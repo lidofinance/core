@@ -56,7 +56,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       infraFeeBP: 0,
       liquidityFeeBP: 0,
       reservationFeeBP: 0,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
     });
     await vaultHub.mock__setPendingDisconnect(false);
 
@@ -148,7 +148,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       infraFeeBP: 0,
       liquidityFeeBP: 0,
       reservationFeeBP: 0,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
     });
     await vaultHub.mock__setPendingDisconnect(false);
 
@@ -172,7 +172,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       infraFeeBP: 0,
       liquidityFeeBP: 0,
       reservationFeeBP: 0,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
     });
     await vaultHub.mock__setPendingDisconnect(true);
 
@@ -196,7 +196,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       infraFeeBP: 0,
       liquidityFeeBP: 0,
       reservationFeeBP: 0,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
     });
     await vaultHub.mock__setPendingDisconnect(false);
 

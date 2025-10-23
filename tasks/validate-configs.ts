@@ -86,15 +86,39 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Deposit contract address is set via environment variables in scratch deployment",
   },
   {
+    path: "chainSpec.isHoodi",
+    reason: "Scratch is on fork",
+  },
+  {
     path: "gateSealForVaults.address",
     reason: "Gate seal configuration differs between upgrade and scratch contexts",
   },
   {
-    path: "easyTrack.evmScriptExecutor",
+    path: "gateSealForVaults.sealingCommittee",
+    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+  },
+  {
+    path: "gateSealForVaults.sealDuration",
+    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+  },
+  {
+    path: "easyTrack.vaultsAdapter",
     reason: "EasyTrack configuration is upgrade-specific",
   },
   {
-    path: "easyTrack.vaultHubAdapter",
+    path: "easyTrack.trustedCaller",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.initialValidatorExitFeeLimit",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.maxGroupShareLimit",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.maxDefaultTierShareLimit",
     reason: "EasyTrack configuration is upgrade-specific",
   },
   {

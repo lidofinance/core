@@ -6,6 +6,11 @@ import {IAccessControlEnumerable as IAccessControlEnumerableV5} from
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
+
+interface IVaultsAdapter {
+    function evmScriptExecutor() external view returns (address);
+}
+
 interface IStakingRouter is IAccessControlEnumerableV5 {
     struct StakingModule {
         uint24 id;
@@ -53,8 +58,8 @@ contract V3Addresses {
         address dashboardImpl;
         address gateSealForVaults;
         // EasyTrack addresses
-        address evmScriptExecutor;
-        address vaultHubAdapter;
+        address vaultsAdapter;
+
         // Existing proxies and contracts
         address kernel;
         address agent;
@@ -62,6 +67,7 @@ contract V3Addresses {
         address locator;
         address voting;
         address dualGovernance;
+        address acl;
     }
 
     string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
@@ -105,8 +111,8 @@ contract V3Addresses {
     //
     // -------- EasyTrack addresses --------
     //
+    address public immutable VAULTS_ADAPTER;
     address public immutable EVM_SCRIPT_EXECUTOR;
-    address public immutable VAULT_HUB_ADAPTER;
 
     //
     // -------- Unchanged contracts --------
@@ -116,6 +122,7 @@ contract V3Addresses {
     address public immutable ARAGON_APP_LIDO_REPO;
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
+    address public immutable ACL;
     address public immutable EL_REWARDS_VAULT;
     address public immutable STAKING_ROUTER;
     address public immutable VALIDATORS_EXIT_BUS_ORACLE;
@@ -124,6 +131,7 @@ contract V3Addresses {
     address public immutable NODE_OPERATORS_REGISTRY;
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
+    address public immutable HOODI_SANDBOX_MODULE;
 
     constructor(V3AddressesParams memory params) {
         if (params.newLocatorImpl == params.oldLocatorImpl) {
@@ -146,12 +154,13 @@ contract V3Addresses {
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
+        ACL = params.acl;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
         GATE_SEAL = params.gateSealForVaults;
-        EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
-        VAULT_HUB_ADAPTER = params.vaultHubAdapter;
+        EVM_SCRIPT_EXECUTOR = IVaultsAdapter(params.vaultsAdapter).evmScriptExecutor();
+        VAULTS_ADAPTER = params.vaultsAdapter;
 
         //
         // Discovered via other contracts
@@ -187,9 +196,18 @@ contract V3Addresses {
                 revert IncorrectStakingModuleName(simpleDvt.name);
             }
             SIMPLE_DVT = simpleDvt.stakingModuleAddress;
-            IStakingRouter.StakingModule memory csm = stakingModules[2];
+
+            // NB: there is additional module on Hoodi before CSM
+            uint256 csmIndex = stakingModules.length - 1;
+            IStakingRouter.StakingModule memory csm = stakingModules[csmIndex];
             if (_hash(csm.name) != _hash(CSM_MODULE_NAME)) revert IncorrectStakingModuleName(csm.name);
             CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
+
+            if (stakingModules.length == 4) {
+                IStakingRouter.StakingModule memory hoodiSandbox = stakingModules[2];
+                if (_hash(hoodiSandbox.name) != _hash("Sandbox")) revert IncorrectStakingModuleName(hoodiSandbox.name);
+                HOODI_SANDBOX_MODULE = hoodiSandbox.stakingModuleAddress;
+            }
         }
     }
 

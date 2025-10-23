@@ -41,7 +41,7 @@ interface ILidoWithFinalizeUpgrade is ILido {
 }
 
 interface IAccountingOracle is IBaseOracle {
-    function finalizeUpgrade_v3(uint256 consensusVersion) external;
+    function finalizeUpgrade_v4(uint256 consensusVersion) external;
 }
 
 interface IAragonAppRepo {
@@ -89,7 +89,7 @@ contract V3Template is V3Addresses {
     //
 
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 3;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 5;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
@@ -132,6 +132,10 @@ contract V3Template is V3Addresses {
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
     }
 
+    function isHoodi() internal view returns (bool) {
+        return HOODI_SANDBOX_MODULE != address(0);
+    }
+
     /// @notice Must be called before LidoLocator is upgraded
     function startUpgrade() external {
         if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
@@ -163,7 +167,7 @@ contract V3Template is V3Addresses {
 
         ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v3(OLD_BURNER, contractsWithBurnerAllowances);
 
-        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v3(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
+        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v4(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
 
         _assertPostUpgradeState();
 
@@ -227,7 +231,11 @@ contract V3Template is V3Addresses {
     function _assertFinalACL() internal view {
         // Burner
         bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
-        _assertZeroOZRoleHolders(OLD_BURNER, requestBurnSharesRole);
+        if (isHoodi()) {
+            _assertSingleOZRoleHolder(OLD_BURNER, requestBurnSharesRole, HOODI_SANDBOX_MODULE);
+        } else {
+            _assertZeroOZRoleHolders(OLD_BURNER, requestBurnSharesRole);
+        }
 
         _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
         _assertSingleOZRoleHolder(BURNER, DEFAULT_ADMIN_ROLE, AGENT);
@@ -242,17 +250,17 @@ contract V3Template is V3Addresses {
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
         _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, AGENT);
 
-        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT, VAULT_HUB_ADAPTER);
-        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
+        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), AGENT, VAULTS_ADAPTER);
 
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULT_HUB_ADAPTER);
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULT_HUB_ADAPTER);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULTS_ADAPTER);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULTS_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
 
         // OperatorGrid
         _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
         _assertSingleOZRoleHolder(OPERATOR_GRID, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertTwoOZRoleHolders(OPERATOR_GRID, OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR);
+        _assertThreeOZRoleHolders(OPERATOR_GRID, OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR, VAULTS_ADAPTER);
 
         // LazyOracle
         _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
@@ -373,6 +381,16 @@ contract V3Template is V3Addresses {
         address[] memory holders = new address[](2);
         holders[0] = _holder1;
         holders[1] = _holder2;
+        _assertOZRoleHolders(_accessControlled, _role, holders);
+    }
+
+    function _assertThreeOZRoleHolders(
+        address _accessControlled, bytes32 _role, address _holder1, address _holder2, address _holder3
+    ) internal view {
+        address[] memory holders = new address[](3);
+        holders[0] = _holder1;
+        holders[1] = _holder2;
+        holders[2] = _holder3;
         _assertOZRoleHolders(_accessControlled, _role, holders);
     }
 

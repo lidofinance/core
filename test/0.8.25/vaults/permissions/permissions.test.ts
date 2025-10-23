@@ -240,7 +240,7 @@ describe("Permissions", () => {
       const newImplementation = await ethers.deployContract("Permissions__Harness", [vaultHub, lidoLocator]);
       await expect(newImplementation.initialize(defaultAdmin, days(7n))).to.be.revertedWithCustomError(
         permissions,
-        "NonProxyCallsForbidden",
+        "AlreadyInitialized",
       );
     });
 

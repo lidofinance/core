@@ -1,7 +1,6 @@
 import { expect } from "chai";
 import hre from "hardhat";
 import { beforeEach } from "mocha";
-import { main as mockTWAragonVoting } from "scripts/upgrade/steps/0400-mock-tw-aragon-voting";
 import { main as mockV3AragonVoting } from "scripts/upgrade/steps/0500-mock-v3-aragon-voting";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -48,8 +47,6 @@ if (!needToSkipTemplateTests())
 
       agentMock = await new V3Template__Harness__factory(deployer).deploy(await template.getAddress());
       await agentMock.waitForDeployment();
-
-      await mockTWAragonVoting();
     });
 
     after(async () => await Snapshot.restore(originalSnapshot));

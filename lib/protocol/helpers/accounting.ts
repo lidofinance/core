@@ -24,10 +24,6 @@ import {
 
 import { ProtocolContext } from "../types";
 
-const ZERO_HASH = new Uint8Array(32).fill(0);
-const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
-const SHARE_RATE_PRECISION = 10n ** 27n;
-
 export type OracleReportParams = {
   clDiff?: bigint;
   clAppearedValidators?: bigint;
@@ -62,6 +58,9 @@ type OracleReportResults = {
   reportTx: ContractTransactionResponse | undefined;
   extraDataTx: ContractTransactionResponse | undefined;
 };
+export const ZERO_HASH = new Uint8Array(32).fill(0);
+const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
+const SHARE_RATE_PRECISION = 10n ** 27n;
 
 /**
  * Prepare and push oracle report.
