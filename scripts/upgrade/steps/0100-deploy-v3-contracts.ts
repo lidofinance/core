@@ -333,7 +333,7 @@ export async function main() {
     oracleDaemonConfig: await locator.oracleDaemonConfig(),
     validatorExitDelayVerifier: getAddress(Sk.validatorExitDelayVerifier, state),
     triggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),
-    consolidationGateway: getAddress(Sk.consolidationGateway, state),
+    consolidationGateway: consolidationGateway.address,
     accounting: accounting.address,
     predepositGuarantee: predepositGuarantee.address,
     wstETH: wstethAddress,
