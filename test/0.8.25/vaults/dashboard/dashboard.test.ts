@@ -703,10 +703,18 @@ describe("Dashboard.sol", () => {
           .to.emit(hub, "Mock__VaultDisconnectInitiated")
           .withArgs(vault)
           .and.to.emit(dashboard, "FeeDisbursed")
-          .withArgs(vaultOwner, 2n);
+          .withArgs(vaultOwner, 2n, dashboard);
+
+        expect(await dashboard.feeLeftover()).to.be.equal(2n);
+
+        await expect(dashboard.recoverFeeLeftover())
+          .to.emit(dashboard, "AssetsRecovered")
+          .withArgs(await dashboard.feeRecipient(), "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", 2n);
+
+        expect(await dashboard.feeLeftover()).to.be.equal(0n);
       });
 
-      it("disburses even to the wrong receiver", async () => {
+      it("disburses even if the wrong receiver is set", async () => {
         // setup for abnormally high fee
         await setup({ totalValue: 1100n, vaultBalance: 1000n, isConnected: true });
 
@@ -721,7 +729,14 @@ describe("Dashboard.sol", () => {
           .to.emit(hub, "Mock__VaultDisconnectInitiated")
           .withArgs(vault)
           .and.to.emit(dashboard, "FeeDisbursed")
-          .withArgs(vaultOwner, 2n);
+          .withArgs(vaultOwner, 2n, dashboard);
+
+        expect(await dashboard.feeLeftover()).to.be.equal(2n);
+
+        await expect(dashboard.recoverFeeLeftover()).to.be.revertedWithCustomError(dashboard, "EthTransferFailed");
+        await expect(
+          dashboard.recoverERC20("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", vaultOwner, 2n),
+        ).to.be.revertedWithCustomError(dashboard, "InsufficientBalance");
       });
     });
   });
