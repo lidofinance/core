@@ -56,3 +56,8 @@ isMigrationAllowed = true             # Must be on for the upgrade to work (for 
 # Oracle and consensus version configuration
 [oracleVersions]
 ao_consensus_version = 4              # Accounting Oracle consensus version
+
+[consolidationGateway]
+maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
+consolidationsPerFrame = 1            # Number of consolidations processed per frame
+frameDurationInSec = 48               # Duration of each processing frame in seconds
