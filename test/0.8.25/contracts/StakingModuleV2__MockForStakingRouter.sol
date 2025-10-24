@@ -25,65 +25,6 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule {
         uint256 exitType
     );
 
-    // allocation by operators
-
-    // uint256[] private modulesOperators__mocked;
-    // uint256[] private modulesAllocations__mocked;
-
-    // function mock_getAllocation(uint256[] memory operators, uint256[] memory allocations) external {
-    //     modulesOperators__mocked = operators;
-    //     modulesAllocations__mocked = allocations;
-    // }
-
-    // function getAllocation(
-    //     uint256 target
-    // ) external view returns (uint256[] memory operators, uint256[] memory allocations) {
-    //     operators = modulesOperators__mocked;
-    //     allocations = modulesAllocations__mocked;
-    // }
-
-    // data by keys for specific operators
-
-    // function getOperatorAvailableKeys(
-    //     uint256[] memory operators,
-    //     uint256[] memory counts
-    // ) external view returns (bytes memory publicKeys, bytes memory signatures) {
-    //     uint256 count;
-
-    //     for (uint256 i; i < counts.length; i++) {
-    //         count += counts[i];
-    //     }
-
-    //     publicKeys = new bytes(48 * count);
-    //     signatures = new bytes(96 * count);
-    // }
-
-    // bool private verifyKeys__mocked;
-
-    // function mock_verifyKeys(bool value) external {
-    //     verifyKeys__mocked = value;
-    // }
-
-    // function verifyKeys(KeyData[] calldata data) external view returns (bool) {
-    //     return verifyKeys__mocked;
-    // }
-
-    // uint256[] private allocations__mocked;
-
-    // function mock_getAllocationTopUp(uint256[] memory allocations) external {
-    //     allocations__mocked = allocations;
-    // }
-
-    // function getAllocation(
-    //     uint256 depositAmount,
-    //     uint256[] memory operators,
-    //     uint256[] memory topUpLimits
-    // ) external view returns (uint256[] memory allocations) {
-    //     return allocations__mocked;
-    // }
-
-    // function onDeposit(uint256 operatorId, uint256 amount) external {}
-
     function getType() external view returns (bytes32) {
         return keccak256(abi.encodePacked("staking.module"));
     }

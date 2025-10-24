@@ -4,6 +4,7 @@ import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
   Burner,
+  ConsolidationGateway,
   IGateSealFactory,
   IOracleReportSanityChecker_preV3,
   LazyOracle,
@@ -303,8 +304,8 @@ export async function main() {
   ]);
   console.log("VaultFactory address", await vaultFactory.getAddress());
 
-  const consolidationGateway = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
-    agentAddress, // TODO: check
+  const consolidationGateway_ = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
+    deployer,
     locator.address,
     // ToDo: Replace dummy parameters with real ones
     10, // maxConsolidationRequestsLimit,
@@ -312,7 +313,24 @@ export async function main() {
     60, // frameDurationInSec
   ]);
 
-  console.log("ConsolidationGateway address", await consolidationGateway.getAddress());
+  const consolidationGateway = await loadContract<ConsolidationGateway>(
+    "ConsolidationGateway",
+    consolidationGateway_.address,
+  );
+
+  // ToDo: Grant ADD_CONSOLIDATION_REQUEST_ROLE to MessageBus address instead of deployer
+  // ADD_CONSOLIDATION_REQUEST_ROLE granted to deployer for testing convenience
+  await makeTx(
+    consolidationGateway,
+    "grantRole",
+    [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), deployer],
+    { from: deployer },
+  );
+  const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
+  await makeTx(consolidationGateway, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(consolidationGateway, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
+  console.log("ConsolidationGateway address", await consolidationGateway_.address);
 
   //
   // Deploy new LidoLocator implementation
