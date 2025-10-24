@@ -440,10 +440,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         VaultHub vaultHub = _vaultHub();
+
         uint256 vaultTierId = $.vaultTier[_vault];
         if (vaultTierId == _requestedTierId) revert TierAlreadySet();
 
         address nodeOperator = IStakingVault(_vault).nodeOperator();
+        // we allow node operator to pre-approve not connected vaults
+        if (msg.sender != nodeOperator && !vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
 
         Tier storage requestedTier = $.tiers[_requestedTierId];
         if (nodeOperator != requestedTier.operator) revert TierNotInOperatorGroup();
@@ -452,6 +455,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         }
 
         address vaultOwner = vaultHub.vaultConnection(_vault).owner;
+
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
