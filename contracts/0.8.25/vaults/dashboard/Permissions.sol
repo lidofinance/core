@@ -207,7 +207,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _ether The amount of ether to withdraw from the StakingVault.
      */
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRoleMemberOrAdmin(WITHDRAW_ROLE) {
-        VAULT_HUB.withdraw(address(_stakingVault()), _recipient, _ether);
+        _doWithdraw(_recipient, _ether);
     }
 
     /**
@@ -348,6 +348,11 @@ abstract contract Permissions is AccessControlConfirmable {
             stakingVaultAddress := mload(add(args, 32))
         }
         return IStakingVault(stakingVaultAddress);
+    }
+
+    /// @dev internal withdraw function just to save the bytecode for external call method
+    function _doWithdraw(address _recipient, uint256 _ether) internal {
+        VAULT_HUB.withdraw(address(_stakingVault()), _recipient, _ether);
     }
 
     function _operatorGrid() internal view returns (OperatorGrid) {
