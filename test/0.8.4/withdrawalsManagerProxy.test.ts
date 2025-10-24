@@ -59,12 +59,12 @@ describe("WithdrawalsManagerProxy.sol", () => {
       await expect(proxy.connect(stranger).proxy_upgradeTo(newImpl, "0x")).to.be.rejectedWith("proxy: unauthorized");
     });
 
-    it("Updates implemenation", async () => {
+    it("Updates implementation", async () => {
       await expect(proxy.proxy_upgradeTo(newImpl, "0x")).to.emit(proxy, "Upgraded");
       expect(await proxy.implementation()).to.equal(newImpl);
     });
 
-    it("Updates implemenation and executes payload bytecode", async () => {
+    it("Updates implementation and executes payload bytecode", async () => {
       const proxyAddr = await proxy.getAddress();
       const storageSlot = streccak("someNumberSlot");
       const someNumber = 1n;

@@ -89,7 +89,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
   describe("Common case", () => {
     // tests in this section related to ExitRequestsData mistakes
-    // also here we tests successfull case
+    // also here we tests successful case
 
     before(async () => {
       [admin, authorizedEntity, stranger] = await ethers.getSigners();
