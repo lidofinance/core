@@ -88,7 +88,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   it("Reverts if not initialized", async () => {
-    await expect(lido.finalizeUpgrade_v3(ZeroAddress, [])).to.be.revertedWith("NOT_INITIALIZED");
+    await expect(lido.finalizeUpgrade_v3(ZeroAddress, [], 0)).to.be.revertedWith("NOT_INITIALIZED");
   });
 
   context("initialized", () => {
@@ -105,31 +105,29 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       const unexpectedVersion = 1n;
       await lido.harness_setContractVersion(unexpectedVersion);
       await expect(
-        lido.finalizeUpgrade_v3(oldBurner, [
-          nodeOperatorsRegistryAddress,
-          simpleDvtAddress,
-          csmAccountingAddress,
-          withdrawalQueueAddress,
-        ]),
+        lido.finalizeUpgrade_v3(
+          oldBurner,
+          [nodeOperatorsRegistryAddress, simpleDvtAddress, csmAccountingAddress, withdrawalQueueAddress],
+          0,
+        ),
       ).to.be.revertedWith("UNEXPECTED_CONTRACT_VERSION");
     });
 
     it("Reverts if old burner is the same as new burner", async () => {
-      await expect(lido.finalizeUpgrade_v3(burner, [])).to.be.revertedWith("OLD_BURNER_SAME_AS_NEW");
+      await expect(lido.finalizeUpgrade_v3(burner, [], 0)).to.be.revertedWith("OLD_BURNER_SAME_AS_NEW");
     });
 
     it("Reverts if old burner is zero address", async () => {
-      await expect(lido.finalizeUpgrade_v3(ZeroAddress, [])).to.be.revertedWith("OLD_BURNER_ADDRESS_ZERO");
+      await expect(lido.finalizeUpgrade_v3(ZeroAddress, [], 0)).to.be.revertedWith("OLD_BURNER_ADDRESS_ZERO");
     });
 
     it("Sets contract version to 3", async () => {
       await expect(
-        lido.finalizeUpgrade_v3(oldBurner, [
-          nodeOperatorsRegistryAddress,
-          simpleDvtAddress,
-          csmAccountingAddress,
-          withdrawalQueueAddress,
-        ]),
+        lido.finalizeUpgrade_v3(
+          oldBurner,
+          [nodeOperatorsRegistryAddress, simpleDvtAddress, csmAccountingAddress, withdrawalQueueAddress],
+          0,
+        ),
       )
         .to.emit(lido, "ContractVersionSet")
         .withArgs(finalizeVersion);
@@ -146,12 +144,11 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       const depositedValidators = await getStorageAtPosition(lido, "lido.Lido.depositedValidators");
 
       await expect(
-        lido.finalizeUpgrade_v3(oldBurner, [
-          nodeOperatorsRegistryAddress,
-          simpleDvtAddress,
-          csmAccountingAddress,
-          withdrawalQueueAddress,
-        ]),
+        lido.finalizeUpgrade_v3(
+          oldBurner,
+          [nodeOperatorsRegistryAddress, simpleDvtAddress, csmAccountingAddress, withdrawalQueueAddress],
+          0,
+        ),
       ).to.not.be.reverted;
 
       expect(await lido.getLidoLocator()).to.equal(locator);
@@ -168,12 +165,11 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       expect(await lido.sharesOf(oldBurner)).to.equal(sharesOnOldBurner);
 
       await expect(
-        lido.finalizeUpgrade_v3(oldBurner, [
-          nodeOperatorsRegistryAddress,
-          simpleDvtAddress,
-          csmAccountingAddress,
-          withdrawalQueueAddress,
-        ]),
+        lido.finalizeUpgrade_v3(
+          oldBurner,
+          [nodeOperatorsRegistryAddress, simpleDvtAddress, csmAccountingAddress, withdrawalQueueAddress],
+          0,
+        ),
       )
         .to.emit(lido, "TransferShares")
         .withArgs(oldBurner, burner, sharesOnOldBurner);
