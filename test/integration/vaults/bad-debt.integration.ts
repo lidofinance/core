@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
-import { MAX_UINT256 } from "lib";
+import { advanceChainTime, MAX_UINT256 } from "lib";
 import {
   changeTier,
   createVaultWithDashboard,
@@ -199,6 +199,136 @@ describe("Integration: Vault with bad debt", () => {
       await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
         .to.emit(vaultHub, "BadDebtSocialized")
         .withArgs(stakingVault, acceptorStakingVault, badDebtShares);
+    });
+
+    it("Socialization requires fresh reports", async () => {
+      await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
+      const { vaultHub, lido } = ctx.contracts;
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      // Advance time to make report stale
+      await advanceChainTime(await vaultHub.REPORT_FRESHNESS_DELTA());
+
+      // Try to socialize with stale report - should fail
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
+        .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
+        .withArgs(stakingVault);
+    });
+
+    it("Socialization only between same node operator", async () => {
+      const { stakingVaultFactory, vaultHub, lido } = ctx.contracts;
+      const [, , , , , differentOperator] = await ethers.getSigners();
+
+      // Create acceptor vault with different node operator
+      const { stakingVault: differentOpVault, dashboard: differentOpDashboard } = await createVaultWithDashboard(
+        ctx,
+        stakingVaultFactory,
+        otherOwner,
+        differentOperator,
+        differentOperator,
+      );
+
+      await differentOpDashboard.connect(otherOwner).fund({ value: ether("10") });
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      // Try to socialize between different operators - should fail
+      await expect(
+        vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, differentOpVault, badDebtShares),
+      ).to.be.revertedWithCustomError(vaultHub, "BadDebtSocializationNotAllowed");
+
+      // Verify socialization works with same operator
+      await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtSocialized")
+        .withArgs(stakingVault, acceptorStakingVault, badDebtShares);
+    });
+
+    it("Multi-vault bad debt socialization scenario", async () => {
+      const { stakingVaultFactory, vaultHub, lido } = ctx.contracts;
+
+      // Create vault B and C (acceptors, same operator)
+      const { stakingVault: vaultB, dashboard: dashboardB } = await createVaultWithDashboard(
+        ctx,
+        stakingVaultFactory,
+        otherOwner,
+        nodeOperator,
+        nodeOperator,
+      );
+
+      const { stakingVault: vaultC, dashboard: dashboardC } = await createVaultWithDashboard(
+        ctx,
+        stakingVaultFactory,
+        otherOwner,
+        nodeOperator,
+        nodeOperator,
+      );
+
+      // Fund acceptor vaults with limited capacity
+      const donorLiabilitySharesBefore = await dashboard.liabilityShares();
+      await dashboardB.connect(otherOwner).fund({ value: donorLiabilitySharesBefore / 4n });
+      await dashboardC.connect(otherOwner).fund({ value: donorLiabilitySharesBefore });
+
+      const totalBadDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      const vaultBLiabilitySharesBefore = await dashboardB.liabilityShares();
+      const vaultCLiabilitySharesBefore = await dashboardC.liabilityShares();
+
+      // Calculate capacity for each acceptor (approximately half of total value in shares)
+      const vaultBCapacity = await lido.getSharesByPooledEth(await dashboardB.totalValue());
+      const vaultCCapacity = await lido.getSharesByPooledEth(await dashboardC.totalValue());
+
+      // First socialization: transfer to vault B
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, vaultB, totalBadDebtShares)).to.emit(
+        vaultHub,
+        "BadDebtSocialized",
+      );
+
+      const donorLiabilitySharesAfterFirst = await dashboard.liabilityShares();
+      const vaultBLiabilitySharesAfterFirst = await dashboardB.liabilityShares();
+
+      // Verify first transfer
+      expect(donorLiabilitySharesAfterFirst).to.be.lessThan(donorLiabilitySharesBefore);
+      expect(vaultBLiabilitySharesAfterFirst).to.be.greaterThan(vaultBLiabilitySharesBefore);
+      expect(vaultBLiabilitySharesAfterFirst).to.be.lessThanOrEqual(vaultBCapacity, "Vault B shouldn't has bad debt");
+
+      // Second socialization: transfer remaining to vault C
+      const remainingBadDebt =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, vaultC, remainingBadDebt)).to.emit(
+        vaultHub,
+        "BadDebtSocialized",
+      );
+
+      const donorLiabilitySharesAfterSecond = await dashboard.liabilityShares();
+      const vaultCLiabilitySharesAfterSecond = await dashboardC.liabilityShares();
+
+      // Verify second transfer
+      expect(donorLiabilitySharesAfterSecond).to.be.lessThan(donorLiabilitySharesAfterFirst);
+      expect(vaultCLiabilitySharesAfterSecond).to.be.greaterThan(vaultCLiabilitySharesBefore);
+      expect(vaultCLiabilitySharesAfterSecond).to.be.lessThanOrEqual(vaultCCapacity, "Vault C shouldn't has bad debt");
+
+      // Verify vault A is fully recovered from bad debt
+      const finalBadDebt =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      expect(finalBadDebt).to.equal(0n, "Donor vault should be fully recovered");
+
+      // Verify all liability shares are properly tracked
+      const totalLiabilityAfter =
+        (await dashboard.liabilityShares()) +
+        (await dashboardB.liabilityShares()) +
+        (await dashboardC.liabilityShares());
+
+      const totalLiabilityBefore =
+        donorLiabilitySharesBefore + vaultBLiabilitySharesBefore + vaultCLiabilitySharesBefore;
+
+      expect(totalLiabilityAfter).to.equal(totalLiabilityBefore, "Total liability shares should be conserved");
     });
   });
 
