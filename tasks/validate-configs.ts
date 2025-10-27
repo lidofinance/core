@@ -141,6 +141,10 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     path: "v3VoteScript.expiryTimestamp",
     reason: "V3 vote script expiry timestamp is upgrade-specific configuration",
   },
+  {
+    path: "v3VoteScript.initialMaxExternalRatioBP",
+    reason: "V3 vote script initial max external ratio BP is upgrade-specific configuration",
+  },
 ];
 
 // Special mappings where the same concept has different names
