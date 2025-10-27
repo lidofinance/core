@@ -13,7 +13,7 @@ interface IVaultHub {
     function BAD_DEBT_MASTER_ROLE() external view returns (bytes32);
 }
 
-interface IPausableUntil {
+interface IPausableUntilWithRoles {
     function PAUSE_ROLE() external view returns (bytes32);
 }
 
@@ -39,15 +39,18 @@ interface IStakingRouter {
         address stakingModuleAddress;
         uint16 stakingModuleFee;
         uint16 treasuryFee;
-        uint16 targetShare;
+        uint16 stakeShareLimit;
         uint8 status;
         string name;
         uint64 lastDepositAt;
         uint256 lastDepositBlock;
         uint256 exitedValidatorsCount;
+        uint16 priorityExitShareThreshold;
+        uint64 maxDepositsPerBlock;
+        uint64 minDepositBlockDistance;
     }
 
-    function getStakingModules() external view returns (StakingModule[] memory);
+    function getStakingModules() external view returns (StakingModule[] memory res);
 }
 
 interface ICSModule {
@@ -142,7 +145,7 @@ contract V3TemporaryAdmin {
      */
     function _setupVaultHub(address _vaultHub, address _vaultsAdapter, address _gateSeal) private {
         // Get roles from the contract
-        bytes32 pauseRole = IPausableUntil(_vaultHub).PAUSE_ROLE();
+        bytes32 pauseRole = IPausableUntilWithRoles(_vaultHub).PAUSE_ROLE();
         bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
         bytes32 redemptionMasterRole = IVaultHub(_vaultHub).REDEMPTION_MASTER_ROLE();
         bytes32 validatorExitRole = IVaultHub(_vaultHub).VALIDATOR_EXIT_ROLE();
@@ -165,7 +168,7 @@ contract V3TemporaryAdmin {
      * @param _predepositGuarantee The PredepositGuarantee contract address
      */
     function _setupPredepositGuarantee(address _predepositGuarantee, address _gateSeal) private {
-        bytes32 pauseRole = IPausableUntil(_predepositGuarantee).PAUSE_ROLE();
+        bytes32 pauseRole = IPausableUntilWithRoles(_predepositGuarantee).PAUSE_ROLE();
         IAccessControl(_predepositGuarantee).grantRole(pauseRole, _gateSeal);
         _transferAdminToAgent(_predepositGuarantee);
     }

@@ -149,7 +149,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
 
     it("Can not change the tier as owner of the vault", async () => {
-      const { operatorGrid, vaultHub } = ctx.contracts;
+      const { operatorGrid } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
 
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
@@ -164,24 +164,23 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         },
       ]);
 
-      const ownerRoleAsAddress = ethers.zeroPadValue(await owner.getAddress(), 32);
-      let confirmTimestamp = await getNextBlockTimestamp();
-      let expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
+      await expect(operatorGrid.connect(owner).changeTier(stakingVault, 1n, 1000n)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "VaultNotConnected",
+      );
+
+      const nodeOperatorRoleAsAddress = ethers.zeroPadValue(nodeOperator.address, 32);
       const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
         await stakingVault.getAddress(),
-        1,
-        1000,
+        1n,
+        1000n,
       ]);
+      const confirmTimestamp = await getNextBlockTimestamp();
+      const expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
 
-      await expect(operatorGrid.connect(owner).changeTier(stakingVault, 1n, 1000n))
+      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
         .to.emit(operatorGrid, "RoleMemberConfirmed")
-        .withArgs(owner, ownerRoleAsAddress, confirmTimestamp, expiryTimestamp, msgData);
-
-      confirmTimestamp = await getNextBlockTimestamp();
-      expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
-      await expect(
-        operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n),
-      ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
+        .withArgs(nodeOperator, nodeOperatorRoleAsAddress, confirmTimestamp, expiryTimestamp, msgData);
     });
 
     describe("Funding", () => {

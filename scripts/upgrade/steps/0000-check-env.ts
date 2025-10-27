@@ -20,6 +20,10 @@ export async function main() {
     throw new Error("Env variable GAS_MAX_FEE is not set");
   }
 
+  if (process.env.MODE === "scratch" && !process.env.GENESIS_TIME) {
+    throw new Error("Env variable GENESIS_TIME is not set");
+  }
+
   const latestBlockNumber = await ethers.provider.getBlockNumber();
   log(cy(`Latest block number: ${latestBlockNumber}`));
 }

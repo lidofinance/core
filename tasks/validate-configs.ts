@@ -138,12 +138,12 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Oracle versions are upgrade-specific configuration",
   },
   {
-    path: "triggerableWithdrawals.exit_events_lookback_window_in_slots",
-    reason: "TODO",
+    path: "v3VoteScript.expiryTimestamp",
+    reason: "V3 vote script expiry timestamp is upgrade-specific configuration",
   },
   {
-    path: "triggerableWithdrawals.nor_exit_deadline_in_sec",
-    reason: "TODO",
+    path: "v3VoteScript.initialMaxExternalRatioBP",
+    reason: "V3 vote script initial max external ratio BP is upgrade-specific configuration",
   },
 ];
 

@@ -34,7 +34,7 @@ interface IBurner is IBurnerWithoutAccessControl, IAccessControlEnumerable {
 }
 
 interface ILidoWithFinalizeUpgrade is ILido {
-    function finalizeUpgrade_v3(address _oldBurner, address[] calldata _contractsWithBurnerAllowances) external;
+    function finalizeUpgrade_v3(address _oldBurner, address[] calldata _contractsWithBurnerAllowances, uint256 _initialMaxExternalRatioBP) external;
 }
 
 interface IAccountingOracle is IBaseOracle {
@@ -91,10 +91,10 @@ contract V3Template is V3Addresses {
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
-    // Timestamp since startUpgrade() and finishUpgrade() revert with Expired()
-    // This behavior is introduced to disarm the template if the upgrade voting creation or enactment didn't
-    // happen in proper time period
-    uint256 public constant EXPIRE_SINCE_INCLUSIVE = 1761868800; // 2025-10-31 00:00:00 UTC
+    // Timestamp since which startUpgrade()
+    // This behavior is introduced to disarm the template if the upgrade voting creation or enactment
+    // didn't happen in proper time period
+    uint256 public immutable EXPIRE_SINCE_INCLUSIVE;
 
     // Initial value of upgradeBlockNumber storage variable
     uint256 public constant UPGRADE_NOT_STARTED = 0;
@@ -111,6 +111,7 @@ contract V3Template is V3Addresses {
     uint256 public initialTotalShares;
     uint256 public initialTotalPooledEther;
     address[] public contractsWithBurnerAllowances;
+    uint256 public immutable INITIAL_MAX_EXTERNAL_RATIO_BP;
 
     //
     // Slots for transient storage
@@ -123,14 +124,14 @@ contract V3Template is V3Addresses {
 
 
     /// @param _params Params required to initialize the addresses contract
-    constructor(V3AddressesParams memory _params) V3Addresses(_params) {
+    /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
+    /// @param _initialMaxExternalRatioBP Initial maximum external ratio in basis points
+    constructor(V3AddressesParams memory _params, uint256 _expireSinceInclusive, uint256 _initialMaxExternalRatioBP) V3Addresses(_params) {
+        EXPIRE_SINCE_INCLUSIVE = _expireSinceInclusive;
+        INITIAL_MAX_EXTERNAL_RATIO_BP = _initialMaxExternalRatioBP;
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
         // NB: NOR and SIMPLE_DVT allowances are set to 0 in TW upgrade, so they are not migrated
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
-    }
-
-    function isHoodi() internal view returns (bool) {
-        return HOODI_SANDBOX_MODULE != address(0);
     }
 
     /// @notice Must be called before LidoLocator is upgraded
@@ -162,7 +163,7 @@ contract V3Template is V3Addresses {
 
         isUpgradeFinished = true;
 
-        ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v3(OLD_BURNER, contractsWithBurnerAllowances);
+        ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v3(OLD_BURNER, contractsWithBurnerAllowances, INITIAL_MAX_EXTERNAL_RATIO_BP);
 
         IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v4(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
 
@@ -228,11 +229,7 @@ contract V3Template is V3Addresses {
     function _assertFinalACL() internal view {
         // Burner
         bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
-        if (isHoodi()) {
-            _assertSingleOZRoleHolder(OLD_BURNER, requestBurnSharesRole, HOODI_SANDBOX_MODULE);
-        } else {
-            _assertZeroOZRoleHolders(OLD_BURNER, requestBurnSharesRole);
-        }
+        _assertZeroOZRoleHolders(OLD_BURNER, requestBurnSharesRole);
 
         _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
         _assertSingleOZRoleHolder(BURNER, DEFAULT_ADMIN_ROLE, AGENT);
