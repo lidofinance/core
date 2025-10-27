@@ -291,6 +291,90 @@ export async function reportVaultDataWithProof(
   );
 }
 
+/**
+ * Report data for multiple vaults in a single Merkle tree
+ * This is useful when you need to ensure all vaults have fresh reports at the same time
+ *
+ * @param ctx Protocol context
+ * @param stakingVaults Array of StakingVault contracts to report
+ * @param params Parameters for the report. If arrays are provided, they must match the length of stakingVaults
+ */
+export async function reportVaultsDataWithProof(
+  ctx: ProtocolContext,
+  stakingVaults: StakingVault[],
+  params: {
+    totalValue?: bigint | bigint[];
+    cumulativeLidoFees?: bigint | bigint[];
+    liabilityShares?: bigint | bigint[];
+    maxLiabilityShares?: bigint | bigint[];
+    slashingReserve?: bigint | bigint[];
+    reportTimestamp?: bigint;
+    reportRefSlot?: bigint;
+    updateReportData?: boolean;
+    waitForNextRefSlot?: boolean;
+  } = {},
+) {
+  const { vaultHub, locator, lazyOracle, hashConsensus } = ctx.contracts;
+
+  if (params.waitForNextRefSlot) {
+    await waitNextAvailableReportTime(ctx);
+  }
+
+  // Helper to get value from array or single value
+  const getValue = <T>(param: T | T[] | undefined, index: number, defaultValue: T): T => {
+    if (param === undefined) return defaultValue;
+    return Array.isArray(param) ? param[index] : param;
+  };
+
+  // Build vault reports for all vaults
+  const vaultReports: VaultReportItem[] = await Promise.all(
+    stakingVaults.map(async (vault, index) => ({
+      vault: await vault.getAddress(),
+      totalValue: getValue(params.totalValue, index, await vaultHub.totalValue(vault)),
+      cumulativeLidoFees: getValue(params.cumulativeLidoFees, index, 0n),
+      liabilityShares: getValue(params.liabilityShares, index, await vaultHub.liabilityShares(vault)),
+      maxLiabilityShares: getValue(
+        params.maxLiabilityShares,
+        index,
+        (await vaultHub.vaultRecord(vault)).maxLiabilityShares,
+      ),
+      slashingReserve: getValue(params.slashingReserve, index, 0n),
+    })),
+  );
+
+  // Create single Merkle tree for all vaults
+  const reportTree = createVaultsReportTree(vaultReports);
+
+  // Update report data once for all vaults
+  if (params.updateReportData ?? true) {
+    const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
+    const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
+
+    const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
+    await lazyOracle
+      .connect(accountingSigner)
+      .updateReportData(reportTimestampArg, reportRefSlotArg, reportTree.root, "");
+  }
+
+  // Update each vault data with its proof from the common tree
+  const txs = [];
+  for (let i = 0; i < stakingVaults.length; i++) {
+    const vaultReport = vaultReports[i];
+    const tx = await lazyOracle.updateVaultData(
+      vaultReport.vault,
+      vaultReport.totalValue,
+      vaultReport.cumulativeLidoFees,
+      vaultReport.liabilityShares,
+      vaultReport.maxLiabilityShares,
+      vaultReport.slashingReserve,
+      reportTree.getProof(i),
+    );
+    txs.push(tx);
+  }
+
+  return txs;
+}
+
 interface CreateVaultResponse {
   tx: ContractTransactionResponse;
   proxy: PinnedBeaconProxy;
