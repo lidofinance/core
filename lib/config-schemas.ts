@@ -79,6 +79,12 @@ const TriggerableWithdrawalsGatewaySchema = z.object({
   frameDurationInSec: PositiveIntSchema,
 });
 
+// Consolidation gateway schema
+const ConsolidationGatewaySchema = z.object({
+  maxConsolidationRequestsLimit: PositiveIntSchema,
+  consolidationsPerFrame: PositiveIntSchema,
+  frameDurationInSec: PositiveIntSchema,
+});
 // Easy track schema
 const EasyTrackSchema = z.object({
   trustedCaller: EthereumAddressSchema,
@@ -119,6 +125,7 @@ export const UpgradeParametersSchema = z.object({
   burner: BurnerSchema,
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
+  consolidationGateway: ConsolidationGatewaySchema,
 });
 
 // Gate seal schema (for scratch deployment)
@@ -262,6 +269,7 @@ export const ScratchParametersSchema = z.object({
   withdrawalQueueERC721: WithdrawalQueueERC721Schema,
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  consolidationGateway: ConsolidationGatewaySchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
 });

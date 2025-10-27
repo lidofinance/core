@@ -39,12 +39,17 @@ interface IStakingRouter {
         address stakingModuleAddress;
         uint16 stakingModuleFee;
         uint16 treasuryFee;
-        uint16 targetShare;
+        uint16 stakeShareLimit;
         uint8 status;
         string name;
         uint64 lastDepositAt;
         uint256 lastDepositBlock;
         uint256 exitedValidatorsCount;
+        uint16 priorityExitShareThreshold;
+        uint64 maxDepositsPerBlock;
+        uint64 minDepositBlockDistance;
+        uint8 moduleType;
+        uint8 withdrawalCredentialsType;
     }
 
     function getStakingModules() external view returns (StakingModule[] memory);

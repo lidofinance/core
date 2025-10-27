@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
+import { ConsolidationGateway, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
 
 import { getContractPath, loadContract } from "lib/contract";
 import {
@@ -36,7 +36,6 @@ export async function main() {
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
-  const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
   const validatorExitDelayVerifierParams = state[Sk.validatorExitDelayVerifier].deployParameters;
 
   const proxyContractsOwner = deployer;
@@ -148,16 +147,34 @@ export async function main() {
   // Deploy StakingRouter
   //
 
+  // deploy deposit tracker
+
+  // const depositsTracker = await deployWithoutProxy(Sk.depositsTracker, "DepositsTracker", deployer);
+
+  // deploy temporary storage
+  const depositsTempStorage = await deployWithoutProxy(Sk.depositsTempStorage, "DepositsTempStorage", deployer);
+
+  // deploy beacon chain depositor
+  const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
+
+  // deploy SRLib
+  const srLib = await deployWithoutProxy(Sk.srLib, "SRLib", deployer);
+
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
     "StakingRouter",
     proxyContractsOwner,
     deployer,
-    [depositContract],
+    [depositContract, chainSpec.secondsPerSlot, chainSpec.genesisTime],
     null,
     true,
     {
-      libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategyAddress },
+      libraries: {
+        // DepositsTracker: depositsTracker.address,
+        BeaconChainDepositor: beaconChainDepositor.address,
+        DepositsTempStorage: depositsTempStorage.address,
+        SRLib: srLib.address,
+      },
     },
   );
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
@@ -192,10 +209,15 @@ export async function main() {
   // Deploy Accounting
   //
 
-  const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
-    locator.address,
-    lidoAddress,
-  ]);
+  const accounting = await deployBehindOssifiableProxy(
+    Sk.accounting,
+    "Accounting",
+    proxyContractsOwner,
+    deployer,
+    [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
+    null,
+    true,
+  );
 
   //
   // Deploy AccountingOracle and its HashConsensus
@@ -306,6 +328,33 @@ export async function main() {
   );
 
   //
+  // Deploy Consolidation Gateway
+  //
+
+  const consolidationGateway_ = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
+    admin,
+    locator.address,
+    // ToDo: Replace dummy parameters with real ones
+    10, // maxConsolidationRequestsLimit,
+    1, // consolidationsPerFrame,
+    60, // frameDurationInSec
+  ]);
+
+  const consolidationGateway = await loadContract<ConsolidationGateway>(
+    "ConsolidationGateway",
+    consolidationGateway_.address,
+  );
+
+  // ToDo: Grant ADD_CONSOLIDATION_REQUEST_ROLE to MessageBus address instead of deployer
+  // ADD_CONSOLIDATION_REQUEST_ROLE granted to deployer for testing convenience
+  await makeTx(
+    consolidationGateway,
+    "grantRole",
+    [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), deployer],
+    { from: deployer },
+  );
+
+  //
   // Deploy ValidatorExitDelayVerifier
   //
 
@@ -343,6 +392,7 @@ export async function main() {
     lidoAddress,
     treasuryAddress,
     triggerableWithdrawalsGateway.address,
+    consolidationGateway.address,
   ]);
 
   await makeTx(withdrawalsManagerProxy, "proxy_upgradeTo", [withdrawalVaultImpl.address, "0x"], { from: deployer });

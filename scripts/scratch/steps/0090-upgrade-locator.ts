@@ -30,6 +30,7 @@ export async function main() {
     withdrawalVault: getAddress(Sk.withdrawalVault, state),
     validatorExitDelayVerifier: getAddress(Sk.validatorExitDelayVerifier, state),
     triggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),
+    consolidationGateway: getAddress(Sk.consolidationGateway, state),
     oracleDaemonConfig: getAddress(Sk.oracleDaemonConfig, state),
     accounting: getAddress(Sk.accounting, state),
     predepositGuarantee: getAddress(Sk.predepositGuarantee, state),

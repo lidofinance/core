@@ -4,25 +4,23 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  DepositContract__MockForBeaconChainDepositor,
-  StakingModule__MockForTriggerableWithdrawals,
-  StakingRouter__Harness,
-} from "typechain-types";
+import { StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, proxify, randomString } from "lib";
+import { certainAddress, ether, randomString, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
 
+import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
+
 describe("StakingRouter.sol:exit", () => {
   let deployer: HardhatEthersSigner;
-  let proxyAdmin: HardhatEthersSigner;
+  let admin: HardhatEthersSigner;
   let stakingRouterAdmin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let reporter: HardhatEthersSigner;
 
-  let depositContract: DepositContract__MockForBeaconChainDepositor;
   let stakingRouter: StakingRouter__Harness;
+  let stakingRouterWithLib: StakingRouterWithLib;
   let stakingModule: StakingModule__MockForTriggerableWithdrawals;
 
   let originalState: string;
@@ -39,18 +37,9 @@ describe("StakingRouter.sol:exit", () => {
   const NODE_OPERATOR_ID = 1n;
 
   before(async () => {
-    [deployer, proxyAdmin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
+    [deployer, admin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
 
-    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
-      },
-    });
-
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
-    [stakingRouter] = await proxify({ impl, admin: proxyAdmin, caller: user });
+    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin, user }));
 
     // Initialize StakingRouter
     await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials);
@@ -63,19 +52,38 @@ describe("StakingRouter.sol:exit", () => {
       .connect(stakingRouterAdmin)
       .grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), stakingRouterAdmin);
 
+    const stakingModuleConfig = {
+      /// @notice Maximum stake share that can be allocated to a module, in BP.
+      /// @dev Must be less than or equal to TOTAL_BASIS_POINTS (10_000 BP = 100%).
+      stakeShareLimit: STAKE_SHARE_LIMIT,
+      /// @notice Module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP.
+      /// @dev Must be less than or equal to TOTAL_BASIS_POINTS (10_000 BP = 100%) and
+      ///      greater than or equal to `stakeShareLimit`.
+      priorityExitShareThreshold: PRIORITY_EXIT_SHARE_THRESHOLD,
+      /// @notice Part of the fee taken from staking rewards that goes to the staking module, in BP.
+      /// @dev Together with `treasuryFee`, must not exceed TOTAL_BASIS_POINTS.
+      stakingModuleFee: MODULE_FEE,
+      /// @notice Part of the fee taken from staking rewards that goes to the treasury, in BP.
+      /// @dev Together with `stakingModuleFee`, must not exceed TOTAL_BASIS_POINTS.
+      treasuryFee: TREASURY_FEE,
+      /// @notice The maximum number of validators that can be deposited in a single block.
+      /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
+      ///      Value must not exceed type(uint64).max.
+      maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
+      /// @notice The minimum distance between deposits in blocks.
+      /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
+      ///      Value must be > 0 and ≤ type(uint64).max.
+      minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
+      /// @notice The type of module (Legacy/Standard), defines the module interface and withdrawal credentials type.
+      /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
+      /// @dev See {StakingModuleType} enum.
+      moduleType: StakingModuleType.Legacy,
+    };
+
     // Add staking module
     await stakingRouter
       .connect(stakingRouterAdmin)
-      .addStakingModule(
-        randomString(8),
-        await stakingModule.getAddress(),
-        STAKE_SHARE_LIMIT,
-        PRIORITY_EXIT_SHARE_THRESHOLD,
-        MODULE_FEE,
-        TREASURY_FEE,
-        MAX_DEPOSITS_PER_BLOCK,
-        MIN_DEPOSIT_BLOCK_DISTANCE,
-      );
+      .addStakingModule(randomString(8), await stakingModule.getAddress(), stakingModuleConfig);
 
     // Grant necessary roles to reporter
     await stakingRouter
@@ -125,9 +133,7 @@ describe("StakingRouter.sol:exit", () => {
             publicKey,
             eligibleToExitInSec,
           ),
-      ).to.be.revertedWith(
-        `AccessControl: account ${user.address.toLowerCase()} is missing role ${await stakingRouter.REPORT_VALIDATOR_EXITING_STATUS_ROLE()}`,
-      );
+      ).to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount");
     });
   });
 
@@ -167,7 +173,7 @@ describe("StakingRouter.sol:exit", () => {
       await expect(
         stakingRouter.connect(reporter).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
       )
-        .to.emit(stakingRouter, "StakingModuleExitNotificationFailed")
+        .to.emit(stakingRouterWithLib, "StakingModuleExitNotificationFailed")
         .withArgs(STAKING_MODULE_ID, NODE_OPERATOR_ID, publicKey);
     });
 
@@ -185,7 +191,7 @@ describe("StakingRouter.sol:exit", () => {
 
       await expect(
         stakingRouter.connect(reporter).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
-      ).to.be.revertedWithCustomError(stakingRouter, "UnrecoverableModuleError");
+      ).to.be.revertedWithCustomError(stakingRouterWithLib, "UnrecoverableModuleError");
     });
 
     it("reverts when called by unauthorized user", async () => {
@@ -199,9 +205,7 @@ describe("StakingRouter.sol:exit", () => {
 
       await expect(
         stakingRouter.connect(user).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
-      ).to.be.revertedWith(
-        `AccessControl: account ${user.address.toLowerCase()} is missing role ${await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE()}`,
-      );
+      ).to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount");
     });
   });
 });

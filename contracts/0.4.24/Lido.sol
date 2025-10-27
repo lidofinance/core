@@ -21,11 +21,11 @@ interface IBurnerMigration {
 }
 
 interface IStakingRouter {
-    function deposit(uint256 _depositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external payable;
+    function deposit(uint256 _stakingModuleId, bytes _depositCalldata) external payable;
 
     function getStakingModuleMaxDepositsCount(
         uint256 _stakingModuleId,
-        uint256 _maxDepositsValue
+        uint256 _depositableEth
     ) external view returns (uint256);
 
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
@@ -34,7 +34,15 @@ interface IStakingRouter {
 
     function getWithdrawalCredentials() external view returns (bytes32);
 
-    function getStakingFeeAggregateDistributionE4Precision() external view returns (uint16 modulesFee, uint16 treasuryFee);
+    function getStakingFeeAggregateDistributionE4Precision()
+        external
+        view
+        returns (uint16 modulesFee, uint16 treasuryFee);
+
+    function getStakingModuleMaxInitialDepositsAmount(
+        uint256 _stakingModuleId,
+        uint256 _depositableEth
+    ) external returns (uint256 depositsAmount, uint256 depositsCount);
 }
 
 interface IWithdrawalQueue {
@@ -123,6 +131,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// keccak256("lido.Lido.clBalanceAndClValidators");
     bytes32 internal constant CL_BALANCE_AND_CL_VALIDATORS_POSITION =
         0xc36804a03ec742b57b141e4e5d8d3bd1ddb08451fd0f9983af8aaab357a78e2f;
+
+    // Storage for balance-based accounting
+    /// @dev storage slot position for CL active balance
+    /// keccak256("lido.Lido.clActiveBalance");
+    bytes32 internal constant CL_ACTIVE_BALANCE_POSITION =
+        keccak256("lido.Lido.clActiveBalance");
+    /// @dev storage slot position for CL pending balance
+    /// keccak256("lido.Lido.clPendingBalance");
+    bytes32 internal constant CL_PENDING_BALANCE_POSITION =
+        keccak256("lido.Lido.clPendingBalance");
+
     /// @dev storage slot position of the staking rate limit structure
     /// keccak256("lido.Lido.stakeLimit");
     bytes32 internal constant STAKING_STATE_POSITION =
@@ -142,7 +161,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event StakingLimitRemoved();
 
     // Emitted when validators number delivered by the oracle
+    // @deprecated This event is deprecated. Use CLBalancesUpdated instead for balance-based accounting
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
+
+    // Emitted when CL balances are updated by the oracle
+    event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clActiveBalance, uint256 clPendingBalance);
 
     // Emitted when depositedValidators value is changed
     event DepositedValidatorsChanged(uint256 depositedValidators);
@@ -601,16 +624,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @notice Get the key values related to the Consensus Layer side of the contract.
      * @return depositedValidators - number of deposited validators from Lido contract side
-     * @return beaconValidators - number of Lido validators visible on Consensus Layer, reported by oracle
-     * @return beaconBalance - total amount of ether on the Consensus Layer side (sum of all the balances of Lido validators)
+     * @return clActiveBalance - Active balance of validators on the consensus layer (without pending deposits)
+     * @return clPendingBalance - Pending deposits balance on the consensus layer
      */
     function getBeaconStat()
         external
         view
-        returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance)
+        returns (uint256 depositedValidators, uint256 clActiveBalance, uint256 clPendingBalance)
     {
         depositedValidators = _getDepositedValidators();
-        (beaconBalance, beaconValidators) = _getClBalanceAndClValidators();
+        clActiveBalance = CL_ACTIVE_BALANCE_POSITION.getStorageUint256();
+        clPendingBalance = CL_PENDING_BALANCE_POSITION.getStorageUint256();
     }
 
     /**
@@ -633,40 +657,39 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Invoke a deposit call to the Staking Router contract and update buffered counters
-     * @param _maxDepositsCount max deposits count
+     * @param _maxDepositsAmountPerBlock max deposits amount per block
      * @param _stakingModuleId id of the staking module to be deposited
      * @param _depositCalldata module calldata
      */
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external {
+    function deposit(uint256 _maxDepositsAmountPerBlock, uint256 _stakingModuleId, bytes _depositCalldata) external {
+        // TODO: get rid of _maxDepositsAmountPerBlock
         ILidoLocator locator = _getLidoLocator();
 
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
         require(canDeposit(), "CAN_NOT_DEPOSIT");
 
         IStakingRouter stakingRouter = _stakingRouter(locator);
-        uint256 depositsCount = Math256.min(
-            _maxDepositsCount,
-            stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther())
+        (uint256 depositsAmount, uint256 depositsCount) = stakingRouter.getStakingModuleMaxInitialDepositsAmount(
+            _stakingModuleId,
+            Math256.min(_maxDepositsAmountPerBlock, getDepositableEther())
         );
 
-        uint256 depositsValue;
-        if (depositsCount > 0) {
-            depositsValue = depositsCount.mul(DEPOSIT_SIZE);
+        if (depositsAmount > 0) {
             /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
             ///     even if the StakingRouter is a trusted contract.
 
             (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
             depositedValidators = depositedValidators.add(depositsCount);
 
-            _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsValue), depositedValidators);
-            emit Unbuffered(depositsValue);
+            _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsAmount), depositedValidators);
+            emit Unbuffered(depositsAmount);
             emit DepositedValidatorsChanged(depositedValidators);
         }
 
         /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether
         ///     sent to StakingRouter is counted as deposited. If StakingRouter can't deposit all
         ///     passed ether it MUST revert the whole transaction (never happens in normal circumstances)
-        stakingRouter.deposit.value(depositsValue)(depositsCount, _stakingModuleId, _depositCalldata);
+        stakingRouter.deposit.value(depositsAmount)(_stakingModuleId, _depositCalldata);
     }
 
     /**
@@ -789,26 +812,24 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @notice Process CL related state changes as a part of the report processing
      * @dev All data validation was done by Accounting and OracleReportSanityChecker
+     * @dev V2: Replaces validator counting with direct balance tracking for EIP-7251 support
      * @param _reportTimestamp timestamp of the report
-     * @param _preClValidators number of validators in the previous CL state (for event compatibility)
-     * @param _reportClValidators number of validators in the current CL state
-     * @param _reportClBalance total balance of the current CL state
+     * @param _clActiveBalance Active balance of validators on the consensus layer
+     * @param _clPendingBalance Pending deposits balance on the consensus layer
      */
-    function processClStateUpdate(
+    function processClStateUpdateV2(
         uint256 _reportTimestamp,
-        uint256 _preClValidators,
-        uint256 _reportClValidators,
-        uint256 _reportClBalance
+        uint256 _clActiveBalance,
+        uint256 _clPendingBalance
     ) external {
         _whenNotStopped();
         _auth(_accounting());
 
-        // Save the current CL balance and validators to
-        // calculate rewards on the next rebase
-        _setClBalanceAndClValidators(_reportClBalance, _reportClValidators);
+        // Update storage with new balance model
+        CL_ACTIVE_BALANCE_POSITION.setStorageUint256(_clActiveBalance);
+        CL_PENDING_BALANCE_POSITION.setStorageUint256(_clPendingBalance);
 
-        emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
-        // cl balance change are logged in ETHDistributed event later
+        emit CLBalancesUpdated(_reportTimestamp, _clActiveBalance, _clPendingBalance);
     }
 
     /**
@@ -958,7 +979,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ////////////////////////////////////////////////////////////////////////////
 
     /**
-     * @notice DEPRECATED: Returns current withdrawal credentials of deposited validators
+     * @notice DEPRECATED: Returns current 0x01 withdrawal credentials of deposited validators
      * @dev DEPRECATED: use StakingRouter.getWithdrawalCredentials() instead
      */
     function getWithdrawalCredentials() external view returns (bytes32) {
@@ -1033,20 +1054,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /// @dev Get the total amount of ether controlled by the protocol internally
-    /// (buffered + CL balance of StakingRouter controlled validators + transient)
+    /// (buffered + CL active balance + CL pending balance)
     function _getInternalEther() internal view returns (uint256) {
-        (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
-        (uint256 clBalance, uint256 clValidators) = _getClBalanceAndClValidators();
+        uint256 bufferedEther = _getBufferedEther();
+        uint256 clActiveBalance = CL_ACTIVE_BALANCE_POSITION.getStorageUint256();
+        uint256 clPendingBalance = CL_PENDING_BALANCE_POSITION.getStorageUint256();
 
-        // clValidators can never exceed depositedValidators.
-        assert(depositedValidators >= clValidators);
-        // the total base balance (multiple of 32) of validators in transient state,
-        // i.e. submitted to the official Deposit contract but not yet visible in the CL state.
-        uint256 transientEther = (depositedValidators - clValidators) * DEPOSIT_SIZE;
-
-        return bufferedEther
-            .add(clBalance)
-            .add(transientEther);
+        // With balance-based accounting, we don't need to calculate transientEther
+        // as pending deposits are already included in clPendingBalance
+        return bufferedEther.add(clActiveBalance).add(clPendingBalance);
     }
 
     /// @dev Calculate the amount of ether controlled by external entities
@@ -1099,9 +1115,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         if (totalShares * maxRatioBP <= externalShares * TOTAL_BASIS_POINTS) return 0;
 
-        return
-            (totalShares * maxRatioBP - externalShares * TOTAL_BASIS_POINTS) /
-            (TOTAL_BASIS_POINTS - maxRatioBP);
+        return (totalShares * maxRatioBP - externalShares * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - maxRatioBP);
     }
 
     function _pauseStaking() internal {
@@ -1284,10 +1298,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _newBufferedEther,
             _newDepositedValidators
         );
-    }
-
-    function _getClBalanceAndClValidators() internal view returns (uint256, uint256) {
-        return CL_BALANCE_AND_CL_VALIDATORS_POSITION.getLowAndHighUint128();
     }
 
     function _setClBalanceAndClValidators(uint256 _newClBalance, uint256 _newClValidators) internal {

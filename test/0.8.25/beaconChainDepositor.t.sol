@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
 import {Test} from "forge-std/Test.sol";
 import {CommonBase} from "forge-std/Base.sol";
@@ -9,7 +9,10 @@ import {StdUtils} from "forge-std/StdUtils.sol";
 import {StdAssertions} from "forge-std/StdAssertions.sol";
 import {IERC165} from "forge-std/interfaces/IERC165.sol";
 
-import {BeaconChainDepositor as BCDepositor} from "contracts/0.8.9/BeaconChainDepositor.sol";
+import {
+    BeaconChainDepositor as BCDepositor,
+    IDepositContract as IDepositContractLib
+} from "contracts/0.8.25/lib/BeaconChainDepositor.sol";
 
 // The following invariants are formulated and enforced for the `BeaconChainDepositor` contract:
 // - exactly 32 ETH gets attached with every single deposit
@@ -171,8 +174,13 @@ contract BCDepositorHandler is CommonBase, StdAssertions, StdUtils {
     }
 }
 
-contract BCDepositorHarness is BCDepositor {
-    constructor(address _depositContract) BCDepositor(_depositContract) {}
+contract BCDepositorHarness {
+    IDepositContractLib public immutable DEPOSIT_CONTRACT;
+    uint256 internal constant INITIAL_DEPOSIT_SIZE = 32 ether;
+
+    constructor(address _depositContract) {
+        DEPOSIT_CONTRACT = IDepositContractLib(_depositContract);
+    }
 
     /// @dev Exposed version of the _makeBeaconChainDeposits32ETH
     /// @param _keysCount amount of keys to deposit
@@ -185,7 +193,14 @@ contract BCDepositorHarness is BCDepositor {
         bytes memory _publicKeysBatch,
         bytes memory _signaturesBatch
     ) external {
-        _makeBeaconChainDeposits32ETH(_keysCount, _withdrawalCredentials, _publicKeysBatch, _signaturesBatch);
+        BCDepositor.makeBeaconChainDeposits32ETH(
+            DEPOSIT_CONTRACT,
+            _keysCount,
+            INITIAL_DEPOSIT_SIZE,
+            _withdrawalCredentials,
+            _publicKeysBatch,
+            _signaturesBatch
+        );
     }
 }
 

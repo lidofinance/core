@@ -24,8 +24,15 @@ export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_E
 async function deployMockAccountingAndStakingRouter() {
   const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
   const withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForAccountingOracle");
+  const lido = await ethers.deployContract("Lido__MockForAccounting");
   const accounting = await ethers.deployContract("Accounting__MockForAccountingOracle");
-  return { accounting, stakingRouter, withdrawalQueue };
+
+  // Initialize Lido mock with reasonable defaults for balance-based accounting
+  await lido.mock__setClActiveBalance(300n * 10n ** 18n); // 300 ETH active
+  await lido.mock__setClPendingBalance(20n * 10n ** 18n); // 20 ETH pending
+  await lido.mock__setDepositedValidators(10);
+
+  return { accounting, stakingRouter, withdrawalQueue, lido };
 }
 
 async function deployMockLazyOracle() {
@@ -46,7 +53,7 @@ export async function deployAccountingOracleSetup(
 ) {
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
-  const { accounting, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
+  const { accounting, stakingRouter, withdrawalQueue, lido } = await getLidoAndStakingRouter();
 
   const oracle = await ethers.deployContract("AccountingOracle__Harness", [
     lidoLocatorAddr || locatorAddr,
@@ -71,6 +78,7 @@ export async function deployAccountingOracleSetup(
     withdrawalQueue: await withdrawalQueue.getAddress(),
     accountingOracle: accountingOracleAddress,
     accounting: accountingAddress,
+    lido: await lido.getAddress(),
   });
 
   const lazyOracle = await deployMockLazyOracle();
@@ -94,6 +102,7 @@ export async function deployAccountingOracleSetup(
     accounting,
     stakingRouter,
     withdrawalQueue,
+    lido,
     locatorAddr,
     oracle,
     consensus,

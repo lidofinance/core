@@ -61,6 +61,9 @@ export async function main() {
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress], {
     from: deployer,
   });
+  await makeTx(stakingRouter, "grantRole", [await stakingRouter.ACCOUNTING_REPORT_ROLE(), accountingAddress], {
+    from: deployer,
+  });
   await makeTx(
     stakingRouter,
     "grantRole",

@@ -1,9 +1,8 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import { BigIntMath, certainAddress, ether, impersonate, log } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { BigIntMath, certainAddress, ether, impersonate, log, StakingModuleStatus, TOTAL_BASIS_POINTS } from "lib";
 
-import { ZERO_HASH } from "test/deploy";
+import { ZERO_HASH } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
@@ -20,12 +19,6 @@ export const unpauseStaking = async (ctx: ProtocolContext) => {
     log.success("Staking contract unpaused");
   }
 };
-
-export enum StakingModuleStatus {
-  Active = 0,
-  DepositsPaused = 1,
-  Stopped = 2,
-}
 
 export const getStakingModuleStatuses = async (
   ctx: ProtocolContext,
@@ -137,7 +130,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   }
 
   const isMaxDepositsCountNotEnough = async () => {
-    const maxDepositsCount = await stakingRouter.getStakingModuleMaxDepositsCount(moduleId, depositableEther);
+    const maxDepositsCount = await stakingRouter.getStakingModuleMaxDepositsCount(moduleId, ethToDeposit);
     return maxDepositsCount < depositsCount;
   };
 
@@ -162,7 +155,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
 
   // Deposit validators
-  await lido.connect(dsmSigner).deposit(depositsCount, moduleId, ZERO_HASH);
+  await lido.connect(dsmSigner).deposit(ethToDeposit, moduleId, ZERO_HASH);
 
   const numDepositedAfter = (await lido.getBeaconStat()).depositedValidators;
 
@@ -182,8 +175,8 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   log.debug("Validators on beacon chain before provisioning", {
     "Module ID to deposit": moduleId,
     "Deposited": before.depositedValidators,
-    "Total": before.beaconValidators,
-    "Balance": before.beaconBalance,
+    "Total": before.clActiveBalance,
+    "Balance": before.clPendingBalance,
   });
 
   // Add new validators to beacon chain
@@ -198,7 +191,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   log.debug("Validators on beacon chain after depositing", {
     "Module ID deposited": moduleId,
     "Deposited": after.depositedValidators,
-    "Total": after.beaconValidators,
-    "Balance": after.beaconBalance,
+    "Total": after.clActiveBalance,
+    "Balance": after.clPendingBalance,
   });
 };

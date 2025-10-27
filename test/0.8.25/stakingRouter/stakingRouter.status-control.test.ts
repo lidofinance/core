@@ -7,10 +7,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, proxify } from "lib";
+import { certainAddress, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
 
+import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
 enum Status {
   Active,
   DepositsPaused,
@@ -23,45 +24,44 @@ context("StakingRouter.sol:status-control", () => {
   let user: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter__Harness;
+  let stakingRouterWithLib: StakingRouterWithLib;
   let moduleId: bigint;
 
   let originalState: string;
+
+  const lido = certainAddress("test:staking-router-status:lido");
+  const withdrawalCredentials = hexlify(randomBytes(32));
 
   before(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
     // deploy staking router
-    const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
-      },
-    });
-
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
-
-    [stakingRouter] = await proxify({ impl, admin });
+    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin }));
 
     await stakingRouter.initialize(
       admin,
-      certainAddress("test:staking-router-status:lido"), // mock lido address
-      hexlify(randomBytes(32)), // mock withdrawal credentials
+      lido, // mock lido address
+      withdrawalCredentials,
     );
 
     // give the necessary role to the admin
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);
 
+    const stakingModuleConfig = {
+      stakeShareLimit: 1_00,
+      priorityExitShareThreshold: 1_00,
+      stakingModuleFee: 5_00,
+      treasuryFee: 5_00,
+      maxDepositsPerBlock: 150,
+      minDepositBlockDistance: 25,
+      moduleType: StakingModuleType.Legacy,
+    };
+
     // add staking module
     await stakingRouter.addStakingModule(
       "myStakingModule",
       certainAddress("test:staking-router-status:staking-module"), // mock staking module address
-      1_00, // target share
-      1_00, // target share
-      5_00, // module fee
-      5_00, // treasury fee
-      150, // max deposits per block
-      25, // min deposit block distance
+      stakingModuleConfig,
     );
 
     moduleId = await stakingRouter.getStakingModulesCount();
@@ -73,9 +73,9 @@ context("StakingRouter.sol:status-control", () => {
 
   context("setStakingModuleStatus", () => {
     it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter.connect(user).setStakingModuleStatus(moduleId, Status.DepositsPaused),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+      await expect(stakingRouter.connect(user).setStakingModuleStatus(moduleId, Status.DepositsPaused))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Reverts if the new status is the same", async () => {
@@ -86,7 +86,7 @@ context("StakingRouter.sol:status-control", () => {
 
     it("Updates the status of staking module", async () => {
       await expect(stakingRouter.setStakingModuleStatus(moduleId, Status.DepositsPaused))
-        .to.emit(stakingRouter, "StakingModuleStatusSet")
+        .to.emit(stakingRouterWithLib, "StakingModuleStatusSet")
         .withArgs(moduleId, Status.DepositsPaused, admin.address);
     });
 
@@ -94,7 +94,7 @@ context("StakingRouter.sol:status-control", () => {
       await stakingRouter.setStakingModuleStatus(moduleId, Status.DepositsPaused);
 
       await expect(stakingRouter.testing_setStakingModuleStatus(moduleId, Status.DepositsPaused)).to.not.emit(
-        stakingRouter,
+        stakingRouterWithLib,
         "StakingModuleStatusSet",
       );
       expect(await stakingRouter.getStakingModuleStatus(moduleId)).to.equal(Status.DepositsPaused);

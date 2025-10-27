@@ -95,6 +95,7 @@ export enum Sk {
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  consolidationGateway = "consolidationGateway",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
@@ -111,6 +112,9 @@ export enum Sk {
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
+  depositsTempStorage = "depositsTempStorage",
+  beaconChainDepositor = "beaconChainDepositor",
+  srLib = "srLib",
   // Easy Track
   vaultsAdapter = "vaultsAdapter",
 }
@@ -171,10 +175,13 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.tokenRebaseNotifier:
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
+    case Sk.consolidationGateway:
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
     case Sk.v3VoteScript:
+    case Sk.depositsTempStorage:
+    case Sk.beaconChainDepositor:
     case Sk.vaultsAdapter:
     case Sk.gateSealFactory:
       return state[contractKey].address;

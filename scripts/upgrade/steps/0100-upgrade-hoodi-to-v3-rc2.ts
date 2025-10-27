@@ -118,6 +118,7 @@ export async function main(): Promise<void> {
     oracleDaemonConfig: await locator.oracleDaemonConfig(),
     validatorExitDelayVerifier: await locator.validatorExitDelayVerifier(),
     triggerableWithdrawalsGateway: await locator.triggerableWithdrawalsGateway(),
+    consolidationGateway: await locator.consolidationGateway(),
     accounting: await locator.accounting(),
     predepositGuarantee: await locator.predepositGuarantee(),
     wstETH: wstethAddress,

@@ -57,6 +57,18 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         return newlyExitedValidatorsCount;
     }
 
+    function reportActiveBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _activeBalancesGwei,
+        uint256[] calldata _pendingBalancesGwei
+    ) external {
+        // do nothing
+    }
+
+    function getDepositAmountFromLastSlot(uint256) external view returns (uint256) {
+        return 0;
+    }
+
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
         uint256 stakingModuleId,
         bytes calldata nodeOperatorIds,
@@ -64,6 +76,16 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
     ) external {
         calls_reportExitedKeysByNodeOperator.push(
             ReportKeysByNodeOperatorCallData(stakingModuleId, nodeOperatorIds, exitedKeysCounts)
+        );
+    }
+
+    function reportStakingModuleOperatorBalances(
+        uint256 _stakingModuleId,
+        bytes calldata _operatorIds,
+        bytes calldata _effectiveBalances
+    ) external {
+        calls_reportExitedKeysByNodeOperator.push(
+            ReportKeysByNodeOperatorCallData(_stakingModuleId, _operatorIds, _effectiveBalances)
         );
     }
 

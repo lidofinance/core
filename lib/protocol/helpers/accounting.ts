@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccountingOracle } from "typechain-types";
-import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting";
+import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.sol/Accounting";
 
 import {
   advanceChainTime,
@@ -43,6 +43,9 @@ export type OracleReportParams = {
   extraDataList?: Uint8Array;
   stakingModuleIdsWithNewlyExitedValidators?: bigint[];
   numExitedValidatorsByStakingModule?: bigint[];
+  stakingModuleIdsWithUpdatedBalance?: bigint[];
+  activeBalancesGweiByStakingModule?: bigint[];
+  pendingBalancesGweiByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
   vaultsDataTreeRoot?: string;
@@ -82,6 +85,9 @@ export const report = async (
     extraDataList = new Uint8Array(),
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
+    stakingModuleIdsWithUpdatedBalance = [],
+    activeBalancesGweiByStakingModule = [],
+    pendingBalancesGweiByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
     vaultsDataTreeRoot = ZERO_BYTES32,
@@ -96,7 +102,9 @@ export const report = async (
 
   refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
-  const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
+  // TODO: Update to use balance-based accounting (clActiveBalance + clPendingBalance)
+  const { depositedValidators: beaconValidators, clActiveBalance, clPendingBalance } = await lido.getBeaconStat();
+  const beaconBalance = clActiveBalance + clPendingBalance;
   const postCLBalance = beaconBalance + clDiff;
   const postBeaconValidators = beaconValidators + clAppearedValidators;
 
@@ -175,13 +183,39 @@ export const report = async (
     log.debug("Bunker Mode", { "Is Active": isBunkerMode });
   }
 
+  const savedTotalClBalance = await ctx.contracts.stakingRouter.getTotalStakingModulesBalance();
+
+  if (stakingModuleIdsWithUpdatedBalance.length === 0) {
+    activeBalancesGweiByStakingModule = [];
+    pendingBalancesGweiByStakingModule = [];
+    let postCLBalanceRest = postCLBalance;
+    const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
+    for (const moduleId of moduleIds) {
+      const moduleClBalance = await ctx.contracts.stakingRouter.getStakingModuleBalance(moduleId);
+      const moduleClBalanceNew = BigIntMath.min(
+        (postCLBalance * moduleClBalance) / savedTotalClBalance,
+        postCLBalanceRest > 0n ? postCLBalanceRest : 0n,
+      );
+      postCLBalanceRest -= moduleClBalanceNew;
+      if (moduleClBalance > 0) {
+        stakingModuleIdsWithUpdatedBalance.push(moduleId);
+        activeBalancesGweiByStakingModule.push(moduleClBalanceNew / ONE_GWEI);
+        pendingBalancesGweiByStakingModule.push(0n);
+      }
+    }
+  }
+
   const reportData = {
     consensusVersion: await accountingOracle.getConsensusVersion(),
     refSlot,
-    numValidators: postBeaconValidators,
-    clBalanceGwei: postCLBalance / ONE_GWEI,
+    // TODO: Split clBalanceGwei into clActiveBalanceGwei + clPendingBalanceGwei
+    clActiveBalanceGwei: postCLBalance / ONE_GWEI,
+    clPendingBalanceGwei: 0n,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
+    stakingModuleIdsWithUpdatedBalance,
+    activeBalancesGweiByStakingModule,
+    pendingBalancesGweiByStakingModule,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
@@ -364,8 +398,9 @@ const simulateReport = async (
   const reportValues: ReportValuesStruct = {
     timestamp: reportTimestamp,
     timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
-    clValidators: beaconValidators,
-    clBalance,
+    // TODO: Split clBalance into clActiveBalance + clPendingBalance
+    clActiveBalance: clBalance,
+    clPendingBalance: 0n,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn: 0n,
@@ -433,8 +468,9 @@ export const handleOracleReport = async (
     await accounting.connect(accountingOracleAccount).handleOracleReport({
       timestamp: reportTimestamp,
       timeElapsed, // 1 day
-      clValidators: beaconValidators,
-      clBalance,
+      // TODO: Split clBalance into clActiveBalance + clPendingBalance
+      clActiveBalance: clBalance,
+      clPendingBalance: 0n,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
       sharesRequestedToBurn,
@@ -543,12 +579,15 @@ const getFinalizationBatches = async (
 export type OracleReportSubmitParams = {
   refSlot: bigint;
   clBalance: bigint;
-  numValidators: bigint;
+  // TODO: Remove numValidators, replace with clActiveBalance + clPendingBalance approach
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   sharesRequestedToBurn: bigint;
   stakingModuleIdsWithNewlyExitedValidators?: bigint[];
   numExitedValidatorsByStakingModule?: bigint[];
+  stakingModuleIdsWithUpdatedBalance?: bigint[];
+  activeBalancesGweiByStakingModule?: bigint[];
+  pendingBalancesGweiByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   simulatedShareRate?: bigint;
   isBunkerMode?: boolean;
@@ -574,12 +613,15 @@ const submitReport = async (
   {
     refSlot,
     clBalance,
-    numValidators,
+    // TODO: Remove numValidators from params
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
+    stakingModuleIdsWithUpdatedBalance = [],
+    activeBalancesGweiByStakingModule = [],
+    pendingBalancesGweiByStakingModule = [],
     withdrawalFinalizationBatches = [],
     simulatedShareRate = 0n,
     isBunkerMode = false,
@@ -596,12 +638,15 @@ const submitReport = async (
   log.debug("Pushing oracle report", {
     "Ref slot": refSlot,
     "CL balance": formatEther(clBalance),
-    "Validators": numValidators,
+    // TODO: Add proper validator count logging
     "Withdrawal vault": formatEther(withdrawalVaultBalance),
     "El rewards vault": formatEther(elRewardsVaultBalance),
     "Shares requested to burn": sharesRequestedToBurn,
     "Staking module ids with newly exited validators": stakingModuleIdsWithNewlyExitedValidators,
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
+    "Staking module ids with updated active balance": stakingModuleIdsWithUpdatedBalance,
+    "Active balances by staking module": activeBalancesGweiByStakingModule,
+    "Pending balances by staking module": pendingBalancesGweiByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
     "Vaults data tree root": vaultsDataTreeRoot,
@@ -618,13 +663,17 @@ const submitReport = async (
   const data = {
     consensusVersion,
     refSlot,
-    clBalanceGwei: clBalance / ONE_GWEI,
-    numValidators,
+    // TODO: Split clBalanceGwei into clActiveBalanceGwei + clPendingBalanceGwei
+    clActiveBalanceGwei: clBalance / ONE_GWEI,
+    clPendingBalanceGwei: 0n,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
+    stakingModuleIdsWithUpdatedBalance,
+    activeBalancesGweiByStakingModule,
+    pendingBalancesGweiByStakingModule,
     withdrawalFinalizationBatches,
     simulatedShareRate,
     isBunkerMode,
@@ -744,10 +793,14 @@ const reachConsensus = async (
 export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.consensusVersion,
   data.refSlot,
-  data.numValidators,
-  data.clBalanceGwei,
+  // TODO: Update to use clActiveBalanceGwei + clPendingBalanceGwei instead of numValidators + clBalanceGwei
+  data.clActiveBalanceGwei,
+  data.clPendingBalanceGwei,
   data.stakingModuleIdsWithNewlyExitedValidators,
   data.numExitedValidatorsByStakingModule,
+  data.stakingModuleIdsWithUpdatedBalance,
+  data.activeBalancesGweiByStakingModule,
+  data.pendingBalancesGweiByStakingModule,
   data.withdrawalVaultBalance,
   data.elRewardsVaultBalance,
   data.sharesRequestedToBurn,
@@ -768,10 +821,14 @@ export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>)
   const types = [
     "uint256", // consensusVersion
     "uint256", // refSlot
-    "uint256", // numValidators
-    "uint256", // clBalanceGwei
+    // TODO: Update types to match new balance-based structure
+    "uint256", // clActiveBalanceGwei
+    "uint256", // clPendingBalanceGwei
     "uint256[]", // stakingModuleIdsWithNewlyExitedValidators
     "uint256[]", // numExitedValidatorsByStakingModule
+    "uint256[]", // stakingModuleIdsWithUpdatedBalance
+    "uint256[]", // activeBalancesGweiByStakingModule
+    "uint256[]", // pendingBalancesGweiByStakingModule
     "uint256", // withdrawalVaultBalance
     "uint256", // elRewardsVaultBalance
     "uint256", // sharesRequestedToBurn
