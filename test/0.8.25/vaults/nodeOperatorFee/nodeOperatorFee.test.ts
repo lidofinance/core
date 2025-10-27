@@ -511,7 +511,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(nodeOperatorFee.connect(stranger).disburseFee())
         .to.emit(nodeOperatorFee, "FeeDisbursed")
-        .withArgs(stranger, adjustedFee)
+        .withArgs(stranger, adjustedFee, await nodeOperatorFee.feeRecipient())
         .and.to.emit(nodeOperatorFee, "SettledGrowthSet");
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
@@ -780,7 +780,7 @@ describe("NodeOperatorFee.sol", () => {
       const newOperatorFeeRate = 5_00n; // 5%
       await expect(nodeOperatorFee.connect(vaultOwner).setFeeRate(newOperatorFeeRate))
         .to.emit(nodeOperatorFee, "FeeDisbursed")
-        .withArgs(vaultOwner, expectedFee);
+        .withArgs(vaultOwner, expectedFee, await nodeOperatorFee.feeRecipient());
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(0);
     });
