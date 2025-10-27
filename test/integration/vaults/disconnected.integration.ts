@@ -170,7 +170,11 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       );
 
       const nodeOperatorRoleAsAddress = ethers.zeroPadValue(nodeOperator.address, 32);
-      const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [stakingVault, 1n, 1000n]);
+      const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
+        await stakingVault.getAddress(),
+        1n,
+        1000n,
+      ]);
       const confirmTimestamp = await getNextBlockTimestamp();
       const expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
 
