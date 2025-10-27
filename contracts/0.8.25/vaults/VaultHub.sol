@@ -249,7 +249,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return the amount of ether that can be locked in the vault given the current total value
     /// @dev returns 0 if the vault is not connected
     function maxLockableValue(address _vault) external view returns (uint256) {
-        return _maxLockableValue(_vaultRecord(_vault));
+        return _maxLockableValue(_vaultRecord(_vault), 0);
     }
 
     /// @notice Calculates the total number of shares that is possible to mint on the vault
@@ -774,7 +774,7 @@ contract VaultHub is PausableUntilWithRoles {
             _record: record,
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
-            _lockableValueLimit: _maxLockableValue(record),
+            _lockableValueLimit: _maxLockableValue(record, 0),
             _shareLimit: connection.shareLimit,
             _overrideOperatorLimits: false
         });
@@ -1469,9 +1469,16 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Calculates the max lockable value of the vault
     /// @param _record The record of the vault
     /// @return the max lockable value of the vault
-    function _maxLockableValue(VaultRecord storage _record) internal view returns (uint256) {
+    function _maxLockableValue(VaultRecord storage _record, int256 _deltaValue) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
         uint256 unsettledLidoFees_ = _unsettledLidoFeesValue(_record);
+        if (_deltaValue < 0) {
+            uint256 absDeltaValue = uint256(-_deltaValue);
+            totalValue_ = totalValue_ > absDeltaValue ? totalValue_ - absDeltaValue : 0;
+        } else {
+            totalValue_ += uint256(_deltaValue);
+        }
+
         return totalValue_ > unsettledLidoFees_ ? totalValue_ - unsettledLidoFees_ : 0;
     }
 
@@ -1485,15 +1492,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         VaultConnection storage connection = _vaultConnection(_vault);
 
-        uint256 maxLockableValue_ = _maxLockableValue(record);
-        if (_deltaValue >= 0) {
-            maxLockableValue_ += uint256(_deltaValue);
-        } else {
-            uint256 negDeltaValue = uint256(-_deltaValue);
-            if (maxLockableValue_ < negDeltaValue) return 0;
-            maxLockableValue_ -= negDeltaValue;
-        }
-
+        uint256 maxLockableValue_ = _maxLockableValue(record, _deltaValue);
         uint256 minimalReserve_ = record.minimalReserve;
         if (maxLockableValue_ <= minimalReserve_) return 0;
 
