@@ -25,4 +25,4 @@ jobs:
         run: yarn test:integration:upgrade-template
         env:
           RPC_URL: "${{ secrets.ETH_RPC_URL }}"
-          UPGRADE_PARAMETERS_FILE: upgrade-parameters-mainnet.json
+          UPGRADE_PARAMETERS_FILE: scripts/upgrade/upgrade-params-mainnet.toml

@@ -1,0 +1,57 @@
+# Lido Protocol Upgrade Parameters - Hoodi Configuration
+# This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum Hoodi testnet
+
+[chainSpec]
+# Ethereum consensus layer specifications
+slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum consensus
+secondsPerSlot = 12                   # Duration of each slot in seconds
+genesisTime = 1742213400              # Ethereum Hoodi testnet genesis timestamp
+depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Ethereum Hoodi testnet deposit contract
+isHoodi = true
+
+# Gate seal configuration for vault operations
+[gateSealForVaults]
+sealDuration = 1209600  # 14 days
+sealingCommittee = "0x83BCE68B4e8b7071b2a664a26e6D3Bc17eEe3102"
+
+[easyTrack]
+trustedCaller = "0xeBe5948787Bb3a565F67ccD93cb85A91960c472a"     # Address of stVaults EasyTrack committee
+initialValidatorExitFeeLimit = "100000000000000000"              #  Max validator exit fee which can be spend for single key exit request
+# Phase 1: Pilot (starts with Lido V3 upgrade enacted) - https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665
+maxGroupShareLimit = "50000000000000000000000"                   # Max share limit which can be set for group by EasyTrack
+maxDefaultTierShareLimit = 0                                     # Max share limit which can be set for default tier by EasyTrack
+
+# Vault hub configuration for managing staking vaults
+[vaultHub]
+relativeShareLimitBP = 1000                    # Relative share limit in basis points (10%)
+
+# Lazy oracle configuration for delayed reward calculations - https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-32.md
+[lazyOracle]
+quarantinePeriod = 259200                      # Quarantine period in seconds (3 days) before rewards are distributed
+maxRewardRatioBP = 350                         # Maximum reward ratio in basis points (3.5%)
+maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per second, in wei (0.18 ETH)
+
+# Predeposit guarantee configuration for validator deposit guarantees
+[predepositGuarantee]
+genesisForkVersion = "0x10000910"     # Ethereum Hoodi testnet genesis fork version
+gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
+gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
+changeSlot = 0                        # Slot number when the change takes effect
+
+# Operator grid configuration for managing staking operators
+[operatorGrid]
+# Default tier parameters for operator classification and fee structure
+[operatorGrid.defaultTierParams]
+shareLimitInEther = "0"               # Share limit per tier in ETH
+reserveRatioBP = 5000                 # Reserve ratio in basis points (50%)
+forcedRebalanceThresholdBP = 4950     # Threshold for forced rebalancing in basis points (49.50%)
+infraFeeBP = 100                      # Infrastructure fee in basis points (1%)
+liquidityFeeBP = 650                  # Liquidity provision fee in basis points (6.5%)
+reservationFeeBP = 0                  # Reservation fee in basis points (0%)
+
+[burner]
+isMigrationAllowed = true             # Must be on for the upgrade to work (for scratch is it false)
+
+# Oracle and consensus version configuration
+[oracleVersions]
+ao_consensus_version = 5              # Accounting Oracle consensus version

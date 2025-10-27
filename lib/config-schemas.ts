@@ -79,9 +79,16 @@ const TriggerableWithdrawalsGatewaySchema = z.object({
   frameDurationInSec: PositiveIntSchema,
 });
 
+// Easy track schema
+const EasyTrackSchema = z.object({
+  trustedCaller: EthereumAddressSchema,
+  initialValidatorExitFeeLimit: BigIntStringSchema,
+  maxGroupShareLimit: BigIntStringSchema,
+  maxDefaultTierShareLimit: NonNegativeIntSchema,
+});
+
 // Oracle versions schema
 const OracleVersionsSchema = z.object({
-  vebo_consensus_version: PositiveIntSchema,
   ao_consensus_version: PositiveIntSchema,
 });
 
@@ -102,22 +109,17 @@ export const UpgradeParametersSchema = z.object({
   chainSpec: ChainSpecSchema.extend({
     genesisTime: z.number().int(),
     depositContract: EthereumAddressSchema,
+    isHoodi: z.boolean(),
   }),
   gateSealForVaults: z.object({
-    address: EthereumAddressSchema,
+    sealDuration: PositiveIntSchema,
+    sealingCommittee: EthereumAddressSchema,
   }),
-  easyTrack: z.object({
-    evmScriptExecutor: EthereumAddressSchema,
-    vaultsAdapter: EthereumAddressSchema,
-  }),
-  validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
+  easyTrack: EasyTrackSchema,
   vaultHub: VaultHubSchema,
   lazyOracle: LazyOracleSchema,
   predepositGuarantee: PredepositGuaranteeSchema.extend({
     genesisForkVersion: HexStringSchema,
-  }),
-  delegation: z.object({
-    wethContract: EthereumAddressSchema,
   }),
   operatorGrid: OperatorGridSchema,
   burner: BurnerSchema,

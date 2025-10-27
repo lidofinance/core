@@ -65,7 +65,7 @@ Please refer to the [Lido Contributor Code of Conduct](/CODE_OF_CONDUCT.md).
 
 ## License
 
-2024 Lido <info@lido.fi>
+2025 Lido <info@lido.fi>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

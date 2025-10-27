@@ -983,10 +983,10 @@ describe("OperatorGrid.sol", () => {
 
       await vaultHub.mock__deleteVaultConnection(vault_NO1_V1);
 
-      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
-      const tx = operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
-
-      await expect(tx).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
+      await expect(
+        operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit),
+      ).to.be.revertedWithCustomError(operatorGrid, "VaultNotConnected");
+      await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit)).to.not.be.reverted;
     });
   });
 

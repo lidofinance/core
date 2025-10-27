@@ -57,7 +57,7 @@ contract NodeOperatorFee is Permissions {
      */
     bytes32 public constant NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE =
         keccak256("vaults.NodeOperatorFee.ProveUnknownValidatorsRole");
-    
+
     /**
      * @notice If the accrued fee exceeds this BP of the total value, it is considered abnormally high.
      * An abnormally high fee can only be disbursed by `DEFAULT_ADMIN_ROLE`.
@@ -74,7 +74,7 @@ contract NodeOperatorFee is Permissions {
      * Since these assumptions are highly conservative, in practice the operator
      * would need to disburse even less frequently before approaching the threshold.
      */
-    uint256 constant internal ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00; 
+    uint256 constant internal ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00;
 
     // ==================== Packed Storage Slot 1 ====================
     /**
@@ -192,10 +192,10 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseFee() public {
-        (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
+        (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
         if (fee > abnormallyHighFeeThreshold) revert AbnormallyHighFee();
 
-       _disburseFee(fee, growth);
+        _disburseFee(fee, growth, feeRecipient);
     }
 
     /**
@@ -204,8 +204,8 @@ contract NodeOperatorFee is Permissions {
      * and the settled growth (used as baseline for fee) is set correctly.
      */
     function disburseAbnormallyHighFee() external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
-        (uint256 fee, int128 growth,) = _calculateFee();
-        _disburseFee(fee, growth);
+        (uint256 fee, int256 growth,) = _calculateFee();
+        _disburseFee(fee, growth, feeRecipient);
     }
 
     /**
@@ -292,14 +292,14 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
-    function _disburseFee(uint256 fee, int128 growth) internal {
+    function _disburseFee(uint256 fee, int256 growth, address _recipient) internal {
         // it's important not to revert here so as not to block disconnect
         if (fee == 0) return;
 
         _setSettledGrowth(growth);
+        _doWithdraw(_recipient, fee);
 
-        VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
-        emit FeeDisbursed(msg.sender, fee);
+        emit FeeDisbursed(msg.sender, fee, _recipient);
     }
 
     function _setSettledGrowth(int256 _newSettledGrowth) internal {
@@ -320,7 +320,7 @@ contract NodeOperatorFee is Permissions {
         _setSettledGrowth(_newSettledGrowth);
         latestCorrectionTimestamp = uint64(block.timestamp);
 
-        emit CorrectionTimestampUpdated(latestCorrectionTimestamp);
+        emit CorrectionTimestampUpdated(block.timestamp);
     }
 
     /**
@@ -335,9 +335,9 @@ contract NodeOperatorFee is Permissions {
         _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
-    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) {
+    function _calculateFee() internal view returns (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) {
         VaultHub.Report memory report = latestReport();
-        growth = int128(uint128(report.totalValue)) - int128(report.inOutDelta);
+        growth = int256(uint256(report.totalValue)) - report.inOutDelta;
         int256 unsettledGrowth = growth - settledGrowth;
 
         if (unsettledGrowth > 0) {
@@ -350,10 +350,10 @@ contract NodeOperatorFee is Permissions {
     function _setFeeRate(uint256 _newFeeRate) internal {
         if (_newFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
-        uint16 oldFeeRate = feeRate;
-        uint16 newFeeRate = _newFeeRate.toUint16();
+        uint256 oldFeeRate = feeRate;
+        uint256 newFeeRate = _newFeeRate;
 
-        feeRate = newFeeRate;
+        feeRate = uint16(newFeeRate);
 
         emit FeeRateSet(msg.sender, oldFeeRate, newFeeRate);
     }
@@ -371,16 +371,19 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @dev Emitted when the node operator fee is set.
+     * @param sender the address of the sender
      * @param oldFeeRate The old node operator fee rate.
      * @param newFeeRate The new node operator fee rate.
      */
-    event FeeRateSet(address indexed sender, uint64 oldFeeRate, uint64 newFeeRate);
+    event FeeRateSet(address indexed sender, uint256 oldFeeRate, uint256 newFeeRate);
 
     /**
      * @dev Emitted when the node operator fee is disbursed.
+     * @param sender the address of the sender
      * @param fee the amount of disbursed fee.
+     * @param recipient the address of recipient
      */
-    event FeeDisbursed(address indexed sender, uint256 fee);
+    event FeeDisbursed(address indexed sender, uint256 fee, address recipient);
 
     /**
      * @dev Emitted when the node operator fee recipient is set.
@@ -401,7 +404,7 @@ contract NodeOperatorFee is Permissions {
      * @dev Emitted when the settled growth is corrected.
      * @param timestamp new correction timestamp
      */
-    event CorrectionTimestampUpdated(uint64 timestamp);
+    event CorrectionTimestampUpdated(uint256 timestamp);
 
     // ==================== Errors ====================
 

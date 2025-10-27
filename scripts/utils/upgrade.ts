@@ -33,7 +33,7 @@ export function readUpgradeParameters(): UpgradeParameters {
   try {
     return validateUpgradeParameters(parsedData);
   } catch (error) {
-    throw new Error(`Invalid upgrade parameters: ${error}`);
+    throw new Error(`Invalid upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
   }
 }
 

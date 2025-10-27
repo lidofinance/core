@@ -734,11 +734,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     error InsufficientValidatorWithdrawalFee(uint256 _passed, uint256 _required);
 
     /**
-     * @notice Thrown when the vault is already ossified
-     */
-    error VaultOssified();
-
-    /**
      * @notice thrown when trying to recover ETH (via EIP-7528 address) using collectERC20
      */
     error EthCollectionNotAllowed();

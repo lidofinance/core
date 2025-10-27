@@ -147,15 +147,15 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _genesisForkVersion genesis fork version for the current chain
      * @param _gIFirstValidator packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in CL state tree
      * @param _gIFirstValidatorAfterChange packed GIndex of first validator after fork changes tree structure
-     * @param _changeSlot slot of the fork that alters first validator GIndex
-     * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _changeSlot = 0
+     * @param _pivotSlot slot of the fork that alters first validator GIndex
+     * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _pivotSlot = 0
      */
     constructor(
         bytes4 _genesisForkVersion,
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
-        uint64 _changeSlot
-    ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {
+        uint64 _pivotSlot
+    ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _pivotSlot) {
         DEPOSIT_DOMAIN = BLS12_381.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);
@@ -807,7 +807,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         if (amount == 0) revert ZeroArgument("msg.value");
         if (amount % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(amount);
 
-        _storage().nodeOperatorBalance[_nodeOperator].total += uint128(amount);
+        _storage().nodeOperatorBalance[_nodeOperator].total += amount;
 
         emit BalanceToppedUp(_nodeOperator, msg.sender, amount);
     }

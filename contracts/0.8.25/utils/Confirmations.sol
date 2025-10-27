@@ -197,6 +197,7 @@ abstract contract Confirmations {
 
     /**
      * @dev Emitted when the confirmation expiry is set.
+     * @param sender msg.sender of the call
      * @param oldConfirmExpiry The old confirmation expiry.
      * @param newConfirmExpiry The new confirmation expiry.
      */

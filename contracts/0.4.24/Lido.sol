@@ -240,7 +240,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
      * @param _initialMaxExternalRatioBP Initial maximum external ratio in basis points
      */
-    function finalizeUpgrade_v3(address _oldBurner, address[] _contractsWithBurnerAllowances, uint256 _initialMaxExternalRatioBP) external {
+    function finalizeUpgrade_v3(
+        address _oldBurner,
+        address[] _contractsWithBurnerAllowances,
+        uint256 _initialMaxExternalRatioBP
+    ) external {
         require(hasInitialized(), "NOT_INITIALIZED");
         _checkContractVersion(2);
         _setContractVersion(3);
