@@ -293,8 +293,12 @@ contract NodeOperatorFee is Permissions {
     }
 
     function _disburseFee(uint256 fee, int256 growth, address _recipient) internal {
-        // it's important not to revert here so as not to block disconnect
-        if (fee == 0) return;
+        if (fee == 0) {
+            // we still need to update the settledGrowth event if the fee is zero
+            // to avoid the retroactive fees
+            if (growth > settledGrowth) _setSettledGrowth(growth);
+            return;
+        }
 
         _setSettledGrowth(growth);
         _doWithdraw(_recipient, fee);
@@ -303,13 +307,12 @@ contract NodeOperatorFee is Permissions {
     }
 
     function _setSettledGrowth(int256 _newSettledGrowth) internal {
-        int128 oldSettledGrowth = settledGrowth;
+        int256 oldSettledGrowth = settledGrowth;
         if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
 
-        int128 newSettledGrowth = _newSettledGrowth.toInt128();
-        settledGrowth = newSettledGrowth;
+        settledGrowth = _newSettledGrowth.toInt128();
 
-        emit SettledGrowthSet(oldSettledGrowth, newSettledGrowth);
+        emit SettledGrowthSet(oldSettledGrowth, _newSettledGrowth);
     }
 
     /**
@@ -398,7 +401,7 @@ contract NodeOperatorFee is Permissions {
      * @param oldSettledGrowth the old settled growth
      * @param newSettledGrowth the new settled growth
      */
-    event SettledGrowthSet(int128 oldSettledGrowth, int128 newSettledGrowth);
+    event SettledGrowthSet(int256 oldSettledGrowth, int256 newSettledGrowth);
 
     /**
      * @dev Emitted when the settled growth is corrected.
