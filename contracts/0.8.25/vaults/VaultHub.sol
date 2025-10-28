@@ -1468,6 +1468,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Calculates the max lockable value of the vault
     /// @param _record The record of the vault
+    /// @param _deltaValue The delta value to apply to the total value of the vault (may be negative)
     /// @return the max lockable value of the vault
     function _maxLockableValue(VaultRecord storage _record, int256 _deltaValue) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
