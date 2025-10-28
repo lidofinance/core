@@ -14,7 +14,7 @@ import {
   OssifiableProxy__factory,
 } from "typechain-types";
 
-import { certainAddress, ether, getStorageAtPosition, impersonate, proxify } from "lib";
+import { certainAddress, ether, getStorageAtPosition, impersonate, proxify, TOTAL_BASIS_POINTS } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -121,18 +121,30 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       await expect(lido.finalizeUpgrade_v3(ZeroAddress, [], 0)).to.be.revertedWith("OLD_BURNER_ADDRESS_ZERO");
     });
 
-    it("Sets contract version to 3", async () => {
+    it("Sets contract version to 3 and max external ratio to 10", async () => {
       await expect(
         lido.finalizeUpgrade_v3(
           oldBurner,
           [nodeOperatorsRegistryAddress, simpleDvtAddress, csmAccountingAddress, withdrawalQueueAddress],
-          0,
+          10,
         ),
       )
         .to.emit(lido, "ContractVersionSet")
-        .withArgs(finalizeVersion);
-
+        .withArgs(finalizeVersion)
+        .and.emit(lido, "MaxExternalRatioBPSet")
+        .withArgs(10);
       expect(await lido.getContractVersion()).to.equal(finalizeVersion);
+      expect(await lido.getMaxExternalRatioBP()).to.equal(10);
+    });
+
+    it("Reverts if initial max external ratio is greater than total basis points", async () => {
+      await expect(
+        lido.finalizeUpgrade_v3(
+          oldBurner,
+          [nodeOperatorsRegistryAddress, simpleDvtAddress, csmAccountingAddress, withdrawalQueueAddress],
+          TOTAL_BASIS_POINTS + 1n,
+        ),
+      ).to.be.revertedWith("INVALID_MAX_EXTERNAL_RATIO");
     });
 
     it("Migrates storage successfully", async () => {
