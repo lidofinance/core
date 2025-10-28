@@ -737,9 +737,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _setExternalShares(externalShares - _amountOfShares);
         _burnShares(msg.sender, _amountOfShares);
 
-        // Increase staking limit
         uint256 stethAmount = getPooledEthByShares(_amountOfShares);
-        _increaseStakingLimit(stethAmount);
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+
+        /// NB: burning external shares must be allowed even when staking is paused to allow external ether withdrawals
+        if (stakeLimitData.isStakingLimitSet() && !stakeLimitData.isStakingPaused()) {
+            uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + stethAmount;
+
+            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
+                stakeLimitData.updatePrevStakeLimit(newStakeLimit)
+            );
+        }
 
         // Historically, Lido contract does not emit Transfer to zero address events
         // for burning but emits SharesBurnt instead, so it's kept here for compatibility
@@ -1127,6 +1135,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return _stakeLimitData.calculateCurrentStakeLimit();
     }
 
+    /// @dev note that staking limit may be increased by burnExternalShares function
     function _decreaseStakingLimit(uint256 _amount) internal {
         StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
         // There is an invariant that protocol pause also implies staking pause.
@@ -1139,17 +1148,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
             STAKING_STATE_POSITION.setStorageStakeLimitStruct(
                 stakeLimitData.updatePrevStakeLimit(currentStakeLimit - _amount)
-            );
-        }
-    }
-
-    function _increaseStakingLimit(uint256 _amount) internal {
-        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
-        if (stakeLimitData.isStakingLimitSet()) {
-            uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + _amount;
-
-            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
-                stakeLimitData.updatePrevStakeLimit(newStakeLimit)
             );
         }
     }
