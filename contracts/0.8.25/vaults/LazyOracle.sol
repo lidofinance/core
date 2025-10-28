@@ -442,7 +442,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             revert CumulativeLidoFeesTooLarge(_cumulativeLidoFees - previousCumulativeLidoFees, maxLidoFees);
         }
 
-        // 5. _maxLiabilityShares is greater or equal than _liabilityShares and current `maxLiabilityShares`
+        // 5. _maxLiabilityShares must be greater or equal than _liabilityShares
+        // _maxLiabilityShares must be less or equal than the currently tracked on-chain record.maxLiabilityShares
+        // (the latter can increase after the ref slot reported)
         if (_maxLiabilityShares < _liabilityShares || _maxLiabilityShares > record.maxLiabilityShares) {
             revert InvalidMaxLiabilityShares();
         }
