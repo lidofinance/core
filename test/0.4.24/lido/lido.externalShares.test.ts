@@ -420,6 +420,20 @@ describe("Lido.sol:externalShares", () => {
 
       expect(await lido.getCurrentStakeLimit()).to.equal(limit + amountToBurn);
     });
+
+    it("Burns shares correctly when staking is paused", async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+      await lido.setStakingLimit(ether("1500000"), ether("1000000"));
+
+      const amountToMint = await lido.getMaxMintableExternalShares();
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, amountToMint);
+
+      await lido.pauseStaking();
+
+      await expect(lido.connect(vaultHubSigner).burnExternalShares(amountToMint))
+        .to.emit(lido, "ExternalSharesBurnt")
+        .withArgs(amountToMint);
+    });
   });
 
   context("rebalanceExternalEtherToInternal", () => {
