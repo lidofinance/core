@@ -460,9 +460,4 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the vault is quarantined.
      */
     error VaultQuarantined();
-
-    /**
-     * @dev Error emitted when you try to disburse fees but there is no unsettled growth
-     */
-    error NoUnsettledGrowth();
 }
