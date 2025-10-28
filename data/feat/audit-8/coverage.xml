@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4912"  lines-covered="4688"  line-rate="0.9544"  branches-valid="2308"  branches-covered="2129"  branch-rate="0.9224"  timestamp="1761679303853" complexity="0" version="0.1">
+<coverage lines-valid="4911"  lines-covered="4690"  line-rate="0.955"  branches-valid="2308"  branches-covered="2130"  branch-rate="0.9229"  timestamp="1761679348822" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2143,7 +2143,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.vaults"  line-rate="0.8815000000000001"  branch-rate="0.8327" >
+	<package name="0.8.25.vaults"  line-rate="0.8845999999999999"  branch-rate="0.8347" >
 	<classes>
 		<class name="LazyOracle.sol"  filename="contracts/0.8.25/vaults/LazyOracle.sol"  line-rate="0.8917"  branch-rate="0.7857" >
 		<methods>
@@ -2942,10 +2942,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="26"  branch="false" />
-			<line number="173"  hits="26"  branch="false" />
-			<line number="175"  hits="26"  branch="false" />
-			<line number="176"  hits="26"  branch="false" />
+			<line number="172"  hits="8"  branch="false" />
+			<line number="173"  hits="8"  branch="false" />
+			<line number="175"  hits="8"  branch="false" />
+			<line number="176"  hits="8"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -3015,7 +3015,7 @@
 			<line number="157"  hits="19"  branch="false" />
 		</lines>
 		</class>
-		<class name="VaultHub.sol"  filename="contracts/0.8.25/vaults/VaultHub.sol"  line-rate="0.8109999999999999"  branch-rate="0.7313" >
+		<class name="VaultHub.sol"  filename="contracts/0.8.25/vaults/VaultHub.sol"  line-rate="0.8177"  branch-rate="0.7375" >
 		<methods>
 			<method name="constructor"  hits="11"  signature="()V" >
 				<lines><line number="164"  hits="11" /></lines>
@@ -3243,10 +3243,10 @@
 				<lines><line number="1459"  hits="94" /></lines>
 			</method>
 			<method name="_maxLockableValue"  hits="79"  signature="()V" >
-				<lines><line number="1472"  hits="79" /></lines>
+				<lines><line number="1473"  hits="79" /></lines>
 			</method>
 			<method name="_totalMintingCapacityShares"  hits="0"  signature="()V" >
-				<lines><line number="1484"  hits="0" /></lines>
+				<lines><line number="1492"  hits="0" /></lines>
 			</method>
 			<method name="_unlocked"  hits="95"  signature="()V" >
 				<lines><line number="1506"  hits="95" /></lines>
@@ -3697,17 +3697,16 @@
 			<line number="1464"  hits="94"  branch="false" />
 			<line number="1465"  hits="94"  branch="false" />
 			<line number="1466"  hits="94"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="1473"  hits="79"  branch="false" />
 			<line number="1474"  hits="79"  branch="false" />
-			<line number="1475"  hits="79"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="1485"  hits="0"  branch="false" />
-			<line number="1486"  hits="0"  branch="false" />
-			<line number="1488"  hits="0"  branch="false" />
-			<line number="1489"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="1490"  hits="0"  branch="false" />
-			<line number="1492"  hits="0"  branch="false" />
-			<line number="1493"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="1475"  hits="79"  branch="false" />
+			<line number="1476"  hits="79"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="1477"  hits="0"  branch="false" />
+			<line number="1478"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="1480"  hits="79"  branch="false" />
+			<line number="1483"  hits="79"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="1493"  hits="0"  branch="false" />
 			<line number="1494"  hits="0"  branch="false" />
+			<line number="1496"  hits="0"  branch="false" />
 			<line number="1497"  hits="0"  branch="false" />
 			<line number="1498"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="1500"  hits="0"  branch="false" />
