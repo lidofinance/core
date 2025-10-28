@@ -79,12 +79,17 @@ describe("Integration: LazyOracle", () => {
     });
 
     it("updates report data and check for all the parameters and events", async () => {
+      const { locator, hashConsensus, lido } = ctx.contracts;
+
+      await dashboard.fund({ value: ether("1") });
+      await dashboard.mintShares(owner, 13001n);
+      await lido.approve(dashboard, 2n);
+      await dashboard.burnShares(1n);
+
       await advanceChainTime(days(2n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      const { locator, hashConsensus } = ctx.contracts;
-
-      const totalValueArg = ether("1");
+      const totalValueArg = ether("2");
       const cumulativeLidoFeesArg = ether("0.1");
       const liabilitySharesArg = 13000n;
       const maxLiabilitySharesArg = 13001n;
@@ -113,7 +118,7 @@ describe("Integration: LazyOracle", () => {
 
       await expect(
         lazyOracle.updateVaultData(
-          await stakingVault.getAddress(),
+          stakingVault,
           totalValueArg,
           cumulativeLidoFeesArg,
           liabilitySharesArg,
@@ -127,7 +132,7 @@ describe("Integration: LazyOracle", () => {
           stakingVault,
           reportTimestampArg,
           totalValueArg,
-          ether("1"),
+          ether("2"),
           cumulativeLidoFeesArg,
           liabilitySharesArg,
           maxLiabilitySharesArg,
@@ -137,15 +142,15 @@ describe("Integration: LazyOracle", () => {
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       const record = await vaultHub.vaultRecord(stakingVault);
-      expect(record.report.totalValue).to.equal(ether("1"));
-      expect(record.report.inOutDelta).to.equal(ether("1"));
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
+      expect(record.report.totalValue).to.equal(ether("2"));
+      expect(record.report.inOutDelta).to.equal(ether("2"));
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
       expect(record.report.timestamp).to.equal(reportTimestampArg);
       expect(record.minimalReserve).to.equal(slashingReserveArg);
-      expect(record.maxLiabilityShares).to.equal(0n);
+      expect(record.maxLiabilityShares).to.equal(13000n);
       expect(await vaultHub.locked(stakingVault)).to.equal(
         await calculateLockedValue(ctx, stakingVault, {
-          liabilityShares: 0n,
+          liabilityShares: 13000n,
           minimalReserve: slashingReserveArg,
           reserveRatioBP: (await vaultHub.vaultConnection(stakingVault)).reserveRatioBP,
         }),
