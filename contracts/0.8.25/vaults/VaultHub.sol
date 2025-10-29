@@ -162,6 +162,10 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _consensusContract Hash consensus contract
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(ILidoLocator _locator, ILido _lido, IHashConsensus _consensusContract, uint256 _maxRelativeShareLimitBP) {
+        _requireNotZero(address(_locator));
+        _requireNotZero(address(_lido));
+        _requireNotZero(address(_consensusContract));
+
         _requireNotZero(_maxRelativeShareLimitBP);
         if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS) revert InvalidBasisPoints(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
 
