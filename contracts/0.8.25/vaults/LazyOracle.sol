@@ -196,11 +196,16 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return _storage().maxLidoFeeRatePerSecond;
     }
 
+    /// @notice returns the amount of total value that is pending in the quarantine for the given vault
+    function quarantineValue(address _vault) external view returns (uint256) {
+        return _storage().vaultQuarantines[_vault].pendingTotalValueIncrease;
+    }
+
     /// @notice returns the quarantine info for the vault
     /// @param _vault the address of the vault
     /// @dev returns zeroed structure if there is no active quarantine
     function vaultQuarantine(address _vault) external view returns (QuarantineInfo memory) {
-        Quarantine storage q = _storage().vaultQuarantines[_vault];
+        Quarantine memory q = _storage().vaultQuarantines[_vault];
         if (q.pendingTotalValueIncrease == 0) {
             return QuarantineInfo(false, 0, 0, 0);
         }

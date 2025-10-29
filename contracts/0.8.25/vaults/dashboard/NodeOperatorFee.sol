@@ -222,7 +222,7 @@ contract NodeOperatorFee is Permissions {
         if (latestCorrectionTimestamp >= _lazyOracle().latestReportTimestamp()) revert CorrectionAfterReport();
 
         // If the vault is quarantined, the total value is reduced and may not reflect the exemption
-        if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
+        if (_quarantineValue() != 0) revert VaultQuarantined();
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
@@ -243,7 +243,7 @@ contract NodeOperatorFee is Permissions {
      * @param _expectedSettledGrowth The expected current settled growth
      * @return bool True if correction was applied, false if awaiting confirmations
      */
-    function correctSettledGrowth(int256 _newSettledGrowth, int256 _expectedSettledGrowth) public returns (bool) {
+    function correctSettledGrowth(int256 _newSettledGrowth, int256 _expectedSettledGrowth) external returns (bool) {
         if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
@@ -290,6 +290,10 @@ contract NodeOperatorFee is Permissions {
 
     function _lazyOracle() internal view returns (LazyOracle) {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
+    }
+
+    function _quarantineValue() internal view returns (uint256) {
+        return _lazyOracle().quarantineValue(address(_stakingVault()));
     }
 
     function _disburseFee(uint256 fee, int256 growth, address _recipient) internal {
@@ -340,7 +344,8 @@ contract NodeOperatorFee is Permissions {
 
     function _calculateFee() internal view returns (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) {
         VaultHub.Report memory report = latestReport();
-        growth = int256(uint256(report.totalValue)) - report.inOutDelta;
+        // we include quarantined value for fees as well
+        growth = int256(uint256(report.totalValue)) + int256(_quarantineValue()) - report.inOutDelta;
         int256 unsettledGrowth = growth - settledGrowth;
 
         if (unsettledGrowth > 0) {
