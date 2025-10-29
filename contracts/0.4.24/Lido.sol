@@ -254,7 +254,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
 
         _setMaxExternalRatioBP(_initialMaxExternalRatioBP);
-        emit MaxExternalRatioBPSet(_initialMaxExternalRatioBP);
     }
 
     function _migrateStorage_v2_to_v3() internal {
@@ -458,11 +457,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function setMaxExternalRatioBP(uint256 _maxExternalRatioBP) external {
         _auth(STAKING_CONTROL_ROLE);
-        require(_maxExternalRatioBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_RATIO");
 
         _setMaxExternalRatioBP(_maxExternalRatioBP);
-
-        emit MaxExternalRatioBPSet(_maxExternalRatioBP);
     }
 
     /**
@@ -1303,7 +1299,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     function _setMaxExternalRatioBP(uint256 _newMaxExternalRatioBP) internal {
+        require(_newMaxExternalRatioBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_RATIO");
+
         LOCATOR_AND_MAX_EXTERNAL_RATIO_POSITION.setHighUint96(_newMaxExternalRatioBP);
+
+        emit MaxExternalRatioBPSet(_newMaxExternalRatioBP);
     }
 
     function _getMaxExternalRatioBP() internal view returns (uint256) {

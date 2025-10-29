@@ -78,78 +78,104 @@ describe("Integration: LazyOracle", () => {
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
     });
 
-    it("updates report data and check for all the parameters and events", async () => {
-      await advanceChainTime(days(2n));
-      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+    context("average vault report", () => {
+      let vaultReport: VaultReportItem;
 
-      const { locator, hashConsensus } = ctx.contracts;
+      beforeEach(async () => {
+        const { lido } = ctx.contracts;
 
-      const totalValueArg = ether("1");
-      const cumulativeLidoFeesArg = ether("0.1");
-      const liabilitySharesArg = 13000n;
-      const maxLiabilitySharesArg = 13001n;
-      const slashingReserveArg = ether("1.5");
-      const reportTimestampArg = await getCurrentBlockTimestamp();
-      const reportRefSlotArg = (await hashConsensus.getCurrentFrame()).refSlot;
+        await dashboard.fund({ value: ether("1") });
+        await dashboard.mintShares(owner, 13001n);
+        await lido.approve(dashboard, 2n);
+        await dashboard.burnShares(1n);
 
-      const vaultReport: VaultReportItem = {
-        vault: await stakingVault.getAddress(),
-        totalValue: totalValueArg,
-        cumulativeLidoFees: cumulativeLidoFeesArg,
-        liabilityShares: liabilitySharesArg,
-        maxLiabilityShares: maxLiabilitySharesArg,
-        slashingReserve: slashingReserveArg,
-      };
-      const reportTree = createVaultsReportTree([vaultReport]);
+        const totalValueArg = ether("2");
+        const cumulativeLidoFeesArg = ether("0.1");
+        const liabilitySharesArg = 13000n;
+        const maxLiabilitySharesArg = 13001n;
+        const slashingReserveArg = ether("1.5");
 
-      const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
-      await expect(
-        lazyOracle
-          .connect(accountingSigner)
-          .updateReportData(reportTimestampArg, reportRefSlotArg, reportTree.root, ""),
-      )
-        .to.emit(lazyOracle, "VaultsReportDataUpdated")
-        .withArgs(reportTimestampArg, reportRefSlotArg, reportTree.root, "");
+        vaultReport = {
+          vault: await stakingVault.getAddress(),
+          totalValue: totalValueArg,
+          cumulativeLidoFees: cumulativeLidoFeesArg,
+          liabilityShares: liabilitySharesArg,
+          maxLiabilityShares: maxLiabilitySharesArg,
+          slashingReserve: slashingReserveArg,
+        };
+      });
 
-      await expect(
-        lazyOracle.updateVaultData(
-          await stakingVault.getAddress(),
-          totalValueArg,
-          cumulativeLidoFeesArg,
-          liabilitySharesArg,
-          maxLiabilitySharesArg,
-          slashingReserveArg,
-          reportTree.getProof(0),
-        ),
-      )
-        .to.emit(vaultHub, "VaultReportApplied")
-        .withArgs(
-          stakingVault,
-          reportTimestampArg,
-          totalValueArg,
-          ether("1"),
-          cumulativeLidoFeesArg,
-          liabilitySharesArg,
-          maxLiabilitySharesArg,
-          slashingReserveArg,
+      it("reverts if maxLiabilityShares is less than liabilityShares", async () => {
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, { maxLiabilityShares: 12999n }),
+        ).to.be.revertedWithCustomError(lazyOracle, "InvalidMaxLiabilityShares");
+      });
+
+      it("reverts if maxLiabilityShares is greater than the currently tracked on-chain record.maxLiabilityShares", async () => {
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, { maxLiabilityShares: 13002n }),
+        ).to.be.revertedWithCustomError(lazyOracle, "InvalidMaxLiabilityShares");
+      });
+
+      it("updates report data and check for all the parameters and events", async () => {
+        const { locator, hashConsensus } = ctx.contracts;
+
+        await advanceChainTime(days(2n));
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+
+        const reportTimestampArg = await getCurrentBlockTimestamp();
+        const reportRefSlotArg = (await hashConsensus.getCurrentFrame()).refSlot;
+
+        const reportTree = createVaultsReportTree([vaultReport]);
+        const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
+        await expect(
+          lazyOracle
+            .connect(accountingSigner)
+            .updateReportData(reportTimestampArg, reportRefSlotArg, reportTree.root, ""),
+        )
+          .to.emit(lazyOracle, "VaultsReportDataUpdated")
+          .withArgs(reportTimestampArg, reportRefSlotArg, reportTree.root, "");
+
+        await expect(
+          lazyOracle.updateVaultData(
+            stakingVault,
+            vaultReport.totalValue,
+            vaultReport.cumulativeLidoFees,
+            vaultReport.liabilityShares,
+            vaultReport.maxLiabilityShares,
+            vaultReport.slashingReserve,
+            reportTree.getProof(0),
+          ),
+        )
+          .to.emit(vaultHub, "VaultReportApplied")
+          .withArgs(
+            stakingVault,
+            reportTimestampArg,
+            vaultReport.totalValue,
+            vaultReport.totalValue, // inOutDelta
+            vaultReport.cumulativeLidoFees,
+            vaultReport.liabilityShares,
+            vaultReport.maxLiabilityShares,
+            vaultReport.slashingReserve,
+          );
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+
+        const record = await vaultHub.vaultRecord(stakingVault);
+        expect(record.report.totalValue).to.equal(ether("2"));
+        expect(record.report.inOutDelta).to.equal(ether("2"));
+        expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
+        expect(record.report.timestamp).to.equal(reportTimestampArg);
+        expect(record.minimalReserve).to.equal(vaultReport.slashingReserve);
+        expect(record.maxLiabilityShares).to.equal(13000n);
+        expect(await vaultHub.locked(stakingVault)).to.equal(
+          await calculateLockedValue(ctx, stakingVault, {
+            liabilityShares: 13000n,
+            minimalReserve: vaultReport.slashingReserve,
+            reserveRatioBP: (await vaultHub.vaultConnection(stakingVault)).reserveRatioBP,
+          }),
         );
-
-      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
-
-      const record = await vaultHub.vaultRecord(stakingVault);
-      expect(record.report.totalValue).to.equal(ether("1"));
-      expect(record.report.inOutDelta).to.equal(ether("1"));
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
-      expect(record.report.timestamp).to.equal(reportTimestampArg);
-      expect(record.minimalReserve).to.equal(slashingReserveArg);
-      expect(record.maxLiabilityShares).to.equal(0n);
-      expect(await vaultHub.locked(stakingVault)).to.equal(
-        await calculateLockedValue(ctx, stakingVault, {
-          liabilityShares: 0n,
-          minimalReserve: slashingReserveArg,
-          reserveRatioBP: (await vaultHub.vaultConnection(stakingVault)).reserveRatioBP,
-        }),
-      );
+      });
     });
   });
 

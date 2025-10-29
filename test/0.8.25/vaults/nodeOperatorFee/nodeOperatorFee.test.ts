@@ -752,7 +752,7 @@ describe("NodeOperatorFee.sol", () => {
       );
     });
 
-    it("disburses any pending node operator fee", async () => {
+    it("works and disburses any pending node operator fee", async () => {
       // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
       // to simplify the test
       await nodeOperatorFee
@@ -783,6 +783,37 @@ describe("NodeOperatorFee.sol", () => {
         .withArgs(vaultOwner, expectedFee, await nodeOperatorFee.feeRecipient());
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(0);
+    });
+
+    it("settles growth event if fee rate is 0", async () => {
+      const report1 = {
+        totalValue: ether("100"),
+        inOutDelta: ether("100"),
+        timestamp: await getCurrentBlockTimestamp(),
+      };
+      await hub.setReport(report1, true); //fresh report to set fees
+
+      await nodeOperatorFee.connect(nodeOperatorManager).setFeeRate(0n);
+      await nodeOperatorFee.connect(vaultOwner).setFeeRate(0n);
+
+      // deposited 100 ETH, earned 1 ETH, fee is 0
+      const report2 = {
+        totalValue: ether("101"),
+        inOutDelta: ether("100"),
+        timestamp: await getCurrentBlockTimestamp(),
+      };
+      await hub.setReport(report2, true);
+
+      expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
+      expect(await nodeOperatorFee.settledGrowth()).to.equal(0n);
+
+      await expect(nodeOperatorFee.disburseFee())
+        .to.emit(nodeOperatorFee, "SettledGrowthSet")
+        .withArgs(0n, ether("1"))
+        .not.to.emit(hub, "Mock__Withdrawn")
+        .not.to.emit(nodeOperatorFee, "FeeDisbursed");
+
+      expect(await nodeOperatorFee.settledGrowth()).to.equal(ether("1"));
     });
   });
 
