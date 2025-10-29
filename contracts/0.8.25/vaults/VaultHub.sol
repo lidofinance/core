@@ -172,6 +172,7 @@ contract VaultHub is PausableUntilWithRoles {
         CONSENSUS_CONTRACT = _consensusContract;
 
         _disableInitializers();
+        _pauseUntil(PAUSE_INFINITELY);
     }
 
     /// @dev used to perform rebalance operations
