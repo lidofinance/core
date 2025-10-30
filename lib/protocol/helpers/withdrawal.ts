@@ -34,7 +34,7 @@ export const finalizeWQViaElVault = async (ctx: ProtocolContext) => {
 
   const initialMaxPositiveTokenRebase = await setMaxPositiveTokenRebase(ctx, LIMITER_PRECISION_BASE);
 
-  const ethToSubmit = ether("1000000"); // don't calculate required eth from withdrawal queue to accelerate tests
+  const ethToSubmit = ether("10000"); // don't calculate required eth from withdrawal queue to accelerate tests
 
   const lastRequestId = await withdrawalQueue.getLastRequestId();
   while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
@@ -52,7 +52,7 @@ export const finalizeWQViaSubmit = async (ctx: ProtocolContext) => {
   const { withdrawalQueue, lido } = ctx.contracts;
   const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("1000000000"));
 
-  const ethToSubmit = ether("1000000"); // don't calculate required eth from withdrawal queue to accelerate tests
+  const ethToSubmit = ether("10000"); // don't calculate required eth from withdrawal queue to accelerate tests
 
   const stakeLimitInfo = await lido.getStakeLimitFullInfo();
   await removeStakingLimit(ctx);

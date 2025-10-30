@@ -774,190 +774,204 @@ describe("Accounting", () => {
     );
   });
 
-  it("Should account correctly shares burn above limits", async () => {
-    const { lido, burner, wstETH } = ctx.contracts;
+  context("Withdrawal queue finalization", () => {
+    // NB: finalization inside the test itself may lead to errors with snapshot restoration
+    before(async () => {
+      await finalizeWQViaSubmit(ctx);
+    });
 
-    await finalizeWQViaSubmit(ctx);
+    it("Should account correctly shares burn above limits", async () => {
+      const { lido, burner, wstETH } = ctx.contracts;
 
-    await ensureWhaleHasFunds();
+      await ensureWhaleHasFunds();
 
-    const limit = await sharesBurnLimitNoPooledEtherChanges();
-    const excess = 42n;
-    const limitWithExcess = limit + excess;
+      const limit = await sharesBurnLimitNoPooledEtherChanges();
+      const excess = 42n;
+      const limitWithExcess = limit + excess;
 
-    const initialBurnerBalance = await lido.sharesOf(burner.address);
-    expect(await lido.sharesOf(wstETH.address)).to.be.greaterThan(limitWithExcess, "Not enough shares on wstETH");
+      const initialBurnerBalance = await lido.sharesOf(burner.address);
+      expect(await lido.sharesOf(wstETH.address)).to.be.greaterThan(limitWithExcess, "Not enough shares on wstETH");
 
-    const stethOfShares = await lido.getPooledEthByShares(limitWithExcess);
+      const stethOfShares = await lido.getPooledEthByShares(limitWithExcess);
 
-    const wstEthSigner = await impersonate(wstETH.address, ether("1"));
-    await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
+      const wstEthSigner = await impersonate(wstETH.address, ether("1"));
+      await lido.connect(wstEthSigner).approve(burner.address, stethOfShares);
 
-    const coverShares = limit / 3n;
-    const noCoverShares = limit - limit / 3n + excess;
+      const coverShares = limit / 3n;
+      const noCoverShares = limit - limit / 3n + excess;
 
-    const lidoSigner = await impersonate(lido.address);
+      const lidoSigner = await impersonate(lido.address);
 
-    const burnTx = await burner.connect(lidoSigner).requestBurnShares(wstETH.address, noCoverShares);
-    const burnTxReceipt = (await burnTx.wait()) as ContractTransactionReceipt;
-    const sharesBurntEvent = getFirstEvent(burnTxReceipt, "StETHBurnRequested");
+      const burnTx = await burner.connect(lidoSigner).requestBurnShares(wstETH.address, noCoverShares);
+      const burnTxReceipt = (await burnTx.wait()) as ContractTransactionReceipt;
+      const sharesBurntEvent = getFirstEvent(burnTxReceipt, "StETHBurnRequested");
 
-    expect(sharesBurntEvent.args.amountOfShares).to.equal(noCoverShares, "StETHBurnRequested: amountOfShares mismatch");
-    expect(sharesBurntEvent.args.isCover, "StETHBurnRequested: isCover mismatch").to.be.false;
-    expect(await lido.sharesOf(burner.address)).to.equal(
-      noCoverShares + initialBurnerBalance,
-      "Burner shares mismatch",
-    );
-
-    const burnForCoverRequest = await burner.connect(lidoSigner).requestBurnSharesForCover(wstETH.address, coverShares);
-    const burnForCoverRequestReceipt = (await burnForCoverRequest.wait()) as ContractTransactionReceipt;
-    const sharesBurntForCoverEvent = getFirstEvent(burnForCoverRequestReceipt, "StETHBurnRequested");
-
-    expect(sharesBurntForCoverEvent.args.amountOfShares).to.equal(
-      coverShares,
-      "StETHBurnRequested: amountOfShares mismatch",
-    );
-    expect(sharesBurntForCoverEvent.args.isCover, "StETHBurnRequested: isCover mismatch").to.be.true;
-    expect(await lido.sharesOf(burner.address)).to.equal(
-      limitWithExcess + initialBurnerBalance,
-      "Burner shares mismatch",
-    );
-
-    const totalSharesBefore = await lido.getTotalShares();
-
-    // Report
-    const params = { clDiff: 0n, excludeVaultsBalances: true };
-    const { reportTx } = (await report(ctx, params)) as {
-      reportTx: TransactionResponse;
-      extraDataTx: TransactionResponse;
-    };
-
-    const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { sharesBurntAmount, sharesToBurn } = getWithdrawalParams(reportTxReceipt);
-    const burnerShares = await lido.sharesOf(burner.address);
-    const burntDueToWithdrawals = sharesToBurn - burnerShares + initialBurnerBalance + excess;
-    expect(burntDueToWithdrawals).to.be.greaterThanOrEqual(0);
-    expect(sharesBurntAmount - burntDueToWithdrawals).to.equal(limit, "SharesBurnt: sharesAmount mismatch");
-
-    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
-    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
-
-    const totalSharesAfter = await lido.getTotalShares();
-    expect(totalSharesBefore - limit).to.equal(totalSharesAfter + burntDueToWithdrawals, "TotalShares change mismatch");
-
-    const extraShares = await lido.sharesOf(burner.address);
-    expect(extraShares).to.be.greaterThanOrEqual(excess, "Expected burner to have excess shares");
-
-    // Second report
-    const secondReportParams = { clDiff: 0n, excludeVaultsBalances: true };
-    const { reportTx: secondReportTx } = (await report(ctx, secondReportParams)) as {
-      reportTx: TransactionResponse;
-      extraDataTx: TransactionResponse;
-    };
-
-    const secondReportTxReceipt = (await secondReportTx.wait()) as ContractTransactionReceipt;
-
-    const withdrawalParams = getWithdrawalParams(secondReportTxReceipt);
-    expect(withdrawalParams.sharesBurntAmount).to.equal(extraShares, "SharesBurnt: sharesAmount mismatch");
-
-    const burnerSharesAfter = await lido.sharesOf(burner.address);
-    expect(burnerSharesAfter).to.equal(0, "Expected burner to have no shares");
-  });
-
-  it("Should account correctly overfill both vaults", async () => {
-    const { lido, withdrawalVault, elRewardsVault } = ctx.contracts;
-
-    await finalizeWQViaSubmit(ctx);
-
-    const limit = await rebaseLimitWei();
-    const excess = ether("10");
-    const limitWithExcess = limit + excess;
-
-    await setBalance(withdrawalVault.address, limitWithExcess);
-    await setBalance(elRewardsVault.address, limitWithExcess);
-
-    const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
-    const totalPooledEtherBefore = await lido.getTotalPooledEther();
-    const ethBalanceBefore = await ethers.provider.getBalance(lido.address);
-
-    let elVaultExcess = 0n;
-    let amountOfETHLocked = 0n;
-    let updatedLimit = 0n;
-    {
-      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true };
-      const { reportTx } = (await report(ctx, params)) as {
-        reportTx: TransactionResponse;
-        extraDataTx: TransactionResponse;
-      };
-      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-
-      updatedLimit = await rebaseLimitWei();
-      elVaultExcess = limitWithExcess - (updatedLimit - excess);
-
-      amountOfETHLocked = getWithdrawalParams(reportTxReceipt).amountOfETHLocked;
-
-      expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(
-        excess,
-        "Expected withdrawals vault to be filled with excess rewards",
+      expect(sharesBurntEvent.args.amountOfShares).to.equal(
+        noCoverShares,
+        "StETHBurnRequested: amountOfShares mismatch",
+      );
+      expect(sharesBurntEvent.args.isCover, "StETHBurnRequested: isCover mismatch").to.be.false;
+      expect(await lido.sharesOf(burner.address)).to.equal(
+        noCoverShares + initialBurnerBalance,
+        "Burner shares mismatch",
       );
 
-      const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
-      expect(withdrawalsReceivedEvent.args.amount).to.equal(limit, "WithdrawalsReceived: amount mismatch");
+      const burnForCoverRequest = await burner
+        .connect(lidoSigner)
+        .requestBurnSharesForCover(wstETH.address, coverShares);
+      const burnForCoverRequestReceipt = (await burnForCoverRequest.wait()) as ContractTransactionReceipt;
+      const sharesBurntForCoverEvent = getFirstEvent(burnForCoverRequestReceipt, "StETHBurnRequested");
 
-      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
-      expect(elRewardsVaultBalance).to.equal(limitWithExcess, "Expected EL vault to be kept unchanged");
-      expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
-    }
-    {
-      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true };
-      const { reportTx } = (await report(ctx, params)) as {
-        reportTx: TransactionResponse;
-        extraDataTx: TransactionResponse;
-      };
-      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-
-      const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
-      expect(withdrawalVaultBalance).to.equal(0, "Expected withdrawals vault to be emptied");
-
-      const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
-      expect(withdrawalsReceivedEvent.args.amount).to.equal(excess, "WithdrawalsReceived: amount mismatch");
-
-      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
-      expect(elRewardsVaultBalance).to.equal(elVaultExcess, "Expected EL vault to be filled with excess rewards");
-
-      const elRewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
-      expect(elRewardsEvent.args.amount).to.equal(updatedLimit - excess, "ELRewardsReceived: amount mismatch");
-    }
-    {
-      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true };
-      const { reportTx } = (await report(ctx, params)) as {
-        reportTx: TransactionResponse;
-        extraDataTx: TransactionResponse;
-      };
-      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-
-      expect(ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")).to.be.empty;
-
-      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
-      expect(elRewardsVaultBalance).to.equal(0, "Expected EL vault to be emptied");
-
-      const rewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
-      expect(rewardsEvent.args.amount).to.equal(elVaultExcess, "ELRewardsReceived: amount mismatch");
-
-      const totalELRewardsCollected = totalELRewardsCollectedBefore + limitWithExcess;
-      const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
-      expect(totalELRewardsCollected).to.equal(totalELRewardsCollectedAfter, "TotalELRewardsCollected change mismatch");
-
-      const expectedTotalPooledEther = totalPooledEtherBefore + limitWithExcess * 2n;
-      const totalPooledEtherAfter = await lido.getTotalPooledEther();
-      expect(expectedTotalPooledEther).to.equal(
-        totalPooledEtherAfter + amountOfETHLocked,
-        "TotalPooledEther change mismatch",
+      expect(sharesBurntForCoverEvent.args.amountOfShares).to.equal(
+        coverShares,
+        "StETHBurnRequested: amountOfShares mismatch",
+      );
+      expect(sharesBurntForCoverEvent.args.isCover, "StETHBurnRequested: isCover mismatch").to.be.true;
+      expect(await lido.sharesOf(burner.address)).to.equal(
+        limitWithExcess + initialBurnerBalance,
+        "Burner shares mismatch",
       );
 
-      const expectedEthBalance = ethBalanceBefore + limitWithExcess * 2n;
-      const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
-      expect(expectedEthBalance).to.equal(ethBalanceAfter + amountOfETHLocked, "Lido ETH balance change mismatch");
-    }
+      const totalSharesBefore = await lido.getTotalShares();
+
+      // Report
+      const params = { clDiff: 0n, excludeVaultsBalances: true };
+      const { reportTx } = (await report(ctx, params)) as {
+        reportTx: TransactionResponse;
+        extraDataTx: TransactionResponse;
+      };
+
+      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+      const { sharesBurntAmount, sharesToBurn } = getWithdrawalParams(reportTxReceipt);
+      const burnerShares = await lido.sharesOf(burner.address);
+      const burntDueToWithdrawals = sharesToBurn - burnerShares + initialBurnerBalance + excess;
+      expect(burntDueToWithdrawals).to.be.greaterThanOrEqual(0);
+      expect(sharesBurntAmount - burntDueToWithdrawals).to.equal(limit, "SharesBurnt: sharesAmount mismatch");
+
+      const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
+      expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
+
+      const totalSharesAfter = await lido.getTotalShares();
+      expect(totalSharesBefore - limit).to.equal(
+        totalSharesAfter + burntDueToWithdrawals,
+        "TotalShares change mismatch",
+      );
+
+      const extraShares = await lido.sharesOf(burner.address);
+      expect(extraShares).to.be.greaterThanOrEqual(excess, "Expected burner to have excess shares");
+
+      // Second report
+      const secondReportParams = { clDiff: 0n, excludeVaultsBalances: true };
+      const { reportTx: secondReportTx } = (await report(ctx, secondReportParams)) as {
+        reportTx: TransactionResponse;
+        extraDataTx: TransactionResponse;
+      };
+
+      const secondReportTxReceipt = (await secondReportTx.wait()) as ContractTransactionReceipt;
+
+      const withdrawalParams = getWithdrawalParams(secondReportTxReceipt);
+      expect(withdrawalParams.sharesBurntAmount).to.equal(extraShares, "SharesBurnt: sharesAmount mismatch");
+
+      const burnerSharesAfter = await lido.sharesOf(burner.address);
+      expect(burnerSharesAfter).to.equal(0, "Expected burner to have no shares");
+    });
+
+    it("Should account correctly overfill both vaults", async () => {
+      const { lido, withdrawalVault, elRewardsVault } = ctx.contracts;
+
+      const limit = await rebaseLimitWei();
+      const excess = ether("10");
+      const limitWithExcess = limit + excess;
+
+      await setBalance(withdrawalVault.address, limitWithExcess);
+      await setBalance(elRewardsVault.address, limitWithExcess);
+
+      const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
+      const totalPooledEtherBefore = await lido.getTotalPooledEther();
+      const ethBalanceBefore = await ethers.provider.getBalance(lido.address);
+
+      let elVaultExcess = 0n;
+      let amountOfETHLocked = 0n;
+      let updatedLimit = 0n;
+      {
+        const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true };
+        const { reportTx } = (await report(ctx, params)) as {
+          reportTx: TransactionResponse;
+          extraDataTx: TransactionResponse;
+        };
+        const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+
+        updatedLimit = await rebaseLimitWei();
+        elVaultExcess = limitWithExcess - (updatedLimit - excess);
+
+        amountOfETHLocked = getWithdrawalParams(reportTxReceipt).amountOfETHLocked;
+
+        expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(
+          excess,
+          "Expected withdrawals vault to be filled with excess rewards",
+        );
+
+        const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
+        expect(withdrawalsReceivedEvent.args.amount).to.equal(limit, "WithdrawalsReceived: amount mismatch");
+
+        const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
+        expect(elRewardsVaultBalance).to.equal(limitWithExcess, "Expected EL vault to be kept unchanged");
+        expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
+      }
+      {
+        const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true };
+        const { reportTx } = (await report(ctx, params)) as {
+          reportTx: TransactionResponse;
+          extraDataTx: TransactionResponse;
+        };
+        const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+
+        const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
+        expect(withdrawalVaultBalance).to.equal(0, "Expected withdrawals vault to be emptied");
+
+        const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
+        expect(withdrawalsReceivedEvent.args.amount).to.equal(excess, "WithdrawalsReceived: amount mismatch");
+
+        const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
+        expect(elRewardsVaultBalance).to.equal(elVaultExcess, "Expected EL vault to be filled with excess rewards");
+
+        const elRewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
+        expect(elRewardsEvent.args.amount).to.equal(updatedLimit - excess, "ELRewardsReceived: amount mismatch");
+      }
+      {
+        const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true };
+        const { reportTx } = (await report(ctx, params)) as {
+          reportTx: TransactionResponse;
+          extraDataTx: TransactionResponse;
+        };
+        const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+
+        expect(ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")).to.be.empty;
+
+        const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
+        expect(elRewardsVaultBalance).to.equal(0, "Expected EL vault to be emptied");
+
+        const rewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
+        expect(rewardsEvent.args.amount).to.equal(elVaultExcess, "ELRewardsReceived: amount mismatch");
+
+        const totalELRewardsCollected = totalELRewardsCollectedBefore + limitWithExcess;
+        const totalELRewardsCollectedAfter = await lido.getTotalELRewardsCollected();
+        expect(totalELRewardsCollected).to.equal(
+          totalELRewardsCollectedAfter,
+          "TotalELRewardsCollected change mismatch",
+        );
+
+        const expectedTotalPooledEther = totalPooledEtherBefore + limitWithExcess * 2n;
+        const totalPooledEtherAfter = await lido.getTotalPooledEther();
+        expect(expectedTotalPooledEther).to.equal(
+          totalPooledEtherAfter + amountOfETHLocked,
+          "TotalPooledEther change mismatch",
+        );
+
+        const expectedEthBalance = ethBalanceBefore + limitWithExcess * 2n;
+        const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
+        expect(expectedEthBalance).to.equal(ethBalanceAfter + amountOfETHLocked, "Lido ETH balance change mismatch");
+      }
+    });
   });
 });
