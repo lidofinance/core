@@ -24,6 +24,11 @@ contract NodeOperatorFee is Permissions {
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
 
     /**
+     * @dev arbitrary number that is big enough to be infinite settled growth
+     */
+    int256 internal constant MAX_SANE_SETTLED_GROWTH = type(int104).max;
+
+    /**
      * @notice Parent role representing the node operator of the underlying StakingVault.
      * The members may not include the node operator address recorded in the underlying StakingVault
      * but it is assumed that the members of this role act in the interest of that node operator.
@@ -152,7 +157,7 @@ contract NodeOperatorFee is Permissions {
      * @notice The roles that must confirm critical parameter changes in the contract.
      * @return roles is an array of roles that form the confirming roles.
      */
-    function confirmingRoles() public pure override returns (bytes32[] memory roles) {
+    function confirmingRoles() public pure returns (bytes32[] memory roles) {
         roles = new bytes32[](2);
         roles[0] = DEFAULT_ADMIN_ROLE;
         roles[1] = NODE_OPERATOR_MANAGER_ROLE;
@@ -237,7 +242,11 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Manually corrects the settled growth value with dual confirmation.
-     * Used to correct fee calculation.
+     * Used to correct fee calculation and enable fee accrual after reconnection
+     *
+     * NB. When the vault is disconnected the information about the inOutDelta is effectively wiped and when the vault is
+     * connected back, inOutDelta as well as totalValue is set to the vault's availableBalance until the first Oracle report
+     * that will show the growth equal to the sum of all validators' balance
      *
      * @param _newSettledGrowth The corrected settled growth value
      * @param _expectedSettledGrowth The expected current settled growth
@@ -337,9 +346,10 @@ contract NodeOperatorFee is Permissions {
      * @dev fee exemption can only be positive
      */
     function _addFeeExemption(uint256 _amount) internal {
-        if (_amount > type(uint104).max) revert UnexpectedFeeExemptionAmount();
+        int256 amount = int256(_amount);
+        if (amount > MAX_SANE_SETTLED_GROWTH) revert UnexpectedFeeExemptionAmount();
 
-        _correctSettledGrowth(settledGrowth + int256(_amount));
+        _correctSettledGrowth(settledGrowth + amount);
     }
 
     function _calculateFee() internal view returns (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) {
@@ -353,6 +363,11 @@ contract NodeOperatorFee is Permissions {
         }
 
         abnormallyHighFeeThreshold = (report.totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
+    }
+
+    function _stopFeeAccrual() internal {
+        // effectively stopping fee accrual by setting over the top settledGrowth
+        if (settledGrowth < MAX_SANE_SETTLED_GROWTH) _setSettledGrowth(MAX_SANE_SETTLED_GROWTH);
     }
 
     function _setFeeRate(uint256 _newFeeRate) internal {

@@ -249,9 +249,19 @@ contract Dashboard is NodeOperatorFee {
      *         without disconnecting it from the hub
      * @param _newOwner Address of the new owner.
      * @return bool True if the ownership transfer was executed, false if pending for confirmation
+     * @dev after invoking this method node operator fee accrual is effectively disabled
+     *      to reenable it (after disconnect fail or reconnect) the related parties must agree on `settledGrowth`
+     *      using `correctSettledGrowth()` method
      */
     function transferVaultOwnership(address _newOwner) external returns (bool) {
-        return _transferVaultOwnership(_newOwner);
+        if (_newOwner == address(this)) revert DashboardNotAllowed();
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
+
+        disburseFee();
+        _stopFeeAccrual();
+
+        VAULT_HUB.transferVaultOwnership(address(_stakingVault()), _newOwner);
+        return true;
     }
 
     /**
@@ -262,10 +272,15 @@ contract Dashboard is NodeOperatorFee {
      * @dev reverts if there is not enough ether on the vault balance to pay the accrued node operator fees
      * @dev node operator fees accrued on the moment of disconnection are collected to Dashboard address as `feeLeftover`
      *      and can be recovered later to the fee recipient address
+     * @dev after invoking this method node operator fee accrual is effectively disabled
+     *      to reenable it (after disconnect fail or reconnect) the related parties must agree on `settledGrowth`
+     *      using `correctSettledGrowth()` method
      */
     function voluntaryDisconnect() external {
         // fee are not disbursed to the feeRecipient address to avoid reverts blocking the disconnection
         _collectFeeLeftover();
+        _stopFeeAccrual();
+
         _voluntaryDisconnect();
     }
 
@@ -289,7 +304,6 @@ contract Dashboard is NodeOperatorFee {
     function abandonDashboard(address _newOwner) external {
         if (VAULT_HUB.isVaultConnected(address(_stakingVault()))) revert ConnectedToVaultHub();
         if (_newOwner == address(this)) revert DashboardNotAllowed();
-        if (settledGrowth != 0) _setSettledGrowth(0);
 
         _acceptOwnership();
         _transferOwnership(_newOwner);
@@ -298,6 +312,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
+     * @dev correct the settled growth before reconnecting in order to enable the fee accrual for the node operator
      * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
     function reconnectToVaultHub(uint256 _currentSettledGrowth) external {
@@ -308,6 +323,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Connects to VaultHub, transferring underlying StakingVault ownership to VaultHub.
      * @param _currentSettledGrowth The current settled growth value to verify against the stored one
+     * @dev correct the settled growth before reconnecting in order to enable the fee accrual for the node operator
      */
     function connectToVaultHub(uint256 _currentSettledGrowth) public payable {
         if (settledGrowth != int256(_currentSettledGrowth)) {
@@ -323,6 +339,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
      * @param _currentSettledGrowth The current settled growth value to verify against the stored one
+     * @dev correct the settled growth before reconnecting in order to enable the fee accrual for the node operator
      */
     function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit, uint256 _currentSettledGrowth) external payable {
         connectToVaultHub(_currentSettledGrowth);
