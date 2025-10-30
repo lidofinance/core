@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4917"  lines-covered="4695"  line-rate="0.9549"  branches-valid="2310"  branches-covered="2129"  branch-rate="0.9216"  timestamp="1761820910195" complexity="0" version="0.1">
+<coverage lines-valid="4918"  lines-covered="4696"  line-rate="0.9549"  branches-valid="2310"  branches-covered="2129"  branch-rate="0.9216"  timestamp="1761851292753" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2139,7 +2139,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.vaults"  line-rate="0.8837"  branch-rate="0.8347" >
+	<package name="0.8.25.vaults"  line-rate="0.8837"  branch-rate="0.8327" >
 	<classes>
 		<class name="LazyOracle.sol"  filename="contracts/0.8.25/vaults/LazyOracle.sol"  line-rate="0.8843000000000001"  branch-rate="0.7857" >
 		<methods>
@@ -2355,7 +2355,7 @@
 			<line number="635"  hits="9"  branch="false" />
 		</lines>
 		</class>
-		<class name="OperatorGrid.sol"  filename="contracts/0.8.25/vaults/OperatorGrid.sol"  line-rate="0.9948"  branch-rate="0.9672" >
+		<class name="OperatorGrid.sol"  filename="contracts/0.8.25/vaults/OperatorGrid.sol"  line-rate="0.9948"  branch-rate="0.9590000000000001" >
 		<methods>
 			<method name="constructor"  hits="4"  signature="()V" >
 				<lines><line number="158"  hits="4" /></lines>
@@ -2609,7 +2609,7 @@
 			<line number="757"  hits="46"  branch="false" />
 			<line number="758"  hits="46"  branch="false" />
 			<line number="760"  hits="46"  branch="false" />
-			<line number="761"  hits="46"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="761"  hits="46"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="763"  hits="46"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="765"  hits="2"  branch="false" />
 			<line number="766"  hits="2"  branch="false" />
@@ -2942,10 +2942,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="49"  branch="false" />
-			<line number="173"  hits="49"  branch="false" />
-			<line number="175"  hits="49"  branch="false" />
-			<line number="176"  hits="49"  branch="false" />
+			<line number="172"  hits="6"  branch="false" />
+			<line number="173"  hits="6"  branch="false" />
+			<line number="175"  hits="6"  branch="false" />
+			<line number="176"  hits="6"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -3747,7 +3747,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.vaults.dashboard"  line-rate="0.9606"  branch-rate="0.8714" >
+	<package name="0.8.25.vaults.dashboard"  line-rate="0.9608"  branch-rate="0.8714" >
 	<classes>
 		<class name="Dashboard.sol"  filename="contracts/0.8.25/vaults/dashboard/Dashboard.sol"  line-rate="0.9416"  branch-rate="0.8387" >
 		<methods>
@@ -4117,13 +4117,13 @@
 				<lines><line number="355"  hits="102" /></lines>
 			</method>
 			<method name="_stopFeeAccrual"  hits="6"  signature="()V" >
-				<lines><line number="368"  hits="6" /></lines>
+				<lines><line number="369"  hits="6" /></lines>
 			</method>
 			<method name="_setFeeRate"  hits="31"  signature="()V" >
-				<lines><line number="373"  hits="31" /></lines>
+				<lines><line number="374"  hits="31" /></lines>
 			</method>
 			<method name="_setFeeRecipient"  hits="23"  signature="()V" >
-				<lines><line number="384"  hits="23" /></lines>
+				<lines><line number="385"  hits="23" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -4184,20 +4184,21 @@
 			<line number="356"  hits="102"  branch="false" />
 			<line number="358"  hits="102"  branch="false" />
 			<line number="359"  hits="102"  branch="false" />
-			<line number="361"  hits="102"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="362"  hits="38"  branch="false" />
-			<line number="365"  hits="102"  branch="false" />
-			<line number="370"  hits="6"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="374"  hits="31"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="376"  hits="31"  branch="false" />
+			<line number="360"  hits="102"  branch="false" />
+			<line number="362"  hits="102"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="363"  hits="38"  branch="false" />
+			<line number="366"  hits="102"  branch="false" />
+			<line number="371"  hits="6"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="375"  hits="31"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="377"  hits="31"  branch="false" />
-			<line number="379"  hits="31"  branch="false" />
-			<line number="381"  hits="31"  branch="false" />
-			<line number="385"  hits="23"  branch="false" />
-			<line number="386"  hits="22"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="388"  hits="22"  branch="false" />
+			<line number="378"  hits="31"  branch="false" />
+			<line number="380"  hits="31"  branch="false" />
+			<line number="382"  hits="31"  branch="false" />
+			<line number="386"  hits="23"  branch="false" />
+			<line number="387"  hits="22"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="389"  hits="22"  branch="false" />
 			<line number="390"  hits="22"  branch="false" />
+			<line number="391"  hits="22"  branch="false" />
 		</lines>
 		</class>
 		<class name="Permissions.sol"  filename="contracts/0.8.25/vaults/dashboard/Permissions.sol"  line-rate="0.9565"  branch-rate="0.9" >
@@ -4467,7 +4468,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.vaults.predeposit_guarantee"  line-rate="0.9440000000000001"  branch-rate="0.8356999999999999" >
+	<package name="0.8.25.vaults.predeposit_guarantee"  line-rate="0.9440000000000001"  branch-rate="0.8429000000000001" >
 	<classes>
 		<class name="CLProofVerifier.sol"  filename="contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol"  line-rate="0.9375"  branch-rate="0.625" >
 		<methods>
@@ -4506,7 +4507,7 @@
 			<line number="217"  hits="21"  branch="false" />
 		</lines>
 		</class>
-		<class name="MeIfNobodyElse.sol"  filename="contracts/0.8.25/vaults/predeposit_guarantee/MeIfNobodyElse.sol"  line-rate="1"  branch-rate="0.75" >
+		<class name="MeIfNobodyElse.sol"  filename="contracts/0.8.25/vaults/predeposit_guarantee/MeIfNobodyElse.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
 			<method name="getValueOrKey"  hits="125"  signature="()V" >
 				<lines><line number="12"  hits="125" /></lines>
@@ -4518,7 +4519,7 @@
 		<lines>
 			<line number="13"  hits="125"  branch="false" />
 			<line number="14"  hits="125"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="19"  hits="15"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="19"  hits="15"  branch="true"  condition-coverage="100% (2/2)" />
 		</lines>
 		</class>
 		<class name="PredepositGuarantee.sol"  filename="contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol"  line-rate="0.9437000000000001"  branch-rate="0.8515999999999999" >
