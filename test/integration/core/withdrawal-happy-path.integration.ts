@@ -23,6 +23,8 @@ describe("Integration: Withdrawal happy path", () => {
 
     [, holder] = await ethers.getSigners();
     await setBalance(holder.address, ether("1000000"));
+
+    await finalizeWQViaElVault(ctx);
   });
 
   after(async () => await Snapshot.restore(snapshot));
@@ -33,8 +35,6 @@ describe("Integration: Withdrawal happy path", () => {
     const REQUESTS_SUM = REQUEST_AMOUNT * REQUESTS_COUNT;
 
     const { withdrawalQueue: wq, lido, acl } = ctx.contracts;
-
-    await finalizeWQViaElVault(ctx);
 
     // Get initial stETH holder balance
     const agentSigner = await ctx.getSigner("agent");
