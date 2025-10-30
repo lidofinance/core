@@ -739,12 +739,7 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(expectedFee);
 
-      await lazyOracle.mock__setQuarantineInfo({
-        isActive: true,
-        pendingTotalValueIncrease: 0,
-        startTimestamp: 0,
-        endTimestamp: 0,
-      });
+      await lazyOracle.mock__setQuarantineValue(1n);
 
       await expect(nodeOperatorFee.connect(vaultOwner).setFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,

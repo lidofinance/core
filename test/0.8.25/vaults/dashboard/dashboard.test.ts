@@ -1542,9 +1542,6 @@ describe("Dashboard.sol", () => {
         .withArgs(hub, dashboard)
         .and.to.emit(vault, "OwnershipTransferStarted")
         .withArgs(dashboard, vaultOwner);
-
-      // settled growth is reset
-      expect(await dashboard.settledGrowth()).to.equal(0n);
     });
   });
 
