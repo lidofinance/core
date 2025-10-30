@@ -50,7 +50,6 @@ describe("Integration: LazyOracle", () => {
       ctx.contracts.stakingVaultFactory,
       owner,
       nodeOperator,
-      nodeOperator,
     ));
 
     dashboard = dashboard.connect(owner);
@@ -430,20 +429,21 @@ describe("Integration: LazyOracle", () => {
       expect(quarantine.isActive).to.equal(true);
 
       // safe deposit and withdrawal in the middle of quarantine period
-      await dashboard.fund({ value: ether("1") });
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
+      const accruedFee = await dashboard.accruedFee();
+      await dashboard.fund({ value: ether("1") + accruedFee });
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2") + accruedFee);
 
       await dashboard.withdraw(stranger, ether("0.3"));
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7"));
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7") + accruedFee);
 
       // end of quarantine period ------------------------------
       await advanceChainTime(quarantinePeriod + 60n * 60n);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1.7") + value });
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1.7") + value + accruedFee });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7") + value);
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7") + value + accruedFee);
 
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.pendingTotalValueIncrease).to.equal(0);
@@ -468,13 +468,14 @@ describe("Integration: LazyOracle", () => {
 
       // safe deposit in the middle of quarantine period
       await advanceChainTime(quarantinePeriod / 2n);
-      await dashboard.fund({ value: ether("1") });
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
+      const accruedFee = await dashboard.accruedFee();
+      await dashboard.fund({ value: ether("1") + accruedFee });
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2") + accruedFee);
 
       await advanceChainTime(quarantinePeriod / 2n - 60n * 60n);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value });
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value + accruedFee });
 
       const [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
 
@@ -490,12 +491,12 @@ describe("Integration: LazyOracle", () => {
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       await dashboard.withdraw(stranger, ether("0.3"));
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7"));
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7") + accruedFee);
 
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value });
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value + accruedFee });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7") + value);
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7") + value + accruedFee);
 
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.pendingTotalValueIncrease).to.equal(0);

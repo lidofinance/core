@@ -13,6 +13,7 @@ import {
   generatePredeposit,
   generateValidator,
   getNextBlockTimestamp,
+  MAX_SANE_SETTLED_GROWTH,
   toGwei,
   toLittleEndian64,
 } from "lib";
@@ -93,6 +94,19 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     it("Can reconnect the vault to the hub", async () => {
       const { vaultHub } = ctx.contracts;
+      await dashboard.reconnectToVaultHub(MAX_SANE_SETTLED_GROWTH); // reconnect with disabled fee accrual
+
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
+    });
+
+    it("Can correct the settled growth before reconnecting", async () => {
+      const { vaultHub } = ctx.contracts;
+
+      await dashboard.connect(owner).correctSettledGrowth(0n, MAX_SANE_SETTLED_GROWTH);
+      await dashboard.connect(nodeOperator).correctSettledGrowth(0n, MAX_SANE_SETTLED_GROWTH);
+
+      expect(await dashboard.settledGrowth()).to.equal(0n);
+
       await dashboard.reconnectToVaultHub(0n);
 
       expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
@@ -137,7 +151,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
         const { vaultHub } = ctx.contracts;
 
-        await expect(dashboard.reconnectToVaultHub(0n))
+        await expect(dashboard.reconnectToVaultHub(MAX_SANE_SETTLED_GROWTH)) // reconnect with disabled fee accrual
           .to.emit(stakingVault, "OwnershipTransferred")
           .withArgs(owner, dashboard)
           .to.emit(stakingVault, "OwnershipTransferStarted")

@@ -355,14 +355,15 @@ contract NodeOperatorFee is Permissions {
     function _calculateFee() internal view returns (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) {
         VaultHub.Report memory report = latestReport();
         // we include quarantined value for fees as well
-        growth = int256(uint256(report.totalValue)) + int256(_quarantineValue()) - report.inOutDelta;
+        uint256 totalValueAndQuarantine = uint256(report.totalValue) + _quarantineValue();
+        growth = int256(totalValueAndQuarantine) - report.inOutDelta;
         int256 unsettledGrowth = growth - settledGrowth;
 
         if (unsettledGrowth > 0) {
             fee = (uint256(unsettledGrowth) * feeRate) / TOTAL_BASIS_POINTS;
         }
 
-        abnormallyHighFeeThreshold = (report.totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
+        abnormallyHighFeeThreshold = (totalValueAndQuarantine * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
     }
 
     function _stopFeeAccrual() internal {

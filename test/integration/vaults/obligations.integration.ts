@@ -312,7 +312,10 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(await vaultHub.locked(stakingVaultAddress)).to.be.closeTo(ether("11"), 2n);
 
       const slashingAmount = ether("5");
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: totalValue - slashingAmount });
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: totalValue - slashingAmount,
+        waitForNextRefSlot: false,
+      });
 
       await setBalance(stakingVaultAddress, totalValue + ether("5")); // simulate the vault has more balance than the total value
 
