@@ -298,10 +298,6 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
-    function _quarantineValue() internal view returns (uint256) {
-        return _lazyOracle().quarantineValue(address(_stakingVault()));
-    }
-
     function _disburseFee(uint256 fee, int256 growth, address _recipient) internal {
         if (fee == 0) {
             // we still need to update the settledGrowth event if the fee is zero
