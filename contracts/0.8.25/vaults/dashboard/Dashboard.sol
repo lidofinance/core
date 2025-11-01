@@ -311,23 +311,22 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
-     * @dev correct the settled growth before reconnecting in order to enable the fee accrual for the node operator
-     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
+     * @dev reverts if settledGrowth is not corrected after the vault is disconnected
      */
-    function reconnectToVaultHub(uint256 _currentSettledGrowth) external {
+    function reconnectToVaultHub() external {
         _acceptOwnership();
-        connectToVaultHub(_currentSettledGrowth);
+        connectToVaultHub();
     }
 
     /**
      * @notice Connects to VaultHub, transferring underlying StakingVault ownership to VaultHub.
-     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
-     * @dev correct the settled growth before reconnecting in order to enable the fee accrual for the node operator
+     * @dev reverts if settledGrowth is not corrected after the vault is disconnected
      */
-    function connectToVaultHub(uint256 _currentSettledGrowth) public payable {
-        if (settledGrowth != int256(_currentSettledGrowth)) {
-            revert SettledGrowthMismatch();
+    function connectToVaultHub() public payable {
+        if (settledGrowth >= MAX_SANE_SETTLED_GROWTH && feeRate != 0) {
+            revert SettleGrowthIsNotSet();
         }
+
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
@@ -337,11 +336,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Changes the tier of the vault and connects to VaultHub
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
-     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
-     * @dev correct the settled growth before reconnecting in order to enable the fee accrual for the node operator
+     * @dev reverts if settledGrowth is not corrected after the vault is disconnected
      */
-    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit, uint256 _currentSettledGrowth) external payable {
-        connectToVaultHub(_currentSettledGrowth);
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
+        connectToVaultHub();
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
         }
@@ -821,4 +819,9 @@ contract Dashboard is NodeOperatorFee {
     error ForbiddenByPDGPolicy();
 
     error InsufficientBalance();
+
+    /**
+     * @dev Error emitted when connection is reverted because node operator's fee is stopped
+     */
+    error SettleGrowthIsNotSet();
 }

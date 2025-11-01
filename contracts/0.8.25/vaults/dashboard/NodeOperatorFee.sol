@@ -241,9 +241,9 @@ contract NodeOperatorFee is Permissions {
      * @notice Manually corrects the settled growth value with dual confirmation.
      * Used to correct fee calculation and enable fee accrual after reconnection
      *
-     * NB. When the vault is disconnected the information about the inOutDelta is effectively wiped and when the vault is
-     * connected back, inOutDelta as well as totalValue is set to the vault's availableBalance until the first Oracle report
-     * that will show the growth equal to the sum of all validators' balance
+     * So, in the simplest case the value of settledGrowth before the vault is connected to VaultHub should be set to:
+     *
+     * sum(validator.balance) + stagedBalance
      *
      * @param _newSettledGrowth The corrected settled growth value
      * @param _expectedSettledGrowth The expected current settled growth
@@ -339,10 +339,9 @@ contract NodeOperatorFee is Permissions {
      * @dev fee exemption can only be positive
      */
     function _addFeeExemption(uint256 _amount) internal {
-        int256 amount = int256(_amount);
-        if (amount > MAX_SANE_SETTLED_GROWTH) revert UnexpectedFeeExemptionAmount();
+        if (_amount > uint256(MAX_SANE_SETTLED_GROWTH)) revert UnexpectedFeeExemptionAmount();
 
-        _correctSettledGrowth(settledGrowth + amount);
+        _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
     function _calculateFee() internal view returns (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) {
@@ -445,11 +444,6 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when trying to set same value for settled growth
      */
     error SameSettledGrowth();
-
-    /**
-     * @dev Error emitted when the settled growth does not match the expected value during connection.
-     */
-    error SettledGrowthMismatch();
 
     /**
      * @dev Error emitted when the report is stale.
