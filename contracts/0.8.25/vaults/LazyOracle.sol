@@ -95,7 +95,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     struct Quarantine {
         uint128 pendingTotalValueIncrease;
         uint64 startTimestamp;
-        uint128 totalValueReminder;
+        uint128 totalValueRemainder;
     }
 
     struct QuarantineInfo {
@@ -204,7 +204,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint256 pendingValue = q.pendingTotalValueIncrease;
         if (pendingValue > 0) {
             // saving one SLOAD if pendingValue
-            pendingValue += q.totalValueReminder;
+            pendingValue += q.totalValueRemainder;
         }
         return pendingValue;
     }
@@ -226,7 +226,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             pendingTotalValueIncrease: q.pendingTotalValueIncrease,
             startTimestamp: q.startTimestamp,
             endTimestamp: q.startTimestamp + _storage().quarantinePeriod,
-            totalValueReminder: q.totalValueReminder
+            totalValueReminder: q.totalValueRemainder
         });
     }
 
@@ -558,7 +558,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             } else {
                 // Transition: QUARANTINE_ACTIVE → QUARANTINE_ACTIVE (maintain quarantine)
                 uint256 reminder = _reportedTotalValue - (onchainTotalValueOnRefSlot + quarantinedValue);
-                quarantine.totalValueReminder = uint128(reminder);
+                quarantine.totalValueRemainder = uint128(reminder);
                 emit QuarantineUpdated(reminder);
                 return onchainTotalValueOnRefSlot;
             }
@@ -606,7 +606,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     ) internal {
         _quarantine.pendingTotalValueIncrease = uint128(_amountToQuarantine);
         _quarantine.startTimestamp = uint64(_currentTimestamp);
-        _quarantine.totalValueReminder = 0;
+        _quarantine.totalValueRemainder = 0;
     }
 
     function _updateSanityParams(
