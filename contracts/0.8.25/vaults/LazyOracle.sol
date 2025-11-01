@@ -103,7 +103,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint256 pendingTotalValueIncrease;
         uint256 startTimestamp;
         uint256 endTimestamp;
-        uint256 totalValueReminder;
+        uint256 totalValueRemainder;
     }
 
     struct VaultInfo {
@@ -203,7 +203,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         Quarantine memory q = _storage().vaultQuarantines[_vault];
         uint256 pendingValue = q.pendingTotalValueIncrease;
         if (pendingValue > 0) {
-            // saving one SLOAD if pendingValue
+            // saving one SLOAD if pendingValue is zero
             pendingValue += q.totalValueRemainder;
         }
         return pendingValue;
@@ -215,9 +215,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     function vaultQuarantine(address _vault) external view returns (QuarantineInfo memory) {
         Quarantine memory q = _storage().vaultQuarantines[_vault];
 
-        bool isQuarantineActive = q.pendingTotalValueIncrease == 0;
+        bool isQuarantineInactive = q.pendingTotalValueIncrease == 0;
 
-        if (isQuarantineActive) {
+        if (isQuarantineInactive) {
             return QuarantineInfo(false, 0, 0, 0, 0);
         }
 
@@ -226,7 +226,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             pendingTotalValueIncrease: q.pendingTotalValueIncrease,
             startTimestamp: q.startTimestamp,
             endTimestamp: q.startTimestamp + _storage().quarantinePeriod,
-            totalValueReminder: q.totalValueRemainder
+            totalValueRemainder: q.totalValueRemainder
         });
     }
 

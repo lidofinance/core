@@ -67,7 +67,7 @@ describe("Integration: Quarantine", () => {
     expect(quarantine.pendingTotalValueIncrease).to.equal(expectedAmount);
     expect(quarantine.startTimestamp).to.equal(startTimestamp);
     expect(quarantine.endTimestamp).to.equal(startTimestamp + quarantinePeriod);
-    expect(quarantine.totalValueReminder).to.equal(remainder);
+    expect(quarantine.totalValueRemainder).to.equal(remainder);
     expect(await lazyOracle.quarantineValue(stakingVault)).to.equal(expectedAmount + remainder);
   }
 
@@ -76,7 +76,7 @@ describe("Integration: Quarantine", () => {
     expect(quarantine.isActive).to.equal(false);
     expect(quarantine.pendingTotalValueIncrease).to.equal(0);
     expect(quarantine.startTimestamp).to.equal(0);
-    expect(quarantine.totalValueReminder).to.equal(0n);
+    expect(quarantine.totalValueRemainder).to.equal(0n);
     expect(await lazyOracle.quarantineValue(stakingVault)).to.equal(0n);
   }
 
