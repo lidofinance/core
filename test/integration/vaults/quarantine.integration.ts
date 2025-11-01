@@ -131,6 +131,29 @@ describe("Integration: Quarantine", () => {
     await expectQuarantineCleared();
   });
 
+  it("Quarantine happy path (with slashing)", async () => {
+    const reportedValue = INITIAL_VAULT_VALUE + LARGE_UNSAFE_VALUE;
+    const slashingValue = ether("0.1");
+
+    // Start quarantine
+    const startTimestamp = await reportTotalValue(reportedValue);
+    expect(await vaultHub.totalValue(stakingVault)).to.equal(INITIAL_VAULT_VALUE);
+    await expectQuarantineActive(LARGE_UNSAFE_VALUE, startTimestamp);
+
+    // Middle of quarantine - value still locked
+    const quarantinePeriod = await lazyOracle.quarantinePeriod();
+    await advanceChainTime(quarantinePeriod / 2n);
+    await reportTotalValue(reportedValue - slashingValue);
+    expect(await vaultHub.totalValue(stakingVault)).to.equal(INITIAL_VAULT_VALUE);
+    await expectQuarantineActive(LARGE_UNSAFE_VALUE, startTimestamp);
+
+    // End of quarantine - value released
+    await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
+    await reportTotalValue(reportedValue - slashingValue);
+    expect(await vaultHub.totalValue(stakingVault)).to.equal(reportedValue - slashingValue);
+    await expectQuarantineCleared();
+  });
+
   it("Funding in quarantine period - before expiration", async () => {
     const reportedValue = INITIAL_VAULT_VALUE + LARGE_UNSAFE_VALUE;
     const depositAmount = INITIAL_VAULT_VALUE;

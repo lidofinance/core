@@ -557,7 +557,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 return _reportedTotalValue;
             } else {
                 // Transition: QUARANTINE_ACTIVE → QUARANTINE_ACTIVE (maintain quarantine)
-                uint256 reminder = _reportedTotalValue - (onchainTotalValueOnRefSlot + quarantinedValue);
+                uint256 reminder = _reportedTotalValue > (onchainTotalValueOnRefSlot + quarantinedValue)
+                    ? _reportedTotalValue - (onchainTotalValueOnRefSlot + quarantinedValue)
+                    : 0;
                 quarantine.totalValueRemainder = uint128(reminder);
                 emit QuarantineUpdated(reminder);
                 return onchainTotalValueOnRefSlot;
