@@ -226,9 +226,6 @@ contract NodeOperatorFee is Permissions {
         // Latest fee exemption must be earlier than the latest fresh report timestamp
         if (latestCorrectionTimestamp >= _lazyOracle().latestReportTimestamp()) revert CorrectionAfterReport();
 
-        // If the vault is quarantined, the total value is reduced and may not reflect the exemption
-        if (_quarantineValue() != 0) revert VaultQuarantined();
-
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
@@ -355,7 +352,8 @@ contract NodeOperatorFee is Permissions {
     function _calculateFee() internal view returns (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) {
         VaultHub.Report memory report = latestReport();
         // we include quarantined value for fees as well
-        uint256 totalValueAndQuarantine = uint256(report.totalValue) + _quarantineValue();
+        uint256 quarantineValue = _lazyOracle().quarantineValue(address(_stakingVault()));
+        uint256 totalValueAndQuarantine = uint256(report.totalValue) + quarantineValue;
         growth = int256(totalValueAndQuarantine) - report.inOutDelta;
         int256 unsettledGrowth = growth - settledGrowth;
 
@@ -476,9 +474,4 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the fee exemption amount does not match the expected value
      */
     error UnexpectedFeeExemptionAmount();
-
-    /**
-     * @dev Error emitted when the vault is quarantined.
-     */
-    error VaultQuarantined();
 }
