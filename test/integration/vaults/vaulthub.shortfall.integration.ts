@@ -12,7 +12,7 @@ import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
 
-describe("Integration: VaultHub ", () => {
+describe("Integration: VaultHub Shortfall", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -95,7 +95,7 @@ describe("Integration: VaultHub ", () => {
 
   describe("Shortfall", () => {
     it("Works on larger numbers", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 2000n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -140,7 +140,7 @@ describe("Integration: VaultHub ", () => {
     });
 
     it("Works on small numbers", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 2000n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -161,7 +161,7 @@ describe("Integration: VaultHub ", () => {
     });
 
     it("Works on really small numbers", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 2000n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -183,7 +183,7 @@ describe("Integration: VaultHub ", () => {
     });
 
     it("Works on numbers less than 10", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 2000n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -204,7 +204,7 @@ describe("Integration: VaultHub ", () => {
     });
 
     it("Works on hundreds", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 2000n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
