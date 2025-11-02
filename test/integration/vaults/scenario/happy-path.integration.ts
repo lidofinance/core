@@ -296,7 +296,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     });
 
     //report
-    await reportVaultDataWithProof(ctx, stakingVault);
+    await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
     // mint
     const lockedBefore = await vaultHub.locked(stakingVaultAddress);
