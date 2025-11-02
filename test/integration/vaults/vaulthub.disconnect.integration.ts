@@ -78,7 +78,7 @@ describe("Integration: VaultHub", () => {
         await dashboard.fund({ value: ether("1.5") });
 
         await dashboard.mintStETH(owner, ether("1"));
-        await reportVaultDataWithProof(ctx, stakingVault);
+        await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
         await lido.connect(owner).approve(dashboard, ether("1"));
         await dashboard.burnStETH(ether("1"));
@@ -109,7 +109,7 @@ describe("Integration: VaultHub", () => {
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
       });
 
-      it("Vault with balalnce more than total value", async () => {
+      it("Vault with balance more than total value", async () => {
         const { vaultHub } = ctx.contracts;
 
         await reportVaultDataWithProof(ctx, stakingVault, { totalValue: 100n, cumulativeLidoFees: 200n });

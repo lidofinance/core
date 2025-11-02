@@ -20,7 +20,7 @@ import {
   WstETH__Harness,
 } from "typechain-types";
 
-import { days, ether, GENESIS_FORK_VERSION } from "lib";
+import { days, ether, GENESIS_FORK_VERSION, randomAddress } from "lib";
 import { createVaultProxy } from "lib/protocol/helpers";
 import { createVaultProxyWithoutConnectingToVaultHub } from "lib/protocol/helpers/vaults";
 
@@ -108,7 +108,7 @@ describe("VaultFactory.sol", () => {
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       steth,
-      ZeroAddress,
+      randomAddress(),
       VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
     ]);
     const vaultHubProxy = await ethers.deployContract(

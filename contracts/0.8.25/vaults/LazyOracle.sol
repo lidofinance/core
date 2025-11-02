@@ -95,6 +95,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     struct Quarantine {
         uint128 pendingTotalValueIncrease;
         uint64 startTimestamp;
+        uint128 totalValueRemainder;
     }
 
     struct QuarantineInfo {
@@ -102,6 +103,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint256 pendingTotalValueIncrease;
         uint256 startTimestamp;
         uint256 endTimestamp;
+        uint256 totalValueRemainder;
     }
 
     struct VaultInfo {
@@ -196,20 +198,35 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return _storage().maxLidoFeeRatePerSecond;
     }
 
+    /// @notice returns the amount of total value that is pending in the quarantine for the given vault
+    function quarantineValue(address _vault) external view returns (uint256) {
+        Quarantine memory q = _storage().vaultQuarantines[_vault];
+        uint256 pendingValue = q.pendingTotalValueIncrease;
+        if (pendingValue > 0) {
+            // saving one SLOAD if pendingValue is zero
+            pendingValue += q.totalValueRemainder;
+        }
+        return pendingValue;
+    }
+
     /// @notice returns the quarantine info for the vault
     /// @param _vault the address of the vault
     /// @dev returns zeroed structure if there is no active quarantine
     function vaultQuarantine(address _vault) external view returns (QuarantineInfo memory) {
-        Quarantine storage q = _storage().vaultQuarantines[_vault];
-        if (q.pendingTotalValueIncrease == 0) {
-            return QuarantineInfo(false, 0, 0, 0);
+        Quarantine memory q = _storage().vaultQuarantines[_vault];
+
+        bool isQuarantineInactive = q.pendingTotalValueIncrease == 0;
+
+        if (isQuarantineInactive) {
+            return QuarantineInfo(false, 0, 0, 0, 0);
         }
 
         return QuarantineInfo({
             isActive: true,
             pendingTotalValueIncrease: q.pendingTotalValueIncrease,
             startTimestamp: q.startTimestamp,
-            endTimestamp: q.startTimestamp + _storage().quarantinePeriod
+            endTimestamp: q.startTimestamp + _storage().quarantinePeriod,
+            totalValueRemainder: q.totalValueRemainder
         });
     }
 
@@ -528,12 +545,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 return _reportedTotalValue;
             } else {
                 // Transition: NO_QUARANTINE → QUARANTINE_ACTIVE (start new quarantine)
-                _startNewQuarantine(
-                    _vault,
-                    quarantine,
-                    _reportedTotalValue - onchainTotalValueOnRefSlot,
-                    _reportTimestamp
-                );
+                _startNewQuarantine(quarantine, _reportedTotalValue - onchainTotalValueOnRefSlot, _reportTimestamp);
+                emit QuarantineActivated(_vault, _reportedTotalValue - onchainTotalValueOnRefSlot);
                 return onchainTotalValueOnRefSlot;
             }
         } else if (currentState == QuarantineState.QUARANTINE_ACTIVE) {
@@ -544,6 +557,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 return _reportedTotalValue;
             } else {
                 // Transition: QUARANTINE_ACTIVE → QUARANTINE_ACTIVE (maintain quarantine)
+                uint256 reminder = _reportedTotalValue > (onchainTotalValueOnRefSlot + quarantinedValue)
+                    ? _reportedTotalValue - (onchainTotalValueOnRefSlot + quarantinedValue)
+                    : 0;
+                quarantine.totalValueRemainder = uint128(reminder);
+                emit QuarantineUpdated(reminder);
                 return onchainTotalValueOnRefSlot;
             }
         } else { // QuarantineState.QUARANTINE_EXPIRED
@@ -561,7 +579,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             } else {
                 // Transition: QUARANTINE_EXPIRED → QUARANTINE_ACTIVE (release old, start new)
                 emit QuarantineReleased(_vault, quarantinedValue);
-                _startNewQuarantine(_vault, quarantine, totalValueIncrease - quarantinedValue, _reportTimestamp);
+
+                _startNewQuarantine(quarantine, totalValueIncrease - quarantinedValue, _reportTimestamp);
+                emit QuarantineActivated(_vault, totalValueIncrease - quarantinedValue);
+
                 return onchainTotalValueOnRefSlot + quarantinedValue;
             }
         }
@@ -581,25 +602,35 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     }
 
     function _startNewQuarantine(
-        address _vault,
         Quarantine storage _quarantine,
         uint256 _amountToQuarantine,
         uint256 _currentTimestamp
     ) internal {
         _quarantine.pendingTotalValueIncrease = uint128(_amountToQuarantine);
         _quarantine.startTimestamp = uint64(_currentTimestamp);
-        emit QuarantineActivated(_vault, _amountToQuarantine);
+        _quarantine.totalValueRemainder = 0;
     }
 
-    function _updateSanityParams(uint256 _quarantinePeriod, uint256 _maxRewardRatioBP, uint256 _maxLidoFeeRatePerSecond) internal {
-        if (_quarantinePeriod > MAX_QUARANTINE_PERIOD) revert QuarantinePeriodTooLarge(_quarantinePeriod, MAX_QUARANTINE_PERIOD);
-        if (_maxRewardRatioBP > MAX_REWARD_RATIO) revert MaxRewardRatioTooLarge(_maxRewardRatioBP, MAX_REWARD_RATIO);
-        if (_maxLidoFeeRatePerSecond > MAX_LIDO_FEE_RATE_PER_SECOND) revert MaxLidoFeeRatePerSecondTooLarge(_maxLidoFeeRatePerSecond, MAX_LIDO_FEE_RATE_PER_SECOND);
+    function _updateSanityParams(
+        uint256 _quarantinePeriod,
+        uint256 _maxRewardRatioBP,
+        uint256 _maxLidoFeeRatePerSecond
+    ) internal {
+        if (_quarantinePeriod > MAX_QUARANTINE_PERIOD) {
+            revert QuarantinePeriodTooLarge(_quarantinePeriod, MAX_QUARANTINE_PERIOD);
+        }
+        if (_maxRewardRatioBP > MAX_REWARD_RATIO) {
+            revert MaxRewardRatioTooLarge(_maxRewardRatioBP, MAX_REWARD_RATIO);
+        }
+        if (_maxLidoFeeRatePerSecond > MAX_LIDO_FEE_RATE_PER_SECOND) {
+            revert MaxLidoFeeRatePerSecondTooLarge(_maxLidoFeeRatePerSecond, MAX_LIDO_FEE_RATE_PER_SECOND);
+        }
 
         Storage storage $ = _storage();
         $.quarantinePeriod = uint64(_quarantinePeriod);
         $.maxRewardRatioBP = uint16(_maxRewardRatioBP);
         $.maxLidoFeeRatePerSecond = uint64(_maxLidoFeeRatePerSecond);
+
         emit SanityParamsUpdated(_quarantinePeriod, _maxRewardRatioBP, _maxLidoFeeRatePerSecond);
     }
 
@@ -634,6 +665,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     event QuarantineActivated(address indexed vault, uint256 delta);
     event QuarantineReleased(address indexed vault, uint256 delta);
     event QuarantineRemoved(address indexed vault);
+    event QuarantineUpdated(uint256 totalValueReminder);
+
     event SanityParamsUpdated(uint256 quarantinePeriod, uint256 maxRewardRatioBP, uint256 maxLidoFeeRatePerSecond);
 
     error AdminCannotBeZero();

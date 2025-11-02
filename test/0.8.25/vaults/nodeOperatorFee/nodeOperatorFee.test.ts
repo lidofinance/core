@@ -24,6 +24,7 @@ import {
   findEvents,
   getCurrentBlockTimestamp,
   getNextBlockTimestamp,
+  MAX_UINT256,
   TOTAL_BASIS_POINTS,
 } from "lib";
 
@@ -441,7 +442,7 @@ describe("NodeOperatorFee.sol", () => {
 
     it("reverts if the amount is too large", async () => {
       await expect(
-        nodeOperatorFee.connect(nodeOperatorFeeExempter).addFeeExemption(2n ** 104n + 1n),
+        nodeOperatorFee.connect(nodeOperatorFeeExempter).addFeeExemption(MAX_UINT256),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "UnexpectedFeeExemptionAmount");
     });
 
@@ -715,7 +716,7 @@ describe("NodeOperatorFee.sol", () => {
       );
     });
 
-    it("reverts if the vault is quarantined", async () => {
+    it("works if the vault is quarantined", async () => {
       // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
       // to simplify the test
       await nodeOperatorFee
@@ -724,12 +725,12 @@ describe("NodeOperatorFee.sol", () => {
 
       const noFeeRate = await nodeOperatorFee.feeRate();
 
-      const rewards = ether("1");
+      const rewards = ether("0.01");
 
       await hub.setReport(
         {
-          totalValue: rewards,
-          inOutDelta: 0n,
+          totalValue: ether("1") + rewards,
+          inOutDelta: ether("1"),
           timestamp: await getCurrentBlockTimestamp(),
         },
         true,
@@ -739,17 +740,15 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(expectedFee);
 
-      await lazyOracle.mock__setQuarantineInfo({
-        isActive: true,
-        pendingTotalValueIncrease: 0,
-        startTimestamp: 0,
-        endTimestamp: 0,
-      });
+      await lazyOracle.mock__setQuarantineValue(1n);
 
-      await expect(nodeOperatorFee.connect(vaultOwner).setFeeRate(100n)).to.be.revertedWithCustomError(
-        nodeOperatorFee,
-        "VaultQuarantined",
-      );
+      await expect(nodeOperatorFee.connect(vaultOwner).setFeeRate(100n))
+        .to.emit(nodeOperatorFee, "FeeRateSet")
+        .withArgs(vaultOwner, noFeeRate, 100n)
+        .to.emit(nodeOperatorFee, "FeeDisbursed")
+        .withArgs(vaultOwner, expectedFee, await nodeOperatorFee.feeRecipient());
+
+      expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
     });
 
     it("works and disburses any pending node operator fee", async () => {

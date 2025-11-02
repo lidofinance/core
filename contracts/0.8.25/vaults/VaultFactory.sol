@@ -99,7 +99,7 @@ contract VaultFactory is IVaultFactory {
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
         dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
-        dashboard.connectToVaultHub{value: msg.value}(0);
+        dashboard.connectToVaultHub{value: msg.value}();
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 

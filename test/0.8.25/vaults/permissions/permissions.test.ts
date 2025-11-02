@@ -473,12 +473,6 @@ describe("Permissions", () => {
     });
   });
 
-  context("confirmingRoles()", () => {
-    it("returns the correct roles", async () => {
-      expect(await permissions.confirmingRoles()).to.deep.equal([await permissions.DEFAULT_ADMIN_ROLE()]);
-    });
-  });
-
   context("fund()", () => {
     it("funds the vault", async () => {
       const fundAmount = ether("1");
@@ -853,23 +847,6 @@ describe("Permissions", () => {
       await expect(permissions.connect(stranger).changeTier(1, ether("1")))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await permissions.VAULT_CONFIGURATION_ROLE());
-    });
-  });
-
-  context("transferVaultOwnership()", () => {
-    it("transfers the ownership of the StakingVault", async () => {
-      await expect(permissions.connect(defaultAdmin).transferVaultOwnership(stranger))
-        .to.emit(vaultHub, "Mock__TransferVaultOwnership")
-        .withArgs(stakingVault, stranger);
-    });
-
-    it("reverts if the caller is not a member of the confirming roles", async () => {
-      expect(await permissions.confirmingRoles()).to.not.include(stranger);
-
-      await expect(permissions.connect(stranger).transferVaultOwnership(stranger)).to.be.revertedWithCustomError(
-        permissions,
-        "SenderNotMember",
-      );
     });
   });
 

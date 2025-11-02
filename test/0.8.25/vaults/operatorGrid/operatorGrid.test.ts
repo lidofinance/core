@@ -231,14 +231,14 @@ describe("OperatorGrid.sol", () => {
       const defaultTierParams = {
         shareLimit: DEFAULT_TIER_SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO,
-        forcedRebalanceThresholdBP: RESERVE_RATIO + 1,
+        forcedRebalanceThresholdBP: RESERVE_RATIO,
         infraFeeBP: INFRA_FEE,
         liquidityFeeBP: LIQUIDITY_FEE,
         reservationFeeBP: RESERVATION_FEE,
       };
       await expect(operatorGridLocal.initialize(stranger, defaultTierParams))
         .to.be.revertedWithCustomError(operatorGridLocal, "ForcedRebalanceThresholdTooHigh")
-        .withArgs("0", RESERVE_RATIO + 1, RESERVE_RATIO);
+        .withArgs("0", RESERVE_RATIO, RESERVE_RATIO);
     });
   });
 
