@@ -7,6 +7,7 @@ import { SHARE_RATE_PRECISION } from "test/suite";
 import { ProtocolContext } from "../types";
 
 import { report } from "./accounting";
+import { removeStakingLimit } from "./staking";
 
 const DEPOSIT = 10000;
 const MIN_BURN = 1;
@@ -31,6 +32,7 @@ async function increaseTotalPooledEther(ctx: ProtocolContext, etherAmount: bigin
   const [whale, burner] = await Promise.all([impersonate(whaleAddress, BIG_BAG), impersonate(burnerAddress, BIG_BAG)]);
 
   // Whale submits deposit
+  await removeStakingLimit(ctx);
   await lido.connect(whale).submit(ZeroAddress, { value: etherAmount });
 
   const sharesToBurn = await lido.getSharesByPooledEth(etherAmount);
