@@ -7,10 +7,10 @@ import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
 import { impersonate } from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
-import { reportVaultDataWithProof } from "lib/protocol/helpers";
+import { ensureExactShareRate, reportVaultDataWithProof } from "lib/protocol/helpers";
 import { ether } from "lib/units";
 
-import { Snapshot } from "test/suite";
+import { SHARE_RATE_PRECISION, Snapshot } from "test/suite";
 
 describe("Integration: VaultHub Shortfall", () => {
   let ctx: ProtocolContext;
@@ -222,6 +222,28 @@ describe("Integration: VaultHub Shortfall", () => {
       const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
       expect(shortfall2).to.equal(0n);
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
+    });
+
+    it("Works on (TV=22, LS=11, rr=frt=499) and shareRate 1.90909", async () => {
+      await ensureExactShareRate(ctx, (190909n * SHARE_RATE_PRECISION) / 100000n);
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 500n, frt: 499n }));
+
+      await vaultHub.fund(stakingVault, { value: ether("1") });
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
+
+      await dashboard.mintShares(owner, 11n);
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: 22n,
+        waitForNextRefSlot: true,
+      });
+
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
+      const shortfall = await vaultHub.healthShortfallShares(stakingVault);
+      await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
+      const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
+      expect(shortfall2).to.equal(0n);
     });
   });
 });
