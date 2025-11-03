@@ -121,7 +121,7 @@ describe("DepositsTracker.sol", () => {
         expect(await depositTracker.getDepositedEthUpToSlot(10_000)).to.equal(0);
       });
 
-      it("sums up to but not beyond _slot (inclusive) and reverts if _slot < first unread", async () => {
+      it("sums up to but not beyond _slot (inclusive); returns 0 if _slot < first unread", async () => {
         await depositTracker.insertSlotDeposit(10, 1);
         await depositTracker.insertSlotDeposit(20, 2);
         await depositTracker.insertSlotDeposit(30, 3);
@@ -134,10 +134,7 @@ describe("DepositsTracker.sol", () => {
         expect(await depositTracker.getCursor()).to.equal(2);
 
         // Now first unread is slot 30; asking up to 25 should revert
-        await expect(depositTracker.getDepositedEthUpToSlot(25)).to.be.revertedWithCustomError(
-          depositTrackerLib,
-          "SlotOutOfRange",
-        );
+        expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(0);
 
         // Up to 30 includes only the last unread (3)
         expect(await depositTracker.getDepositedEthUpToSlot(30)).to.equal(3);
@@ -156,31 +153,28 @@ describe("DepositsTracker.sol", () => {
         expect(await depositTracker.getCursor()).to.equal(1);
       });
 
-      it("reverts with SlotOutOfRange if _slot is behind first unread", async () => {
-        await depositTracker.insertSlotDeposit(10, 1);
-        await depositTracker.insertSlotDeposit(20, 2);
-        await depositTracker.insertSlotDeposit(30, 3);
+      // it("returns 0 if _slot is behind first unread", async () => {
+      //   await depositTracker.insertSlotDeposit(10, 1);
+      //   await depositTracker.insertSlotDeposit(20, 2);
+      //   await depositTracker.insertSlotDeposit(30, 3);
 
-        await depositTracker.moveCursorToSlot(20); // cursor -> 2 (first unread slot 30)
-        expect(await depositTracker.getCursor()).to.equal(2);
+      //   await depositTracker.moveCursorToSlot(20); // cursor -> 2 (first unread slot 30)
+      //   expect(await depositTracker.getCursor()).to.equal(2);
 
-        await expect(depositTracker.getDepositedEthUpToSlot(15)).to.be.revertedWithCustomError(
-          depositTrackerLib,
-          "SlotOutOfRange",
-        );
-      });
+      //   expect(await depositTracker.getDepositedEthUpToSlot(15)).to.equal(0);
+      // });
 
-      it("returns 0 if everything was read (cursor == len)", async () => {
-        await depositTracker.insertSlotDeposit(1, 10);
-        await depositTracker.insertSlotDeposit(2, 20);
+      // it("returns 0 if everything was read (cursor == len)", async () => {
+      //   await depositTracker.insertSlotDeposit(1, 10);
+      //   await depositTracker.insertSlotDeposit(2, 20);
 
-        await depositTracker.moveCursorToSlot(2); // cursor == len
-        expect(await depositTracker.getCursor()).to.equal(2);
+      //   await depositTracker.moveCursorToSlot(2); // cursor == len
+      //   expect(await depositTracker.getCursor()).to.equal(2);
 
-        expect(await depositTracker.getDepositedEthUpToSlot(999_999)).to.equal(0);
-      });
+      //   expect(await depositTracker.getDepositedEthUpToSlot(999_999)).to.equal(0);
+      // });
 
-      it("moveCursorToSlot reverts only when _slot < current cursor slot; otherwise moves or marks all-read", async () => {
+      it("moveCursorToSlot: _slot < cursor slot → dont do anything; _slot == cursor slot → cursor++ ; _slot >= last → cursor=len", async () => {
         await depositTracker.insertSlotDeposit(10, 1);
         await depositTracker.insertSlotDeposit(20, 2);
         await depositTracker.insertSlotDeposit(30, 3);
@@ -192,11 +186,9 @@ describe("DepositsTracker.sol", () => {
         await depositTracker.moveCursorToSlot(10);
         expect(await depositTracker.getCursor()).to.equal(1);
 
-        // _slot < cursor slot -> revert
-        await expect(depositTracker.moveCursorToSlot(9)).to.be.revertedWithCustomError(
-          depositTrackerLib,
-          "SlotOutOfOrder",
-        );
+        // _slot < cursor slot -> don't do anything
+        await depositTracker.moveCursorToSlot(9);
+        expect(await depositTracker.getCursor()).to.equal(1);
 
         // find first > 25 -> slot 30 (index 2)
         await depositTracker.moveCursorToSlot(25);
@@ -206,9 +198,75 @@ describe("DepositsTracker.sol", () => {
         await depositTracker.moveCursorToSlot(30);
         expect(await depositTracker.getCursor()).to.equal(3);
 
-        // already all read; no-op
+        // already all read; don't do anything
         await depositTracker.moveCursorToSlot(5);
         expect(await depositTracker.getCursor()).to.equal(3);
+      });
+    });
+
+    context("oracle frame windows: (prev ref slot, current last frame]", () => {
+      it("1) prev ref slot < slot at cursor → no deposits in last frame (sum=0, cursor unchanged)", async () => {
+        // deposits: [ (10,1), (20,3), (30,6) ]  cumulative
+        await depositTracker.insertSlotDeposit(10, 1);
+        await depositTracker.insertSlotDeposit(20, 2);
+        await depositTracker.insertSlotDeposit(30, 3);
+
+        // simulate we've already consumed up to slot 20 → cursor points to index 2 (slot 30)
+        await depositTracker.moveCursorToSlot(20);
+        expect(await depositTracker.getCursor()).to.equal(2);
+        // First unread slot is 30
+
+        // Current oracle frame ends at 25 (which is < first unread slot 30)
+        expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(0);
+
+        // Moving with _slot < cursorSlot, no actions required
+        await depositTracker.moveCursorToSlot(25);
+        expect(await depositTracker.getCursor()).to.equal(2);
+      });
+
+      it("2) there was a deposit during last frame (sum>0; cursor moves to first slot>_slot)", async () => {
+        // deposits: (10,5), (15,7), (25,10), (40,14)
+        await depositTracker.insertSlotDeposit(10, 5);
+        await depositTracker.insertSlotDeposit(15, 2);
+        await depositTracker.insertSlotDeposit(25, 3);
+        await depositTracker.insertSlotDeposit(40, 4);
+
+        // start fresh
+        expect(await depositTracker.getCursor()).to.equal(0);
+
+        // frame ends at 25 → sum from cursor(0) up to 25 (inclusive): 10
+        expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(10);
+
+        // after moving, cursor should land on first slot > 25 → slot 40 (index 3)
+        await depositTracker.moveCursorToSlot(25);
+        expect(await depositTracker.getCursor()).to.equal(3);
+      });
+
+      it("3) no deposit since last report and everything already read (cursor==len)", async () => {
+        await depositTracker.insertSlotDeposit(100, 1);
+        await depositTracker.insertSlotDeposit(200, 2);
+
+        // Mark all read
+        await depositTracker.moveCursorToSlot(200);
+        expect(await depositTracker.getCursor()).to.equal(2);
+
+        // Any further frame read should be 0; move is a no-op
+        expect(await depositTracker.getDepositedEthUpToSlot(999999)).to.equal(0);
+        await depositTracker.moveCursorToSlot(999999);
+        expect(await depositTracker.getCursor()).to.equal(2);
+      });
+
+      it("4) deposit happens at the current report slot; included in read; cursor -> len", async () => {
+        // deposits up to current report slot 555
+        await depositTracker.insertSlotDeposit(500, 10);
+        await depositTracker.insertSlotDeposit(555, 7); // deposit exactly at report slot
+
+        // from cursor=0, reading up to 555 must include both → total 17
+        expect(await depositTracker.getDepositedEthUpToSlot(555)).to.equal(17);
+
+        // moving with _slot >= lastDepositSlot → cursor == len
+        await depositTracker.moveCursorToSlot(555);
+        expect(await depositTracker.getCursor()).to.equal(2);
       });
     });
   });

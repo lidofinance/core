@@ -34,19 +34,16 @@ library DepositsTracker {
     error SlotTooLarge(uint256 slot);
     error DepositAmountTooLarge(uint256 depositAmount);
     error ZeroValue(string depositAmount);
-    error SlotOutOfRange();
 
     /// @notice Add new deposit information in deposit state
     ///
     /// @param state - deposited wei state
-    /// @param currentSlot - slot of deposit // Maybe it is more secure to calculate current slot in this method
+    /// @param currentSlot - slot of deposit
     /// @param depositAmount - Eth deposit amount
     function insertSlotDeposit(DepositedState storage state, uint256 currentSlot, uint256 depositAmount) internal {
         if (currentSlot > type(uint64).max) revert SlotTooLarge(currentSlot);
         if (depositAmount > type(uint128).max) revert DepositAmountTooLarge(depositAmount);
         if (depositAmount == 0) revert ZeroValue("depositAmount");
-
-        // DepositedEthState storage state = _getDataStorage(_depositedEthStatePosition);
 
         uint256 depositsEntryAmount = state.slotsDeposits.length;
 
@@ -85,19 +82,16 @@ library DepositsTracker {
         view
         returns (uint256 total)
     {
-        // DepositedEthState storage state = _getDataStorage(_depositedEthStatePosition);
         uint256 depositsEntryAmount = state.slotsDeposits.length;
         if (depositsEntryAmount == 0) return 0;
-        // data in tracker was already read
+        // data in tracker was already read, as cursor point to element that will be added later in state
         if (state.cursor == depositsEntryAmount) return 0;
 
         // define cursor start
         uint256 startIndex = state.cursor;
-        // SlotDeposit memory startDeposit = state.slotsDeposits[state.cursor].unpack();
 
         (uint64 startDepositSlot, ) = state.slotsDeposits[state.cursor].unpack();
-        // TODO: maybe error should be LessThanCursorValue or smth
-        if (startDepositSlot > _slot) revert SlotOutOfRange();
+        if (startDepositSlot > _slot) return 0;
 
         uint256 endIndex = type(uint256).max;
         for (uint256 i = startIndex; i < depositsEntryAmount;) {
@@ -112,6 +106,7 @@ library DepositsTracker {
         }
         (,uint192 endCumulativeEth) = state.slotsDeposits[endIndex].unpack();
 
+        // didnt move cursor yet
         if (startIndex == 0) {
             return endCumulativeEth;
         }
@@ -147,32 +142,29 @@ library DepositsTracker {
     /// @dev Rules:
     ///      - Cursor only moves to the right;
     ///      - _slot must be >= slot at current cursor;
-    ///      - Search only in the suffix (cursor, len);
+    ///      - _slot < cursorSlot, don't move cursor
+    ///      - Search only in the suffix (cursor, slotsDeposits.len);
     ///      - Find index of first element that higher than _slot;
-    ///      - max value that can have cursor is depositsEntryAmount
-    ///      - Method will revert only if _slot is less than cursor slot, as if there are no entries in tracker > _slot we think everything was read and set cursor to length of slotsDeposits
+    ///      - Cursor max value is depositsEntryAmount
     function moveCursorToSlot(DepositedState storage state, uint256 _slot) internal {
         if (_slot > type(uint64).max) revert SlotTooLarge(_slot);
 
-        // DepositedEthState storage state = _getDataStorage(_depositedEthStatePosition);
         uint256 depositsEntryAmount = state.slotsDeposits.length;
         if (depositsEntryAmount == 0) return;
 
-        // SlotDeposit memory lastSlot = state.slotsDeposits[depositsEntryAmount - 1].unpack();
+        if (state.cursor == depositsEntryAmount) return;
+
         (uint64 lastDepositSlot,) = state.slotsDeposits[depositsEntryAmount - 1].unpack();
 
-
+        // there are no deposits on slot higher than lastDepositSlot
         if (_slot >= lastDepositSlot) {
             state.cursor = depositsEntryAmount;
             return;
         }
 
-        if (state.cursor == depositsEntryAmount) return;
-        // SlotDeposit memory cursorSlot = state.slotsDeposits[state.cursor].unpack();
-         (uint64 cursorSlot, ) = state.slotsDeposits[state.cursor].unpack();
+        (uint64 cursorSlot, ) = state.slotsDeposits[state.cursor].unpack();
 
-
-        if (_slot < cursorSlot) revert SlotOutOfOrder();
+        if (_slot < cursorSlot) return;
 
         if (cursorSlot == _slot) {
             state.cursor = state.cursor + 1;
@@ -193,19 +185,4 @@ library DepositsTracker {
             }
         }
     }
-
-    // function moveCursorToLastSlot(DepositedState storage state) public {
-    //     // DepositedEthState storage state = _getDataStorage(_depositedEthStatePosition);
-    //     uint256 depositsEntryAmount = state.slotsDeposits.length;
-    //     // here cursor will have default value
-    //     if (depositsEntryAmount == 0) return;
-    //     // everything was read
-    //     state.cursor = depositsEntryAmount;
-    // }
-
-    // function _getDataStorage(bytes32 _position) private pure returns (DepositedEthState storage $) {
-    //     assembly {
-    //         $.slot := _position
-    //     }
-    // }
 }
