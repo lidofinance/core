@@ -29,7 +29,7 @@ interface IStakingRouter {
     function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
 }
 
-interface IVaultsAdapterPermissions {
+interface IVaultsAdapter {
     function setVaultJailStatus(address _vault, bool _isInJail) external;
     function updateVaultFees(address _vault, uint16 _infrastructureFeeBP, uint16 _liquidityFeeBP, uint16 _reservationFeeBP) external;
     function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _feeRecipient) external payable;
@@ -75,7 +75,7 @@ contract V3VoteScript is OmnibusBase {
         address operatorGrid = TEMPLATE.OPERATOR_GRID();
         address vaultsAdapter = TEMPLATE.VAULTS_ADAPTER();
         votingVoteItems[0] = VoteItem({
-            description: "1. Call EasyTrack.addEVMScriptFactory(ETF_ALTER_TIERS_IN_OPERATOR_GRID, (operatorGrid, alterTiers))",
+            description: "1. Add AlterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, alterTiers)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -89,7 +89,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[1] = VoteItem({
-            description: "2. Call EasyTrack.addEVMScriptFactory(ETF_REGISTER_GROUPS_IN_OPERATOR_GRID, (operatorGrid, registerGroup + registerTiers))",
+            description: "2. Add RegisterGroupsInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerGroup + registerTiers)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -105,7 +105,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[2] = VoteItem({
-            description: "3. Call EasyTrack.addEVMScriptFactory(ETF_REGISTER_TIERS_IN_OPERATOR_GRID, (operatorGrid, registerTiers))",
+            description: "3. Add RegisterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerTiers)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -119,7 +119,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[3] = VoteItem({
-            description: "4. Call EasyTrack.addEVMScriptFactory(ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID, (operatorGrid, updateGroupShareLimit))",
+            description: "4. Add UpdateGroupsShareLimitInOperatorGrid factory to EasyTrack (permissions: operatorGrid, updateGroupShareLimit)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -133,70 +133,70 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[4] = VoteItem({
-            description: "5. Call EasyTrack.addEVMScriptFactory(ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID, (vaultsAdapter, setVaultJailStatus))",
+            description: "5. Add SetJailStatusInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, setVaultJailStatus)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
                     TEMPLATE.ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID(),
                     bytes.concat(
                         bytes20(vaultsAdapter),
-                        bytes4(IVaultsAdapterPermissions.setVaultJailStatus.selector)
+                        bytes4(IVaultsAdapter.setVaultJailStatus.selector)
                     )
                 ))
             })
         });
 
         votingVoteItems[5] = VoteItem({
-            description: "6. Call EasyTrack.addEVMScriptFactory(ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID, (vaultsAdapter, updateVaultFees))",
+            description: "6. Add UpdateVaultsFeesInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, updateVaultFees)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
                     TEMPLATE.ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID(),
                     bytes.concat(
                         bytes20(vaultsAdapter),
-                        bytes4(IVaultsAdapterPermissions.updateVaultFees.selector)
+                        bytes4(IVaultsAdapter.updateVaultFees.selector)
                     )
                 ))
             })
         });
 
         votingVoteItems[6] = VoteItem({
-            description: "7. Call EasyTrack.addEVMScriptFactory(ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB, (vaultsAdapter, forceValidatorExit))",
+            description: "7. Add ForceValidatorExitsInVaultHub factory to EasyTrack (permissions: vaultsAdapter, forceValidatorExit)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
                     TEMPLATE.ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB(),
                     bytes.concat(
                         bytes20(vaultsAdapter),
-                        bytes4(IVaultsAdapterPermissions.forceValidatorExit.selector)
+                        bytes4(IVaultsAdapter.forceValidatorExit.selector)
                     )
                 ))
             })
         });
 
         votingVoteItems[7] = VoteItem({
-            description: "8. Call EasyTrack.addEVMScriptFactory(ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB, (vaultsAdapter, setLiabilitySharesTarget))",
+            description: "8. Add SetLiabilitySharesTargetInVaultHub factory to EasyTrack (permissions: vaultsAdapter, setLiabilitySharesTarget)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
                     TEMPLATE.ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB(),
                     bytes.concat(
                         bytes20(vaultsAdapter),
-                        bytes4(IVaultsAdapterPermissions.setLiabilitySharesTarget.selector)
+                        bytes4(IVaultsAdapter.setLiabilitySharesTarget.selector)
                     )
                 ))
             })
         });
 
         votingVoteItems[8] = VoteItem({
-            description: "9. Call EasyTrack.addEVMScriptFactory(ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB, (vaultsAdapter, socializeBadDebt))",
+            description: "9. Add SocializeBadDebtInVaultHub factory to EasyTrack (permissions: vaultsAdapter, socializeBadDebt)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
                     TEMPLATE.ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB(),
                     bytes.concat(
                         bytes20(vaultsAdapter),
-                        bytes4(IVaultsAdapterPermissions.socializeBadDebt.selector)
+                        bytes4(IVaultsAdapter.socializeBadDebt.selector)
                     )
                 ))
             })
