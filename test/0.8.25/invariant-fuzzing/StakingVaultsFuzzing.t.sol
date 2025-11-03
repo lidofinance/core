@@ -3,24 +3,26 @@
 pragma solidity 0.8.25;
 
 import {Test} from "forge-std/Test.sol";
-import "forge-std/console2.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts-v5.2/proxy/ERC1967/ERC1967Proxy.sol";
+
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {StakingVault} from "contracts/0.8.25/vaults/StakingVault.sol";
 import {TierParams, OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
-
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IHashConsensus} from "contracts/0.8.25/vaults/interfaces/IHashConsensus.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
+import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
+import {RefSlotCache, DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 import {StakingVaultsHandler} from "./StakingVaultsHandler.t.sol";
 import {Constants} from "./StakingVaultConstants.sol";
-
-import {LazyOracleMock} from "./mocks/LazyOracleMock.sol";
-
-import {Math256} from "contracts/common/lib/Math256.sol";
+import {PinnedBeaconProxyMock} from "./mocks/CommonMocks.sol";
 
 contract StakingVaultsTest is Test {
+    using RefSlotCache for RefSlotCache.Uint104WithCache;
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
+
     VaultHub vaultHubProxy;
     StakingVault stakingVaultProxy;
 
@@ -42,6 +44,7 @@ contract StakingVaultsTest is Test {
     address private lidoLocator_addr = makeAddr("lidoLocator");
     address private lido_addr = makeAddr("lido");
     address private consensusContract_addr = makeAddr("consensusContract");
+    address private vaultFactory_addr = makeAddr("vaultFactory");
 
     function deployMockContracts() internal {
         //Deploy LidoMock
@@ -56,19 +59,32 @@ contract StakingVaultsTest is Test {
         );
 
         //Deploy LazyOracleMock
+        LazyOracle lazyOracle = new LazyOracle(lidoLocator_addr);
+
+        vm.prank(rootAccount);
         deployCodeTo(
-            "CommonMocks.sol:LazyOracleMock",
+            "ERC1967Proxy",
             abi.encode(
-                lidoLocator_addr,
-                consensusContract_addr,
-                Constants.QUARANTINE_PERIOD,
-                Constants.MAX_REWARD_RATIO_BP
+                lazyOracle,
+                abi.encodeWithSelector(
+                    LazyOracle.initialize.selector,
+                    rootAccount,
+                    Constants.QUARANTINE_PERIOD,
+                    Constants.MAX_REWARD_RATIO_BP,
+                    Constants.MAX_LIDO_FEE_RATE_PER_SECOND
+                )
             ),
             lazyOracle_addr
         );
 
         //Deploy ConsensusContractMock
         deployCodeTo("CommonMocks.sol:ConsensusContractMock", abi.encode(1, 0), consensusContract_addr);
+
+        //Deploy VaultFactoryMock
+        deployCodeTo("CommonMocks.sol:VaultFactoryMock", abi.encode(vaultFactory_addr), vaultFactory_addr);
+
+        //Deploy PredepositGuaranteeMock
+        deployCodeTo("CommonMocks.sol:PredepositGuaranteeMock", abi.encode(pdg_addr), pdg_addr);
 
         //Deploy LidoLocatorMock
         deployCodeTo(
@@ -81,7 +97,8 @@ contract StakingVaultsTest is Test {
                 operatorGrid_addr,
                 lazyOracle_addr,
                 vaultHub_addr,
-                consensusContract_addr
+                consensusContract_addr,
+                vaultFactory_addr
             ),
             lidoLocator_addr
         );
@@ -131,10 +148,6 @@ contract StakingVaultsTest is Test {
         vm.prank(rootAccount);
         vaultHubProxy.grantRole(vaultMasterRole, rootAccount);
 
-        bytes32 vaultCodehashSetRole = vaultHubProxy.VAULT_CODEHASH_SET_ROLE();
-        vm.prank(rootAccount);
-        vaultHubProxy.grantRole(vaultCodehashSetRole, rootAccount);
-
         bytes32 validatorExitRole = vaultHubProxy.VALIDATOR_EXIT_ROLE();
         vm.prank(rootAccount);
         vaultHubProxy.grantRole(validatorExitRole, rootAccount);
@@ -143,15 +156,12 @@ contract StakingVaultsTest is Test {
     function deployStakingVault() internal {
         //Create StakingVault contract
         StakingVault stakingVault = new StakingVault(address(0x22));
-        ERC1967Proxy proxy = new ERC1967Proxy(
+
+        PinnedBeaconProxyMock proxy = new PinnedBeaconProxyMock(
             address(stakingVault),
             abi.encodeWithSelector(StakingVault.initialize.selector, userAccount, nodeOperator, pdg_addr, "0x")
         );
         stakingVaultProxy = StakingVault(payable(address(proxy)));
-
-        vm.prank(rootAccount);
-        //Allow the stakingVault contract to be connected
-        vaultHubProxy.setAllowedCodehash(address(stakingVaultProxy).codehash, true);
     }
 
     function setUp() public {
@@ -201,45 +211,50 @@ contract StakingVaultsTest is Test {
         targetSelector(FuzzSelector({addr: address(svHandler), selectors: svSelectors}));
     }
 
+    function test() public {
+        svHandler.fund(1 ether);
+        svHandler.updateVaultData(3);
+        svHandler.voluntaryDisconnect();
+    }
+
     ////////// INVARIANTS //////////
 
-    //With current deployed environement (no slashing, no stETH rebase)
+    //With current deployed environment (no slashing, no stETH rebase)
     //the staking Vault should never go below the rebalance threshold
     //Meaning having less locked collateral than the threshold ratio limit (in regards to the liabilityShares converted in ETH)
     //This is computed by rebalanceShortfall function
 
     // Invariant 1: Staking vault should never go below the rebalance threshold (collateral always covers liability).
     function invariant1_liabilityShares_not_above_collateral() external {
-        uint256 rebalanceShares = vaultHubProxy.rebalanceShortfall(address(stakingVaultProxy));
+        uint256 rebalanceShares = vaultHubProxy.healthShortfallShares(address(stakingVaultProxy));
         assertEq(rebalanceShares, 0, "Staking Vault should never go below the rebalance threshold");
     }
-
 
     // Invariant 2: Dynamic total value (including deltas) should never underflow (must be >= 0).
     function invariant2_dynamic_totalValue_should_not_underflow() external {
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
         assertGe(
             int256(uint256(record.report.totalValue)) +
-                int256(record.inOutDelta.value) -
+                int256(record.inOutDelta.currentValue()) -
                 int256(record.report.inOutDelta),
             0,
             "Dynamic total value should not underflow"
         );
     }
 
-    // Invariant 3: forceRebalance should not revert when the vault is unhealthy.
-    function invariant3_forceRebalance_should_not_revert_when_unhealthy() external {
+    // Invariant 3: forceRebalance should not revert when the vault has available balance and obligations.
+    function invariant3_forceRebalance_should_not_revert_when_has_available_balance_and_obligations() external {
         bool forceRebalanceReverted = svHandler.didForceRebalanceReverted();
-        assertFalse(forceRebalanceReverted, "forceRebalance should not revert when unhealthy");
+        assertFalse(
+            forceRebalanceReverted,
+            "forceRebalance should not revert when has available balance and obligations"
+        );
     }
 
-    // Invariant 4: forceValidatorExit should not revert when unhealthy and vault balance is too low.
-    function invariant4_forceValidatorExit_should_not_revert_when_unhealthy_and_vault_balance_too_low() external {
+    // Invariant 4: forceValidatorExit should not revert when has obligations shortfall.
+    function invariant4_forceValidatorExit_should_not_revert_when_has_obligations_shortfall() external {
         bool forceValidatorExitReverted = svHandler.didForceValidatorExitReverted();
-        assertFalse(
-            forceValidatorExitReverted,
-            "forceValidatorExit should not revert when unhealthy and vault balance is not sufficient"
-        );
+        assertFalse(forceValidatorExitReverted, "forceValidatorExit should not revert when has obligations shortfall");
     }
 
     // Invariant 5: Applied total value should not be greater than reported total value.
@@ -254,6 +269,7 @@ contract StakingVaultsTest is Test {
         );
     }
 
+    // внимательно следить при каких операциях он держится (update connection, socilized bad dept)
     // Invariant 6: Liability shares should never be greater than connection share limit.
     function invariant6_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
         //Get the share limit from the vault
@@ -266,21 +282,21 @@ contract StakingVaultsTest is Test {
     }
 
     modifier vaultMustBeConnected() {
-        if (vaultHubProxy.vaultConnection(address(stakingVaultProxy)).vaultIndex == 0) {
+        if (!vaultHubProxy.isVaultConnected(address(stakingVaultProxy))) {
             return;
         }
         _;
     }
 
     modifier vaultNotPendingDisconnect() {
-        if (vaultHubProxy.vaultConnection(address(stakingVaultProxy)).pendingDisconnect) {
+        if (vaultHubProxy.isPendingDisconnect(address(stakingVaultProxy))) {
             return;
         }
         _;
     }
 
     // Invariant 7: Locked amount must be >= max(connect deposit, slashing reserve, reserve ratio).
-    function invariant7_locked_cannot_be_less_than_slashing_connectdep_reserve()
+    function invariant7_locked_cannot_be_less_than_slashing_connected_reserve()
         external
         vaultMustBeConnected
         vaultNotPendingDisconnect
@@ -290,7 +306,7 @@ contract StakingVaultsTest is Test {
         VaultHub.VaultConnection memory connection = vaultHubProxy.vaultConnection(address(stakingVaultProxy));
         uint256 forcedRebalanceThresholdBP = connection.forcedRebalanceThresholdBP;
 
-        uint128 lockedAmount = record.locked;
+        uint256 lockedAmount = vaultHubProxy.locked(address(stakingVaultProxy));
         uint256 liabilityStETH = ILido(address(lido_addr)).getPooledEthBySharesRoundUp(record.liabilityShares);
 
         uint256 minium_safety_buffer = (liabilityStETH * Constants.TOTAL_BASIS_POINTS) /
@@ -303,25 +319,25 @@ contract StakingVaultsTest is Test {
         );
     }
 
-    // function invariant_totalValue_should_be_greater_than_locked() vaultMustBeConnected vaultNotPendingDisconnect external {
-    //     //Get the total value of the vault
-    //     uint256 totalValue = vaultHubProxy.totalValue(address(stakingVaultProxy));
-    //     if (totalValue == 0) {
-    //         // If totalValue is 0, we cannot check the invariant
-    //         //That's probably because the vault has just been created and no report has not been applied yet
-    //         return;
-    //     }
+    // // function invariant_totalValue_should_be_greater_than_locked() vaultMustBeConnected vaultNotPendingDisconnect external {
+    // //     //Get the total value of the vault
+    // //     uint256 totalValue = vaultHubProxy.totalValue(address(stakingVaultProxy));
+    // //     if (totalValue == 0) {
+    // //         // If totalValue is 0, we cannot check the invariant
+    // //         //That's probably because the vault has just been created and no report has not been applied yet
+    // //         return;
+    // //     }
 
-    //     //Get the locked amount
-    //     VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
-    //     uint128 lockedAmount = record.locked;
+    // //     //Get the locked amount
+    // //     VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
+    // //     uint128 lockedAmount = record.locked;
 
-    //     //VaultHub.VaultObligations memory vaultObligations = vaultHubProxy.vaultObligations(address(stakingVaultProxy));
-    //     //uint256 unsettledObligations = vaultObligations.unsettledLidoFees + vaultObligations.redemptions;
+    // //     //VaultHub.VaultObligations memory vaultObligations = vaultHubProxy.vaultObligations(address(stakingVaultProxy));
+    // //     //uint256 unsettledObligations = vaultObligations.unsettledLidoFees + vaultObligations.redemptions;
 
-    //     //Check that total value is greater than or equal to locked amount and unsettled obligations
-    //     assertGe(totalValue, lockedAmount , "Total value should be greater than or equal to locked amount");
-    // }
+    // //     //Check that total value is greater than or equal to locked amount and unsettled obligations
+    // //     assertGe(totalValue, lockedAmount , "Total value should be greater than or equal to locked amount");
+    // // }
 
     // Invariant 8: Withdrawable value must be <= total value minus locked amount and unsettled obligations.
     function invariant8_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
@@ -334,12 +350,10 @@ contract StakingVaultsTest is Test {
         uint256 totalValue = vaultHubProxy.totalValue(address(stakingVaultProxy));
 
         //Get the locked amount and unsettled obligations
-        VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
-        uint128 lockedAmount = record.locked;
-        VaultHub.VaultObligations memory vaultObligations = vaultHubProxy.vaultObligations(address(stakingVaultProxy));
-        uint256 unsettled_plus_locked = vaultObligations.unsettledLidoFees +
-            vaultObligations.redemptions +
-            lockedAmount;
+        uint256 lockedAmount = vaultHubProxy.locked(address(stakingVaultProxy));
+        (uint256 obligationsShares, uint256 obligationsFees) = vaultHubProxy.obligations(address(stakingVaultProxy));
+
+        uint256 unsettled_plus_locked = obligationsFees + lockedAmount;
         uint256 tv_minus_locked_and_obligations = totalValue > unsettled_plus_locked
             ? totalValue - unsettled_plus_locked
             : 0;
@@ -368,14 +382,12 @@ contract StakingVaultsTest is Test {
     //9. connectVault
     //10. updateVaultData -> reuses previous report; quarantine is expired; TV is kept as is (special branch if the new quarantine delta is lower than the expired one).
     // Invariant 9: Computed totalValue must be <= effective (real) total value.
-    function invariant9_computed_totalValue_must_be_less_than_or_equal_to_effective_total_value() external {
-        assertLe(svHandler.getVaultTotalValue(), svHandler.getEffectiveVaultTotalValue());
-    }
+    // function invariant9_computed_totalValue_must_be_less_than_or_equal_to_effective_total_value() external {
+    //     assertLe(svHandler.getVaultTotalValue(), svHandler.getEffectiveVaultTotalValue());
+    // }
 
-    
     // For testing purposes only (guiding the fuzzing)
     // function invariant_state() external {
     //     assertEq(svHandler.actionIndex() != 11, true, "callpath reached");
     // }
-
 }

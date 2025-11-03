@@ -2,23 +2,21 @@
 
 pragma solidity ^0.8.25;
 
+// External dependencies
 import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
-
 import {StdAssertions} from "forge-std/StdAssertions.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import {StakingVault} from "contracts/0.8.25/vaults/StakingVault.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
-import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {LidoLocatorMock, ConsensusContractMock} from "./mocks/CommonMocks.sol";
+import {StakingVault} from "contracts/0.8.25/vaults/StakingVault.sol";
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 
-import {LazyOracleMock} from "./mocks/LazyOracleMock.sol";
 import {Constants} from "./StakingVaultConstants.sol";
-import "forge-std/console2.sol";
-
+import {LidoLocatorMock, ConsensusContractMock} from "./mocks/CommonMocks.sol";
 
 /// @title StakingVaultsHandler
 /// @notice Handler contract for invariant fuzzing of a single staking vault in the Lido protocol.
@@ -31,9 +29,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     LidoLocatorMock public lidoLocator;
     VaultHub public vaultHub;
     StakingVault public stakingVault;
-    LazyOracleMock public lazyOracle;
+    LazyOracle public lazyOracle;
     ConsensusContractMock public consensusContract;
     VaultReport public lastReport;
+    address public accountingOracle;
 
     struct VaultReport {
         uint256 totalValue;
@@ -76,10 +75,11 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     constructor(address _lidoLocator, address _stakingVault, address _rootAccount, address _userAccount) {
         lidoLocator = LidoLocatorMock(_lidoLocator);
+        accountingOracle = lidoLocator.accountingOracle();
         lidoContract = ILido(lidoLocator.lido());
         vaultHub = VaultHub(payable(lidoLocator.vaultHub()));
         stakingVault = StakingVault(payable(_stakingVault));
-        lazyOracle = LazyOracleMock(lidoLocator.lazyOracle());
+        lazyOracle = LazyOracle(lidoLocator.lazyOracle());
         consensusContract = ConsensusContractMock(lidoLocator.consensusContract());
         rootAccount = _rootAccount;
         userAccount = _userAccount;
@@ -125,6 +125,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     function didForceValidatorExitReverted() public view returns (bool) {
         return forceValidatorExitReverted;
     }
+
     // --- VaultHub interactions ---
     /// @notice Connects the vault to the VaultHub, funding if needed
     function connectVault() public {
@@ -132,7 +133,8 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex != 0) {
             return;
         }
-        if (address(stakingVault).balance < Constants.CONNECT_DEPOSIT) {
+        // TODO: PDG.pendingActivations
+        if (stakingVault.availableBalance() < Constants.CONNECT_DEPOSIT) {
             deal(address(userAccount), Constants.CONNECT_DEPOSIT);
             vm.prank(userAccount);
             stakingVault.fund{value: Constants.CONNECT_DEPOSIT}();
@@ -145,10 +147,9 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     /// @notice Initiates voluntary disconnect for the vault
     function voluntaryDisconnect() public {
-        VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
-
         //do nothing if disconnected or already disconnecting
-        if (vc.vaultIndex == 0 || vc.pendingDisconnect == true) return;
+        if (!vaultHub.isVaultConnected(address(stakingVault)) || vaultHub.isPendingDisconnect(address(stakingVault)))
+            return;
 
         //decrease liabilities
         uint256 shares = vaultHub.liabilityShares(address(stakingVault));
@@ -173,33 +174,49 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         amount = bound(amount, 1, vaultHub.withdrawableValue(address(stakingVault)));
 
         //check that stakingVault is connected
-        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex == 0) {
+        if (!vaultHub.isVaultConnected(address(stakingVault))) {
             return;
         }
         vm.prank(userAccount);
         vaultHub.withdraw(address(stakingVault), userAccount, amount);
     }
 
-    /// @notice Forces a rebalance if the vault is unhealthy
+    /// @notice Forces a rebalance if the vault has available balance and obligations
     function forceRebalance() public {
-        if (vaultHub.isVaultHealthy(address(stakingVault))) {
+        // if (vaultHub.isVaultHealthy(address(stakingVault))) {
+        //     return;
+        // }
+
+        uint256 availableBalance = Math256.min(
+            stakingVault.availableBalance(),
+            vaultHub.totalValue(address(stakingVault))
+        );
+        if (availableBalance == 0) {
             return;
         }
+
+        (uint256 obligationsShares, ) = vaultHub.obligations(address(stakingVault));
+        uint256 sharesToForceRebalance = Math256.min(
+            obligationsShares,
+            lidoContract.getSharesByPooledEth(availableBalance)
+        );
+        if (sharesToForceRebalance == 0) {
+            return;
+        }
+
         vm.prank(userAccount);
         try vaultHub.forceRebalance(address(stakingVault)) {} catch {
             forceRebalanceReverted = true;
         }
     }
 
-    /// @notice Forces validator exit if vault is unhealthy or obligations exceed threshold
+    /// @notice Forces validator exit if vault has obligations shortfall
     function forceValidatorExit() public {
-        uint256 redemptions = vaultHub.vaultObligations(address(stakingVault)).redemptions;
-        if (
-            vaultHub.isVaultHealthy(address(stakingVault)) &&
-            redemptions < Math256.max(Constants.UNSETTLED_THRESHOLD, address(stakingVault).balance)
-        ) {
+        uint256 obligationsShortfallValue = vaultHub.obligationsShortfallValue(address(stakingVault));
+        if (obligationsShortfallValue == 0) {
             return;
         }
+
         bytes memory pubkeys = new bytes(0);
         vm.prank(rootAccount); //privileged account can force exit
         try vaultHub.forceValidatorExit{value: 3000}(address(stakingVault), pubkeys, userAccount) {
@@ -243,7 +260,8 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     /// @notice Calls rebalance on the staking vault (via VaultHub)
     function rebalance(uint256 amount) public {
         VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
-        if (vc.vaultIndex == 0 || vc.pendingDisconnect == true) return;
+        if (!vaultHub.isVaultConnected(address(stakingVault)) || vaultHub.isPendingDisconnect(address(stakingVault)))
+            return;
 
         uint256 totalValue = vaultHub.totalValue(address(stakingVault));
         amount = bound(amount, 1, totalValue);
@@ -251,7 +269,6 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         vm.prank(userAccount);
         vaultHub.rebalance(address(stakingVault), amount);
     }
-
 
     /// @notice Returns the effective total value of the vault (EL + CL balance)
     function getEffectiveVaultTotalValue() public view returns (uint256) {
@@ -268,7 +285,6 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         amount = bound(amount, 1 ether, 10 ether);
         sv_otcDeposited += amount;
         deal(address(stakingVault), address(stakingVault).balance + amount);
-        console2.log("stakingVault balance =", address(stakingVault).balance);
     }
 
     /// @notice Simulates OTC deposit to the VaultHub
@@ -284,21 +300,23 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     function updateVaultData(uint256 daysShift) public {
         daysShift = bound(daysShift, 0, 1);
         daysShift *= 3; // 0 or 3 days for quarantine period expiration
-        console2.log("DaysShift = %d", daysShift);
 
         //Check if vault is connected before proceeding
-        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex == 0) {
+        if (!vaultHub.isVaultConnected(address(stakingVault))) {
             return;
         }
 
         if (daysShift > 0) {
             vm.warp(block.timestamp + daysShift * 1 days);
-            lazyOracle.setVaultDataTimestamp(uint64(block.timestamp));
-            VaultHub.VaultObligations memory obligations = vaultHub.vaultObligations(address(stakingVault));
+            (uint256 refSlot1, ) = consensusContract.getCurrentFrame();
+            vm.prank(accountingOracle);
+            lazyOracle.updateReportData(uint256(block.timestamp), refSlot1, bytes32(0), "test");
+
+            VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(address(stakingVault));
 
             lastReport = VaultReport({
-                totalValue: vaultHub.totalValue(address(stakingVault)) + sv_otcDeposited + cl_balance,
-                cumulativeLidoFees: obligations.settledLidoFees + obligations.unsettledLidoFees + 1,
+                totalValue: stakingVault.availableBalance() + cl_balance + sv_otcDeposited, //*/ vaultHub.totalValue(address(stakingVault)),// + sv_otcDeposited + cl_balance,
+                cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
                 liabilityShares: vaultHub.liabilityShares(address(stakingVault)),
                 reportTimestamp: uint64(block.timestamp)
             });
@@ -306,6 +324,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
             //reset otc deposit value
             sv_otcDeposited = 0;
         }
+
         // Simulate next ref slot
         (uint256 refSlot, ) = consensusContract.getCurrentFrame();
         if (daysShift > 0) {
@@ -318,14 +337,20 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         //we update the reported total Value
         reportedTotalValue = lastReport.totalValue;
 
+        uint256 maxLiabilityShares = vaultHub.vaultRecord(address(stakingVault)).maxLiabilityShares;
+
         //update the vault data
         lazyOracle.updateVaultData(
             address(stakingVault),
             lastReport.totalValue,
             lastReport.cumulativeLidoFees,
             lastReport.liabilityShares,
-            uint64(block.timestamp)
+            maxLiabilityShares,
+            0,
+            new bytes32[](0)
         );
+
+        bool isReportFresh = vaultHub.isReportFresh(address(stakingVault));
 
         //we update the applied total value (TV should go through sanity checks, quarantine, etc.)
         appliedTotalValue = vaultHub.vaultRecord(address(stakingVault)).report.totalValue;

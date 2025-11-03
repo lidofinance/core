@@ -28,4 +28,5 @@ library Constants {
     //LazyOracle params
     uint64 public constant QUARANTINE_PERIOD = 3 days;
     uint16 public constant MAX_REWARD_RATIO_BP = 350; //3.5%
+    uint256 public constant MAX_LIDO_FEE_RATE_PER_SECOND = 1 ether;
 }

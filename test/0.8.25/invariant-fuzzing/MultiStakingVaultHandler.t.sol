@@ -10,15 +10,14 @@ import {StdAssertions} from "forge-std/StdAssertions.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {StakingVault} from "contracts/0.8.25/vaults/StakingVault.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {LidoLocatorMock, ConsensusContractMock} from "./mocks/CommonMocks.sol";
 
-import {LazyOracleMock} from "./mocks/LazyOracleMock.sol";
+import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {OperatorGridMock} from "./mocks/OperatorGridMock.sol";
 import {Constants} from "./StakingVaultConstants.sol";
-import "forge-std/console2.sol";
 
 /// @title MultiStakingVaultHandler
 /// @notice Handler contract for invariant fuzzing of multiple staking vaults, tiers, and groups in the Lido protocol.
@@ -31,7 +30,7 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
     LidoLocatorMock public lidoLocator;
     VaultHub public vaultHub;
     StakingVault[] public stakingVaults;
-    LazyOracleMock public lazyOracle;
+    LazyOracle public lazyOracle;
     OperatorGridMock public operatorGrid;
     ConsensusContractMock public consensusContract;
     VaultReport public lastReport;
@@ -61,8 +60,6 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
     bool public forceRebalanceReverted = false;
     bool public forceValidatorExitReverted = false;
 
-
-
     /// @notice Sequence of actions for guided fuzzing
     enum VaultAction {
         CONNECT,
@@ -77,12 +74,17 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
     VaultAction[] public actionPath;
     uint256 public actionIndex = 0;
 
-    constructor(address _lidoLocator, StakingVault[] memory _stakingVaults, address _rootAccount, address[] memory _userAccount) {
+    constructor(
+        address _lidoLocator,
+        StakingVault[] memory _stakingVaults,
+        address _rootAccount,
+        address[] memory _userAccount
+    ) {
         lidoLocator = LidoLocatorMock(_lidoLocator);
         lidoContract = ILido(lidoLocator.lido());
         vaultHub = VaultHub(payable(lidoLocator.vaultHub()));
         stakingVaults = _stakingVaults;
-        lazyOracle = LazyOracleMock(lidoLocator.lazyOracle());
+        lazyOracle = LazyOracle(lidoLocator.lazyOracle());
         operatorGrid = OperatorGridMock(lidoLocator.operatorGrid());
         consensusContract = ConsensusContractMock(lidoLocator.consensusContract());
         rootAccount = _rootAccount;
@@ -112,7 +114,6 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         _;
     }
 
-
     // --- Getters for invariant checks ---
     function getGroupShareLimit(uint256 groupId) public view returns (uint256) {
         return groupShareLimit[groupId];
@@ -122,14 +123,13 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         return tierShareLimit[tierId];
     }
 
-
     // --- VaultHub interactions ---
     /// @notice Connects a vault to the VaultHub, funding if needed
     function connectVault(uint256 id) public {
         id = bound(id, 0, userAccount.length - 1);
         VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVaults[id]));
         if (vc.vaultIndex != 0) return;
-        if (address(stakingVaults[id]).balance < Constants.CONNECT_DEPOSIT) {
+        if (stakingVaults[id].availableBalance() < Constants.CONNECT_DEPOSIT) {
             deal(address(userAccount[id]), Constants.CONNECT_DEPOSIT);
             vm.prank(userAccount[id]);
             stakingVaults[id].fund{value: Constants.CONNECT_DEPOSIT}();
@@ -143,8 +143,10 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
     /// @notice Initiates voluntary disconnect for a vault
     function voluntaryDisconnect(uint256 id) public {
         id = bound(id, 0, userAccount.length - 1);
-        VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVaults[id]));
-        if (vc.vaultIndex == 0 || vc.pendingDisconnect == true) return;
+        if (
+            !vaultHub.isVaultConnected(address(stakingVaults[id])) ||
+            vaultHub.isPendingDisconnect(address(stakingVaults[id]))
+        ) return;
         uint256 shares = vaultHub.liabilityShares(address(stakingVaults[id]));
         if (shares != 0) {
             vm.prank(userAccount[id]);
@@ -167,7 +169,10 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
     function VHwithdraw(uint256 id, uint256 amount) public {
         id = bound(id, 0, userAccount.length - 1);
         amount = bound(amount, 0, vaultHub.withdrawableValue(address(stakingVaults[id])));
-        if (vaultHub.vaultConnection(address(stakingVaults[id])).vaultIndex == 0) {
+        if (
+            !vaultHub.isVaultConnected(address(stakingVaults[id])) ||
+            vaultHub.isPendingDisconnect(address(stakingVaults[id]))
+        ) {
             return;
         }
         if (amount == 0) {
@@ -184,8 +189,7 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
             return;
         }
         vm.prank(userAccount[id]);
-        try vaultHub.forceRebalance(address(stakingVaults[id])) {
-        } catch {
+        try vaultHub.forceRebalance(address(stakingVaults[id])) {} catch {
             forceRebalanceReverted = true;
         }
     }
@@ -193,14 +197,13 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
     /// @notice Forces validator exit if vault is unhealthy or obligations exceed threshold
     function forceValidatorExit(uint256 id) public {
         id = bound(id, 0, userAccount.length - 1);
-        uint256 redemptions = vaultHub.vaultObligations(address(stakingVaults[id])).redemptions;
-        if (vaultHub.isVaultHealthy(address(stakingVaults[id])) && redemptions < Math256.max(Constants.UNSETTLED_THRESHOLD, address(stakingVaults[id]).balance)) {
-            return;
-        }
+        uint256 obligationsShortfallAmount = vaultHub.obligationsShortfallValue(address(stakingVaults[id]));
+        // if (obligationsShortfallAmount == 0) {
+        //     return;
+        // }
         bytes memory pubkeys = new bytes(0);
         vm.prank(rootAccount);
-        try vaultHub.forceValidatorExit(address(stakingVaults[id]), pubkeys, userAccount[id]) {
-        } catch {
+        try vaultHub.forceValidatorExit(address(stakingVaults[id]), pubkeys, userAccount[id]) {} catch {
             forceValidatorExitReverted = true;
         }
     }
@@ -229,30 +232,34 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
     /// @notice Changes the tier of a vault, respecting share limits
     function changeTier(uint256 id, uint256 _requestedTierId, uint256 _requestedShareLimit) public {
         id = bound(id, 0, userAccount.length - 1);
-        if (vaultHub.vaultConnection(address(stakingVaults[id])).vaultIndex == 0) {
+        if (
+            !vaultHub.isVaultConnected(address(stakingVaults[id])) ||
+            vaultHub.isPendingDisconnect(address(stakingVaults[id]))
+        ) {
             return;
         }
         address nodeOperator = stakingVaults[id].nodeOperator();
         OperatorGridMock.Group memory nodeOperatorGroup = operatorGrid.group(nodeOperator);
         _requestedTierId = bound(_requestedTierId, 1, nodeOperatorGroup.tierIds.length - 1); // cannot change to default tier (0)
-        (,uint256 vaultTierId,,,,,,) = operatorGrid.vaultInfo(address(stakingVaults[id]));
-        if (_requestedTierId == vaultTierId)
-            return;
+        (, uint256 vaultTierId, , , , , , ) = operatorGrid.vaultInfo(address(stakingVaults[id]));
+        if (_requestedTierId == vaultTierId) return;
         uint256 requestedTierId = nodeOperatorGroup.tierIds[_requestedTierId];
         uint256 requestedTierShareLimit = operatorGrid.tier(requestedTierId).shareLimit;
 
         /////// AVOIDS INVARIANT VIOLATION ///////////
-        _requestedShareLimit = bound(_requestedShareLimit,  vaultHub.liabilityShares(address(stakingVaults[id])), requestedTierShareLimit); //this caught a finding with a minimum set to 1
-        
+        _requestedShareLimit = bound(
+            _requestedShareLimit,
+            vaultHub.liabilityShares(address(stakingVaults[id])),
+            requestedTierShareLimit
+        ); //this caught a finding with a minimum set to 1
 
         vm.prank(userAccount[id]);
         operatorGrid.changeTier(address(stakingVaults[id]), requestedTierId, _requestedShareLimit);
     }
 
-
     /// @notice Simulates OTC deposit to a staking vault
     function sv_otcDeposit(uint256 id, uint256 amount) public {
-        id = bound(id, 0, userAccount.length-1);
+        id = bound(id, 0, userAccount.length - 1);
         amount = bound(amount, 1 ether, 10 ether);
         sv_otcDeposited[id] += amount;
         deal(address(stakingVaults[id]), address(stakingVaults[id]).balance + amount);
@@ -265,24 +272,29 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         deal(address(vaultHub), address(vaultHub).balance + amount);
     }
 
-    // --- LazyOracle interactions ---
+    // // --- LazyOracle interactions ---
 
     /// @notice Updates vault data, simulating time shifts and quarantine logic
     function updateVaultData(uint256 id, uint256 daysShift) public {
         id = bound(id, 0, userAccount.length - 1);
-        if (vaultHub.vaultConnection(address(stakingVaults[id])).vaultIndex == 0) {
+        if (
+            !vaultHub.isVaultConnected(address(stakingVaults[id])) ||
+            vaultHub.isPendingDisconnect(address(stakingVaults[id]))
+        ) {
             return;
         }
         daysShift = bound(daysShift, 0, 1);
         daysShift *= 3; // 0 or 3 days for quarantine period expiration
         if (daysShift > 0) {
             vm.warp(block.timestamp + daysShift * 1 days);
-            lazyOracle.setVaultDataTimestamp(uint64(block.timestamp));
-            VaultHub.VaultObligations memory obligations = vaultHub.vaultObligations(address(stakingVaults[id]));
+            //lazyOracle.setVaultDataTimestamp(uint64(block.timestamp));
+            (uint256 refSlot1, ) = consensusContract.getCurrentFrame();
+            lazyOracle.updateReportData(uint256(block.timestamp), refSlot1, bytes32(0), "test");
 
+            VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(address(stakingVaults[id]));
             lastReport = VaultReport({
                 totalValue: vaultHub.totalValue(address(stakingVaults[id])) + sv_otcDeposited[id] + cl_balance,
-                cumulativeLidoFees: obligations.settledLidoFees + obligations.unsettledLidoFees + 1,
+                cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
                 liabilityShares: vaultHub.liabilityShares(address(stakingVaults[id])),
                 reportTimestamp: uint64(block.timestamp)
             });
@@ -297,13 +309,16 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
             consensusContract.setCurrentFrame(refSlot);
         }
 
+        VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(address(stakingVaults[id]));
         //update the vault data
         lazyOracle.updateVaultData(
             address(stakingVaults[id]),
             lastReport.totalValue,
             lastReport.cumulativeLidoFees,
             lastReport.liabilityShares,
-            uint64(block.timestamp)
+            vaultRecord.maxLiabilityShares,
+            0,
+            new bytes32[](0)
         );
         // Accept ownership if disconnect was successful
         if (stakingVaults[id].pendingOwner() == userAccount[id]) {
