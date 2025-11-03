@@ -124,13 +124,17 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
     locator: state[Sk.lidoLocator].proxy.address,
     agentAddress: state[Sk.appAgent].proxy.address,
     votingAddress: state[Sk.appVoting].proxy.address,
-    easyTrackAddress: state["easyTrackEVMScriptExecutor"].address,
+    easyTrackAddress: state[Sk.easyTrackEVMScriptExecutor]?.address,
     stakingVaultFactory: state[Sk.stakingVaultFactory]?.address,
     stakingVaultBeacon: state[Sk.stakingVaultBeacon]?.address,
     operatorGrid: state[Sk.operatorGrid]?.proxy.address,
     validatorConsolidationRequests: state[Sk.validatorConsolidationRequests]?.address,
   };
-  return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "state-network-config");
+
+  const chainId = state[Sk.chainId];
+  const prefix = chainId === 1 ? "MAINNET" : chainId === 11155111 ? "SEPOLIA" : chainId === 560048 ? "HOODI" : "";
+
+  return new ProtocolNetworkConfig(getPrefixedEnv(prefix, defaultEnv), defaults, "state-network-config");
 }
 
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
@@ -144,8 +148,6 @@ export async function getNetworkConfig(network: string): Promise<ProtocolNetwork
       return getLocalNetworkConfig(network, "fork");
     case "mainnet-fork":
       return getMainnetForkNetworkConfig();
-    case "holesky-vaults-devnet-0":
-      return getLocalNetworkConfig(network, "fork");
     case "custom":
       console.log("Using custom network configuration");
       return getMainnetForkNetworkConfig();

@@ -87,6 +87,7 @@ export enum Sk {
   wstETH = "wstETH",
   lidoLocator = "lidoLocator",
   chainSpec = "chainSpec",
+  chainId = "chainId",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
   accounting = "accounting",
@@ -113,6 +114,7 @@ export enum Sk {
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
   // Easy Track
   vaultsAdapter = "vaultsAdapter",
+  easyTrackEVMScriptExecutor = "easyTrackEVMScriptExecutor",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
