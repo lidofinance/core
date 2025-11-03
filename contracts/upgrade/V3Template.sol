@@ -24,6 +24,10 @@ interface IBaseOracle is IAccessControlEnumerable, IVersioned {
     function getConsensusContract() external view returns (address);
 }
 
+interface IEasyTrack {
+    function getEVMScriptFactories() external view returns (address[] memory);
+}
+
 interface IStakingRouter is IAccessControlEnumerable {
     function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
 }
@@ -296,6 +300,37 @@ contract V3Template is V3Addresses {
         // StakingRouter
         bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
         _assertSingleOZRoleHolder(STAKING_ROUTER, reportRewardsMintedRole, ACCOUNTING);
+
+        _assertEasyTrackFactoriesAdded();
+    }
+
+    function _assertEasyTrackFactoriesAdded() internal view {
+        IEasyTrack easyTrack = IEasyTrack(EASY_TRACK);
+        address[] memory factories = easyTrack.getEVMScriptFactories();
+
+        // The expected order of the last 9 EasyTrack factories
+        address[9] memory expectedFactories = [
+            ETF_ALTER_TIERS_IN_OPERATOR_GRID,
+            ETF_REGISTER_GROUPS_IN_OPERATOR_GRID,
+            ETF_REGISTER_TIERS_IN_OPERATOR_GRID,
+            ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID,
+            ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID,
+            ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID,
+            ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB,
+            ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB,
+            ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB
+        ];
+
+        uint256 numFactories = factories.length;
+        if (numFactories < expectedFactories.length) {
+            revert UnexpectedEasyTrackFactories();
+        }
+
+        for (uint256 i = 0; i < expectedFactories.length; ++i) {
+            if (factories[numFactories - expectedFactories.length + i] != expectedFactories[i]) {
+                revert UnexpectedEasyTrackFactories();
+            }
+        }
     }
 
     function _checkBurnerMigratedCorrectly() internal view {
@@ -442,4 +477,5 @@ contract V3Template is V3Addresses {
     error IncorrectUpgradeableBeaconOwner(address beacon, address owner);
     error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
     error TotalSharesOrPooledEtherChanged();
+    error UnexpectedEasyTrackFactories();
 }

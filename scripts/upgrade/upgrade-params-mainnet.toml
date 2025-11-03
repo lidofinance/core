@@ -22,6 +22,19 @@ initialValidatorExitFeeLimit = "100000000000000000"              # Max validator
 maxGroupShareLimit = "250000000000000000000000"                  # Max share limit which can be set for group by EasyTrack
 maxDefaultTierShareLimit = 0                                     # Max share limit which can be set for default tier by EasyTrack
 
+# Must be deployed before the V3 upgrading contracts
+[easyTrack.newFactories]
+# TODO: update upon deployment
+AlterTiersInOperatorGrid = "0x00000000000000000000000000000000000fAc01"
+RegisterGroupsInOperatorGrid = "0x00000000000000000000000000000000000fAc02"
+RegisterTiersInOperatorGrid = "0x00000000000000000000000000000000000FAc03"
+SetJailStatusInOperatorGrid = "0x00000000000000000000000000000000000faC04"
+SetLiabilitySharesTargetInVaultHub = "0x00000000000000000000000000000000000FAc05"
+SocializeBadDebtInVaultHub = "0x00000000000000000000000000000000000Fac06"
+ForceValidatorExitsInVaultHub = "0x00000000000000000000000000000000000faC07"
+UpdateGroupsShareLimitInOperatorGrid = "0x00000000000000000000000000000000000FAc08"
+UpdateVaultsFeesInOperatorGrid = "0x00000000000000000000000000000000000fac09"
+
 # Vault hub configuration for managing staking vaults
 [vaultHub]
 relativeShareLimitBP = 3000           # Relative share limit in basis points (30%)

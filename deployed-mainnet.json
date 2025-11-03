@@ -296,6 +296,9 @@
     "deployTx": "0x9d76786f639bd18365f10c087444761db5dafd0edc85c5c1a3e90219f2d1331d",
     "constructorArgs": []
   },
+  "easyTrack": {
+    "address": "0xF0211b7660680B49De1A7E9f25C65660F0a13Fea"
+  },
   "easyTrackEVMScriptExecutor": {
     "address": "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"
   },
