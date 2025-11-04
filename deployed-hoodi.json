@@ -133,7 +133,7 @@
   "app:lido": {
     "implementation": {
       "contract": "contracts/0.4.24/Lido.sol",
-      "address": "0x35A4f9c9c2B1f81bDe7Eaa1f23b6465D3d741EEF",
+      "address": "0x892D3fF28Dc9360cAA47576070B1892244e68a1f",
       "constructorArgs": []
     },
     "aragonApp": {
@@ -359,7 +359,7 @@
   },
   "dashboardImpl": {
     "contract": "contracts/0.8.25/vaults/dashboard/Dashboard.sol",
-    "address": "0x7CA203e3b7341341A4a83086780137eb283A9338",
+    "address": "0x7D25D43D5a69ae0521440211C655C11840aF0FD6",
     "constructorArgs": [
       "0x3508A952176b3c15387C97BE809eaffB1982176a",
       "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
@@ -514,7 +514,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/LazyOracle.sol",
-      "address": "0x100200eE0067B4Aa95c7Ae0433d8467F5Ca74E78",
+      "address": "0x60beda728821B47446fDBcD14111b447BF8663e0",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
@@ -558,7 +558,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0x8717971067D6FeeB631d750B09Ba66a6B4E01BA3",
+      "address": "0x778Dc3a94B24D0Cd66E36d3ED8d47cAa622688F6",
       "constructorArgs": [
         {
           "accountingOracle": "0xcb883B1bD0a41512b42D2dB267F2A2cd919FB216",
@@ -580,7 +580,7 @@
           "predepositGuarantee": "0xa5F55f3402beA2B14AE15Dae1b6811457D43581d",
           "wstETH": "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
           "vaultHub": "0x4C9fFC325392090F789255b9948Ab1659b797964",
-          "vaultFactory": "0xf0Cf0c852Bb2b41eF8171399a71be79aa67e6295",
+          "vaultFactory": "0x1d10DB6a66EF8D2A6f6D36Ad4dc7092Ef7C12569",
           "lazyOracle": "0xf41491C79C30e8f4862d3F4A5b790171adB8e04A",
           "operatorGrid": "0x501e678182bB5dF3f733281521D3f3D1aDe69917"
         }
@@ -631,7 +631,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/OperatorGrid.sol",
-      "address": "0xab35DA5722B188E3b67896873F88e2dFA905c944",
+      "address": "0x81a8e96bf75eb02CE082FaFF5701B181E491dc1c",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
@@ -732,12 +732,12 @@
   },
   "stakingVaultFactory": {
     "contract": "contracts/0.8.25/vaults/VaultFactory.sol",
-    "address": "0xf0Cf0c852Bb2b41eF8171399a71be79aa67e6295",
+    "address": "0x1d10DB6a66EF8D2A6f6D36Ad4dc7092Ef7C12569",
     "constructorArgs": [
       "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
       "0xb3e6a8B6A752d3bb905A1B3Ef12bbdeE77E8160e",
-      "0x7CA203e3b7341341A4a83086780137eb283A9338",
-      "0x67Fc99587B4Cd6FA16E26FF4782711f79055d7ad"
+      "0x7D25D43D5a69ae0521440211C655C11840aF0FD6",
+      "0xf0Cf0c852Bb2b41eF8171399a71be79aa67e6295"
     ]
   },
   "stakingVaultImplementation": {
@@ -856,7 +856,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/VaultHub.sol",
-      "address": "0x36CdDa6Ff2cb8a83a0F328aA2Bf1B5200377FAf9",
+      "address": "0x25414E6CEB90F5ffa42cb11CeE95Adb4EC9a1dB8",
       "constructorArgs": [
         "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
         "0x3508A952176b3c15387C97BE809eaffB1982176a",
