@@ -106,9 +106,9 @@ describe("Integration: Unhealthy vault", () => {
 
       // Vault should still be unhealthy because we could only partially rebalance
       const obligationsAfter = await vaultHub.obligations(stakingVault);
-      expect(obligationsAfter.sharesToBurn).to.be.equal(
-        obligationsBefore.sharesToBurn - (await lido.getSharesByPooledEth(availableBalance)),
-      );
+      const expectedSharesToBurn = obligationsBefore.sharesToBurn - (await lido.getSharesByPooledEth(availableBalance));
+      // Allow small rounding difference (up to 10 wei) due to ETH/shares conversion
+      expect(obligationsAfter.sharesToBurn).to.be.closeTo(expectedSharesToBurn, 10n);
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
     });
 
