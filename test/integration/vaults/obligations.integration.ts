@@ -686,8 +686,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
     });
   });
 
-  // TODO: Need to fix the disconnect flow first
-  context.skip("Disconnect flow", () => {
+  context("Disconnect flow", () => {
     it("Reverts when trying to disconnect with unsettled obligations", async () => {
       await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1.1") });
 
@@ -699,8 +698,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       // will revert because of the unsettled obligations event trying to settle using the connection deposit
       await expect(dashboard.voluntaryDisconnect())
-        .to.be.revertedWithCustomError(vaultHub, "UnsettledObligationsExceedsAllowance")
-        .withArgs(stakingVaultAddress, ether("1"), 0);
+        .to.be.revertedWithCustomError(vaultHub, "NoUnsettledLidoFeesShouldBeLeft")
+        .withArgs(stakingVaultAddress, ether("1.1"));
 
       expect(obligations.cumulativeLidoFees).to.equal(ether("1.1"));
       expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("1"));
@@ -711,8 +710,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       await dashboard.fund({ value: ether("0.1") });
 
       await expect(dashboard.voluntaryDisconnect())
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, ether("1.1"), 0n, 0n, ether("1.1"))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVaultAddress, ether("1.1"), ether("1.1"), ether("1.1"))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(stakingVaultAddress);
     });
@@ -732,75 +731,6 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("0.1"));
       expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(ether("0.1"));
-    });
-
-    it("Reverts disconnect process when balance is not enough to cover the exit fees", async () => {
-      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(ether("1"));
-      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") });
-
-      const totalValue = await vaultHub.totalValue(stakingVaultAddress);
-      await dashboard.voluntaryDisconnect();
-
-      // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue, cumulativeLidoFees: ether("1.1") }))
-        .to.be.revertedWithCustomError(vaultHub, "UnsettledObligationsExceedsAllowance")
-        .withArgs(stakingVaultAddress, ether("0.1"), 0);
-    });
-
-    it("Should take last fees from the post disconnect report with direct transfer", async () => {
-      // 1 ether of the connection deposit will be settled to the treasury
-      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") });
-
-      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
-
-      // successfully disconnect
-      await dashboard.voluntaryDisconnect();
-
-      // adding 1 ether to cover the exit fees
-      await owner.sendTransaction({ to: stakingVaultAddress, value: ether("1") });
-
-      // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
-      await expect(
-        await reportVaultDataWithProof(ctx, stakingVault, {
-          totalValue: totalValueOnRefSlot,
-          cumulativeLidoFees: ether("1.1"),
-        }),
-      )
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, ether("0.1"), 0n, 0n, ether("1.1"))
-        .to.emit(vaultHub, "VaultDisconnectCompleted")
-        .withArgs(stakingVaultAddress);
-
-      // 0.9 ether should be left in the vault
-      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("0.9"));
-    });
-
-    it("Should take last fees from the post disconnect report with fund", async () => {
-      // 1 ether of the connection deposit will be settled to the treasury
-      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") });
-
-      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
-
-      // successfully disconnect
-      await dashboard.voluntaryDisconnect();
-
-      // adding 1 ether to cover the exit fees
-      await dashboard.fund({ value: ether("1") });
-
-      // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
-      await expect(
-        await reportVaultDataWithProof(ctx, stakingVault, {
-          totalValue: totalValueOnRefSlot,
-          cumulativeLidoFees: ether("1.1"),
-        }),
-      )
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, ether("0.1"), 0n, 0n, ether("1.1"))
-        .to.emit(vaultHub, "VaultDisconnectCompleted")
-        .withArgs(stakingVaultAddress);
-
-      // 0.9 ether should be left in the vault
-      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("0.9"));
     });
   });
 });

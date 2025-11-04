@@ -6,7 +6,14 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
-import { finalizeWQViaSubmit, getProtocolContext, getReportTimeElapsed, ProtocolContext, report } from "lib/protocol";
+import {
+  finalizeWQViaSubmit,
+  getProtocolContext,
+  getReportTimeElapsed,
+  OracleReportParams,
+  ProtocolContext,
+  report,
+} from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
@@ -97,9 +104,8 @@ describe("Integration: Accounting", () => {
     }
   }
 
-  // TODO: remove or fix and make it more meaningful for both scratch and mainnet limits
-  it.skip("Should reverts report on sanity checks", async () => {
-    const { oracleReportSanityChecker } = ctx.contracts;
+  it("reverts if the CL increase balance is incorrect", async () => {
+    const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
 
     const maxCLRebaseViaLimiter = await rebaseLimitWei();
     console.debug({ maxCLRebaseViaLimiter });
@@ -107,10 +113,48 @@ describe("Integration: Accounting", () => {
     // Expected annual limit to shot first
     const rebaseAmount = maxCLRebaseViaLimiter - 1n;
 
-    const params = { clDiff: rebaseAmount, excludeVaultsBalances: true };
+    const params: Partial<OracleReportParams> = {
+      clDiff: rebaseAmount,
+      excludeVaultsBalances: true,
+      withdrawalVaultBalance: await ethers.provider.getBalance(withdrawalVault),
+    };
     await expect(report(ctx, params)).to.be.revertedWithCustomError(
       oracleReportSanityChecker,
       "IncorrectCLBalanceIncrease(uint256)",
+    );
+  });
+
+  it("reverts if the withdrawal vault balance is greater than reported", async () => {
+    const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
+
+    const balance = await ethers.provider.getBalance(withdrawalVault);
+
+    const params: Partial<OracleReportParams> = {
+      excludeVaultsBalances: false,
+      withdrawalVaultBalance: balance + 1n,
+      reportWithdrawalsVault: true,
+    };
+
+    await expect(report(ctx, params)).to.be.revertedWithCustomError(
+      oracleReportSanityChecker,
+      "IncorrectWithdrawalsVaultBalance(uint256)",
+    );
+  });
+
+  it("reverts if the withdrawal vault balance is greater than reported", async () => {
+    const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
+
+    const balance = await ethers.provider.getBalance(withdrawalVault);
+
+    const params: Partial<OracleReportParams> = {
+      excludeVaultsBalances: false,
+      withdrawalVaultBalance: balance + 1n,
+      reportWithdrawalsVault: true,
+    };
+
+    await expect(report(ctx, params)).to.be.revertedWithCustomError(
+      oracleReportSanityChecker,
+      "IncorrectWithdrawalsVaultBalance(uint256)",
     );
   });
 

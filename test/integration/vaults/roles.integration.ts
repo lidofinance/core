@@ -74,7 +74,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       }
     });
 
-    describe.skip("Verify ACL for methods that require only role", () => {
+    describe("Verify ACL for methods that require only role", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
@@ -98,7 +98,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       }
     });
 
-    describe.skip("Verify ACL for methods that require only role", () => {
+    describe("Verify ACL for methods that require only role", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
