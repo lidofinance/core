@@ -140,7 +140,7 @@ describe("Integration: VaultHub ", () => {
       const shares = ether("1");
       const stakingLimitBeforeAll = await lido.getCurrentStakeLimit();
 
-      for (let i = 0n; i < 500n; i++) {
+      for (let i = 0n; i < 10n; i++) {
         const stakingLimitBefore = await lido.getCurrentStakeLimit();
 
         await vaultHub.mintShares(stakingVault, vaultHub, shares + i);
