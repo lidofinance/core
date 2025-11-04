@@ -93,12 +93,6 @@ abstract contract Permissions is AccessControlConfirmable {
     /// @dev 0x25482e7dc9e29f6da5bd70b6d19d17bbf44021da51ba0664a9f430c94a09c674
     bytes32 public constant VAULT_CONFIGURATION_ROLE = keccak256("vaults.Permissions.VaultConfiguration");
 
-    /**
-     * @notice Address of the implementation contract
-     * @dev Used to prevent initialization in the implementation
-     */
-    address private immutable _SELF;
-
     VaultHub public immutable VAULT_HUB;
     ILidoLocator public immutable LIDO_LOCATOR;
 
@@ -111,7 +105,8 @@ abstract contract Permissions is AccessControlConfirmable {
         _requireNotZero(_vaultHub);
         _requireNotZero(_lidoLocator);
 
-        _SELF = address(this);
+        initialized = true;
+
         // @dev vaultHub is cached as immutable to save gas for main operations
         VAULT_HUB = VaultHub(payable(_vaultHub));
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
@@ -123,7 +118,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     modifier initializer() {
         if (initialized) revert AlreadyInitialized();
-        if (address(this) == _SELF) revert NonProxyCallsForbidden();
 
         initialized = true;
         _;
@@ -175,19 +169,12 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev If an account is not a member of a role, doesn't revert, emits no events.
      */
     function revokeRoles(RoleAssignment[] calldata _assignments) external {
-        if (_assignments.length == 0) revert ZeroArgument();
+        _requireNotZero(_assignments.length);
 
         for (uint256 i = 0; i < _assignments.length; i++) {
             revokeRole(_assignments[i].role, _assignments[i].account);
         }
     }
-
-    /**
-     * @dev Returns an array of roles that need to confirm the call
-     *      used for the `onlyConfirmed` modifier.
-     * @return The roles that need to confirm the call.
-     */
-    function confirmingRoles() public pure virtual returns (bytes32[] memory);
 
     /**
      * @dev A custom modifier that checks if the caller has a role or the admin role for a given role.
@@ -212,17 +199,15 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the WITHDRAW_ROLE and withdraws funds from the StakingVault.
      * @param _recipient The address to withdraw the funds to.
      * @param _ether The amount of ether to withdraw from the StakingVault.
-     * @dev The zero checks for recipient and ether are performed in the StakingVault contract.
      */
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRoleMemberOrAdmin(WITHDRAW_ROLE) {
-        VAULT_HUB.withdraw(address(_stakingVault()), _recipient, _ether);
+        _doWithdraw(_recipient, _ether);
     }
 
     /**
      * @dev Checks the MINT_ROLE and mints shares backed by the StakingVault.
      * @param _recipient The address to mint the shares to.
      * @param _shares The amount of shares to mint.
-     * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRoleMemberOrAdmin(MINT_ROLE) {
         VAULT_HUB.mintShares(address(_stakingVault()), _recipient, _shares);
@@ -231,7 +216,6 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Checks the BURN_ROLE and burns shares backed by the StakingVault.
      * @param _shares The amount of shares to burn.
-     * @dev The zero check for parameters is performed in the VaultHub contract.
      */
     function _burnShares(uint256 _shares) internal onlyRoleMemberOrAdmin(BURN_ROLE) {
         VAULT_HUB.burnShares(address(_stakingVault()), _shares);
@@ -240,7 +224,6 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Checks the REBALANCE_ROLE and rebalances the StakingVault.
      * @param _shares The amount of shares to rebalance the StakingVault with.
-     * @dev The zero check for parameters is performed in the StakingVault contract.
      */
     function _rebalanceVault(uint256 _shares) internal onlyRoleMemberOrAdmin(REBALANCE_ROLE) {
         VAULT_HUB.rebalance(address(_stakingVault()), _shares);
@@ -262,7 +245,6 @@ abstract contract Permissions is AccessControlConfirmable {
 
     /**
      * @dev Checks the REQUEST_VALIDATOR_EXIT_ROLE and requests validator exit on the StakingVault.
-     * @dev The zero check for _pubkeys is performed in the StakingVault contract.
      */
     function _requestValidatorExit(
         bytes calldata _pubkeys
@@ -271,8 +253,8 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault using EIP-7002 triggerable exit.
-     * @dev The zero checks for parameters are performed in the StakingVault contract.
+     * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault
+     *      using EIP-7002 triggerable exit.
      */
     function _triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
@@ -307,15 +289,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _acceptOwnership() internal onlyRole(DEFAULT_ADMIN_ROLE) {
         _stakingVault().acceptOwnership();
-    }
-
-    /**
-     * @dev Checks the confirming roles and transfer the ownership of the vault without disconnecting it from the hub
-     * @param _newOwner The address to set the owner to.
-     */
-    function _transferVaultOwnership(address _newOwner) internal {
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
-        VAULT_HUB.transferVaultOwnership(address(_stakingVault()), _newOwner);
     }
 
     /**
@@ -361,6 +334,11 @@ abstract contract Permissions is AccessControlConfirmable {
         return IStakingVault(stakingVaultAddress);
     }
 
+    /// @dev internal withdraw function just to save the bytecode for external call method
+    function _doWithdraw(address _recipient, uint256 _ether) internal {
+        VAULT_HUB.withdraw(address(_stakingVault()), _recipient, _ether);
+    }
+
     function _operatorGrid() internal view returns (OperatorGrid) {
         return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
@@ -377,11 +355,6 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Emitted when the contract is initialized
      */
     event Initialized();
-
-    /**
-     * @notice Error when direct calls to the implementation are forbidden
-     */
-    error NonProxyCallsForbidden();
 
     /**
      * @notice Error when the contract is already initialized.

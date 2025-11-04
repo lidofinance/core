@@ -1790,9 +1790,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomicfoundation/hardhat-verify@npm:2.0.14":
-  version: 2.0.14
-  resolution: "@nomicfoundation/hardhat-verify@npm:2.0.14"
+"@nomicfoundation/hardhat-verify@npm:2.1.1":
+  version: 2.1.1
+  resolution: "@nomicfoundation/hardhat-verify@npm:2.1.1"
   dependencies:
     "@ethersproject/abi": "npm:^5.1.2"
     "@ethersproject/address": "npm:^5.0.2"
@@ -1804,8 +1804,8 @@ __metadata:
     table: "npm:^6.8.0"
     undici: "npm:^5.14.0"
   peerDependencies:
-    hardhat: ^2.24.1
-  checksum: 10c0/2654a80eae5a4ab531e8f00b799c5a0560e496cdb032680e99eecd7ab5309c07e35744cdaaf41b782addc1d17bc066a0cc277a31a74c3100f4b96738997b5f51
+    hardhat: ^2.26.0
+  checksum: 10c0/d21ca6db816509972deb6603e087381644ca17c5fb07a02a3fbe2148b483ac26f41b34fce64222b90a52e93de1d2920e9d879a333b96ad33cc8e3f6d16ac4558
   languageName: node
   linkType: hard
 
@@ -8452,7 +8452,7 @@ __metadata:
     "@nomicfoundation/hardhat-ignition-ethers": "npm:0.15.12"
     "@nomicfoundation/hardhat-network-helpers": "npm:1.0.12"
     "@nomicfoundation/hardhat-toolbox": "npm:5.0.0"
-    "@nomicfoundation/hardhat-verify": "npm:2.0.14"
+    "@nomicfoundation/hardhat-verify": "npm:2.1.1"
     "@nomicfoundation/ignition-core": "npm:0.15.11"
     "@openzeppelin/contracts": "npm:3.4.0"
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1"

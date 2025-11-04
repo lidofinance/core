@@ -147,13 +147,7 @@ const config: HardhatUserConfig = {
         },
       },
     ],
-    apiKey: {
-      "mainnet": process.env.ETHERSCAN_API_KEY || "",
-      "sepolia": process.env.ETHERSCAN_API_KEY || "",
-      "holesky": process.env.ETHERSCAN_API_KEY || "",
-      "hoodi": process.env.ETHERSCAN_API_KEY || "",
-      "local-devnet": process.env.LOCAL_DEVNET_EXPLORER_API_URL ? "local-devnet" : "",
-    },
+    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL ? "local-devnet" : process.env.ETHERSCAN_API_KEY || "",
   },
   solidity: {
     compilers: [

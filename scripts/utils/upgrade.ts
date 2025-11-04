@@ -12,6 +12,8 @@ import { loadContract } from "lib/contract";
 import { findEventsWithInterfaces } from "lib/event";
 import { DeploymentState, getAddress, Sk } from "lib/state-file";
 
+const FUSAKA_TX_LIMIT = 2n ** 24n; // 16M =  16_777_216
+
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
 
 export { UpgradeParameters };
@@ -92,6 +94,11 @@ export async function mockDGAragonVoting(
   const proposalExecutedTx = await timelock.connect(deployer).execute(proposalId);
   const proposalExecutedReceipt = (await proposalExecutedTx.wait())!;
   log.success("Proposal executed: gas used", proposalExecutedReceipt.gasUsed);
+
+  if (proposalExecutedReceipt.gasUsed > FUSAKA_TX_LIMIT) {
+    log.error("Proposal executed: gas used exceeds FUSAKA_TX_LIMIT");
+    process.exit(1);
+  }
 
   return { voteId, proposalId, executeReceipt, scheduleReceipt, proposalExecutedReceipt };
 }

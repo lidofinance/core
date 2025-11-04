@@ -72,7 +72,7 @@ const BurnerSchema = z.object({
   totalNonCoverSharesBurnt: BigIntStringSchema.optional(),
 });
 
-// Triggerable withdrawals gateway schema
+// Triggerable withdrawals gateway schema (used in scratch configs)
 const TriggerableWithdrawalsGatewaySchema = z.object({
   maxExitRequestsLimit: PositiveIntSchema,
   exitsPerFrame: PositiveIntSchema,
@@ -90,6 +90,12 @@ const EasyTrackSchema = z.object({
 // Oracle versions schema
 const OracleVersionsSchema = z.object({
   ao_consensus_version: PositiveIntSchema,
+});
+
+// V3 vote script params
+const V3VoteScriptSchema = z.object({
+  expiryTimestamp: NonNegativeIntSchema,
+  initialMaxExternalRatioBP: BasisPointsSchema,
 });
 
 // Aragon app versions schema
@@ -119,6 +125,7 @@ export const UpgradeParametersSchema = z.object({
   burner: BurnerSchema,
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
+  v3VoteScript: V3VoteScriptSchema,
 });
 
 // Gate seal schema (for scratch deployment)

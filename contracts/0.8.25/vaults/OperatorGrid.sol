@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -13,6 +14,7 @@ import {Confirmable2Addresses} from "../utils/Confirmable2Addresses.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
+
 
 struct TierParams {
     uint256 shareLimit;
@@ -195,6 +197,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         );
     }
 
+    /// @notice Sets the confirmation expiry period
+    /// @param _newConfirmExpiry The new confirmation expiry period in seconds
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyRole(REGISTRY_ROLE) {
+        _setConfirmExpiry(_newConfirmExpiry);
+    }
+
     /// @notice Registers a new group
     /// @param _nodeOperator address of the node operator
     /// @param _shareLimit Maximum share limit for the group
@@ -206,13 +214,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         $.groups[_nodeOperator] = Group({
             operator: _nodeOperator,
-            shareLimit: uint96(_shareLimit),
+            shareLimit: SafeCast.toUint96(_shareLimit),
             liabilityShares: 0,
             tierIds: new uint256[](0)
         });
         $.nodeOperators.push(_nodeOperator);
 
-        emit GroupAdded(_nodeOperator, uint96(_shareLimit));
+        emit GroupAdded(_nodeOperator, _shareLimit);
     }
 
     /// @notice Updates the share limit of a group
@@ -225,9 +233,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         Group storage group_ = $.groups[_nodeOperator];
         if (group_.operator == address(0)) revert GroupNotExists();
 
-        group_.shareLimit = uint96(_shareLimit);
+        group_.shareLimit = SafeCast.toUint96(_shareLimit);
 
-        emit GroupShareLimitUpdated(_nodeOperator, uint96(_shareLimit));
+        emit GroupShareLimitUpdated(_nodeOperator, _shareLimit);
     }
 
     /// @notice Returns a group by node operator address
@@ -367,13 +375,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         }
     }
 
-    /// @notice Vault tier change with multi-role confirmation
-    /// @param _vault address of the vault
-    /// @param _requestedTierId id of the tier
-    /// @param _requestedShareLimit share limit to set
-    /// @return bool Whether the tier change was executed.
-    /// @dev Requires vault to be connected to VaultHub to finalize tier change.
-    /// @dev Both vault owner and node operator confirmations are required.
     /*
 
     Legend:
@@ -419,7 +420,19 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     NB: Cannot change from Tier2 to Tier4, because Tier4 has different operator.
 
     */
-    function changeTier(address _vault, uint256 _requestedTierId, uint256 _requestedShareLimit) external returns (bool) {
+    /// @notice Vault tier change with multi-role confirmation
+    /// @param _vault address of the vault
+    /// @param _requestedTierId id of the tier
+    /// @param _requestedShareLimit share limit to set
+    /// @return bool Whether the tier change was executed.
+    /// @dev Node operator confirmation can be collected even if the vault is disconnected
+    /// @dev Requires vault to be connected to VaultHub to finalize tier change from the vault owner side.
+    /// @dev Both vault owner (via Dashboard) and node operator confirmations are required.
+    function changeTier(
+        address _vault,
+        uint256 _requestedTierId,
+        uint256 _requestedShareLimit
+    ) external returns (bool) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
         ERC7201Storage storage $ = _getStorage();
@@ -427,20 +440,21 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         VaultHub vaultHub = _vaultHub();
-        bool isVaultConnected = vaultHub.isVaultConnected(_vault);
-
-        address vaultOwner = isVaultConnected
-            ? vaultHub.vaultConnection(_vault).owner
-            : IStakingVault(_vault).owner();
-
-        address nodeOperator = IStakingVault(_vault).nodeOperator();
 
         uint256 vaultTierId = $.vaultTier[_vault];
         if (vaultTierId == _requestedTierId) revert TierAlreadySet();
 
+        address nodeOperator = IStakingVault(_vault).nodeOperator();
+        // we allow node operator to pre-approve not connected vaults
+        if (msg.sender != nodeOperator && !vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
+
         Tier storage requestedTier = $.tiers[_requestedTierId];
         if (nodeOperator != requestedTier.operator) revert TierNotInOperatorGroup();
-        if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
+        if (_requestedShareLimit > requestedTier.shareLimit) {
+            revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
+        }
+
+        address vaultOwner = vaultHub.vaultConnection(_vault).owner;
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
@@ -486,7 +500,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _vault address of the vault
     /// @return bool Whether the sync was executed.
     /// @dev Requires vault to be connected to VaultHub.
-    /// @dev Both vault owner and node operator confirmations are required.
+    /// @dev Both vault owner (via Dashboard) and node operator confirmations are required.
     function syncTier(address _vault) external returns (bool) {
         (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
         address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);
@@ -524,6 +538,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the update was executed.
     /// @dev Requires vault to be connected to VaultHub.
+    /// @dev Both vault owner (via Dashboard) and node operator confirmations are required.
     function updateVaultShareLimit(address _vault, uint256 _requestedShareLimit) external returns (bool) {
         (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
         address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);
@@ -772,7 +787,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, MAX_RESERVE_RATIO_BP);
 
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
-        if (_forcedRebalanceThresholdBP > _reserveRatioBP)
+        if (_forcedRebalanceThresholdBP >= _reserveRatioBP)
             revert ForcedRebalanceThresholdTooHigh(_tierId, _forcedRebalanceThresholdBP, _reserveRatioBP);
 
         if (_infraFeeBP > MAX_FEE_BP)

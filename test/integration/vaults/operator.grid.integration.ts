@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, OperatorGrid, StakingVault, VaultHub } from "typechain-types";
 
-import { ether } from "lib";
+import { ether, MAX_SANE_SETTLED_GROWTH } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -47,7 +47,6 @@ describe("Integration: OperatorGrid", () => {
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
-      nodeOperator,
       nodeOperator,
     ));
 
@@ -379,7 +378,10 @@ describe("Integration: OperatorGrid", () => {
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
 
       // Disconnect vault (ensure fresh report first)
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: await dashboard.totalValue() });
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: await dashboard.totalValue(),
+        waitForNextRefSlot: true,
+      });
       await dashboard.connect(owner).voluntaryDisconnect();
 
       // Verify disconnect is pending
@@ -399,8 +401,10 @@ describe("Integration: OperatorGrid", () => {
       expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
 
+      await dashboard.connect(owner).correctSettledGrowth(0, MAX_SANE_SETTLED_GROWTH);
+      await dashboard.connect(nodeOperator).correctSettledGrowth(0, MAX_SANE_SETTLED_GROWTH);
+
       // Reconnect vault
-      await dashboard.connect(nodeOperator).setApprovedToConnect(true);
       await dashboard.connect(owner).reconnectToVaultHub();
 
       // Verify vault is reconnected

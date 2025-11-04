@@ -238,8 +238,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      * @param _oldBurner The address of the old Burner contract to migrate from
      * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
+     * @param _initialMaxExternalRatioBP Initial maximum external ratio in basis points
      */
-    function finalizeUpgrade_v3(address _oldBurner, address[] _contractsWithBurnerAllowances) external {
+    function finalizeUpgrade_v3(
+        address _oldBurner,
+        address[] _contractsWithBurnerAllowances,
+        uint256 _initialMaxExternalRatioBP
+    ) external {
         require(hasInitialized(), "NOT_INITIALIZED");
         _checkContractVersion(2);
         _setContractVersion(3);
@@ -247,6 +252,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _migrateStorage_v2_to_v3();
 
         _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
+
+        _setMaxExternalRatioBP(_initialMaxExternalRatioBP);
     }
 
     function _migrateStorage_v2_to_v3() internal {
@@ -450,11 +457,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function setMaxExternalRatioBP(uint256 _maxExternalRatioBP) external {
         _auth(STAKING_CONTROL_ROLE);
-        require(_maxExternalRatioBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_RATIO");
 
         _setMaxExternalRatioBP(_maxExternalRatioBP);
-
-        emit MaxExternalRatioBPSet(_maxExternalRatioBP);
     }
 
     /**
@@ -733,9 +737,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _setExternalShares(externalShares - _amountOfShares);
         _burnShares(msg.sender, _amountOfShares);
 
-        // Increase staking limit
         uint256 stethAmount = getPooledEthByShares(_amountOfShares);
-        _increaseStakingLimit(stethAmount);
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+
+        /// NB: burning external shares must be allowed even when staking is paused to allow external ether withdrawals
+        if (stakeLimitData.isStakingLimitSet() && !stakeLimitData.isStakingPaused()) {
+            uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + stethAmount;
+
+            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
+                stakeLimitData.updatePrevStakeLimit(newStakeLimit)
+            );
+        }
 
         // Historically, Lido contract does not emit Transfer to zero address events
         // for burning but emits SharesBurnt instead, so it's kept here for compatibility
@@ -1123,6 +1135,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return _stakeLimitData.calculateCurrentStakeLimit();
     }
 
+    /// @dev note that staking limit may be increased by burnExternalShares function
     function _decreaseStakingLimit(uint256 _amount) internal {
         StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
         // There is an invariant that protocol pause also implies staking pause.
@@ -1135,17 +1148,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
             STAKING_STATE_POSITION.setStorageStakeLimitStruct(
                 stakeLimitData.updatePrevStakeLimit(currentStakeLimit - _amount)
-            );
-        }
-    }
-
-    function _increaseStakingLimit(uint256 _amount) internal {
-        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
-        if (stakeLimitData.isStakingLimitSet()) {
-            uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + _amount;
-
-            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
-                stakeLimitData.updatePrevStakeLimit(newStakeLimit)
             );
         }
     }
@@ -1295,7 +1297,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     function _setMaxExternalRatioBP(uint256 _newMaxExternalRatioBP) internal {
+        require(_newMaxExternalRatioBP <= TOTAL_BASIS_POINTS, "INVALID_MAX_EXTERNAL_RATIO");
+
         LOCATOR_AND_MAX_EXTERNAL_RATIO_POSITION.setHighUint96(_newMaxExternalRatioBP);
+
+        emit MaxExternalRatioBPSet(_newMaxExternalRatioBP);
     }
 
     function _getMaxExternalRatioBP() internal view returns (uint256) {

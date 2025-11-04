@@ -7,6 +7,7 @@ import { SHARE_RATE_PRECISION } from "test/suite";
 import { ProtocolContext } from "../types";
 
 import { report } from "./accounting";
+import { removeStakingLimit } from "./staking";
 
 const DEPOSIT = 10000;
 const MIN_BURN = 1;
@@ -22,6 +23,47 @@ function calculateShareRate(totalPooledEther: bigint, totalShares: bigint): bigi
 function logShareRate(shareRate: bigint): number {
   return Number(shareRate) / Number(SHARE_RATE_PRECISION);
 }
+
+async function increaseTotalPooledEther(ctx: ProtocolContext, etherAmount: bigint) {
+  const { lido, locator } = ctx.contracts;
+  // Impersonate whale and burner accounts
+  const whaleAddress = certainAddress("shareRate:eth:whale");
+  const burnerAddress = await locator.burner();
+  const [whale, burner] = await Promise.all([impersonate(whaleAddress, BIG_BAG), impersonate(burnerAddress, BIG_BAG)]);
+
+  // Whale submits deposit
+  await removeStakingLimit(ctx);
+  await lido.connect(whale).submit(ZeroAddress, { value: etherAmount });
+
+  const sharesToBurn = await lido.getSharesByPooledEth(etherAmount);
+
+  // Whale transfers shares to burner, burner burns shares
+  await lido.connect(whale).transferShares(burner, sharesToBurn);
+  await lido.connect(burner).burnShares(sharesToBurn);
+
+  // Report accounting
+  await report(ctx, { clDiff: 0n });
+}
+
+export const ensureExactShareRate = async (ctx: ProtocolContext, targetShareRate: bigint) => {
+  const { lido } = ctx.contracts;
+
+  const [totalPooledEther, totalShares] = await Promise.all([lido.getTotalPooledEther(), lido.getTotalShares()]);
+  if (totalPooledEther * SHARE_RATE_PRECISION === totalShares * targetShareRate) {
+    return;
+  }
+
+  const etherAmount = (totalShares * targetShareRate) / SHARE_RATE_PRECISION - totalPooledEther;
+  await increaseTotalPooledEther(ctx, etherAmount);
+
+  const [totalPooledEtherAfter, totalSharesAfter] = await Promise.all([
+    lido.getTotalPooledEther(),
+    lido.getTotalShares(),
+  ]);
+  const newShareRate = calculateShareRate(totalPooledEtherAfter, totalSharesAfter);
+
+  log.success("Share rate:", logShareRate(newShareRate));
+};
 
 export const ensureSomeOddShareRate = async (ctx: ProtocolContext) => {
   const { lido, locator } = ctx.contracts;

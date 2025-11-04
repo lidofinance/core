@@ -14,6 +14,11 @@ interface IKernel {
     function APP_BASES_NAMESPACE() external view returns (bytes32);
 }
 
+interface IOracleDaemonConfig {
+    function CONFIG_MANAGER_ROLE() external view returns (bytes32);
+    function set(string calldata _key, bytes calldata _value) external;
+}
+
 interface IStakingRouter {
     function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
 }
@@ -30,7 +35,7 @@ contract V3VoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 14;
+    uint256 public constant VOTE_ITEMS_COUNT = 17;
 
     //
     // Immutables
@@ -58,21 +63,18 @@ contract V3VoteScript is OmnibusBase {
         voteItems = new VoteItem[](VOTE_ITEMS_COUNT);
         uint256 index = 0;
 
-        // Start the upgrade process
         voteItems[index++] = VoteItem({
             description: "1. Call UpgradeTemplateV3.startUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.startUpgrade, ()))
         });
 
-        // Upgrade LidoLocator implementation
         voteItems[index++] = VoteItem({
             description: "2. Upgrade LidoLocator implementation",
             call: _forwardCall(TEMPLATE.AGENT(), TEMPLATE.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_LOCATOR_IMPL())))
         });
 
-        // Grant APP_MANAGER_ROLE to the AGENT
         voteItems[index++] = VoteItem({
-            description: "3. Grant APP_MANAGER_ROLE to the AGENT",
+            description: "3. Grant Aragon APP_MANAGER_ROLE to the AGENT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACL(),
@@ -85,7 +87,6 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Set Lido implementation in Kernel
         voteItems[index++] = VoteItem({
             description: "4. Set Lido implementation in Kernel",
             call: _forwardCall(
@@ -95,9 +96,8 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Revoke APP_MANAGER_ROLE from the AGENT on Kernel ACL
         voteItems[index++] = VoteItem({
-            description: "5. Revoke APP_MANAGER_ROLE from the AGENT",
+            description: "5. Revoke Aragon APP_MANAGER_ROLE from the AGENT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACL(),
@@ -110,7 +110,6 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Revoke REQUEST_BURN_SHARES_ROLE from Lido
         bytes32 requestBurnSharesRole = IBurner(TEMPLATE.OLD_BURNER()).REQUEST_BURN_SHARES_ROLE();
         voteItems[index++] = VoteItem({
             description: "6. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
@@ -121,7 +120,6 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Revoke REQUEST_BURN_SHARES_ROLE from Curated staking modules (NodeOperatorsRegistry)
         voteItems[index++] = VoteItem({
             description: "7. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
             call: _forwardCall(
@@ -131,7 +129,6 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT
         voteItems[index++] = VoteItem({
             description: "8. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
             call: _forwardCall(
@@ -141,7 +138,6 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Revoke REQUEST_BURN_SHARES_ROLE from CS Accounting
         voteItems[index++] = VoteItem({
             description: "9. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
             call: _forwardCall(
@@ -151,7 +147,6 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Upgrade AccountingOracle implementation
         voteItems[index++] = VoteItem({
             description: "10. Upgrade AccountingOracle implementation",
             call: _forwardCall(
@@ -161,7 +156,6 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Revoke REPORT_REWARDS_MINTED_ROLE from Lido
         bytes32 reportRewardsMintedRole = IStakingRouter(TEMPLATE.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
         voteItems[index++] = VoteItem({
             description: "11. Revoke REPORT_REWARDS_MINTED_ROLE from Lido",
@@ -172,7 +166,6 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Grant REPORT_REWARDS_MINTED_ROLE to Accounting
         voteItems[index++] = VoteItem({
             description: "12. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
             call: _forwardCall(
@@ -182,20 +175,47 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Finish the upgrade process
-        voteItems[index++] = VoteItem({
-            description: "13. Call UpgradeTemplateV3.finishUpgrade",
-            call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
-        });
+        bytes32 configManagerRole = IOracleDaemonConfig(TEMPLATE.ORACLE_DAEMON_CONFIG()).CONFIG_MANAGER_ROLE();
 
-        // Revoke REQUEST_BURN_SHARES_ROLE from Hoodi Sandbox module (only on Hoodi)
         voteItems[index++] = VoteItem({
-            description: "14. Revoke REQUEST_BURN_SHARES_ROLE from Hoodi Sandbox",
+            description: "13. Grant OracleDaemonConfig's CONFIG_MANAGER_ROLE to Agent",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
-                TEMPLATE.OLD_BURNER(),
-                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.HOODI_SANDBOX_MODULE()))
+                TEMPLATE.ORACLE_DAEMON_CONFIG(),
+                abi.encodeCall(IAccessControl.grantRole, (configManagerRole, TEMPLATE.AGENT()))
             )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "14. Set SLASHING_RESERVE_WE_RIGHT_SHIFT to 0x2000 at OracleDaemonConfig",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ORACLE_DAEMON_CONFIG(),
+                abi.encodeCall(IOracleDaemonConfig.set, ("SLASHING_RESERVE_WE_RIGHT_SHIFT", abi.encode(0x2000)))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "15. Set SLASHING_RESERVE_WE_LEFT_SHIFT to 0x2000 at OracleDaemonConfig",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ORACLE_DAEMON_CONFIG(),
+                abi.encodeCall(IOracleDaemonConfig.set, ("SLASHING_RESERVE_WE_LEFT_SHIFT", abi.encode(0x2000)))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "16. Revoke OracleDaemonConfig's CONFIG_MANAGER_ROLE from Agent",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ORACLE_DAEMON_CONFIG(),
+                abi.encodeCall(IAccessControl.revokeRole, (configManagerRole, TEMPLATE.AGENT()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "17. Call UpgradeTemplateV3.finishUpgrade",
+            call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
         });
 
         assert(index == VOTE_ITEMS_COUNT);

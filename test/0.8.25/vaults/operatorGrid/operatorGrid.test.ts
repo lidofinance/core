@@ -231,14 +231,14 @@ describe("OperatorGrid.sol", () => {
       const defaultTierParams = {
         shareLimit: DEFAULT_TIER_SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO,
-        forcedRebalanceThresholdBP: RESERVE_RATIO + 1,
+        forcedRebalanceThresholdBP: RESERVE_RATIO,
         infraFeeBP: INFRA_FEE,
         liquidityFeeBP: LIQUIDITY_FEE,
         reservationFeeBP: RESERVATION_FEE,
       };
       await expect(operatorGridLocal.initialize(stranger, defaultTierParams))
         .to.be.revertedWithCustomError(operatorGridLocal, "ForcedRebalanceThresholdTooHigh")
-        .withArgs("0", RESERVE_RATIO + 1, RESERVE_RATIO);
+        .withArgs("0", RESERVE_RATIO, RESERVE_RATIO);
     });
   });
 
@@ -983,10 +983,10 @@ describe("OperatorGrid.sol", () => {
 
       await vaultHub.mock__deleteVaultConnection(vault_NO1_V1);
 
-      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
-      const tx = operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
-
-      await expect(tx).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
+      await expect(
+        operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit),
+      ).to.be.revertedWithCustomError(operatorGrid, "VaultNotConnected");
+      await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit)).to.not.be.reverted;
     });
   });
 

@@ -297,6 +297,7 @@ export async function main() {
     locatorAddress,
     beacon.address,
     dashboardImplAddress,
+    ethers.ZeroAddress, // previous factory
   ]);
   console.log("VaultFactory address", await vaultFactory.getAddress());
 
