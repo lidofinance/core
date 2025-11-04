@@ -97,7 +97,7 @@ describe("Integration: OperatorGrid", () => {
       const beforeInfo = await operatorGrid.vaultTierInfo(stakingVault);
       expect(beforeInfo.tierId).to.equal(0n);
 
-      const requestedTierId = 1n;
+      const requestedTierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
       const requestedShareLimit = ether("1000");
 
       // First confirmation from vault owner via Dashboard → returns false (not yet confirmed)
@@ -132,7 +132,7 @@ describe("Integration: OperatorGrid", () => {
         },
       ]);
 
-      const tierId = 1n;
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
       const initialLimit = ether("1200");
 
       // Confirm change tier into tier 1
@@ -197,8 +197,9 @@ describe("Integration: OperatorGrid", () => {
       ]);
 
       // Move to tier 1 first
-      await dashboard.changeTier(1n, ether("1000"));
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, ether("1000"));
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
+      await dashboard.changeTier(tierId, ether("1000"));
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, ether("1000"));
 
       // Try to change to default tier (0) → should revert
       await expect(
@@ -229,8 +230,9 @@ describe("Integration: OperatorGrid", () => {
       ]);
 
       // Change tier to 1 with initial limit 1000
-      await dashboard.changeTier(1n, ether("1000"));
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, ether("1000"));
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
+      await dashboard.changeTier(tierId, ether("1000"));
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, ether("1000"));
 
       // Try to increase to 1200 → first confirmation by owner via Dashboard returns false
       const increaseTo = ether("1200");
@@ -333,12 +335,13 @@ describe("Integration: OperatorGrid", () => {
       expect(initialVaultInfo.tierId).to.equal(0); // Should be default tier
 
       // Change tier from default (0) to tier 1
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1, ether("1000"));
-      await dashboard.connect(owner).changeTier(1, ether("1000"));
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, ether("1000"));
+      await dashboard.connect(owner).changeTier(tierId, ether("1000"));
 
       // Verify tier changed
       const updatedVaultInfo = await operatorGrid.vaultTierInfo(stakingVault);
-      expect(updatedVaultInfo.tierId).to.equal(1);
+      expect(updatedVaultInfo.tierId).to.equal(tierId);
 
       // Verify jail status is preserved after tier change
       expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
