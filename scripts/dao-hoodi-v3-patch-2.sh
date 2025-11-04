@@ -10,7 +10,7 @@ export GAS_PRIORITY_FEE=1
 export GAS_MAX_FEE=100
 
 export NETWORK_STATE_FILE=${NETWORK_STATE_FILE:="deployed-hoodi.json"}
-export STEPS_FILE=upgrade/steps-upgrade-hoodi-patch-1.json
+export STEPS_FILE=upgrade/steps-upgrade-hoodi-patch-2.json
 export UPGRADE_PARAMETERS_FILE=scripts/upgrade/upgrade-params-hoodi.toml
 
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
