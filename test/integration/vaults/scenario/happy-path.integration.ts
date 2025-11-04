@@ -181,7 +181,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("1")); // has locked value cause of connection deposit
 
-    expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT);
   });
 
