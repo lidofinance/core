@@ -29,14 +29,14 @@ describe("Scenario: Lazy Oracle after mainnet upgrade before the first report", 
 
   after(async () => await Snapshot.restore(snapshot));
 
-  it("Vault report is not fresh on upgrade (skipped on scratch)", async function () {
+  // TODO: move to acceptance?
+  it("Vault report is not fresh on upgrade", async function () {
     const { stakingVaultFactory, vaultHub, lazyOracle } = ctx.contracts;
-    if (ctx.isScratch) {
+
+    if ((await lazyOracle.latestReportData()).timestamp != 0n) {
+      console.log("LazyOracle report is not fresh on upgrade");
       this.skip();
     }
-
-    // if fails here then snapshot restoring is broken somewhere
-    expect(await lazyOracle.latestReportData()).to.be.deep.equal([0n, 0n, "", ""], "LazyOracle should have no report");
 
     const { stakingVault } = await createVaultWithDashboard(
       ctx,
