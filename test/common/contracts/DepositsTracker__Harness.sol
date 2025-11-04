@@ -35,8 +35,8 @@ contract DepositsTracker__Harness {
         return DepositsTracker.getDepositedEthUpToLastSlot(S);
     }
 
-    function moveCursorToSlot(uint256 slot) external {
-        DepositsTracker.moveCursorToSlot(S, slot);
+    function moveCursorPastSlot(uint256 slot) external {
+        DepositsTracker.moveCursorPastSlot(S, slot);
     }
 
     // function moveCursorToLastSlot() external {

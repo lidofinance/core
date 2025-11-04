@@ -137,7 +137,7 @@ library DepositsTracker {
     }
 
     /// @notice Move cursor to next slot after provided
-    /// @param state - deposited wei state
+    /// @param state - Deposited wei state
     /// @param _slot - Upper bound slot
     /// @dev Rules:
     ///      - Cursor only moves to the right;
@@ -146,7 +146,7 @@ library DepositsTracker {
     ///      - Search only in the suffix (cursor, slotsDeposits.len);
     ///      - Find index of first element that higher than _slot;
     ///      - Cursor max value is depositsEntryAmount
-    function moveCursorToSlot(DepositedState storage state, uint256 _slot) internal {
+    function moveCursorPastSlot(DepositedState storage state, uint256 _slot) internal {
         if (_slot > type(uint64).max) revert SlotTooLarge(_slot);
 
         uint256 depositsEntryAmount = state.slotsDeposits.length;

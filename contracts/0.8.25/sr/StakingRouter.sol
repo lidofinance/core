@@ -409,7 +409,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @notice Hook for AO report
     function onAccountingReport(uint256 slot) external onlyRole(ACCOUNTING_REPORT_ROLE) {
         // move cursor for global deposit tracker
-        SRStorage.getLidoDepositTrackerStorage().moveCursorToSlot(slot);
+        SRStorage.getLidoDepositTrackerStorage().moveCursorPastSlot(slot);
         // move cursor for all module's deposits trackers
         _updateModulesTrackers(slot);
     }
@@ -1221,7 +1221,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256[] memory moduleIds = SRStorage.getModuleIds();
 
         for (uint256 i; i < moduleIds.length; ++i) {
-            SRStorage.getStakingModuleTrackerStorage(moduleIds[i]).moveCursorToSlot(slot);
+            SRStorage.getStakingModuleTrackerStorage(moduleIds[i]).moveCursorPastSlot(slot);
         }
     }
 

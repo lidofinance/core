@@ -91,12 +91,12 @@ describe("DepositsTracker.sol", () => {
       });
     });
 
-    context("getDepositedEthUpToSlot / moveCursorToSlot", () => {
+    context("getDepositedEthUpToSlot / moveCursorPastSlot", () => {
       it("returns 0 when no entries", async () => {
         expect(await depositTracker.getDepositedEthUpToSlot(1234)).to.equal(0);
       });
 
-      it("reads ranges; cursor advances only via moveCursorToSlot", async () => {
+      it("reads ranges; cursor advances only via moveCursorPastSlot", async () => {
         await depositTracker.insertSlotDeposit(1000, 5);
         await depositTracker.insertSlotDeposit(1001, 7);
         await depositTracker.insertSlotDeposit(1003, 3);
@@ -105,17 +105,17 @@ describe("DepositsTracker.sol", () => {
 
         expect(await depositTracker.getDepositedEthUpToSlot(1000)).to.equal(5);
 
-        await depositTracker.moveCursorToSlot(1000);
+        await depositTracker.moveCursorPastSlot(1000);
         expect(await depositTracker.getCursor()).to.equal(1);
 
         expect(await depositTracker.getDepositedEthUpToSlot(1001)).to.equal(7);
 
-        await depositTracker.moveCursorToSlot(1001);
+        await depositTracker.moveCursorPastSlot(1001);
         expect(await depositTracker.getCursor()).to.equal(2);
 
         expect(await depositTracker.getDepositedEthUpToSlot(10_000)).to.equal(3);
 
-        await depositTracker.moveCursorToSlot(1003); // _slot >= last.slot -> cursor = len
+        await depositTracker.moveCursorPastSlot(1003); // _slot >= last.slot -> cursor = len
         expect(await depositTracker.getCursor()).to.equal(3);
 
         expect(await depositTracker.getDepositedEthUpToSlot(10_000)).to.equal(0);
@@ -130,16 +130,16 @@ describe("DepositsTracker.sol", () => {
         expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(3);
 
         // Move to first element > 20 -> index 2 (slot 30)
-        await depositTracker.moveCursorToSlot(20);
+        await depositTracker.moveCursorPastSlot(20);
         expect(await depositTracker.getCursor()).to.equal(2);
 
-        // Now first unread is slot 30; asking up to 25 should revert
+        // Now first unread is slot 30; asking up to 25 should return 0
         expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(0);
 
         // Up to 30 includes only the last unread (3)
         expect(await depositTracker.getDepositedEthUpToSlot(30)).to.equal(3);
 
-        await depositTracker.moveCursorToSlot(30);
+        await depositTracker.moveCursorPastSlot(30);
         expect(await depositTracker.getCursor()).to.equal(3);
       });
 
@@ -149,7 +149,7 @@ describe("DepositsTracker.sol", () => {
 
         expect(await depositTracker.getDepositedEthUpToSlot(1000)).to.equal(12);
 
-        await depositTracker.moveCursorToSlot(1000);
+        await depositTracker.moveCursorPastSlot(1000);
         expect(await depositTracker.getCursor()).to.equal(1);
       });
 
@@ -158,7 +158,7 @@ describe("DepositsTracker.sol", () => {
       //   await depositTracker.insertSlotDeposit(20, 2);
       //   await depositTracker.insertSlotDeposit(30, 3);
 
-      //   await depositTracker.moveCursorToSlot(20); // cursor -> 2 (first unread slot 30)
+      //   await depositTracker.moveCursorPastSlot(20); // cursor -> 2 (first unread slot 30)
       //   expect(await depositTracker.getCursor()).to.equal(2);
 
       //   expect(await depositTracker.getDepositedEthUpToSlot(15)).to.equal(0);
@@ -168,13 +168,13 @@ describe("DepositsTracker.sol", () => {
       //   await depositTracker.insertSlotDeposit(1, 10);
       //   await depositTracker.insertSlotDeposit(2, 20);
 
-      //   await depositTracker.moveCursorToSlot(2); // cursor == len
+      //   await depositTracker.moveCursorPastSlot(2); // cursor == len
       //   expect(await depositTracker.getCursor()).to.equal(2);
 
       //   expect(await depositTracker.getDepositedEthUpToSlot(999_999)).to.equal(0);
       // });
 
-      it("moveCursorToSlot: _slot < cursor slot → dont do anything; _slot == cursor slot → cursor++ ; _slot >= last → cursor=len", async () => {
+      it("moveCursorPastSlot: _slot < cursor slot → don't do anything; _slot == cursor slot → cursor++ ; _slot >= last → cursor=len", async () => {
         await depositTracker.insertSlotDeposit(10, 1);
         await depositTracker.insertSlotDeposit(20, 2);
         await depositTracker.insertSlotDeposit(30, 3);
@@ -183,23 +183,23 @@ describe("DepositsTracker.sol", () => {
         expect(await depositTracker.getCursor()).to.equal(0);
 
         // _slot == cursor slot -> cursor++
-        await depositTracker.moveCursorToSlot(10);
+        await depositTracker.moveCursorPastSlot(10);
         expect(await depositTracker.getCursor()).to.equal(1);
 
         // _slot < cursor slot -> don't do anything
-        await depositTracker.moveCursorToSlot(9);
+        await depositTracker.moveCursorPastSlot(9);
         expect(await depositTracker.getCursor()).to.equal(1);
 
         // find first > 25 -> slot 30 (index 2)
-        await depositTracker.moveCursorToSlot(25);
+        await depositTracker.moveCursorPastSlot(25);
         expect(await depositTracker.getCursor()).to.equal(2);
 
         // _slot >= last slot -> cursor = len (3)
-        await depositTracker.moveCursorToSlot(30);
+        await depositTracker.moveCursorPastSlot(30);
         expect(await depositTracker.getCursor()).to.equal(3);
 
         // already all read; don't do anything
-        await depositTracker.moveCursorToSlot(5);
+        await depositTracker.moveCursorPastSlot(5);
         expect(await depositTracker.getCursor()).to.equal(3);
       });
     });
@@ -212,7 +212,7 @@ describe("DepositsTracker.sol", () => {
         await depositTracker.insertSlotDeposit(30, 3);
 
         // simulate we've already consumed up to slot 20 → cursor points to index 2 (slot 30)
-        await depositTracker.moveCursorToSlot(20);
+        await depositTracker.moveCursorPastSlot(20);
         expect(await depositTracker.getCursor()).to.equal(2);
         // First unread slot is 30
 
@@ -220,7 +220,7 @@ describe("DepositsTracker.sol", () => {
         expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(0);
 
         // Moving with _slot < cursorSlot, no actions required
-        await depositTracker.moveCursorToSlot(25);
+        await depositTracker.moveCursorPastSlot(25);
         expect(await depositTracker.getCursor()).to.equal(2);
       });
 
@@ -238,7 +238,7 @@ describe("DepositsTracker.sol", () => {
         expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(10);
 
         // after moving, cursor should land on first slot > 25 → slot 40 (index 3)
-        await depositTracker.moveCursorToSlot(25);
+        await depositTracker.moveCursorPastSlot(25);
         expect(await depositTracker.getCursor()).to.equal(3);
       });
 
@@ -247,12 +247,12 @@ describe("DepositsTracker.sol", () => {
         await depositTracker.insertSlotDeposit(200, 2);
 
         // Mark all read
-        await depositTracker.moveCursorToSlot(200);
+        await depositTracker.moveCursorPastSlot(200);
         expect(await depositTracker.getCursor()).to.equal(2);
 
         // Any further frame read should be 0; move is a no-op
         expect(await depositTracker.getDepositedEthUpToSlot(999999)).to.equal(0);
-        await depositTracker.moveCursorToSlot(999999);
+        await depositTracker.moveCursorPastSlot(999999);
         expect(await depositTracker.getCursor()).to.equal(2);
       });
 
@@ -265,7 +265,7 @@ describe("DepositsTracker.sol", () => {
         expect(await depositTracker.getDepositedEthUpToSlot(555)).to.equal(17);
 
         // moving with _slot >= lastDepositSlot → cursor == len
-        await depositTracker.moveCursorToSlot(555);
+        await depositTracker.moveCursorPastSlot(555);
         expect(await depositTracker.getCursor()).to.equal(2);
       });
     });
