@@ -454,7 +454,10 @@ describe("Integration: OperatorGrid", () => {
 
       // 6. Verify disconnect is NOT blocked by jail status
       // Ensure fresh report first
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: await dashboard.totalValue() });
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        waitForNextRefSlot: true,
+        totalValue: await dashboard.totalValue(),
+      });
       await expect(dashboard.connect(owner).voluntaryDisconnect()).to.not.be.reverted;
 
       // Verify disconnect was initiated successfully
