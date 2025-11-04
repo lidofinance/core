@@ -87,7 +87,6 @@ const _title = (title: string) => {
 };
 
 const _record = (label: string, value: ConvertibleToString) => {
-  if (!shouldLog("debug")) return;
   log(`${chalk.grey(label)}: ${yl(value.toString())}`);
 };
 
@@ -174,6 +173,14 @@ log.done = (message: string) => {
 
 log.debug = (title: string, records: Record<string, ConvertibleToString> = {}) => {
   if (!shouldLog("debug")) return;
+
+  _title(title);
+  Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
+  log.emptyLine();
+};
+
+log.info = (title: string, records: Record<string, ConvertibleToString> = {}) => {
+  if (!shouldLog("info")) return;
 
   _title(title);
   Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
