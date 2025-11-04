@@ -11,7 +11,9 @@ import {
   norSdvtEnsureOperators,
   OracleReportParams,
   ProtocolContext,
+  removeStakingLimit,
   report,
+  setStakingLimit,
 } from "lib/protocol";
 
 import { bailOnFailure, MAX_DEPOSIT, Snapshot, ZERO_HASH } from "test/suite";
@@ -39,6 +41,9 @@ describe("Scenario: Protocol Happy Path", () => {
     await updateBalance(stEthHolder.address, ether("100000000"));
 
     snapshot = await Snapshot.take();
+
+    await removeStakingLimit(ctx);
+    await setStakingLimit(ctx, ether("200000"), ether("20"));
   });
 
   after(async () => await Snapshot.restore(snapshot));
@@ -247,7 +252,7 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should rebase correctly", async () => {
-    const { lido, withdrawalQueue, locator, burner, nor, sdvt } = ctx.contracts;
+    const { lido, withdrawalQueue, locator, burner, nor, sdvt, stakingRouter } = ctx.contracts;
 
     const treasuryAddress = await locator.treasury();
     const strangerBalancesBeforeRebase = await getBalances(stranger);
@@ -322,7 +327,7 @@ describe("Scenario: Protocol Happy Path", () => {
       toSdvtTransfer,
       toTreasuryTransfer,
       toTreasuryTransferShares: LogDescriptionExtended | undefined;
-    let numExpectedTransferEvents = 3;
+    let numExpectedTransferEvents = Number(await stakingRouter.getStakingModulesCount());
     if (wereWithdrawalsFinalized) {
       numExpectedTransferEvents += 1;
       [toBurnerTransfer, toNorTransfer, toSdvtTransfer] = transferEvents;
