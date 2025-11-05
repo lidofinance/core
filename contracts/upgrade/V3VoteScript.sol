@@ -9,6 +9,12 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 import {V3Template} from "./V3Template.sol";
 
+import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
+
+interface IEasyTrack {
+    function addEVMScriptFactory(address _evmScriptFactory, bytes memory _permissions) external;
+}
+
 interface IKernel {
     function setApp(bytes32 _namespace, bytes32 _appId, address _app) external;
     function APP_BASES_NAMESPACE() external view returns (bytes32);
@@ -21,6 +27,14 @@ interface IOracleDaemonConfig {
 
 interface IStakingRouter {
     function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
+}
+
+interface IVaultsAdapter {
+    function setVaultJailStatus(address _vault, bool _isInJail) external;
+    function updateVaultFees(address _vault, uint16 _infrastructureFeeBP, uint16 _liquidityFeeBP, uint16 _reservationFeeBP) external;
+    function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _feeRecipient) external payable;
+    function setLiabilitySharesTarget(address _vault, uint256 _liabilitySharesTarget) external;
+    function socializeBadDebt(address _debtVault, address _acceptorVault, uint256 _shares) external;
 }
 
 /// @title V3VoteScript
@@ -55,8 +69,138 @@ contract V3VoteScript is OmnibusBase {
         params = _params;
     }
 
-    function getVotingVoteItems() public pure override returns (VoteItem[] memory votingVoteItems) {
-        votingVoteItems = new VoteItem[](0);
+    function getVotingVoteItems() public view override returns (VoteItem[] memory votingVoteItems) {
+        votingVoteItems = new VoteItem[](9);
+        address easyTrack = TEMPLATE.EASY_TRACK();
+        address operatorGrid = TEMPLATE.OPERATOR_GRID();
+        address vaultsAdapter = TEMPLATE.VAULTS_ADAPTER();
+        votingVoteItems[0] = VoteItem({
+            description: "1. Add AlterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, alterTiers)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_ALTER_TIERS_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.alterTiers.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[1] = VoteItem({
+            description: "2. Add RegisterGroupsInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerGroup + registerTiers)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_REGISTER_GROUPS_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.registerGroup.selector),
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.registerTiers.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[2] = VoteItem({
+            description: "3. Add RegisterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerTiers)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_REGISTER_TIERS_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.registerTiers.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[3] = VoteItem({
+            description: "4. Add UpdateGroupsShareLimitInOperatorGrid factory to EasyTrack (permissions: operatorGrid, updateGroupShareLimit)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.updateGroupShareLimit.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[4] = VoteItem({
+            description: "5. Add SetJailStatusInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, setVaultJailStatus)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.setVaultJailStatus.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[5] = VoteItem({
+            description: "6. Add UpdateVaultsFeesInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, updateVaultFees)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.updateVaultFees.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[6] = VoteItem({
+            description: "7. Add ForceValidatorExitsInVaultHub factory to EasyTrack (permissions: vaultsAdapter, forceValidatorExit)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.forceValidatorExit.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[7] = VoteItem({
+            description: "8. Add SetLiabilitySharesTargetInVaultHub factory to EasyTrack (permissions: vaultsAdapter, setLiabilitySharesTarget)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.setLiabilitySharesTarget.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[8] = VoteItem({
+            description: "9. Add SocializeBadDebtInVaultHub factory to EasyTrack (permissions: vaultsAdapter, socializeBadDebt)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.socializeBadDebt.selector)
+                    )
+                ))
+            })
+        });
     }
 
     function getVoteItems() public view override returns (VoteItem[] memory voteItems) {

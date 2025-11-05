@@ -39,9 +39,6 @@ export async function main() {
     state[Sk.dashboardImpl].address,
     getAddress(Sk.gateSealV3, state),
 
-    // EasyTrack addresses
-    getAddress(Sk.vaultsAdapter, state),
-
     // Existing proxies and contracts
     getAddress(Sk.aragonKernel, state),
     getAddress(Sk.appAgent, state),
@@ -50,6 +47,21 @@ export async function main() {
     getAddress(Sk.appVoting, state),
     getAddress(Sk.dgDualGovernance, state),
     getAddress(Sk.aragonAcl, state),
+
+    // EasyTrack addresses
+    getAddress(Sk.easyTrack, state),
+    getAddress(Sk.vaultsAdapter, state),
+
+    // EasyTrack new factories
+    parameters.easyTrack.newFactories.AlterTiersInOperatorGrid,
+    parameters.easyTrack.newFactories.RegisterGroupsInOperatorGrid,
+    parameters.easyTrack.newFactories.RegisterTiersInOperatorGrid,
+    parameters.easyTrack.newFactories.UpdateGroupsShareLimitInOperatorGrid,
+    parameters.easyTrack.newFactories.SetJailStatusInOperatorGrid,
+    parameters.easyTrack.newFactories.UpdateVaultsFeesInOperatorGrid,
+    parameters.easyTrack.newFactories.ForceValidatorExitsInVaultHub,
+    parameters.easyTrack.newFactories.SetLiabilitySharesTargetInVaultHub,
+    parameters.easyTrack.newFactories.SocializeBadDebtInVaultHub,
   ];
 
   const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [
