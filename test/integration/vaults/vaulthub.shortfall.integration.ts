@@ -26,6 +26,8 @@ describe("Integration: VaultHub Shortfall", () => {
     [, owner, nodeOperator] = await ethers.getSigners();
     agentSigner = await ctx.getSigner("agent");
     await setupLidoForVaults(ctx);
+
+    await ensureExactShareRate(ctx, (12737625930792815n * SHARE_RATE_PRECISION) / 10000000000000000n);
   });
 
   async function setup({ rr, frt }: { rr: bigint; frt: bigint }) {
