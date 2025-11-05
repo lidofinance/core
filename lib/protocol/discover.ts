@@ -144,13 +144,16 @@ const getAragonContracts = async (lido: LoadedContract<Lido>, config: ProtocolNe
  * Load staking modules contracts registered in the staking router.
  */
 const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, config: ProtocolNetworkConfig) => {
-  const [nor, sdvt, csm] = await stakingRouter.getStakingModules();
+  const modules = await stakingRouter.getStakingModules();
+  const nor = modules[0];
+  const sdvt = modules.find((m) => m.name === "SimpleDVT")!;
 
   const promises: { [key: string]: Promise<LoadedContract<NodeOperatorsRegistry | IStakingModule>> } = {
     nor: loadContract("NodeOperatorsRegistry", config.get("nor") || nor.stakingModuleAddress),
     sdvt: loadContract("NodeOperatorsRegistry", config.get("sdvt") || sdvt.stakingModuleAddress),
   };
 
+  const csm = modules.find((m) => m.name === "Community Staking");
   if (csm) {
     promises.csm = loadContract("IStakingModule", config.get("csm") || csm.stakingModuleAddress);
   }
