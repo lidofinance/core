@@ -597,7 +597,7 @@ describe("VaultHub.sol:hub", () => {
       const totalValue_ = await vaultHub.totalValue(vault);
 
       const shortfallEth = ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio, 50_00n);
-      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 10n;
+      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 100n;
 
       expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfallShares);
     });
@@ -652,7 +652,7 @@ describe("VaultHub.sol:hub", () => {
     it("returns correct value for rebalance vault", async () => {
       const { vault } = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
-        reserveRatioBP: 50_00n, // 50%
+        reserveRatioBP: 50_00n, // 50%s
         forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
@@ -678,7 +678,7 @@ describe("VaultHub.sol:hub", () => {
       const totalValue_ = await vaultHub.totalValue(vault);
 
       const shortfallEth = ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio, 50_00n);
-      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 10n;
+      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 100n;
 
       expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfallShares);
     });
