@@ -462,6 +462,11 @@ describe("Integration: OperatorGrid", () => {
 
       // Verify disconnect was initiated successfully
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
+
+      // Verify disconnect is completed
+      await expect(reportVaultDataWithProof(ctx, stakingVault))
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(stakingVault);
     });
   });
 });

@@ -68,20 +68,39 @@ describe("Scenario: Vault Report Slashing Reserve", () => {
     expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("2"));
   });
 
-  it("Report with zero slashing reserve resets the minimal reserve to CONNECT_DEPOSIT", async () => {
+  it("Report with slashing reserve no more than CONNECT_DEPOSIT resets the minimal reserve to CONNECT_DEPOSIT", async () => {
     const { vaultHub } = ctx.contracts;
+    const CONNECT_DEPOSIT = ether("1");
 
-    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: ether("2") });
+    const largeSlashingReserve = ether("2");
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: largeSlashingReserve });
 
     let record = await vaultHub.vaultRecord(stakingVault);
-    expect(record.minimalReserve).to.be.equal(ether("2"));
-    expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("2"));
+    expect(record.minimalReserve).to.be.equal(largeSlashingReserve);
+    expect(await vaultHub.locked(stakingVault)).to.be.equal(largeSlashingReserve);
 
+    // 1. report with zero slashing reserve
     await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: ether("0") });
 
     record = await vaultHub.vaultRecord(stakingVault);
-    expect(record.minimalReserve).to.be.equal(ether("1"));
-    expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
+    expect(record.minimalReserve).to.be.equal(CONNECT_DEPOSIT);
+    expect(await vaultHub.locked(stakingVault)).to.be.equal(CONNECT_DEPOSIT);
+
+    // 2. report with slashing reserve less than CONNECT_DEPOSIT
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: largeSlashingReserve });
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: CONNECT_DEPOSIT / 2n });
+
+    record = await vaultHub.vaultRecord(stakingVault);
+    expect(record.minimalReserve).to.be.equal(CONNECT_DEPOSIT);
+    expect(await vaultHub.locked(stakingVault)).to.be.equal(CONNECT_DEPOSIT);
+
+    // 3. report with slashing reserve equal to CONNECT_DEPOSIT
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: largeSlashingReserve });
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: CONNECT_DEPOSIT });
+
+    record = await vaultHub.vaultRecord(stakingVault);
+    expect(record.minimalReserve).to.be.equal(CONNECT_DEPOSIT);
+    expect(await vaultHub.locked(stakingVault)).to.be.equal(CONNECT_DEPOSIT);
   });
 
   it("You cannot withdraw reported slashing reserve", async () => {

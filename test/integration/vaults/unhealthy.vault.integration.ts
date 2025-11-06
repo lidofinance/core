@@ -74,10 +74,8 @@ describe("Integration: Unhealthy vault", () => {
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
       expect(obligationsBefore.sharesToBurn).to.be.gt(0n);
 
-      const availableBalance = await ethers.provider.getBalance(stakingVault);
-      const sharesToRebalance = await lido.getSharesByPooledEth(availableBalance);
-      const expectedShares =
-        sharesToRebalance < obligationsBefore.sharesToBurn ? sharesToRebalance : obligationsBefore.sharesToBurn;
+      // Shares to rebalance should be equal to obligationsBefore.sharesToBurn because it is full rebalance scenario
+      const expectedShares = obligationsBefore.sharesToBurn;
 
       await expect(vaultHub.connect(stranger).forceRebalance(stakingVault))
         .to.emit(vaultHub, "VaultRebalanced")
@@ -86,30 +84,36 @@ describe("Integration: Unhealthy vault", () => {
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
 
       const recordAfter = await vaultHub.vaultRecord(stakingVault);
-      expect(recordAfter.liabilityShares).to.be.lt(recordBefore.liabilityShares);
+      expect(recordAfter.liabilityShares).to.be.equal(recordBefore.liabilityShares - expectedShares);
     });
 
     it("Force rebalance with insufficient balance", async () => {
       const { vaultHub, lido } = ctx.contracts;
 
-      // Set vault balance to 1 ETH
-      await setBalance(await stakingVault.getAddress(), ether("1"));
+      // Set vault balance to 0.1 ETH
+      const availableBalance = ether("0.1");
+      await setBalance(await stakingVault.getAddress(), availableBalance);
 
+      const recordBefore = await vaultHub.vaultRecord(stakingVault);
       const obligationsBefore = await vaultHub.obligations(stakingVault);
-      const availableBalance = await ethers.provider.getBalance(stakingVault);
+
+      // Verify vault is unhealthy
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
-      expect(availableBalance).to.equal(ether("1"));
       expect(obligationsBefore.sharesToBurn).to.be.gt(0n);
 
+      // Shares to rebalance should be equal to available balance because it is insufficient balance scenario
+      const expectedShares = await lido.getSharesByPooledEth(availableBalance);
+
       // Force rebalance with partial balance
-      await vaultHub.connect(stranger).forceRebalance(stakingVault);
+      await expect(vaultHub.connect(stranger).forceRebalance(stakingVault))
+        .to.emit(vaultHub, "VaultRebalanced")
+        .withArgs(stakingVault, expectedShares, await lido.getPooledEthBySharesRoundUp(expectedShares));
 
       // Vault should still be unhealthy because we could only partially rebalance
-      const obligationsAfter = await vaultHub.obligations(stakingVault);
-      const expectedSharesToBurn = obligationsBefore.sharesToBurn - (await lido.getSharesByPooledEth(availableBalance));
-      // Allow small rounding difference (up to 10 wei) due to ETH/shares conversion
-      expect(obligationsAfter.sharesToBurn).to.be.closeTo(expectedSharesToBurn, 10n);
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
+
+      const recordAfter = await vaultHub.vaultRecord(stakingVault);
+      expect(recordAfter.liabilityShares).to.be.equal(recordBefore.liabilityShares - expectedShares);
     });
 
     it("Force rebalance reverts when no funds", async () => {

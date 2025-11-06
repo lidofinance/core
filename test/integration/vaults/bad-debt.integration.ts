@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
-import { advanceChainTime, MAX_UINT256 } from "lib";
+import { advanceChainTime, days, MAX_UINT256 } from "lib";
 import {
   changeTier,
   createVaultWithDashboard,
@@ -159,59 +159,6 @@ describe("Integration: Vault with bad debt", () => {
       const healthShortfall = await vaultHub.healthShortfallShares(stakingVault);
       expect(healthShortfall).to.not.equal(MAX_UINT256, "healthShortfallShares should not be MAX_UINT256");
 
-      // Normal operations should work now - use actual minting capacity
-      const mintingCapacity = await dashboard.remainingMintingCapacityShares(0n);
-      expect(mintingCapacity).to.be.greaterThan(0n, "Should have minting capacity");
-      const sharesToMint = mintingCapacity / 10n; // Mint 10% of capacity
-      await expect(dashboard.mintShares(owner, sharesToMint)).to.not.be.reverted;
-    });
-
-    it("Recovery via CL rewards", async () => {
-      const { vaultHub } = ctx.contracts;
-
-      const totalValue = await dashboard.totalValue();
-
-      // Verify vault is unhealthy before recovery
-      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(false);
-
-      // Increase totalValue by 2.5% (not very fast to avoid quarantine) each time - simulate CL rewards accumulation
-      let newTotalValue = totalValue;
-      for (let i = 0; i < 100; i++) {
-        await reportVaultDataWithProof(ctx, stakingVault, {
-          totalValue: newTotalValue,
-          waitForNextRefSlot: true,
-        });
-        newTotalValue = (newTotalValue * 1025n) / 1000n;
-      }
-
-      // Verify vault is now healthy
-      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(true, "Vault should be healthy after CL rewards");
-
-      // Verify healthShortfallShares is no longer MAX_UINT256
-      const healthShortfall = await vaultHub.healthShortfallShares(stakingVault);
-      expect(healthShortfall).to.not.equal(MAX_UINT256, "healthShortfallShares should not be MAX_UINT256");
-    });
-
-    it("Full recovery enables normal operations", async () => {
-      const { vaultHub, lido } = ctx.contracts;
-
-      // Calculate bad debt and recover
-      const liabilityShares = await dashboard.liabilityShares();
-      const totalValue = await dashboard.totalValue();
-      const liabilityValue = await lido.getPooledEthBySharesRoundUp(liabilityShares);
-
-      // Cover bad debt with direct deposit
-      // Use 2x the liability value to ensure we're above health threshold
-      const depositAmount = liabilityValue * 2n - totalValue;
-      await dashboard.fund({ value: depositAmount });
-
-      // Bring fresh report
-      await reportVaultDataWithProof(ctx, stakingVault);
-
-      // Verify vault is healthy
-      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(true);
-
-      // Test all normal operations work
       // Mint should work - use actual minting capacity
       const mintingCapacity = await dashboard.remainingMintingCapacityShares(0n);
       expect(mintingCapacity).to.be.greaterThan(0n, "Should have minting capacity");
@@ -222,6 +169,35 @@ describe("Integration: Vault with bad debt", () => {
       const withdrawableValue = await vaultHub.withdrawableValue(stakingVault);
       expect(withdrawableValue).to.be.greaterThan(ether("0.1"), "Should have withdrawable value");
       await expect(dashboard.withdraw(owner, ether("0.1"))).to.emit(stakingVault, "EtherWithdrawn");
+    });
+
+    it("Recovery via CL rewards", async () => {
+      const { vaultHub, lazyOracle } = ctx.contracts;
+
+      const totalValue = await dashboard.totalValue();
+
+      // Verify vault is unhealthy before recovery
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(false);
+
+      // Increase totalValue by 100% each time - simulate CL rewards accumulation
+      const agentSigner = await ctx.getSigner("agent");
+      await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 10500n, ether("0.01"));
+
+      let newTotalValue = totalValue;
+      for (let i = 0; i < 5; i++) {
+        newTotalValue = newTotalValue * 2n;
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: newTotalValue,
+          waitForNextRefSlot: true,
+        });
+      }
+
+      // Verify vault is now healthy
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(true, "Vault should be healthy after CL rewards");
+
+      // Verify healthShortfallShares is no longer MAX_UINT256
+      const healthShortfall = await vaultHub.healthShortfallShares(stakingVault);
+      expect(healthShortfall).to.not.equal(MAX_UINT256, "healthShortfallShares should not be MAX_UINT256");
     });
   });
 
