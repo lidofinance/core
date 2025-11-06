@@ -1242,10 +1242,11 @@ contract VaultHub is PausableUntilWithRoles {
         // X = (L * 100 - TV * MR) / (100 - MR)
         // RR = 100 - MR
         // X = (L * 100 - TV * MR) / RR
-        uint256 shortfallEth = (liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
+        uint256 shortfallEth = Math256.ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio,
+            reserveRatioBP);
 
         // Add 10 extra shares to avoid dealing with rounding/precision issues
-        uint256 shortfallShares = _getSharesByPooledEth(shortfallEth) + 10;
+        uint256 shortfallShares = _getSharesByPooledEth(shortfallEth) + 100;
 
         return Math256.min(shortfallShares, liabilityShares_);
     }
