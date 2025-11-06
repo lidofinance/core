@@ -114,6 +114,12 @@ describe("Integration: Unhealthy vault", () => {
 
       const recordAfter = await vaultHub.vaultRecord(stakingVault);
       expect(recordAfter.liabilityShares).to.be.equal(recordBefore.liabilityShares - expectedShares);
+
+      // Verify available balance is decreased by the amount of shares burned
+      const availableBalanceAfter = await ethers.provider.getBalance(await stakingVault.getAddress());
+      expect(availableBalanceAfter).to.be.equal(
+        availableBalance - (await lido.getPooledEthBySharesRoundUp(expectedShares)),
+      );
     });
 
     it("Force rebalance reverts when no funds", async () => {
