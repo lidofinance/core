@@ -280,7 +280,7 @@ export async function reportVaultDataWithProof(
       .updateReportData(reportTimestampArg, reportRefSlotArg, reportTree.root, "");
   }
 
-  return await lazyOracle.updateVaultData(
+  return lazyOracle.updateVaultData(
     await stakingVault.getAddress(),
     vaultReport.totalValue,
     vaultReport.cumulativeLidoFees,
