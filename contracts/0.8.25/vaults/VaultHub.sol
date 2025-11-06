@@ -453,16 +453,22 @@ contract VaultHub is PausableUntilWithRoles {
         _requireSender(address(_operatorGrid()));
         _requireSaneShareLimit(_shareLimit);
 
-        VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _vaultRecord(_vault);
+        VaultConnection storage connection = _vaultConnection(_vault);
+        _requireConnected(connection, _vault);
 
+        VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 totalValue_ = _totalValue(record);
-        uint256 liabilityShares_ = record.liabilityShares;
+        if (
+            _reserveRatioBP != connection.reserveRatioBP || 
+            _forcedRebalanceThresholdBP != connection.forcedRebalanceThresholdBP
+        ) {
+            uint256 totalValue_ = _totalValue(record);
+            uint256 liabilityShares_ = record.liabilityShares;
 
-        if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP)) {
-            revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
+            if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP)) {
+                revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
+            }
         }
 
         // special event for the Oracle to track fee calculation
