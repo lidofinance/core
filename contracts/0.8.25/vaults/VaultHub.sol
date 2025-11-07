@@ -432,7 +432,6 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice updates the vault's connection parameters
-    /// @dev Reverts if the vault is not healthy as of latest report
     /// @param _vault vault address
     /// @param _shareLimit new share limit
     /// @param _reserveRatioBP new reserve ratio
@@ -440,6 +439,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _infraFeeBP new infra fee
     /// @param _liquidityFeeBP new liquidity fee
     /// @param _reservationFeeBP new reservation fee
+    /// @dev reverts if the vault's minting capacity will be exceeded with new parameters
     /// @dev requires the fresh report
     function updateConnection(
         address _vault,
