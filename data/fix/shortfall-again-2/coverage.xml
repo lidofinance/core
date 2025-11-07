@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4934"  lines-covered="4709"  line-rate="0.9544"  branches-valid="2318"  branches-covered="2135"  branch-rate="0.9211"  timestamp="1762542608940" complexity="0" version="0.1">
+<coverage lines-valid="4934"  lines-covered="4709"  line-rate="0.9544"  branches-valid="2318"  branches-covered="2135"  branch-rate="0.9211"  timestamp="1762543057797" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2442,16 +2442,16 @@
 				<lines><line number="777"  hits="70" /></lines>
 			</method>
 			<method name="_vaultHub"  hits="163"  signature="()V" >
-				<lines><line number="803"  hits="163" /></lines>
+				<lines><line number="804"  hits="163" /></lines>
 			</method>
 			<method name="_getStorage"  hits="464"  signature="()V" >
-				<lines><line number="807"  hits="464" /></lines>
+				<lines><line number="808"  hits="464" /></lines>
 			</method>
 			<method name="_getVaultContextForConnectedVault"  hits="24"  signature="()V" >
-				<lines><line number="813"  hits="24" /></lines>
+				<lines><line number="814"  hits="24" /></lines>
 			</method>
 			<method name="_requireLessOrEqToBP"  hits="9"  signature="()V" >
-				<lines><line number="832"  hits="9" /></lines>
+				<lines><line number="833"  hits="9" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2630,22 +2630,22 @@
 			<line number="789"  hits="68"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="790"  hits="67"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="791"  hits="2"  branch="false" />
-			<line number="793"  hits="65"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="794"  hits="1"  branch="false" />
-			<line number="796"  hits="64"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="797"  hits="1"  branch="false" />
-			<line number="799"  hits="63"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="800"  hits="1"  branch="false" />
-			<line number="804"  hits="163"  branch="false" />
-			<line number="808"  hits="464"  branch="false" />
-			<line number="820"  hits="24"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="822"  hits="22"  branch="false" />
-			<line number="823"  hits="22"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="825"  hits="21"  branch="false" />
+			<line number="794"  hits="65"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="795"  hits="1"  branch="false" />
+			<line number="797"  hits="64"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="798"  hits="1"  branch="false" />
+			<line number="800"  hits="63"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="801"  hits="1"  branch="false" />
+			<line number="805"  hits="163"  branch="false" />
+			<line number="809"  hits="464"  branch="false" />
+			<line number="821"  hits="24"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="823"  hits="22"  branch="false" />
+			<line number="824"  hits="22"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="826"  hits="21"  branch="false" />
 			<line number="827"  hits="21"  branch="false" />
-			<line number="829"  hits="21"  branch="false" />
-			<line number="833"  hits="9"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="828"  hits="21"  branch="false" />
+			<line number="830"  hits="21"  branch="false" />
+			<line number="834"  hits="9"  branch="true"  condition-coverage="100% (2/2)" />
 		</lines>
 		</class>
 		<class name="PinnedBeaconProxy.sol"  filename="contracts/0.8.25/vaults/PinnedBeaconProxy.sol"  line-rate="1"  branch-rate="1" >
