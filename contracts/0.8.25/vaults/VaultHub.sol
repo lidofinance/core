@@ -1218,9 +1218,6 @@ contract VaultHub is PausableUntilWithRoles {
             return 0;
         }
 
-        // if not healthy and low in debt, please rebalance the whole amount
-        if (liabilityShares_ <= 100) return liabilityShares_;
-
         uint256 reserveRatioBP = _connection.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
         uint256 liability = _getPooledEthBySharesRoundUp(liabilityShares_);
@@ -1229,6 +1226,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (liability > totalValue_) {
             return type(uint256).max;
         }
+
+        // if not healthy and low in debt, please rebalance the whole amount
+        if (liabilityShares_ <= 100) return liabilityShares_;
 
         // Solve the equation for X:
         // L - liability, TV - totalValue
