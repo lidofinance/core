@@ -85,6 +85,17 @@ const EasyTrackSchema = z.object({
   initialValidatorExitFeeLimit: BigIntStringSchema,
   maxGroupShareLimit: BigIntStringSchema,
   maxDefaultTierShareLimit: NonNegativeIntSchema,
+  newFactories: z.object({
+    AlterTiersInOperatorGrid: EthereumAddressSchema,
+    RegisterGroupsInOperatorGrid: EthereumAddressSchema,
+    RegisterTiersInOperatorGrid: EthereumAddressSchema,
+    SetJailStatusInOperatorGrid: EthereumAddressSchema,
+    SetLiabilitySharesTargetInVaultHub: EthereumAddressSchema,
+    SocializeBadDebtInVaultHub: EthereumAddressSchema,
+    ForceValidatorExitsInVaultHub: EthereumAddressSchema,
+    UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
+    UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
+  }),
 });
 
 // Oracle versions schema

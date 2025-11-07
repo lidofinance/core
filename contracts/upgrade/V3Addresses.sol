@@ -56,9 +56,6 @@ contract V3Addresses {
         address dashboardImpl;
         address gateSealForVaults;
 
-        // EasyTrack addresses
-        address vaultsAdapter;
-
         // Existing proxies and contracts
         address kernel;
         address agent;
@@ -67,6 +64,21 @@ contract V3Addresses {
         address voting;
         address dualGovernance;
         address acl;
+
+        // EasyTrack addresses
+        address easyTrack;
+        address vaultsAdapter;
+
+        // EasyTrack new factories
+        address etfAlterTiersInOperatorGrid;
+        address etfRegisterGroupsInOperatorGrid;
+        address etfRegisterTiersInOperatorGrid;
+        address etfUpdateGroupsShareLimitInOperatorGrid;
+        address etfSetJailStatusInOperatorGrid;
+        address etfUpdateVaultsFeesInOperatorGrid;
+        address etfForceValidatorExitsInVaultHub;
+        address etfSetLiabilitySharesTargetInVaultHub;
+        address etfSocializeBadDebtInVaultHub;
     }
 
     string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
@@ -110,8 +122,23 @@ contract V3Addresses {
     //
     // -------- EasyTrack addresses --------
     //
-    address public immutable VAULTS_ADAPTER;
+
+    address public immutable EASY_TRACK;
+
     address public immutable EVM_SCRIPT_EXECUTOR;
+
+    address public immutable VAULTS_ADAPTER;
+
+    // ETF = EasyTrack Factory
+    address public immutable ETF_ALTER_TIERS_IN_OPERATOR_GRID;
+    address public immutable ETF_REGISTER_GROUPS_IN_OPERATOR_GRID;
+    address public immutable ETF_REGISTER_TIERS_IN_OPERATOR_GRID;
+    address public immutable ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID;
+    address public immutable ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB;
+    address public immutable ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB;
+    address public immutable ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID;
+    address public immutable ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID;
+    address public immutable ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB;
 
     //
     // -------- Unchanged contracts --------
@@ -162,7 +189,19 @@ contract V3Addresses {
         DASHBOARD_IMPL = params.dashboardImpl;
         GATE_SEAL = params.gateSealForVaults;
         EVM_SCRIPT_EXECUTOR = IVaultsAdapter(params.vaultsAdapter).evmScriptExecutor();
+
+        EASY_TRACK = params.easyTrack;
         VAULTS_ADAPTER = params.vaultsAdapter;
+        ETF_ALTER_TIERS_IN_OPERATOR_GRID = params.etfAlterTiersInOperatorGrid;
+        ETF_REGISTER_GROUPS_IN_OPERATOR_GRID = params.etfRegisterGroupsInOperatorGrid;
+        ETF_REGISTER_TIERS_IN_OPERATOR_GRID = params.etfRegisterTiersInOperatorGrid;
+        ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID = params.etfSetJailStatusInOperatorGrid;
+        ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB = params.etfSetLiabilitySharesTargetInVaultHub;
+        ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB = params.etfSocializeBadDebtInVaultHub;
+        ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID = params.etfUpdateGroupsShareLimitInOperatorGrid;
+        ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID = params.etfUpdateVaultsFeesInOperatorGrid;
+        ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB = params.etfForceValidatorExitsInVaultHub;
+
         //
         // Discovered via other contracts
         //

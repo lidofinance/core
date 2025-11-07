@@ -122,6 +122,10 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "EasyTrack configuration is upgrade-specific",
   },
   {
+    path: "easyTrack.newFactories",
+    reason: "EasyTrack new factories configuration is upgrade-specific",
+  },
+  {
     path: "predepositGuarantee.genesisForkVersion",
     reason: "Genesis fork version is upgrade-specific configuration",
   },

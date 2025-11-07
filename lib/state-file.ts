@@ -113,6 +113,7 @@ export enum Sk {
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
   // Easy Track
+  easyTrack = "easyTrack",
   vaultsAdapter = "vaultsAdapter",
   easyTrackEVMScriptExecutor = "easyTrackEVMScriptExecutor",
 }
@@ -177,6 +178,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
     case Sk.v3VoteScript:
+    case Sk.easyTrack:
     case Sk.vaultsAdapter:
     case Sk.gateSealFactory:
       return state[contractKey].address;
