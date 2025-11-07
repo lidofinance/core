@@ -439,7 +439,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _infraFeeBP new infra fee
     /// @param _liquidityFeeBP new liquidity fee
     /// @param _reservationFeeBP new reservation fee
-    /// @dev reverts if the vault's minting capacity will be exceeded with new parameters
+    /// @dev reverts if the vault's minting capacity will be exceeded with new reserve parameters
     /// @dev requires the fresh report
     function updateConnection(
         address _vault,
