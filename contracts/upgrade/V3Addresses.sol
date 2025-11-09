@@ -124,10 +124,9 @@ contract V3Addresses {
     //
 
     address public immutable EASY_TRACK;
-
     address public immutable EVM_SCRIPT_EXECUTOR;
-
     address public immutable VAULTS_ADAPTER;
+    address public constant EASY_TRACK_TRP_REGISTRY = 0x231Ac69A1A37649C6B06a71Ab32DdD92158C80b8;
 
     // ETF = EasyTrack Factory
     address public immutable ETF_ALTER_TIERS_IN_OPERATOR_GRID;
@@ -158,6 +157,12 @@ contract V3Addresses {
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
     address public immutable ORACLE_DAEMON_CONFIG;
+
+    address public constant FINANCE = 0xB9E5CBB9CA5b0d659238807E84D0176930753d86;
+    address public constant MATIC_TOKEN = 0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0;
+    address public constant LOL_MULTISIG = 0x87D93d9B2C672bf9c9642d853a8682546a5012B5;
+    uint256 public constant MATIC_AMOUNT_WEI_FOR_TRANSFER = 508106000000000000000000;
+    string public constant TRANSFER_REFERENCE = "Transfer 508,106 MATIC from Treasury to Liquidity Observation Lab (LOL) Multisig";
 
     constructor(
         V3AddressesParams memory params

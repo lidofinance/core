@@ -70,13 +70,20 @@ isMigrationAllowed = true             # Must be on for the upgrade to work (for 
 [oracleVersions]
 ao_consensus_version = 4              # Accounting Oracle consensus version
 
+# V3 vote script configuration
 [v3VoteScript]
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
 expiryTimestamp = 1765324800          # December 10, 2025 00:00:00 UTC
 # Initial maximum external ratio in basis points for Lido v3
-initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial phase
+initialMaxExternalRatioBP = 300       # 3% value set upon upgrade for the initial phase
+# Staking module parameters for raising stake share limit
+stakingModuleId = 2                   # SDVT
+stakeShareLimit = 430
+# Easy Track TRP Registry parameters
+trpLimitAfter = "15000000000000000000000000"  # 15_000_000 * 10**18
+trpPeriodDurationMonths = 12          # Period duration in months
 
 # Sources (todo)
 # - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504

@@ -2,6 +2,7 @@ import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { IAragonAppRepo, IOssifiableProxy, OssifiableProxy__factory } from "typechain-types";
+import { V3VoteScript } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
@@ -70,7 +71,14 @@ export async function main() {
     parameters.v3VoteScript.initialMaxExternalRatioBP,
   ]);
 
-  await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [
-    [template.address, state[Sk.appLido].aragonApp.id],
-  ]);
+  const voteScriptParams: V3VoteScript.ScriptParamsStruct = {
+    upgradeTemplate: template.address,
+    lidoAppId: state[Sk.appLido].aragonApp.id,
+    stakingModuleId: parameters.v3VoteScript.stakingModuleId,
+    stakeShareLimit: parameters.v3VoteScript.stakeShareLimit,
+    trpLimitAfter: parameters.v3VoteScript.trpLimitAfter,
+    trpPeriodDurationMonths: parameters.v3VoteScript.trpPeriodDurationMonths,
+  };
+
+  await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [voteScriptParams]);
 }

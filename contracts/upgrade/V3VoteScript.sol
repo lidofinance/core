@@ -15,6 +15,10 @@ interface IEasyTrack {
     function addEVMScriptFactory(address _evmScriptFactory, bytes memory _permissions) external;
 }
 
+interface IFinance {
+    function newImmediatePayment(address _token, address _receiver, uint256 _amount, string calldata _reference) external;
+}
+
 interface IKernel {
     function setApp(bytes32 _namespace, bytes32 _appId, address _app) external;
     function APP_BASES_NAMESPACE() external view returns (bytes32);
@@ -27,6 +31,39 @@ interface IOracleDaemonConfig {
 
 interface IStakingRouter {
     function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
+
+    function updateStakingModule(
+        uint256 _stakingModuleId,
+        uint256 _stakeShareLimit,
+        uint256 _priorityExitShareThreshold,
+        uint256 _stakingModuleFee,
+        uint256 _treasuryFee,
+        uint256 _maxDepositsPerBlock,
+        uint256 _minDepositBlockDistance
+    ) external;
+
+    struct StakingModule {
+        uint24 id;
+        address stakingModuleAddress;
+        uint16 stakingModuleFee;
+        uint16 treasuryFee;
+        uint16 stakeShareLimit;
+        uint8 status;
+        string name;
+        uint64 lastDepositAt;
+        uint256 lastDepositBlock;
+        uint256 exitedValidatorsCount;
+        uint16 priorityExitShareThreshold;
+        uint64 maxDepositsPerBlock;
+        uint64 minDepositBlockDistance;
+    }
+
+    function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
+}
+
+interface IAllowedRecipientsRegistry {
+    function unsafeSetSpentAmount(uint256 _newSpentAmount) external;
+    function setLimitParameters(uint256 _limit, uint256 _periodDurationMonths) external;
 }
 
 interface IVaultsAdapter {
@@ -44,12 +81,18 @@ contract V3VoteScript is OmnibusBase {
     struct ScriptParams {
         address upgradeTemplate;
         bytes32 lidoAppId;
+
+        uint256 stakingModuleId;
+        uint256 stakeShareLimit;
+
+        uint256 trpLimitAfter;
+        uint256 trpPeriodDurationMonths;
     }
 
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 17;
+    uint256 public constant VOTE_ITEMS_COUNT = 20;
 
     //
     // Immutables
@@ -70,10 +113,11 @@ contract V3VoteScript is OmnibusBase {
     }
 
     function getVotingVoteItems() public view override returns (VoteItem[] memory votingVoteItems) {
-        votingVoteItems = new VoteItem[](9);
+        votingVoteItems = new VoteItem[](10);
         address easyTrack = TEMPLATE.EASY_TRACK();
         address operatorGrid = TEMPLATE.OPERATOR_GRID();
         address vaultsAdapter = TEMPLATE.VAULTS_ADAPTER();
+
         votingVoteItems[0] = VoteItem({
             description: "1. Add AlterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, alterTiers)",
             call: ScriptCall({
@@ -198,6 +242,19 @@ contract V3VoteScript is OmnibusBase {
                         bytes20(vaultsAdapter),
                         bytes4(IVaultsAdapter.socializeBadDebt.selector)
                     )
+                ))
+            })
+        });
+
+        votingVoteItems[9] = VoteItem({
+            description: "10. Transfer 508,106 MATIC 0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0 from Aragon Agent 0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c to Liquidity Observation Lab (LOL) Multisig 0x87D93d9B2C672bf9c9642d853a8682546a5012B5",
+            call: ScriptCall({
+                to: TEMPLATE.FINANCE(),
+                data: abi.encodeCall(IFinance.newImmediatePayment, (
+                    TEMPLATE.MATIC_TOKEN(),
+                    TEMPLATE.LOL_MULTISIG(),
+                    TEMPLATE.MATIC_AMOUNT_WEI_FOR_TRANSFER(),
+                    TEMPLATE.TRANSFER_REFERENCE()
                 ))
             })
         });
@@ -360,6 +417,42 @@ contract V3VoteScript is OmnibusBase {
         voteItems[index++] = VoteItem({
             description: "17. Call UpgradeTemplateV3.finishUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
+        });
+
+        IStakingRouter.StakingModule memory currentModule = IStakingRouter(TEMPLATE.STAKING_ROUTER()).getStakingModule(params.stakingModuleId);
+        voteItems[index++] = VoteItem({
+            description: "18. Raise SDVT (MODULE_ID = 2) stake share limit from 400 bps to 430 bps in Staking Router 0xFdDf38947aFB03C621C71b06C9C70bce73f12999",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.STAKING_ROUTER(),
+                abi.encodeCall(IStakingRouter.updateStakingModule, (
+                    params.stakingModuleId,
+                    params.stakeShareLimit,
+                    currentModule.priorityExitShareThreshold,
+                    currentModule.stakingModuleFee,
+                    currentModule.treasuryFee,
+                    currentModule.maxDepositsPerBlock,
+                    currentModule.minDepositBlockDistance
+                ))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "19. Set spent amount for Easy Track TRP registry 0x231Ac69A1A37649C6B06a71Ab32DdD92158C80b8 to 0 LDO",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.EASY_TRACK_TRP_REGISTRY(),
+                abi.encodeCall(IAllowedRecipientsRegistry.unsafeSetSpentAmount, (0))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "20. Set limit for Easy Track TRP registry 0x231Ac69A1A37649C6B06a71Ab32DdD92158C80b8 to 15'000'000 LDO with unchanged period duration of 12 months",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.EASY_TRACK_TRP_REGISTRY(),
+                abi.encodeCall(IAllowedRecipientsRegistry.setLimitParameters, (params.trpLimitAfter, params.trpPeriodDurationMonths))
+            )
         });
 
         assert(index == VOTE_ITEMS_COUNT);
