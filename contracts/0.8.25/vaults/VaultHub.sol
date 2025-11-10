@@ -357,9 +357,12 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice amount of bad debt to be internalized to become the protocol loss
-    /// @return the number of shares to internalize as bad debt during the oracle report
-    /// @dev the value is lagging increases that was done after the current refSlot to the next one
     function badDebtToInternalize() external view returns (uint256) {
+        return _storage().badDebtToInternalize.value;
+    }
+
+    /// @notice amount of bad debt to be internalized to become the protocol loss (that was actual on the last refSlot)
+    function badDebtToInternalizeForLastRefSlot() external view returns (uint256) {
         return _storage().badDebtToInternalize.getValueForLastRefSlot(CONSENSUS_CONTRACT);
     }
 
@@ -460,7 +463,7 @@ contract VaultHub is PausableUntilWithRoles {
         _requireFreshReport(_vault, record);
 
         if (
-            _reserveRatioBP != connection.reserveRatioBP || 
+            _reserveRatioBP != connection.reserveRatioBP ||
             _forcedRebalanceThresholdBP != connection.forcedRebalanceThresholdBP
         ) {
             uint256 totalValue_ = _totalValue(record);
