@@ -103,6 +103,18 @@ const OracleVersionsSchema = z.object({
   ao_consensus_version: PositiveIntSchema,
 });
 
+const SanityCheckerSchema = z.object({
+  simulatedShareRateDeviationBPLimit: BasisPointsSchema,
+});
+
+// Time constraints params for V3 upgrade
+const TimeConstraintsSchema = z.object({
+  disabledBefore: NonNegativeIntSchema,
+  disabledAfter: NonNegativeIntSchema,
+  enabledDaySpanStart: NonNegativeIntSchema,
+  enabledDaySpanEnd: NonNegativeIntSchema,
+});
+
 // V3 vote script params
 const V3VoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
@@ -111,6 +123,15 @@ const V3VoteScriptSchema = z.object({
   stakeShareLimit: BasisPointsSchema,
   trpLimitAfter: BigIntStringSchema,
   trpPeriodDurationMonths: NonNegativeIntSchema,
+  odcSlashingReserveWeRightShiftEpochs: NonNegativeIntSchema,
+  odcSlashingReserveWeLeftShiftEpochs: NonNegativeIntSchema,
+  finance: EthereumAddressSchema,
+  maticToken: EthereumAddressSchema,
+  lolMultisig: EthereumAddressSchema,
+  maticAmountWeiForTransfer: BigIntStringSchema,
+  transferReference: z.string().min(1),
+  easyTrackTrpRegistry: EthereumAddressSchema,
+  timeConstraints: TimeConstraintsSchema,
 });
 
 // Aragon app versions schema
@@ -138,7 +159,8 @@ export const UpgradeParametersSchema = z.object({
   }),
   operatorGrid: OperatorGridSchema,
   burner: BurnerSchema,
-  oracleVersions: OracleVersionsSchema.optional(),
+  oracleVersions: OracleVersionsSchema,
+  sanityChecker: SanityCheckerSchema,
   aragonAppVersions: AragonAppVersionsSchema.optional(),
   v3VoteScript: V3VoteScriptSchema,
 });

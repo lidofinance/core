@@ -79,6 +79,16 @@ contract V3Addresses {
         address etfForceValidatorExitsInVaultHub;
         address etfSetLiabilitySharesTargetInVaultHub;
         address etfSocializeBadDebtInVaultHub;
+
+        // Treasury transfer parameters
+        address finance;
+        address maticToken;
+        address lolMultisig;
+        uint256 maticAmountWeiForTransfer;
+        string transferReference;
+
+        // TRP related parameters
+        address easyTrackTrpRegistry;
     }
 
     string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
@@ -126,7 +136,6 @@ contract V3Addresses {
     address public immutable EASY_TRACK;
     address public immutable EVM_SCRIPT_EXECUTOR;
     address public immutable VAULTS_ADAPTER;
-    address public constant EASY_TRACK_TRP_REGISTRY = 0x231Ac69A1A37649C6B06a71Ab32DdD92158C80b8;
 
     // ETF = EasyTrack Factory
     address public immutable ETF_ALTER_TIERS_IN_OPERATOR_GRID;
@@ -158,11 +167,12 @@ contract V3Addresses {
     address public immutable CSM_ACCOUNTING;
     address public immutable ORACLE_DAEMON_CONFIG;
 
-    address public constant FINANCE = 0xB9E5CBB9CA5b0d659238807E84D0176930753d86;
-    address public constant MATIC_TOKEN = 0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0;
-    address public constant LOL_MULTISIG = 0x87D93d9B2C672bf9c9642d853a8682546a5012B5;
-    uint256 public constant MATIC_AMOUNT_WEI_FOR_TRANSFER = 508106000000000000000000;
-    string public constant TRANSFER_REFERENCE = "Transfer 508,106 MATIC from Treasury to Liquidity Observation Lab (LOL) Multisig";
+    address public immutable FINANCE;
+    address public immutable MATIC_TOKEN;
+    address public immutable LOL_MULTISIG;
+    uint256 public immutable MATIC_AMOUNT_WEI_FOR_TRANSFER;
+    string public TRANSFER_REFERENCE;
+    address public immutable EASY_TRACK_TRP_REGISTRY;
 
     constructor(
         V3AddressesParams memory params
@@ -206,6 +216,13 @@ contract V3Addresses {
         ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID = params.etfUpdateGroupsShareLimitInOperatorGrid;
         ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID = params.etfUpdateVaultsFeesInOperatorGrid;
         ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB = params.etfForceValidatorExitsInVaultHub;
+
+        FINANCE = params.finance;
+        MATIC_TOKEN = params.maticToken;
+        LOL_MULTISIG = params.lolMultisig;
+        MATIC_AMOUNT_WEI_FOR_TRANSFER = params.maticAmountWeiForTransfer;
+        TRANSFER_REFERENCE = params.transferReference;
+        EASY_TRACK_TRP_REGISTRY = params.easyTrackTrpRegistry;
 
         //
         // Discovered via other contracts

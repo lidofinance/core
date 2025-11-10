@@ -63,12 +63,20 @@ export async function main() {
     parameters.easyTrack.newFactories.ForceValidatorExitsInVaultHub,
     parameters.easyTrack.newFactories.SetLiabilitySharesTargetInVaultHub,
     parameters.easyTrack.newFactories.SocializeBadDebtInVaultHub,
+
+    // Treasury transfer parameters
+    parameters.v3VoteScript.finance,
+    parameters.v3VoteScript.maticToken,
+    parameters.v3VoteScript.lolMultisig,
+    parameters.v3VoteScript.maticAmountWeiForTransfer,
+    parameters.v3VoteScript.transferReference,
+    parameters.v3VoteScript.easyTrackTrpRegistry,
   ];
 
   const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [
     addressesParams,
-    parameters.v3VoteScript.expiryTimestamp,
     parameters.v3VoteScript.initialMaxExternalRatioBP,
+    parameters.v3VoteScript.timeConstraints,
   ]);
 
   const voteScriptParams: V3VoteScript.ScriptParamsStruct = {
@@ -78,6 +86,14 @@ export async function main() {
     stakeShareLimit: parameters.v3VoteScript.stakeShareLimit,
     trpLimitAfter: parameters.v3VoteScript.trpLimitAfter,
     trpPeriodDurationMonths: parameters.v3VoteScript.trpPeriodDurationMonths,
+    odcSlashingReserveWeRightShiftEpochs: parameters.v3VoteScript.odcSlashingReserveWeRightShiftEpochs,
+    odcSlashingReserveWeLeftShiftEpochs: parameters.v3VoteScript.odcSlashingReserveWeLeftShiftEpochs,
+    finance: parameters.v3VoteScript.finance,
+    maticToken: parameters.v3VoteScript.maticToken,
+    lolMultisig: parameters.v3VoteScript.lolMultisig,
+    maticAmountWeiForTransfer: parameters.v3VoteScript.maticAmountWeiForTransfer,
+    transferReference: parameters.v3VoteScript.transferReference,
+    easyTrackTrpRegistry: parameters.v3VoteScript.easyTrackTrpRegistry,
   };
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [voteScriptParams]);

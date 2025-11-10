@@ -70,6 +70,9 @@ isMigrationAllowed = true             # Must be on for the upgrade to work (for 
 [oracleVersions]
 ao_consensus_version = 4              # Accounting Oracle consensus version
 
+[sanityChecker]
+simulatedShareRateDeviationBPLimit = 150
+
 # V3 vote script configuration
 [v3VoteScript]
 # Expiry timestamp after which the upgrade transaction will revert
@@ -80,10 +83,28 @@ expiryTimestamp = 1765324800          # December 10, 2025 00:00:00 UTC
 initialMaxExternalRatioBP = 300       # 3% value set upon upgrade for the initial phase
 # Staking module parameters for raising stake share limit
 stakingModuleId = 2                   # SDVT
-stakeShareLimit = 430
+stakeShareLimit = 430                 # Increased stake share limit
 # Easy Track TRP Registry parameters
 trpLimitAfter = "15000000000000000000000000"  # 15_000_000 * 10**18
 trpPeriodDurationMonths = 12          # Period duration in months
+# Oracle Daemon Config slashing reserve parameters
+# how it is used: https://github.com/lidofinance/lido-oracle/blob/d6c09a16736b2c132343a4e349c8f27179c73e6e/src/services/staking_vaults.py#L207-L235
+odcSlashingReserveWeRightShiftEpochs = 8100  # 36 days in epochs (= 36 * 24 * 60 * 60 / (12 * 32))
+odcSlashingReserveWeLeftShiftEpochs = 8100   # 36 days in epochs (= 36 * 24 * 60 * 60 / (12 * 32))
+# Treasury transfer parameters
+finance = "0xB9E5CBB9CA5b0d659238807E84D0176930753d86"
+maticToken = "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0"
+lolMultisig = "0x87D93d9B2C672bf9c9642d853a8682546a5012B5"
+maticAmountWeiForTransfer = "508106000000000000000000"  # 508,106 MATIC in wei
+transferReference = "Transfer 508,106 MATIC from Treasury to Liquidity Observation Lab (LOL) Multisig"
+easyTrackTrpRegistry = "0x231Ac69A1A37649C6B06a71Ab32DdD92158C80b8"
+
+# Time constraints for upgrade execution window
+[v3VoteScript.timeConstraints]
+disabledBefore = 1764806400           # Upgrade disabled before December 4, 2025 00:00:00 UTC
+disabledAfter = 1765324800            # Upgrade disabled after December 10, 2026 00:00:00 UTC
+enabledDaySpanStart = 50400           # Daily window start: 14:00 UTC (14 * 3600 seconds)
+enabledDaySpanEnd = 82800             # Daily window end: 23:00 UTC (23 * 3600 seconds)
 
 # Sources (todo)
 # - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504

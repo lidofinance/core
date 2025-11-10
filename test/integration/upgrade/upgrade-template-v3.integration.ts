@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import hre from "hardhat";
 import { beforeEach } from "mocha";
-import { main as mockV3AragonVoting } from "scripts/upgrade/steps/0500-mock-v3-aragon-voting";
+import { main as mockV3AragonVoting, setValidUpgradeTimestamp } from "scripts/upgrade/steps/0500-mock-v3-aragon-voting";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
@@ -12,6 +12,9 @@ import { deployUpgrade, loadContract, readNetworkState, Sk } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
+
+const SECONDS_PER_DAY = 86400n;
+const SECONDS_PER_HOUR = 3600n;
 
 function needToSkipTemplateTests() {
   return !process.env.TEMPLATE_TEST;
@@ -27,6 +30,7 @@ if (!needToSkipTemplateTests())
     let agentSigner: HardhatEthersSigner;
     let agentMock: V3Template__Harness;
 
+    // Helper function to set timestamp within valid upgrade window
     before(async () => {
       originalSnapshot = await Snapshot.take();
 
@@ -67,11 +71,27 @@ if (!needToSkipTemplateTests())
     }
 
     it_("happy path", async function () {
+      // Note: mockV3AragonVoting internally advances time, so we set it right before the call
       await expect((async () => (await mockV3AragonVoting()).proposalExecutedReceipt)())
         .to.emit(template, "UpgradeStarted")
         .and.to.emit(template, "UpgradeFinished");
       expect(await template.upgradeBlockNumber()).to.not.equal(0);
       expect(await template.isUpgradeFinished()).to.equal(true);
+    });
+
+    describe("time constraints", () => {
+      it_("should have sane immutable values set from constructor", async function () {
+        const disabledBefore = await template.DISABLED_BEFORE();
+        const disabledAfter = await template.DISABLED_AFTER();
+        const enabledDaySpanStart = await template.ENABLED_DAY_SPAN_START();
+        const enabledDaySpanEnd = await template.ENABLED_DAY_SPAN_END();
+
+        expect(disabledBefore).to.be.greaterThan(0);
+        expect(disabledAfter).to.be.greaterThan(disabledBefore);
+        expect(enabledDaySpanStart).to.be.lessThan(SECONDS_PER_DAY);
+        expect(enabledDaySpanEnd).to.be.lessThan(SECONDS_PER_DAY);
+        expect(enabledDaySpanEnd).to.be.greaterThan(enabledDaySpanStart);
+      });
     });
 
     describe("startUpgrade", () => {
@@ -82,14 +102,80 @@ if (!needToSkipTemplateTests())
         );
       });
 
-      it_("should revert when startUpgrade is called after expiration", async function () {
-        await time.setNextBlockTimestamp(await template.EXPIRE_SINCE_INCLUSIVE());
-        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(template, "Expired");
+      it_("should revert when startUpgrade is called before DISABLED_BEFORE timestamp", async function () {
+        const disabledBefore = await template.DISABLED_BEFORE();
+        await time.setNextBlockTimestamp(disabledBefore - 1n);
+        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
+          template,
+          "TimestampNotPassed",
+        );
+      });
+
+      it_("should revert when startUpgrade is called after DISABLED_AFTER timestamp", async function () {
+        const disabledAfter = await template.DISABLED_AFTER();
+        await time.setNextBlockTimestamp(disabledAfter);
+        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
+          template,
+          "TimestampPassed",
+        );
+      });
+
+      it_("should revert when startUpgrade is called outside the daily time window (before start)", async function () {
+        const disabledBefore = await template.DISABLED_BEFORE();
+        const enabledDaySpanStart = await template.ENABLED_DAY_SPAN_START();
+
+        // Set time to valid date but before the daily window (e.g., early morning)
+        const validDate = disabledBefore + SECONDS_PER_DAY;
+        const oneHourBeforeWindow = enabledDaySpanStart - SECONDS_PER_HOUR;
+        const earlyMorning = (validDate / SECONDS_PER_DAY) * SECONDS_PER_DAY + oneHourBeforeWindow;
+
+        await time.setNextBlockTimestamp(earlyMorning);
+        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
+          template,
+          "DayTimeOutOfRange",
+        );
+      });
+
+      it_("should revert when startUpgrade is called outside the daily time window (after end)", async function () {
+        const disabledBefore = await template.DISABLED_BEFORE();
+        const enabledDaySpanEnd = await template.ENABLED_DAY_SPAN_END();
+
+        // Set time to valid date but after the daily window (e.g., late night)
+        const validDate = disabledBefore + SECONDS_PER_DAY;
+        const oneHourAfterWindow = enabledDaySpanEnd + SECONDS_PER_HOUR;
+        const lateNight = (validDate / SECONDS_PER_DAY) * SECONDS_PER_DAY + oneHourAfterWindow;
+
+        await time.setNextBlockTimestamp(lateNight);
+        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
+          template,
+          "DayTimeOutOfRange",
+        );
+      });
+
+      it_("should succeed when startUpgrade is called within valid time window", async function () {
+        const disabledBefore = await template.DISABLED_BEFORE();
+        const disabledAfter = await template.DISABLED_AFTER();
+        const enabledDaySpanStart = await template.ENABLED_DAY_SPAN_START();
+        const enabledDaySpanEnd = await template.ENABLED_DAY_SPAN_END();
+
+        // Calculate a valid timestamp: within date range and within daily window
+        const validDate = disabledBefore + SECONDS_PER_DAY;
+        const midWindow = (enabledDaySpanStart + enabledDaySpanEnd) / 2n;
+        const validTimestamp = (validDate / SECONDS_PER_DAY) * SECONDS_PER_DAY + midWindow;
+
+        // Ensure we're within bounds
+        expect(validTimestamp).to.be.greaterThan(disabledBefore);
+        expect(validTimestamp).to.be.lessThan(disabledAfter);
+
+        await time.setNextBlockTimestamp(validTimestamp);
+        await expect(template.connect(agentSigner).startUpgrade()).to.emit(template, "UpgradeStarted");
       });
 
       it_(
         "should revert with IncorrectProxyImplementation when startUpgrade is called with incorrect proxy implementation for locator and accountingOracle",
         async function () {
+          await setValidUpgradeTimestamp(false, template);
+
           const unexpectedImpl = ctx.contracts.kernel.address;
           const testCases = [
             {
@@ -114,6 +200,8 @@ if (!needToSkipTemplateTests())
       );
 
       it_("should revert when startUpgrade is called after it has already been started", async function () {
+        await setValidUpgradeTimestamp(false, template);
+
         await template.connect(agentSigner).startUpgrade();
         await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
           template,
@@ -122,6 +210,7 @@ if (!needToSkipTemplateTests())
       });
 
       it_("should revert when startUpgrade is called after upgrade is already finished", async function () {
+        // Note: mockV3AragonVoting internally advances time, so we set it right before the call
         await mockV3AragonVoting();
         await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
           template,
@@ -130,6 +219,8 @@ if (!needToSkipTemplateTests())
       });
 
       it_("should revert when startUpgrade is called twice in the same transaction", async function () {
+        await setValidUpgradeTimestamp(false, template);
+
         await hre.ethers.provider.send("hardhat_setCode", [agentSigner.address, await agentMock.getDeployedCode()]);
         const harness = (await new V3Template__Harness__factory(deployer).attach(
           agentSigner.address,
@@ -141,6 +232,8 @@ if (!needToSkipTemplateTests())
 
     describe("finishUpgrade", () => {
       it_("should revert when finishUpgrade is called by non-agent address", async function () {
+        await setValidUpgradeTimestamp(false, template);
+
         await template.connect(agentSigner).startUpgrade();
         await expect(template.connect(deployer).finishUpgrade()).to.be.revertedWithCustomError(
           template,
@@ -156,6 +249,7 @@ if (!needToSkipTemplateTests())
       });
 
       it_("should revert when finishUpgrade is called after upgrade is already finished", async function () {
+        // Note: mockV3AragonVoting internally advances time, so we set it right before the call
         await mockV3AragonVoting();
         await expect(template.connect(agentSigner).finishUpgrade()).to.be.revertedWithCustomError(
           template,

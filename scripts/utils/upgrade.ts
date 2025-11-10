@@ -61,8 +61,6 @@ export async function mockDGAragonVoting(
     "IEmergencyProtectedTimelock",
     state[Sk.dgEmergencyProtectedTimelock].proxy.address,
   );
-  const afterSubmitDelay = await timelock.getAfterSubmitDelay();
-  const afterScheduleDelay = await timelock.getAfterScheduleDelay();
 
   const voteId = await voting.votesLength();
 
@@ -85,12 +83,12 @@ export async function mockDGAragonVoting(
   const proposalId = events[0].args.id;
   log.success("Proposal submitted: proposalId", proposalId);
 
-  await advanceChainTime(afterSubmitDelay);
+  await advanceChainTime(await timelock.getAfterSubmitDelay());
   const scheduleTx = await dualGovernance.connect(deployer).scheduleProposal(proposalId);
   const scheduleReceipt = (await scheduleTx.wait())!;
   log.success("Proposal scheduled: gas used", scheduleReceipt.gasUsed);
 
-  await advanceChainTime(afterScheduleDelay);
+  await advanceChainTime(await timelock.getAfterScheduleDelay());
   const proposalExecutedTx = await timelock.connect(deployer).execute(proposalId);
   const proposalExecutedReceipt = (await proposalExecutedTx.wait())!;
   log.success("Proposal executed: gas used", proposalExecutedReceipt.gasUsed);

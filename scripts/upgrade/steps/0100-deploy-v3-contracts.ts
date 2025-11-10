@@ -13,6 +13,7 @@ import {
   V3TemporaryAdmin,
   VaultHub,
 } from "typechain-types";
+import { LimitsListPackedStructOutput } from "typechain-types/test/0.8.9/contracts/OracleReportSanityCheckerWrapper";
 
 import { ether, log } from "lib";
 import { loadContract } from "lib/contract";
@@ -213,7 +214,7 @@ export async function main() {
     "IOracleReportSanityChecker_preV3",
     oldSanityCheckerAddress,
   );
-  const oldCheckerLimits = await oldSanityChecker.getOracleReportLimits();
+  const oldCheckerLimits: LimitsListPackedStructOutput = await oldSanityChecker.getOracleReportLimits();
 
   const oracleReportSanityCheckerArgs = [
     locatorAddress,
@@ -224,7 +225,7 @@ export async function main() {
       oldCheckerLimits.exitedValidatorsPerDayLimit,
       oldCheckerLimits.appearedValidatorsPerDayLimit,
       oldCheckerLimits.annualBalanceIncreaseBPLimit,
-      oldCheckerLimits.simulatedShareRateDeviationBPLimit,
+      parameters.sanityChecker.simulatedShareRateDeviationBPLimit,
       oldCheckerLimits.maxValidatorExitRequestsPerReport,
       oldCheckerLimits.maxItemsPerExtraDataTransaction,
       oldCheckerLimits.maxNodeOperatorsPerExtraDataItem,

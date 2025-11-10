@@ -18,6 +18,9 @@ import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
+import {TimeConstraints} from "./utils/TimeConstraints.sol";
+import {Timestamps} from "./utils/Timestamp.sol";
+import {Durations} from "./utils/Duration.sol";
 import {V3Addresses} from "./V3Addresses.sol";
 
 interface IBaseOracle is IAccessControlEnumerable, IVersioned {
@@ -77,7 +80,7 @@ interface IOracleReportSanityChecker is IAccessControlEnumerable {
 *   - `startUpgrade()` before upgrading LidoLocator and before everything else
 *   - `finishUpgrade()` as the last step of the upgrade
 */
-contract V3Template is V3Addresses {
+contract V3Template is V3Addresses, TimeConstraints {
     //
     // Events
     //
@@ -95,15 +98,21 @@ contract V3Template is V3Addresses {
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
-    // Timestamp since which startUpgrade()
-    // This behavior is introduced to disarm the template if the upgrade voting creation or enactment
-    // didn't happen in proper time period
-    uint256 public immutable EXPIRE_SINCE_INCLUSIVE;
-
     // Initial value of upgradeBlockNumber storage variable
     uint256 public constant UPGRADE_NOT_STARTED = 0;
 
     uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
+
+    //
+    // Structs
+    //
+
+    struct TimeConstraintsParams {
+        uint256 disabledBefore;           // Upgrade disabled before this Unix timestamp
+        uint256 disabledAfter;            // Upgrade disabled after this Unix timestamp
+        uint256 enabledDaySpanStart;      // Daily time window start (seconds since midnight UTC)
+        uint256 enabledDaySpanEnd;        // Daily time window end (seconds since midnight UTC)
+    }
 
     //
     // Structured storage
@@ -118,6 +127,14 @@ contract V3Template is V3Addresses {
     uint256 public immutable INITIAL_MAX_EXTERNAL_RATIO_BP;
 
     //
+    // Upgrade time constraints
+    //
+    uint256 public immutable DISABLED_BEFORE;
+    uint256 public immutable DISABLED_AFTER;
+    uint256 public immutable ENABLED_DAY_SPAN_START;
+    uint256 public immutable ENABLED_DAY_SPAN_END;
+
+    //
     // Slots for transient storage
     //
 
@@ -128,11 +145,18 @@ contract V3Template is V3Addresses {
 
 
     /// @param _params Params required to initialize the addresses contract
-    /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
     /// @param _initialMaxExternalRatioBP Initial maximum external ratio in basis points
-    constructor(V3AddressesParams memory _params, uint256 _expireSinceInclusive, uint256 _initialMaxExternalRatioBP) V3Addresses(_params) {
-        EXPIRE_SINCE_INCLUSIVE = _expireSinceInclusive;
+    /// @param _timeConstraintsParams Time constraints for the upgrade window
+    constructor(
+        V3AddressesParams memory _params,
+        uint256 _initialMaxExternalRatioBP,
+        TimeConstraintsParams memory _timeConstraintsParams
+    ) V3Addresses(_params) {
         INITIAL_MAX_EXTERNAL_RATIO_BP = _initialMaxExternalRatioBP;
+        DISABLED_BEFORE = _timeConstraintsParams.disabledBefore;
+        DISABLED_AFTER = _timeConstraintsParams.disabledAfter;
+        ENABLED_DAY_SPAN_START = _timeConstraintsParams.enabledDaySpanStart;
+        ENABLED_DAY_SPAN_END = _timeConstraintsParams.enabledDaySpanEnd;
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
         // NB: NOR and SIMPLE_DVT allowances are set to 0 in TW upgrade, so they are not migrated
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
@@ -141,10 +165,13 @@ contract V3Template is V3Addresses {
     /// @notice Must be called before LidoLocator is upgraded
     function startUpgrade() external {
         if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
-        if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
         if (_isStartCalledInThisTx()) revert StartAlreadyCalledInThisTx();
         if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
+
+        checkTimeAfterTimestamp(Timestamps.from(DISABLED_BEFORE));
+        checkTimeBeforeTimestamp(Timestamps.from(DISABLED_AFTER));
+        checkTimeWithinDayTime(Durations.from(ENABLED_DAY_SPAN_START), Durations.from(ENABLED_DAY_SPAN_END));
 
         assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
         upgradeBlockNumber = block.number;

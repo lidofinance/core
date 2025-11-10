@@ -87,6 +87,16 @@ contract V3VoteScript is OmnibusBase {
 
         uint256 trpLimitAfter;
         uint256 trpPeriodDurationMonths;
+
+        uint256 odcSlashingReserveWeRightShiftEpochs;
+        uint256 odcSlashingReserveWeLeftShiftEpochs;
+
+        address finance;
+        address maticToken;
+        address lolMultisig;
+        uint256 maticAmountWeiForTransfer;
+        string transferReference;
+        address easyTrackTrpRegistry;
     }
 
     //
@@ -249,12 +259,12 @@ contract V3VoteScript is OmnibusBase {
         votingVoteItems[9] = VoteItem({
             description: "10. Transfer 508,106 MATIC 0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0 from Aragon Agent 0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c to Liquidity Observation Lab (LOL) Multisig 0x87D93d9B2C672bf9c9642d853a8682546a5012B5",
             call: ScriptCall({
-                to: TEMPLATE.FINANCE(),
+                to: params.finance,
                 data: abi.encodeCall(IFinance.newImmediatePayment, (
-                    TEMPLATE.MATIC_TOKEN(),
-                    TEMPLATE.LOL_MULTISIG(),
-                    TEMPLATE.MATIC_AMOUNT_WEI_FOR_TRANSFER(),
-                    TEMPLATE.TRANSFER_REFERENCE()
+                    params.maticToken,
+                    params.lolMultisig,
+                    params.maticAmountWeiForTransfer,
+                    params.transferReference
                 ))
             })
         });
@@ -392,7 +402,7 @@ contract V3VoteScript is OmnibusBase {
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ORACLE_DAEMON_CONFIG(),
-                abi.encodeCall(IOracleDaemonConfig.set, ("SLASHING_RESERVE_WE_RIGHT_SHIFT", abi.encode(0x2000)))
+                abi.encodeCall(IOracleDaemonConfig.set, ("SLASHING_RESERVE_WE_RIGHT_SHIFT", abi.encode(params.odcSlashingReserveWeRightShiftEpochs)))
             )
         });
 
@@ -401,7 +411,7 @@ contract V3VoteScript is OmnibusBase {
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ORACLE_DAEMON_CONFIG(),
-                abi.encodeCall(IOracleDaemonConfig.set, ("SLASHING_RESERVE_WE_LEFT_SHIFT", abi.encode(0x2000)))
+                abi.encodeCall(IOracleDaemonConfig.set, ("SLASHING_RESERVE_WE_LEFT_SHIFT", abi.encode(params.odcSlashingReserveWeLeftShiftEpochs)))
             )
         });
 
@@ -441,7 +451,7 @@ contract V3VoteScript is OmnibusBase {
             description: "19. Set spent amount for Easy Track TRP registry 0x231Ac69A1A37649C6B06a71Ab32DdD92158C80b8 to 0 LDO",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
-                TEMPLATE.EASY_TRACK_TRP_REGISTRY(),
+                params.easyTrackTrpRegistry,
                 abi.encodeCall(IAllowedRecipientsRegistry.unsafeSetSpentAmount, (0))
             )
         });
@@ -450,7 +460,7 @@ contract V3VoteScript is OmnibusBase {
             description: "20. Set limit for Easy Track TRP registry 0x231Ac69A1A37649C6B06a71Ab32DdD92158C80b8 to 15'000'000 LDO with unchanged period duration of 12 months",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
-                TEMPLATE.EASY_TRACK_TRP_REGISTRY(),
+                params.easyTrackTrpRegistry,
                 abi.encodeCall(IAllowedRecipientsRegistry.setLimitParameters, (params.trpLimitAfter, params.trpPeriodDurationMonths))
             )
         });
