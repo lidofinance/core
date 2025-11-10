@@ -1,0 +1,3 @@
+{
+  "steps": ["harness/steps/0000-check-env", "harness/steps/0100-deploy-alerting-harness"]
+}

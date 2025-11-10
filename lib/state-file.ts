@@ -114,6 +114,8 @@ export enum Sk {
   // Easy Track
   easyTrack = "easyTrack",
   vaultsAdapter = "vaultsAdapter",
+  // Harnesses
+  alertingHarness = "alertingHarness",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
