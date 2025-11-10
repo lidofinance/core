@@ -344,7 +344,7 @@ type SimulateReportResult = {
 /**
  * Simulate oracle report to get the expected result.
  */
-const simulateReport = async (
+export const simulateReport = async (
   ctx: ProtocolContext,
   { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
@@ -363,7 +363,7 @@ const simulateReport = async (
 
   const reportValues: ReportValuesStruct = {
     timestamp: reportTimestamp,
-    timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
+    timeElapsed: /* 1 day */ 86_400n,
     clValidators: beaconValidators,
     clBalance,
     withdrawalVaultBalance,
