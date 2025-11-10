@@ -18,9 +18,6 @@ import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
-import {TimeConstraints} from "./utils/TimeConstraints.sol";
-import {Timestamps} from "./utils/Timestamp.sol";
-import {Durations} from "./utils/Duration.sol";
 import {V3Addresses} from "./V3Addresses.sol";
 
 interface IBaseOracle is IAccessControlEnumerable, IVersioned {
@@ -80,7 +77,7 @@ interface IOracleReportSanityChecker is IAccessControlEnumerable {
 *   - `startUpgrade()` before upgrading LidoLocator and before everything else
 *   - `finishUpgrade()` as the last step of the upgrade
 */
-contract V3Template is V3Addresses, TimeConstraints {
+contract V3Template is V3Addresses {
     //
     // Events
     //
@@ -168,10 +165,6 @@ contract V3Template is V3Addresses, TimeConstraints {
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
         if (_isStartCalledInThisTx()) revert StartAlreadyCalledInThisTx();
         if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
-
-        checkTimeAfterTimestamp(Timestamps.from(DISABLED_BEFORE));
-        checkTimeBeforeTimestamp(Timestamps.from(DISABLED_AFTER));
-        checkTimeWithinDayTime(Durations.from(ENABLED_DAY_SPAN_START), Durations.from(ENABLED_DAY_SPAN_END));
 
         assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
         upgradeBlockNumber = block.number;

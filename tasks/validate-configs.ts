@@ -149,6 +149,82 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     path: "v3VoteScript.initialMaxExternalRatioBP",
     reason: "V3 vote script initial max external ratio BP is upgrade-specific configuration",
   },
+  {
+    path: "sanityChecker.simulatedShareRateDeviationBPLimit",
+    reason: "Sanity checker simulated share rate deviation BP limit is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.stakingModuleId",
+    reason: "V3 vote script staking module ID is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.stakeShareLimit",
+    reason: "V3 vote script stake share limit is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.trpLimitAfter",
+    reason: "V3 vote script TRP limit after is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.trpPeriodDurationMonths",
+    reason: "V3 vote script TRP period duration months is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.odcSlashingReserveWeRightShiftEpochs",
+    reason: "V3 vote script ODC slashing reserve right shift epochs is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.odcSlashingReserveWeLeftShiftEpochs",
+    reason: "V3 vote script ODC slashing reserve left shift epochs is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.finance",
+    reason: "V3 vote script finance address is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.maticToken",
+    reason: "V3 vote script MATIC token address is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.lolMultisig",
+    reason: "V3 vote script LOL multisig address is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.maticAmountWeiForTransfer",
+    reason: "V3 vote script MATIC amount for transfer is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.transferReference",
+    reason: "V3 vote script transfer reference is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.easyTrackTrpRegistry",
+    reason: "V3 vote script EasyTrack TRP registry address is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.timeConstraints",
+    reason: "V3 vote script time constraints configuration is upgrade-specific",
+  },
+  {
+    path: "v3VoteScript.timeConstraints.timeConstraints",
+    reason: "V3 vote script TimeConstraints contract address is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.timeConstraints.disabledBefore",
+    reason: "V3 vote script time constraints disabled before timestamp is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.timeConstraints.disabledAfter",
+    reason: "V3 vote script time constraints disabled after timestamp is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.timeConstraints.enabledDaySpanStart",
+    reason: "V3 vote script time constraints enabled day span start is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.timeConstraints.enabledDaySpanEnd",
+    reason: "V3 vote script time constraints enabled day span end is upgrade-specific configuration",
+  },
 ];
 
 // Special mappings where the same concept has different names

@@ -109,6 +109,7 @@ const SanityCheckerSchema = z.object({
 
 // Time constraints params for V3 upgrade
 const TimeConstraintsSchema = z.object({
+  timeConstraints: EthereumAddressSchema,
   disabledBefore: NonNegativeIntSchema,
   disabledAfter: NonNegativeIntSchema,
   enabledDaySpanStart: NonNegativeIntSchema,

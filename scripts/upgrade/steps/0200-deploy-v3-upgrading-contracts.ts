@@ -94,6 +94,11 @@ export async function main() {
     maticAmountWeiForTransfer: parameters.v3VoteScript.maticAmountWeiForTransfer,
     transferReference: parameters.v3VoteScript.transferReference,
     easyTrackTrpRegistry: parameters.v3VoteScript.easyTrackTrpRegistry,
+    timeConstraints: parameters.v3VoteScript.timeConstraints.timeConstraints,
+    disabledBefore: parameters.v3VoteScript.timeConstraints.disabledBefore,
+    disabledAfter: parameters.v3VoteScript.timeConstraints.disabledAfter,
+    enabledDaySpanStart: parameters.v3VoteScript.timeConstraints.enabledDaySpanStart,
+    enabledDaySpanEnd: parameters.v3VoteScript.timeConstraints.enabledDaySpanEnd,
   };
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [voteScriptParams]);

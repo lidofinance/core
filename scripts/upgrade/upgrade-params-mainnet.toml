@@ -101,8 +101,9 @@ easyTrackTrpRegistry = "0x231Ac69A1A37649C6B06a71Ab32DdD92158C80b8"
 
 # Time constraints for upgrade execution window
 [v3VoteScript.timeConstraints]
+timeConstraints = "0x2a30F5aC03187674553024296bed35Aa49749DDa"  # Predeployed TimeConstraints contract on mainnet
 disabledBefore = 1764806400           # Upgrade disabled before December 4, 2025 00:00:00 UTC
-disabledAfter = 1765324800            # Upgrade disabled after December 10, 2026 00:00:00 UTC
+disabledAfter = 1765324800            # Upgrade disabled after December 10, 2025 00:00:00 UTC
 enabledDaySpanStart = 50400           # Daily window start: 14:00 UTC (14 * 3600 seconds)
 enabledDaySpanEnd = 82800             # Daily window end: 23:00 UTC (23 * 3600 seconds)
 

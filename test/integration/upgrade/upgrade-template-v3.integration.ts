@@ -4,7 +4,6 @@ import { beforeEach } from "mocha";
 import { main as mockV3AragonVoting, setValidUpgradeTimestamp } from "scripts/upgrade/steps/0500-mock-v3-aragon-voting";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { OssifiableProxy, V3Template, V3Template__Harness, V3Template__Harness__factory } from "typechain-types";
 
@@ -14,7 +13,6 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { Snapshot } from "test/suite";
 
 const SECONDS_PER_DAY = 86400n;
-const SECONDS_PER_HOUR = 3600n;
 
 function needToSkipTemplateTests() {
   return !process.env.TEMPLATE_TEST;
@@ -100,75 +98,6 @@ if (!needToSkipTemplateTests())
           template,
           "OnlyAgentCanUpgrade",
         );
-      });
-
-      it_("should revert when startUpgrade is called before DISABLED_BEFORE timestamp", async function () {
-        const disabledBefore = await template.DISABLED_BEFORE();
-        await time.setNextBlockTimestamp(disabledBefore - 1n);
-        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
-          template,
-          "TimestampNotPassed",
-        );
-      });
-
-      it_("should revert when startUpgrade is called after DISABLED_AFTER timestamp", async function () {
-        const disabledAfter = await template.DISABLED_AFTER();
-        await time.setNextBlockTimestamp(disabledAfter);
-        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
-          template,
-          "TimestampPassed",
-        );
-      });
-
-      it_("should revert when startUpgrade is called outside the daily time window (before start)", async function () {
-        const disabledBefore = await template.DISABLED_BEFORE();
-        const enabledDaySpanStart = await template.ENABLED_DAY_SPAN_START();
-
-        // Set time to valid date but before the daily window (e.g., early morning)
-        const validDate = disabledBefore + SECONDS_PER_DAY;
-        const oneHourBeforeWindow = enabledDaySpanStart - SECONDS_PER_HOUR;
-        const earlyMorning = (validDate / SECONDS_PER_DAY) * SECONDS_PER_DAY + oneHourBeforeWindow;
-
-        await time.setNextBlockTimestamp(earlyMorning);
-        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
-          template,
-          "DayTimeOutOfRange",
-        );
-      });
-
-      it_("should revert when startUpgrade is called outside the daily time window (after end)", async function () {
-        const disabledBefore = await template.DISABLED_BEFORE();
-        const enabledDaySpanEnd = await template.ENABLED_DAY_SPAN_END();
-
-        // Set time to valid date but after the daily window (e.g., late night)
-        const validDate = disabledBefore + SECONDS_PER_DAY;
-        const oneHourAfterWindow = enabledDaySpanEnd + SECONDS_PER_HOUR;
-        const lateNight = (validDate / SECONDS_PER_DAY) * SECONDS_PER_DAY + oneHourAfterWindow;
-
-        await time.setNextBlockTimestamp(lateNight);
-        await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
-          template,
-          "DayTimeOutOfRange",
-        );
-      });
-
-      it_("should succeed when startUpgrade is called within valid time window", async function () {
-        const disabledBefore = await template.DISABLED_BEFORE();
-        const disabledAfter = await template.DISABLED_AFTER();
-        const enabledDaySpanStart = await template.ENABLED_DAY_SPAN_START();
-        const enabledDaySpanEnd = await template.ENABLED_DAY_SPAN_END();
-
-        // Calculate a valid timestamp: within date range and within daily window
-        const validDate = disabledBefore + SECONDS_PER_DAY;
-        const midWindow = (enabledDaySpanStart + enabledDaySpanEnd) / 2n;
-        const validTimestamp = (validDate / SECONDS_PER_DAY) * SECONDS_PER_DAY + midWindow;
-
-        // Ensure we're within bounds
-        expect(validTimestamp).to.be.greaterThan(disabledBefore);
-        expect(validTimestamp).to.be.lessThan(disabledAfter);
-
-        await time.setNextBlockTimestamp(validTimestamp);
-        await expect(template.connect(agentSigner).startUpgrade()).to.emit(template, "UpgradeStarted");
       });
 
       it_(
