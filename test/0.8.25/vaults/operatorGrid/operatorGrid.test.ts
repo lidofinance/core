@@ -230,7 +230,7 @@ describe("OperatorGrid.sol", () => {
       const operatorGridLocal = await ethers.getContractAt("OperatorGrid", operatorGridProxy, deployer);
       const defaultTierParams = {
         shareLimit: DEFAULT_TIER_SHARE_LIMIT,
-        reserveRatioBP: RESERVE_RATIO,
+        reserveRatioBP: RESERVE_RATIO + 10,
         forcedRebalanceThresholdBP: RESERVE_RATIO,
         infraFeeBP: INFRA_FEE,
         liquidityFeeBP: LIQUIDITY_FEE,
@@ -238,7 +238,7 @@ describe("OperatorGrid.sol", () => {
       };
       await expect(operatorGridLocal.initialize(stranger, defaultTierParams))
         .to.be.revertedWithCustomError(operatorGridLocal, "ForcedRebalanceThresholdTooHigh")
-        .withArgs("0", RESERVE_RATIO, RESERVE_RATIO);
+        .withArgs("0", RESERVE_RATIO, RESERVE_RATIO + 10);
     });
   });
 

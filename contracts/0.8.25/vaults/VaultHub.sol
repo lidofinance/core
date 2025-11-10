@@ -432,7 +432,6 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice updates the vault's connection parameters
-    /// @dev Reverts if the vault is not healthy as of latest report
     /// @param _vault vault address
     /// @param _shareLimit new share limit
     /// @param _reserveRatioBP new reserve ratio
@@ -440,6 +439,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _infraFeeBP new infra fee
     /// @param _liquidityFeeBP new liquidity fee
     /// @param _reservationFeeBP new reservation fee
+    /// @dev reverts if the vault's minting capacity will be exceeded with new reserve parameters
     /// @dev requires the fresh report
     function updateConnection(
         address _vault,
@@ -453,16 +453,22 @@ contract VaultHub is PausableUntilWithRoles {
         _requireSender(address(_operatorGrid()));
         _requireSaneShareLimit(_shareLimit);
 
-        VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _vaultRecord(_vault);
+        VaultConnection storage connection = _vaultConnection(_vault);
+        _requireConnected(connection, _vault);
 
+        VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 totalValue_ = _totalValue(record);
-        uint256 liabilityShares_ = record.liabilityShares;
+        if (
+            _reserveRatioBP != connection.reserveRatioBP || 
+            _forcedRebalanceThresholdBP != connection.forcedRebalanceThresholdBP
+        ) {
+            uint256 totalValue_ = _totalValue(record);
+            uint256 liabilityShares_ = record.liabilityShares;
 
-        if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP)) {
-            revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
+            if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP)) {
+                revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
+            }
         }
 
         // special event for the Oracle to track fee calculation
@@ -1227,6 +1233,9 @@ contract VaultHub is PausableUntilWithRoles {
             return type(uint256).max;
         }
 
+        // if not healthy and low in debt, please rebalance the whole amount
+        if (liabilityShares_ <= 100) return liabilityShares_;
+
         // Solve the equation for X:
         // L - liability, TV - totalValue
         // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
@@ -1242,10 +1251,11 @@ contract VaultHub is PausableUntilWithRoles {
         // X = (L * 100 - TV * MR) / (100 - MR)
         // RR = 100 - MR
         // X = (L * 100 - TV * MR) / RR
-        uint256 shortfallEth = (liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
+        uint256 shortfallEth = Math256.ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio,
+            reserveRatioBP);
 
-        // Add 10 extra shares to avoid dealing with rounding/precision issues
-        uint256 shortfallShares = _getSharesByPooledEth(shortfallEth) + 10;
+        // Add 100 extra shares to avoid dealing with rounding/precision issues
+        uint256 shortfallShares = _getSharesByPooledEth(shortfallEth) + 100;
 
         return Math256.min(shortfallShares, liabilityShares_);
     }

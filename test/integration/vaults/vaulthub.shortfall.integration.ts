@@ -95,7 +95,7 @@ describe("Integration: VaultHub Shortfall", () => {
 
   describe("Shortfall", () => {
     it("Works on larger numbers", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1989n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -139,13 +139,36 @@ describe("Integration: VaultHub Shortfall", () => {
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
     });
 
-    it("Works on small numbers", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
+    it("Works on (TV=1000, LS=689, rr=2000 frt=1999) and shareRate 1.162518454795922", async () => {
+      await ensureExactShareRate(ctx, (1162518454795922n * SHARE_RATE_PRECISION) / 1000000000000000n);
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1989n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
-      await dashboard.mintShares(owner, 689n);
+      await dashboard.mintShares(owner, 699n);
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: 1000n,
+        waitForNextRefSlot: true,
+      });
+
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
+      const shortfall = await vaultHub.healthShortfallShares(stakingVault);
+      await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
+      const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
+      expect(shortfall2).to.equal(0n);
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
+    });
+
+    it("Works on (TV=1000, LS=235, rr=2000 frt=1989) and shareRate 1.162518454795922", async () => {
+      await ensureExactShareRate(ctx, (1162518454795922n * SHARE_RATE_PRECISION) / 1000000000000000n);
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1989n }));
+
+      await vaultHub.fund(stakingVault, { value: ether("1") });
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
+
+      await dashboard.mintShares(owner, 699n);
 
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: 1000n,
@@ -161,7 +184,7 @@ describe("Integration: VaultHub Shortfall", () => {
     });
 
     it("Works on really small numbers", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1989n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -183,7 +206,7 @@ describe("Integration: VaultHub Shortfall", () => {
     });
 
     it("Works on numbers less than 10", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1989n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -204,7 +227,7 @@ describe("Integration: VaultHub Shortfall", () => {
     });
 
     it("Works on hundreds", async () => {
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1999n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 1989n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -226,7 +249,7 @@ describe("Integration: VaultHub Shortfall", () => {
 
     it("Works on (TV=22, LS=11, rr=frt=499) and shareRate 1.90909", async () => {
       await ensureExactShareRate(ctx, (190909n * SHARE_RATE_PRECISION) / 100000n);
-      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 500n, frt: 499n }));
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 500n, frt: 489n }));
 
       await vaultHub.fund(stakingVault, { value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
@@ -235,6 +258,28 @@ describe("Integration: VaultHub Shortfall", () => {
 
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: 22n,
+        waitForNextRefSlot: true,
+      });
+
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
+      const shortfall = await vaultHub.healthShortfallShares(stakingVault);
+      await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
+      const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
+      expect(shortfall2).to.equal(0n);
+    });
+
+    it("Works on (TV=15, LS=12, rr=772 frt=769) and shareRate 1.125", async () => {
+      await ensureExactShareRate(ctx, (112500n * SHARE_RATE_PRECISION) / 100000n);
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 772n, frt: 761n }));
+
+      await vaultHub.fund(stakingVault, { value: ether("1") });
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
+
+      await dashboard.mintShares(owner, 12n);
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: 15n,
         waitForNextRefSlot: true,
       });
 
