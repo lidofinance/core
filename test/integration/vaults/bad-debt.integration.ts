@@ -5,12 +5,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
-import { advanceChainTime, days, MAX_UINT256 } from "lib";
+import { advanceChainTime, days, getCurrentBlockTimestamp, MAX_UINT256, SECONDS_PER_SLOT } from "lib";
 import {
   changeTier,
   createVaultWithDashboard,
   DEFAULT_TIER_PARAMS,
   getProtocolContext,
+  getReportTimeElapsed,
   ProtocolContext,
   report,
   reportVaultDataWithProof,
@@ -19,6 +20,7 @@ import {
   setUpOperatorGrid,
   waitNextAvailableReportTime,
 } from "lib/protocol";
+import { simulateReport } from "lib/protocol/helpers/accounting";
 import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
@@ -581,7 +583,7 @@ describe("Integration: Vault with bad debt", () => {
       await vaultHub.connect(daoAgent).internalizeBadDebt(stakingVault, badDebtShares);
 
       // Immediately check badDebtToInternalize - should return 0 because increase applies to next refSlot
-      expect(await vaultHub.badDebtToInternalize()).to.be.equal(0n, "Returns 0 for current refSlot");
+      expect(await vaultHub.badDebtToInternalizeForLastRefSlot()).to.be.equal(0n, "Returns 0 for current refSlot");
 
       // Wait for next refSlot
       await waitNextAvailableReportTime(ctx);
@@ -590,7 +592,10 @@ describe("Integration: Vault with bad debt", () => {
       expect(newRefSlot).to.be.greaterThan(currentRefSlot, "Advanced to next refSlot");
 
       // Now badDebtToInternalize should show the internalized amount
-      expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares, "Returns internalized amount");
+      expect(await vaultHub.badDebtToInternalizeForLastRefSlot()).to.be.equal(
+        badDebtShares,
+        "Returns internalized amount",
+      );
     });
 
     it("Multiple internalizations accumulate", async () => {
@@ -660,6 +665,47 @@ describe("Integration: Vault with bad debt", () => {
       await expect(vaultHub.connect(daoAgent).internalizeBadDebt(stakingVault, badDebtShares))
         .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
         .withArgs(stakingVault);
+    });
+
+    it("Internalization is reflected in the next report(both simulation and real report)", async () => {
+      const { vaultHub, lido, hashConsensus } = ctx.contracts;
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      await vaultHub.connect(daoAgent).internalizeBadDebt(stakingVault, badDebtShares);
+
+      const { reportProcessingDeadlineSlot: nextRefSlot } = await hashConsensus.getCurrentFrame();
+      const { time, nextFrameStart } = await getReportTimeElapsed(ctx);
+
+      await advanceChainTime(nextFrameStart - time); // Advance to the next frame start exactly
+      expect(await getCurrentBlockTimestamp()).to.be.equal(nextFrameStart, "We landed exactly in the refSlotBlock");
+      expect(await vaultHub.badDebtToInternalizeForLastRefSlot()).to.be.equal(0, "Bad debt to internalize is still 0");
+      expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares, "Bad debt to internalize is the same");
+
+      // simulate the report at the refSlot (like the Oracle would do)
+      const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
+      const simulationAtRefSlot = await simulateReport(ctx, {
+        refSlot: nextRefSlot,
+        beaconValidators,
+        clBalance: beaconBalance,
+        withdrawalVaultBalance: 0n,
+        elRewardsVaultBalance: 0n,
+      });
+
+      await advanceChainTime(SECONDS_PER_SLOT);
+      expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares);
+
+      // simulate the report after refSlot (like it happens during the report processing)
+      expect(
+        await simulateReport(ctx, {
+          refSlot: (await hashConsensus.getCurrentFrame()).refSlot,
+          beaconValidators,
+          clBalance: beaconBalance,
+          withdrawalVaultBalance: 0n,
+          elRewardsVaultBalance: 0n,
+        }),
+      ).to.be.deep.equal(simulationAtRefSlot, "Simulation after refSlot should work the same");
     });
   });
 });

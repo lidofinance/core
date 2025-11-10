@@ -117,7 +117,7 @@ contract Accounting {
     ) external view returns (CalculatedValues memory update) {
         Contracts memory contracts = _loadOracleReportContracts();
 
-        PreReportState memory pre = _snapshotPreReportState(contracts);
+        PreReportState memory pre = _snapshotPreReportState(contracts, true);
 
         return _simulateOracleReport(contracts, pre, _report);
     }
@@ -128,19 +128,26 @@ contract Accounting {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
-        PreReportState memory pre = _snapshotPreReportState(contracts);
+        PreReportState memory pre = _snapshotPreReportState(contracts, false);
         CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report);
         _applyOracleReportContext(contracts, _report, pre, update);
     }
 
     /// @dev reads the current state of the protocol to the memory
-    function _snapshotPreReportState(Contracts memory _contracts) internal view returns (PreReportState memory pre) {
+    function _snapshotPreReportState(Contracts memory _contracts, bool isSimulation) internal view returns (PreReportState memory pre) {
         (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
-        pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalize();
+
+        if (isSimulation) {
+            // for simulation we specifically fetch the current value, because during the refSlot `LastRefSlot` method
+            // will return the previous refSlot value, but Oracle use simulation to gather the current refSlot info
+            pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalize();
+        } else {
+            pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
+        }
     }
 
     /// @dev calculates all the state changes that is required to apply the report
