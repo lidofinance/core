@@ -12,8 +12,6 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
-const SECONDS_PER_DAY = 86400n;
-
 function needToSkipTemplateTests() {
   return !process.env.TEMPLATE_TEST;
 }
@@ -28,7 +26,6 @@ if (!needToSkipTemplateTests())
     let agentSigner: HardhatEthersSigner;
     let agentMock: V3Template__Harness;
 
-    // Helper function to set timestamp within valid upgrade window
     before(async () => {
       originalSnapshot = await Snapshot.take();
 
@@ -77,21 +74,6 @@ if (!needToSkipTemplateTests())
       expect(await template.isUpgradeFinished()).to.equal(true);
     });
 
-    describe("time constraints", () => {
-      it_("should have sane immutable values set from constructor", async function () {
-        const disabledBefore = await template.DISABLED_BEFORE();
-        const disabledAfter = await template.DISABLED_AFTER();
-        const enabledDaySpanStart = await template.ENABLED_DAY_SPAN_START();
-        const enabledDaySpanEnd = await template.ENABLED_DAY_SPAN_END();
-
-        expect(disabledBefore).to.be.greaterThan(0);
-        expect(disabledAfter).to.be.greaterThan(disabledBefore);
-        expect(enabledDaySpanStart).to.be.lessThan(SECONDS_PER_DAY);
-        expect(enabledDaySpanEnd).to.be.lessThan(SECONDS_PER_DAY);
-        expect(enabledDaySpanEnd).to.be.greaterThan(enabledDaySpanStart);
-      });
-    });
-
     describe("startUpgrade", () => {
       it_("should revert when startUpgrade is called by non-agent address", async function () {
         await expect(template.connect(deployer).startUpgrade()).to.be.revertedWithCustomError(
@@ -103,7 +85,7 @@ if (!needToSkipTemplateTests())
       it_(
         "should revert with IncorrectProxyImplementation when startUpgrade is called with incorrect proxy implementation for locator and accountingOracle",
         async function () {
-          await setValidUpgradeTimestamp(false, template);
+          await setValidUpgradeTimestamp(false);
 
           const unexpectedImpl = ctx.contracts.kernel.address;
           const testCases = [
@@ -129,7 +111,7 @@ if (!needToSkipTemplateTests())
       );
 
       it_("should revert when startUpgrade is called after it has already been started", async function () {
-        await setValidUpgradeTimestamp(false, template);
+        await setValidUpgradeTimestamp(false);
 
         await template.connect(agentSigner).startUpgrade();
         await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
@@ -148,7 +130,7 @@ if (!needToSkipTemplateTests())
       });
 
       it_("should revert when startUpgrade is called twice in the same transaction", async function () {
-        await setValidUpgradeTimestamp(false, template);
+        await setValidUpgradeTimestamp(false);
 
         await hre.ethers.provider.send("hardhat_setCode", [agentSigner.address, await agentMock.getDeployedCode()]);
         const harness = (await new V3Template__Harness__factory(deployer).attach(
@@ -161,7 +143,7 @@ if (!needToSkipTemplateTests())
 
     describe("finishUpgrade", () => {
       it_("should revert when finishUpgrade is called by non-agent address", async function () {
-        await setValidUpgradeTimestamp(false, template);
+        await setValidUpgradeTimestamp(false);
 
         await template.connect(agentSigner).startUpgrade();
         await expect(template.connect(deployer).finishUpgrade()).to.be.revertedWithCustomError(

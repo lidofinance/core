@@ -101,17 +101,6 @@ contract V3Template is V3Addresses {
     uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
 
     //
-    // Structs
-    //
-
-    struct TimeConstraintsParams {
-        uint256 disabledBefore;           // Upgrade disabled before this Unix timestamp
-        uint256 disabledAfter;            // Upgrade disabled after this Unix timestamp
-        uint256 enabledDaySpanStart;      // Daily time window start (seconds since midnight UTC)
-        uint256 enabledDaySpanEnd;        // Daily time window end (seconds since midnight UTC)
-    }
-
-    //
     // Structured storage
     //
 
@@ -122,14 +111,6 @@ contract V3Template is V3Addresses {
     uint256 public initialTotalPooledEther;
     address[] public contractsWithBurnerAllowances;
     uint256 public immutable INITIAL_MAX_EXTERNAL_RATIO_BP;
-
-    //
-    // Upgrade time constraints
-    //
-    uint256 public immutable DISABLED_BEFORE;
-    uint256 public immutable DISABLED_AFTER;
-    uint256 public immutable ENABLED_DAY_SPAN_START;
-    uint256 public immutable ENABLED_DAY_SPAN_END;
 
     //
     // Slots for transient storage
@@ -143,17 +124,11 @@ contract V3Template is V3Addresses {
 
     /// @param _params Params required to initialize the addresses contract
     /// @param _initialMaxExternalRatioBP Initial maximum external ratio in basis points
-    /// @param _timeConstraintsParams Time constraints for the upgrade window
     constructor(
         V3AddressesParams memory _params,
-        uint256 _initialMaxExternalRatioBP,
-        TimeConstraintsParams memory _timeConstraintsParams
+        uint256 _initialMaxExternalRatioBP
     ) V3Addresses(_params) {
         INITIAL_MAX_EXTERNAL_RATIO_BP = _initialMaxExternalRatioBP;
-        DISABLED_BEFORE = _timeConstraintsParams.disabledBefore;
-        DISABLED_AFTER = _timeConstraintsParams.disabledAfter;
-        ENABLED_DAY_SPAN_START = _timeConstraintsParams.enabledDaySpanStart;
-        ENABLED_DAY_SPAN_END = _timeConstraintsParams.enabledDaySpanEnd;
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
         // NB: NOR and SIMPLE_DVT allowances are set to 0 in TW upgrade, so they are not migrated
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
@@ -228,6 +203,7 @@ contract V3Template is V3Addresses {
         }
 
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), NEW_ACCOUNTING_ORACLE_IMPL);
 
         _assertContractVersion(IVersioned(LIDO), EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(IVersioned(ACCOUNTING_ORACLE), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
@@ -286,6 +262,7 @@ contract V3Template is V3Addresses {
         _assertSingleOZRoleHolder(LAZY_ORACLE, LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
 
         // AccountingOracle
+        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING_ORACLE), AGENT);
         _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
         // OracleReportSanityChecker
@@ -393,6 +370,14 @@ contract V3Template is V3Addresses {
                 revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], BURNER);
             }
         }
+
+        // NO and SimpleDVT new Burner allowances are to be zero the same as old Burner on pre upgrade state
+        if (ILidoWithFinalizeUpgrade(LIDO).allowance(NODE_OPERATORS_REGISTRY, BURNER) != 0) {
+            revert IncorrectBurnerAllowance(NODE_OPERATORS_REGISTRY, BURNER);
+        }
+        if (ILidoWithFinalizeUpgrade(LIDO).allowance(SIMPLE_DVT, BURNER) != 0) {
+            revert IncorrectBurnerAllowance(SIMPLE_DVT, BURNER);
+        }
     }
 
     function _assertProxyAdmin(IOssifiableProxy _proxy, address _admin) internal view {
@@ -485,7 +470,6 @@ contract V3Template is V3Addresses {
     error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
     error NonZeroRoleHolders(address contractAddress, bytes32 role);
     error IncorrectAragonAppImplementation(address repo, address implementation);
-    error StartAndFinishMustBeInSameBlock();
     error StartAndFinishMustBeInSameTx();
     error StartAlreadyCalledInThisTx();
     error Expired();

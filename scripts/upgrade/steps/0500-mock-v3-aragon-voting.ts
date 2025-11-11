@@ -2,7 +2,7 @@ import { mockDGAragonVoting } from "scripts/utils/upgrade";
 
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { IEmergencyProtectedTimelock, V3Template, Voting } from "typechain-types";
+import { IEmergencyProtectedTimelock, V3VoteScript, Voting } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { getAddress, readNetworkState, Sk } from "lib/state-file";
@@ -25,10 +25,14 @@ export async function getFullVotingDuration(): Promise<bigint> {
   return voteTime + afterSubmitDelay + afterScheduleDelay;
 }
 
-export async function setValidUpgradeTimestamp(beforeStart: boolean, template: V3Template): Promise<bigint> {
-  const disabledBefore = await template.DISABLED_BEFORE();
-  const enabledDaySpanStart = await template.ENABLED_DAY_SPAN_START();
-  const enabledDaySpanEnd = await template.ENABLED_DAY_SPAN_END();
+export async function setValidUpgradeTimestamp(beforeStart: boolean): Promise<bigint> {
+  const state = readNetworkState();
+  const voteScript = await loadContract<V3VoteScript>("V3VoteScript", getAddress(Sk.v3VoteScript, state));
+  const params = await voteScript.params();
+
+  const disabledBefore = params.disabledBefore;
+  const enabledDaySpanStart = params.enabledDaySpanStart;
+  const enabledDaySpanEnd = params.enabledDaySpanEnd;
 
   const fullVotingDuration = await getFullVotingDuration();
 
@@ -45,10 +49,9 @@ export async function setValidUpgradeTimestamp(beforeStart: boolean, template: V
 
 export async function main(): Promise<ReturnType<typeof mockDGAragonVoting>> {
   const state = readNetworkState();
-  const template = await loadContract<V3Template>("V3Template", state[Sk.v3Template].address);
 
   // Set timestamp before voting to account for voting duration
-  await setValidUpgradeTimestamp(true, template);
+  await setValidUpgradeTimestamp(true);
 
   const votingDescription = "V3 Lido Upgrade description placeholder";
   const proposalMetadata = "V3 Lido Upgrade proposal metadata placeholder";

@@ -75,10 +75,6 @@ simulatedShareRateDeviationBPLimit = 150
 
 # V3 vote script configuration
 [v3VoteScript]
-# Expiry timestamp after which the upgrade transaction will revert
-# Format: Unix timestamp (seconds since epoch)
-# The upgrade transaction must be executed before this deadline
-expiryTimestamp = 1765324800          # December 10, 2025 00:00:00 UTC
 # Initial maximum external ratio in basis points for Lido v3
 initialMaxExternalRatioBP = 300       # 3% value set upon upgrade for the initial phase
 # Staking module parameters for raising stake share limit
