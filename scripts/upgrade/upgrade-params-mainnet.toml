@@ -37,7 +37,7 @@ UpdateVaultsFeesInOperatorGrid = "0x00000000000000000000000000000000000fac09"
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
-relativeShareLimitBP = 3000           # Relative share limit in basis points (30%)
+relativeShareLimitBP = 1000           # Relative share limit in basis points (10%)
 
 # Lazy oracle configuration for delayed reward calculations - https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-32.md
 [lazyOracle]
@@ -47,34 +47,35 @@ maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per secon
 
 # Predeposit guarantee configuration for validator deposit guarantees
 [predepositGuarantee]
-genesisForkVersion = "0x00000000"     # Ethereum mainnet genesis fork version
-gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
-gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
+genesisForkVersion = "0x00000000"     # Ethereum mainnet genesis fork version: https://github.com/ethereum/consensus-specs/blob/01b53691dcc36d37a5ad8994b3a32d8de69fb1aa/configs/mainnet.yaml#L30
+gIndex            = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification: https://research.lido.fi/t/lip-27-ensuring-compatibility-with-ethereum-s-pectra-upgrade/9444#p-20086-update-gindexes-5
+gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028" # Required for hardfork upgrades, the same for now
 changeSlot = 0                        # Slot number when the change takes effect
 
 # Operator grid configuration for managing staking operators
 [operatorGrid]
 # Default tier parameters for operator classification and fee structure
 [operatorGrid.defaultTierParams]
-shareLimitInEther = "250"             # Share limit per tier in ETH
-reserveRatioBP = 2000                 # Reserve ratio in basis points (20%)
-forcedRebalanceThresholdBP = 1800     # Threshold for forced rebalancing in basis points (18%)
-infraFeeBP = 500                      # Infrastructure fee in basis points (5%)
-liquidityFeeBP = 400                  # Liquidity provision fee in basis points (4%)
-reservationFeeBP = 100                # Reservation fee in basis points (1%)
+shareLimitInEther = "0"               # Share limit per tier in ETH
+reserveRatioBP = 5000                 # Reserve ratio in basis points (50%)
+forcedRebalanceThresholdBP = 4950     # Threshold for forced rebalancing in basis points (49.50%)
+# https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504#p-22550-table-3-fees-9
+infraFeeBP = 100                      # Infrastructure fee in basis points (1%)
+liquidityFeeBP = 650                  # Liquidity provision fee in basis points (6.5%)
+reservationFeeBP = 0                  # Reservation fee in basis points (0%)
 
 [burner]
 isMigrationAllowed = true             # Must be on for the upgrade to work (for scratch is it false)
 
 # Oracle and consensus version configuration
 [oracleVersions]
-ao_consensus_version = 4              # Accounting Oracle consensus version
+ao_consensus_version = 5              # Accounting Oracle consensus version: https://etherscan.io/address/0x852deD011285fe67063a08005c71a85690503Cee#readProxyContract#F16
 
 [v3VoteScript]
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-expiryTimestamp = 1765324800          # December 10, 2025 00:00:00 UTC
+expiryTimestamp = 1764547200          # December 1, 2025 00:00:00 UTC
 # Initial maximum external ratio in basis points for Lido v3
 initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial phase
 

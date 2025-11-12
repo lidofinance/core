@@ -59,10 +59,29 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       [],
     ));
 
+    // Register node operator group with sufficient share limit
+    const operatorGrid = ctx.contracts.operatorGrid;
+    agentSigner = await ctx.getSigner("agent");
+    await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
+    await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+      {
+        shareLimit: ether("1000"),
+        reserveRatioBP: 2000,
+        forcedRebalanceThresholdBP: 1800,
+        infraFeeBP: 100,
+        liquidityFeeBP: 650,
+        reservationFeeBP: 0,
+      },
+    ]);
+
+    // Move vault to tier 1 with share limit
+    const requestedTierId = 1n;
+    const requestedShareLimit = ether("1000");
+    await dashboard.connect(owner).changeTier(requestedTierId, requestedShareLimit);
+    await operatorGrid.connect(nodeOperator).changeTier(stakingVault, requestedTierId, requestedShareLimit);
+
     stakingVaultAddress = await stakingVault.getAddress();
     treasuryAddress = await ctx.contracts.locator.treasury();
-
-    agentSigner = await ctx.getSigner("agent");
 
     // set maximum fee rate per second to 1 ether to allow rapid fee increases
     await lazyOracle.connect(agentSigner).grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), agentSigner);
