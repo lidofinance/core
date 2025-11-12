@@ -13,7 +13,6 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
@@ -248,9 +247,7 @@ contract V3Template is V3Addresses {
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
         _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, AGENT);
 
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
-        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), AGENT, VAULTS_ADAPTER);
-
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);     
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULTS_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULTS_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
@@ -263,7 +260,6 @@ contract V3Template is V3Addresses {
         // LazyOracle
         _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
         _assertSingleOZRoleHolder(LAZY_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(LAZY_ORACLE, LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
 
         // AccountingOracle
         _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
