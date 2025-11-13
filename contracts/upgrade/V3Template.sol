@@ -400,15 +400,6 @@ contract V3Template is V3Addresses {
         }
     }
 
-    function _assertTwoOZRoleHolders(
-        address _accessControlled, bytes32 _role, address _holder1, address _holder2
-    ) internal view {
-        address[] memory holders = new address[](2);
-        holders[0] = _holder1;
-        holders[1] = _holder2;
-        _assertOZRoleHolders(_accessControlled, _role, holders);
-    }
-
     function _assertThreeOZRoleHolders(
         address _accessControlled, bytes32 _role, address _holder1, address _holder2, address _holder3
     ) internal view {
