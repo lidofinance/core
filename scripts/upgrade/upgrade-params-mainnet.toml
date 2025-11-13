@@ -25,15 +25,15 @@ maxDefaultTierShareLimit = 0                                     # Max share lim
 # Must be deployed before the V3 upgrading contracts
 [easyTrack.newFactories]
 # TODO: update upon deployment
-AlterTiersInOperatorGrid = "0x00000000000000000000000000000000000fAc01"
-RegisterGroupsInOperatorGrid = "0x00000000000000000000000000000000000fAc02"
-RegisterTiersInOperatorGrid = "0x00000000000000000000000000000000000FAc03"
-SetJailStatusInOperatorGrid = "0x00000000000000000000000000000000000faC04"
-SetLiabilitySharesTargetInVaultHub = "0x00000000000000000000000000000000000FAc05"
-SocializeBadDebtInVaultHub = "0x00000000000000000000000000000000000Fac06"
-ForceValidatorExitsInVaultHub = "0x00000000000000000000000000000000000faC07"
-UpdateGroupsShareLimitInOperatorGrid = "0x00000000000000000000000000000000000FAc08"
-UpdateVaultsFeesInOperatorGrid = "0x00000000000000000000000000000000000fac09"
+AlterTiersInOperatorGrid = "0xEdCc480e10E324c87bcEd02b976e505D6733a123"
+RegisterGroupsInOperatorGrid = "0x65a166Cf16cF19A446Bb3bD1B2Df5f1a7A282fF4"
+RegisterTiersInOperatorGrid = "0xB54a475203c001E0DeB78A7b9e3C1DDD67B9fF29"
+SetJailStatusInOperatorGrid = "0x44993ad6e49e20e32F98CE7047ef4334BaFCbAf6"
+SetLiabilitySharesTargetInVaultHub = "0xFF576a593d83370e8674984958de8bE65D59e193"
+SocializeBadDebtInVaultHub = "0x55F0fDAEA0759ddde67aBcf7F07Dd27b8376993b"
+ForceValidatorExitsInVaultHub = "0xE551A1F085D9f7f553e6099B6Ee3c694551b238A"
+UpdateGroupsShareLimitInOperatorGrid = "0x8aF6973c70c45506DA2e9D068720b12F3D2d4A98"
+UpdateVaultsFeesInOperatorGrid = "0x31D377D79D2de4042ffb52114701Cdb3E58522c8"
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]

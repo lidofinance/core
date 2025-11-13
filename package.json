@@ -20,6 +20,7 @@
     "check": "yarn lint && yarn format && yarn typecheck && yarn validate:configs",
     "test": "hardhat test test/**/*.test.ts --parallel",
     "upgrade:deploy": "STEPS_FILE=upgrade/steps-deploy.json yarn hardhat --network custom run scripts/utils/migrate.ts",
+    "upgrade:deploy:mainnet": "STEPS_FILE=upgrade/steps-deploy.json yarn hardhat --network mainnet run scripts/utils/migrate.ts",
     "upgrade:mock-voting": "STEPS_FILE=upgrade/steps-mock-voting.json yarn hardhat --network custom run scripts/utils/migrate.ts",
     "test:forge": "forge test",
     "test:coverage": "COVERAGE=unit hardhat coverage",
