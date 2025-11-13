@@ -464,7 +464,7 @@ library SRLib {
         unchecked {
             for (uint256 i; i < n; ++i) {
                 uint256 v = vals[i];
-                if (v == 10000) {
+                if (v == SRUtils.TOTAL_BASIS_POINTS) {
                     ++undefinedCount;
                 } else {
                     totalDefined += v;
