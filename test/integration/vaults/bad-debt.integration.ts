@@ -183,6 +183,7 @@ describe("Integration: Vault with bad debt", () => {
 
       // Increase totalValue by 100% each time - simulate CL rewards accumulation
       const agentSigner = await ctx.getSigner("agent");
+      await lazyOracle.connect(agentSigner).grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), agentSigner);
       await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 10500n, ether("0.01"));
 
       let newTotalValue = totalValue;
