@@ -388,6 +388,20 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
             await dashboard.VAULT_CONFIGURATION_ROLE(),
           );
         });
+
+        describe("renounceRole()", () => {
+          for (const role of vaultRoleKeys) {
+            it(`reverts if called for role ${role}`, async () => {
+              const roleMethods = getRoleMethods(dashboard);
+              const roleId = await roleMethods[role];
+              const caller = roles[role];
+              await expect(dashboard.connect(caller).renounceRole(roleId, caller)).to.be.revertedWithCustomError(
+                dashboard,
+                "RoleRenouncementDisabled",
+              );
+            });
+          }
+        });
       });
     });
 

@@ -131,7 +131,6 @@ contract V3TemporaryAdmin {
         address csmAccounting = getCsmAccountingAddress(locator.stakingRouter());
 
         _setupPredepositGuarantee(locator.predepositGuarantee(), _gateSeal);
-        _setupLazyOracle(locator.lazyOracle());
         _setupOperatorGrid(locator.operatorGrid(), IVaultsAdapter(_vaultsAdapter).evmScriptExecutor(), _vaultsAdapter);
         _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
         _setupVaultHub(locator.vaultHub(), _vaultsAdapter, _gateSeal);
@@ -147,18 +146,15 @@ contract V3TemporaryAdmin {
         // Get roles from the contract
         bytes32 pauseRole = IPausableUntilWithRoles(_vaultHub).PAUSE_ROLE();
         bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
-        bytes32 redemptionMasterRole = IVaultHub(_vaultHub).REDEMPTION_MASTER_ROLE();
         bytes32 validatorExitRole = IVaultHub(_vaultHub).VALIDATOR_EXIT_ROLE();
         bytes32 badDebtMasterRole = IVaultHub(_vaultHub).BAD_DEBT_MASTER_ROLE();
 
         IAccessControl(_vaultHub).grantRole(pauseRole, _gateSeal);
 
         IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
-        IAccessControl(_vaultHub).grantRole(redemptionMasterRole, AGENT);
 
         IAccessControl(_vaultHub).grantRole(validatorExitRole, _vaultsAdapter);
         IAccessControl(_vaultHub).grantRole(badDebtMasterRole, _vaultsAdapter);
-        IAccessControl(_vaultHub).grantRole(redemptionMasterRole, _vaultsAdapter);
 
         _transferAdminToAgent(_vaultHub);
     }
@@ -171,16 +167,6 @@ contract V3TemporaryAdmin {
         bytes32 pauseRole = IPausableUntilWithRoles(_predepositGuarantee).PAUSE_ROLE();
         IAccessControl(_predepositGuarantee).grantRole(pauseRole, _gateSeal);
         _transferAdminToAgent(_predepositGuarantee);
-    }
-
-    /**
-     * @notice Setup LazyOracle with required roles and transfer admin to agent
-     * @param _lazyOracle The LazyOracle contract address
-     */
-    function _setupLazyOracle(address _lazyOracle) private {
-        bytes32 updateSanityParamsRole = ILazyOracle(_lazyOracle).UPDATE_SANITY_PARAMS_ROLE();
-        IAccessControl(_lazyOracle).grantRole(updateSanityParamsRole, AGENT);
-        _transferAdminToAgent(_lazyOracle);
     }
 
     /**

@@ -5,6 +5,8 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
+import {AccessControl} from "@openzeppelin/contracts-v5.2/access/AccessControl.sol";
+import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
@@ -174,6 +176,13 @@ abstract contract Permissions is AccessControlConfirmable {
         for (uint256 i = 0; i < _assignments.length; i++) {
             revokeRole(_assignments[i].role, _assignments[i].account);
         }
+    }
+
+    /**
+     * @notice Role renouncement is disabled to avoid accidental access loss.
+     */
+    function renounceRole(bytes32, address) public pure override(AccessControl, IAccessControl) {
+        revert RoleRenouncementDisabled();
     }
 
     /**
@@ -370,4 +379,9 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Error thrown for when a given address cannot be zero
      */
     error ZeroAddress();
+
+    /**
+     * @notice Error thrown when attempting to renounce a role.
+     */
+    error RoleRenouncementDisabled();
 }

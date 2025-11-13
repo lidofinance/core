@@ -386,6 +386,20 @@ describe("Permissions", () => {
     });
   });
 
+  context("renounceRole()", () => {
+    it("reverts if called by a stranger", async () => {
+      await expect(
+        permissions.connect(stranger).renounceRole(await permissions.DEFAULT_ADMIN_ROLE(), stranger),
+      ).to.be.revertedWithCustomError(permissions, "RoleRenouncementDisabled");
+    });
+
+    it("reverts if called by the role holder", async () => {
+      await expect(
+        permissions.connect(defaultAdmin).renounceRole(await permissions.DEFAULT_ADMIN_ROLE(), defaultAdmin),
+      ).to.be.revertedWithCustomError(permissions, "RoleRenouncementDisabled");
+    });
+  });
+
   context("revokeRoles()", () => {
     it("mass-revokes roles", async () => {
       const [

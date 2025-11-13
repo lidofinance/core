@@ -11,7 +11,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/Accounting.sol",
-      "address": "0x0bF902fb783Fbf8af0bC011C76D2F7d318a50c74",
+      "address": "0x41f0765b56d4f6b6AF231c217886ea7A8D1e7640",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8", "0x3508A952176b3c15387C97BE809eaffB1982176a"]
     }
   },
@@ -140,7 +140,7 @@
   "app:lido": {
     "implementation": {
       "contract": "contracts/0.4.24/Lido.sol",
-      "address": "0x892D3fF28Dc9360cAA47576070B1892244e68a1f",
+      "address": "0x4f9143Dba1f1BbFa535528254592f3396E229e53",
       "constructorArgs": []
     },
     "aragonApp": {
@@ -521,7 +521,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/LazyOracle.sol",
-      "address": "0x60beda728821B47446fDBcD14111b447BF8663e0",
+      "address": "0x4e3b9fd9F713e5dbA86255febD4c402794135095",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
@@ -638,7 +638,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/OperatorGrid.sol",
-      "address": "0x81a8e96bf75eb02CE082FaFF5701B181E491dc1c",
+      "address": "0x0f7b5BFA0FC13F2b8218a1624a5aF4055500cAe0",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
@@ -863,7 +863,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/VaultHub.sol",
-      "address": "0x25414E6CEB90F5ffa42cb11CeE95Adb4EC9a1dB8",
+      "address": "0x932d97b59B8846796469C129AB1b83c2a855a3F7",
       "constructorArgs": [
         "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
         "0x3508A952176b3c15387C97BE809eaffB1982176a",

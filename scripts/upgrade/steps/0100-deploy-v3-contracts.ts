@@ -110,7 +110,7 @@ export async function main() {
   // Prepare initialization data for LazyOracle.initialize(address admin, uint256 quarantinePeriod, uint256 maxRewardRatioBP, uint256 maxLidoFeeRatePerSecond)
   const lazyOracleInterface = await ethers.getContractFactory("LazyOracle");
   const lazyOracleInitData = lazyOracleInterface.interface.encodeFunctionData("initialize", [
-    v3TemporaryAdmin.address,
+    agentAddress,
     lazyOracleParams.quarantinePeriod,
     lazyOracleParams.maxRewardRatioBP,
     lazyOracleParams.maxLidoFeeRatePerSecond,
@@ -163,7 +163,7 @@ export async function main() {
     "VaultHub",
     proxyContractsOwner,
     deployer,
-    [locatorAddress, lidoAddress, hashConsensusAddress, vaultHubParams.relativeShareLimitBP],
+    [locatorAddress, lidoAddress, hashConsensusAddress, vaultHubParams.maxRelativeShareLimitBP],
     null, // implementation
     true, // withStateFile
     undefined, // signerOrOptions

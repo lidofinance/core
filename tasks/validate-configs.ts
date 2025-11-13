@@ -153,8 +153,7 @@ const EXPECTED_MISSING_IN_SCRATCH = [
 
 // Special mappings where the same concept has different names
 const PATH_MAPPINGS: Record<string, string> = {
-  "vaultHub.relativeShareLimitBP": "vaultHub.maxRelativeShareLimitBP",
-  "aragonAppVersions": "appVersions", // Handle different naming
+  aragonAppVersions: "appVersions", // Handle different naming
 };
 
 function getNestedValue(obj: unknown, path: string): unknown {
