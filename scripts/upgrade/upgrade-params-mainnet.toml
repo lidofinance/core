@@ -37,7 +37,7 @@ UpdateVaultsFeesInOperatorGrid = "0x00000000000000000000000000000000000fac09"
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
-relativeShareLimitBP = 1000           # Relative share limit in basis points (10%)
+maxRelativeShareLimitBP = 1000           # 10%, Absolute Max possible shareLimit of a vault relative to Lido TVL (in basis points)
 
 # Lazy oracle configuration for delayed reward calculations - https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-32.md
 [lazyOracle]
@@ -55,10 +55,11 @@ changeSlot = 0                        # Slot number when the change takes effect
 # Operator grid configuration for managing staking operators
 [operatorGrid]
 # Default tier parameters for operator classification and fee structure
+# https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665#p-22926-rollout-plan-9
 [operatorGrid.defaultTierParams]
 shareLimitInEther = "0"               # Share limit per tier in ETH
 reserveRatioBP = 5000                 # Reserve ratio in basis points (50%)
-forcedRebalanceThresholdBP = 4950     # Threshold for forced rebalancing in basis points (49.50%)
+forcedRebalanceThresholdBP = 4975     # Threshold for forced rebalancing in basis points (49.75%)
 # https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504#p-22550-table-3-fees-9
 infraFeeBP = 100                      # Infrastructure fee in basis points (1%)
 liquidityFeeBP = 650                  # Liquidity provision fee in basis points (6.5%)
@@ -77,6 +78,7 @@ ao_consensus_version = 5              # Accounting Oracle consensus version: htt
 # The upgrade transaction must be executed before this deadline
 expiryTimestamp = 1764547200          # December 1, 2025 00:00:00 UTC
 # Initial maximum external ratio in basis points for Lido v3
+# https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665#p-22926-rollout-plan-9
 initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial phase
 
 # Sources (todo)

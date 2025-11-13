@@ -163,7 +163,7 @@ export async function main() {
     "VaultHub",
     proxyContractsOwner,
     deployer,
-    [locatorAddress, lidoAddress, hashConsensusAddress, vaultHubParams.relativeShareLimitBP],
+    [locatorAddress, lidoAddress, hashConsensusAddress, vaultHubParams.maxRelativeShareLimitBP],
     null, // implementation
     true, // withStateFile
     undefined, // signerOrOptions
