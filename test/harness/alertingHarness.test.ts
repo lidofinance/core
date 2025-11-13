@@ -79,6 +79,12 @@ describe("AlertingHarness.sol", () => {
     });
   });
 
+  describe("version", () => {
+    it("returns correct version", async () => {
+      expect(await alertingHarness.VERSION()).to.equal("1.0.0");
+    });
+  });
+
   describe("getVaultData", () => {
     it("returns correct vault data for a connected vault", async () => {
       const vault = await createMockStakingVaultAndConnect(user, operator);
@@ -92,6 +98,13 @@ describe("AlertingHarness.sol", () => {
       expect(vaultData.vaultRecord.report.totalValue).to.equal(ether("100"));
       expect(vaultData.vaultRecord.report.inOutDelta).to.equal(ether("1")); // connected vault has 1 ETH deposit
       expect(vaultData.vaultPendingActivationsCount).to.equal(0n);
+      expect(vaultData.stakingVaultData.stakingVaultNodeOperator).to.equal(await operator.getAddress());
+      expect(vaultData.stakingVaultData.stakingVaultDepositor).to.equal(await locator.predepositGuarantee());
+      expect(vaultData.stakingVaultData.stakingVaultOwner).to.equal(await locator.vaultHub());
+      expect(vaultData.stakingVaultData.stakingVaultPendingOwner).to.equal(ZeroAddress);
+      expect(vaultData.stakingVaultData.stakingVaultStagedBalance).to.equal(0n);
+      expect(vaultData.stakingVaultData.stakingVaultAvailableBalance).to.equal(ether("1"));
+      expect(vaultData.stakingVaultData.stakingVaultBeaconChainDepositsPaused).to.equal(false);
     });
   });
 
@@ -235,6 +248,29 @@ describe("AlertingHarness.sol", () => {
       expect(batch).to.have.length(1);
       expect(batch[0].vault).to.equal(await vault.getAddress());
       expect(batch[0].vaultPendingActivationsCount).to.equal(0n);
+    });
+  });
+
+  describe("batchStakingVaultData", () => {
+    it("returns empty array when no vaults exist", async () => {
+      const batch = await alertingHarness.batchStakingVaultData(0, 10);
+      expect(batch).to.have.length(0);
+    });
+
+    it("returns staking vault data for vaults", async () => {
+      const vault = await createMockStakingVaultAndConnect(user, operator);
+
+      const batch = await alertingHarness.batchStakingVaultData(0, 10);
+
+      expect(batch).to.have.length(1);
+      expect(batch[0].vault).to.equal(await vault.getAddress());
+      expect(batch[0].stakingVaultData.stakingVaultNodeOperator).to.equal(await operator.getAddress());
+      expect(batch[0].stakingVaultData.stakingVaultDepositor).to.equal(await locator.predepositGuarantee());
+      expect(batch[0].stakingVaultData.stakingVaultOwner).to.equal(await locator.vaultHub());
+      expect(batch[0].stakingVaultData.stakingVaultPendingOwner).to.equal(ZeroAddress);
+      expect(batch[0].stakingVaultData.stakingVaultStagedBalance).to.equal(0n);
+      expect(batch[0].stakingVaultData.stakingVaultAvailableBalance).to.equal(ether("1"));
+      expect(batch[0].stakingVaultData.stakingVaultBeaconChainDepositsPaused).to.equal(false);
     });
   });
 });

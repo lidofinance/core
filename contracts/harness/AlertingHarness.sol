@@ -18,6 +18,27 @@ contract AlertingHarness {
     /// @notice reference to the Lido locator contract used to resolve protocol contract addresses
     ILidoLocator public immutable LIDO_LOCATOR;
 
+    /// @notice version of the contract
+    string public constant VERSION = "1.0.0";
+
+    /// @notice structure containing relevant data for a single staking vault
+    /// @param stakingVault the address of the staking vault
+    /// @param stakingVaultNodeOperator the address of the node operator for the staking vault
+    /// @param stakingVaultDepositor the address of the depositor for the staking vault
+    /// @param stakingVaultOwner the address of the owner for the staking vault
+    /// @param stakingVaultPendingOwner the address of the pending owner for the staking vault
+    /// @param stakingVaultStagedBalance the staged balance of the staking vault
+    /// @param stakingVaultAvailableBalance the available balance of the staking vault
+    struct StakingVaultData {
+        address stakingVaultNodeOperator;
+        address stakingVaultDepositor;
+        address stakingVaultOwner;
+        address stakingVaultPendingOwner;
+        uint256 stakingVaultStagedBalance;
+        uint256 stakingVaultAvailableBalance;
+        bool stakingVaultBeaconChainDepositsPaused;
+    }
+
     /// @notice structure containing relevant data for a single connected vault
     /// @param vault The address of the vault
     /// @param vaultConnection The current connection parameters for the vault (such as limits and owner info)
@@ -30,6 +51,7 @@ contract AlertingHarness {
         VaultHub.VaultRecord vaultRecord;
         LazyOracle.QuarantineInfo vaultQuarantineInfo;
         uint256 vaultPendingActivationsCount;
+        StakingVaultData stakingVaultData;
     }
 
     struct VaultConnectionData {
@@ -52,6 +74,11 @@ contract AlertingHarness {
         uint256 vaultPendingActivationsCount;
     }
 
+    struct VaultStakingVaultData {
+        address vault;
+        StakingVaultData stakingVaultData;
+    }
+
     error ZeroAddress(string _argument);
 
     /// @notice initializes the AlertingHarness and stores the locator contract address
@@ -67,9 +94,9 @@ contract AlertingHarness {
     /// @return vault data for the queried vault
     function getVaultData(address _vault) external view returns (VaultData memory) {
         return _collectVaultData(
-            _vault, 
-            _vaultHub(), 
-            _lazyOracle(), 
+            _vault,
+            _vaultHub(),
+            _lazyOracle(),
             _predepositGuarantee()
         );
     }
@@ -186,6 +213,26 @@ contract AlertingHarness {
         }
     }
 
+    /// @notice retrieves batch of StakingVaultData structs in a single call
+    /// @param _offset the starting vault index in the hub [0, vaultsCount)
+    /// @param _limit maximum number of items to return in the batch
+    /// @return batch of StakingVaultData structs for the requested vaults
+    function batchStakingVaultData(
+        uint256 _offset,
+        uint256 _limit
+    ) external view returns (VaultStakingVaultData[] memory batch) {
+        (VaultHub vaultHub, uint256 batchSize) = _getBatchSize(_offset, _limit);
+        if (batchSize == 0) return new VaultStakingVaultData[](0);
+
+        batch = new VaultStakingVaultData[](batchSize);
+        for (uint256 i = 0; i < batchSize; ++i) {
+            address vault = vaultHub.vaultByIndex(_offset + i + 1);
+            batch[i] = VaultStakingVaultData({
+                vault: vault,
+                stakingVaultData: _collectStakingVaultData(IStakingVault(vault))
+            });
+        }
+    }
     /// @notice helper to calculate actual batch size based on vault hub
     /// @param _offset the starting vault index in the hub [0, vaultsCount)
     /// @param _limit requested batch size
@@ -197,7 +244,7 @@ contract AlertingHarness {
     ) private view returns (VaultHub vaultHub, uint256 batchSize) {
         vaultHub = _vaultHub();
         uint256 vaultsCount = vaultHub.vaultsCount();
-        
+
         if (_offset > vaultsCount) return (vaultHub, 0);
 
         batchSize = _offset + _limit > vaultsCount ? vaultsCount - _offset : _limit;
@@ -215,12 +262,29 @@ contract AlertingHarness {
         LazyOracle lazyOracle,
         PredepositGuarantee predepositGuarantee
     ) internal view returns (VaultData memory) {
+        IStakingVault stakingVault = IStakingVault(_vault);
         return VaultData({
             vault: _vault,
             vaultConnection: vaultHub.vaultConnection(_vault),
             vaultRecord: vaultHub.vaultRecord(_vault),
             vaultQuarantineInfo: lazyOracle.vaultQuarantine(_vault),
-            vaultPendingActivationsCount: predepositGuarantee.pendingActivations(IStakingVault(_vault))
+            vaultPendingActivationsCount: predepositGuarantee.pendingActivations(stakingVault),
+            stakingVaultData: _collectStakingVaultData(stakingVault)
+        });
+    }
+
+    /// @notice helper to collect staking vault data from a single staking vault
+    /// @param _stakingVault the staking vault to collect data from
+    /// @return populated stakingVaultData structure
+    function _collectStakingVaultData(IStakingVault _stakingVault) internal view returns (StakingVaultData memory) {
+        return StakingVaultData({
+            stakingVaultNodeOperator: _stakingVault.nodeOperator(),
+            stakingVaultDepositor: _stakingVault.depositor(),
+            stakingVaultOwner: _stakingVault.owner(),
+            stakingVaultPendingOwner: _stakingVault.pendingOwner(),
+            stakingVaultStagedBalance: _stakingVault.stagedBalance(),
+            stakingVaultAvailableBalance: _stakingVault.availableBalance(),
+            stakingVaultBeaconChainDepositsPaused: _stakingVault.beaconChainDepositsPaused()
         });
     }
 
