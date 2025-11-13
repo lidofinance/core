@@ -8,11 +8,6 @@ interface IStakingRouter {
         uint256 _stakingModuleId,
         uint256 _depositableEth
     ) external view returns (uint256, uint256);
-
-    function mock_storeTemp(uint256[] calldata operators, uint256[] calldata counts) external;
-
-    /// @notice FOR TEST: clear temp
-    function mock_clearTemp() external;
 }
 
 /// @notice Test-only wrapper that must be set as the authorized Lido caller in the router.
@@ -30,8 +25,6 @@ contract DepositCallerWrapper__MockForStakingRouter {
         uint256[] calldata operators,
         uint256[] calldata counts
     ) external payable {
-        stakingRouter.mock_storeTemp(operators, counts);
-
         stakingRouter.deposit{value: msg.value}(stakingModuleId, bytes(""));
     }
 }

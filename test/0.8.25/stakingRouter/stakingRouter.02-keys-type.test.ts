@@ -12,7 +12,7 @@ import {
   StakingRouter__Harness,
 } from "typechain-types";
 
-import { ether, StakingModuleType } from "lib";
+import { ether, StakingModuleType, WithdrawalCredentialsType } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -77,6 +77,7 @@ describe("StakingRouter.sol:keys-02-type", () => {
       maxDepositsPerBlock,
       minDepositBlockDistance,
       moduleType: StakingModuleType.New,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
     };
 
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
@@ -121,11 +122,6 @@ describe("StakingRouter.sol:keys-02-type", () => {
 
   context("getStakingModuleMaxInitialDepositsAmount", () => {
     it("correctly returns max initial deposits amount", async () => {
-      // mock allocation that will return staking module of second type
-      // 2 keys + 2 keys + 0 + 1
-      const opIds = [1, 2, 3, 4];
-      const opAllocs = [ether("4096"), ether("4000"), ether("31"), ether("32")];
-      await stakingModuleV2.mock_getAllocation(opIds, opAllocs);
       await stakingModuleV2.mock__getStakingModuleSummary(moduleId, 0n, 100n);
 
       const depositableEth = ether("10242");

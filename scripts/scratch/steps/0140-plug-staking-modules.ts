@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { StakingModuleType } from "lib";
+import { StakingModuleType, WITHDRAWAL_CREDENTIALS_TYPE_01 } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { streccak } from "lib/keccak";
@@ -49,6 +49,7 @@ export async function main() {
         maxDepositsPerBlock: NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
         minDepositBlockDistance: NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
         moduleType: NOR_MODULE_TYPE,
+        withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
       },
     ],
     { from: deployer },
@@ -69,6 +70,7 @@ export async function main() {
         maxDepositsPerBlock: SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
         minDepositBlockDistance: SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
         moduleType: SDVT_MODULE_TYPE,
+        withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
       },
     ],
     { from: deployer },

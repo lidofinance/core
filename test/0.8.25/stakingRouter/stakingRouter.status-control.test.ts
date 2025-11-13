@@ -7,7 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, StakingModuleType } from "lib";
+import { certainAddress, StakingModuleType, WITHDRAWAL_CREDENTIALS_TYPE_01 } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -55,6 +55,7 @@ context("StakingRouter.sol:status-control", () => {
       maxDepositsPerBlock: 150,
       minDepositBlockDistance: 25,
       moduleType: StakingModuleType.Legacy,
+      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
     };
 
     // add staking module

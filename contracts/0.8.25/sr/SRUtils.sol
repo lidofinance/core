@@ -30,6 +30,7 @@ library SRUtils {
     error StakingModuleWrongName();
     error StakingModuleUnregistered();
     error InvalidStakingModuleType();
+    error InvalidWithdrawalCredentialsType();
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
@@ -83,6 +84,13 @@ library SRUtils {
         }
     }
 
+    function _validateWithdrawalCredentialsType(uint256 v) internal pure{
+        // allow exactly 1 or 2 (0x01 / 0x02)
+        if (v != WC_TYPE_01 && v != WC_TYPE_02) {
+          revert InvalidWithdrawalCredentialsType();
+        }
+    }
+
     function _validateModulesCount() internal view {
         if (SRStorage.getModulesCount() >= MAX_STAKING_MODULES_COUNT) {
             revert StakingModulesLimitExceeded();
@@ -95,24 +103,10 @@ library SRUtils {
         }
     }
 
-    function _getModuleWCType(StakingModuleType moduleType) internal pure returns (uint8) {
-        if (moduleType == StakingModuleType.Legacy) {
-            return WC_TYPE_01;
-        } else if (moduleType == StakingModuleType.New) {
-            return WC_TYPE_02;
-        } else {
-            revert InvalidStakingModuleType();
-        }
-    }
-
-    function _getModuleMEB(StakingModuleType moduleType) internal pure returns (uint256) {
-        if (moduleType == StakingModuleType.Legacy) {
-            return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
-        } else if (moduleType == StakingModuleType.New) {
-            return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
-        } else {
-            revert InvalidStakingModuleType();
-        }
+    function _getModuleMEB(uint8 wcType) internal pure returns (uint256) {
+      if (wcType == WC_TYPE_01) return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+      if (wcType == WC_TYPE_02) return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
+      revert InvalidWithdrawalCredentialsType();
     }
 
     function _toE4Precision(uint256 _value, uint256 _precision) internal pure returns (uint16) {
@@ -157,12 +151,12 @@ library SRUtils {
     }
 
     ///  @dev calculate module capacity in ETH
-    function _getModuleCapacity(StakingModuleType moduleType, uint256 availableKeysCount)
+    function _getModuleCapacity(uint8 wcType, uint256 availableKeysCount)
         internal
         pure
         returns (uint256)
     {
-        return availableKeysCount * _getModuleMEB(moduleType);
+        return availableKeysCount * _getModuleMEB(wcType);
     }
 
     function _toGwei(uint256 amount) internal pure returns (uint96) {

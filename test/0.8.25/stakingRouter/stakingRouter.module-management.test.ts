@@ -71,8 +71,8 @@ describe("StakingRouter.sol:module-management", () => {
       ///      Value must be > 0 and ≤ type(uint64).max.
       minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
       /// @notice The type of withdrawal credentials for creation of validators.
-      /// @dev 1 = 0x01 withdrawals, 2 = 0x02 withdrawals.
       moduleType: StakingModuleType.Legacy,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
     };
 
     it("Reverts if the caller does not have the role", async () => {
@@ -146,6 +146,7 @@ describe("StakingRouter.sol:module-management", () => {
         maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
         minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
         moduleType: StakingModuleType.Legacy,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
       };
 
       for (let i = 0; i < MAX_STAKING_MODULES_COUNT; i++) {
@@ -236,6 +237,7 @@ describe("StakingRouter.sol:module-management", () => {
       maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
       minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
       moduleType: StakingModuleType.Legacy,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
     };
 
     beforeEach(async () => {
