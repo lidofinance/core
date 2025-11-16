@@ -4,7 +4,6 @@
 pragma solidity 0.8.25;
 
 import {StakingRouter} from "contracts/0.8.25/sr/StakingRouter.sol";
-import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
 import {SRLib} from "contracts/0.8.25/sr/SRLib.sol";
 import {SRStorage} from "contracts/0.8.25/sr/SRStorage.sol";
 import {StakingModuleStatus, ModuleStateAccounting} from "contracts/0.8.25/sr/SRTypes.sol";
@@ -33,16 +32,6 @@ contract StakingRouter__Harness is StakingRouter {
         uint64 _genesisTime
     ) StakingRouter(_depositContract, _secondsPerSlot, _genesisTime) {}
 
-    /// @notice FOR TEST: write operators & counts into the router's transient storage.
-    function mock_storeTemp(uint256[] calldata operators, uint256[] calldata counts) external {
-        DepositsTempStorage.storeOperatorCounts(operators, counts);
-    }
-
-    /// @notice FOR TEST: clear temp
-    function mock_clearTemp() external {
-        DepositsTempStorage.clearOperatorCounts();
-    }
-
     /// @notice method for testing migrateUpgrade_v4
     /// as version in new version will be stored in another slot, no need to set here old version
     /// will check migration of lido contract address and WC_01
@@ -51,8 +40,6 @@ contract StakingRouter__Harness is StakingRouter {
         WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value = WC_01_MOCK;
         LIDO_POSITION.getAddressSlot().value = LIDO_ADDRESS_MOCK;
         LAST_STAKING_MODULE_ID_POSITION.getUint256Slot().value = LAST_STAKING_MODULE_ID_MOCK;
-
-        // TODO: check that we use last
     }
 
     function testing_getLastModuleId() public view returns (uint256) {

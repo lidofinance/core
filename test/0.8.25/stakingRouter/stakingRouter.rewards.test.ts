@@ -7,7 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { StakingModule__MockForStakingRouter, StakingRouter__Harness } from "typechain-types";
 
 import { certainAddress, ether } from "lib";
-import { getModuleMEB, StakingModuleStatus, StakingModuleType, TOTAL_BASIS_POINTS } from "lib/constants";
+import { getModuleMEB, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
 
 import { Snapshot } from "test/suite";
 
@@ -29,9 +29,9 @@ describe("StakingRouter.sol:rewards", () => {
     treasuryFee: 5_00n,
     maxDepositsPerBlock: 150n,
     minDepositBlockDistance: 25n,
-    moduleType: StakingModuleType.Legacy,
+    withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
   };
-  const DEFAULT_MEB = getModuleMEB(DEFAULT_CONFIG.moduleType);
+  const DEFAULT_MEB = getModuleMEB(DEFAULT_CONFIG.withdrawalCredentialsType);
 
   const withdrawalCredentials = hexlify(randomBytes(32));
 
@@ -79,7 +79,23 @@ describe("StakingRouter.sol:rewards", () => {
       );
     });
 
-    it("Returns the maximum allocation to a single module based on the value and module capacity", async () => {
+    it("Returns the maximum allocation to a single module based on the value and module capacity for new module", async () => {
+      const maxDeposits = 150n;
+
+      const config = {
+        ...DEFAULT_CONFIG,
+        depositable: 100n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      };
+
+      const [, id] = await setupModule(config);
+
+      expect(await stakingRouter.getStakingModuleMaxDepositsCount(id, maxDeposits * DEPOSIT_VALUE)).to.equal(
+        config.depositable,
+      );
+    });
+
+    it("Returns the maximum allocation based on the value and module capacity if one module on pause", async () => {
       const depositableEther = ether("32") * 100n + 10n;
 
       const config = {
@@ -508,7 +524,7 @@ describe("StakingRouter.sol:rewards", () => {
     deposited = 0n,
     depositable = 0n,
     status = StakingModuleStatus.Active,
-    moduleType = StakingModuleType.Legacy,
+    withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
     effBalanceGwei = 0n,
   }: ModuleConfig): Promise<[StakingModule__MockForStakingRouter, bigint]> {
     const modulesCount = await stakingRouter.getStakingModulesCount();
@@ -521,7 +537,7 @@ describe("StakingRouter.sol:rewards", () => {
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-      moduleType,
+      withdrawalCredentialsType,
     };
 
     await stakingRouter
@@ -533,7 +549,8 @@ describe("StakingRouter.sol:rewards", () => {
 
     await module.mock__getStakingModuleSummary(exited, deposited, depositable);
     if (effBalanceGwei == 0n && deposited > 0n) {
-      effBalanceGwei = (deposited * getModuleMEB(moduleType)) / 1_000_000_000n; // in gwei
+      effBalanceGwei =
+        (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
     }
     await stakingRouter.testing_setStakingModuleAccounting(moduleId, effBalanceGwei, effBalanceGwei, exited);
 
@@ -552,7 +569,7 @@ interface ModuleConfig {
   treasuryFee: bigint;
   maxDepositsPerBlock: bigint;
   minDepositBlockDistance: bigint;
-  moduleType: StakingModuleType;
+  withdrawalCredentialsType: WithdrawalCredentialsType;
   exited?: bigint;
   deposited?: bigint;
   depositable?: bigint;

@@ -33,7 +33,7 @@ library DepositsTracker {
     error SlotOutOfOrder();
     error SlotTooLarge(uint256 slot);
     error DepositAmountTooLarge(uint256 depositAmount);
-    error ZeroValue(string depositAmount);
+    error ZeroDepositAmount();
     error SlotOutOfRange();
 
     /// @notice Add new deposit information in deposit state
@@ -44,7 +44,7 @@ library DepositsTracker {
     function insertSlotDeposit(DepositedState storage state, uint256 currentSlot, uint256 depositAmount) internal {
         if (currentSlot > type(uint64).max) revert SlotTooLarge(currentSlot);
         if (depositAmount > type(uint128).max) revert DepositAmountTooLarge(depositAmount);
-        if (depositAmount == 0) revert ZeroValue("depositAmount");
+        if (depositAmount == 0) revert ZeroDepositAmount();
 
         // DepositedEthState storage state = _getDataStorage(_depositedEthStatePosition);
 
@@ -99,6 +99,7 @@ library DepositsTracker {
         // TODO: maybe error should be LessThanCursorValue or smth
         if (startDepositSlot > _slot) revert SlotOutOfRange();
 
+        // TODO: think about improvement
         uint256 endIndex = type(uint256).max;
         for (uint256 i = startIndex; i < depositsEntryAmount;) {
             // SlotDeposit memory d = state.slotsDeposits[i].unpack();
@@ -106,9 +107,7 @@ library DepositsTracker {
             if (slot > _slot) break;
 
             endIndex = i;
-            unchecked {
-                ++i;
-            }
+            ++i;
         }
         (,uint192 endCumulativeEth) = state.slotsDeposits[endIndex].unpack();
 
@@ -187,25 +186,7 @@ library DepositsTracker {
                 state.cursor = i;
                 break;
             }
-
-            unchecked {
-                ++i;
-            }
+            ++i;
         }
     }
-
-    // function moveCursorToLastSlot(DepositedState storage state) public {
-    //     // DepositedEthState storage state = _getDataStorage(_depositedEthStatePosition);
-    //     uint256 depositsEntryAmount = state.slotsDeposits.length;
-    //     // here cursor will have default value
-    //     if (depositsEntryAmount == 0) return;
-    //     // everything was read
-    //     state.cursor = depositsEntryAmount;
-    // }
-
-    // function _getDataStorage(bytes32 _position) private pure returns (DepositedEthState storage $) {
-    //     assembly {
-    //         $.slot := _position
-    //     }
-    // }
 }

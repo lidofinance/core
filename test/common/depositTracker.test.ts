@@ -55,7 +55,7 @@ describe("DepositsTracker.sol", () => {
       it("reverts on zero amount", async () => {
         await expect(depositTracker.insertSlotDeposit(1, 0)).to.be.revertedWithCustomError(
           depositTrackerLib,
-          "ZeroValue",
+          "ZeroDepositAmount",
         );
       });
 

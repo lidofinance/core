@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, randomString, StakingModuleType } from "lib";
+import { certainAddress, ether, randomString, WithdrawalCredentialsType } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -74,10 +74,8 @@ describe("StakingRouter.sol:exit", () => {
       /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
       ///      Value must be > 0 and ≤ type(uint64).max.
       minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
-      /// @notice The type of module (Legacy/Standard), defines the module interface and withdrawal credentials type.
-      /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
-      /// @dev See {StakingModuleType} enum.
-      moduleType: StakingModuleType.Legacy,
+      /// @notice Withdrawal credential type used by the module.
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
     };
 
     // Add staking module

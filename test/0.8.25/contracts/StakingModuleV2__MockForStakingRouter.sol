@@ -4,7 +4,7 @@
 pragma solidity 0.8.25;
 
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
-import {IStakingModuleV2, KeyData} from "contracts/common/interfaces/IStakingModuleV2.sol";
+import {IStakingModuleV2 } from "contracts/common/interfaces/IStakingModuleV2.sol";
 
 contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModuleV2 {
     event Mock__TargetValidatorsLimitsUpdated(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit);
@@ -25,65 +25,6 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
         uint256 withdrawalRequestPaidFee,
         uint256 exitType
     );
-
-    // allocation by operators
-
-    uint256[] private modulesOperators__mocked;
-    uint256[] private modulesAllocations__mocked;
-
-    function mock_getAllocation(uint256[] memory operators, uint256[] memory allocations) external {
-        modulesOperators__mocked = operators;
-        modulesAllocations__mocked = allocations;
-    }
-
-    function getAllocation(
-        uint256 target
-    ) external view returns (uint256[] memory operators, uint256[] memory allocations) {
-        operators = modulesOperators__mocked;
-        allocations = modulesAllocations__mocked;
-    }
-
-    // data by keys for specific operators
-
-    function getOperatorAvailableKeys(
-        uint256[] memory operators,
-        uint256[] memory counts
-    ) external view returns (bytes memory publicKeys, bytes memory signatures) {
-        uint256 count;
-
-        for (uint256 i; i < counts.length; i++) {
-            count += counts[i];
-        }
-
-        publicKeys = new bytes(48 * count);
-        signatures = new bytes(96 * count);
-    }
-
-    bool private verifyKeys__mocked;
-
-    function mock_verifyKeys(bool value) external {
-        verifyKeys__mocked = value;
-    }
-
-    function verifyKeys(KeyData[] calldata data) external view returns (bool) {
-        return verifyKeys__mocked;
-    }
-
-    uint256[] private allocations__mocked;
-
-    function mock_getAllocationTopUp(uint256[] memory allocations) external {
-        allocations__mocked = allocations;
-    }
-
-    function getAllocation(
-        uint256 depositAmount,
-        uint256[] memory operators,
-        uint256[] memory topUpLimits
-    ) external view returns (uint256[] memory allocations) {
-        return allocations__mocked;
-    }
-
-    function onDeposit(uint256 operatorId, uint256 amount) external {}
 
     function getType() external view returns (bytes32) {
         return keccak256(abi.encodePacked("staking.module"));
@@ -271,6 +212,81 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
     ) external returns (bytes memory publicKeys, bytes memory signatures) {
         publicKeys = new bytes(48 * _depositsCount);
         signatures = new bytes(96 * _depositsCount);
+    }
+
+    // --- Top-up mock data ---
+
+    bytes[] private topUpPubkeys__mocked;
+    uint256[] private topUpAmounts__mocked;
+    bool private useCustomTopUpData__mocked;
+
+    function mock__setTopUpDepositData(bytes[] calldata pubkeys, uint256[] calldata amounts) external {
+        require(pubkeys.length == amounts.length, "mock: topup len mismatch");
+
+        delete topUpPubkeys__mocked;
+        delete topUpAmounts__mocked;
+
+        for (uint256 i = 0; i < pubkeys.length; ++i) {
+            topUpPubkeys__mocked.push(pubkeys[i]);
+            topUpAmounts__mocked.push(amounts[i]);
+        }
+
+        useCustomTopUpData__mocked = true;
+    }
+
+    function mock__clearTopUpDepositData() external {
+        delete topUpPubkeys__mocked;
+        delete topUpAmounts__mocked;
+        useCustomTopUpData__mocked = false;
+    }
+
+
+    // *** TOP-UP (used by topUp()) ***
+    function obtainDepositData(
+        uint256 _depositsValue,
+        bytes calldata _packedPubkeys,
+        uint256[] calldata _keyIndices,
+        uint256[] calldata _operatorIds,
+        uint256[] calldata _topUpLimitsGwei
+    ) external returns (bytes[] memory pubkeys, uint256[] memory topUpAmounts) {
+        if (useCustomTopUpData__mocked) {
+            uint256 len = topUpPubkeys__mocked.length;
+            pubkeys = new bytes[](len);
+            topUpAmounts = new uint256[](len);
+
+            for (uint256 i = 0; i < len; ++i) {
+                pubkeys[i] = topUpPubkeys__mocked[i];
+                topUpAmounts[i] = topUpAmounts__mocked[i];
+            }
+
+            return (pubkeys, topUpAmounts);
+        }
+        
+        uint256 keysCount = _keyIndices.length;
+        require(
+            keysCount > 0 &&
+                keysCount == _operatorIds.length &&
+                keysCount == _topUpLimitsGwei.length,
+            "mock: invalid top up inputs"
+        );
+
+        uint256 expectedPackedLen = keysCount * 48;
+        require(_packedPubkeys.length == expectedPackedLen, "mock: invalid packed pubkeys length");
+
+        pubkeys = new bytes[](keysCount);
+        topUpAmounts = new uint256[](keysCount);
+
+        for (uint256 i = 0; i < keysCount; ++i) {
+            bytes memory pk = new bytes(48);
+            uint256 offset = i * 48;
+
+            for (uint256 j = 0; j < 48; ++j) {
+                pk[j] = _packedPubkeys[offset + j];
+            }
+
+            pubkeys[i] = pk;
+            topUpAmounts[i] = _topUpLimitsGwei[i];
+        }
     }
 
     event Mock__onExitedAndStuckValidatorsCountsUpdated();

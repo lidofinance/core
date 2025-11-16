@@ -20,17 +20,9 @@ interface IDepositContract {
 library BeaconChainDepositor {
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant SIGNATURE_LENGTH = 96;
-    // uint256 internal constant DEPOSIT_SIZE = 32 ether;
-    // uint256 internal constant DEPOSIT_SIZE_02 = 2048 ether;
 
-    /// @dev deposit amount 32eth in gweis converted to little endian uint64
-    /// DEPOSIT_SIZE_IN_GWEI_LE64 = toLittleEndian64(32 ether / 1 gwei)
-    uint64 internal constant DEPOSIT_SIZE_IN_GWEI_LE64 = 0x0040597307000000;
-
-    // constructor(address _depositContract) {
-    //     if (_depositContract == address(0)) revert DepositContractZeroAddress();
-    //     DEPOSIT_CONTRACT = IDepositContract(_depositContract);
-    // }
+    uint256 internal constant DEPOSIT_SIZE = 32 ether;
+    uint64 internal constant DEPOSIT_SIZE_IN_GWEI = 32 ether / 1 gwei;
 
     /// @dev Invokes a deposit call to the official Beacon Deposit contract
     /// @param _depositContract - IDepositContract deposit contract
@@ -39,10 +31,8 @@ library BeaconChainDepositor {
     /// @param _publicKeysBatch A BLS12-381 public keys batch
     /// @param _signaturesBatch A BLS12-381 signatures batch
     function makeBeaconChainDeposits32ETH(
-        // TODO: remove 32 from name
         IDepositContract _depositContract,
         uint256 _keysCount,
-        uint256 depositSize,
         bytes memory _withdrawalCredentials,
         bytes memory _publicKeysBatch,
         bytes memory _signaturesBatch
@@ -61,11 +51,11 @@ library BeaconChainDepositor {
             MemUtils.copyBytes(_publicKeysBatch, publicKey, i * PUBLIC_KEY_LENGTH, 0, PUBLIC_KEY_LENGTH);
             MemUtils.copyBytes(_signaturesBatch, signature, i * SIGNATURE_LENGTH, 0, SIGNATURE_LENGTH);
 
-            _depositContract.deposit{value: depositSize}(
+            _depositContract.deposit{value:  DEPOSIT_SIZE}(
                 publicKey,
                 _withdrawalCredentials,
                 signature,
-                _computeDepositDataRoot(_withdrawalCredentials, publicKey, signature)
+                _computeDepositDataRootWithAmount(_withdrawalCredentials, publicKey, signature, DEPOSIT_SIZE_IN_GWEI)
             );
 
             unchecked {
@@ -74,35 +64,102 @@ library BeaconChainDepositor {
         }
     }
 
-    /// @dev computes the deposit_root_hash required by official Beacon Deposit contract
-    /// @param _publicKey A BLS12-381 public key.
-    /// @param _signature A BLS12-381 signature
-    function _computeDepositDataRoot(
+    function makeBeaconChainTopUp(
+        IDepositContract _depositContract,
+        bytes memory _withdrawalCredentials,
+        bytes[] memory _publicKeys,
+        uint256[] memory _amountGwei
+    ) external {
+        uint256 len = _publicKeys.length;
+        if (len == 0) return;
+        if (len != _amountGwei.length) revert ArrayLengthMismatch();
+
+        bytes memory dummySignature = new bytes(SIGNATURE_LENGTH);
+
+        for (uint256 i; i < len; ) {
+            bytes memory pk = _publicKeys[i];
+
+            // TODO: maybe we should trust parameters passed to this method
+            if (pk.length != PUBLIC_KEY_LENGTH) {
+                revert InvalidPublicKeysBatchLength(pk.length, PUBLIC_KEY_LENGTH);
+            }
+
+            uint256 amountGwei256 = _amountGwei[i];
+            if (amountGwei256 > type(uint64).max) {
+                revert AmountTooLarge();
+            }
+
+            uint64 amountGwei64 = uint64(amountGwei256);
+            uint256 amountWei = uint256(amountGwei64) * 1 gwei;
+
+            // full DepositData root with custom amount
+            bytes32 depositDataRoot =  _computeDepositDataRootWithAmount(
+                _withdrawalCredentials,
+                pk,
+                dummySignature,
+                amountGwei64
+            );
+
+            _depositContract.deposit{value: amountWei}(
+                pk,
+                _withdrawalCredentials,
+                dummySignature,
+                depositDataRoot
+            );
+
+            unchecked {
+                ++i;
+            }
+        }
+
+    }
+
+    function _computeDepositDataRootWithAmount(
         bytes memory _withdrawalCredentials,
         bytes memory _publicKey,
+        bytes memory _signature,
+        uint64 _amountGwei
+    ) private pure returns (bytes32) {
+        bytes32 publicKeyRoot = sha256(abi.encodePacked(_publicKey, bytes16(0)));
+        bytes32 signatureRoot = _computeSignatureRoot(_signature);
+        bytes8 amountLE = _toLittleEndian64(_amountGwei);
+
+        return sha256(
+            abi.encodePacked(
+                sha256(abi.encodePacked(publicKeyRoot, _withdrawalCredentials)),
+                sha256(abi.encodePacked(amountLE, bytes24(0), signatureRoot))
+            )
+        );
+    }
+
+    function _computeSignatureRoot(
         bytes memory _signature
     ) private pure returns (bytes32) {
-        // Compute deposit data root (`DepositData` hash tree root) according to deposit_contract.sol
         bytes memory sigPart1 = MemUtils.unsafeAllocateBytes(64);
         bytes memory sigPart2 = MemUtils.unsafeAllocateBytes(SIGNATURE_LENGTH - 64);
+
         MemUtils.copyBytes(_signature, sigPart1, 0, 0, 64);
         MemUtils.copyBytes(_signature, sigPart2, 64, 0, SIGNATURE_LENGTH - 64);
 
-        bytes32 publicKeyRoot = sha256(abi.encodePacked(_publicKey, bytes16(0)));
-        bytes32 signatureRoot = sha256(
-            abi.encodePacked(sha256(abi.encodePacked(sigPart1)), sha256(abi.encodePacked(sigPart2, bytes32(0))))
+        return sha256(
+            abi.encodePacked(
+                sha256(abi.encodePacked(sigPart1)),
+                sha256(abi.encodePacked(sigPart2, bytes32(0)))
+            )
         );
+    }
 
-        return
-            sha256(
-                abi.encodePacked(
-                    sha256(abi.encodePacked(publicKeyRoot, _withdrawalCredentials)),
-                    sha256(abi.encodePacked(DEPOSIT_SIZE_IN_GWEI_LE64, bytes24(0), signatureRoot))
-                )
-            );
+    function _toLittleEndian64(uint64 value) private pure returns (bytes8 ret) { 
+        // 8 байт LE, как в deposit_contract.sol
+        ret = bytes8(0);
+        for (uint256 i = 0; i < 8; ++i) {
+            ret |= bytes8(bytes1(uint8(value >> (8 * i)))) >> (8 * i); 
+        }
     }
 
     // error DepositContractZeroAddress();
     error InvalidPublicKeysBatchLength(uint256 actual, uint256 expected);
     error InvalidSignaturesBatchLength(uint256 actual, uint256 expected);
+    error ArrayLengthMismatch();
+    error AmountTooLarge();
 }
