@@ -454,11 +454,15 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
         }
 
-        address vaultOwner = vaultHub.vaultConnection(_vault).owner;
+        uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
+        if (_requestedShareLimit < vaultLiabilityShares) {
+            revert RequestedShareLimitTooLow(_requestedShareLimit, vaultLiabilityShares);
+        }
+
+        address vaultOwner = vaultHub.vaultConnection(_vault).owner;
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
-        uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
         // check if tier limit is exceeded
         if (requestedTier.liabilityShares + vaultLiabilityShares > requestedTier.shareLimit) revert TierLimitExceeded();
@@ -886,6 +890,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error ReservationFeeTooHigh(uint256 tierId, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
     error ArrayLengthMismatch();
     error RequestedShareLimitTooHigh(uint256 requestedShareLimit, uint256 tierShareLimit);
+    error RequestedShareLimitTooLow(uint256 requestedSHareLimit, uint256 vaultShares);
     error VaultNotConnected();
     error VaultAlreadySyncedWithTier();
     error ShareLimitAlreadySet();
