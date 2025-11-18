@@ -2396,6 +2396,17 @@ describe("OperatorGrid.sol", () => {
       ).to.be.revertedWithCustomError(operatorGrid, "ShareLimitAlreadySet");
     });
 
+    it("reverts when requested share limit is less than current liability shares", async () => {
+      const connection = createVaultConnection(vaultOwner.address, 1000n);
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, connection);
+      const cleanRecord = { ...record, liabilityShares: 600n };
+      await vaultHub.mock__setVaultRecord(vault_NO1_V1, cleanRecord);
+
+      await expect(
+        operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, 400),
+      ).to.be.revertedWithCustomError(operatorGrid, "RequestedShareLimitTooLow");
+    });
+
     it("requires confirmation from both vault owner and node operator for increasing share limit", async () => {
       // First, move vault to tier 1
       const connection = createVaultConnection(vaultOwner.address, 500n);

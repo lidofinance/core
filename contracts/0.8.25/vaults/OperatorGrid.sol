@@ -552,6 +552,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_requestedShareLimit > tierShareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, tierShareLimit);
         if (_requestedShareLimit == vaultConnection.shareLimit) revert ShareLimitAlreadySet();
 
+        uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
+
+        if (_requestedShareLimit < vaultLiabilityShares) {
+            revert RequestedShareLimitTooLow(_requestedShareLimit, vaultLiabilityShares);
+        }
+
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
 
