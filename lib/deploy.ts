@@ -12,6 +12,7 @@ import { keysOf } from "./protocol/types";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
 const GAS_MAX_FEE = process.env.GAS_MAX_FEE || null;
+const GAS_LIMIT = process.env.GAS_LIMIT || null;
 
 const PROXY_CONTRACT_NAME = "OssifiableProxy";
 
@@ -57,6 +58,7 @@ async function getDeployTxParams(deployer: string) {
       type: 2,
       maxPriorityFeePerGas: ethers.parseUnits(String(GAS_PRIORITY_FEE), "gwei"),
       maxFeePerGas: ethers.parseUnits(String(GAS_MAX_FEE), "gwei"),
+      gasLimit: GAS_LIMIT,
     };
   } else {
     throw new Error('Must specify gas ENV vars: "GAS_PRIORITY_FEE" and "GAS_MAX_FEE" in gwei (like just "3")');
