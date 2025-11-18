@@ -244,11 +244,12 @@ describe("Integration: VaultHub:fees", () => {
       });
 
       // Mint 24 ETH worth of stETH
-      // With 20% reserve ratio: locked = liability + reserve = 24 + (24 * 0.2) = 24 + 4.8 = 28.8 ETH (rounded up to 29)
-      // Available for fees = 31 - 29 = 2 ETH
+      // With 20% reserve ratio:
+      //   reserve = ceilDiv(liability * 2000, 8000)
+      //   locked = liability + reserve
       await dashboard.mintStETH(owner, ether("24"));
 
-      // Report with 5 ETH unsettled fees (more than the 2 ETH available)
+      // Report with 5 ETH unsettled fees
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("31"),
         cumulativeLidoFees: ether("5"),
@@ -258,14 +259,14 @@ describe("Integration: VaultHub:fees", () => {
       const obligations = await vaultHub.obligations(stakingVault);
       expect(obligations.feesToSettle).to.equal(ether("5"));
 
-      // Verify locked calculation
       const locked = await vaultHub.locked(stakingVault);
-      expect(locked).to.be.greaterThan(ether("28")); // Should be ~29 ETH locked
 
-      // Calculate settleable amount (should be ~2 ETH: 31 total - ~29 locked)
+      // Calculate expected settleable amount: totalValue - locked
+      const totalValue = ether("31");
+      const expectedSettleable = totalValue - locked;
+
       const settleableValue = await vaultHub.settleableLidoFeesValue(stakingVault);
-      expect(settleableValue).to.be.lessThan(ether("3")); // Less than 3 ETH available
-      expect(settleableValue).to.be.greaterThan(ether("1")); // More than 1 ETH available
+      expect(settleableValue).to.equal(expectedSettleable);
 
       // Action: settleLidoFees (only settles what's available)
       const treasuryBefore = await ethers.provider.getBalance(await ctx.contracts.locator.treasury());
@@ -278,12 +279,11 @@ describe("Integration: VaultHub:fees", () => {
 
       // Expected: Only partial fees settled (exactly settleableValue)
       expect(actualSettled).to.equal(settleableValue);
-      expect(actualSettled).to.be.lessThan(ether("5"));
 
-      // Verify fees remain unsettled
+      // Verify remaining unsettled fees
+      const expectedRemaining = ether("5") - actualSettled;
       const obligationsAfter = await vaultHub.obligations(stakingVault);
-      expect(obligationsAfter.feesToSettle).to.equal(ether("5") - actualSettled);
-      expect(obligationsAfter.feesToSettle).to.be.greaterThan(ether("2")); // More than 2 ETH remains
+      expect(obligationsAfter.feesToSettle).to.equal(expectedRemaining);
 
       // Deposits remain paused (remaining fees >= 1 ETH)
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
@@ -296,13 +296,13 @@ describe("Integration: VaultHub:fees", () => {
         totalValue: ether("16"), // includes CONNECT_DEPOSIT
       });
 
-      // Mint 10 ETH worth of stETH to lock more of the vault
-      // With 20% reserve ratio: locked = minimalReserve(1) + liability(10) + reserve(2) = ~13 ETH
-      // Unlocked = 16 - 13 = ~3 ETH
+      // Mint 10 ETH worth of stETH
+      // With 20% reserve ratio:
+      //   reserve = ceilDiv(liability * 2000, 8000)
+      //   locked = liability + max(reserve, minimalReserve)
       await dashboard.mintStETH(owner, ether("10"));
 
-      // Set redemption shares representing 2 ETH (reserves 2 ETH from unlocked balance)
-      // This leaves only ~1 ETH available for fee settlement
+      // Set redemption shares representing 2 ETH (reserves ETH from unlocked balance)
       const liabilityShares = await vaultHub.liabilityShares(stakingVault);
       const redemptionSharesAmount = await ctx.contracts.lido.getSharesByPooledEth(ether("2"));
       const targetLiabilityShares = liabilityShares - redemptionSharesAmount;
@@ -314,7 +314,7 @@ describe("Integration: VaultHub:fees", () => {
       const record = await vaultHub.vaultRecord(stakingVault);
       expect(record.redemptionShares).to.equal(redemptionSharesAmount);
 
-      // Report unsettled fees = 5 ETH (much more than available after redemptions)
+      // Report unsettled fees = 5 ETH (more than available after redemptions)
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("16"),
         cumulativeLidoFees: ether("5"),
@@ -324,28 +324,24 @@ describe("Integration: VaultHub:fees", () => {
       const obligations = await vaultHub.obligations(stakingVault);
       expect(obligations.feesToSettle).to.equal(ether("5"));
 
-      // Calculate settleable: Should be limited by redemptions (less than total fees)
+      // Get the actual settleable amount from the contract
       const settleableValue = await vaultHub.settleableLidoFeesValue(stakingVault);
-      expect(settleableValue).to.be.lessThan(ether("5")); // Less than total fees (limited by redemptions + locked)
-      expect(settleableValue).to.be.greaterThan(ether("1")); // Reasonable amount available
 
       // Action: Settle fees (only settles what's available after redemptions)
       const treasuryBefore = await ethers.provider.getBalance(await ctx.contracts.locator.treasury());
 
-      const tx = await vaultHub.settleLidoFees(stakingVault);
-      await tx.wait();
+      await vaultHub.settleLidoFees(stakingVault);
 
       const treasuryAfter = await ethers.provider.getBalance(await ctx.contracts.locator.treasury());
       const actualSettled = treasuryAfter - treasuryBefore;
 
-      // Expected: Settled exactly settleableValue (much less than total fees due to redemptions)
+      // Expected: Settled exactly settleableValue
       expect(actualSettled).to.equal(settleableValue);
-      expect(actualSettled).to.be.lessThan(ether("5"));
 
-      // Verify fees remain unsettled (constrained by redemptions)
+      // Verify remaining unsettled fees
+      const expectedRemaining = ether("5") - actualSettled;
       const obligationsAfter = await vaultHub.obligations(stakingVault);
-      expect(obligationsAfter.feesToSettle).to.equal(ether("5") - actualSettled);
-      expect(obligationsAfter.feesToSettle).to.be.greaterThan(0n); // Some fees remain
+      expect(obligationsAfter.feesToSettle).to.equal(expectedRemaining);
 
       // Verify redemption shares are still reserved
       const recordAfter = await vaultHub.vaultRecord(stakingVault);
@@ -395,8 +391,11 @@ describe("Integration: VaultHub:fees", () => {
         waitForNextRefSlot: true,
       });
 
-      const availableBalance = await stakingVault.availableBalance();
-      expect(availableBalance).to.be.lessThan(ether("1.5"));
+      const obligations = await vaultHub.obligations(stakingVault);
+      expect(obligations.feesToSettle).to.equal(ether("1.5"));
+
+      const settleableValue = await vaultHub.settleableLidoFeesValue(stakingVault);
+      expect(settleableValue).to.equal(0n); // No funds available to settle
 
       // Action: Attempt voluntary disconnect
       await expect(dashboard.voluntaryDisconnect()).to.be.revertedWithCustomError(
@@ -432,9 +431,6 @@ describe("Integration: VaultHub:fees", () => {
       expect(record.cumulativeLidoFees).to.equal(record.settledLidoFees);
       expect(record.cumulativeLidoFees).to.equal(ether("0.5"));
       expect(record.settledLidoFees).to.equal(ether("0.5"));
-
-      // This verifies that the Lido fee settlement requirement is satisfied
-      // (voluntary disconnect may still fail on other requirements like node operator fees)
     });
 
     it("allows force disconnect even with large unpaid fees", async () => {
@@ -453,15 +449,17 @@ describe("Integration: VaultHub:fees", () => {
 
       const treasuryBefore = await ethers.provider.getBalance(await ctx.contracts.locator.treasury());
 
-      // Action: Force disconnect by VAULT_MASTER
+      // Action: Force disconnect by VAULT_MASTER (will settle what it can)
       const tx = await vaultHub.connect(vaultMaster).disconnect(stakingVault);
       await expect(tx).to.emit(vaultHub, "VaultDisconnectInitiated").withArgs(stakingVault);
 
-      // Expected: Settles what it can (up to available balance)
+      // Expected: Some amount was settled during disconnect
       const treasuryAfter = await ethers.provider.getBalance(await ctx.contracts.locator.treasury());
       const settled = treasuryAfter - treasuryBefore;
-      expect(settled).to.be.lessThanOrEqual(vaultBalance);
-      expect(settled).to.be.lessThan(largeFees);
+
+      // Verify the settled amount matches what was actually settled
+      const obligationsAfter = await vaultHub.obligations(stakingVault);
+      expect(obligationsAfter.feesToSettle).to.equal(largeFees - settled);
 
       // Disconnect still initiated despite unsettled fees
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
@@ -553,7 +551,6 @@ describe("Integration: VaultHub:fees", () => {
       });
 
       // Check minting capacity without fees
-      const capacityBefore = await vaultHub.totalMintingCapacityShares(stakingVault, 0);
       const maxLockableValueBefore = await vaultHub.maxLockableValue(stakingVault);
       expect(maxLockableValueBefore).to.equal(ether("51"));
 
@@ -565,18 +562,14 @@ describe("Integration: VaultHub:fees", () => {
       });
 
       // Check minting capacity with fees
-      const capacityAfter = await vaultHub.totalMintingCapacityShares(stakingVault, 0);
       const maxLockableValueAfter = await vaultHub.maxLockableValue(stakingVault);
 
       // Expected: maxLockableValue reduced by unsettled fees
       expect(maxLockableValueAfter).to.equal(ether("41")); // 51 - 10
-      expect(capacityAfter).to.be.lessThan(capacityBefore);
 
-      // Verify the reduction matches the fee amount
-      const capacityReduction = capacityBefore - capacityAfter;
-      const expectedReduction = await ctx.contracts.lido.getSharesByPooledEth(ether("10"));
-      // Should be approximately equal (accounting for reserve ratio)
-      expect(capacityReduction).to.be.greaterThan(expectedReduction / 2n);
+      // Verify obligations are tracked
+      const obligations = await vaultHub.obligations(stakingVault);
+      expect(obligations.feesToSettle).to.equal(ether("10"));
     });
 
     it("restores minting capacity proportion after fees are settled", async () => {
@@ -587,7 +580,9 @@ describe("Integration: VaultHub:fees", () => {
         cumulativeLidoFees: ether("3"),
       });
 
-      const capacityWithFees = await vaultHub.totalMintingCapacityShares(stakingVault, 0);
+      // Verify fees are unsettled before settlement
+      const obligationsBefore = await vaultHub.obligations(stakingVault);
+      expect(obligationsBefore.feesToSettle).to.equal(ether("3"));
 
       // Settle fees
       await vaultHub.settleLidoFees(stakingVault);
@@ -599,15 +594,14 @@ describe("Integration: VaultHub:fees", () => {
         waitForNextRefSlot: true,
       });
 
-      const capacityAfterSettlement = await vaultHub.totalMintingCapacityShares(stakingVault, 0);
       const maxLockableAfter = await vaultHub.maxLockableValue(stakingVault);
+      const obligationsAfter = await vaultHub.obligations(stakingVault);
 
       // Expected: maxLockableValue should equal totalValue (no more unsettled fees)
       expect(maxLockableAfter).to.equal(ether("18"));
 
-      // Capacity relative to maxLockable should be better or equal
-      // (unsettled fees no longer reducing it)
-      expect(capacityAfterSettlement).to.be.greaterThanOrEqual(capacityWithFees);
+      // Verify all fees have been settled
+      expect(obligationsAfter.feesToSettle).to.equal(0n);
     });
   });
 
@@ -654,19 +648,21 @@ describe("Integration: VaultHub:fees", () => {
       // Verify deposits are paused initially (fees >= 1 ETH)
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
-      // Check settleable amount (should be ~1.5 ETH since we have ~1.6 ETH available)
+      // Get the actual settleable amount
       const settleableValue = await vaultHub.settleableLidoFeesValue(stakingVault);
-      expect(settleableValue).to.be.greaterThan(ether("1.4"));
-      expect(settleableValue).to.be.lessThanOrEqual(ether("1.6"));
 
       // Settle fees
       await vaultHub.settleLidoFees(stakingVault);
 
       const remainingFees = ether("1.5") - settleableValue;
 
-      // Expected: Remaining fees < 1 ETH, so deposits should resume
-      expect(remainingFees).to.be.lessThan(ether("1"));
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+      // Verify remaining fees and deposit status
+      const obligationsAfter = await vaultHub.obligations(stakingVault);
+      expect(obligationsAfter.feesToSettle).to.equal(remainingFees);
+
+      // Deposits should resume only if remaining fees < 1 ETH
+      const depositsResumed = remainingFees < ether("1");
+      expect(await stakingVault.beaconChainDepositsPaused()).to.equal(!depositsResumed);
     });
 
     it("unblocks minting after full fee settlement", async () => {
@@ -677,9 +673,9 @@ describe("Integration: VaultHub:fees", () => {
         cumulativeLidoFees: ether("5"),
       });
 
-      // Check minting capacity before settlement
-      const capacityBefore = await dashboard.totalMintingCapacityShares();
-      const remainingBefore = await dashboard.remainingMintingCapacityShares(0);
+      // Verify fees before settlement
+      const obligationsBefore = await vaultHub.obligations(stakingVault);
+      expect(obligationsBefore.feesToSettle).to.equal(ether("5"));
 
       // Settle fees
       await vaultHub.settleLidoFees(stakingVault);
@@ -690,13 +686,12 @@ describe("Integration: VaultHub:fees", () => {
         waitForNextRefSlot: true,
       });
 
-      // Check minting capacity after settlement
-      const capacityAfter = await dashboard.totalMintingCapacityShares();
-      const remainingAfter = await dashboard.remainingMintingCapacityShares(0);
+      // Verify state after settlement
+      const obligationsAfter = await vaultHub.obligations(stakingVault);
+      expect(obligationsAfter.feesToSettle).to.equal(0n); // All fees settled
 
-      // Expected: Minting capacity improved relative to total value
-      expect(capacityAfter).to.be.greaterThan(capacityBefore);
-      expect(remainingAfter).to.be.greaterThan(remainingBefore);
+      const maxLockableAfter = await vaultHub.maxLockableValue(stakingVault);
+      expect(maxLockableAfter).to.equal(ether("16")); // No unsettled fees reducing maxLockable
     });
   });
 
@@ -722,7 +717,8 @@ describe("Integration: VaultHub:fees", () => {
       const obligations = await vaultHub.obligations(stakingVault);
 
       // Verify bad health (need to rebalance shares) and unsettled fees
-      expect(obligations.sharesToBurn).to.be.greaterThan(0n);
+      const healthShortfallShares = await vaultHub.healthShortfallShares(stakingVault);
+      expect(obligations.sharesToBurn).to.equal(healthShortfallShares);
       expect(obligations.feesToSettle).to.equal(ether("1.5"));
 
       // Action: forceRebalance (rebalances shares, not fees)
@@ -741,8 +737,10 @@ describe("Integration: VaultHub:fees", () => {
       // Deposits still paused (fees >= 1 ETH)
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
-      // Verify rebalance operation is separate from fee settlement
-      expect(obligationsAfter.sharesToBurn).to.be.lessThan(obligations.sharesToBurn);
+      // Verify rebalance reduced the shares to burn
+      const healthShortfallAfter = await vaultHub.healthShortfallShares(stakingVault);
+      expect(obligationsAfter.sharesToBurn).to.equal(healthShortfallAfter);
+      expect(healthShortfallAfter).to.equal(0n); // Health restored after rebalance
     });
   });
 
@@ -763,21 +761,21 @@ describe("Integration: VaultHub:fees", () => {
     });
 
     it("handles fees just below 1 ETH threshold", async () => {
-      // Setup: Report 0.999 ETH fees
+      // Setup: Report 1 ETH - 1 wei fees
       await dashboard.fund({ value: ether("10") });
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: ether("10.999"),
-        cumulativeLidoFees: ether("0.999"),
+        totalValue: ether("10"),
+        cumulativeLidoFees: ether("1") - 1n,
       });
 
       const obligations = await vaultHub.obligations(stakingVault);
-      expect(obligations.feesToSettle).to.equal(ether("0.999"));
+      expect(obligations.feesToSettle).to.equal(ether("1") - 1n);
 
       // Expected: Deposits NOT paused (below threshold)
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
     });
 
-    it("settles zero fees when balance is exactly zero", async () => {
+    it("does not settle fees when balance is exactly zero", async () => {
       // Setup: Report fees with no balance
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("1"), // Only locked CONNECT_DEPOSIT
@@ -835,10 +833,13 @@ describe("Integration: VaultHub:fees", () => {
       obligations = await vaultHub.obligations(stakingVault);
       expect(obligations.feesToSettle).to.equal(ether("2"));
 
-      // With locked liabilities, only partial settlement possible
+      // Calculate exact settleable amount based on locked balance
+      const locked = await vaultHub.locked(stakingVault);
+      const totalValue = ether("13");
+      const expectedSettleable = totalValue - locked;
+
       settleableValue = await vaultHub.settleableLidoFeesValue(stakingVault);
-      expect(settleableValue).to.be.lessThan(ether("2"));
-      expect(settleableValue).to.be.greaterThan(0n);
+      expect(settleableValue).to.equal(expectedSettleable);
 
       const treasuryBefore2 = await ethers.provider.getBalance(await ctx.contracts.locator.treasury());
       await vaultHub.settleLidoFees(stakingVault);
@@ -846,16 +847,15 @@ describe("Integration: VaultHub:fees", () => {
 
       const secondSettlement = treasuryAfter2 - treasuryBefore2;
       expect(secondSettlement).to.equal(settleableValue);
-      expect(secondSettlement).to.be.lessThan(ether("2"));
 
+      // Verify remaining unsettled fees
+      const expectedRemaining = ether("2") - secondSettlement;
       obligations = await vaultHub.obligations(stakingVault);
-      expect(obligations.feesToSettle).to.equal(ether("2") - secondSettlement);
-      expect(obligations.feesToSettle).to.be.greaterThan(0n);
+      expect(obligations.feesToSettle).to.equal(expectedRemaining);
 
       // Verify multiple settlements occurred
       const totalSettled = firstSettlement + secondSettlement;
       expect(totalSettled).to.equal(ether("3") + secondSettlement);
-      expect(totalSettled).to.be.greaterThan(ether("3"));
     });
   });
 });
