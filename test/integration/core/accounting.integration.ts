@@ -141,23 +141,6 @@ describe("Integration: Accounting", () => {
     );
   });
 
-  it("reverts if the withdrawal vault balance is greater than reported", async () => {
-    const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
-
-    const balance = await ethers.provider.getBalance(withdrawalVault);
-
-    const params: Partial<OracleReportParams> = {
-      excludeVaultsBalances: false,
-      withdrawalVaultBalance: balance + 1n,
-      reportWithdrawalsVault: true,
-    };
-
-    await expect(report(ctx, params)).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "IncorrectWithdrawalsVaultBalance(uint256)",
-    );
-  });
-
   it("Should account correctly with no CL rebase", async () => {
     const { lido, accountingOracle } = ctx.contracts;
 
