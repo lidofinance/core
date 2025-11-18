@@ -41,7 +41,6 @@ export async function main() {
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const wstethAddress = state[Sk.wstETH].address;
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
-  const vaultsAdapterAddress = getAddress(Sk.vaultsAdapter, state);
 
   //
   // Deploy V3TemporaryAdmin
@@ -382,7 +381,7 @@ export async function main() {
   await makeTx(
     v3TemporaryAdminContract,
     "completeSetup",
-    [lidoLocatorImpl.address, vaultsAdapterAddress, gateSealAddress],
+    [lidoLocatorImpl.address, parameters.easyTrack.VaultsAdapter, gateSealAddress],
     {
       from: deployer,
     },

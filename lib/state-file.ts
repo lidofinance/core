@@ -113,7 +113,6 @@ export enum Sk {
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
   // Easy Track
   easyTrack = "easyTrack",
-  vaultsAdapter = "vaultsAdapter",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -177,7 +176,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorConsolidationRequests:
     case Sk.v3VoteScript:
     case Sk.easyTrack:
-    case Sk.vaultsAdapter:
     case Sk.gateSealFactory:
       return state[contractKey].address;
     default:

@@ -85,6 +85,7 @@ const EasyTrackSchema = z.object({
   initialValidatorExitFeeLimit: BigIntStringSchema,
   maxGroupShareLimit: BigIntStringSchema,
   maxDefaultTierShareLimit: NonNegativeIntSchema,
+  VaultsAdapter: EthereumAddressSchema,
   newFactories: z.object({
     AlterTiersInOperatorGrid: EthereumAddressSchema,
     RegisterGroupsInOperatorGrid: EthereumAddressSchema,

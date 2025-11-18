@@ -50,7 +50,7 @@ export async function main() {
 
     // EasyTrack addresses
     getAddress(Sk.easyTrack, state),
-    getAddress(Sk.vaultsAdapter, state),
+    parameters.easyTrack.VaultsAdapter,
 
     // EasyTrack new factories
     parameters.easyTrack.newFactories.AlterTiersInOperatorGrid,

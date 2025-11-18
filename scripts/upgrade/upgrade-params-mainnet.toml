@@ -21,6 +21,7 @@ initialValidatorExitFeeLimit = "100000000000000000"              # Max validator
 # Phase 1: Pilot (starts with Lido V3 upgrade enacted) - https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665
 maxGroupShareLimit = "250000000000000000000000"                  # Max share limit which can be set for group by EasyTrack
 maxDefaultTierShareLimit = 0                                     # Max share limit which can be set for default tier by EasyTrack
+VaultsAdapter = "0x0000000000000000000000000000000000000000"     # TODO: update upon deployment
 
 # Must be deployed before the V3 upgrading contracts
 [easyTrack.newFactories]
