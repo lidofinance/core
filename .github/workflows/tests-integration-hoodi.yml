@@ -26,3 +26,5 @@ jobs:
           RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
           LOG_LEVEL: debug
           NETWORK_STATE_FILE: deployed-hoodi.json
+          # TODO: enable csm integration tests later (CSM is deployed on hoodis)
+          INTEGRATION_WITH_CSM: "off"
