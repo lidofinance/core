@@ -14,7 +14,9 @@ import {
   report,
   reportVaultDataWithProof,
   reportVaultsDataWithProof,
+  resetDefaultTierShareLimit,
   setupLidoForVaults,
+  upDefaultTierShareLimit,
   waitNextAvailableReportTime,
 } from "lib/protocol";
 import { simulateReport } from "lib/protocol/helpers/accounting";
@@ -36,7 +38,7 @@ describe("Integration: Vault with bad debt", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
-    const { lido, stakingVaultFactory, vaultHub, operatorGrid } = ctx.contracts;
+    const { lido, stakingVaultFactory, vaultHub } = ctx.contracts;
     originalSnapshot = await Snapshot.take();
 
     [, owner, nodeOperator, otherOwner, daoAgent] = await ethers.getSigners();
@@ -50,25 +52,7 @@ describe("Integration: Vault with bad debt", () => {
       nodeOperator,
     ));
 
-    // Register node operator group with sufficient share limit
-    const agentSigner = await ctx.getSigner("agent");
-    await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
-    await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
-      {
-        shareLimit: ether("1000"),
-        reserveRatioBP: 2000,
-        forcedRebalanceThresholdBP: 1800,
-        infraFeeBP: 100,
-        liquidityFeeBP: 650,
-        reservationFeeBP: 0,
-      },
-    ]);
-
-    // Move vault to tier 1 with share limit
-    const requestedTierId = 1n;
-    const requestedShareLimit = ether("1000");
-    await dashboard.connect(owner).changeTier(requestedTierId, requestedShareLimit);
-    await operatorGrid.connect(nodeOperator).changeTier(stakingVault, requestedTierId, requestedShareLimit);
+    await upDefaultTierShareLimit(ctx, ether("1000"));
 
     dashboard = dashboard.connect(owner);
 
@@ -228,21 +212,14 @@ describe("Integration: Vault with bad debt", () => {
     let acceptorDashboard: Dashboard;
 
     beforeEach(async () => {
-      const { stakingVaultFactory, operatorGrid } = ctx.contracts;
+      const { stakingVaultFactory } = ctx.contracts;
       // create vault acceptor
       ({ stakingVault: acceptorStakingVault, dashboard: acceptorDashboard } = await createVaultWithDashboard(
         ctx,
         stakingVaultFactory,
         otherOwner,
         nodeOperator,
-        nodeOperator,
       ));
-
-      // Move acceptor vault to tier 1 with sufficient share limit
-      const requestedTierId = 1n;
-      const requestedShareLimit = ether("1000");
-      await acceptorDashboard.connect(otherOwner).changeTier(requestedTierId, requestedShareLimit);
-      await operatorGrid.connect(nodeOperator).changeTier(acceptorStakingVault, requestedTierId, requestedShareLimit);
     });
 
     it("Vault's debt can be socialized", async () => {
@@ -335,12 +312,10 @@ describe("Integration: Vault with bad debt", () => {
 
     it("OperatorGrid shareLimits can't prevent socialization", async () => {
       await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
-      const { vaultHub, lido, operatorGrid } = ctx.contracts;
+      const { vaultHub, lido } = ctx.contracts;
 
-      // Update the group share limit to be lower than what we need
-      const agentSigner = await ctx.getSigner("agent");
-      const newGroupShareLimit = await acceptorDashboard.liabilityShares();
-      await operatorGrid.connect(agentSigner).updateGroupShareLimit(nodeOperator, newGroupShareLimit);
+      // Reset the default tier share limit to 0
+      await resetDefaultTierShareLimit(ctx);
 
       const badDebtShares =
         (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
@@ -405,14 +380,12 @@ describe("Integration: Vault with bad debt", () => {
         stakingVaultFactory,
         otherOwner,
         nodeOperator,
-        nodeOperator,
       );
 
       const { stakingVault: vaultC, dashboard: dashboardC } = await createVaultWithDashboard(
         ctx,
         stakingVaultFactory,
         otherOwner,
-        nodeOperator,
         nodeOperator,
       );
 

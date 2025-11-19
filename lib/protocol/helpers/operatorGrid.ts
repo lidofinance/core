@@ -38,6 +38,16 @@ export async function upDefaultTierShareLimit(ctx: ProtocolContext, increaseBy: 
   );
 }
 
+export async function resetDefaultTierShareLimit(ctx: ProtocolContext) {
+  const { operatorGrid } = ctx.contracts;
+  const agentSigner = await ctx.getSigner("agent");
+  await grantRegistryRoleIfNotGranted(ctx, agentSigner);
+
+  await operatorGrid
+    .connect(agentSigner)
+    .alterTiers([await operatorGrid.DEFAULT_TIER_ID()], [{ ...DEFAULT_TIER_PARAMS, shareLimit: 0n }]);
+}
+
 export async function grantRegistryRoleIfNotGranted(ctx: ProtocolContext, signer: HardhatEthersSigner) {
   const { operatorGrid } = ctx.contracts;
   const agentSigner = await ctx.getSigner("agent");
