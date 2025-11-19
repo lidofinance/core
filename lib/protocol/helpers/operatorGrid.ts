@@ -16,6 +16,28 @@ export const DEFAULT_TIER_PARAMS: TierParamsStruct = {
   reservationFeeBP: 0n,
 };
 
+export async function upDefaultTierShareLimit(ctx: ProtocolContext, increaseBy: bigint) {
+  const { operatorGrid } = ctx.contracts;
+  const agentSigner = await ctx.getSigner("agent");
+  await grantRegistryRoleIfNotGranted(ctx, agentSigner);
+
+  const existingTierParams = await operatorGrid.tier(await operatorGrid.DEFAULT_TIER_ID());
+
+  await operatorGrid.connect(agentSigner).alterTiers(
+    [await operatorGrid.DEFAULT_TIER_ID()],
+    [
+      {
+        shareLimit: existingTierParams.shareLimit + increaseBy,
+        reserveRatioBP: existingTierParams.reserveRatioBP,
+        forcedRebalanceThresholdBP: existingTierParams.forcedRebalanceThresholdBP,
+        infraFeeBP: existingTierParams.infraFeeBP,
+        liquidityFeeBP: existingTierParams.liquidityFeeBP,
+        reservationFeeBP: existingTierParams.reservationFeeBP,
+      },
+    ],
+  );
+}
+
 export async function grantRegistryRoleIfNotGranted(ctx: ProtocolContext, signer: HardhatEthersSigner) {
   const { operatorGrid } = ctx.contracts;
   const agentSigner = await ctx.getSigner("agent");
