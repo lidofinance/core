@@ -146,18 +146,20 @@ describe("Integration: Vault with bad debt", () => {
 
       // Owner deposits to cover bad debt
       // Use 2x the liability value to ensure we're above health threshold
-      const depositAmount = liabilityValue * 2n - totalValue;
+      const depositAmount = liabilityValue * 3n - totalValue;
       await dashboard.fund({ value: depositAmount });
 
       // Bring fresh report
-      await reportVaultDataWithProof(ctx, stakingVault);
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
       // Verify vault is now healthy
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(true, "Vault should be healthy after deposit");
 
       // Verify healthShortfallShares is no longer MAX_UINT256
-      const healthShortfall = await vaultHub.healthShortfallShares(stakingVault);
-      expect(healthShortfall).to.not.equal(MAX_UINT256, "healthShortfallShares should not be MAX_UINT256");
+      expect(await vaultHub.healthShortfallShares(stakingVault)).to.not.equal(
+        MAX_UINT256,
+        "healthShortfallShares should not be MAX_UINT256",
+      );
 
       // Mint should work - use actual minting capacity
       const mintingCapacity = await dashboard.remainingMintingCapacityShares(0n);

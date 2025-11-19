@@ -24,6 +24,7 @@ import {
   generateTopUp,
   getCurrentBlockTimestamp,
   impersonate,
+  log,
   prepareLocalMerkleTree,
   TOTAL_BASIS_POINTS,
   Validator,
@@ -199,19 +200,20 @@ export async function autofillRoles(
  */
 export async function setupLidoForVaults(ctx: ProtocolContext) {
   const { lido, acl } = ctx.contracts;
-  const agentSigner = await ctx.getSigner("agent");
-  const role = await lido.STAKING_CONTROL_ROLE();
-  const agentAddress = await agentSigner.getAddress();
 
-  await acl.connect(agentSigner).grantPermission(agentAddress, lido.address, role);
-  await lido.connect(agentSigner).setMaxExternalRatioBP(20_00n);
-  await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
-
-  if (!ctx.isScratch) {
-    // we need a report to initialize LazyOracle timestamp after the upgrade
-    // if we are running tests in the mainnet fork environment
-    await report(ctx);
+  if ((await lido.getMaxExternalRatioBP()) < 20_00n) {
+    const agentSigner = await ctx.getSigner("agent");
+    const role = await lido.STAKING_CONTROL_ROLE();
+    const agentAddress = await agentSigner.getAddress();
+    await acl.connect(agentSigner).grantPermission(agentAddress, lido.address, role);
+    await lido.connect(agentSigner).setMaxExternalRatioBP(20_00n);
+    await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
+    log.success("Setting max external ratio to 20%");
   }
+
+  // we need a report to initialize LazyOracle timestamp after the upgrade
+  // if we are running tests in the mainnet fork environment
+  await report(ctx);
 }
 
 export type VaultReportItem = {
