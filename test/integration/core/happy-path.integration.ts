@@ -252,7 +252,7 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should rebase correctly", async () => {
-    const { lido, withdrawalQueue, locator, burner, nor, sdvt, stakingRouter } = ctx.contracts;
+    const { lido, withdrawalQueue, locator, burner, nor, sdvt, stakingRouter, csm } = ctx.contracts;
 
     const treasuryAddress = await locator.treasury();
     const strangerBalancesBeforeRebase = await getBalances(stranger);
@@ -334,7 +334,7 @@ describe("Scenario: Protocol Happy Path", () => {
     } else {
       [toNorTransfer, toSdvtTransfer] = transferEvents;
     }
-    if (ctx.flags.withCSM) {
+    if (csm !== undefined) {
       toTreasuryTransfer = transferEvents[numExpectedTransferEvents];
       toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents];
       numExpectedTransferEvents += 2;
