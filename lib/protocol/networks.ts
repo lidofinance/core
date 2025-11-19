@@ -155,3 +155,8 @@ export async function getNetworkConfig(network: string): Promise<ProtocolNetwork
       throw new Error(`Network ${network} is not supported`);
   }
 }
+
+export function getChainIdFromState(): number {
+  const state = readNetworkState();
+  return parseInt(state[Sk.chainId] || "0");
+}
