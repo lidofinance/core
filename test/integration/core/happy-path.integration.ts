@@ -322,25 +322,20 @@ describe("Scenario: Protocol Happy Path", () => {
     const transferEvents = ctx.getEvents(reportTxReceipt, "Transfer");
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
 
-    let toBurnerTransfer,
-      toNorTransfer,
-      toSdvtTransfer,
-      toTreasuryTransfer,
-      toTreasuryTransferShares: LogDescriptionExtended | undefined;
-    let numExpectedTransferEvents = Number(await stakingRouter.getStakingModulesCount());
+    let toBurnerTransfer, toNorTransfer, toSdvtTransfer: LogDescriptionExtended | undefined;
+    let numExpectedTransferEvents = Number(await stakingRouter.getStakingModulesCount()) + 1; // +1 for the treasury
     if (wereWithdrawalsFinalized) {
       numExpectedTransferEvents += 1;
       [toBurnerTransfer, toNorTransfer, toSdvtTransfer] = transferEvents;
     } else {
       [toNorTransfer, toSdvtTransfer] = transferEvents;
     }
+    const toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
+    const toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents - 1];
+
     if (csm !== undefined) {
-      toTreasuryTransfer = transferEvents[numExpectedTransferEvents];
-      toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents];
-      numExpectedTransferEvents += 2;
-    } else {
-      toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
-      toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents - 1];
+      // +1 for the CSM internal transfer
+      numExpectedTransferEvents += 1;
     }
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
