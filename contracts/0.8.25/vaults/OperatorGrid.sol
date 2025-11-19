@@ -787,8 +787,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, MAX_RESERVE_RATIO_BP);
 
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
-        if (_forcedRebalanceThresholdBP >= _reserveRatioBP)
+        if (_forcedRebalanceThresholdBP + 10 >= _reserveRatioBP) {
             revert ForcedRebalanceThresholdTooHigh(_tierId, _forcedRebalanceThresholdBP, _reserveRatioBP);
+        }
 
         if (_infraFeeBP > MAX_FEE_BP)
             revert InfraFeeTooHigh(_tierId, _infraFeeBP, MAX_FEE_BP);
