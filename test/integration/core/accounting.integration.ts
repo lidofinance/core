@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
+import { ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
 import { getProtocolContext, getReportTimeElapsed, ProtocolContext, removeStakingLimit, report } from "lib/protocol";
 
@@ -163,6 +163,42 @@ describe("Integration: Accounting", () => {
     );
   }
 
+  async function expectTransferFeesEvents(
+    reportTxReceipt: ContractTransactionReceipt,
+    noRewards: boolean = false,
+  ): Promise<bigint> {
+    const { stakingRouter } = ctx.contracts;
+
+    const stakingModulesCount = await stakingRouter.getStakingModulesCount();
+
+    const numberOfCSMModules = (await stakingRouter.getStakingModules()).filter(
+      (module) => module.name === "Community Staking",
+    ).length;
+
+    const { amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
+    const hasWithdrawals = amountOfETHLocked != 0;
+
+    const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
+    const expectedRewardsDistributionEventsCount = noRewards
+      ? 0n
+      : BigInt(stakingModulesCount) + BigInt(numberOfCSMModules) + 1n;
+    const expectedWithdrawalsTransferEventCount = hasWithdrawals ? 1n : 0n;
+    expect(transferSharesEvents.length).to.equal(
+      expectedWithdrawalsTransferEventCount + expectedRewardsDistributionEventsCount,
+      "Expected transfer of shares to treasury, WQ and staking modules",
+    );
+
+    const mintedSharesSum = transferSharesEvents
+      .slice(hasWithdrawals ? 1 : 0) // skip burner if withdrawals processed
+      .filter(({ args }) => args.from === ZeroAddress) // only minted shares
+      .reduce((acc, { args }) => acc + args.sharesValue, 0n);
+
+    const tokenRebasedEvent = getFirstEvent(reportTxReceipt, "TokenRebased");
+    expect(tokenRebasedEvent.args.sharesMintedAsFees).to.equal(mintedSharesSum);
+
+    return mintedSharesSum;
+  }
+
   // Ensure the whale account has enough shares, e.g. on scratch deployments
   async function ensureWhaleHasFunds(amount: bigint) {
     const { lido, wstETH } = ctx.contracts;
@@ -239,7 +275,7 @@ describe("Integration: Accounting", () => {
   });
 
   it("Should account correctly with positive CL rebase close to the limits", async () => {
-    const { lido, stakingRouter, oracleReportSanityChecker } = ctx.contracts;
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
     const { beaconBalance } = await lido.getBeaconStat();
@@ -269,30 +305,7 @@ describe("Integration: Accounting", () => {
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
-    const hasWithdrawals = amountOfETHLocked != 0;
-    const stakingModulesCount = await stakingRouter.getStakingModulesCount();
-    const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
-
-    const feeDistributionTransfer = ctx.flags.withCSM ? 1n : 0n;
-
-    // Magic numbers here: 2 – burner and treasury, 1 – only treasury
-    expect(transferSharesEvents.length).to.equal(
-      (hasWithdrawals ? 2n : 1n) + stakingModulesCount + feeDistributionTransfer,
-      "Expected transfer of shares to DAO and staking modules",
-    );
-
-    log.debug("Staking modules count", { stakingModulesCount });
-
-    const mintedSharesSum = transferSharesEvents
-      .slice(hasWithdrawals ? 1 : 0) // skip burner if withdrawals processed
-      .filter(({ args }) => args.from === ZeroAddress) // only minted shares
-      .reduce((acc, { args }) => acc + args.sharesValue, 0n);
-
-    const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased");
-    expect(tokenRebasedEvent[0].args.sharesMintedAsFees).to.equal(
-      mintedSharesSum,
-      "TokenRebased: sharesMintedAsFee mismatch",
-    );
+    const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
 
     await expectStateChanges(beforeState, {
       totalELRewardsCollected: 0n,
@@ -301,7 +314,7 @@ describe("Integration: Accounting", () => {
       lidoBalance: amountOfETHLocked * -1n,
     });
 
-    const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
+    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
     expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
 
     const ethDistributedEvent = ctx.getEvents(reportTxReceipt, "ETHDistributed");
@@ -391,7 +404,7 @@ describe("Integration: Accounting", () => {
       elRewardsVaultBalance: elRewards * -1n,
     });
 
-    const elRewardsReceivedEvent = await ctx.getEvents(reportTxReceipt, "ELRewardsReceived")[0];
+    const elRewardsReceivedEvent = ctx.getEvents(reportTxReceipt, "ELRewardsReceived")[0];
     expect(elRewardsReceivedEvent.args.amount).to.equal(elRewards);
   });
 
@@ -451,7 +464,7 @@ describe("Integration: Accounting", () => {
   });
 
   it("Should account correctly with withdrawals at limits", async () => {
-    const { withdrawalVault, stakingRouter } = ctx.contracts;
+    const { withdrawalVault } = ctx.contracts;
     const withdrawals = await rebaseLimitWei();
     await impersonate(withdrawalVault.address, withdrawals);
 
@@ -467,25 +480,7 @@ describe("Integration: Accounting", () => {
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
-    const hasWithdrawals = amountOfETHLocked != 0;
-    const stakingModulesCount = await stakingRouter.getStakingModulesCount();
-    const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
-
-    const feeDistributionTransfer = ctx.flags.withCSM ? 1n : 0n;
-
-    // Magic numbers here: 2 – burner and treasury, 1 – only treasury
-    expect(transferSharesEvents.length).to.equal(
-      (hasWithdrawals ? 2n : 1n) + stakingModulesCount + feeDistributionTransfer,
-      "Expected transfer of shares to DAO and staking modules",
-    );
-
-    const mintedSharesSum = transferSharesEvents
-      .slice(hasWithdrawals ? 1 : 0) // skip burner if withdrawals processed
-      .filter(({ args }) => args.from === ZeroAddress) // only minted shares
-      .reduce((acc, { args }) => acc + args.sharesValue, 0n);
-
-    const tokenRebasedEvent = getFirstEvent(reportTxReceipt, "TokenRebased");
-    expect(tokenRebasedEvent.args.sharesMintedAsFees).to.equal(mintedSharesSum);
+    const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
 
     await expectStateChanges(beforeState, {
       internalEther: withdrawals - amountOfETHLocked,
@@ -502,7 +497,7 @@ describe("Integration: Accounting", () => {
   });
 
   it("Should account correctly with withdrawals above limits", async () => {
-    const { withdrawalVault, stakingRouter } = ctx.contracts;
+    const { withdrawalVault } = ctx.contracts;
 
     const expectedWithdrawals = await rebaseLimitWei();
     const withdrawalsExcess = ether("10");
@@ -521,24 +516,7 @@ describe("Integration: Accounting", () => {
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
-    const hasWithdrawals = amountOfETHLocked != 0;
-    const stakingModulesCount = await stakingRouter.getStakingModulesCount();
-    const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
-    const feeDistributionTransfer = ctx.flags.withCSM ? 1n : 0n;
-
-    // Magic numbers here: 2 – burner and treasury, 1 – only treasury
-    expect(transferSharesEvents.length).to.equal(
-      (hasWithdrawals ? 2n : 1n) + stakingModulesCount + feeDistributionTransfer,
-      "Expected transfer of shares to DAO and staking modules",
-    );
-
-    const mintedSharesSum = transferSharesEvents
-      .slice(hasWithdrawals ? 1 : 0) // skip burner if withdrawals processed
-      .filter(({ args }) => args.from === ZeroAddress) // only minted shares
-      .reduce((acc, { args }) => acc + args.sharesValue, 0n);
-
-    const tokenRebasedEvent = getFirstEvent(reportTxReceipt, "TokenRebased");
-    expect(tokenRebasedEvent.args.sharesMintedAsFees).to.equal(mintedSharesSum);
+    const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
 
     await expectStateChanges(beforeState, {
       internalEther: expectedWithdrawals - amountOfETHLocked,
@@ -675,11 +653,7 @@ describe("Integration: Accounting", () => {
       expect(elRewardsVaultBalance).to.equal(limitWithExcess, "Expected EL vault to be kept unchanged");
       expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
 
-      mintedSharesSum += ctx
-        .getEvents(reportTxReceipt, "TransferShares")
-        .slice(amountOfETHLocked > 0n ? 1 : 0) // skip burner if withdrawals processed
-        .filter(({ args }) => args.from === ZeroAddress) // only minted shares
-        .reduce((acc, { args }) => acc + args.sharesValue, 0n);
+      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt);
     }
     {
       const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
@@ -701,11 +675,7 @@ describe("Integration: Accounting", () => {
       const elRewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
       expect(elRewardsEvent.args.amount).to.equal(updatedLimit - excess, "ELRewardsReceived: amount mismatch");
 
-      mintedSharesSum += ctx
-        .getEvents(reportTxReceipt, "TransferShares")
-        .slice(amountOfETHLocked > 0n ? 1 : 0) // skip burner if withdrawals processed
-        .filter(({ args }) => args.from === ZeroAddress) // only minted shares
-        .reduce((acc, { args }) => acc + args.sharesValue, 0n);
+      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt);
     }
     {
       const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
@@ -723,11 +693,7 @@ describe("Integration: Accounting", () => {
       const rewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
       expect(rewardsEvent.args.amount).to.equal(elVaultExcess, "ELRewardsReceived: amount mismatch");
 
-      mintedSharesSum += ctx
-        .getEvents(reportTxReceipt, "TransferShares")
-        .slice(amountOfETHLocked > 0n ? 1 : 0) // skip burner if withdrawals processed
-        .filter(({ args }) => args.from === ZeroAddress) // only minted shares
-        .reduce((acc, { args }) => acc + args.sharesValue, 0n);
+      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt, true);
     }
 
     await expectStateChanges(beforeState, {
