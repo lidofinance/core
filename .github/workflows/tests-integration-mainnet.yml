@@ -40,6 +40,7 @@ jobs:
           DEPLOYER: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" # first acc of default mnemonic "test test ..."
           GAS_PRIORITY_FEE: 1
           GAS_MAX_FEE: 100
+          GAS_LIMIT: 30000000
           NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
           UPGRADE_PARAMETERS_FILE: scripts/upgrade/upgrade-params-mainnet.toml
 
