@@ -59,7 +59,11 @@ describe("Integration: Accounting", () => {
     return (maxPositiveTokeRebase * internalEther) / LIMITER_PRECISION_BASE;
   };
 
-  const getWithdrawalParamsFromEvent = (tx: ContractTransactionReceipt) => {
+  function getWithdrawalParamsFromEvent(tx: ContractTransactionReceipt): {
+    amountOfETHLocked: bigint;
+    sharesBurntAmount: bigint;
+    sharesToBurn: bigint;
+  } {
     const withdrawalsFinalized = getFirstEvent(tx, "WithdrawalsFinalized")?.args;
     const amountOfETHLocked = withdrawalsFinalized?.amountOfETHLocked ?? 0n;
     const sharesToBurn = withdrawalsFinalized?.sharesToBurn ?? 0n;
@@ -68,7 +72,7 @@ describe("Integration: Accounting", () => {
     const sharesBurntAmount = sharesBurnt?.sharesAmount ?? 0n;
 
     return { amountOfETHLocked, sharesBurntAmount, sharesToBurn };
-  };
+  }
 
   const sharesRateFromEvent = (tx: ContractTransactionReceipt) => {
     const tokenRebasedEvent = getFirstEvent(tx, "TokenRebased");
@@ -178,7 +182,7 @@ describe("Integration: Accounting", () => {
     ).length;
 
     const { amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
-    const hasWithdrawals = amountOfETHLocked != 0;
+    const hasWithdrawals = amountOfETHLocked !== 0n;
 
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
     const expectedRewardsDistributionEventsCount = noRewards
@@ -396,7 +400,7 @@ describe("Integration: Accounting", () => {
     };
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
+    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
     await expectStateChanges(beforeState, {
       totalELRewardsCollected: elRewards,
@@ -404,6 +408,7 @@ describe("Integration: Accounting", () => {
       internalShares: sharesBurntAmount * -1n,
       lidoBalance: amountOfETHLocked * -1n + elRewards,
       elRewardsVaultBalance: elRewards * -1n,
+      burnerShares: sharesToBurn - sharesBurntAmount,
     });
 
     const elRewardsReceivedEvent = ctx.getEvents(reportTxReceipt, "ELRewardsReceived")[0];
@@ -428,7 +433,7 @@ describe("Integration: Accounting", () => {
     };
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
+    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
     await expectStateChanges(beforeState, {
       totalELRewardsCollected: expectedRewards,
@@ -436,6 +441,7 @@ describe("Integration: Accounting", () => {
       internalShares: 0n - sharesBurntAmount,
       lidoBalance: expectedRewards - amountOfETHLocked,
       elRewardsVaultBalance: 0n - expectedRewards,
+      burnerShares: sharesToBurn - sharesBurntAmount,
     });
 
     const elRewardsReceivedEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
@@ -480,7 +486,7 @@ describe("Integration: Accounting", () => {
     };
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
+    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
     const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
 
@@ -489,6 +495,7 @@ describe("Integration: Accounting", () => {
       internalShares: mintedSharesSum - sharesBurntAmount,
       lidoBalance: withdrawals - amountOfETHLocked,
       withdrawalVaultBalance: 0n - withdrawals,
+      burnerShares: sharesToBurn - sharesBurntAmount,
     });
 
     const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
@@ -516,7 +523,7 @@ describe("Integration: Accounting", () => {
     };
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
-    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
+    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
     const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
 
@@ -525,6 +532,7 @@ describe("Integration: Accounting", () => {
       internalShares: mintedSharesSum - sharesBurntAmount,
       lidoBalance: expectedWithdrawals - amountOfETHLocked,
       withdrawalVaultBalance: 0n - expectedWithdrawals,
+      burnerShares: sharesToBurn - sharesBurntAmount,
     });
 
     const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
