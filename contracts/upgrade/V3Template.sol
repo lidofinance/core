@@ -68,6 +68,12 @@ interface IOracleReportSanityChecker is IAccessControlEnumerable {
     function INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE() external view returns (bytes32);
 }
 
+interface ITokenRateNotifier {
+    function owner() external view returns (address);
+    function observers(uint256 index) external view returns (address);
+    function observersLength() external view returns (uint256);
+}
+
 
 /**
 * @title Lido V3 Upgrade Template
@@ -213,6 +219,7 @@ contract V3Template is V3Addresses {
 
         _assertFinalACL();
 
+        _checkTokenRateNotifierMigratedCorrectly();
         _checkBurnerMigratedCorrectly();
 
         if (VaultFactory(VAULT_FACTORY).BEACON() != UPGRADEABLE_BEACON) {
@@ -325,6 +332,25 @@ contract V3Template is V3Addresses {
         for (uint256 i = 0; i < expectedFactories.length; ++i) {
             if (factories[numFactories - expectedFactories.length + i] != expectedFactories[i]) {
                 revert UnexpectedEasyTrackFactories();
+            }
+        }
+    }
+
+    function _checkTokenRateNotifierMigratedCorrectly() internal view {
+        ITokenRateNotifier oldNotifier = ITokenRateNotifier(OLD_TOKEN_RATE_NOTIFIER);
+        ITokenRateNotifier newNotifier = ITokenRateNotifier(NEW_TOKEN_RATE_NOTIFIER);
+
+        if (newNotifier.owner() != AGENT) {
+            revert IncorrectTokenRateNotifierOwnerMigration(NEW_TOKEN_RATE_NOTIFIER, AGENT);
+        }
+
+        if (oldNotifier.observersLength() != newNotifier.observersLength()) {
+            revert IncorrectTokenRateNotifierObserversLengthMigration();
+        }
+
+        for (uint256 i = 0; i < oldNotifier.observersLength(); i++) {
+            if (oldNotifier.observers(i) != newNotifier.observers(i)) {
+                revert IncorrectTokenRateNotifierObserversMigration();
             }
         }
     }
@@ -465,4 +491,7 @@ contract V3Template is V3Addresses {
     error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
     error TotalSharesOrPooledEtherChanged();
     error UnexpectedEasyTrackFactories();
+    error IncorrectTokenRateNotifierOwnerMigration(address notifier, address owner);
+    error IncorrectTokenRateNotifierObserversLengthMigration();
+    error IncorrectTokenRateNotifierObserversMigration();
 }

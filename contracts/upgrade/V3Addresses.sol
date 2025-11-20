@@ -44,11 +44,13 @@ contract V3Addresses {
         address oldLocatorImpl;
         address oldLidoImpl;
         address oldAccountingOracleImpl;
+        address oldTokenRateNotifier;
 
         // New implementations
         address newLocatorImpl;
         address newLidoImpl;
         address newAccountingOracleImpl;
+        address newTokenRateNotifier;
 
         // New fancy proxy and blueprint contracts
         address upgradeableBeacon;
@@ -92,6 +94,7 @@ contract V3Addresses {
     address public immutable OLD_BURNER;
     address public immutable OLD_ACCOUNTING_ORACLE_IMPL;
     address public immutable OLD_LIDO_IMPL;
+    address public immutable OLD_TOKEN_RATE_NOTIFIER;
 
     //
     // -------- Upgraded contracts --------
@@ -104,6 +107,7 @@ contract V3Addresses {
     address public immutable ORACLE_REPORT_SANITY_CHECKER;
     address public immutable NEW_LIDO_IMPL;
     address public immutable NEW_ACCOUNTING_ORACLE_IMPL;
+    address public immutable NEW_TOKEN_RATE_NOTIFIER;
 
     //
     // -------- New V3 contracts --------
@@ -174,10 +178,12 @@ contract V3Addresses {
         OLD_LOCATOR_IMPL = params.oldLocatorImpl;
         OLD_ACCOUNTING_ORACLE_IMPL = params.oldAccountingOracleImpl;
         OLD_LIDO_IMPL = params.oldLidoImpl;
+        OLD_TOKEN_RATE_NOTIFIER = params.oldTokenRateNotifier;
         LOCATOR = params.locator;
         NEW_LOCATOR_IMPL = params.newLocatorImpl;
         NEW_LIDO_IMPL = params.newLidoImpl;
         NEW_ACCOUNTING_ORACLE_IMPL = params.newAccountingOracleImpl;
+        NEW_TOKEN_RATE_NOTIFIER = params.newTokenRateNotifier;
         KERNEL = params.kernel;
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;

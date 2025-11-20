@@ -27,11 +27,13 @@ export async function main() {
     oldLocatorImplementation,
     lidoImplementation,
     await accountingOracle.proxy__getImplementation(),
+    getAddress(Sk.tokenRebaseNotifier, state),
 
     // New implementations
     state[Sk.lidoLocator].implementation.address,
     state[Sk.appLido].implementation.address,
     state[Sk.accountingOracle].implementation.address,
+    getAddress(Sk.tokenRebaseNotifierV3, state),
 
     // New fancy proxy and blueprint contracts
     state[Sk.stakingVaultBeacon].address,

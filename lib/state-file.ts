@@ -92,6 +92,7 @@ export enum Sk {
   accounting = "accounting",
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
+  tokenRebaseNotifierV3 = "tokenRebaseNotifierV3",
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
@@ -169,6 +170,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.wstETH:
     case Sk.depositContract:
     case Sk.tokenRebaseNotifier:
+    case Sk.tokenRebaseNotifierV3:
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
     case Sk.stakingVaultFactory:

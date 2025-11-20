@@ -61,6 +61,13 @@ interface IVaultsAdapter {
     function evmScriptExecutor() external view returns (address);
 }
 
+interface ITokenRateNotifier {
+    function observers(uint256 index) external view returns (address);
+    function observersLength() external view returns (uint256);
+    function addObserver(address observer) external;
+    function transferOwnership(address newOwner) external;
+}
+
 interface ILidoLocator {
     function vaultHub() external view returns (address);
     function predepositGuarantee() external view returns (address);
@@ -70,6 +77,7 @@ interface ILidoLocator {
     function accounting() external view returns (address);
     function stakingRouter() external view returns (address);
     function vaultFactory() external view returns (address);
+    function postTokenRebaseReceiver() external view returns (address);
 }
 
 /**
@@ -119,7 +127,7 @@ contract V3TemporaryAdmin {
      * @param _lidoLocatorImpl The new LidoLocator implementation address
      * @param _vaultsAdapter The vaults' adapter address from easyTrack
      */
-    function completeSetup(address _lidoLocatorImpl, address _vaultsAdapter, address _gateSeal) external {
+    function completeSetup(address _lidoLocatorImpl, address _vaultsAdapter, address _gateSeal, address _oldTokenRateNotifier) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
         if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
         if (_vaultsAdapter == address(0)) revert ZeroVaultsAdapter();
@@ -134,6 +142,7 @@ contract V3TemporaryAdmin {
         _setupOperatorGrid(locator.operatorGrid(), IVaultsAdapter(_vaultsAdapter).evmScriptExecutor(), _vaultsAdapter);
         _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
         _setupVaultHub(locator.vaultHub(), _vaultsAdapter, _gateSeal);
+        _migrateTokenRateNotifier(_oldTokenRateNotifier, locator.postTokenRebaseReceiver());
     }
 
 
@@ -201,6 +210,21 @@ contract V3TemporaryAdmin {
         IAccessControl(_burner).grantRole(requestBurnSharesRole, _csmAccounting);
 
         _transferAdminToAgent(_burner);
+    }
+
+    function _migrateTokenRateNotifier(address _oldTokenRateNotifier, address _newTokenRateNotifier) private {
+        ITokenRateNotifier oldNotifier = ITokenRateNotifier(_oldTokenRateNotifier);
+        ITokenRateNotifier newNotifier = ITokenRateNotifier(_newTokenRateNotifier);
+
+        assert(newNotifier.observersLength() == 0);
+        uint256 observersLength = oldNotifier.observersLength();
+
+        for (uint256 i = 0; i < observersLength; i++) {
+            address observer = oldNotifier.observers(i);
+            newNotifier.addObserver(observer);
+        }
+
+        newNotifier.transferOwnership(AGENT);
     }
 
     function _transferAdminToAgent(address _contract) private {
