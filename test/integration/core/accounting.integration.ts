@@ -20,6 +20,8 @@ describe("Integration: Accounting", () => {
   before(async () => {
     ctx = await getProtocolContext();
 
+    await report(ctx);
+
     snapshot = await Snapshot.take();
   });
 
@@ -213,16 +215,16 @@ describe("Integration: Accounting", () => {
   it("Should revert report on sanity checks if CL rebase is too large", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
 
-    const maxCLRebaseViaLimiter = await rebaseLimitWei();
+    const maxCLRebaseViaLimiter = (await rebaseLimitWei()) + 1n;
 
-    // Expected annual limit to shot first
-    const rebaseAmount = maxCLRebaseViaLimiter - 1n;
-
-    const params = { clDiff: rebaseAmount, excludeVaultsBalances: true };
-    await expect(report(ctx, params)).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "IncorrectCLBalanceIncrease(uint256)",
-    );
+    await expect(
+      report(ctx, {
+        clDiff: maxCLRebaseViaLimiter,
+        excludeVaultsBalances: true,
+        reportBurner: false,
+        skipWithdrawals: true,
+      }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease(uint256)");
   });
 
   it("Should account correctly with no CL rebase", async () => {
