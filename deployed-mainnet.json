@@ -331,6 +331,9 @@
     "sealingCommittee": "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C",
     "address": "0xA6BC802fAa064414AA62117B4a53D27fFfF741F1"
   },
+  "resealManager": {
+    "address": "0x7914b5a1539b97Bd0bbd155757F25FD79A522d24"
+  },
   "hashConsensusForAccountingOracle": {
     "address": "0xD624B08C83bAECF0807Dd2c6880C3154a5F0B288",
     "contract": "contracts/0.8.9/oracle/HashConsensus.sol",

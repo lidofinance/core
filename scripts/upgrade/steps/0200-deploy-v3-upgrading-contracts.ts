@@ -49,6 +49,7 @@ export async function main() {
     getAddress(Sk.appVoting, state),
     getAddress(Sk.dgDualGovernance, state),
     getAddress(Sk.aragonAcl, state),
+    getAddress(Sk.resealManager, state),
 
     // EasyTrack addresses
     getAddress(Sk.easyTrack, state),

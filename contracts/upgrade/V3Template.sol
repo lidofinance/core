@@ -257,7 +257,8 @@ contract V3Template is V3Addresses {
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);     
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULTS_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULTS_ADAPTER);
-        _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
+        _assertTwoOZRoleHolders(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER);
+        _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).RESUME_ROLE(), RESEAL_MANAGER);
 
         // OperatorGrid
         _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
@@ -298,8 +299,9 @@ contract V3Template is V3Addresses {
         // PredepositGuarantee
         _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
         _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL);
-
+        _assertTwoOZRoleHolders(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER);
+        _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).RESUME_ROLE(), RESEAL_MANAGER);
+        
         // StakingRouter
         bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
         _assertSingleOZRoleHolder(STAKING_ROUTER, reportRewardsMintedRole, ACCOUNTING);
@@ -424,6 +426,15 @@ contract V3Template is V3Addresses {
         ) {
             revert IncorrectOZAccessControlRoleHolders(address(accessControlled), _role);
         }
+    }
+
+    function _assertTwoOZRoleHolders(
+        address _accessControlled, bytes32 _role, address _holder1, address _holder2
+    ) internal view {
+        address[] memory holders = new address[](2);
+        holders[0] = _holder1;
+        holders[1] = _holder2;
+        _assertOZRoleHolders(_accessControlled, _role, holders);
     }
 
     function _assertThreeOZRoleHolders(

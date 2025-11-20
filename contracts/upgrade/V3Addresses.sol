@@ -66,6 +66,7 @@ contract V3Addresses {
         address voting;
         address dualGovernance;
         address acl;
+        address resealManager;
 
         // EasyTrack addresses
         address easyTrack;
@@ -162,6 +163,7 @@ contract V3Addresses {
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
     address public immutable ORACLE_DAEMON_CONFIG;
+    address public immutable RESEAL_MANAGER;
 
     constructor(
         V3AddressesParams memory params
@@ -232,6 +234,7 @@ contract V3Addresses {
         WITHDRAWAL_QUEUE = newLocatorImpl.withdrawalQueue();
         WSTETH = newLocatorImpl.wstETH();
         ORACLE_DAEMON_CONFIG = newLocatorImpl.oracleDaemonConfig();
+        RESEAL_MANAGER = params.resealManager;
 
         {
             // Retrieve contracts with burner allowances to migrate: NOR, SDVT and CSM ACCOUNTING

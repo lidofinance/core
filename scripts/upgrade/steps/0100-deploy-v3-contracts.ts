@@ -34,6 +34,7 @@ export async function main() {
   const depositContract = state.chainSpec.depositContractAddress;
   const hashConsensusAddress = state[Sk.hashConsensusForAccountingOracle].address;
   const pdgDeployParams = parameters.predepositGuarantee;
+  const resealManagerAddress = state[Sk.resealManager].address;
 
   const proxyContractsOwner = agentAddress;
 
@@ -394,7 +395,13 @@ export async function main() {
   await makeTx(
     v3TemporaryAdminContract,
     "completeSetup",
-    [lidoLocatorImpl.address, parameters.easyTrack.VaultsAdapter, gateSealAddress, oldTokenRateNotifierAddress],
+    [
+      lidoLocatorImpl.address,
+      parameters.easyTrack.VaultsAdapter,
+      gateSealAddress,
+      resealManagerAddress,
+      oldTokenRateNotifierAddress,
+    ],
     {
       from: deployer,
     },

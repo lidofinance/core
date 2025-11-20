@@ -15,6 +15,7 @@ interface IVaultHub {
 
 interface IPausableUntilWithRoles {
     function PAUSE_ROLE() external view returns (bytes32);
+    function RESUME_ROLE() external view returns (bytes32);
 }
 
 interface ILazyOracle {
@@ -127,7 +128,13 @@ contract V3TemporaryAdmin {
      * @param _lidoLocatorImpl The new LidoLocator implementation address
      * @param _vaultsAdapter The vaults' adapter address from easyTrack
      */
-    function completeSetup(address _lidoLocatorImpl, address _vaultsAdapter, address _gateSeal, address _oldTokenRateNotifier) external {
+    function completeSetup(
+        address _lidoLocatorImpl,
+        address _vaultsAdapter,
+        address _gateSeal,
+        address _resealManager,
+        address _oldTokenRateNotifier
+    ) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
         if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
         if (_vaultsAdapter == address(0)) revert ZeroVaultsAdapter();
@@ -138,27 +145,36 @@ contract V3TemporaryAdmin {
 
         address csmAccounting = getCsmAccountingAddress(locator.stakingRouter());
 
-        _setupPredepositGuarantee(locator.predepositGuarantee(), _gateSeal);
+        _setupPredepositGuarantee(locator.predepositGuarantee(), _gateSeal, _resealManager);
         _setupOperatorGrid(locator.operatorGrid(), IVaultsAdapter(_vaultsAdapter).evmScriptExecutor(), _vaultsAdapter);
         _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
-        _setupVaultHub(locator.vaultHub(), _vaultsAdapter, _gateSeal);
+        _setupVaultHub(locator.vaultHub(), _vaultsAdapter, _gateSeal, _resealManager);
         _migrateTokenRateNotifier(_oldTokenRateNotifier, locator.postTokenRebaseReceiver());
     }
-
 
     /**
      * @notice Setup VaultHub with all required roles and transfer admin to agent
      * @param _vaultHub The VaultHub contract address
      * @param _vaultsAdapter The vaults' adapter address
+     * @param _gateSeal The GateSeal contract address
+     * @param _resealManager The ResealManager contract address
      */
-    function _setupVaultHub(address _vaultHub, address _vaultsAdapter, address _gateSeal) private {
+    function _setupVaultHub(
+        address _vaultHub,
+        address _vaultsAdapter,
+        address _gateSeal,
+        address _resealManager
+    ) private {
         // Get roles from the contract
         bytes32 pauseRole = IPausableUntilWithRoles(_vaultHub).PAUSE_ROLE();
+        bytes32 resumeRole = IPausableUntilWithRoles(_vaultHub).RESUME_ROLE();
         bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
         bytes32 validatorExitRole = IVaultHub(_vaultHub).VALIDATOR_EXIT_ROLE();
         bytes32 badDebtMasterRole = IVaultHub(_vaultHub).BAD_DEBT_MASTER_ROLE();
 
         IAccessControl(_vaultHub).grantRole(pauseRole, _gateSeal);
+        IAccessControl(_vaultHub).grantRole(pauseRole, _resealManager);
+        IAccessControl(_vaultHub).grantRole(resumeRole, _resealManager);
 
         IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
 
@@ -171,10 +187,21 @@ contract V3TemporaryAdmin {
     /**
      * @notice Setup PredepositGuarantee with PAUSE_ROLE for gateSeal and transfer admin to agent
      * @param _predepositGuarantee The PredepositGuarantee contract address
+     * @param _gateSeal The GateSeal contract address
+     * @param _resealManager The ResealManager contract address that can 
      */
-    function _setupPredepositGuarantee(address _predepositGuarantee, address _gateSeal) private {
+    function _setupPredepositGuarantee(
+        address _predepositGuarantee,
+        address _gateSeal,
+        address _resealManager
+    ) private {
         bytes32 pauseRole = IPausableUntilWithRoles(_predepositGuarantee).PAUSE_ROLE();
+        bytes32 resumeRole = IPausableUntilWithRoles(_predepositGuarantee).RESUME_ROLE();
+        
         IAccessControl(_predepositGuarantee).grantRole(pauseRole, _gateSeal);
+        IAccessControl(_predepositGuarantee).grantRole(pauseRole, _resealManager);
+        IAccessControl(_predepositGuarantee).grantRole(resumeRole, _resealManager);
+
         _transferAdminToAgent(_predepositGuarantee);
     }
 
