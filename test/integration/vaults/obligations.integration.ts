@@ -246,7 +246,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       it("Does not increase on new minting", async () => {
         await dashboard.fund({ value: ether("2") });
-        await dashboard.mintShares(stranger, ether("1"));
+        await dashboard.mintShares(stranger, await dashboard.remainingMintingCapacityShares(0n));
 
         const recordAfter = await vaultHub.vaultRecord(stakingVault);
         expect(recordAfter.redemptionShares).to.equal(redemptionShares);
@@ -341,7 +341,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       it("Handles slashing when healthShortfallShares > redemptionShares", async () => {
         const initialTotalValue = ether("10");
         await dashboard.fund({ value: initialTotalValue });
-        const liabilityShares = (initialTotalValue * 50n) / 100n;
+        const liabilityShares = ((await lido.getSharesByPooledEth(initialTotalValue)) * 50n) / 100n;
         await dashboard.mintShares(stranger, liabilityShares);
 
         const redemptionShares = (initialTotalValue * 10n) / 100n;
