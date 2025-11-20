@@ -647,5 +647,11 @@
     "contract": "contracts/0.6.12/WstETH.sol",
     "deployTx": "0xaf2c1a501d2b290ef1e84ddcfc7beb3406f8ece2c46dee14e212e8233654ff05",
     "constructorArgs": ["0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
+  },
+  "tokenRebaseNotifier": {
+    "address": "0xe6793B9e4FbA7DE0ee833F9D02bba7DB5EB27823",
+    "contract": "contracts/0.8.9/TokenRateNotifier.sol",
+    "deployTx": "0xcbffe641fe89657368a79e7482e90ec8517b4ac6f27ad6301f52d0e9db97887d",
+    "constructorArgs": ["0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000"]
   }
 }
