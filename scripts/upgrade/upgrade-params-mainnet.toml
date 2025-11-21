@@ -16,10 +16,10 @@ sealDuration = 1209600  # 14 days
 sealingCommittee = "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
 
 [easyTrack]
-trustedCaller = "0x0000000000000000000000000000000000000000"     # Address of stVaults EasyTrack committee # TODO: update the placeholder
+trustedCaller = "0x18A1065c81b0Cc356F1b1C843ddd5E14e4AefffF"     # Address of stVaults EasyTrack committee # TODO: update the placeholder
 initialValidatorExitFeeLimit = "100000000000000000"              # Max validator exit fee which can be spend for single key exit request
 # Phase 1: Pilot (starts with Lido V3 upgrade enacted) - https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665
-maxGroupShareLimit = "250000000000000000000000"                  # Max share limit which can be set for group by EasyTrack
+maxGroupShareLimit = "50000000000000000000000"                   # Max share limit which can be set for group by EasyTrack
 maxDefaultTierShareLimit = 0                                     # Max share limit which can be set for default tier by EasyTrack
 VaultsAdapter = "0x4CC57Fcb95429CBdC596824a40A92D1245FDb92b"     # TODO: update upon deployment
 
