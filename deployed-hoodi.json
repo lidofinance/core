@@ -37,7 +37,7 @@
   "alertingHarness": {
     "implementation": {
       "contract": "contracts/harness/AlertingHarness.sol",
-      "address": "0xA5707977Efa65521de9ca7fed133a70561b51234",
+      "address": "0xc12ae7e57c927870939030De93487D06E8Ab69ce",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
