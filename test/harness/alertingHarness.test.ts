@@ -79,12 +79,6 @@ describe("AlertingHarness.sol", () => {
     });
   });
 
-  describe("version", () => {
-    it("returns correct version", async () => {
-      expect(await alertingHarness.VERSION()).to.equal("1.0.0");
-    });
-  });
-
   describe("getVaultData", () => {
     it("returns correct vault data for a connected vault", async () => {
       const vault = await createMockStakingVaultAndConnect(user, operator);
@@ -94,17 +88,17 @@ describe("AlertingHarness.sol", () => {
       const vaultData = await alertingHarness.getVaultData(await vault.getAddress());
 
       expect(vaultData.vault).to.equal(await vault.getAddress());
-      expect(vaultData.vaultConnection.vaultIndex).to.be.greaterThan(0);
-      expect(vaultData.vaultRecord.report.totalValue).to.equal(ether("100"));
-      expect(vaultData.vaultRecord.report.inOutDelta).to.equal(ether("1")); // connected vault has 1 ETH deposit
-      expect(vaultData.vaultPendingActivationsCount).to.equal(0n);
-      expect(vaultData.stakingVaultData.stakingVaultNodeOperator).to.equal(await operator.getAddress());
-      expect(vaultData.stakingVaultData.stakingVaultDepositor).to.equal(await locator.predepositGuarantee());
-      expect(vaultData.stakingVaultData.stakingVaultOwner).to.equal(await locator.vaultHub());
-      expect(vaultData.stakingVaultData.stakingVaultPendingOwner).to.equal(ZeroAddress);
-      expect(vaultData.stakingVaultData.stakingVaultStagedBalance).to.equal(0n);
-      expect(vaultData.stakingVaultData.stakingVaultAvailableBalance).to.equal(ether("1"));
-      expect(vaultData.stakingVaultData.stakingVaultBeaconChainDepositsPaused).to.equal(false);
+      expect(vaultData.connection.vaultIndex).to.be.greaterThan(0);
+      expect(vaultData.record.report.totalValue).to.equal(ether("100"));
+      expect(vaultData.record.report.inOutDelta).to.equal(ether("1")); // connected vault has 1 ETH deposit
+      expect(vaultData.pendingActivationsCount).to.equal(0n);
+      expect(vaultData.contractInfo.nodeOperator).to.equal(await operator.getAddress());
+      expect(vaultData.contractInfo.depositor).to.equal(await locator.predepositGuarantee());
+      expect(vaultData.contractInfo.owner).to.equal(await locator.vaultHub());
+      expect(vaultData.contractInfo.pendingOwner).to.equal(ZeroAddress);
+      expect(vaultData.contractInfo.stagedBalance).to.equal(0n);
+      expect(vaultData.contractInfo.availableBalance).to.equal(ether("1"));
+      expect(vaultData.contractInfo.beaconChainDepositsPaused).to.equal(false);
     });
   });
 
@@ -190,7 +184,7 @@ describe("AlertingHarness.sol", () => {
       const batch = await alertingHarness.batchVaultConnections(0, 10);
       expect(batch).to.have.length(1);
       expect(batch[0].vault).to.equal(await vault.getAddress());
-      expect(batch[0].vaultConnection.vaultIndex).to.be.greaterThan(0);
+      expect(batch[0].connection.vaultIndex).to.be.greaterThan(0);
     });
   });
 
@@ -208,8 +202,8 @@ describe("AlertingHarness.sol", () => {
       const batch = await alertingHarness.batchVaultRecords(0, 10);
       expect(batch).to.have.length(1);
       expect(batch[0].vault).to.equal(await vault.getAddress());
-      expect(batch[0].vaultRecord.report.totalValue).to.equal(ether("100"));
-      expect(batch[0].vaultRecord.report.inOutDelta).to.equal(ether("1")); // connected vault has 1 ETH deposit
+      expect(batch[0].record.report.totalValue).to.equal(ether("100"));
+      expect(batch[0].record.report.inOutDelta).to.equal(ether("1")); // connected vault has 1 ETH deposit
     });
   });
 
@@ -227,11 +221,11 @@ describe("AlertingHarness.sol", () => {
       const batch = await alertingHarness.batchVaultQuarantines(0, 10);
       expect(batch).to.have.length(1);
       expect(batch[0].vault).to.equal(await vault.getAddress());
-      expect(batch[0].vaultQuarantineInfo.isActive).to.equal(true);
-      expect(batch[0].vaultQuarantineInfo.pendingTotalValueIncrease).to.equal(0n);
-      expect(batch[0].vaultQuarantineInfo.startTimestamp).to.equal(0n);
-      expect(batch[0].vaultQuarantineInfo.endTimestamp).to.equal(0n);
-      expect(batch[0].vaultQuarantineInfo.totalValueRemainder).to.equal(0n);
+      expect(batch[0].quarantineInfo.isActive).to.equal(true);
+      expect(batch[0].quarantineInfo.pendingTotalValueIncrease).to.equal(0n);
+      expect(batch[0].quarantineInfo.startTimestamp).to.equal(0n);
+      expect(batch[0].quarantineInfo.endTimestamp).to.equal(0n);
+      expect(batch[0].quarantineInfo.totalValueRemainder).to.equal(0n);
     });
   });
 
@@ -247,7 +241,7 @@ describe("AlertingHarness.sol", () => {
       const batch = await alertingHarness.batchPendingActivations(0, 10);
       expect(batch).to.have.length(1);
       expect(batch[0].vault).to.equal(await vault.getAddress());
-      expect(batch[0].vaultPendingActivationsCount).to.equal(0n);
+      expect(batch[0].pendingActivationsCount).to.equal(0n);
     });
   });
 
@@ -264,13 +258,13 @@ describe("AlertingHarness.sol", () => {
 
       expect(batch).to.have.length(1);
       expect(batch[0].vault).to.equal(await vault.getAddress());
-      expect(batch[0].stakingVaultData.stakingVaultNodeOperator).to.equal(await operator.getAddress());
-      expect(batch[0].stakingVaultData.stakingVaultDepositor).to.equal(await locator.predepositGuarantee());
-      expect(batch[0].stakingVaultData.stakingVaultOwner).to.equal(await locator.vaultHub());
-      expect(batch[0].stakingVaultData.stakingVaultPendingOwner).to.equal(ZeroAddress);
-      expect(batch[0].stakingVaultData.stakingVaultStagedBalance).to.equal(0n);
-      expect(batch[0].stakingVaultData.stakingVaultAvailableBalance).to.equal(ether("1"));
-      expect(batch[0].stakingVaultData.stakingVaultBeaconChainDepositsPaused).to.equal(false);
+      expect(batch[0].contractInfo.nodeOperator).to.equal(await operator.getAddress());
+      expect(batch[0].contractInfo.depositor).to.equal(await locator.predepositGuarantee());
+      expect(batch[0].contractInfo.owner).to.equal(await locator.vaultHub());
+      expect(batch[0].contractInfo.pendingOwner).to.equal(ZeroAddress);
+      expect(batch[0].contractInfo.stagedBalance).to.equal(0n);
+      expect(batch[0].contractInfo.availableBalance).to.equal(ether("1"));
+      expect(batch[0].contractInfo.beaconChainDepositsPaused).to.equal(false);
     });
   });
 });

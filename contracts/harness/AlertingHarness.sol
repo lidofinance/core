@@ -1,6 +1,11 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
+// ======================================================================================================= //
+// DISCLAIMER: This contract is provided for tooling purposes only and is NOT part of the Lido core protocol.
+// It is not audited, and may be updated in the future without notice.
+// ======================================================================================================= //
+
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
@@ -11,72 +16,69 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {PredepositGuarantee} from "contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol";
 
-
 /// @title AlertingHarness
-/// @notice provides a harness for gathering vault-related data
+/// @dev this contract is NOT a part of the Lido core protocol logic, it is only used for tooling purposes
 contract AlertingHarness {
     /// @notice reference to the Lido locator contract used to resolve protocol contract addresses
     ILidoLocator public immutable LIDO_LOCATOR;
 
-    /// @notice version of the contract
-    string public constant VERSION = "1.0.0";
-
-    /// @notice structure containing relevant data for a single staking vault
-    /// @param stakingVault the address of the staking vault
-    /// @param stakingVaultNodeOperator the address of the node operator for the staking vault
-    /// @param stakingVaultDepositor the address of the depositor for the staking vault
-    /// @param stakingVaultOwner the address of the owner for the staking vault
-    /// @param stakingVaultPendingOwner the address of the pending owner for the staking vault
-    /// @param stakingVaultStagedBalance the staged balance of the staking vault
-    /// @param stakingVaultAvailableBalance the available balance of the staking vault
-    struct StakingVaultData {
-        address stakingVaultNodeOperator;
-        address stakingVaultDepositor;
-        address stakingVaultOwner;
-        address stakingVaultPendingOwner;
-        uint256 stakingVaultStagedBalance;
-        uint256 stakingVaultAvailableBalance;
-        bool stakingVaultBeaconChainDepositsPaused;
+    /// @notice structure containing relevant data from an underlying contract
+    /// @param nodeOperator the address of the node operator
+    /// @param depositor the address of the depositor
+    /// @param owner the address of the owner
+    /// @param pendingOwner the address of the pending owner
+    /// @param stagedBalance the staged balance
+    /// @param availableBalance the available balance
+    /// @param beaconChainDepositsPaused the status of the beacon chain deposits
+    struct ContractInfo {
+        address nodeOperator;
+        address depositor;
+        address owner;
+        address pendingOwner;
+        uint256 stagedBalance;
+        uint256 availableBalance;
+        bool beaconChainDepositsPaused;
     }
 
     /// @notice structure containing relevant data for a single connected vault
     /// @param vault The address of the vault
-    /// @param vaultConnection The current connection parameters for the vault (such as limits and owner info)
-    /// @param vaultRecord the current accounting record for the vault (liabilities, report, in/out delta, etc.)
-    /// @param vaultQuarantineInfo the quarantine info (if any) for the vault from LazyOracle
-    /// @param vaultPendingActivationsCount the number of pending validator activations in the vault (from PredepositGuarantee)
+    /// @param connection The current connection parameters for the vault (such as limits and owner info)
+    /// @param record the current accounting record for the vault (liabilities, report, in/out delta, etc.)
+    /// @param quarantineInfo the quarantine info (if any) for the vault from LazyOracle
+    /// @param contractData the data from the underlying staking vault contracts
+    /// @param pendingActivationsCount the number of pending validator activations in the vault (from PredepositGuarantee)
     struct VaultData {
         address vault;
-        VaultHub.VaultConnection vaultConnection;
-        VaultHub.VaultRecord vaultRecord;
-        LazyOracle.QuarantineInfo vaultQuarantineInfo;
-        uint256 vaultPendingActivationsCount;
-        StakingVaultData stakingVaultData;
+        VaultHub.VaultConnection connection;
+        VaultHub.VaultRecord record;
+        LazyOracle.QuarantineInfo quarantineInfo;
+        ContractInfo contractInfo;
+        uint256 pendingActivationsCount;
     }
 
     struct VaultConnectionData {
         address vault;
-        VaultHub.VaultConnection vaultConnection;
+        VaultHub.VaultConnection connection;
     }
 
     struct VaultRecordData {
         address vault;
-        VaultHub.VaultRecord vaultRecord;
+        VaultHub.VaultRecord record;
     }
 
     struct VaultQuarantineInfoData {
         address vault;
-        LazyOracle.QuarantineInfo vaultQuarantineInfo;
+        LazyOracle.QuarantineInfo quarantineInfo;
     }
 
     struct VaultPendingActivationsData {
         address vault;
-        uint256 vaultPendingActivationsCount;
+        uint256 pendingActivationsCount;
     }
 
-    struct VaultStakingVaultData {
+    struct VaultContractInfoData {
         address vault;
-        StakingVaultData stakingVaultData;
+        ContractInfo contractInfo;
     }
 
     error ZeroAddress(string _argument);
@@ -140,7 +142,7 @@ contract AlertingHarness {
             address vault = vaultHub.vaultByIndex(_offset + i + 1);
             batch[i] = VaultConnectionData({
                 vault: vault,
-                vaultConnection: vaultHub.vaultConnection(vault)
+                connection: vaultHub.vaultConnection(vault)
             });
         }
     }
@@ -162,7 +164,7 @@ contract AlertingHarness {
             address vault = vaultHub.vaultByIndex(_offset + i + 1);
             batch[i] = VaultRecordData({
                 vault: vault,
-                vaultRecord: vaultHub.vaultRecord(vault)
+                record: vaultHub.vaultRecord(vault)
             });
         }
     }
@@ -185,7 +187,7 @@ contract AlertingHarness {
             address vault = vaultHub.vaultByIndex(_offset + i + 1);
             batch[i] = VaultQuarantineInfoData({
                 vault: vault,
-                vaultQuarantineInfo: lazyOracle.vaultQuarantine(vault)
+                quarantineInfo: lazyOracle.vaultQuarantine(vault)
             });
         }
     }
@@ -208,28 +210,28 @@ contract AlertingHarness {
             address vault = vaultHub.vaultByIndex(_offset + i + 1);
             batch[i] = VaultPendingActivationsData({
                 vault: vault,
-                vaultPendingActivationsCount: predepositGuarantee.pendingActivations(IStakingVault(vault))
+                pendingActivationsCount: predepositGuarantee.pendingActivations(IStakingVault(vault))
             });
         }
     }
 
-    /// @notice retrieves batch of StakingVaultData structs in a single call
+    /// @notice retrieves batch of ContractInfo structs in a single call
     /// @param _offset the starting vault index in the hub [0, vaultsCount)
     /// @param _limit maximum number of items to return in the batch
-    /// @return batch of StakingVaultData structs for the requested vaults
+    /// @return batch of ContractInfo structs for the requested vaults
     function batchStakingVaultData(
         uint256 _offset,
         uint256 _limit
-    ) external view returns (VaultStakingVaultData[] memory batch) {
+    ) external view returns (VaultContractInfoData[] memory batch) {
         (VaultHub vaultHub, uint256 batchSize) = _getBatchSize(_offset, _limit);
-        if (batchSize == 0) return new VaultStakingVaultData[](0);
+        if (batchSize == 0) return new VaultContractInfoData[](0);
 
-        batch = new VaultStakingVaultData[](batchSize);
+        batch = new VaultContractInfoData[](batchSize);
         for (uint256 i = 0; i < batchSize; ++i) {
             address vault = vaultHub.vaultByIndex(_offset + i + 1);
-            batch[i] = VaultStakingVaultData({
+            batch[i] = VaultContractInfoData({
                 vault: vault,
-                stakingVaultData: _collectStakingVaultData(IStakingVault(vault))
+                contractInfo: _collectContractInfo(IStakingVault(vault))
             });
         }
     }
@@ -245,7 +247,7 @@ contract AlertingHarness {
         vaultHub = _vaultHub();
         uint256 vaultsCount = vaultHub.vaultsCount();
 
-        if (_offset > vaultsCount) return (vaultHub, 0);
+        if (_offset >= vaultsCount) return (vaultHub, 0);
 
         batchSize = _offset + _limit > vaultsCount ? vaultsCount - _offset : _limit;
     }
@@ -265,26 +267,26 @@ contract AlertingHarness {
         IStakingVault stakingVault = IStakingVault(_vault);
         return VaultData({
             vault: _vault,
-            vaultConnection: vaultHub.vaultConnection(_vault),
-            vaultRecord: vaultHub.vaultRecord(_vault),
-            vaultQuarantineInfo: lazyOracle.vaultQuarantine(_vault),
-            vaultPendingActivationsCount: predepositGuarantee.pendingActivations(stakingVault),
-            stakingVaultData: _collectStakingVaultData(stakingVault)
+            connection: vaultHub.vaultConnection(_vault),
+            record: vaultHub.vaultRecord(_vault),
+            quarantineInfo: lazyOracle.vaultQuarantine(_vault),
+            pendingActivationsCount: predepositGuarantee.pendingActivations(stakingVault),
+            contractInfo: _collectContractInfo(stakingVault)
         });
     }
 
     /// @notice helper to collect staking vault data from a single staking vault
     /// @param _stakingVault the staking vault to collect data from
     /// @return populated stakingVaultData structure
-    function _collectStakingVaultData(IStakingVault _stakingVault) internal view returns (StakingVaultData memory) {
-        return StakingVaultData({
-            stakingVaultNodeOperator: _stakingVault.nodeOperator(),
-            stakingVaultDepositor: _stakingVault.depositor(),
-            stakingVaultOwner: _stakingVault.owner(),
-            stakingVaultPendingOwner: _stakingVault.pendingOwner(),
-            stakingVaultStagedBalance: _stakingVault.stagedBalance(),
-            stakingVaultAvailableBalance: _stakingVault.availableBalance(),
-            stakingVaultBeaconChainDepositsPaused: _stakingVault.beaconChainDepositsPaused()
+    function _collectContractInfo(IStakingVault _stakingVault) internal view returns (ContractInfo memory) {
+        return ContractInfo({
+            nodeOperator: _stakingVault.nodeOperator(),
+            depositor: _stakingVault.depositor(),
+            owner: _stakingVault.owner(),
+            pendingOwner: _stakingVault.pendingOwner(),
+            stagedBalance: _stakingVault.stagedBalance(),
+            availableBalance: _stakingVault.availableBalance(),
+            beaconChainDepositsPaused: _stakingVault.beaconChainDepositsPaused()
         });
     }
 
