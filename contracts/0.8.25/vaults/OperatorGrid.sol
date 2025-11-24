@@ -186,7 +186,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         $.tiers.push(
             Tier({
                 operator: DEFAULT_TIER_OPERATOR,
-                shareLimit: uint96(_defaultTierParams.shareLimit),
+                shareLimit: SafeCast.toUint96(_defaultTierParams.shareLimit),
                 reserveRatioBP: uint16(_defaultTierParams.reserveRatioBP),
                 forcedRebalanceThresholdBP: uint16(_defaultTierParams.forcedRebalanceThresholdBP),
                 infraFeeBP: uint16(_defaultTierParams.infraFeeBP),
@@ -287,7 +287,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
             Tier memory tier_ = Tier({
                 operator: _nodeOperator,
-                shareLimit: uint96(_tiers[i].shareLimit),
+                shareLimit: SafeCast.toUint96(_tiers[i].shareLimit),
                 reserveRatioBP: uint16(_tiers[i].reserveRatioBP),
                 forcedRebalanceThresholdBP: uint16(_tiers[i].forcedRebalanceThresholdBP),
                 infraFeeBP: uint16(_tiers[i].infraFeeBP),
@@ -301,12 +301,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             emit TierAdded(
                 _nodeOperator,
                 tierId,
-                uint96(tier_.shareLimit),
-                uint16(tier_.reserveRatioBP),
-                uint16(tier_.forcedRebalanceThresholdBP),
-                uint16(tier_.infraFeeBP),
-                uint16(tier_.liquidityFeeBP),
-                uint16(tier_.reservationFeeBP)
+                tier_.shareLimit,
+                tier_.reserveRatioBP,
+                tier_.forcedRebalanceThresholdBP,
+                tier_.infraFeeBP,
+                tier_.liquidityFeeBP,
+                tier_.reservationFeeBP
             );
 
             tierId++;
@@ -356,7 +356,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
             Tier storage tier_ = $.tiers[_tierIds[i]];
 
-            tier_.shareLimit = uint96(_tierParams[i].shareLimit);
+            tier_.shareLimit = SafeCast.toUint96(_tierParams[i].shareLimit);
             tier_.reserveRatioBP = uint16(_tierParams[i].reserveRatioBP);
             tier_.forcedRebalanceThresholdBP = uint16(_tierParams[i].forcedRebalanceThresholdBP);
             tier_.infraFeeBP = uint16(_tierParams[i].infraFeeBP);
