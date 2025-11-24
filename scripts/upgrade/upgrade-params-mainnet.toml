@@ -76,7 +76,7 @@ ao_consensus_version = 5              # Accounting Oracle consensus version: htt
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-expiryTimestamp = 1764547200          # December 1, 2025 00:00:00 UTC
+expiryTimestamp = 1766188800          # December 20, 2025 12:00:00 AM
 # Initial maximum external ratio in basis points for Lido v3
 # https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665#p-22926-rollout-plan-9
 initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial phase
