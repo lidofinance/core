@@ -32,6 +32,7 @@ import {
   impersonate,
 } from "lib";
 import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
+import { ceilDiv } from "lib/protocol";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -589,9 +590,16 @@ describe("VaultHub.sol:hub", () => {
       await reportVault({ vault });
 
       const record = await vaultHub.vaultRecord(vault);
-      const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
-      const shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
-      expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfall);
+
+      const maxMintableRatio = TOTAL_BASIS_POINTS - 50_00n;
+      const liabilityShares_ = record.liabilityShares;
+      const liability = await lido.getPooledEthBySharesRoundUp(liabilityShares_);
+      const totalValue_ = await vaultHub.totalValue(vault);
+
+      const shortfallEth = ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio, 50_00n);
+      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 100n;
+
+      expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfallShares);
     });
   });
 
@@ -644,7 +652,7 @@ describe("VaultHub.sol:hub", () => {
     it("returns correct value for rebalance vault", async () => {
       const { vault } = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
-        reserveRatioBP: 50_00n, // 50%
+        reserveRatioBP: 50_00n, // 50%s
         forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
@@ -664,9 +672,15 @@ describe("VaultHub.sol:hub", () => {
       await reportVault({ vault });
 
       const record = await vaultHub.vaultRecord(vault);
-      const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
-      const shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
-      expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfall);
+      const maxMintableRatio = TOTAL_BASIS_POINTS - 50_00n;
+      const liabilityShares_ = record.liabilityShares;
+      const liability = await lido.getPooledEthBySharesRoundUp(liabilityShares_);
+      const totalValue_ = await vaultHub.totalValue(vault);
+
+      const shortfallEth = ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio, 50_00n);
+      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 100n;
+
+      expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfallShares);
     });
   });
 
@@ -676,6 +690,13 @@ describe("VaultHub.sol:hub", () => {
     before(async () => {
       vault = await createVault(vaultFactory);
       await vault.connect(user).transferOwnership(vaultHub);
+    });
+
+    it("reverts if called by non-owner", async () => {
+      await expect(vaultHub.connect(stranger).connectVault(vault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotAuthorized",
+      );
     });
 
     it("reverts if vault is not factory deployed", async () => {
@@ -688,9 +709,10 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if vault is already connected", async () => {
       const { vault: connectedVault } = await createAndConnectVault(vaultFactory);
 
-      await expect(vaultHub.connect(user).connectVault(connectedVault))
-        .to.be.revertedWithCustomError(vaultHub, "VaultHubNotPendingOwner")
-        .withArgs(connectedVault);
+      await expect(vaultHub.connect(user).connectVault(connectedVault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotAuthorized",
+      );
     });
 
     it("connects the vault", async () => {
@@ -974,6 +996,85 @@ describe("VaultHub.sol:hub", () => {
           newReservationFeeBP,
         );
     });
+
+    it("reverts if minting capacity would be breached", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+      await vaultHub.connect(user).mintShares(vault, user.address, 1n);
+
+      await expect(
+        vaultHub.connect(operatorGridSigner).updateConnection(
+          vault,
+          SHARE_LIMIT,
+          10000n, // 100% reserve ratio
+          FORCED_REBALANCE_THRESHOLD_BP,
+          INFRA_FEE_BP,
+          LIQUIDITY_FEE_BP,
+          RESERVATION_FEE_BP,
+        ),
+      ).to.be.revertedWithCustomError(vaultHub, "VaultMintingCapacityExceeded");
+    });
+
+    context("for unhealthy vaults", () => {
+      let vault: StakingVault__MockForVaultHub;
+
+      before(async () => {
+        ({ vault } = await createAndConnectVault(vaultFactory, {
+          infraFeeBP: INFRA_FEE_BP,
+          liquidityFeeBP: LIQUIDITY_FEE_BP,
+          reservationFeeBP: RESERVATION_FEE_BP,
+        }));
+
+        await vaultHub.connect(user).fund(vault, { value: ether("1") });
+        await vaultHub.connect(user).mintShares(vault, user.address, ether("0.9"));
+        await reportVault({ vault, totalValue: ether("0.9") });
+
+        expect(await vaultHub.isVaultHealthy(vault)).to.be.false;
+      });
+
+      it("reverts if minting capacity would be breached (by forced rebalance threshold)", async () => {
+        await expect(
+          vaultHub.connect(operatorGridSigner).updateConnection(
+            vault,
+            SHARE_LIMIT,
+            RESERVE_RATIO_BP,
+            10000n, // 100% forced rebalance threshold
+            INFRA_FEE_BP,
+            LIQUIDITY_FEE_BP,
+            RESERVATION_FEE_BP,
+          ),
+        ).to.be.revertedWithCustomError(vaultHub, "VaultMintingCapacityExceeded");
+      });
+
+      it("allows to set share limit and fees even on the unhealthy vault", async () => {
+        await expect(
+          vaultHub
+            .connect(operatorGridSigner)
+            .updateConnection(
+              vault,
+              SHARE_LIMIT + 1n,
+              RESERVE_RATIO_BP,
+              FORCED_REBALANCE_THRESHOLD_BP,
+              INFRA_FEE_BP + 1n,
+              LIQUIDITY_FEE_BP + 1n,
+              RESERVATION_FEE_BP + 1n,
+            ),
+        )
+          .to.to.emit(vaultHub, "VaultConnectionUpdated")
+          .withArgs(vault, user.address, SHARE_LIMIT + 1n, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
+          .and.to.emit(vaultHub, "VaultFeesUpdated")
+          .withArgs(
+            vault,
+            INFRA_FEE_BP,
+            LIQUIDITY_FEE_BP,
+            RESERVATION_FEE_BP,
+            INFRA_FEE_BP + 1n,
+            LIQUIDITY_FEE_BP + 1n,
+            RESERVATION_FEE_BP + 1n,
+          );
+      });
+    });
   });
 
   context("disconnect", () => {
@@ -1104,6 +1205,34 @@ describe("VaultHub.sol:hub", () => {
       await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoLiabilitySharesShouldBeLeft",
+      );
+    });
+
+    it("reverts if unsettled lido fees are greater than the balance", async () => {
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      const totalValue = await vaultHub.totalValue(vaultAddress);
+      const cumulativeLidoFees = totalValue - 1n;
+      await reportVault({ vault, totalValue, cumulativeLidoFees });
+
+      await setBalance(vaultAddress, cumulativeLidoFees - 1n);
+
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NoUnsettledLidoFeesShouldBeLeft",
+      );
+    });
+
+    it("reverts if unsettled lido fees are greater than the total value", async () => {
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      const totalValue = await vaultHub.totalValue(vaultAddress);
+      const cumulativeLidoFees = totalValue + 1n;
+      await reportVault({ vault, totalValue, cumulativeLidoFees });
+
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NoUnsettledLidoFeesShouldBeLeft",
       );
     });
 

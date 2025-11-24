@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub } from "typechain-types";
 
-import { ether } from "lib";
+import { ether, randomAddress } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoLocator } from "test/deploy";
@@ -23,6 +23,7 @@ describe("VaultHub.sol:initialization", () => {
   let steth: StETH__Harness;
   let locator: LidoLocator;
   let vaultHub: VaultHub;
+  let consensusContract: string;
 
   let originalState: string;
 
@@ -31,12 +32,13 @@ describe("VaultHub.sol:initialization", () => {
 
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: ether("10.0") });
     locator = await deployLidoLocator({ lido: steth });
+    consensusContract = randomAddress();
 
     // VaultHub
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
-      ZeroAddress,
+      consensusContract,
       VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -71,15 +73,41 @@ describe("VaultHub.sol:initialization", () => {
   });
 
   context("constructor", () => {
-    it("reverts on `_maxRelativeShareLimitBP` is zero", async () => {
+    it("ossifies the implementation", async () => {
+      expect(await vaultHubImpl.isPaused()).to.be.true;
+      await expect(vaultHubImpl.initialize(stranger)).to.be.revertedWithCustomError(
+        vaultHubImpl,
+        "InvalidInitialization",
+      );
+    });
+
+    it("reverts on `_locator` is zero", async () => {
+      await expect(
+        ethers.deployContract("VaultHub", [ZeroAddress, await locator.lido(), consensusContract, 0n]),
+      ).to.be.revertedWithCustomError(vaultHubImpl, "ZeroAddress");
+    });
+
+    it("reverts on `_lido` is zero", async () => {
+      await expect(
+        ethers.deployContract("VaultHub", [locator, ZeroAddress, consensusContract, 0n]),
+      ).to.be.revertedWithCustomError(vaultHubImpl, "ZeroAddress");
+    });
+
+    it("reverts on `_consensusContract` is zero", async () => {
       await expect(
         ethers.deployContract("VaultHub", [locator, await locator.lido(), ZeroAddress, 0n]),
+      ).to.be.revertedWithCustomError(vaultHubImpl, "ZeroAddress");
+    });
+
+    it("reverts on `_maxRelativeShareLimitBP` is zero", async () => {
+      await expect(
+        ethers.deployContract("VaultHub", [locator, await locator.lido(), consensusContract, 0n]),
       ).to.be.revertedWithCustomError(vaultHubImpl, "ZeroArgument");
     });
 
     it("reverts if `_maxRelativeShareLimitBP` is greater than `TOTAL_BASIS_POINTS`", async () => {
       await expect(
-        ethers.deployContract("VaultHub", [locator, await locator.lido(), ZeroAddress, TOTAL_BASIS_POINTS + 1n]),
+        ethers.deployContract("VaultHub", [locator, await locator.lido(), consensusContract, TOTAL_BASIS_POINTS + 1n]),
       )
         .to.be.revertedWithCustomError(vaultHubImpl, "InvalidBasisPoints")
         .withArgs(TOTAL_BASIS_POINTS + 1n, TOTAL_BASIS_POINTS);

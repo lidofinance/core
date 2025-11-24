@@ -4,6 +4,10 @@ pragma solidity 0.8.25;
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
+interface IVaultsAdapter {
+    function evmScriptExecutor() external view returns (address);
+}
+
 interface IStakingRouter is IAccessControlEnumerable {
     struct StakingModule {
         uint24 id;
@@ -52,10 +56,6 @@ contract V3Addresses {
         address dashboardImpl;
         address gateSealForVaults;
 
-        // EasyTrack addresses
-        address evmScriptExecutor;
-        address vaultHubAdapter;
-
         // Existing proxies and contracts
         address kernel;
         address agent;
@@ -63,6 +63,22 @@ contract V3Addresses {
         address locator;
         address voting;
         address dualGovernance;
+        address acl;
+
+        // EasyTrack addresses
+        address easyTrack;
+        address vaultsAdapter;
+
+        // EasyTrack new factories
+        address etfAlterTiersInOperatorGrid;
+        address etfRegisterGroupsInOperatorGrid;
+        address etfRegisterTiersInOperatorGrid;
+        address etfUpdateGroupsShareLimitInOperatorGrid;
+        address etfSetJailStatusInOperatorGrid;
+        address etfUpdateVaultsFeesInOperatorGrid;
+        address etfForceValidatorExitsInVaultHub;
+        address etfSetLiabilitySharesTargetInVaultHub;
+        address etfSocializeBadDebtInVaultHub;
     }
 
     string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
@@ -106,8 +122,23 @@ contract V3Addresses {
     //
     // -------- EasyTrack addresses --------
     //
+
+    address public immutable EASY_TRACK;
+
     address public immutable EVM_SCRIPT_EXECUTOR;
-    address public immutable VAULT_HUB_ADAPTER;
+
+    address public immutable VAULTS_ADAPTER;
+
+    // ETF = EasyTrack Factory
+    address public immutable ETF_ALTER_TIERS_IN_OPERATOR_GRID;
+    address public immutable ETF_REGISTER_GROUPS_IN_OPERATOR_GRID;
+    address public immutable ETF_REGISTER_TIERS_IN_OPERATOR_GRID;
+    address public immutable ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID;
+    address public immutable ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB;
+    address public immutable ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB;
+    address public immutable ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID;
+    address public immutable ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID;
+    address public immutable ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB;
 
     //
     // -------- Unchanged contracts --------
@@ -117,6 +148,7 @@ contract V3Addresses {
     address public immutable ARAGON_APP_LIDO_REPO;
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
+    address public immutable ACL;
     address public immutable EL_REWARDS_VAULT;
     address public immutable STAKING_ROUTER;
     address public immutable VALIDATORS_EXIT_BUS_ORACLE;
@@ -125,6 +157,7 @@ contract V3Addresses {
     address public immutable NODE_OPERATORS_REGISTRY;
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
+    address public immutable ORACLE_DAEMON_CONFIG;
 
     constructor(
         V3AddressesParams memory params
@@ -150,12 +183,24 @@ contract V3Addresses {
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
+        ACL = params.acl;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
         GATE_SEAL = params.gateSealForVaults;
-        EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
-        VAULT_HUB_ADAPTER = params.vaultHubAdapter;
+        EVM_SCRIPT_EXECUTOR = IVaultsAdapter(params.vaultsAdapter).evmScriptExecutor();
+
+        EASY_TRACK = params.easyTrack;
+        VAULTS_ADAPTER = params.vaultsAdapter;
+        ETF_ALTER_TIERS_IN_OPERATOR_GRID = params.etfAlterTiersInOperatorGrid;
+        ETF_REGISTER_GROUPS_IN_OPERATOR_GRID = params.etfRegisterGroupsInOperatorGrid;
+        ETF_REGISTER_TIERS_IN_OPERATOR_GRID = params.etfRegisterTiersInOperatorGrid;
+        ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID = params.etfSetJailStatusInOperatorGrid;
+        ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB = params.etfSetLiabilitySharesTargetInVaultHub;
+        ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB = params.etfSocializeBadDebtInVaultHub;
+        ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID = params.etfUpdateGroupsShareLimitInOperatorGrid;
+        ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID = params.etfUpdateVaultsFeesInOperatorGrid;
+        ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB = params.etfForceValidatorExitsInVaultHub;
 
         //
         // Discovered via other contracts
@@ -180,6 +225,7 @@ contract V3Addresses {
         VALIDATORS_EXIT_BUS_ORACLE = newLocatorImpl.validatorsExitBusOracle();
         WITHDRAWAL_QUEUE = newLocatorImpl.withdrawalQueue();
         WSTETH = newLocatorImpl.wstETH();
+        ORACLE_DAEMON_CONFIG = newLocatorImpl.oracleDaemonConfig();
 
         {
             // Retrieve contracts with burner allowances to migrate: NOR, SDVT and CSM ACCOUNTING

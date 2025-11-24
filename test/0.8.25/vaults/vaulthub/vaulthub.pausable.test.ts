@@ -7,7 +7,7 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { OperatorGrid, OssifiableProxy, StETH__HarnessForVaultHub, VaultHub } from "typechain-types";
 
-import { ether, MAX_UINT256 } from "lib";
+import { ether, MAX_UINT256, randomAddress } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -53,7 +53,7 @@ describe("VaultHub.sol:pausableUntil", () => {
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       steth,
-      ZeroAddress,
+      randomAddress(),
       VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
     ]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);

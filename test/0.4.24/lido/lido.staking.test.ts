@@ -42,10 +42,6 @@ describe("Lido.sol:staking", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("fallback", () => {
-    beforeEach(async () => {
-      await lido.resumeStaking();
-    });
-
     it("Defaults to submit", async () => {
       await expect(
         user.sendTransaction({
@@ -75,10 +71,6 @@ describe("Lido.sol:staking", () => {
   });
 
   context("submit", () => {
-    beforeEach(async () => {
-      await lido.resumeStaking();
-    });
-
     it("Reverts if the value is zero", async () => {
       await expect(lido.submit(ZeroAddress, { value: 0n })).to.be.revertedWith("ZERO_DEPOSIT");
     });

@@ -8,40 +8,38 @@ slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum co
 secondsPerSlot = 12                   # Duration of each slot in seconds
 genesisTime = 1606824023              # Ethereum mainnet genesis timestamp
 depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Official ETH2 deposit contract
+isHoodi = false
 
 # Gate seal configuration for vault operations
 [gateSealForVaults]
-address = "0x0000000000000000000000000000000f00f00F00"  # TODO: update the placeholder
+sealDuration = 1209600  # 14 days
+sealingCommittee = "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
 
 [easyTrack]
-# TODO: maybe take the address from VaultHubAdapter.evmScriptExecutor()
-evmScriptExecutor = "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977" # see https://docs.lido.fi/deployed-contracts/#easy-track
+trustedCaller = "0x0000000000000000000000000000000000000000"     # Address of stVaults EasyTrack committee # TODO: update the placeholder
+initialValidatorExitFeeLimit = "100000000000000000"              # Max validator exit fee which can be spend for single key exit request
+# Phase 1: Pilot (starts with Lido V3 upgrade enacted) - https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665
+maxGroupShareLimit = "250000000000000000000000"                  # Max share limit which can be set for group by EasyTrack
+maxDefaultTierShareLimit = 0                                     # Max share limit which can be set for default tier by EasyTrack
 
-# see https://github.com/lidofinance/easy-track/pull/86/files#diff-53d787db7bce77eb7c0d871e63d490e4ccdc31a407f27acba8125a69a2d94139
-# TODO: update the placeholder
-vaultHubAdapter = "0x0000000000000000000000000000000F00F00F77"
-
-# Validator exit delay verifier configuration for managing validator exits
-[validatorExitDelayVerifier]
-# Generalized indices for validator state verification in Ethereum consensus
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
-gIFirstHistoricalSummaryPrev = "0x000000000000000000000000000000000000000000000000000000b600000018"
-gIFirstHistoricalSummaryCurr = "0x000000000000000000000000000000000000000000000000000000b600000018"
-gIFirstBlockRootInSummaryPrev = "0x000000000000000000000000000000000000000000000000000000000040000d"
-gIFirstBlockRootInSummaryCurr = "0x000000000000000000000000000000000000000000000000000000000040000d"
-# Additional deployment parameters for ValidatorExitDelayVerifier
-firstSupportedSlot = 6718464              # First supported slot for validator state verification
-pivotSlot = 6718464                       # Pivot slot for state verification
-capellaSlot = 6718464                     # Capella upgrade slot
-slotsPerHistoricalRoot = 8192             # Number of slots per historical root
-shardCommitteePeriodInSeconds = 98304     # Shard committee period in seconds (2^8 * 32 * 12)
+# Must be deployed before the V3 upgrading contracts
+[easyTrack.newFactories]
+# TODO: update upon deployment
+AlterTiersInOperatorGrid = "0x00000000000000000000000000000000000fAc01"
+RegisterGroupsInOperatorGrid = "0x00000000000000000000000000000000000fAc02"
+RegisterTiersInOperatorGrid = "0x00000000000000000000000000000000000FAc03"
+SetJailStatusInOperatorGrid = "0x00000000000000000000000000000000000faC04"
+SetLiabilitySharesTargetInVaultHub = "0x00000000000000000000000000000000000FAc05"
+SocializeBadDebtInVaultHub = "0x00000000000000000000000000000000000Fac06"
+ForceValidatorExitsInVaultHub = "0x00000000000000000000000000000000000faC07"
+UpdateGroupsShareLimitInOperatorGrid = "0x00000000000000000000000000000000000FAc08"
+UpdateVaultsFeesInOperatorGrid = "0x00000000000000000000000000000000000fac09"
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
-relativeShareLimitBP = 3000           # Relative share limit in basis points (30%)
+maxRelativeShareLimitBP = 1000           # 10%, Absolute Max possible shareLimit of a vault relative to Lido TVL (in basis points)
 
-# Lazy oracle configuration for delayed reward calculations
+# Lazy oracle configuration for delayed reward calculations - https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-32.md
 [lazyOracle]
 quarantinePeriod = 259200                      # Quarantine period in seconds (3 days) before rewards are distributed
 maxRewardRatioBP = 350                         # Maximum reward ratio in basis points (3.5%)
@@ -49,46 +47,39 @@ maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per secon
 
 # Predeposit guarantee configuration for validator deposit guarantees
 [predepositGuarantee]
-genesisForkVersion = "0x00000000"     # Ethereum mainnet genesis fork version
-gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
-gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
+genesisForkVersion = "0x00000000"     # Ethereum mainnet genesis fork version: https://github.com/ethereum/consensus-specs/blob/01b53691dcc36d37a5ad8994b3a32d8de69fb1aa/configs/mainnet.yaml#L30
+gIndex            = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification: https://research.lido.fi/t/lip-27-ensuring-compatibility-with-ethereum-s-pectra-upgrade/9444#p-20086-update-gindexes-5
+gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028" # Required for hardfork upgrades, the same for now
 changeSlot = 0                        # Slot number when the change takes effect
-
-# Delegation module configuration for liquid delegation
-[delegation]
-wethContract = "0x94373a4919B3240D86eA41593D5eBa789FEF3848"  # WETH contract address for wrapped ETH operations
 
 # Operator grid configuration for managing staking operators
 [operatorGrid]
 # Default tier parameters for operator classification and fee structure
+# https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665#p-22926-rollout-plan-9
 [operatorGrid.defaultTierParams]
-shareLimitInEther = "250"             # Share limit per tier in ETH
-reserveRatioBP = 2000                 # Reserve ratio in basis points (20%)
-forcedRebalanceThresholdBP = 1800     # Threshold for forced rebalancing in basis points (18%)
-infraFeeBP = 500                      # Infrastructure fee in basis points (5%)
-liquidityFeeBP = 400                  # Liquidity provision fee in basis points (4%)
-reservationFeeBP = 100                # Reservation fee in basis points (1%)
+shareLimitInEther = "0"               # Share limit per tier in ETH
+reserveRatioBP = 5000                 # Reserve ratio in basis points (50%)
+forcedRebalanceThresholdBP = 4975     # Threshold for forced rebalancing in basis points (49.75%)
+# https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504#p-22550-table-3-fees-9
+infraFeeBP = 100                      # Infrastructure fee in basis points (1%)
+liquidityFeeBP = 650                  # Liquidity provision fee in basis points (6.5%)
+reservationFeeBP = 0                  # Reservation fee in basis points (0%)
 
 [burner]
 isMigrationAllowed = true             # Must be on for the upgrade to work (for scratch is it false)
 
 # Oracle and consensus version configuration
 [oracleVersions]
-vebo_consensus_version = 4            # Validators Exit Bus Oracle consensus version
-ao_consensus_version = 4              # Accounting Oracle consensus version
+ao_consensus_version = 5              # Accounting Oracle consensus version: https://etherscan.io/address/0x852deD011285fe67063a08005c71a85690503Cee#readProxyContract#F16
 
-# ================================================================================================
-# TRIGGERABLE WITHDRAWALS (TW) UPGRADE PARAMETERS
-# ================================================================================================
-# All parameters related to the Triggerable Withdrawals upgrade are grouped here for easy access
+[v3VoteScript]
+# Expiry timestamp after which the upgrade transaction will revert
+# Format: Unix timestamp (seconds since epoch)
+# The upgrade transaction must be executed before this deadline
+expiryTimestamp = 1764547200          # December 1, 2025 00:00:00 UTC
+# Initial maximum external ratio in basis points for Lido v3
+# https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665#p-22926-rollout-plan-9
+initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial phase
 
-# TW Gateway configuration for managing validator exit requests
-[triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 13000          # Maximum number of exit requests that can be processed
-exitsPerFrame = 1                     # Number of exits processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
-
-# TW Exit management configuration
-[triggerableWithdrawals]
-exit_events_lookback_window_in_slots = 7200  # Lookback window for exit events in slots (1 day)
-nor_exit_deadline_in_sec = 1800       # Node operator registry exit deadline in seconds (30 minutes)
+# Sources (todo)
+# - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504

@@ -1,6 +1,6 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log } from "lib";
+import { certainAddress, ether, getCurrentBlockTimestamp, impersonate, log } from "lib";
 
 import { SHARE_RATE_PRECISION } from "test/suite";
 
@@ -22,6 +22,44 @@ function calculateShareRate(totalPooledEther: bigint, totalShares: bigint): bigi
 function logShareRate(shareRate: bigint): number {
   return Number(shareRate) / Number(SHARE_RATE_PRECISION);
 }
+
+async function changeInternalEther(ctx: ProtocolContext, internalEtherDelta: bigint) {
+  const { lido, accounting } = ctx.contracts;
+
+  const accountingSigner = await impersonate(accounting, ether("1"));
+
+  const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
+
+  await lido
+    .connect(accountingSigner)
+    .processClStateUpdate(
+      await getCurrentBlockTimestamp(),
+      beaconValidators,
+      beaconValidators,
+      beaconBalance + internalEtherDelta,
+    );
+}
+
+export const ensureExactShareRate = async (ctx: ProtocolContext, targetShareRate: bigint) => {
+  const { lido } = ctx.contracts;
+
+  const [totalPooledEther, totalShares] = await Promise.all([lido.getTotalPooledEther(), lido.getTotalShares()]);
+  if (totalPooledEther * SHARE_RATE_PRECISION === totalShares * targetShareRate) {
+    return;
+  }
+
+  const etherAmount = (totalShares * targetShareRate) / SHARE_RATE_PRECISION - totalPooledEther;
+
+  await changeInternalEther(ctx, etherAmount);
+
+  const [totalPooledEtherAfter, totalSharesAfter] = await Promise.all([
+    lido.getTotalPooledEther(),
+    lido.getTotalShares(),
+  ]);
+  const newShareRate = calculateShareRate(totalPooledEtherAfter, totalSharesAfter);
+
+  log.success("Share rate:", logShareRate(newShareRate));
+};
 
 export const ensureSomeOddShareRate = async (ctx: ProtocolContext) => {
   const { lido, locator } = ctx.contracts;

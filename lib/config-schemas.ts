@@ -72,17 +72,41 @@ const BurnerSchema = z.object({
   totalNonCoverSharesBurnt: BigIntStringSchema.optional(),
 });
 
-// Triggerable withdrawals gateway schema
+// Triggerable withdrawals gateway schema (used in scratch configs)
 const TriggerableWithdrawalsGatewaySchema = z.object({
   maxExitRequestsLimit: PositiveIntSchema,
   exitsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
 });
 
+// Easy track schema
+const EasyTrackSchema = z.object({
+  trustedCaller: EthereumAddressSchema,
+  initialValidatorExitFeeLimit: BigIntStringSchema,
+  maxGroupShareLimit: BigIntStringSchema,
+  maxDefaultTierShareLimit: NonNegativeIntSchema,
+  newFactories: z.object({
+    AlterTiersInOperatorGrid: EthereumAddressSchema,
+    RegisterGroupsInOperatorGrid: EthereumAddressSchema,
+    RegisterTiersInOperatorGrid: EthereumAddressSchema,
+    SetJailStatusInOperatorGrid: EthereumAddressSchema,
+    SetLiabilitySharesTargetInVaultHub: EthereumAddressSchema,
+    SocializeBadDebtInVaultHub: EthereumAddressSchema,
+    ForceValidatorExitsInVaultHub: EthereumAddressSchema,
+    UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
+    UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
+  }),
+});
+
 // Oracle versions schema
 const OracleVersionsSchema = z.object({
-  vebo_consensus_version: PositiveIntSchema,
   ao_consensus_version: PositiveIntSchema,
+});
+
+// V3 vote script params
+const V3VoteScriptSchema = z.object({
+  expiryTimestamp: NonNegativeIntSchema,
+  initialMaxExternalRatioBP: BasisPointsSchema,
 });
 
 // Aragon app versions schema
@@ -96,32 +120,23 @@ export const UpgradeParametersSchema = z.object({
   chainSpec: ChainSpecSchema.extend({
     genesisTime: z.number().int(),
     depositContract: EthereumAddressSchema,
+    isHoodi: z.boolean(),
   }),
   gateSealForVaults: z.object({
-    address: EthereumAddressSchema,
+    sealDuration: PositiveIntSchema,
+    sealingCommittee: EthereumAddressSchema,
   }),
-  easyTrack: z.object({
-    evmScriptExecutor: EthereumAddressSchema,
-    vaultHubAdapter: EthereumAddressSchema,
-  }),
-  validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
+  easyTrack: EasyTrackSchema,
   vaultHub: VaultHubSchema,
   lazyOracle: LazyOracleSchema,
   predepositGuarantee: PredepositGuaranteeSchema.extend({
     genesisForkVersion: HexStringSchema,
   }),
-  delegation: z.object({
-    wethContract: EthereumAddressSchema,
-  }),
   operatorGrid: OperatorGridSchema,
   burner: BurnerSchema,
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
-  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
-  triggerableWithdrawals: z.object({
-    exit_events_lookback_window_in_slots: PositiveIntSchema,
-    nor_exit_deadline_in_sec: PositiveIntSchema,
-  }),
+  v3VoteScript: V3VoteScriptSchema,
 });
 
 // Gate seal schema (for scratch deployment)

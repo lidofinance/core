@@ -324,7 +324,9 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         container: { ...validator.container, withdrawalCredentials: await stakingVault.withdrawalCredentials() },
       };
 
-      const invalidPredeposit = await generatePredeposit(invalidValidatorHackedWC);
+      const invalidPredeposit = await generatePredeposit(invalidValidatorHackedWC, {
+        depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
+      });
 
       // 5. The Node Operator predeposits 1 ETH from the vault balance to the validator via the PDG contract.
       //    same time the PDG locks 1 ETH from the Node Operator's guarantee collateral in the PDG.

@@ -230,15 +230,15 @@ describe("OperatorGrid.sol", () => {
       const operatorGridLocal = await ethers.getContractAt("OperatorGrid", operatorGridProxy, deployer);
       const defaultTierParams = {
         shareLimit: DEFAULT_TIER_SHARE_LIMIT,
-        reserveRatioBP: RESERVE_RATIO,
-        forcedRebalanceThresholdBP: RESERVE_RATIO + 1,
+        reserveRatioBP: RESERVE_RATIO + 10,
+        forcedRebalanceThresholdBP: RESERVE_RATIO,
         infraFeeBP: INFRA_FEE,
         liquidityFeeBP: LIQUIDITY_FEE,
         reservationFeeBP: RESERVATION_FEE,
       };
       await expect(operatorGridLocal.initialize(stranger, defaultTierParams))
         .to.be.revertedWithCustomError(operatorGridLocal, "ForcedRebalanceThresholdTooHigh")
-        .withArgs("0", RESERVE_RATIO + 1, RESERVE_RATIO);
+        .withArgs("0", RESERVE_RATIO, RESERVE_RATIO + 10);
     });
   });
 
@@ -688,6 +688,30 @@ describe("OperatorGrid.sol", () => {
       ).to.be.revertedWithCustomError(operatorGrid, "RequestedShareLimitTooHigh");
     });
 
+    it("reverts if requested share limit is less than vault liability shares", async function () {
+      const shareLimit = 1000;
+      await operatorGrid.registerGroup(nodeOperator1, shareLimit + 1);
+      await operatorGrid.registerTiers(nodeOperator1, [
+        {
+          shareLimit: shareLimit,
+          reserveRatioBP: 2000,
+          forcedRebalanceThresholdBP: 1800,
+          infraFeeBP: 500,
+          liquidityFeeBP: 400,
+          reservationFeeBP: 100,
+        },
+      ]);
+
+      await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
+        ...record,
+        liabilityShares: shareLimit,
+      });
+
+      await expect(
+        operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit - 1),
+      ).to.be.revertedWithCustomError(operatorGrid, "RequestedShareLimitTooLow");
+    });
+
     it("Cannot change tier to the default tier from non-default tier", async function () {
       // First change to non-default tier
       await operatorGrid.registerGroup(nodeOperator1, 1000);
@@ -770,11 +794,11 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("reverts if TierLimitExceeded", async function () {
-      const shareLimit = 1000;
-      await operatorGrid.registerGroup(nodeOperator1, 1000);
+      const tierShareLimit = 1002;
+      await operatorGrid.registerGroup(nodeOperator1, tierShareLimit + 1);
       await operatorGrid.registerTiers(nodeOperator1, [
         {
-          shareLimit: shareLimit,
+          shareLimit: tierShareLimit,
           reserveRatioBP: 2000,
           forcedRebalanceThresholdBP: 1800,
           infraFeeBP: 500,
@@ -783,10 +807,9 @@ describe("OperatorGrid.sol", () => {
         },
       ]);
 
-      //just for test - update sharesMinted for vaultHub socket
       const _liabilityShares = 1001;
       await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
-        shareLimit: shareLimit,
+        shareLimit: 1000,
         reserveRatioBP: 2000,
         forcedRebalanceThresholdBP: 1800,
         infraFeeBP: 500,
@@ -806,10 +829,34 @@ describe("OperatorGrid.sol", () => {
       //and update tier sharesMinted
       await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
 
-      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
-      await expect(
-        operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit),
-      ).to.be.revertedWithCustomError(operatorGrid, "TierLimitExceeded");
+      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, _liabilityShares);
+      await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, _liabilityShares);
+
+      await vaultHub.mock__setVaultConnection(vault_NO1_V2, {
+        shareLimit: 1000,
+        reserveRatioBP: 2000,
+        forcedRebalanceThresholdBP: 1800,
+        infraFeeBP: 500,
+        liquidityFeeBP: 400,
+        reservationFeeBP: 100,
+        owner: vaultOwner,
+        vaultIndex: 1,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
+        beaconChainDepositsPauseIntent: false,
+      });
+
+      await vaultHub.mock__setVaultRecord(vault_NO1_V2, {
+        ...record,
+        liabilityShares: 2,
+      });
+
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, 2, false);
+
+      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V2, 1, 1000);
+      await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V2, 1, 1000)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "TierLimitExceeded",
+      );
     });
 
     it("reverts if GroupLimitExceeded", async function () {
@@ -983,10 +1030,10 @@ describe("OperatorGrid.sol", () => {
 
       await vaultHub.mock__deleteVaultConnection(vault_NO1_V1);
 
-      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
-      const tx = operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
-
-      await expect(tx).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
+      await expect(
+        operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit),
+      ).to.be.revertedWithCustomError(operatorGrid, "VaultNotConnected");
+      await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit)).to.not.be.reverted;
     });
   });
 
@@ -2347,6 +2394,17 @@ describe("OperatorGrid.sol", () => {
       await expect(
         operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, currentShareLimit),
       ).to.be.revertedWithCustomError(operatorGrid, "ShareLimitAlreadySet");
+    });
+
+    it("reverts when requested share limit is less than current liability shares", async () => {
+      const connection = createVaultConnection(vaultOwner.address, 1000n);
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, connection);
+      const cleanRecord = { ...record, liabilityShares: 600n };
+      await vaultHub.mock__setVaultRecord(vault_NO1_V1, cleanRecord);
+
+      await expect(
+        operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, 400),
+      ).to.be.revertedWithCustomError(operatorGrid, "RequestedShareLimitTooLow");
     });
 
     it("requires confirmation from both vault owner and node operator for increasing share limit", async () => {

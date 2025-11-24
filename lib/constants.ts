@@ -1,4 +1,5 @@
 export const MAX_UINT256 = 2n ** 256n - 1n;
+export const MAX_INT104 = 2n ** 103n - 1n;
 export const INITIAL_STETH_HOLDER = "0x000000000000000000000000000000000000dEaD";
 
 // https://eips.ethereum.org/EIPS/eip-165
@@ -59,9 +60,11 @@ export const EMPTY_SIGNATURE = "0x".padEnd(SIGNATURE_LENGTH_HEX + 2, "0");
 export const ONE_GWEI = 1_000_000_000n;
 
 export const TOTAL_BASIS_POINTS = 100_00n;
+export const ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00n;
 
 export const MAX_FEE_BP = 65_535n;
 export const MAX_RESERVE_RATIO_BP = 99_99n;
 export const LIMITER_PRECISION_BASE = 10n ** 9n;
 
 export const DISCONNECT_NOT_INITIATED = 2n ** 48n - 1n;
+export const MAX_SANE_SETTLED_GROWTH = MAX_INT104;

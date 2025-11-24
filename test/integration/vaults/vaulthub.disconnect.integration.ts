@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
@@ -77,7 +78,7 @@ describe("Integration: VaultHub", () => {
         await dashboard.fund({ value: ether("1.5") });
 
         await dashboard.mintStETH(owner, ether("1"));
-        await reportVaultDataWithProof(ctx, stakingVault);
+        await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
         await lido.connect(owner).approve(dashboard, ether("1"));
         await dashboard.burnStETH(ether("1"));
@@ -106,6 +107,19 @@ describe("Integration: VaultHub", () => {
         expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
         expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
+      });
+
+      it("Vault with balance more than total value", async () => {
+        const { vaultHub } = ctx.contracts;
+
+        await reportVaultDataWithProof(ctx, stakingVault, { totalValue: 100n, cumulativeLidoFees: 200n });
+        await setBalance(await stakingVault.getAddress(), ether("1.5"));
+
+        await vaultHub.connect(await ctx.getSigner("agent")).grantRole(await vaultHub.VAULT_MASTER_ROLE(), dao);
+
+        await expect(vaultHub.connect(dao).disconnect(stakingVault))
+          .to.emit(vaultHub, "VaultDisconnectInitiated")
+          .withArgs(stakingVault);
       });
     });
   });

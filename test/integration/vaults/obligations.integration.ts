@@ -59,15 +59,36 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       [],
     ));
 
+    // Register node operator group with sufficient share limit
+    const operatorGrid = ctx.contracts.operatorGrid;
+    agentSigner = await ctx.getSigner("agent");
+    await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
+    await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+      {
+        shareLimit: ether("1000"),
+        reserveRatioBP: 2000,
+        forcedRebalanceThresholdBP: 1800,
+        infraFeeBP: 100,
+        liquidityFeeBP: 650,
+        reservationFeeBP: 0,
+      },
+    ]);
+
+    // Move vault to tier 1 with share limit
+    const requestedTierId = 1n;
+    const requestedShareLimit = ether("1000");
+    await dashboard.connect(owner).changeTier(requestedTierId, requestedShareLimit);
+    await operatorGrid.connect(nodeOperator).changeTier(stakingVault, requestedTierId, requestedShareLimit);
+
     stakingVaultAddress = await stakingVault.getAddress();
     treasuryAddress = await ctx.contracts.locator.treasury();
 
-    agentSigner = await ctx.getSigner("agent");
-
     // set maximum fee rate per second to 1 ether to allow rapid fee increases
+    await lazyOracle.connect(agentSigner).grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), agentSigner);
     await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
 
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
+    await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), agentSigner);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.VALIDATOR_EXIT_ROLE(), validatorExit);
 
     await reportVaultDataWithProof(ctx, stakingVault);
@@ -146,6 +167,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
           .withArgs(stakingVaultAddress, redemptionShares)
           .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
+        expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+
         const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
         expect(recordAfter.redemptionShares).to.equal(redemptionShares);
         expect(recordAfter.liabilityShares).to.equal(redemptionShares);
@@ -161,6 +184,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
           .withArgs(stakingVaultAddress, redemptionShares)
           .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
+        expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+
         const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
         expect(recordAfter.redemptionShares).to.equal(redemptionShares);
         expect(recordAfter.liabilityShares).to.equal(redemptionShares);
@@ -172,6 +197,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
           .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
           .withArgs(stakingVaultAddress, 0n)
           .to.emit(stakingVault, "BeaconChainDepositsResumed");
+
+        expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
 
         const recordAfterForceRebalance = await vaultHub.vaultRecord(stakingVaultAddress);
         expect(recordAfterForceRebalance.redemptionShares).to.equal(0n);
@@ -295,6 +322,86 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       });
     });
 
+    context("Slashing scenarios", () => {
+      it("Handles slashing when redemptionShares > healthShortfallShares", async () => {
+        const initialTotalValue = ether("10");
+        await dashboard.fund({ value: initialTotalValue });
+        const redemptionShares = await dashboard.remainingMintingCapacityShares(0n);
+        await dashboard.mintShares(stranger, redemptionShares);
+
+        await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
+
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(redemptionShares);
+        expect(await vaultHub.isVaultHealthy(stakingVaultAddress)).to.be.true;
+
+        // Simulate slashing
+        const targetTotalValue = (initialTotalValue * 90n) / 100n;
+        await setBalance(stakingVaultAddress, targetTotalValue);
+        await reportVaultDataWithProof(ctx, stakingVault, { totalValue: targetTotalValue, waitForNextRefSlot: true });
+
+        // Vault should become unhealthy after slashing
+        expect(await vaultHub.isVaultHealthy(stakingVaultAddress)).to.be.false;
+
+        // Check health shortfall is less than redemptions (scenario requirement)
+        const healthShortfallShares = await vaultHub.healthShortfallShares(stakingVaultAddress);
+        expect(healthShortfallShares).to.be.lessThan(redemptionShares);
+
+        await expect(vaultHub.forceRebalance(stakingVaultAddress))
+          .to.emit(vaultHub, "VaultRebalanced")
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated");
+
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+
+        // Check that rebalanced more than the health shortfall
+        expect(redemptionShares - recordAfter.liabilityShares).to.be.greaterThan(healthShortfallShares);
+
+        // Redemptions should be fully covered
+        expect(recordAfter.redemptionShares).to.equal(0n);
+      });
+
+      it("Handles slashing when healthShortfallShares > redemptionShares", async () => {
+        const initialTotalValue = ether("10");
+        await dashboard.fund({ value: initialTotalValue });
+        const liabilityShares = (initialTotalValue * 50n) / 100n;
+        await dashboard.mintShares(stranger, liabilityShares);
+
+        const redemptionShares = (initialTotalValue * 10n) / 100n;
+        await vaultHub
+          .connect(agentSigner)
+          .setLiabilitySharesTarget(stakingVaultAddress, liabilityShares - redemptionShares);
+
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(redemptionShares);
+        expect(await vaultHub.isVaultHealthy(stakingVaultAddress)).to.be.true;
+
+        // Simulate slashing
+        const targetTotalValue = (initialTotalValue * 20n) / 100n;
+        await setBalance(stakingVaultAddress, targetTotalValue);
+        await reportVaultDataWithProof(ctx, stakingVault, { totalValue: targetTotalValue, waitForNextRefSlot: true });
+
+        // Vault should become unhealthy after slashing
+        expect(await vaultHub.isVaultHealthy(stakingVaultAddress)).to.be.false;
+
+        // Check health shortfall is greater than redemptions (scenario requirement)
+        const healthShortfallShares = await vaultHub.healthShortfallShares(stakingVaultAddress);
+        expect(healthShortfallShares).to.be.greaterThan(0n);
+        expect(healthShortfallShares).to.be.greaterThan(redemptionShares);
+
+        await expect(vaultHub.forceRebalance(stakingVaultAddress))
+          .to.emit(vaultHub, "VaultRebalanced")
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated");
+
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+
+        // Check that rebalanced more than redemption shares
+        expect(liabilityShares - recordAfter.liabilityShares).to.be.greaterThan(redemptionShares);
+
+        // Redemptions are fully covered
+        expect(recordAfter.redemptionShares).to.be.equal(0n);
+      });
+    });
+
     // https://github.com/lidofinance/core/issues/1219
     it("Does not break the vault", async () => {
       await dashboard.fund({ value: ether("10") });
@@ -312,7 +419,10 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(await vaultHub.locked(stakingVaultAddress)).to.be.closeTo(ether("11"), 2n);
 
       const slashingAmount = ether("5");
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: totalValue - slashingAmount });
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: totalValue - slashingAmount,
+        waitForNextRefSlot: false,
+      });
 
       await setBalance(stakingVaultAddress, totalValue + ether("5")); // simulate the vault has more balance than the total value
 
@@ -638,14 +748,13 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
     });
 
-    it("Reverts when trying to withdraw more than available balance", async () => {
-      // simulate deposit to Beacon chain -1 ether
+    it("Reverts when trying to withdraw redemption shares", async () => {
       const withdrawableValue = await vaultHub.withdrawableValue(stakingVaultAddress);
       expect(withdrawableValue).to.equal(0n);
 
-      await expect(dashboard.withdraw(stranger, withdrawableValue + 1n))
+      await expect(dashboard.withdraw(stranger, 1n))
         .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
-        .withArgs(withdrawableValue + 1n, withdrawableValue);
+        .withArgs(1n, 0n);
     });
 
     it("Works when trying to withdraw all the withdrawable balance", async () => {

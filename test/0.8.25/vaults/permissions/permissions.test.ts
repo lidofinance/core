@@ -240,7 +240,7 @@ describe("Permissions", () => {
       const newImplementation = await ethers.deployContract("Permissions__Harness", [vaultHub, lidoLocator]);
       await expect(newImplementation.initialize(defaultAdmin, days(7n))).to.be.revertedWithCustomError(
         permissions,
-        "NonProxyCallsForbidden",
+        "AlreadyInitialized",
       );
     });
 
@@ -386,6 +386,20 @@ describe("Permissions", () => {
     });
   });
 
+  context("renounceRole()", () => {
+    it("reverts if called by a stranger", async () => {
+      await expect(
+        permissions.connect(stranger).renounceRole(await permissions.DEFAULT_ADMIN_ROLE(), stranger),
+      ).to.be.revertedWithCustomError(permissions, "RoleRenouncementDisabled");
+    });
+
+    it("reverts if called by the role holder", async () => {
+      await expect(
+        permissions.connect(defaultAdmin).renounceRole(await permissions.DEFAULT_ADMIN_ROLE(), defaultAdmin),
+      ).to.be.revertedWithCustomError(permissions, "RoleRenouncementDisabled");
+    });
+  });
+
   context("revokeRoles()", () => {
     it("mass-revokes roles", async () => {
       const [
@@ -470,12 +484,6 @@ describe("Permissions", () => {
         permissions,
         "ZeroArgument",
       );
-    });
-  });
-
-  context("confirmingRoles()", () => {
-    it("returns the correct roles", async () => {
-      expect(await permissions.confirmingRoles()).to.deep.equal([await permissions.DEFAULT_ADMIN_ROLE()]);
     });
   });
 
@@ -853,23 +861,6 @@ describe("Permissions", () => {
       await expect(permissions.connect(stranger).changeTier(1, ether("1")))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await permissions.VAULT_CONFIGURATION_ROLE());
-    });
-  });
-
-  context("transferVaultOwnership()", () => {
-    it("transfers the ownership of the StakingVault", async () => {
-      await expect(permissions.connect(defaultAdmin).transferVaultOwnership(stranger))
-        .to.emit(vaultHub, "Mock__TransferVaultOwnership")
-        .withArgs(stakingVault, stranger);
-    });
-
-    it("reverts if the caller is not a member of the confirming roles", async () => {
-      expect(await permissions.confirmingRoles()).to.not.include(stranger);
-
-      await expect(permissions.connect(stranger).transferVaultOwnership(stranger)).to.be.revertedWithCustomError(
-        permissions,
-        "SenderNotMember",
-      );
     });
   });
 

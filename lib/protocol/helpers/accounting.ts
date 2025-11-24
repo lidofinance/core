@@ -24,10 +24,6 @@ import {
 
 import { ProtocolContext } from "../types";
 
-const ZERO_HASH = new Uint8Array(32).fill(0);
-const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
-const SHARE_RATE_PRECISION = 10n ** 27n;
-
 export type OracleReportParams = {
   clDiff?: bigint;
   clAppearedValidators?: bigint;
@@ -59,6 +55,9 @@ type OracleReportResults = {
   reportTx: ContractTransactionResponse | undefined;
   extraDataTx: ContractTransactionResponse | undefined;
 };
+export const ZERO_HASH = new Uint8Array(32).fill(0);
+const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
+const SHARE_RATE_PRECISION = 10n ** 27n;
 
 /**
  * Prepare and push oracle report.
@@ -345,7 +344,7 @@ type SimulateReportResult = {
 /**
  * Simulate oracle report to get the expected result.
  */
-const simulateReport = async (
+export const simulateReport = async (
   ctx: ProtocolContext,
   { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
@@ -364,7 +363,7 @@ const simulateReport = async (
 
   const reportValues: ReportValuesStruct = {
     timestamp: reportTimestamp,
-    timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
+    timeElapsed: /* 1 day */ 86_400n,
     clValidators: beaconValidators,
     clBalance,
     withdrawalVaultBalance,

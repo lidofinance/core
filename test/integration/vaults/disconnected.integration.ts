@@ -13,6 +13,7 @@ import {
   generatePredeposit,
   generateValidator,
   getNextBlockTimestamp,
+  MAX_SANE_SETTLED_GROWTH,
   toGwei,
   toLittleEndian64,
 } from "lib";
@@ -74,6 +75,11 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
   after(async () => await Snapshot.restore(originalSnapshot));
 
+  async function correctSettledGrowth(settledGrowth = 0n) {
+    await dashboard.connect(owner).correctSettledGrowth(settledGrowth, MAX_SANE_SETTLED_GROWTH);
+    await dashboard.connect(nodeOperator).correctSettledGrowth(settledGrowth, MAX_SANE_SETTLED_GROWTH);
+  }
+
   describe("Dashboard is owner", () => {
     it("Can transfer the StakingVault ownership further", async () => {
       const { vaultHub } = ctx.contracts;
@@ -93,10 +99,17 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     it("Can reconnect the vault to the hub", async () => {
       const { vaultHub } = ctx.contracts;
-      await dashboard.connect(nodeOperator).setApprovedToConnect(true);
+
+      await correctSettledGrowth(0n);
+      expect(await dashboard.settledGrowth()).to.equal(0n);
+
       await dashboard.reconnectToVaultHub();
 
       expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
+    });
+
+    it("Reverts if settled growth is not corrected", async () => {
+      await expect(dashboard.reconnectToVaultHub()).to.be.revertedWithCustomError(dashboard, "SettleGrowthIsNotSet");
     });
   });
 
@@ -138,9 +151,10 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
         const { vaultHub } = ctx.contracts;
 
-        await dashboard.connect(nodeOperator).setApprovedToConnect(true);
+        await correctSettledGrowth(0n);
+        expect(await dashboard.settledGrowth()).to.equal(0n);
 
-        await expect(dashboard.reconnectToVaultHub())
+        await expect(dashboard.reconnectToVaultHub()) // reconnect with disabled fee accrual
           .to.emit(stakingVault, "OwnershipTransferred")
           .withArgs(owner, dashboard)
           .to.emit(stakingVault, "OwnershipTransferStarted")
@@ -152,7 +166,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
 
     it("Can not change the tier as owner of the vault", async () => {
-      const { operatorGrid, vaultHub } = ctx.contracts;
+      const { operatorGrid } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
 
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
@@ -167,24 +181,23 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         },
       ]);
 
-      const ownerRoleAsAddress = ethers.zeroPadValue(await owner.getAddress(), 32);
-      let confirmTimestamp = await getNextBlockTimestamp();
-      let expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
+      await expect(operatorGrid.connect(owner).changeTier(stakingVault, 1n, 1000n)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "VaultNotConnected",
+      );
+
+      const nodeOperatorRoleAsAddress = ethers.zeroPadValue(nodeOperator.address, 32);
       const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
         await stakingVault.getAddress(),
-        1,
-        1000,
+        1n,
+        1000n,
       ]);
+      const confirmTimestamp = await getNextBlockTimestamp();
+      const expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
 
-      await expect(operatorGrid.connect(owner).changeTier(stakingVault, 1n, 1000n))
+      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
         .to.emit(operatorGrid, "RoleMemberConfirmed")
-        .withArgs(owner, ownerRoleAsAddress, confirmTimestamp, expiryTimestamp, msgData);
-
-      confirmTimestamp = await getNextBlockTimestamp();
-      expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
-      await expect(
-        operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n),
-      ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
+        .withArgs(nodeOperator, nodeOperatorRoleAsAddress, confirmTimestamp, expiryTimestamp, msgData);
     });
 
     describe("Funding", () => {

@@ -86,16 +86,44 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Deposit contract address is set via environment variables in scratch deployment",
   },
   {
+    path: "chainSpec.isHoodi",
+    reason: "Scratch is on fork",
+  },
+  {
     path: "gateSealForVaults.address",
     reason: "Gate seal configuration differs between upgrade and scratch contexts",
   },
   {
-    path: "easyTrack.evmScriptExecutor",
+    path: "gateSealForVaults.sealingCommittee",
+    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+  },
+  {
+    path: "gateSealForVaults.sealDuration",
+    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+  },
+  {
+    path: "easyTrack.vaultsAdapter",
     reason: "EasyTrack configuration is upgrade-specific",
   },
   {
-    path: "easyTrack.vaultHubAdapter",
+    path: "easyTrack.trustedCaller",
     reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.initialValidatorExitFeeLimit",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.maxGroupShareLimit",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.maxDefaultTierShareLimit",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.newFactories",
+    reason: "EasyTrack new factories configuration is upgrade-specific",
   },
   {
     path: "predepositGuarantee.genesisForkVersion",
@@ -114,19 +142,18 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Oracle versions are upgrade-specific configuration",
   },
   {
-    path: "triggerableWithdrawals.exit_events_lookback_window_in_slots",
-    reason: "TODO",
+    path: "v3VoteScript.expiryTimestamp",
+    reason: "V3 vote script expiry timestamp is upgrade-specific configuration",
   },
   {
-    path: "triggerableWithdrawals.nor_exit_deadline_in_sec",
-    reason: "TODO",
+    path: "v3VoteScript.initialMaxExternalRatioBP",
+    reason: "V3 vote script initial max external ratio BP is upgrade-specific configuration",
   },
 ];
 
 // Special mappings where the same concept has different names
 const PATH_MAPPINGS: Record<string, string> = {
-  "vaultHub.relativeShareLimitBP": "vaultHub.maxRelativeShareLimitBP",
-  "aragonAppVersions": "appVersions", // Handle different naming
+  aragonAppVersions: "appVersions", // Handle different naming
 };
 
 function getNestedValue(obj: unknown, path: string): unknown {
