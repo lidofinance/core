@@ -114,4 +114,9 @@ contract Lido__MockForAccounting {
     function mintShares(address _recipient, uint256 _sharesAmount) external {
         emit TransferShares(address(0), _recipient, _sharesAmount);
     }
+
+    function transferShares(address _recipient, uint256 _amount) external returns (uint256) {
+        emit TransferShares(msg.sender, _recipient, _amount);
+        return _amount;
+    }
 }
