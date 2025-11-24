@@ -3,7 +3,14 @@ pragma solidity 0.8.25;
 
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {STASCore} from "./STASCore.sol";
-import {SortIndexedTarget} from "./STASTypes.sol";
+
+
+/// @dev Helper struct for sorting entities during "Water filling" allocation
+struct SortIndexedTarget {
+    uint256 idx;
+    uint256 target;
+}
+
 
 /**
  * @title Pouring Math for STAS

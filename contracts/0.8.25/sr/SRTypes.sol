@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {STASStorage} from "contracts/0.8.25/stas/STASTypes.sol";
+import {STASStorage} from "contracts/0.8.25/stas/STASCore.sol";
 
 /**
  * @title StakingRouter shared types

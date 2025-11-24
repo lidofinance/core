@@ -5,7 +5,15 @@ import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/Enumerab
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {Packed16} from "contracts/common/lib/Packed16.sol";
 import {BitMask16} from "contracts/common/lib/BitMask16.sol";
-import {STASStorage, Entity, Strategy, Metric} from "./STASTypes.sol";
+
+struct STASStorage {
+    // uint16 enabledMetricsBitMask;
+    uint16 enabledStrategiesBitMask;
+    uint256 packedEnabledStrategyMetricsBitMasks; // packed bit masks of enabled metrics per strategy (16x uint16 in one uint256)
+    mapping(uint256 => uint256) packedEntityMetricValues; // mapping of entity ID to their packed metric values
+    mapping(uint256 => uint256) strategySumWeights; // mapping of strategy ID to their sum of weights
+    EnumerableSet.UintSet entityIds; // set of entity IDs
+}
 
 /**
  * @title Share Target Allocation Strategy (STAS)
@@ -25,9 +33,6 @@ library STASCore {
     uint8 public constant S_FRAC = 96; // Q96.96
     uint256 public constant S_SCALE = uint256(1) << S_FRAC; // 2^96
 
-    event UpdatedEntities(uint256 updateCount);
-    event UpdatedStrategyWeights(uint256 strategyId, uint256 updatesCount);
-
     error NotExists();
     error NotEnabled();
     error AlreadyExists();
@@ -39,41 +44,71 @@ library STASCore {
     function enableStrategy(STASStorage storage $, uint8 sId) internal {
         uint16 mask = $.enabledStrategiesBitMask;
         if (mask.isBitSet(sId)) revert AlreadyEnabled();
-
         $.enabledStrategiesBitMask = mask.setBit(sId);
 
-        // initializing with zeros, weights should be set later
-        uint256[16] memory sumX;
-        $.strategies[sId] = Strategy({packedWeights: 0, sumWeights: 0, sumX: sumX});
+        // recalculate sumWeights for all entities
+        uint256 n = $.entityIds.length();
+        uint16 smMask = $.packedEnabledStrategyMetricsBitMasks.get16(sId);
+        uint256 sW = 0;
+
+        // if there are enabled metrics, calculate sumWeights
+        if (smMask != 0) {
+            unchecked {
+                for (uint256 i; i < n; ++i) {
+                    uint256 eId = $.entityIds.at(i);
+                    uint256 pVals = $.packedEntityMetricValues[eId];
+                    sW += pVals.product(smMask); // product of values for enabled metrics in strategy
+                }
+            }
+        }
+        // save updated sumWeights
+        $.strategySumWeights[sId] = sW;
     }
 
     function disableStrategy(STASStorage storage $, uint8 sId) internal {
         uint16 mask = $.enabledStrategiesBitMask;
         if (!mask.isBitSet(sId)) revert NotEnabled();
-
-        // reset strategy storage
-        delete $.strategies[sId];
         $.enabledStrategiesBitMask = mask.clearBit(sId);
+
+        // reset sumWeights to 0
+        $.strategySumWeights[sId] = 0;
     }
 
-    function enableMetric(STASStorage storage $, uint8 mId, uint16 defaultWeight) internal returns (uint256 updCnt) {
-        uint16 mask = $.enabledMetricsBitMask;
-        if (mask.isBitSet(mId)) revert AlreadyEnabled(); // skip non-enabled metrics
+    /// @dev Enables metrics in strategy
+    function enableStrategyMetrics(STASStorage storage $, uint8 sId, uint8[] memory mIds)
+        internal
+        returns (uint256 updCnt)
+    {
+        uint256 smMasks = $.packedEnabledStrategyMetricsBitMasks;
+        uint16 mask = smMasks.get16(sId);
 
-        $.enabledMetricsBitMask = mask.setBit(mId);
-        $.metrics[mId] = Metric({defaultWeight: defaultWeight});
+        uint16 newMetricsMask = mask;
+        for (uint256 i = 0; i < mIds.length; ++i) {
+            uint8 mId = mIds[i];
+            if (mask.isBitSet(mId)) continue; // skip already enabled metrics
+            newMetricsMask = newMetricsMask.setBit(mId);
+        }
+        if (newMetricsMask == mask) revert AlreadyEnabled(); // skip already enabled metrics
 
-        updCnt = _setWeightsAllStrategies($, mId, defaultWeight);
+        updCnt = _updateStrategyMetrics($, sId, newMetricsMask);
     }
 
-    function disableMetric(STASStorage storage $, uint8 mId) internal returns (uint256 updCnt) {
-        uint16 mask = $.enabledMetricsBitMask;
-        if (!mask.isBitSet(mId)) revert NotEnabled(); // skip non-enabled metrics
+    function disableStrategyMetrics(STASStorage storage $, uint8 sId, uint8[] memory mIds)
+        internal
+        returns (uint256 updCnt)
+    {
+        uint256 smMasks = $.packedEnabledStrategyMetricsBitMasks;
+        uint16 mask = smMasks.get16(sId);
 
-        updCnt = _setWeightsAllStrategies($, mId, 0);
+        uint16 newMetricsMask = mask;
+        for (uint256 i = 0; i < mIds.length; ++i) {
+            uint8 mId = mIds[i];
+            if (!mask.isBitSet(mId)) continue; // skip non-enabled metrics
+            newMetricsMask = newMetricsMask.clearBit(mId);
+        }
+        if (newMetricsMask == mask) revert NotEnabled(); // skip non-enabled metrics
 
-        $.enabledMetricsBitMask = mask.clearBit(mId);
-        delete $.metrics[mId];
+        updCnt = _updateStrategyMetrics($, sId, newMetricsMask);
     }
 
     function addEntity(STASStorage storage $, uint256 eId) internal {
@@ -101,40 +136,23 @@ library STASCore {
         uint256 n = eIds.length;
         if (n == 0) revert NoData();
 
-        uint16 mask = $.enabledMetricsBitMask;
-        uint8[] memory mIds = mask.bitsToValues();
-        uint256 mCnt = mIds.length;
-        uint16[][] memory delVals = new uint16[][](n);
+        // todo filter entities with zero values?
 
+        uint16[][] memory zeroVals = new uint16[][](n);
         for (uint256 i; i < n; ++i) {
-            uint256 eId = eIds[i];
-            if (!$.entityIds.remove(eId)) {
-                revert NotExists();
-            }
-
-            uint256 slot = $.entities[eId].packedMetricValues;
-            if (slot == 0) continue; // nothing to remove
-            delVals[i] = new uint16[](mCnt);
-            for (uint8 k = 0; k < mCnt; ++k) {
-                delVals[i][k] = slot.get16(mIds[k]);
-            }
+            zeroVals[i] = new uint16[](MAX_METRICS); // zeroed values array for all metrics
         }
 
-        updCnt = _applyUpdate($, eIds, mIds, delVals);
-    }
+        // all possible metric values set to 0
+        // forge-lint: disable-next-line(incorrect-shift)
+        uint8[] memory mIds = (uint16((1 << MAX_METRICS) - 1)).bitsToValues();
+        updCnt = _applyUpdate($, eIds, mIds, zeroVals);
 
-    function setWeights(STASStorage storage $, uint8 sId, uint8[] memory mIds, uint16[] memory newWeights)
-        internal
-        returns (uint256 updCnt)
-    {
-        uint256 mCnt = mIds.length;
-        _checkLength(mCnt, newWeights.length);
-        _checkBounds(mCnt, MAX_METRICS);
-
-        uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
-
-        updCnt = _setWeights($, sId, mIds, newWeights);
+        for (uint256 i; i < n; ++i) {
+            if (!$.entityIds.remove(eIds[i])) {
+                revert NotExists();
+            }
+        }
     }
 
     function batchUpdate(
@@ -147,35 +165,33 @@ library STASCore {
         updCnt = _applyUpdate($, eIds, mIds, newVals);
     }
 
-    function _getEntityRaw(STASStorage storage $, uint256 eId) internal view returns (Entity memory) {
-        return $.entities[eId];
-    }
-
-    function _getStrategyRaw(STASStorage storage $, uint256 sId) internal view returns (Strategy memory) {
-        return $.strategies[sId];
-    }
-
-    function _getMetricRaw(STASStorage storage $, uint256 mId) internal view returns (Metric memory) {
-        return $.metrics[mId];
-    }
-
     function getMetricValues(STASStorage storage $, uint256 eId) internal view returns (uint16[] memory) {
         _checkEntity($, eId);
 
-        uint256 pVals = $.entities[eId].packedMetricValues;
+        uint256 pVals = $.packedEntityMetricValues[eId];
         return pVals.unpack16();
     }
 
-    function getWeights(STASStorage storage $, uint8 sId)
+    function getStrategyMetricValues(STASStorage storage $, uint256 eId, uint8 sId)
         internal
         view
-        returns (uint16[] memory weights, uint256 sumWeights)
+        returns (uint16[] memory)
     {
-        uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
+        _checkEntity($, eId);
 
-        uint256 pW = $.strategies[sId].packedWeights;
-        return (pW.unpack16(), $.strategies[sId].sumWeights);
+        uint16 sMask = $.enabledStrategiesBitMask;
+        if (!sMask.isBitSet(sId)) revert NotEnabled(); // non-enabled strategy
+
+        uint256 pVals = $.packedEntityMetricValues[eId];
+        uint16 smMask = $.packedEnabledStrategyMetricsBitMasks.get16(sId);
+        uint8[] memory mIds = smMask.bitsToValues();
+        uint16[] memory pValsFiltered = new uint16[](mIds.length);
+        for (uint256 i = 0; i < mIds.length; ++i) {
+            uint8 mId = mIds[i];
+            pValsFiltered[i] = pVals.get16(mId);
+        }
+
+        return pValsFiltered;
     }
 
     function getEnabledStrategies(STASStorage storage $) internal view returns (uint8[] memory) {
@@ -183,8 +199,9 @@ library STASCore {
         return mask.bitsToValues();
     }
 
-    function getEnabledMetrics(STASStorage storage $) internal view returns (uint8[] memory) {
-        uint16 mask = $.enabledMetricsBitMask;
+    function getEnabledStrategyMetrics(STASStorage storage $, uint8 sId) internal view returns (uint8[] memory) {
+        uint256 smMasks = $.packedEnabledStrategyMetricsBitMasks;
+        uint16 mask = smMasks.get16(sId);
         return mask.bitsToValues();
     }
 
@@ -194,8 +211,7 @@ library STASCore {
 
     function shareOf(STASStorage storage $, uint256 eId, uint8 sId) internal view returns (uint256) {
         uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
-
+        if (!mask.isBitSet(sId)) return 0;
         _checkEntity($, eId);
         return _calculateShare($, eId, sId);
     }
@@ -207,7 +223,7 @@ library STASCore {
     {
         uint256[] memory shares = new uint256[](eIds.length);
         uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
+        if (!mask.isBitSet(sId)) return shares;
 
         for (uint256 i = 0; i < eIds.length; i++) {
             uint256 eId = eIds[i];
@@ -226,80 +242,81 @@ library STASCore {
             if (!$.entityIds.add(eId)) {
                 revert AlreadyExists();
             }
-            $.entities[eId] = Entity({packedMetricValues: 0});
+            $.packedEntityMetricValues[eId] = 0;
         }
     }
 
-    function _setWeightsAllStrategies(STASStorage storage $, uint8 mId, uint16 newWeight)
+    function _updateStrategyMetrics(STASStorage storage $, uint8 sId, uint16 newMetricsMask)
         private
         returns (uint256 updCnt)
     {
-        uint16 mask = $.enabledStrategiesBitMask;
-        uint8[] memory mIds = new uint8[](1);
-        mIds[0] = mId;
-        uint16[] memory newWeights = new uint16[](1);
-        newWeights[0] = newWeight;
+        uint256 n = $.entityIds.length();
+        uint256 smMasks = $.packedEnabledStrategyMetricsBitMasks;
+        uint16 oldMetricsMask = smMasks.get16(sId);
 
-        for (uint8 i; i < MAX_STRATEGIES; ++i) {
-            if (!mask.isBitSet(i)) continue; // skip non-enabled strategies
-            updCnt += _setWeights($, i, mIds, newWeights);
+        if (newMetricsMask == oldMetricsMask) {
+            return 0; // nothing to update
         }
-    }
 
-    function _setWeights(STASStorage storage $, uint8 sId, uint8[] memory mIds, uint16[] memory newWeights)
-        private
-        returns (uint256 updCnt)
-    {
-        Strategy storage ss = $.strategies[sId];
-        // get old weights/sum
-        uint256 pW = ss.packedWeights;
         int256 dSum;
-        uint16 mask = $.enabledMetricsBitMask;
+        uint16 addedMetricsMask = newMetricsMask & ~oldMetricsMask;
         // forge-lint: disable-start(unsafe-typecast)
         unchecked {
-            for (uint8 k; k < mIds.length; ++k) {
-                uint8 mId = mIds[k];
-                if (!mask.isBitSet(mId)) continue;
+            for (uint256 i; i < n; ++i) {
+                uint256 eId = $.entityIds.at(i);
+                uint256 pVals = $.packedEntityMetricValues[eId];
 
-                uint16 oldW = pW.get16(mId);
-                uint16 newW = newWeights[k];
-                if (newW == oldW) continue;
+                // set default value 1 for newly added metrics if not set
+                if (addedMetricsMask != 0) {
+                    uint256 pValsWithDefaults = pVals;
+                    for (uint8 m; m < MAX_METRICS; ++m) {
+                        if (!addedMetricsMask.isBitSet(m)) continue;
+                        if (pValsWithDefaults.get16(m) == 0) {
+                            pValsWithDefaults = pValsWithDefaults.set16(m, 1);
+                        }
+                    }
+                    if (pValsWithDefaults != pVals) {
+                        $.packedEntityMetricValues[eId] = pValsWithDefaults;
+                        pVals = pValsWithDefaults;
+                    }
+                }
 
-                int256 dx = int256(uint256(newW)) - int256(uint256(oldW));
+                uint256 xOld = pVals.product(oldMetricsMask); // product of values for old enabled metrics in strategy
+                uint256 xNew = pVals.product(newMetricsMask); // product of values for new enabled metrics in strategy
+                if (xNew == xOld) continue;
+                int256 dx = int256(xNew) - int256(xOld);
                 dSum += dx;
-                // update local packedWeights
-                pW = pW.set16(mId, newW);
+
                 ++updCnt;
             }
-        }
-        // apply delta to sumWeights
-        uint256 sW = ss.sumWeights;
-        if (dSum != 0) {
-            if (dSum > 0) sW += uint256(dSum);
-            else sW -= uint256(-dSum);
+
+            // apply delta to sumWeights
+            uint256 sW = $.strategySumWeights[sId];
+            if (dSum != 0) {
+                if (dSum > 0) sW += uint256(dSum);
+                else sW -= uint256(-dSum);
+            }
+
+            $.strategySumWeights[sId] = sW;
         }
         // forge-lint: disable-end(unsafe-typecast)
-        ss.packedWeights = pW;
-        ss.sumWeights = sW;
-        emit UpdatedStrategyWeights(sId, updCnt);
+        $.packedEnabledStrategyMetricsBitMasks = smMasks.set16(sId, newMetricsMask);
     }
 
-    function _applyUpdate(
-        STASStorage storage $,
-        uint256[] memory eIds,
-        uint8[] memory mIds,
-        uint16[][] memory newVals // или компактнее: индексы+значения per id
-            // uint16[][] memory mask // 1 если k изменяем, иначе 0
-    ) private returns (uint256 updCnt) {
+    function _applyUpdate(STASStorage storage $, uint256[] memory eIds, uint8[] memory mIds, uint16[][] memory newVals)
+        private
+        returns (uint256 updCnt)
+    {
         uint256 n = eIds.length;
         _checkLength(newVals.length, n);
 
         uint256 mCnt = mIds.length;
         _checkBounds(mCnt, MAX_METRICS);
 
-        // дельты сумм по параметрам
-        int256[] memory dSum = new int256[](mCnt);
-        uint16 mask = $.enabledMetricsBitMask;
+        int256[] memory dSum = new int256[](MAX_STRATEGIES);
+
+        uint16 sMask = $.enabledStrategiesBitMask;
+        uint256 smMasks = $.packedEnabledStrategyMetricsBitMasks;
         // forge-lint: disable-start(unsafe-typecast)
         unchecked {
             for (uint256 i; i < n; ++i) {
@@ -307,71 +324,56 @@ library STASCore {
                 _checkEntity($, eId);
                 _checkLength(newVals[i].length, mCnt);
 
-                uint256 pVals = $.entities[eId].packedMetricValues;
+                uint256 pVals = $.packedEntityMetricValues[eId];
                 uint256 pValsNew = pVals;
 
+                // set new metric values for entity
                 for (uint256 k; k < mCnt; ++k) {
-                    // if (mask[i][k] == 0) continue;
                     uint8 mId = mIds[k];
-                    if (!mask.isBitSet(mId)) continue; // skip non-enabled metrics
-
-                    uint16 xOld = pValsNew.get16(mId);
-                    uint16 xNew = newVals[i][k];
-                    if (xNew == xOld) continue;
-
-                    pValsNew = pValsNew.set16(mId, xNew);
-                    int256 dx = int256(uint256(xNew)) - int256(uint256(xOld));
-                    dSum[k] += dx;
+                    pValsNew = pValsNew.set16(mId, newVals[i][k]);
                 }
 
                 if (pValsNew != pVals) {
-                    $.entities[eId].packedMetricValues = pValsNew;
+                    $.packedEntityMetricValues[eId] = pValsNew;
                     ++updCnt;
+
+                    for (uint256 s; s < MAX_STRATEGIES; ++s) {
+                        if (!sMask.isBitSet(uint8(s))) continue; // skip non-enabled strategies
+                        uint16 smMask = smMasks.get16(uint8(s));
+                        uint256 xOld = pVals.product(smMask); // product of old values for enabled metrics in strategy
+                        uint256 xNew = pValsNew.product(smMask); // product of new values for enabled metrics in strategy
+                        if (xNew == xOld) continue;
+                        int256 dx = int256(xNew) - int256(xOld);
+                        dSum[s] += dx;
+                    }
                 }
             }
-        }
 
-        mask = $.enabledStrategiesBitMask;
-        for (uint256 i; i < MAX_STRATEGIES; ++i) {
-            if (!mask.isBitSet(uint8(i))) continue; // skip non-enabled strategies
-            Strategy storage ss = $.strategies[i];
-            // update sumX[k]
-            for (uint256 k; k < mCnt; ++k) {
-                int256 dx = dSum[k];
-                if (dx == 0) continue;
-                uint8 mId = mIds[k];
-                if (dx > 0) ss.sumX[mId] += uint256(dx);
-                else ss.sumX[mId] -= uint256(-dx); // no overflow, due to dx = Σ(new-old)
+            // apply dSum[k] to sumWeights per strategy
+            for (uint256 i; i < MAX_STRATEGIES; ++i) {
+                if (!sMask.isBitSet(uint8(i))) continue; // skip non-enabled strategies
+
+                // update sumWeights
+                uint256 sW = $.strategySumWeights[i];
+                int256 dx = dSum[i];
+                if (dx != 0) {
+                    if (dx > 0) sW += uint256(dx);
+                    else sW -= uint256(-dx); // no overflow, due to dx = Σ(new-old)
+                }
+                $.strategySumWeights[i] = sW;
             }
         }
         // forge-lint: disable-end(unsafe-typecast)
-        emit UpdatedEntities(updCnt);
     }
 
     function _calculateShare(STASStorage storage $, uint256 eId, uint8 sId) private view returns (uint256) {
-        Strategy storage ss = $.strategies[sId];
-
-        uint256 sW = ss.sumWeights;
+        uint256 sW = $.strategySumWeights[sId];
         if (sW == 0) return 0;
 
-        uint256 pW = ss.packedWeights;
-        uint256 pVals = $.entities[eId].packedMetricValues;
-        uint256 acc; // Σ_k w_k * x_{i,k} / sumX[k]
-
-        unchecked {
-            for (uint8 k; k < 16; ++k) {
-                uint256 xk = pVals.get16(k);
-                if (xk == 0) continue;
-                uint256 sx = ss.sumX[k];
-                if (sx == 0) continue;
-                uint256 wk = pW.get16(k);
-                //  w * x / sumX[k]
-                // acc += Math.mulDiv(wk, xk, sx, Math.Rounding.Floor);
-                acc += Math.mulDiv(wk, xk, sx);
-            }
-        }
-        // return Math.mulDiv(acc, S_SCALE, sW, Math.Rounding.Floor);
-        return (acc << S_FRAC) / sW;
+        uint16 smMask = $.packedEnabledStrategyMetricsBitMasks.get16(sId);
+        uint256 pVals = $.packedEntityMetricValues[eId];
+        //  return Math.mulDiv(pVals.product(smMask), S_SCALE, sW, Math.Rounding.Ceil);
+        return (pVals.product(smMask) << S_FRAC) / sW;
     }
 
     function _checkEntity(STASStorage storage $, uint256 eId) private view {

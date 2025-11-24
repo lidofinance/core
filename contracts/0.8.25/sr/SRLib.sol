@@ -5,8 +5,7 @@ import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
-import {STASStorage} from "contracts/0.8.25/stas/STASTypes.sol";
-import {STASCore} from "contracts/0.8.25/stas/STASCore.sol";
+import {STASCore, STASStorage} from "contracts/0.8.25/stas/STASCore.sol";
 import {STASPouringMath} from "contracts/0.8.25/stas/STASPouringMath.sol";
 import {SRStorage} from "./SRStorage.sol";
 import {SRUtils} from "./SRUtils.sol";
@@ -98,34 +97,29 @@ library SRLib {
     function _initializeSTAS() public {
         STASStorage storage _stas = SRStorage.getSTASStorage();
 
-        if (_stas.getEnabledMetrics().length > 0 || _stas.getEnabledStrategies().length > 0) {
-            // data already exists, skip initialization
+        if (_stas.getEnabledStrategies().length > 0) {
+            // assuming data already exists, skip initialization
             return;
         }
-
-        uint8[] memory metricIds = SRUtils._getMetricIds();
-        assert(metricIds.length == 2);
 
         uint8[] memory strategyIds = SRUtils._getStrategyIds();
         assert(strategyIds.length == 2);
 
-        _stas.enableMetric(metricIds[0], 0);
-        _stas.enableMetric(metricIds[1], 0);
         _stas.enableStrategy(strategyIds[0]);
         _stas.enableStrategy(strategyIds[1]);
-        // _stas.enableStrategy(strategyIds[2], 0);
 
-        uint16[] memory metricWeights = new uint16[](metricIds.length);
+        uint8[] memory metricIds = SRUtils._getMetricIds();
+        assert(metricIds.length == 2);
 
-        // set metric weights for Deposit strategy: 100% for DepositTargetShare, 0% for WithdrawalProtectShare
-        metricWeights[0] = 10000; // some big relative number (uint16)
-        metricWeights[1] = 0;
-        _stas.setWeights(strategyIds[0], metricIds, metricWeights);
+        uint8[] memory enabledMetricIds = new uint8[](1);
 
-        // set metric weights for Withdrawal strategy: 0% for DepositTargetShare, 100% for WithdrawalProtectShare
-        metricWeights[0] = 0;
-        metricWeights[1] = 10000; // some big relative number (uint16)
-        _stas.setWeights(strategyIds[1], metricIds, metricWeights);
+        // enable metrics for Deposit strategy: only DepositTargetShare
+        enabledMetricIds[0] = metricIds[0];
+        _stas.enableStrategyMetrics(strategyIds[0], enabledMetricIds);
+
+        // enable metrics for Withdrawal strategy: only WithdrawalProtectShare
+        enabledMetricIds[0] = metricIds[1];
+        _stas.enableStrategyMetrics(strategyIds[1], enabledMetricIds);
     }
 
     function _migrateStorage() public {
