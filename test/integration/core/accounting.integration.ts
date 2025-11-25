@@ -47,6 +47,147 @@ describe("Integration: Accounting", () => {
     return (value / ONE_GWEI) * ONE_GWEI;
   };
 
+  /**
+   * Validates the shareRate invariant: shareRate = totalPooledEther / totalShares
+   * Checks that:
+   * 1. The actual on-chain shareRate matches the event-reported shareRate
+   * 2. ShareRate from event matches expected calculation
+   * 3. Division by zero is prevented
+   */
+  const validateShareRateInvariant = async (
+    reportTxReceipt: ContractTransactionReceipt,
+    expectedDirection: "increase" | "decrease" | "same",
+  ) => {
+    const { lido } = ctx.contracts;
+
+    const tokenRebasedEvent = getFirstEvent(reportTxReceipt, "TokenRebased");
+
+    // Check division by zero
+    expect(tokenRebasedEvent.args.preTotalShares).to.be.greaterThan(0, "preTotalShares must not be zero");
+    expect(tokenRebasedEvent.args.postTotalShares).to.be.greaterThan(0, "postTotalShares must not be zero");
+
+    // Calculate shareRate from events
+    const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent);
+
+    // Get actual on-chain state after the report
+    const actualTotalPooledEther = await lido.getTotalPooledEther();
+    const actualTotalShares = await lido.getTotalShares();
+
+    // Check division by zero for actual state
+    expect(actualTotalShares).to.be.greaterThan(0, "Actual totalShares must not be zero");
+
+    // Calculate actual on-chain shareRate
+    const actualShareRate = (actualTotalPooledEther * SHARE_RATE_PRECISION) / actualTotalShares;
+
+    // Verify that actual on-chain shareRate matches the event's post shareRate
+    expect(actualShareRate).to.equal(sharesRateAfter, "Actual on-chain shareRate must match event's post shareRate");
+
+    // Verify shareRate direction based on expected behavior
+    switch (expectedDirection) {
+      case "increase":
+        expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "ShareRate should increase with positive rebase");
+        break;
+      case "decrease":
+        expect(sharesRateAfter).to.be.lessThan(sharesRateBefore, "ShareRate should decrease with negative rebase");
+        break;
+      case "same":
+        expect(sharesRateAfter).to.be.lessThanOrEqual(
+          sharesRateBefore + 1n,
+          "ShareRate should stay approximately the same",
+        );
+        expect(sharesRateAfter).to.be.greaterThanOrEqual(sharesRateBefore, "ShareRate should not decrease");
+        break;
+    }
+
+    return { sharesRateBefore, sharesRateAfter, actualShareRate };
+  };
+
+  /**
+   * Validates that treasury received exactly the remainder after module distribution
+   * Invariant from Accounting.sol:325:
+   *   treasurySharesToMint = _totalSharesToMintAsFees - totalModuleFeeShares
+   */
+  const validateTreasuryReceivedRemainder = async (reportTxReceipt: ContractTransactionReceipt) => {
+    const { lido } = ctx.contracts;
+
+    const tokenRebasedEvent = getFirstEvent(reportTxReceipt, "TokenRebased");
+    const totalSharesMinted = tokenRebasedEvent.args.sharesMintedAsFees;
+
+    // Get treasury address
+    const lidoLocator = await lido.getLidoLocator();
+    const locatorContract = await ethers.getContractAt("LidoLocator", lidoLocator);
+    const treasury = await locatorContract.treasury();
+
+    const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
+
+    // Get all module transfers (from ZeroAddress, not to treasury)
+    const moduleMintEvents = transferSharesEvents.filter(
+      ({ args }) => args.from === ZeroAddress && args.to !== treasury,
+    );
+
+    const totalModuleShares = moduleMintEvents.reduce((sum, { args }) => sum + args.sharesValue, 0n);
+
+    // Get treasury transfer
+    const treasuryMintEvent = transferSharesEvents.find(
+      ({ args }) => args.from === ZeroAddress && args.to === treasury,
+    );
+
+    const treasuryShares = treasuryMintEvent ? treasuryMintEvent.args.sharesValue : 0n;
+
+    // INVARIANT: treasury + modules = total
+    expect(treasuryShares + totalModuleShares).to.equal(
+      totalSharesMinted,
+      "Treasury shares + module shares must equal total sharesMintedAsFees",
+    );
+
+    // INVARIANT: treasury = total - modules (from Accounting.sol:325)
+    expect(treasuryShares).to.equal(
+      totalSharesMinted - totalModuleShares,
+      "Treasury must receive exactly the remainder after module distribution",
+    );
+
+    return { treasuryShares, totalModuleShares };
+  };
+
+  /**
+   * Validates that each module received shares proportional to their fee weight
+   * Invariant from Accounting.sol:319:
+   *   moduleFeeShares = (_totalSharesToMintAsFees * moduleFee) / _totalFee
+   */
+  const validateModuleFeeProportions = async (reportTxReceipt: ContractTransactionReceipt) => {
+    const { stakingRouter } = ctx.contracts;
+
+    // Get fee distribution from StakingRouter
+    const [recipients, stakingModuleIds, stakingModuleFees, totalFee] =
+      await stakingRouter.getStakingRewardsDistribution();
+
+    const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
+    const tokenRebasedEvent = getFirstEvent(reportTxReceipt, "TokenRebased");
+    const totalSharesMinted = tokenRebasedEvent.args.sharesMintedAsFees;
+
+    // For each module, verify proportional distribution
+    for (let i = 0; i < recipients.length; i++) {
+      if (stakingModuleFees[i] === 0n) continue; // skip modules with 0 fee
+
+      const expectedModuleShares = (totalSharesMinted * stakingModuleFees[i]) / totalFee;
+
+      const actualTransfer = transferSharesEvents.find(
+        ({ args }) => args.from === ZeroAddress && args.to === recipients[i],
+      );
+
+      expect(actualTransfer, `Module ${stakingModuleIds[i]} with non-zero fee must receive shares`).to.not.be.undefined;
+
+      if (!actualTransfer) continue; // TypeScript guard
+
+      // Allow 1 wei difference due to integer division rounding
+      expect(actualTransfer.args.sharesValue).to.be.closeTo(
+        expectedModuleShares,
+        1n,
+        `Module ${stakingModuleIds[i]} shares must match expected proportion`,
+      );
+    }
+  };
+
   const rebaseLimitWei = async () => {
     const { oracleReportSanityChecker, lido } = ctx.contracts;
 
@@ -70,15 +211,15 @@ describe("Integration: Accounting", () => {
     return { amountOfETHLocked, sharesBurntAmount, sharesToBurn };
   };
 
-  const sharesRateFromEvent = (tx: ContractTransactionReceipt) => {
-    const tokenRebasedEvent = getFirstEvent(tx, "TokenRebased");
-    expect(tokenRebasedEvent.args.preTotalEther).to.be.greaterThanOrEqual(0);
-    expect(tokenRebasedEvent.args.postTotalEther).to.be.greaterThanOrEqual(0);
-    return [
-      (tokenRebasedEvent.args.preTotalEther * SHARE_RATE_PRECISION) / tokenRebasedEvent.args.preTotalShares,
-      (tokenRebasedEvent.args.postTotalEther * SHARE_RATE_PRECISION) / tokenRebasedEvent.args.postTotalShares,
-    ];
-  };
+  // const sharesRateFromEvent = (tx: ContractTransactionReceipt) => {
+  //   const tokenRebasedEvent = getFirstEvent(tx, "TokenRebased");
+  //   expect(tokenRebasedEvent.args.preTotalEther).to.be.greaterThanOrEqual(0);
+  //   expect(tokenRebasedEvent.args.postTotalEther).to.be.greaterThanOrEqual(0);
+  //   return [
+  //     (tokenRebasedEvent.args.preTotalEther * SHARE_RATE_PRECISION) / tokenRebasedEvent.args.preTotalShares,
+  //     (tokenRebasedEvent.args.postTotalEther * SHARE_RATE_PRECISION) / tokenRebasedEvent.args.postTotalShares,
+  //   ];
+  // };
 
   // Get shares burn limit from oracle report sanity checker contract when NO changes in pooled Ether are expected
   const sharesBurnLimitNoPooledEtherChanges = async () => {
@@ -148,9 +289,8 @@ describe("Integration: Accounting", () => {
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
-    const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased");
-    const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
-    expect(sharesRateBefore).to.be.lessThanOrEqual(sharesRateAfter);
+    // Validate shareRate invariant - rate should stay same or slightly increase due to share burn
+    await validateShareRateInvariant(reportTxReceipt, "same");
 
     const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(ethBalanceBefore).to.equal(ethBalanceAfter + amountOfETHLocked);
@@ -191,9 +331,8 @@ describe("Integration: Accounting", () => {
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore).to.equal(totalSharesAfter + sharesBurntAmount);
 
-    const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased");
-    const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
-    expect(sharesRateAfter).to.be.lessThan(sharesRateBefore);
+    // Validate shareRate invariant - rate should decrease with negative rebase
+    await validateShareRateInvariant(reportTxReceipt, "decrease");
 
     const ethDistributedEvent = ctx.getEvents(reportTxReceipt, "ETHDistributed");
     expect(ethDistributedEvent[0].args.preCLBalance + REBASE_AMOUNT).to.equal(
@@ -202,7 +341,7 @@ describe("Integration: Accounting", () => {
     );
   });
 
-  it.skip("Should account correctly with positive CL rebase close to the limits", async () => {
+  it("Should account correctly with positive CL rebase close to the limits", async () => {
     const { lido, accountingOracle, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
@@ -267,25 +406,10 @@ describe("Integration: Accounting", () => {
       .filter(({ args }) => args.from === ZeroAddress) // only minted shares
       .reduce((acc, { args }) => acc + args.sharesValue, 0n);
 
-    // TODO: check math, why it's not equal?
-    // let stakingModulesSharesAsFees = 0n;
-    // for (let i = 1; i <= stakingModulesCount; i++) {
-    //   const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
-    //   const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
-    //   stakingModulesSharesAsFees += stakingModuleSharesAsFees;
-    // }
-
-    // const treasurySharesAsFees = transferSharesEvents[transferSharesEvents.length - 1 - Number(feeDistributionTransfer)];
-    // expect(stakingModulesSharesAsFees).to.approximately(
-    //   treasurySharesAsFees.args.sharesValue,
-    //   100,
-    //   "Shares minted to DAO and staking modules mismatch",
-    // );
-
     const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased");
     expect(tokenRebasedEvent[0].args.sharesMintedAsFees).to.equal(
       mintedSharesSum,
-      "TokenRebased: sharesMintedAsFee mismatch",
+      "Sum of all minted shares must equal sharesMintedAsFees from TokenRebased event",
     );
 
     const totalSharesAfter = await lido.getTotalShares();
@@ -294,8 +418,12 @@ describe("Integration: Accounting", () => {
       "TotalShares change mismatch",
     );
 
-    const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
-    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
+    // Validate shareRate invariant - rate should increase with positive rebase
+    await validateShareRateInvariant(reportTxReceipt, "increase");
+
+    // Validate fee distribution invariants
+    await validateTreasuryReceivedRemainder(reportTxReceipt);
+    await validateModuleFeeProportions(reportTxReceipt);
 
     const ethDistributedEvent = ctx.getEvents(reportTxReceipt, "ETHDistributed");
     expect(ethDistributedEvent[0].args.preCLBalance + rebaseAmount).to.equal(
@@ -339,6 +467,9 @@ describe("Integration: Accounting", () => {
 
     const ethBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(ethBalanceBefore).to.equal(ethBalanceAfter + amountOfETHLocked);
+
+    // Validate shareRate invariant - rate should stay same with no changes
+    await validateShareRateInvariant(reportTxReceipt, "same");
 
     expect(ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")).to.be.empty;
     expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
@@ -388,6 +519,9 @@ describe("Integration: Accounting", () => {
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked);
 
+    // Validate shareRate invariant - rate should increase with EL rewards
+    await validateShareRateInvariant(reportTxReceipt, "increase");
+
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(0, "Expected EL vault to be empty");
   });
@@ -435,6 +569,9 @@ describe("Integration: Accounting", () => {
 
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(lidoBalanceBefore + elRewards).to.equal(lidoBalanceAfter + amountOfETHLocked);
+
+    // Validate shareRate invariant - rate should increase with EL rewards
+    await validateShareRateInvariant(reportTxReceipt, "increase");
 
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(0, "Expected EL vault to be empty");
@@ -488,6 +625,9 @@ describe("Integration: Accounting", () => {
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(lidoBalanceBefore + expectedRewards).equal(lidoBalanceAfter + amountOfETHLocked);
 
+    // Validate shareRate invariant - rate should increase with EL rewards
+    await validateShareRateInvariant(reportTxReceipt, "increase");
+
     const elVaultBalanceAfter = await ethers.provider.getBalance(elRewardsVault.address);
     expect(elVaultBalanceAfter).to.equal(rewardsExcess, "Expected EL vault to be filled with excess rewards");
   });
@@ -529,11 +669,14 @@ describe("Integration: Accounting", () => {
     const lidoBalanceAfter = await ethers.provider.getBalance(lido.address);
     expect(lidoBalanceBefore).to.equal(lidoBalanceAfter + amountOfETHLocked);
 
+    // Validate shareRate invariant - rate should stay same with no changes
+    await validateShareRateInvariant(reportTxReceipt, "same");
+
     expect(ctx.getEvents(reportTxReceipt, "WithdrawalsReceived").length).be.equal(0);
     expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived").length).be.equal(0);
   });
 
-  it.skip("Should account correctly with withdrawals at limits", async () => {
+  it("Should account correctly with withdrawals at limits", async () => {
     const { lido, accountingOracle, withdrawalVault, stakingRouter } = ctx.contracts;
 
     const withdrawals = await rebaseLimitWei();
@@ -589,29 +732,21 @@ describe("Integration: Accounting", () => {
       .filter(({ args }) => args.from === ZeroAddress) // only minted shares
       .reduce((acc, { args }) => acc + args.sharesValue, 0n);
 
-    // TODO: check math, why it's not equal?
-    // let stakingModulesSharesAsFees = 0n;
-    // for (let i = 1; i <= stakingModulesCount; i++) {
-    //   const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
-    //   const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
-    //   stakingModulesSharesAsFees += stakingModuleSharesAsFees;
-    // }
-
-    // const treasurySharesAsFees = transferSharesEvents[transferSharesEvents.length - 1 - Number(feeDistributionTransfer)];
-    // expect(stakingModulesSharesAsFees).to.approximately(
-    //   treasurySharesAsFees.args.sharesValue,
-    //   100,
-    //   "Shares minted to DAO and staking modules mismatch",
-    // );
-
     const tokenRebasedEvent = getFirstEvent(reportTxReceipt, "TokenRebased");
-    expect(tokenRebasedEvent.args.sharesMintedAsFees).to.equal(mintedSharesSum);
+    expect(tokenRebasedEvent.args.sharesMintedAsFees).to.equal(
+      mintedSharesSum,
+      "Sum of all minted shares must equal sharesMintedAsFees from TokenRebased event",
+    );
 
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore + mintedSharesSum).to.equal(totalSharesAfter + sharesBurntAmount);
 
-    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
-    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore);
+    // Validate shareRate invariant - rate should increase with withdrawals
+    await validateShareRateInvariant(reportTxReceipt, "increase");
+
+    // Validate fee distribution invariants
+    await validateTreasuryReceivedRemainder(reportTxReceipt);
+    await validateModuleFeeProportions(reportTxReceipt);
 
     const withdrawalsReceivedEvent = ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")[0];
     expect(withdrawalsReceivedEvent.args.amount).to.equal(withdrawals);
@@ -620,7 +755,7 @@ describe("Integration: Accounting", () => {
     expect(withdrawalVaultBalanceAfter).to.equal(0, "Expected withdrawals vault to be empty");
   });
 
-  it.skip("Should account correctly with withdrawals above limits", async () => {
+  it("Should account correctly with withdrawals above limits", async () => {
     const { lido, accountingOracle, withdrawalVault, stakingRouter } = ctx.contracts;
 
     const expectedWithdrawals = await rebaseLimitWei();
@@ -673,29 +808,21 @@ describe("Integration: Accounting", () => {
       .filter(({ args }) => args.from === ZeroAddress) // only minted shares
       .reduce((acc, { args }) => acc + args.sharesValue, 0n);
 
-    // TODO: check math, why it's not equal?
-    // let stakingModulesSharesAsFees = 0n;
-    // for (let i = 1; i <= stakingModulesCount; i++) {
-    //   const transferSharesEvent = transferSharesEvents[i + (hasWithdrawals ? 1 : 0)];
-    //   const stakingModuleSharesAsFees = transferSharesEvent?.args?.sharesValue || 0n;
-    //   stakingModulesSharesAsFees += stakingModuleSharesAsFees;
-    // }
-
-    // const treasurySharesAsFees = transferSharesEvents[transferSharesEvents.length - 1 - Number(feeDistributionTransfer)];
-    // expect(stakingModulesSharesAsFees).to.approximately(
-    //   treasurySharesAsFees.args.sharesValue,
-    //   100,
-    //   "Shares minted to DAO and staking modules mismatch",
-    // );
-
     const tokenRebasedEvent = getFirstEvent(reportTxReceipt, "TokenRebased");
-    expect(tokenRebasedEvent.args.sharesMintedAsFees).to.equal(mintedSharesSum);
+    expect(tokenRebasedEvent.args.sharesMintedAsFees).to.equal(
+      mintedSharesSum,
+      "Sum of all minted shares must equal sharesMintedAsFees from TokenRebased event",
+    );
 
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore + mintedSharesSum).to.equal(totalSharesAfter + sharesBurntAmount);
 
-    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
-    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore);
+    // Validate shareRate invariant - rate should increase with withdrawals
+    await validateShareRateInvariant(reportTxReceipt, "increase");
+
+    // Validate fee distribution invariants
+    await validateTreasuryReceivedRemainder(reportTxReceipt);
+    await validateModuleFeeProportions(reportTxReceipt);
 
     const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
     expect(withdrawalsReceivedEvent.args.amount).to.equal(expectedWithdrawals);
@@ -766,8 +893,9 @@ describe("Integration: Accounting", () => {
     expect(burntDueToWithdrawals).to.be.greaterThanOrEqual(0);
     expect(sharesBurntAmount - burntDueToWithdrawals).to.equal(sharesLimit, "SharesBurnt: sharesAmount mismatch");
 
-    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
-    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
+    // Validate shareRate invariant - rate should increase with shares burn
+    await validateShareRateInvariant(reportTxReceipt, "increase");
+
     expect(totalSharesBefore - sharesLimit).to.equal(
       (await lido.getTotalShares()) + burntDueToWithdrawals,
       "TotalShares change mismatch",
@@ -841,8 +969,8 @@ describe("Integration: Accounting", () => {
     expect(burntDueToWithdrawals).to.be.greaterThanOrEqual(0);
     expect(sharesBurntAmount - burntDueToWithdrawals).to.equal(limit, "SharesBurnt: sharesAmount mismatch");
 
-    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
-    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore, "Shares rate has not increased");
+    // Validate shareRate invariant - rate should increase with shares burn
+    await validateShareRateInvariant(reportTxReceipt, "increase");
 
     const totalSharesAfter = await lido.getTotalShares();
     expect(totalSharesBefore - limit).to.equal(totalSharesAfter + burntDueToWithdrawals, "TotalShares change mismatch");
@@ -861,6 +989,9 @@ describe("Integration: Accounting", () => {
 
     const withdrawalParams = getWithdrawalParams(secondReportTxReceipt);
     expect(withdrawalParams.sharesBurntAmount).to.equal(extraShares, "SharesBurnt: sharesAmount mismatch");
+
+    // Validate shareRate invariant for second report - rate should increase with shares burn
+    await validateShareRateInvariant(secondReportTxReceipt, "increase");
 
     const burnerSharesAfter = await lido.sharesOf(burner.address);
     expect(burnerSharesAfter).to.equal(0, "Expected burner to have no shares");
@@ -898,6 +1029,9 @@ describe("Integration: Accounting", () => {
 
       amountOfETHLocked = getWithdrawalParams(reportTxReceipt).amountOfETHLocked;
 
+      // Validate shareRate invariant - rate should increase with withdrawals
+      await validateShareRateInvariant(reportTxReceipt, "increase");
+
       expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(
         excess,
         "Expected withdrawals vault to be filled with excess rewards",
@@ -918,6 +1052,9 @@ describe("Integration: Accounting", () => {
       };
       const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
 
+      // Validate shareRate invariant - rate should increase with withdrawals and EL rewards
+      await validateShareRateInvariant(reportTxReceipt, "increase");
+
       const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
       expect(withdrawalVaultBalance).to.equal(0, "Expected withdrawals vault to be emptied");
 
@@ -937,6 +1074,9 @@ describe("Integration: Accounting", () => {
         extraDataTx: TransactionResponse;
       };
       const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+
+      // Validate shareRate invariant - rate should increase with EL rewards
+      await validateShareRateInvariant(reportTxReceipt, "increase");
 
       expect(ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")).to.be.empty;
 
