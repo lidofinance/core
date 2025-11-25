@@ -5,7 +5,6 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
-import { days } from "lib";
 import {
   changeTier,
   createVaultWithDashboard,
@@ -53,9 +52,6 @@ describe("Integration: VaultHub:fees", () => {
 
     await changeTier(ctx, dashboard, owner, nodeOperator);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.VAULT_MASTER_ROLE(), vaultMaster);
-
-    // loosen sanity checks to bypass fee increase rate limit
-    await ctx.contracts.lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -160,6 +156,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("12"),
         cumulativeLidoFees: ether("2"),
+        waitForNextRefSlot: true,
       });
 
       const record = await vaultHub.vaultRecord(stakingVault);
@@ -186,6 +183,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("13"),
         cumulativeLidoFees: ether("3"),
+        waitForNextRefSlot: true,
       });
 
       // Verify unsettled fees
@@ -222,6 +220,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("12"),
         cumulativeLidoFees: ether("2"),
+        waitForNextRefSlot: true,
       });
 
       const treasuryBefore = await ethers.provider.getBalance(await ctx.contracts.locator.treasury());
@@ -368,6 +367,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("1"), // Only CONNECT_DEPOSIT (locked)
         cumulativeLidoFees: ether("2"),
+        waitForNextRefSlot: true,
       });
 
       // Verify fees exist
@@ -410,6 +410,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("6"),
         cumulativeLidoFees: ether("0.5"),
+        waitForNextRefSlot: true,
       });
 
       let obligations = await vaultHub.obligations(stakingVault);
@@ -471,6 +472,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("6"),
         cumulativeLidoFees: ether("2"),
+        waitForNextRefSlot: true,
       });
 
       const treasuryBeforeDisconnect = await ethers.provider.getBalance(await ctx.contracts.locator.treasury());
@@ -578,6 +580,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("21"),
         cumulativeLidoFees: ether("3"),
+        waitForNextRefSlot: true,
       });
 
       // Verify fees are unsettled before settlement
@@ -612,6 +615,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("11"),
         cumulativeLidoFees: ether("2"),
+        waitForNextRefSlot: true,
       });
 
       // Verify deposits are paused
@@ -671,6 +675,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("21"),
         cumulativeLidoFees: ether("5"),
+        waitForNextRefSlot: true,
       });
 
       // Verify fees before settlement
@@ -751,6 +756,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("11"),
         cumulativeLidoFees: ether("1.0"),
+        waitForNextRefSlot: true,
       });
 
       const obligations = await vaultHub.obligations(stakingVault);
@@ -766,6 +772,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("10"),
         cumulativeLidoFees: ether("1") - 1n,
+        waitForNextRefSlot: true,
       });
 
       const obligations = await vaultHub.obligations(stakingVault);
@@ -780,6 +787,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("1"), // Only locked CONNECT_DEPOSIT
         cumulativeLidoFees: ether("2"),
+        waitForNextRefSlot: true,
       });
 
       const settleableValue = await vaultHub.settleableLidoFeesValue(stakingVault);
@@ -798,6 +806,7 @@ describe("Integration: VaultHub:fees", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("16"),
         cumulativeLidoFees: ether("3"),
+        waitForNextRefSlot: true,
       });
 
       let obligations = await vaultHub.obligations(stakingVault);

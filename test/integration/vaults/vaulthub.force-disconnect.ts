@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
-import { BigIntMath, days, DISCONNECT_NOT_INITIATED, impersonate } from "lib";
+import { BigIntMath, DISCONNECT_NOT_INITIATED, impersonate } from "lib";
 import {
   changeTier,
   createVaultsReportTree,
@@ -55,9 +55,6 @@ describe("Integration: VaultHub:force-disconnect", () => {
 
     await changeTier(ctx, dashboard, owner, nodeOperator);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.VAULT_MASTER_ROLE(), vaultMaster);
-
-    // loosen sanity checks to bypass fee increase rate limit
-    await ctx.contracts.lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -73,6 +70,7 @@ describe("Integration: VaultHub:force-disconnect", () => {
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("1"),
         cumulativeLidoFees: feesToSettle, // Assign unsettled fees to the vault
+        waitForNextRefSlot: true,
       });
 
       // Verify initial state
@@ -289,6 +287,7 @@ describe("Integration: VaultHub:force-disconnect", () => {
     await reportVaultDataWithProof(ctx, stakingVault, {
       totalValue: ether("1"),
       cumulativeLidoFees: unsettledFees,
+      waitForNextRefSlot: true,
     });
 
     // Ensure vault has enough balance to settle fees
