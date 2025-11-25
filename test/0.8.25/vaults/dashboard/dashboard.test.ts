@@ -1495,7 +1495,7 @@ describe("Dashboard.sol", () => {
 
     it("requests a tier change", async () => {
       await setup({ owner: dashboard });
-      await expect(dashboard.changeTier(1, 100n)).to.emit(operatorGrid, "RoleMemberConfirmed");
+      await expect(dashboard.changeTier(1, 555n)).to.emit(operatorGrid, "RoleMemberConfirmed");
     });
   });
 
