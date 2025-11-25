@@ -126,7 +126,10 @@ contract V3TemporaryAdmin {
      * @notice Complete setup for all contracts - grants all roles and transfers admin to agent
      * @dev This is the main external function that should be called after deployment
      * @param _lidoLocatorImpl The new LidoLocator implementation address
-     * @param _vaultsAdapter The vaults' adapter address from easyTrack
+     * @param _vaultsAdapter The vaults' adapter address for EasyTrack
+     * @param _gateSeal The GateSeal contract address
+     * @param _resealManager The ResealManager for extra pause/resume roles
+     * @param _oldTokenRateNotifier The old TokenRateNotifier contract address
      */
     function completeSetup(
         address _lidoLocatorImpl,
