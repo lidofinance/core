@@ -75,7 +75,7 @@ contract V3VoteScript is OmnibusBase {
         address operatorGrid = TEMPLATE.OPERATOR_GRID();
         address vaultsAdapter = TEMPLATE.VAULTS_ADAPTER();
         votingVoteItems[0] = VoteItem({
-            description: "1. Add AlterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, alterTiers)",
+            description: "2. Add AlterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, alterTiers)", // 1 is reserved for DG submission item
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -89,7 +89,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[1] = VoteItem({
-            description: "2. Add RegisterGroupsInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerGroup + registerTiers)",
+            description: "3. Add RegisterGroupsInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerGroup + registerTiers)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -105,7 +105,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[2] = VoteItem({
-            description: "3. Add RegisterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerTiers)",
+            description: "4. Add RegisterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerTiers)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -119,7 +119,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[3] = VoteItem({
-            description: "4. Add UpdateGroupsShareLimitInOperatorGrid factory to EasyTrack (permissions: operatorGrid, updateGroupShareLimit)",
+            description: "5. Add UpdateGroupsShareLimitInOperatorGrid factory to EasyTrack (permissions: operatorGrid, updateGroupShareLimit)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -133,7 +133,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[4] = VoteItem({
-            description: "5. Add SetJailStatusInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, setVaultJailStatus)",
+            description: "6. Add SetJailStatusInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, setVaultJailStatus)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -147,7 +147,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[5] = VoteItem({
-            description: "6. Add UpdateVaultsFeesInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, updateVaultFees)",
+            description: "7. Add UpdateVaultsFeesInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, updateVaultFees)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -161,7 +161,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[6] = VoteItem({
-            description: "7. Add ForceValidatorExitsInVaultHub factory to EasyTrack (permissions: vaultsAdapter, forceValidatorExit)",
+            description: "8. Add ForceValidatorExitsInVaultHub factory to EasyTrack (permissions: vaultsAdapter, forceValidatorExit)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -175,7 +175,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[7] = VoteItem({
-            description: "8. Add SetLiabilitySharesTargetInVaultHub factory to EasyTrack (permissions: vaultsAdapter, setLiabilitySharesTarget)",
+            description: "9. Add SetLiabilitySharesTargetInVaultHub factory to EasyTrack (permissions: vaultsAdapter, setLiabilitySharesTarget)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -189,7 +189,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[8] = VoteItem({
-            description: "9. Add SocializeBadDebtInVaultHub factory to EasyTrack (permissions: vaultsAdapter, socializeBadDebt)",
+            description: "10. Add SocializeBadDebtInVaultHub factory to EasyTrack (permissions: vaultsAdapter, socializeBadDebt)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
