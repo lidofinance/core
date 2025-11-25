@@ -187,7 +187,7 @@ describe("Integration: Accounting", () => {
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
     const expectedRewardsDistributionEventsCount = noRewards
       ? 0n
-      : BigInt(stakingModulesCount) + BigInt(numberOfCSMModules) + 1n;
+      : BigInt(stakingModulesCount) + BigInt(numberOfCSMModules) + 2n;
     const expectedWithdrawalsTransferEventCount = hasWithdrawals ? 1n : 0n;
     expect(transferSharesEvents.length).to.equal(
       expectedWithdrawalsTransferEventCount + expectedRewardsDistributionEventsCount,
