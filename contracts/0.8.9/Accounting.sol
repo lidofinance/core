@@ -366,6 +366,9 @@ contract Accounting {
         );
 
         if (_update.sharesToMintAsFees > 0) {
+            // this is a final action that changes share rate.
+            // so all transfers after this mint will reflect the actual postShareRate
+            LIDO.mintShares(address(this), _update.sharesToMintAsFees);
             _distributeFee(_update.feeDistribution);
             // important to have this callback last for modules to have updated state
             _contracts.stakingRouter.reportRewardsMinted(
@@ -441,13 +444,13 @@ contract Accounting {
         for (uint256 i; i < length; ++i) {
             uint256 moduleShares = sharesToMint[i];
             if (moduleShares > 0) {
-                LIDO.mintShares(recipients[i], moduleShares);
+                LIDO.transferShares(recipients[i], moduleShares);
             }
         }
 
         uint256 treasuryShares = _feeDistribution.treasurySharesToMint;
         if (treasuryShares > 0) { // zero is an edge case when all fees goes to modules
-            LIDO.mintShares(LIDO_LOCATOR.treasury(), treasuryShares);
+            LIDO.transferShares(LIDO_LOCATOR.treasury(), treasuryShares);
         }
     }
 
