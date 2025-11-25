@@ -190,47 +190,45 @@ contract StakingVaultsTest is Test {
         //First connect StakingVault to VaultHub
         svHandler.connectVault();
 
-        // Configure fuzzing targets
-        bytes4[] memory svSelectors = new bytes4[](14);
+        //Configure fuzzing targets
+        bytes4[] memory svSelectors = new bytes4[](13);
         svSelectors[0] = svHandler.fund.selector;
-        svSelectors[1] = svHandler.VHwithdraw.selector;
+        svSelectors[1] = svHandler.withdraw.selector;
         svSelectors[2] = svHandler.forceRebalance.selector;
         svSelectors[3] = svHandler.forceValidatorExit.selector;
         svSelectors[4] = svHandler.mintShares.selector;
         svSelectors[5] = svHandler.burnShares.selector;
         svSelectors[6] = svHandler.transferAndBurnShares.selector;
-        svSelectors[7] = svHandler.voluntaryDisconnect.selector;
-        svSelectors[8] = svHandler.sv_otcDeposit.selector;
-        svSelectors[9] = svHandler.vh_otcDeposit.selector;
-        svSelectors[10] = svHandler.updateVaultData.selector;
-        svSelectors[11] = svHandler.SVwithdraw.selector;
-        svSelectors[12] = svHandler.connectVault.selector;
-        svSelectors[13] = svHandler.rebalance.selector;
+        svSelectors[7] = svHandler.rebalance.selector;
+        svSelectors[8] = svHandler.otcDepositToStakingVault.selector;
+        svSelectors[9] = svHandler.updateVaultData.selector;
+        svSelectors[10] = svHandler.withdrawFromStakingVault.selector;
+        svSelectors[11] = svHandler.connectVault.selector;
+        svSelectors[12] = svHandler.voluntaryDisconnect.selector;
 
         targetContract(address(svHandler));
         targetSelector(FuzzSelector({addr: address(svHandler), selectors: svSelectors}));
     }
 
-    function test() public {
-        svHandler.fund(1 ether);
-        svHandler.updateVaultData(3);
-        svHandler.voluntaryDisconnect();
-    }
+    // function test() public {
+    //     svHandler.fund(1 ether);
+    //     svHandler.updateVaultData(3);
+    //     svHandler.voluntaryDisconnect();
+    // }
 
     ////////// INVARIANTS //////////
 
-    //With current deployed environment (no slashing, no stETH rebase)
-    //the staking Vault should never go below the rebalance threshold
-    //Meaning having less locked collateral than the threshold ratio limit (in regards to the liabilityShares converted in ETH)
-    //This is computed by rebalanceShortfall function
-
-    // Invariant 1: Staking vault should never go below the rebalance threshold (collateral always covers liability).
-    function invariant1_liabilityShares_not_above_collateral() external {
+    /**
+     * Invariant 1: Staking Vault should never go below the rebalance threshold.
+     */
+    function invariant1_liabilityShares_not_above_rebalance_threshold() external {
         uint256 rebalanceShares = vaultHubProxy.healthShortfallShares(address(stakingVaultProxy));
         assertEq(rebalanceShares, 0, "Staking Vault should never go below the rebalance threshold");
     }
 
-    // Invariant 2: Dynamic total value (including deltas) should never underflow (must be >= 0).
+    /**
+     * Invariant 2: Dynamic total value (including deltas) should never underflow (must be >= 0).
+     */
     function invariant2_dynamic_totalValue_should_not_underflow() external {
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
         assertGe(
@@ -242,7 +240,9 @@ contract StakingVaultsTest is Test {
         );
     }
 
-    // Invariant 3: forceRebalance should not revert when the vault has available balance and obligations.
+    /**
+     * Invariant 3: forceRebalance should not revert when the vault has available balance and obligations.
+     */
     function invariant3_forceRebalance_should_not_revert_when_has_available_balance_and_obligations() external {
         bool forceRebalanceReverted = svHandler.didForceRebalanceReverted();
         assertFalse(
@@ -251,13 +251,17 @@ contract StakingVaultsTest is Test {
         );
     }
 
-    // Invariant 4: forceValidatorExit should not revert when has obligations shortfall.
+    /**
+     * Invariant 4: forceValidatorExit should not revert when has obligations shortfall.
+     */
     function invariant4_forceValidatorExit_should_not_revert_when_has_obligations_shortfall() external {
         bool forceValidatorExitReverted = svHandler.didForceValidatorExitReverted();
         assertFalse(forceValidatorExitReverted, "forceValidatorExit should not revert when has obligations shortfall");
     }
 
-    // Invariant 5: Applied total value should not be greater than reported total value.
+    /**
+     * Invariant 5: Applied total value should not be greater than reported total value.
+     */
     function invariant5_applied_tv_should_not_be_greater_than_reported_tv() external {
         uint256 appliedTotalValue = svHandler.getAppliedTotalValue();
         uint256 reportedTotalValue = svHandler.getReportedTotalValue();
@@ -269,8 +273,9 @@ contract StakingVaultsTest is Test {
         );
     }
 
-    // внимательно следить при каких операциях он держится (update connection, socilized bad dept)
-    // Invariant 6: Liability shares should never be greater than connection share limit.
+    /**
+     * Invariant 6: Liability shares should never be greater than connection share limit.
+     */
     function invariant6_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
         //Get the share limit from the vault
         uint256 liabilityShares = vaultHubProxy.liabilityShares(address(stakingVaultProxy));
@@ -295,13 +300,14 @@ contract StakingVaultsTest is Test {
         _;
     }
 
-    // Invariant 7: Locked amount must be >= max(connect deposit, slashing reserve, reserve ratio).
+    /**
+     * Invariant 7: Locked amount must be >= max(connect deposit, slashing reserve, reserve ratio).
+     */
     function invariant7_locked_cannot_be_less_than_slashing_connected_reserve()
         external
         vaultMustBeConnected
         vaultNotPendingDisconnect
     {
-        //slashing reserve
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
         VaultHub.VaultConnection memory connection = vaultHubProxy.vaultConnection(address(stakingVaultProxy));
         uint256 forcedRebalanceThresholdBP = connection.forcedRebalanceThresholdBP;
@@ -319,37 +325,14 @@ contract StakingVaultsTest is Test {
         );
     }
 
-    // // function invariant_totalValue_should_be_greater_than_locked() vaultMustBeConnected vaultNotPendingDisconnect external {
-    // //     //Get the total value of the vault
-    // //     uint256 totalValue = vaultHubProxy.totalValue(address(stakingVaultProxy));
-    // //     if (totalValue == 0) {
-    // //         // If totalValue is 0, we cannot check the invariant
-    // //         //That's probably because the vault has just been created and no report has not been applied yet
-    // //         return;
-    // //     }
-
-    // //     //Get the locked amount
-    // //     VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
-    // //     uint128 lockedAmount = record.locked;
-
-    // //     //VaultHub.VaultObligations memory vaultObligations = vaultHubProxy.vaultObligations(address(stakingVaultProxy));
-    // //     //uint256 unsettledObligations = vaultObligations.unsettledLidoFees + vaultObligations.redemptions;
-
-    // //     //Check that total value is greater than or equal to locked amount and unsettled obligations
-    // //     assertGe(totalValue, lockedAmount , "Total value should be greater than or equal to locked amount");
-    // // }
-
-    // Invariant 8: Withdrawable value must be <= total value minus locked amount and unsettled obligations.
+    /**
+     * Invariant 8: Withdrawable value must be <= total value minus locked amount and unsettled obligations.
+     */
     function invariant8_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
         external
     {
-        //Get the withdrawable value of the vault
         uint256 withdrawableValue = vaultHubProxy.withdrawableValue(address(stakingVaultProxy));
-
-        //Get the total value of the vault
         uint256 totalValue = vaultHubProxy.totalValue(address(stakingVaultProxy));
-
-        //Get the locked amount and unsettled obligations
         uint256 lockedAmount = vaultHubProxy.locked(address(stakingVaultProxy));
         (uint256 obligationsShares, uint256 obligationsFees) = vaultHubProxy.obligations(address(stakingVaultProxy));
 
@@ -365,26 +348,37 @@ contract StakingVaultsTest is Test {
         );
     }
 
-    //The totalValue should be equal or above the real totalValue (EL+CL balance)
-    //totalValue = report.totalValue + current ioDelta - reported ioDelta
-    //This invariant catches the crit vulnerability that exploits
-    //- replay of same report
-    //- uncleared quarantine upon disconnect
-    //call path is pretty long but is:
-    //1. connectVault
-    //2. sv_otcDeposit
-    //3. updateVaultData -> triggers quarantine
-    //4. initializeDisconnect
-    //5. updateVaultData -> finalize disconnection
-    //6. connectVault
-    //7. updateVaultData -> generate a fresh report with TV
-    //8. SVwithdraw
-    //9. connectVault
-    //10. updateVaultData -> reuses previous report; quarantine is expired; TV is kept as is (special branch if the new quarantine delta is lower than the expired one).
-    // Invariant 9: Computed totalValue must be <= effective (real) total value.
-    // function invariant9_computed_totalValue_must_be_less_than_or_equal_to_effective_total_value() external {
-    //     assertLe(svHandler.getVaultTotalValue(), svHandler.getEffectiveVaultTotalValue());
-    // }
+    /**
+     * Invariant 9: The totalValue should be equal or above the real totalValue (EL+CL balance)
+     */
+    function invariant9_totalValue_should_be_less_than_or_equal_to_effective_total_value() external {
+        uint256 totalValue = svHandler.getVaultTotalValue();
+        uint256 effectiveTotalValue = svHandler.getEffectiveVaultTotalValue();
+        assertLe(totalValue, effectiveTotalValue, "Total value should be less than or equal to effective total value");
+    }
+
+    /**
+     * Invariant 10: Total value should be greater than or equal to locked amount.
+     */
+    function invariant10_totalValue_should_be_greater_than_or_equal_to_locked_amount()
+        external
+        vaultMustBeConnected
+        vaultNotPendingDisconnect
+    {
+        //Get the total value of the vault
+        uint256 totalValue = vaultHubProxy.totalValue(address(stakingVaultProxy));
+        if (totalValue == 0) {
+            // If totalValue is 0, we cannot check the invariant
+            //That's probably because the vault has just been created and no report has not been applied yet
+            return;
+        }
+
+        //Get the locked amount
+        uint256 lockedAmount = vaultHubProxy.locked(address(stakingVaultProxy));
+
+        //Check that total value is greater than or equal to locked amount and unsettled obligations
+        assertGe(totalValue, lockedAmount, "Total value should be greater than or equal to locked amount");
+    }
 
     // For testing purposes only (guiding the fuzzing)
     // function invariant_state() external {

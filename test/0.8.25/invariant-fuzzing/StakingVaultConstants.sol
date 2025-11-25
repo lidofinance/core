@@ -6,7 +6,7 @@ library Constants {
     //OperatorGrid params
     //retrieved from default settings in deploy scripts
     uint256 public constant DEFAULT_TIER = 0;
-    uint256 public constant SHARE_LIMIT = 100;
+    uint256 public constant SHARE_LIMIT = 10 ether;
     uint256 public constant RESERVE_RATIO_BP = 2000;
     uint256 public constant FORCED_REBALANCE_THRESHOLD_BP = 1800;
     uint256 public constant INFRA_FEE_BP = 500;
