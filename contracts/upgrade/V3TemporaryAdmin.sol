@@ -8,7 +8,6 @@ import {IAccessControl} from "@openzeppelin/contracts-v4.4/access/AccessControl.
 
 interface IVaultHub {
     function VAULT_MASTER_ROLE() external view returns (bytes32);
-    function REDEMPTION_MASTER_ROLE() external view returns (bytes32);
     function VALIDATOR_EXIT_ROLE() external view returns (bytes32);
     function BAD_DEBT_MASTER_ROLE() external view returns (bytes32);
 }
@@ -28,10 +27,6 @@ interface IOperatorGrid {
 
 interface IBurner {
     function REQUEST_BURN_SHARES_ROLE() external view returns (bytes32);
-}
-
-interface IUpgradeableBeacon {
-    function implementation() external view returns (address);
 }
 
 interface IStakingRouter {
@@ -261,7 +256,6 @@ contract V3TemporaryAdmin {
     error ZeroAddress();
     error ZeroLidoLocator();
     error ZeroStakingRouter();
-    error ZeroEvmScriptExecutor();
     error ZeroVaultsAdapter();
     error CsmModuleNotFound();
     error SetupAlreadyCompleted();
