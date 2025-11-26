@@ -74,6 +74,10 @@ interface ITokenRateNotifier {
     function observersLength() external view returns (uint256);
 }
 
+interface ILazyOracle {
+    function UPDATE_SANITY_PARAMS_ROLE() external view returns (bytes32);
+}
+
 
 /**
 * @title Lido V3 Upgrade Template
@@ -268,6 +272,7 @@ contract V3Template is V3Addresses {
         // LazyOracle
         _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
         _assertSingleOZRoleHolder(LAZY_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertZeroOZRoleHolders(LAZY_ORACLE, ILazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE());
 
         // AccountingOracle
         _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
@@ -295,6 +300,7 @@ contract V3Template is V3Addresses {
 
         // Accounting
         _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
+        _assertSingleOZRoleHolder(ACCOUNTING, DEFAULT_ADMIN_ROLE, AGENT);
 
         // PredepositGuarantee
         _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);

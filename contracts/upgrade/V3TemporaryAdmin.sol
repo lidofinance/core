@@ -17,10 +17,6 @@ interface IPausableUntilWithRoles {
     function RESUME_ROLE() external view returns (bytes32);
 }
 
-interface ILazyOracle {
-    function UPDATE_SANITY_PARAMS_ROLE() external view returns (bytes32);
-}
-
 interface IOperatorGrid {
     function REGISTRY_ROLE() external view returns (bytes32);
 }
