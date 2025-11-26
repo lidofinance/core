@@ -84,7 +84,7 @@ interface ILidoLocator {
  */
 contract V3TemporaryAdmin {
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
-    bytes32 public constant CSM_MODULE_NAME_HASH = keccak256(bytes("Community Staking"));
+    string public constant CSM_MODULE_NAME = "Community Staking";
 
     address public immutable AGENT;
 
@@ -104,8 +104,9 @@ contract V3TemporaryAdmin {
         if (_stakingRouter == address(0)) revert ZeroStakingRouter();
         IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(_stakingRouter).getStakingModules();
 
+        bytes32 csmModuleNameHash = keccak256(bytes(CSM_MODULE_NAME));
         for (uint256 i = 0; i < stakingModules.length; i++) {
-            if (keccak256(bytes(stakingModules[i].name)) == CSM_MODULE_NAME_HASH) {
+            if (keccak256(bytes(stakingModules[i].name)) == csmModuleNameHash) {
                 return ICSModule(stakingModules[i].stakingModuleAddress).accounting();
             }
         }
