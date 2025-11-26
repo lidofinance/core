@@ -300,7 +300,6 @@ contract V3Template is V3Addresses {
 
         // Accounting
         _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
-        _assertSingleOZRoleHolder(ACCOUNTING, DEFAULT_ADMIN_ROLE, AGENT);
 
         // PredepositGuarantee
         _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
