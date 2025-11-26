@@ -104,6 +104,7 @@ const OracleVersionsSchema = z.object({
 const V3VoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
   initialMaxExternalRatioBP: BasisPointsSchema,
+  timeConstraintsContract: EthereumAddressSchema,
 });
 
 // Aragon app versions schema

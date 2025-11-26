@@ -79,3 +79,6 @@ initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial
 
 # Sources (todo)
 # - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504
+
+timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"  # Predeployed TimeConstraints contract on mainnet
+

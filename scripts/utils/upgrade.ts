@@ -1,4 +1,4 @@
-import { TransactionReceipt } from "ethers";
+import { TransactionReceipt, TransactionResponse } from "ethers";
 import fs from "fs";
 
 import * as toml from "@iarna/toml";
@@ -11,6 +11,8 @@ import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas
 import { loadContract } from "lib/contract";
 import { findEventsWithInterfaces } from "lib/event";
 import { DeploymentState, getAddress, Sk } from "lib/state-file";
+
+import { ONE_HOUR } from "test/suite";
 
 const FUSAKA_TX_LIMIT = 2n ** 24n; // 16M =  16_777_216
 
@@ -91,8 +93,21 @@ export async function mockDGAragonVoting(
   log.success("Proposal scheduled: gas used", scheduleReceipt.gasUsed);
 
   await advanceChainTime(afterScheduleDelay);
-  const proposalExecutedTx = await timelock.connect(deployer).execute(proposalId);
-  const proposalExecutedReceipt = (await proposalExecutedTx.wait())!;
+  let proposalExecutedTx: TransactionResponse;
+  let revertedDueToTimeConstraints: boolean = true;
+  let attempts: number = 0;
+
+  while (revertedDueToTimeConstraints && attempts < 24) {
+    try {
+      proposalExecutedTx = await timelock.connect(deployer).execute(proposalId);
+      revertedDueToTimeConstraints = false;
+    } catch {
+      await advanceChainTime(ONE_HOUR);
+      attempts++;
+    }
+  }
+
+  const proposalExecutedReceipt = (await proposalExecutedTx!.wait())!;
   log.success("Proposal executed: gas used", proposalExecutedReceipt.gasUsed);
 
   if (proposalExecutedReceipt.gasUsed > FUSAKA_TX_LIMIT) {
