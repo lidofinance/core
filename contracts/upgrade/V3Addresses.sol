@@ -44,11 +44,13 @@ contract V3Addresses {
         address oldLocatorImpl;
         address oldLidoImpl;
         address oldAccountingOracleImpl;
+        address oldTokenRateNotifier;
 
         // New implementations
         address newLocatorImpl;
         address newLidoImpl;
         address newAccountingOracleImpl;
+        address newTokenRateNotifier;
 
         // New fancy proxy and blueprint contracts
         address upgradeableBeacon;
@@ -64,6 +66,7 @@ contract V3Addresses {
         address voting;
         address dualGovernance;
         address acl;
+        address resealManager;
 
         // EasyTrack addresses
         address easyTrack;
@@ -92,6 +95,7 @@ contract V3Addresses {
     address public immutable OLD_BURNER;
     address public immutable OLD_ACCOUNTING_ORACLE_IMPL;
     address public immutable OLD_LIDO_IMPL;
+    address public immutable OLD_TOKEN_RATE_NOTIFIER;
 
     //
     // -------- Upgraded contracts --------
@@ -104,6 +108,7 @@ contract V3Addresses {
     address public immutable ORACLE_REPORT_SANITY_CHECKER;
     address public immutable NEW_LIDO_IMPL;
     address public immutable NEW_ACCOUNTING_ORACLE_IMPL;
+    address public immutable NEW_TOKEN_RATE_NOTIFIER;
 
     //
     // -------- New V3 contracts --------
@@ -158,12 +163,17 @@ contract V3Addresses {
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
     address public immutable ORACLE_DAEMON_CONFIG;
+    address public immutable RESEAL_MANAGER;
 
     constructor(
         V3AddressesParams memory params
     ) {
         if (params.newLocatorImpl == params.oldLocatorImpl) {
             revert NewAndOldLocatorImplementationsMustBeDifferent();
+        }
+
+        if (params.oldTokenRateNotifier == params.newTokenRateNotifier) {
+            revert OldAndNewTokenRateNotifiersMustBeDifferent();
         }
 
         //
@@ -174,10 +184,12 @@ contract V3Addresses {
         OLD_LOCATOR_IMPL = params.oldLocatorImpl;
         OLD_ACCOUNTING_ORACLE_IMPL = params.oldAccountingOracleImpl;
         OLD_LIDO_IMPL = params.oldLidoImpl;
+        OLD_TOKEN_RATE_NOTIFIER = params.oldTokenRateNotifier;
         LOCATOR = params.locator;
         NEW_LOCATOR_IMPL = params.newLocatorImpl;
         NEW_LIDO_IMPL = params.newLidoImpl;
         NEW_ACCOUNTING_ORACLE_IMPL = params.newAccountingOracleImpl;
+        NEW_TOKEN_RATE_NOTIFIER = params.newTokenRateNotifier;
         KERNEL = params.kernel;
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
@@ -226,26 +238,46 @@ contract V3Addresses {
         WITHDRAWAL_QUEUE = newLocatorImpl.withdrawalQueue();
         WSTETH = newLocatorImpl.wstETH();
         ORACLE_DAEMON_CONFIG = newLocatorImpl.oracleDaemonConfig();
+        RESEAL_MANAGER = params.resealManager;
 
         {
             // Retrieve contracts with burner allowances to migrate: NOR, SDVT and CSM ACCOUNTING
+            bytes32 curatedHash = _hash(CURATED_MODULE_NAME);
+            bytes32 simpleDvtHash = _hash(SIMPLE_DVT_MODULE_NAME);
+            bytes32 csmHash = _hash(CSM_MODULE_NAME);
+
+            address nodeOperatorsRegistry;
+            address simpleDvt;
+            address csmAccounting;
+
             IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(STAKING_ROUTER).getStakingModules();
-            IStakingRouter.StakingModule memory curated = stakingModules[0];
-            if (_hash(curated.name) != _hash(CURATED_MODULE_NAME)) revert IncorrectStakingModuleName(curated.name);
-            NODE_OPERATORS_REGISTRY = curated.stakingModuleAddress;
-            IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
-            if (_hash(simpleDvt.name) != _hash(SIMPLE_DVT_MODULE_NAME)) revert IncorrectStakingModuleName(simpleDvt.name);
-            SIMPLE_DVT = simpleDvt.stakingModuleAddress;
-            IStakingRouter.StakingModule memory csm = stakingModules[2];
-            if (_hash(csm.name) != _hash(CSM_MODULE_NAME)) revert IncorrectStakingModuleName(csm.name);
-            CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
+
+            for (uint256 i = 0; i < stakingModules.length; i++) {
+                bytes32 nameHash = _hash(stakingModules[i].name);
+                if (nameHash == curatedHash) {
+                    nodeOperatorsRegistry = stakingModules[i].stakingModuleAddress;
+                } else if (nameHash == simpleDvtHash) {
+                    simpleDvt = stakingModules[i].stakingModuleAddress;
+                } else if (nameHash == csmHash) {
+                    csmAccounting = ICSModule(stakingModules[i].stakingModuleAddress).accounting();
+                }
+            }
+
+            if (nodeOperatorsRegistry == address(0)) revert StakingModuleNotFound(CURATED_MODULE_NAME);
+            if (simpleDvt == address(0)) revert StakingModuleNotFound(SIMPLE_DVT_MODULE_NAME);
+            if (csmAccounting == address(0)) revert StakingModuleNotFound(CSM_MODULE_NAME);
+
+            NODE_OPERATORS_REGISTRY = nodeOperatorsRegistry;
+            SIMPLE_DVT = simpleDvt;
+            CSM_ACCOUNTING = csmAccounting;
         }
     }
 
     function _hash(string memory input) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(input));
+        return keccak256(bytes(input));
     }
 
     error NewAndOldLocatorImplementationsMustBeDifferent();
-    error IncorrectStakingModuleName(string name);
+    error OldAndNewTokenRateNotifiersMustBeDifferent(); 
+    error StakingModuleNotFound(string moduleName);
 }

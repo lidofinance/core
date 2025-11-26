@@ -81,10 +81,7 @@ const TriggerableWithdrawalsGatewaySchema = z.object({
 
 // Easy track schema
 const EasyTrackSchema = z.object({
-  trustedCaller: EthereumAddressSchema,
-  initialValidatorExitFeeLimit: BigIntStringSchema,
-  maxGroupShareLimit: BigIntStringSchema,
-  maxDefaultTierShareLimit: NonNegativeIntSchema,
+  VaultsAdapter: EthereumAddressSchema,
   newFactories: z.object({
     AlterTiersInOperatorGrid: EthereumAddressSchema,
     RegisterGroupsInOperatorGrid: EthereumAddressSchema,
