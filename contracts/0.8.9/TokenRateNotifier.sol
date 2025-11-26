@@ -6,24 +6,11 @@ pragma solidity 0.8.9;
 import {Ownable} from "@openzeppelin/contracts-v4.4/access/Ownable.sol";
 import {ERC165Checker} from "@openzeppelin/contracts-v4.4/utils/introspection/ERC165Checker.sol";
 import {ITokenRatePusher} from "./interfaces/ITokenRatePusher.sol";
+import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 
-/// @notice An interface to subscribe on the `stETH` token rebases (defined in the `Lido` core contract)
-interface IPostTokenRebaseReceiver {
-
-    /// @notice Is called in the context of `Lido.handleOracleReport` to notify the subscribers about each token rebase
-    function handlePostTokenRebase(
-        uint256 _reportTimestamp,
-        uint256 _timeElapsed,
-        uint256 _preTotalShares,
-        uint256 _preTotalEther,
-        uint256 _postTotalShares,
-        uint256 _postTotalEther,
-        uint256 _sharesMintedAsFees
-    ) external;
-}
 
 /// @author kovalgek
-/// @notice Notifies all `observers` when rebase event occures.
+/// @notice Notifies all `observers` when rebase event occurs.
 contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
     using ERC165Checker for address;
 
@@ -75,8 +62,8 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
         emit ObserverAdded(observer_);
     }
 
-    /// @notice Remove a observer at the given `observer_` position
-    /// @param observer_ observer remove position
+    /// @notice Remove an observer from the array
+    /// @param observer_ observer address to remove
     function removeObserver(address observer_) external onlyOwner {
         uint256 observerIndexToRemove = _observerIndex(observer_);
 
