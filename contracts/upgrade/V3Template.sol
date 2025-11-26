@@ -489,7 +489,6 @@ contract V3Template is V3Addresses {
     error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
     error NonZeroRoleHolders(address contractAddress, bytes32 role);
     error IncorrectAragonAppImplementation(address repo, address implementation);
-    error StartAndFinishMustBeInSameBlock();
     error StartAndFinishMustBeInSameTx();
     error StartAlreadyCalledInThisTx();
     error Expired();
