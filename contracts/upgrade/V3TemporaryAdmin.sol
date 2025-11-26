@@ -139,11 +139,19 @@ contract V3TemporaryAdmin {
 
         address csmAccounting = getCsmAccountingAddress(locator.stakingRouter());
 
-        _setupPredepositGuarantee(locator.predepositGuarantee(), _gateSeal, _resealManager);
-        _setupOperatorGrid(locator.operatorGrid(), IVaultsAdapter(_vaultsAdapter).evmScriptExecutor(), _vaultsAdapter);
-        _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
-        _setupVaultHub(locator.vaultHub(), _vaultsAdapter, _gateSeal, _resealManager);
-        _migrateTokenRateNotifier(_oldTokenRateNotifier, locator.postTokenRebaseReceiver());
+        address vaultHub = locator.vaultHub();
+        address operatorGrid = locator.operatorGrid();
+        address burner = locator.burner();
+        address predepositGuarantee = locator.predepositGuarantee();
+        address tokenRateNotifier = locator.postTokenRebaseReceiver();
+
+        _setupPredepositGuarantee(predepositGuarantee, _gateSeal, _resealManager);
+        _setupOperatorGrid(operatorGrid, IVaultsAdapter(_vaultsAdapter).evmScriptExecutor(), _vaultsAdapter);
+        _setupBurner(burner, locator.accounting(), csmAccounting);
+        _setupVaultHub(vaultHub, _vaultsAdapter, _gateSeal, _resealManager);
+        _migrateTokenRateNotifier(_oldTokenRateNotifier, tokenRateNotifier);
+
+        emit SetupCompleted(vaultHub, operatorGrid, burner, predepositGuarantee, tokenRateNotifier);
     }
 
     /**
@@ -259,4 +267,12 @@ contract V3TemporaryAdmin {
     error ZeroVaultsAdapter();
     error CsmModuleNotFound();
     error SetupAlreadyCompleted();
+
+    event SetupCompleted(
+        address vaultHub,
+        address operatorGrid,
+        address burner,
+        address predepositGuarantee,
+        address newTokenRateNotifier
+    );
 }
