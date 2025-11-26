@@ -100,10 +100,17 @@ const OracleVersionsSchema = z.object({
   ao_consensus_version: PositiveIntSchema,
 });
 
+const TimeConstraintsSchema = z.object({
+  timeConstraintsContract: EthereumAddressSchema,
+  enabledDaySpanStart: NonNegativeIntSchema,
+  enabledDaySpanEnd: NonNegativeIntSchema,
+});
+
 // V3 vote script params
 const V3VoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
   initialMaxExternalRatioBP: BasisPointsSchema,
+  timeConstraints: TimeConstraintsSchema,
 });
 
 // Aragon app versions schema
