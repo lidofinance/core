@@ -238,23 +238,41 @@ contract V3Addresses {
 
         {
             // Retrieve contracts with burner allowances to migrate: NOR, SDVT and CSM ACCOUNTING
+            bytes32 curatedHash = _hash(CURATED_MODULE_NAME);
+            bytes32 simpleDvtHash = _hash(SIMPLE_DVT_MODULE_NAME);
+            bytes32 csmHash = _hash(CSM_MODULE_NAME);
+
+            address nodeOperatorsRegistry;
+            address simpleDvt;
+            address csmAccounting;
+
             IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(STAKING_ROUTER).getStakingModules();
-            IStakingRouter.StakingModule memory curated = stakingModules[0];
-            if (_hash(curated.name) != _hash(CURATED_MODULE_NAME)) revert IncorrectStakingModuleName(curated.name);
-            NODE_OPERATORS_REGISTRY = curated.stakingModuleAddress;
-            IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
-            if (_hash(simpleDvt.name) != _hash(SIMPLE_DVT_MODULE_NAME)) revert IncorrectStakingModuleName(simpleDvt.name);
-            SIMPLE_DVT = simpleDvt.stakingModuleAddress;
-            IStakingRouter.StakingModule memory csm = stakingModules[2];
-            if (_hash(csm.name) != _hash(CSM_MODULE_NAME)) revert IncorrectStakingModuleName(csm.name);
-            CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
+
+            for (uint256 i = 0; i < stakingModules.length; i++) {
+                bytes32 nameHash = _hash(stakingModules[i].name);
+                if (nameHash == curatedHash) {
+                    nodeOperatorsRegistry = stakingModules[i].stakingModuleAddress;
+                } else if (nameHash == simpleDvtHash) {
+                    simpleDvt = stakingModules[i].stakingModuleAddress;
+                } else if (nameHash == csmHash) {
+                    csmAccounting = ICSModule(stakingModules[i].stakingModuleAddress).accounting();
+                }
+            }
+
+            if (nodeOperatorsRegistry == address(0)) revert StakingModuleNotFound(CURATED_MODULE_NAME);
+            if (simpleDvt == address(0)) revert StakingModuleNotFound(SIMPLE_DVT_MODULE_NAME);
+            if (csmAccounting == address(0)) revert StakingModuleNotFound(CSM_MODULE_NAME);
+
+            NODE_OPERATORS_REGISTRY = nodeOperatorsRegistry;
+            SIMPLE_DVT = simpleDvt;
+            CSM_ACCOUNTING = csmAccounting;
         }
     }
 
     function _hash(string memory input) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(input));
+        return keccak256(bytes(input));
     }
 
     error NewAndOldLocatorImplementationsMustBeDifferent();
-    error IncorrectStakingModuleName(string name);
+    error StakingModuleNotFound(string moduleName);
 }
