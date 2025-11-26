@@ -47,10 +47,7 @@ export async function main() {
   // Deploy V3TemporaryAdmin
   //
 
-  const v3TemporaryAdmin = await deployWithoutProxy(Sk.v3TemporaryAdmin, "V3TemporaryAdmin", deployer, [
-    agentAddress,
-    parameters.chainSpec.isHoodi,
-  ]);
+  const v3TemporaryAdmin = await deployWithoutProxy(Sk.v3TemporaryAdmin, "V3TemporaryAdmin", deployer, [agentAddress]);
 
   //
   // Deploy Lido new implementation

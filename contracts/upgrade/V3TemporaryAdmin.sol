@@ -89,16 +89,15 @@ interface ILidoLocator {
  */
 contract V3TemporaryAdmin {
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
+    bytes32 public constant CSM_MODULE_NAME_HASH = keccak256(bytes("Community Staking"));
 
     address public immutable AGENT;
-    bool public immutable IS_HOODI;
 
     bool public isSetupComplete;
 
-    constructor(address _agent, bool _isHoodi) {
+    constructor(address _agent) {
         if (_agent == address(0)) revert ZeroAddress();
         AGENT = _agent;
-        IS_HOODI = _isHoodi;
     }
 
     /**
@@ -108,18 +107,15 @@ contract V3TemporaryAdmin {
      */
     function getCsmAccountingAddress(address _stakingRouter) public view returns (address) {
         if (_stakingRouter == address(0)) revert ZeroStakingRouter();
-
         IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(_stakingRouter).getStakingModules();
 
-        // Find the Community Staking module (index 2 or 3 on Hoodi)
-        if (stakingModules.length <= 2) revert CsmModuleNotFound();
-
-        IStakingRouter.StakingModule memory csm = stakingModules[IS_HOODI ? 3 : 2];
-        if (keccak256(bytes(csm.name)) != keccak256(bytes("Community Staking"))) {
-            revert CsmModuleNotFound();
+        for (uint256 i = 0; i < stakingModules.length; i++) {
+            if (keccak256(bytes(stakingModules[i].name)) == CSM_MODULE_NAME_HASH) {
+                return ICSModule(stakingModules[i].stakingModuleAddress).accounting();
+            }
         }
 
-        return ICSModule(csm.stakingModuleAddress).accounting();
+        revert CsmModuleNotFound();
     }
 
     /**
