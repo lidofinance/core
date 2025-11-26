@@ -26,6 +26,7 @@ import {
   impersonate,
   MAX_FEE_BP,
   MAX_RESERVE_RATIO_BP,
+  MAX_UINT96,
 } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
@@ -202,6 +203,7 @@ describe("OperatorGrid.sol", () => {
         "InvalidInitialization",
       );
     });
+
     it("reverts on `_admin` address is zero", async () => {
       const operatorGridProxy = await ethers.deployContract(
         "OssifiableProxy",
@@ -221,6 +223,7 @@ describe("OperatorGrid.sol", () => {
         .to.be.revertedWithCustomError(operatorGridImpl, "ZeroArgument")
         .withArgs("_admin");
     });
+
     it("reverts on invalid `_defaultTierParams`", async () => {
       const operatorGridProxy = await ethers.deployContract(
         "OssifiableProxy",
@@ -239,6 +242,26 @@ describe("OperatorGrid.sol", () => {
       await expect(operatorGridLocal.initialize(stranger, defaultTierParams))
         .to.be.revertedWithCustomError(operatorGridLocal, "ForcedRebalanceThresholdTooHigh")
         .withArgs("0", RESERVE_RATIO, RESERVE_RATIO + 10);
+    });
+
+    it("reverts on default tier share limit is greater than uint96 max", async () => {
+      const operatorGridProxy = await ethers.deployContract(
+        "OssifiableProxy",
+        [operatorGridImpl, deployer, new Uint8Array()],
+        deployer,
+      );
+      const operatorGridLocal = await ethers.getContractAt("OperatorGrid", operatorGridProxy, deployer);
+      const defaultTierParams = {
+        shareLimit: MAX_UINT96 + 1n,
+        reserveRatioBP: RESERVE_RATIO,
+        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD,
+        infraFeeBP: INFRA_FEE,
+        liquidityFeeBP: LIQUIDITY_FEE,
+        reservationFeeBP: RESERVATION_FEE,
+      };
+      await expect(operatorGridLocal.initialize(stranger, defaultTierParams))
+        .to.be.revertedWithCustomError(operatorGridLocal, "SafeCastOverflowedUintDowncast")
+        .withArgs(96, MAX_UINT96 + 1n);
     });
   });
 
@@ -267,6 +290,12 @@ describe("OperatorGrid.sol", () => {
       );
     });
 
+    it("reverts if share limit is greater than uint96 max", async function () {
+      await expect(operatorGrid.registerGroup(nodeOperator1, MAX_UINT96 + 1n))
+        .to.be.revertedWithCustomError(operatorGrid, "SafeCastOverflowedUintDowncast")
+        .withArgs(96, MAX_UINT96 + 1n);
+    });
+
     it("reverts on updateGroupShareLimit when _nodeOperator address is zero", async function () {
       await expect(operatorGrid.updateGroupShareLimit(ZeroAddress, 1000)).to.be.revertedWithCustomError(
         operatorGrid,
@@ -278,6 +307,14 @@ describe("OperatorGrid.sol", () => {
       await expect(
         operatorGrid.updateGroupShareLimit(certainAddress("non-existent-group"), 1000),
       ).to.be.revertedWithCustomError(operatorGrid, "GroupNotExists");
+    });
+
+    it("reverts on updateGroupShareLimit when _shareLimit is greater than uint96 max", async function () {
+      const groupOperator = certainAddress("new-operator-group");
+      await operatorGrid.registerGroup(groupOperator, MAX_UINT96);
+      await expect(operatorGrid.updateGroupShareLimit(groupOperator, MAX_UINT96 + 1n))
+        .to.be.revertedWithCustomError(operatorGrid, "SafeCastOverflowedUintDowncast")
+        .withArgs(96, MAX_UINT96 + 1n);
     });
 
     it("add a new group", async function () {
@@ -418,10 +455,27 @@ describe("OperatorGrid.sol", () => {
         .withArgs("_nodeOperator");
     });
 
-    it("works", async function () {
-      await expect(operatorGrid.alterTiers([0], [tiers[0]]))
-        .to.emit(operatorGrid, "TierUpdated")
-        .withArgs(0, tierShareLimit, reserveRatio, forcedRebalanceThreshold, infraFee, liquidityFee, reservationFee);
+    it("reverts if tier share limit is greater than uint96 max", async function () {
+      await operatorGrid.registerGroup(groupOperator, MAX_UINT96);
+      await expect(operatorGrid.registerTiers(groupOperator, [{ ...tiers[0], shareLimit: MAX_UINT96 + 1n }]))
+        .to.be.revertedWithCustomError(operatorGrid, "SafeCastOverflowedUintDowncast")
+        .withArgs(96, MAX_UINT96 + 1n);
+    });
+
+    it("registerTiers works", async function () {
+      await operatorGrid.registerGroup(groupOperator, MAX_UINT96);
+      await expect(operatorGrid.registerTiers(groupOperator, tiers))
+        .to.emit(operatorGrid, "TierAdded")
+        .withArgs(
+          groupOperator,
+          await operatorGrid.tiersCount(),
+          tierShareLimit,
+          reserveRatio,
+          forcedRebalanceThreshold,
+          infraFee,
+          liquidityFee,
+          reservationFee,
+        );
     });
 
     it("tierCount - works", async function () {
@@ -524,6 +578,14 @@ describe("OperatorGrid.sol", () => {
         operatorGrid,
         "ArrayLengthMismatch",
       );
+    });
+
+    it("alterTiers - reverts if share limit is greater than uint96 max", async function () {
+      await operatorGrid.registerGroup(nodeOperator1, MAX_UINT96);
+      await operatorGrid.registerTiers(nodeOperator1, tiers);
+      await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], shareLimit: MAX_UINT96 + 1n }]))
+        .to.be.revertedWithCustomError(operatorGrid, "SafeCastOverflowedUintDowncast")
+        .withArgs(96, MAX_UINT96 + 1n);
     });
 
     it("alterTiers - updates multiple tiers at once", async function () {

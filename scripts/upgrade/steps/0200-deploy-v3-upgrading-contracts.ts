@@ -27,11 +27,13 @@ export async function main() {
     oldLocatorImplementation,
     lidoImplementation,
     await accountingOracle.proxy__getImplementation(),
+    getAddress(Sk.tokenRebaseNotifier, state),
 
     // New implementations
     state[Sk.lidoLocator].implementation.address,
     state[Sk.appLido].implementation.address,
     state[Sk.accountingOracle].implementation.address,
+    getAddress(Sk.tokenRebaseNotifierV3, state),
 
     // New fancy proxy and blueprint contracts
     state[Sk.stakingVaultBeacon].address,
@@ -47,10 +49,11 @@ export async function main() {
     getAddress(Sk.appVoting, state),
     getAddress(Sk.dgDualGovernance, state),
     getAddress(Sk.aragonAcl, state),
+    getAddress(Sk.resealManager, state),
 
     // EasyTrack addresses
     getAddress(Sk.easyTrack, state),
-    getAddress(Sk.vaultsAdapter, state),
+    parameters.easyTrack.VaultsAdapter,
 
     // EasyTrack new factories
     parameters.easyTrack.newFactories.AlterTiersInOperatorGrid,

@@ -247,7 +247,7 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should rebase correctly", async () => {
-    const { lido, withdrawalQueue, locator, burner, nor, sdvt } = ctx.contracts;
+    const { lido, withdrawalQueue, locator, burner, nor, sdvt, accounting } = ctx.contracts;
 
     const treasuryAddress = await locator.treasury();
     const strangerBalancesBeforeRebase = await getBalances(stranger);
@@ -322,17 +322,17 @@ describe("Scenario: Protocol Happy Path", () => {
       toSdvtTransfer,
       toTreasuryTransfer,
       toTreasuryTransferShares: LogDescriptionExtended | undefined;
-    let numExpectedTransferEvents = 3;
+    let numExpectedTransferEvents = 4; // treasury, minting fees to accounting, transfer fees to nor and sdvt
     if (wereWithdrawalsFinalized) {
-      numExpectedTransferEvents += 1;
-      [toBurnerTransfer, toNorTransfer, toSdvtTransfer] = transferEvents;
+      numExpectedTransferEvents += 1; // +1 for the burner transfer
+      [toBurnerTransfer, , toNorTransfer, toSdvtTransfer] = transferEvents;
     } else {
-      [toNorTransfer, toSdvtTransfer] = transferEvents;
+      [, toNorTransfer, toSdvtTransfer] = transferEvents;
     }
     if (ctx.flags.withCSM) {
       toTreasuryTransfer = transferEvents[numExpectedTransferEvents];
       toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents];
-      numExpectedTransferEvents += 2;
+      numExpectedTransferEvents += 2; // CSM does 2 transfers for fees distribution
     } else {
       toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
       toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents - 1];
@@ -352,7 +352,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     expect(toNorTransfer?.args.toObject()).to.include(
       {
-        from: ZeroAddress,
+        from: accounting.address,
         to: nor.address,
       },
       "Transfer to NOR",
@@ -360,7 +360,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     expect(toSdvtTransfer?.args.toObject()).to.include(
       {
-        from: ZeroAddress,
+        from: accounting.address,
         to: sdvt.address,
       },
       "Transfer to SDVT",
@@ -368,14 +368,14 @@ describe("Scenario: Protocol Happy Path", () => {
 
     expect(toTreasuryTransfer?.args.toObject()).to.include(
       {
-        from: ZeroAddress,
+        from: accounting.address,
         to: treasuryAddress,
       },
       "Transfer to Treasury",
     );
     expect(toTreasuryTransferShares?.args.toObject()).to.include(
       {
-        from: ZeroAddress,
+        from: accounting.address,
         to: treasuryAddress,
       },
       "Transfer shares to Treasury",
