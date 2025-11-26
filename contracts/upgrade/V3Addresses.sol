@@ -172,6 +172,10 @@ contract V3Addresses {
             revert NewAndOldLocatorImplementationsMustBeDifferent();
         }
 
+        if (params.oldTokenRateNotifier == params.newTokenRateNotifier) {
+            revert OldAndNewTokenRateNotifiersMustBeDifferent();
+        }
+
         //
         // Set directly from passed parameters
         //
@@ -274,5 +278,6 @@ contract V3Addresses {
     }
 
     error NewAndOldLocatorImplementationsMustBeDifferent();
+    error OldAndNewTokenRateNotifiersMustBeDifferent(); 
     error StakingModuleNotFound(string moduleName);
 }
