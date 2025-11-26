@@ -159,7 +159,7 @@ contract V3TemporaryAdmin {
      * @param _vaultHub The VaultHub contract address
      * @param _vaultsAdapter The vaults' adapter address
      * @param _gateSeal The GateSeal contract address
-     * @param _resealManager The ResealManager contract address
+     * @param _resealManager The ResealManager contract address that can pause and resume
      */
     function _setupVaultHub(
         address _vaultHub,
@@ -190,7 +190,7 @@ contract V3TemporaryAdmin {
      * @notice Setup PredepositGuarantee with PAUSE_ROLE for gateSeal and transfer admin to agent
      * @param _predepositGuarantee The PredepositGuarantee contract address
      * @param _gateSeal The GateSeal contract address
-     * @param _resealManager The ResealManager contract address that can 
+     * @param _resealManager The ResealManager contract address that can pause and resume
      */
     function _setupPredepositGuarantee(
         address _predepositGuarantee,
