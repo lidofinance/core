@@ -74,12 +74,6 @@ export async function main() {
   ]);
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [
-    [
-      template.address,
-      state[Sk.appLido].aragonApp.id,
-      parameters.v3VoteScript.timeConstraints.timeConstraintsContract,
-      parameters.v3VoteScript.timeConstraints.enabledDaySpanStart,
-      parameters.v3VoteScript.timeConstraints.enabledDaySpanEnd,
-    ],
+    [template.address, state[Sk.appLido].aragonApp.id, parameters.v3VoteScript.timeConstraintsContract],
   ]);
 }

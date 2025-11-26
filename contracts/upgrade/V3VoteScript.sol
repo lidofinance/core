@@ -51,9 +51,13 @@ contract V3VoteScript is OmnibusBase {
         address upgradeTemplate;
         bytes32 lidoAppId;
         address timeConstraints;
-        uint32 enabledDaySpanStart;
-        uint32 enabledDaySpanEnd;
     }
+
+    //
+    // Execution window
+    //
+    uint32 public constant ENABLED_DAY_SPAN_START = 50400; // 14:00
+    uint32 public constant ENABLED_DAY_SPAN_END = 82800; // 23:00
 
     //
     // Constants
@@ -223,8 +227,8 @@ contract V3VoteScript is OmnibusBase {
                 data: abi.encodeCall(
                     ITimeConstraints.checkTimeWithinDayTimeAndEmit,
                     (
-                        params.enabledDaySpanStart,
-                        params.enabledDaySpanEnd
+                        ENABLED_DAY_SPAN_START,
+                        ENABLED_DAY_SPAN_END
                     )
                 )
             })
