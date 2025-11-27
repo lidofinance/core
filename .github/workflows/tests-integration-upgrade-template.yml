@@ -1,10 +1,10 @@
-name: Integration Test For Upgrade Template
+name: Integration Test Mainnet For Upgrade Template
 
 on: [push]
 
 jobs:
   test_hardhat_integration_fork_template:
-    name: Hardhat / Upgrade Template
+    name: Hardhat / Mainnet
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
