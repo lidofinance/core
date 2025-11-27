@@ -11,6 +11,12 @@ import {V3Template} from "./V3Template.sol";
 
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 
+interface ITimeConstraints {
+    function checkTimeAfterTimestampAndEmit(uint40 timestamp) external;
+    function checkTimeBeforeTimestampAndEmit(uint40 timestamp) external;
+    function checkTimeWithinDayTimeAndEmit(uint32 startDayTime, uint32 endDayTime) external;
+}
+
 interface IEasyTrack {
     function addEVMScriptFactory(address _evmScriptFactory, bytes memory _permissions) external;
 }
@@ -44,12 +50,19 @@ contract V3VoteScript is OmnibusBase {
     struct ScriptParams {
         address upgradeTemplate;
         bytes32 lidoAppId;
+        address timeConstraints;
     }
+
+    //
+    // Execution window
+    //
+    uint32 public constant ENABLED_DAY_SPAN_START = 50400; // 14:00
+    uint32 public constant ENABLED_DAY_SPAN_END = 82800; // 23:00
 
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 17;
+    uint256 public constant VOTE_ITEMS_COUNT = 18;
 
     //
     // Immutables
@@ -75,7 +88,7 @@ contract V3VoteScript is OmnibusBase {
         address operatorGrid = TEMPLATE.OPERATOR_GRID();
         address vaultsAdapter = TEMPLATE.VAULTS_ADAPTER();
         votingVoteItems[0] = VoteItem({
-            description: "1. Add AlterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, alterTiers)",
+            description: "2. Add AlterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, alterTiers)", // 1 is reserved for DG submission item
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -89,7 +102,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[1] = VoteItem({
-            description: "2. Add RegisterGroupsInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerGroup + registerTiers)",
+            description: "3. Add RegisterGroupsInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerGroup + registerTiers)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -105,7 +118,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[2] = VoteItem({
-            description: "3. Add RegisterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerTiers)",
+            description: "4. Add RegisterTiersInOperatorGrid factory to EasyTrack (permissions: operatorGrid, registerTiers)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -119,7 +132,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[3] = VoteItem({
-            description: "4. Add UpdateGroupsShareLimitInOperatorGrid factory to EasyTrack (permissions: operatorGrid, updateGroupShareLimit)",
+            description: "5. Add UpdateGroupsShareLimitInOperatorGrid factory to EasyTrack (permissions: operatorGrid, updateGroupShareLimit)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -133,7 +146,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[4] = VoteItem({
-            description: "5. Add SetJailStatusInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, setVaultJailStatus)",
+            description: "6. Add SetJailStatusInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, setVaultJailStatus)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -147,7 +160,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[5] = VoteItem({
-            description: "6. Add UpdateVaultsFeesInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, updateVaultFees)",
+            description: "7. Add UpdateVaultsFeesInOperatorGrid factory to EasyTrack (permissions: vaultsAdapter, updateVaultFees)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -161,7 +174,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[6] = VoteItem({
-            description: "7. Add ForceValidatorExitsInVaultHub factory to EasyTrack (permissions: vaultsAdapter, forceValidatorExit)",
+            description: "8. Add ForceValidatorExitsInVaultHub factory to EasyTrack (permissions: vaultsAdapter, forceValidatorExit)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -175,7 +188,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[7] = VoteItem({
-            description: "8. Add SetLiabilitySharesTargetInVaultHub factory to EasyTrack (permissions: vaultsAdapter, setLiabilitySharesTarget)",
+            description: "9. Add SetLiabilitySharesTargetInVaultHub factory to EasyTrack (permissions: vaultsAdapter, setLiabilitySharesTarget)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -189,7 +202,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         votingVoteItems[8] = VoteItem({
-            description: "9. Add SocializeBadDebtInVaultHub factory to EasyTrack (permissions: vaultsAdapter, socializeBadDebt)",
+            description: "10. Add SocializeBadDebtInVaultHub factory to EasyTrack (permissions: vaultsAdapter, socializeBadDebt)",
             call: ScriptCall({
                 to: easyTrack,
                 data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
@@ -208,17 +221,31 @@ contract V3VoteScript is OmnibusBase {
         uint256 index = 0;
 
         voteItems[index++] = VoteItem({
-            description: "1. Call UpgradeTemplateV3.startUpgrade",
+            description: "1. Check DG voting enactment is within daily time window (14:00 UTC - 23:00 UTC)",
+            call: ScriptCall({
+                to: params.timeConstraints,
+                data: abi.encodeCall(
+                    ITimeConstraints.checkTimeWithinDayTimeAndEmit,
+                    (
+                        ENABLED_DAY_SPAN_START,
+                        ENABLED_DAY_SPAN_END
+                    )
+                )
+            })
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "2. Call UpgradeTemplateV3.startUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.startUpgrade, ()))
         });
 
         voteItems[index++] = VoteItem({
-            description: "2. Upgrade LidoLocator implementation",
+            description: "3. Upgrade LidoLocator implementation",
             call: _forwardCall(TEMPLATE.AGENT(), TEMPLATE.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_LOCATOR_IMPL())))
         });
 
         voteItems[index++] = VoteItem({
-            description: "3. Grant Aragon APP_MANAGER_ROLE to the AGENT",
+            description: "4. Grant Aragon APP_MANAGER_ROLE to the AGENT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACL(),
@@ -232,7 +259,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "4. Set Lido implementation in Kernel",
+            description: "5. Set Lido implementation in Kernel",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.KERNEL(),
@@ -241,7 +268,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "5. Revoke Aragon APP_MANAGER_ROLE from the AGENT",
+            description: "6. Revoke Aragon APP_MANAGER_ROLE from the AGENT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACL(),
@@ -256,7 +283,7 @@ contract V3VoteScript is OmnibusBase {
 
         bytes32 requestBurnSharesRole = IBurner(TEMPLATE.OLD_BURNER()).REQUEST_BURN_SHARES_ROLE();
         voteItems[index++] = VoteItem({
-            description: "6. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
+            description: "7. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -265,7 +292,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "7. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
+            description: "8. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -274,7 +301,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "8. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
+            description: "9. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -283,7 +310,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "9. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
+            description: "10. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -292,7 +319,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "10. Upgrade AccountingOracle implementation",
+            description: "11. Upgrade AccountingOracle implementation",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACCOUNTING_ORACLE(),
@@ -302,7 +329,7 @@ contract V3VoteScript is OmnibusBase {
 
         bytes32 reportRewardsMintedRole = IStakingRouter(TEMPLATE.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
         voteItems[index++] = VoteItem({
-            description: "11. Revoke REPORT_REWARDS_MINTED_ROLE from Lido",
+            description: "12. Revoke REPORT_REWARDS_MINTED_ROLE from Lido",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.STAKING_ROUTER(),
@@ -311,7 +338,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "12. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
+            description: "13. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.STAKING_ROUTER(),
@@ -322,7 +349,7 @@ contract V3VoteScript is OmnibusBase {
         bytes32 configManagerRole = IOracleDaemonConfig(TEMPLATE.ORACLE_DAEMON_CONFIG()).CONFIG_MANAGER_ROLE();
 
         voteItems[index++] = VoteItem({
-            description: "13. Grant OracleDaemonConfig's CONFIG_MANAGER_ROLE to Agent",
+            description: "14. Grant OracleDaemonConfig's CONFIG_MANAGER_ROLE to Agent",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ORACLE_DAEMON_CONFIG(),
@@ -331,7 +358,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "14. Set SLASHING_RESERVE_WE_RIGHT_SHIFT to 0x2000 at OracleDaemonConfig",
+            description: "15. Set SLASHING_RESERVE_WE_RIGHT_SHIFT to 0x2000 at OracleDaemonConfig",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ORACLE_DAEMON_CONFIG(),
@@ -340,7 +367,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "15. Set SLASHING_RESERVE_WE_LEFT_SHIFT to 0x2000 at OracleDaemonConfig",
+            description: "16. Set SLASHING_RESERVE_WE_LEFT_SHIFT to 0x2000 at OracleDaemonConfig",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ORACLE_DAEMON_CONFIG(),
@@ -349,7 +376,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "16. Revoke OracleDaemonConfig's CONFIG_MANAGER_ROLE from Agent",
+            description: "17. Revoke OracleDaemonConfig's CONFIG_MANAGER_ROLE from Agent",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ORACLE_DAEMON_CONFIG(),
@@ -358,7 +385,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "17. Call UpgradeTemplateV3.finishUpgrade",
+            description: "18. Call UpgradeTemplateV3.finishUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
         });
 

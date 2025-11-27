@@ -26,3 +26,4 @@ jobs:
         env:
           RPC_URL: "${{ secrets.ETH_RPC_URL }}"
           UPGRADE_PARAMETERS_FILE: scripts/upgrade/upgrade-params-mainnet.toml
+          GAS_LIMIT: 30000000
