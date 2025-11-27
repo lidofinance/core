@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4938"  lines-covered="4719"  line-rate="0.9556999999999999"  branches-valid="2326"  branches-covered="2143"  branch-rate="0.9213"  timestamp="1764089702338" complexity="0" version="0.1">
+<coverage lines-valid="4931"  lines-covered="4719"  line-rate="0.9570000000000001"  branches-valid="2338"  branches-covered="2143"  branch-rate="0.9166"  timestamp="1764238637604" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1936,7 +1936,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.utils"  line-rate="0.5222"  branch-rate="0.6111" >
+	<package name="0.8.25.utils"  line-rate="1"  branch-rate="1" >
 	<classes>
 		<class name="AccessControlConfirmable.sol"  filename="contracts/0.8.25/utils/AccessControlConfirmable.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
@@ -2049,79 +2049,6 @@
 			<line number="32"  hits="5"  branch="false" />
 			<line number="43"  hits="20"  branch="false" />
 			<line number="54"  hits="3"  branch="false" />
-		</lines>
-		</class>
-		<class name="V3TemporaryAdmin.sol"  filename="contracts/0.8.25/utils/V3TemporaryAdmin.sol"  line-rate="0"  branch-rate="0" >
-		<methods>
-			<method name="constructor"  hits="0"  signature="()V" >
-				<lines><line number="89"  hits="0" /></lines>
-			</method>
-			<method name="getCsmAccountingAddress"  hits="0"  signature="()V" >
-				<lines><line number="100"  hits="0" /></lines>
-			</method>
-			<method name="completeSetup"  hits="0"  signature="()V" >
-				<lines><line number="122"  hits="0" /></lines>
-			</method>
-			<method name="_setupVaultHub"  hits="0"  signature="()V" >
-				<lines><line number="145"  hits="0" /></lines>
-			</method>
-			<method name="_setupPredepositGuarantee"  hits="0"  signature="()V" >
-				<lines><line number="166"  hits="0" /></lines>
-			</method>
-			<method name="_setupOperatorGrid"  hits="0"  signature="()V" >
-				<lines><line number="178"  hits="0" /></lines>
-			</method>
-			<method name="_setupBurner"  hits="0"  signature="()V" >
-				<lines><line number="192"  hits="0" /></lines>
-			</method>
-			<method name="_transferAdminToAgent"  hits="0"  signature="()V" >
-				<lines><line number="206"  hits="0" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="90"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="91"  hits="0"  branch="false" />
-			<line number="92"  hits="0"  branch="false" />
-			<line number="101"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="103"  hits="0"  branch="false" />
-			<line number="106"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="108"  hits="0"  branch="false" />
-			<line number="109"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="110"  hits="0"  branch="false" />
-			<line number="113"  hits="0"  branch="false" />
-			<line number="123"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="124"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="125"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="127"  hits="0"  branch="false" />
-			<line number="129"  hits="0"  branch="false" />
-			<line number="131"  hits="0"  branch="false" />
-			<line number="133"  hits="0"  branch="false" />
-			<line number="134"  hits="0"  branch="false" />
-			<line number="135"  hits="0"  branch="false" />
-			<line number="136"  hits="0"  branch="false" />
-			<line number="147"  hits="0"  branch="false" />
-			<line number="148"  hits="0"  branch="false" />
-			<line number="149"  hits="0"  branch="false" />
-			<line number="150"  hits="0"  branch="false" />
-			<line number="152"  hits="0"  branch="false" />
-			<line number="154"  hits="0"  branch="false" />
-			<line number="156"  hits="0"  branch="false" />
-			<line number="157"  hits="0"  branch="false" />
-			<line number="159"  hits="0"  branch="false" />
-			<line number="167"  hits="0"  branch="false" />
-			<line number="168"  hits="0"  branch="false" />
-			<line number="169"  hits="0"  branch="false" />
-			<line number="179"  hits="0"  branch="false" />
-			<line number="180"  hits="0"  branch="false" />
-			<line number="181"  hits="0"  branch="false" />
-			<line number="182"  hits="0"  branch="false" />
-			<line number="183"  hits="0"  branch="false" />
-			<line number="198"  hits="0"  branch="false" />
-			<line number="200"  hits="0"  branch="false" />
-			<line number="201"  hits="0"  branch="false" />
-			<line number="203"  hits="0"  branch="false" />
-			<line number="207"  hits="0"  branch="false" />
-			<line number="208"  hits="0"  branch="false" />
 		</lines>
 		</class>
 	</classes>
@@ -2947,10 +2874,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="2"  branch="false" />
-			<line number="173"  hits="2"  branch="false" />
-			<line number="175"  hits="2"  branch="false" />
-			<line number="176"  hits="2"  branch="false" />
+			<line number="172"  hits="18"  branch="false" />
+			<line number="173"  hits="18"  branch="false" />
+			<line number="175"  hits="18"  branch="false" />
+			<line number="176"  hits="18"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -4862,7 +4789,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9"  line-rate="0.9956999999999999"  branch-rate="0.9815" >
+	<package name="0.8.9"  line-rate="0.9656999999999999"  branch-rate="0.9405" >
 	<classes>
 		<class name="Accounting.sol"  filename="contracts/0.8.9/Accounting.sol"  line-rate="0.9792000000000001"  branch-rate="0.8611" >
 		<methods>
@@ -6103,6 +6030,66 @@
 			<line number="1487"  hits="3"  branch="false" />
 			<line number="1500"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="1501"  hits="1"  branch="false" />
+		</lines>
+		</class>
+		<class name="TokenRateNotifier.sol"  filename="contracts/0.8.9/TokenRateNotifier.sol"  line-rate="0"  branch-rate="0" >
+		<methods>
+			<method name="constructor"  hits="0"  signature="()V" >
+				<lines><line number="34"  hits="0" /></lines>
+			</method>
+			<method name="addObserver"  hits="0"  signature="()V" >
+				<lines><line number="47"  hits="0" /></lines>
+			</method>
+			<method name="removeObserver"  hits="0"  signature="()V" >
+				<lines><line number="67"  hits="0" /></lines>
+			</method>
+			<method name="handlePostTokenRebase"  hits="0"  signature="()V" >
+				<lines><line number="84"  hits="0" /></lines>
+			</method>
+			<method name="observersLength"  hits="0"  signature="()V" >
+				<lines><line number="117"  hits="0" /></lines>
+			</method>
+			<method name="_observerIndex"  hits="0"  signature="()V" >
+				<lines><line number="123"  hits="0" /></lines>
+			</method>
+		</methods>
+		<lines>
+			<line number="35"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="36"  hits="0"  branch="false" />
+			<line number="38"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="39"  hits="0"  branch="false" />
+			<line number="41"  hits="0"  branch="false" />
+			<line number="42"  hits="0"  branch="false" />
+			<line number="48"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="49"  hits="0"  branch="false" />
+			<line number="51"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="52"  hits="0"  branch="false" />
+			<line number="54"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="55"  hits="0"  branch="false" />
+			<line number="57"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="58"  hits="0"  branch="false" />
+			<line number="61"  hits="0"  branch="false" />
+			<line number="62"  hits="0"  branch="false" />
+			<line number="68"  hits="0"  branch="false" />
+			<line number="70"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="71"  hits="0"  branch="false" />
+			<line number="73"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="74"  hits="0"  branch="false" />
+			<line number="76"  hits="0"  branch="false" />
+			<line number="78"  hits="0"  branch="false" />
+			<line number="93"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="94"  hits="0"  branch="false" />
+			<line number="96"  hits="0"  branch="false" />
+			<line number="97"  hits="0"  branch="false" />
+			<line number="99"  hits="0"  branch="false" />
+			<line number="106"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="107"  hits="0"  branch="false" />
+			<line number="118"  hits="0"  branch="false" />
+			<line number="124"  hits="0"  branch="false" />
+			<line number="125"  hits="0"  branch="false" />
+			<line number="126"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="127"  hits="0"  branch="false" />
+			<line number="130"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="TriggerableWithdrawalsGateway.sol"  filename="contracts/0.8.9/TriggerableWithdrawalsGateway.sol"  line-rate="0.9815"  branch-rate="0.9706" >
