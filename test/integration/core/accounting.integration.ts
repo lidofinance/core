@@ -19,10 +19,9 @@ describe("Integration: Accounting", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
+    snapshot = await Snapshot.take();
 
     await report(ctx);
-
-    snapshot = await Snapshot.take();
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
