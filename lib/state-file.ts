@@ -70,6 +70,7 @@ export enum Sk {
   gateSealV3 = "gateSealV3",
   gateSealFactory = "gateSealFactory",
   gateSealTW = "gateSealTW",
+  resealManager = "resealManager",
   stakingRouter = "stakingRouter",
   burner = "burner",
   executionLayerRewardsVault = "executionLayerRewardsVault",
@@ -87,11 +88,13 @@ export enum Sk {
   wstETH = "wstETH",
   lidoLocator = "lidoLocator",
   chainSpec = "chainSpec",
+  chainId = "chainId",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
   accounting = "accounting",
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
+  tokenRebaseNotifierV3 = "tokenRebaseNotifierV3",
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
@@ -113,6 +116,7 @@ export enum Sk {
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
   // Easy Track
   easyTrack = "easyTrack",
+  easyTrackEVMScriptExecutor = "easyTrackEVMScriptExecutor",
   vaultsAdapter = "vaultsAdapter",
   // Harnesses
   alertingHarness = "alertingHarness",
@@ -161,6 +165,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.executionLayerRewardsVault:
     case Sk.gateSeal:
     case Sk.gateSealV3:
+    case Sk.resealManager:
     case Sk.hashConsensusForAccountingOracle:
     case Sk.hashConsensusForValidatorsExitBusOracle:
     case Sk.ldo:
@@ -172,6 +177,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.wstETH:
     case Sk.depositContract:
     case Sk.tokenRebaseNotifier:
+    case Sk.tokenRebaseNotifierV3:
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
     case Sk.stakingVaultFactory:
@@ -179,7 +185,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorConsolidationRequests:
     case Sk.v3VoteScript:
     case Sk.easyTrack:
-    case Sk.vaultsAdapter:
     case Sk.gateSealFactory:
       return state[contractKey].address;
     default:

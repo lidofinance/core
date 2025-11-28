@@ -105,7 +105,7 @@ describe("Integration: DSM keys unvetting", () => {
   });
 
   it("Should allow stranger to unvet keys with valid guardian signature", async () => {
-    const { nor } = ctx.contracts;
+    const { nor, stakingRouter } = ctx.contracts;
 
     // Create new guardian with known (arbitrary) private key
     const guardian = new ethers.Wallet(GUARDIAN_PRIVATE_KEY).address;
@@ -118,12 +118,26 @@ describe("Integration: DSM keys unvetting", () => {
     const operatorId = 0n;
     const blockNumber = await time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
-    const nonce = await ctx.contracts.stakingRouter.getStakingModuleNonce(stakingModuleId);
-
     // Get node operator state before unvetting
-    const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
-    const totalVettedValidatorsBefore = nodeOperatorBefore.totalVettedValidators;
-    const vettedSigningKeysCount = totalVettedValidatorsBefore - 2n;
+    // eslint-disable-next-line prefer-const
+    let { totalVettedValidators, totalDepositedValidators, totalAddedValidators } = await nor.getNodeOperator(
+      operatorId,
+      true,
+    );
+
+    // Add more keys if needed
+    if (totalAddedValidators === totalDepositedValidators) {
+      await norSdvtAddOperatorKeys(ctx, nor, { operatorId, keysToAdd: 2n });
+      totalAddedValidators += 2n;
+    }
+
+    // Set more limit if needed
+    if (totalVettedValidators === totalDepositedValidators) {
+      await norSdvtSetOperatorStakingLimit(ctx, nor, { operatorId, limit: totalVettedValidators + 2n });
+      totalVettedValidators += 2n;
+    }
+
+    const vettedSigningKeysCount = totalVettedValidators - 2n;
 
     // Pack operator IDs into bytes (8 bytes per ID)
     const nodeOperatorIds = ethers.solidityPacked(["uint64"], [operatorId]);
@@ -131,6 +145,7 @@ describe("Integration: DSM keys unvetting", () => {
     // Pack vetted signing keys counts into bytes (16 bytes per count)
     const vettedSigningKeysCounts = ethers.solidityPacked(["uint128"], [vettedSigningKeysCount]);
 
+    const nonce = await stakingRouter.getStakingModuleNonce(stakingModuleId);
     // Generate valid guardian signature
     const unvetMessage = new DSMUnvetMessage(
       blockNumber,
@@ -144,11 +159,8 @@ describe("Integration: DSM keys unvetting", () => {
     const sig = await unvetMessage.sign(GUARDIAN_PRIVATE_KEY);
 
     // Get node operator state before unvetting
-    expect(totalVettedValidatorsBefore).to.be.not.equal(vettedSigningKeysCount);
-    const totalVettedValidatorsAfter = BigIntMath.max(
-      vettedSigningKeysCount,
-      nodeOperatorBefore.totalDepositedValidators,
-    );
+    expect(totalVettedValidators).to.be.not.equal(vettedSigningKeysCount);
+    const totalVettedValidatorsAfter = BigIntMath.max(vettedSigningKeysCount, totalDepositedValidators);
 
     // Unvet signing keys
     const tx = await dsm
@@ -168,7 +180,7 @@ describe("Integration: DSM keys unvetting", () => {
   });
 
   it("Should allow guardian to unvet signing keys directly", async () => {
-    const { nor } = ctx.contracts;
+    const { nor, stakingRouter } = ctx.contracts;
 
     // Create new guardian with known (arbitrary)private key
     const guardian = new ethers.Wallet(GUARDIAN_PRIVATE_KEY).address;
@@ -179,24 +191,33 @@ describe("Integration: DSM keys unvetting", () => {
     const operatorId = 0n;
 
     // Get node operator state before unvetting
-    const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
-    const totalDepositedValidatorsBefore = nodeOperatorBefore.totalDepositedValidators;
-    expect(totalDepositedValidatorsBefore).to.be.gte(1n);
-    const totalVettedValidatorsBefore = nodeOperatorBefore.totalVettedValidators;
+    // eslint-disable-next-line prefer-const
+    let { totalDepositedValidators, totalVettedValidators, totalAddedValidators } = await nor.getNodeOperator(
+      operatorId,
+      true,
+    );
+
+    // Add more keys if needed
+    if (totalAddedValidators === totalDepositedValidators) {
+      await norSdvtAddOperatorKeys(ctx, nor, { operatorId, keysToAdd: 3n });
+      totalAddedValidators += 3n;
+    }
+
+    // Set more limit if needed
+    if (totalVettedValidators === totalDepositedValidators) {
+      await norSdvtSetOperatorStakingLimit(ctx, nor, { operatorId, limit: totalVettedValidators + 3n });
+      totalVettedValidators += 3n;
+    }
 
     // Prepare unvet parameters
     const stakingModuleId = 1;
-    const vettedSigningKeysCount = totalVettedValidatorsBefore - 3n;
+    const vettedSigningKeysCount = totalVettedValidators - 3n;
     const blockNumber = await time.latestBlock();
     const blockHash = (await ethers.provider.getBlock(blockNumber))!.hash!;
-    const nonce = await ctx.contracts.stakingRouter.getStakingModuleNonce(stakingModuleId);
+    const nonce = await stakingRouter.getStakingModuleNonce(stakingModuleId);
 
     // Get node operator state before unvetting
-    const totalVettedValidatorsAfter = Math.max(
-      Number(vettedSigningKeysCount),
-      Number(nodeOperatorBefore.totalDepositedValidators),
-    );
-    expect(totalDepositedValidatorsBefore).to.be.gte(1n);
+    const totalVettedValidatorsAfter = Math.max(Number(vettedSigningKeysCount), Number(totalDepositedValidators));
 
     // Pack operator IDs into bytes (8 bytes per ID)
     const nodeOperatorIds = ethers.solidityPacked(["uint64"], [operatorId]);
@@ -205,23 +226,19 @@ describe("Integration: DSM keys unvetting", () => {
     const vettedSigningKeysCounts = ethers.solidityPacked(["uint128"], [vettedSigningKeysCount]);
 
     // Guardian should be able to unvet directly without signature
-    const tx = await dsm
-      .connect(guardianSigner)
-      .unvetSigningKeys(blockNumber, blockHash, stakingModuleId, nonce, nodeOperatorIds, vettedSigningKeysCounts, {
-        r: ZeroHash,
-        vs: ZeroHash,
-      });
-
-    // Check events
-    const receipt = await tx.wait();
-    const unvetEvents = findEventsWithInterfaces(receipt!, "VettedSigningKeysCountChanged", [nor.interface]);
-    expect(unvetEvents.length).to.equal(1);
-    expect(unvetEvents[0].args.nodeOperatorId).to.equal(operatorId);
-    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(totalVettedValidatorsAfter);
-
+    await expect(
+      dsm
+        .connect(guardianSigner)
+        .unvetSigningKeys(blockNumber, blockHash, stakingModuleId, nonce, nodeOperatorIds, vettedSigningKeysCounts, {
+          r: ZeroHash,
+          vs: ZeroHash,
+        }),
+    )
+      .to.emit(nor, "VettedSigningKeysCountChanged")
+      .withArgs(operatorId, totalVettedValidatorsAfter);
     // Verify node operator state after unvetting
     const nodeOperatorAfter = await nor.getNodeOperator(operatorId, true);
-    expect(nodeOperatorAfter.totalDepositedValidators).to.equal(totalDepositedValidatorsBefore);
+    expect(nodeOperatorAfter.totalDepositedValidators).to.equal(totalDepositedValidators);
     expect(nodeOperatorAfter.totalVettedValidators).to.equal(totalVettedValidatorsAfter);
   });
 
