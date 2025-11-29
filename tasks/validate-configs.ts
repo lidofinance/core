@@ -90,52 +90,24 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Scratch is on fork",
   },
   {
-    path: "gateSealForVaults.address",
-    reason: "Gate seal configuration differs between upgrade and scratch contexts",
-  },
-  {
     path: "gateSealForVaults.sealingCommittee",
-    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+    reason: "There are no GateSeals in scratch deployment",
   },
   {
     path: "gateSealForVaults.sealDuration",
-    reason: "Gate seal configuration differs between upgrade and scratch contexts",
-  },
-  {
-    path: "easyTrack.vaultsAdapter",
-    reason: "EasyTrack configuration is upgrade-specific",
-  },
-  {
-    path: "easyTrack.trustedCaller",
-    reason: "EasyTrack configuration is upgrade-specific",
-  },
-  {
-    path: "easyTrack.initialValidatorExitFeeLimit",
-    reason: "EasyTrack configuration is upgrade-specific",
-  },
-  {
-    path: "easyTrack.maxGroupShareLimit",
-    reason: "EasyTrack configuration is upgrade-specific",
-  },
-  {
-    path: "easyTrack.maxDefaultTierShareLimit",
-    reason: "EasyTrack configuration is upgrade-specific",
+    reason: "There are no GateSeals in scratch deployment",
   },
   {
     path: "easyTrack.newFactories",
-    reason: "EasyTrack new factories configuration is upgrade-specific",
+    reason: "EasyTrack is missing in scratch deployment",
+  },
+  {
+    path: "easyTrack.VaultsAdapter",
+    reason: "EasyTrack is missing in scratch deployment",
   },
   {
     path: "predepositGuarantee.genesisForkVersion",
-    reason: "Genesis fork version is upgrade-specific configuration",
-  },
-  {
-    path: "delegation.wethContract",
-    reason: "Delegation is upgrade-specific configuration",
-  },
-  {
-    path: "oracleVersions.vebo_consensus_version",
-    reason: "Oracle versions are upgrade-specific configuration",
+    reason: "Genesis fork version is taken from the network-state file during scratch deployment", //TODO: fix it
   },
   {
     path: "oracleVersions.ao_consensus_version",
