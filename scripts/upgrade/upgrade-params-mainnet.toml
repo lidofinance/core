@@ -8,7 +8,6 @@ slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum co
 secondsPerSlot = 12                   # Duration of each slot in seconds
 genesisTime = 1606824023              # Ethereum mainnet genesis timestamp
 depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Official ETH2 deposit contract
-isHoodi = false
 
 # Gate seal configuration for vault operations
 [gateSealForVaults]
@@ -81,4 +80,3 @@ initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial
 # - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504
 
 timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"  # Predeployed TimeConstraints contract on mainnet
-

@@ -1,4 +1,4 @@
-name: Integration Test Mainnet For Upgrade Template
+name: Integration Test (Upgrade)
 
 on: [push]
 

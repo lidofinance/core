@@ -118,7 +118,6 @@ export const UpgradeParametersSchema = z.object({
   chainSpec: ChainSpecSchema.extend({
     genesisTime: z.number().int(),
     depositContract: EthereumAddressSchema,
-    isHoodi: z.boolean(),
   }),
   gateSealForVaults: z.object({
     sealDuration: PositiveIntSchema,
