@@ -44,8 +44,9 @@ interface IAccountingOracle is IBaseOracle {
     function finalizeUpgrade_v4(uint256 consensusVersion) external;
 }
 
-interface IAragonAppRepo {
-    function getLatest() external view returns (uint16[3] memory, address, bytes memory);
+interface IAragonKernel {
+    function getApp(bytes32 _namespace, bytes32 _appId) external view returns (address);
+    function APP_BASES_NAMESPACE() external view returns (bytes32);
 }
 
 interface IWithdrawalsManagerProxy {
@@ -189,7 +190,7 @@ contract V3Template is V3Addresses {
         // Check initial implementations of the proxies to be upgraded
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
-        _assertAragonAppImplementation(IAragonAppRepo(ARAGON_APP_LIDO_REPO), OLD_LIDO_IMPL);
+        _assertAragonKernelImplementation(IAragonKernel(KERNEL), OLD_LIDO_IMPL);
 
         // Check allowances of the old burner
         address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
@@ -218,6 +219,8 @@ contract V3Template is V3Addresses {
 
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), NEW_ACCOUNTING_ORACLE_IMPL);
+
+        _assertAragonKernelImplementation(IAragonKernel(KERNEL), NEW_LIDO_IMPL);
 
         _assertContractVersion(IVersioned(LIDO), EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(IVersioned(ACCOUNTING_ORACLE), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
@@ -476,10 +479,9 @@ contract V3Template is V3Addresses {
         }
     }
 
-    function _assertAragonAppImplementation(IAragonAppRepo _repo, address _implementation) internal view {
-        (, address actualImplementation, ) = _repo.getLatest();
-        if (actualImplementation != _implementation) {
-            revert IncorrectAragonAppImplementation(address(_repo), _implementation);
+    function _assertAragonKernelImplementation(IAragonKernel _kernel, address _implementation) internal view {
+        if (_kernel.getApp(_kernel.APP_BASES_NAMESPACE(), LIDO_APP_ID) != _implementation) {
+            revert IncorrectAragonKernelImplementation(address(_kernel), _implementation);
         }
     }
 
@@ -503,7 +505,7 @@ contract V3Template is V3Addresses {
     error InvalidContractVersion(address contractAddress, uint256 actualVersion);
     error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
     error NonZeroRoleHolders(address contractAddress, bytes32 role);
-    error IncorrectAragonAppImplementation(address repo, address implementation);
+    error IncorrectAragonKernelImplementation(address kernel, address implementation);
     error StartAndFinishMustBeInSameTx();
     error StartAlreadyCalledInThisTx();
     error Expired();

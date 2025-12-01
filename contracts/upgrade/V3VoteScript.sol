@@ -49,7 +49,6 @@ contract V3VoteScript is OmnibusBase {
 
     struct ScriptParams {
         address upgradeTemplate;
-        bytes32 lidoAppId;
         address timeConstraints;
         uint256 odcSlashingReserveWeRightShiftEpochs;
         uint256 odcSlashingReserveWeLeftShiftEpochs;
@@ -270,7 +269,7 @@ contract V3VoteScript is OmnibusBase {
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.KERNEL(),
-                abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.lidoAppId, TEMPLATE.NEW_LIDO_IMPL()))
+                abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), TEMPLATE.LIDO_APP_ID(), TEMPLATE.NEW_LIDO_IMPL()))
             )
         });
 

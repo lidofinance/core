@@ -60,8 +60,8 @@ contract V3Addresses {
 
         // Existing proxies and contracts
         address kernel;
+        bytes32 lidoAppId;
         address agent;
-        address aragonAppLidoRepo;
         address locator;
         address voting;
         address dualGovernance;
@@ -149,8 +149,8 @@ contract V3Addresses {
     // -------- Unchanged contracts --------
     //
     address public immutable KERNEL;
+    bytes32 public immutable LIDO_APP_ID;
     address public immutable AGENT;
-    address public immutable ARAGON_APP_LIDO_REPO;
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
     address public immutable ACL;
@@ -191,8 +191,8 @@ contract V3Addresses {
         NEW_ACCOUNTING_ORACLE_IMPL = params.newAccountingOracleImpl;
         NEW_TOKEN_RATE_NOTIFIER = params.newTokenRateNotifier;
         KERNEL = params.kernel;
+        LIDO_APP_ID = params.lidoAppId;
         AGENT = params.agent;
-        ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
         ACL = params.acl;
@@ -278,6 +278,6 @@ contract V3Addresses {
     }
 
     error NewAndOldLocatorImplementationsMustBeDifferent();
-    error OldAndNewTokenRateNotifiersMustBeDifferent(); 
+    error OldAndNewTokenRateNotifiersMustBeDifferent();
     error StakingModuleNotFound(string moduleName);
 }
