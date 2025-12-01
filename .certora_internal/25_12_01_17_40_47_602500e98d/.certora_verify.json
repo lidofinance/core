@@ -1,0 +1,30 @@
+{
+    "importFilesToOrigRelpaths": {
+        "certora/specs/common/ERC20Params.spec": "certora/specs/common/ERC20Params.spec",
+        "certora/specs/common/ERC20Standard.spec": "certora/specs/common/ERC20Standard.spec",
+        "certora/specs/common/ERC20Storage.spec": "certora/specs/common/ERC20Storage.spec",
+        "certora/specs/common/erc20-summary.spec": "certora/specs/common/erc20-summary.spec",
+        "certora/specs/vaults/lido-mock.spec": "certora/specs/vaults/lido-mock.spec",
+        "certora/specs/vaults/vaults-array.spec": "certora/specs/vaults/vaults-array.spec"
+    },
+    "primary_contract": "VaultHubHarness",
+    "specfile": "certora/specs/vaults/VaultHub.spec",
+    "specfileOrigRelpath": "certora/specs/vaults/VaultHub.spec",
+    "specfilesToImportDecls": {
+        "certora/specs/common/ERC20Standard.spec": [
+            "./ERC20Storage.spec"
+        ],
+        "certora/specs/common/ERC20Storage.spec": [
+            "./ERC20Params.spec"
+        ],
+        "certora/specs/common/erc20-summary.spec": [
+            "./ERC20Standard.spec"
+        ],
+        "certora/specs/vaults/VaultHub.spec": [
+            "./vaults-array.spec",
+            "../common/erc20-summary.spec",
+            "./lido-mock.spec"
+        ]
+    },
+    "type": "spec"
+}

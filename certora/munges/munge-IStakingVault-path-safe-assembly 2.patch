@@ -1,0 +1,55 @@
+diff --git a/contracts/0.8.25/vaults/VaultHub.sol b/contracts/0.8.25/vaults/VaultHub.sol
+index 0d5d96f4b..0c7108b4b 100644
+--- a/contracts/0.8.25/vaults/VaultHub.sol
++++ b/contracts/0.8.25/vaults/VaultHub.sol
+@@ -11,7 +11,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+ import {ILido} from "contracts/common/interfaces/ILido.sol";
+ import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
+ 
+-import {IStakingVault} from "./interfaces/IStakingVault.sol";
++import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+ import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+ import {IPinnedBeaconProxy} from "./interfaces/IPinnedBeaconProxy.sol";
+ import {IVaultFactory} from "./interfaces/IVaultFactory.sol";
+@@ -1487,6 +1487,7 @@ contract VaultHub is PausableUntilWithRoles {
+     }
+ 
+     function _storage() internal pure returns (Storage storage $) {
++        /// @solidity memory-safe-assembly
+         assembly {
+             $.slot := STORAGE_LOCATION
+         }
+diff --git a/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol b/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol
+index f8ec400d4..249cd37d7 100644
+--- a/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol
++++ b/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol
+@@ -5,7 +5,7 @@
+ // solhint-disable-next-line lido/fixed-compiler-version
+ pragma solidity >=0.8.0;
+ 
+-import {IStakingVault} from "./IStakingVault.sol";
++import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+ 
+ /**
+  * @title IPredepositGuarantee
+diff --git a/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol b/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol
+index a9c50d096..a12531f0b 100644
+--- a/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol
++++ b/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol
+@@ -11,7 +11,7 @@ import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRo
+ import {CLProofVerifier} from "./CLProofVerifier.sol";
+ import {MeIfNobodyElse} from "./MeIfNobodyElse.sol";
+ 
+-import {IStakingVault} from "../interfaces/IStakingVault.sol";
++import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+ import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
+ 
+ /**
+@@ -825,6 +825,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
+     }
+ 
+     function _storage() private pure returns (ERC7201Storage storage $) {
++        /// @solidity memory-safe-assembly
+         assembly {
+             $.slot := ERC7201_STORAGE_LOCATION
+         }

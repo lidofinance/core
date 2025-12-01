@@ -1,0 +1,662 @@
+[
+    {
+        "card_title": "general",
+        "content_type": "COMPLEX",
+        "content": [
+            {
+                "inner_title": "CLI Version",
+                "content_type": "FLAG",
+                "content": "8.5.1",
+                "doc_link": "",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "branch",
+                "content_type": "FLAG",
+                "content": "pr-16",
+                "doc_link": "",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "dirty",
+                "content_type": "FLAG",
+                "content": "true",
+                "doc_link": "",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "origin",
+                "content_type": "FLAG",
+                "content": "https://github.com/Certora/lido-staking-vaults",
+                "doc_link": "",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "revision",
+                "content_type": "FLAG",
+                "content": "89dbc18f9dc1edaa584f8e2b9e696c7f98b58caa",
+                "doc_link": "",
+                "tooltip": "",
+                "unsound": false
+            }
+        ]
+    },
+    {
+        "card_title": "files",
+        "content_type": "SIMPLE",
+        "content": [
+            {
+                "inner_title": "files",
+                "content_type": "SIMPLE",
+                "content": [
+                    "certora/harness/VaultHubHarness.sol",
+                    "certora/mocks/IHashConsensusMock.sol",
+                    "certora/mocks/ILidoMock.sol",
+                    "certora/mocks/PayableMock.sol",
+                    "certora/mocks/StorageExtension.sol",
+                    "certora/mocks/WithdrawableRequestMock.sol",
+                    "contracts/0.8.25/vaults/OperatorGrid.sol",
+                    "contracts/0.8.25/vaults/StakingVault.sol",
+                    "contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol",
+                    "contracts/0.8.9/LidoLocator.sol",
+                    "contracts/common/lib/BLS.sol:BLS12_381"
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#files",
+                "tooltip": "",
+                "unsound": false
+            }
+        ]
+    },
+    {
+        "card_title": "options",
+        "content_type": "COMPLEX",
+        "content": [
+            {
+                "inner_title": "verify",
+                "content_type": "FLAG",
+                "content": "VaultHubHarness:certora/specs/vaults/VaultHub.spec",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#verify",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "build_cache",
+                "content_type": "FLAG",
+                "content": "true",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#build-cache",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "disallow_internal_function_calls",
+                "content_type": "FLAG",
+                "content": "true",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#disallow-internal-function-calls",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "global_timeout",
+                "content_type": "FLAG",
+                "content": 7200,
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#global-timeout",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "hashing_length_bound",
+                "content_type": "FLAG",
+                "content": 500,
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#hashing-length-bound",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "loop_iter",
+                "content_type": "FLAG",
+                "content": 2,
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#loop-iter",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "msg",
+                "content_type": "FLAG",
+                "content": "verify VaultHub",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#msg",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "optimistic_fallback",
+                "content_type": "FLAG",
+                "content": "true",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#optimistic-fallback",
+                "tooltip": "",
+                "unsound": true
+            },
+            {
+                "inner_title": "optimistic_hashing",
+                "content_type": "FLAG",
+                "content": "true",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#optimistic-hashing",
+                "tooltip": "",
+                "unsound": true
+            },
+            {
+                "inner_title": "optimistic_loop",
+                "content_type": "FLAG",
+                "content": "true",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#optimistic-loop",
+                "tooltip": "",
+                "unsound": true
+            },
+            {
+                "inner_title": "prover_version",
+                "content_type": "FLAG",
+                "content": "master",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#prover-version",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "rule",
+                "content_type": "SIMPLE",
+                "content": [
+                    "obligatedVaultIsConnected"
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#rule",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "rule_sanity",
+                "content_type": "FLAG",
+                "content": "basic",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#rule-sanity",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "server",
+                "content_type": "FLAG",
+                "content": "prover",
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#server",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "storage_extension_harnesses",
+                "content_type": "SIMPLE",
+                "content": [
+                    "OperatorGrid=StorageExtension",
+                    "PredepositGuarantee=StorageExtension",
+                    "StakingVault=StorageExtension",
+                    "VaultHubHarness=StorageExtension"
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#storage-extension-harnesses",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "struct_link",
+                "content_type": "SIMPLE",
+                "content": [
+                    "PredepositGuarantee:stakingVault=StakingVault"
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#struct-link",
+                "tooltip": "",
+                "unsound": false
+            }
+        ]
+    },
+    {
+        "card_title": "link",
+        "content_type": "SIMPLE",
+        "content": [
+            {
+                "inner_title": "link",
+                "content_type": "SIMPLE",
+                "content": [
+                    "LidoLocator:operatorGrid=OperatorGrid",
+                    "LidoLocator:predepositGuarantee=PredepositGuarantee",
+                    "LidoLocator:vaultHub=VaultHubHarness",
+                    "OperatorGrid:LIDO_LOCATOR=LidoLocator",
+                    "VaultHubHarness:CONSENSUS_CONTRACT=IHashConsensusMock",
+                    "VaultHubHarness:LIDO=ILidoMock",
+                    "VaultHubHarness:LIDO_LOCATOR=LidoLocator"
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#link",
+                "tooltip": "",
+                "unsound": false
+            }
+        ]
+    },
+    {
+        "card_title": "packages",
+        "content_type": "SIMPLE",
+        "content": [
+            {
+                "inner_title": "packages",
+                "content_type": "SIMPLE",
+                "content": [
+                    "@aragon/apps-agent=node_modules/@aragon/apps-agent",
+                    "@aragon/apps-finance=node_modules/@aragon/apps-finance",
+                    "@aragon/apps-lido=node_modules/@aragon/apps-lido",
+                    "@aragon/apps-vault=node_modules/@aragon/apps-vault",
+                    "@aragon/id=node_modules/@aragon/id",
+                    "@aragon/minime=node_modules/@aragon/minime",
+                    "@aragon/os=node_modules/@aragon/os",
+                    "@openzeppelin/contracts-v4.4=node_modules/@openzeppelin/contracts-v4.4",
+                    "@openzeppelin/contracts-v5.2=node_modules/@openzeppelin/contracts-v5.2",
+                    "@openzeppelin/contracts=node_modules/@openzeppelin/contracts",
+                    "@openzeppelin/merkle-tree=node_modules/@openzeppelin/merkle-tree",
+                    "openzeppelin-solidity=node_modules/openzeppelin-solidity",
+                    "solhint-plugin-lido=node_modules/solhint-plugin-lido",
+                    "solhint=node_modules/solhint"
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#packages",
+                "tooltip": "",
+                "unsound": false
+            }
+        ]
+    },
+    {
+        "card_title": "solidity_compiler",
+        "content_type": "COMPLEX",
+        "content": [
+            {
+                "inner_title": "compiler_map",
+                "content_type": "COMPLEX",
+                "content": [
+                    {
+                        "inner_title": "BLS12_381",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "IHashConsensusMock",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "ILidoMock",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "LidoLocator",
+                        "content_type": "FLAG",
+                        "content": "solc8.9",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "OperatorGrid",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "PayableMock",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "PredepositGuarantee",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "StakingVault",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "StorageExtension",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "VaultHubHarness",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "WithdrawableRequestMock",
+                        "content_type": "FLAG",
+                        "content": "solc8.25",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                        "tooltip": "",
+                        "unsound": false
+                    }
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#compiler-map",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "solc_evm_version_map",
+                "content_type": "COMPLEX",
+                "content": [
+                    {
+                        "inner_title": "BLS12_381",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "IHashConsensusMock",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "ILidoMock",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "LidoLocator",
+                        "content_type": "FLAG",
+                        "content": "istanbul",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "OperatorGrid",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "PayableMock",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "PredepositGuarantee",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "StakingVault",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "StorageExtension",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "VaultHubHarness",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "WithdrawableRequestMock",
+                        "content_type": "FLAG",
+                        "content": "cancun",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                        "tooltip": "",
+                        "unsound": false
+                    }
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-evm-version-map",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "solc_optimize_map",
+                "content_type": "COMPLEX",
+                "content": [
+                    {
+                        "inner_title": "BLS12_381",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "IHashConsensusMock",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "ILidoMock",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "LidoLocator",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "OperatorGrid",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "PayableMock",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "PredepositGuarantee",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "StakingVault",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "StorageExtension",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "VaultHubHarness",
+                        "content_type": "FLAG",
+                        "content": 100,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "WithdrawableRequestMock",
+                        "content_type": "FLAG",
+                        "content": 200,
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                        "tooltip": "",
+                        "unsound": false
+                    }
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-optimize-map",
+                "tooltip": "",
+                "unsound": false
+            },
+            {
+                "inner_title": "solc_via_ir_map",
+                "content_type": "COMPLEX",
+                "content": [
+                    {
+                        "inner_title": "BLS12_381",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "IHashConsensusMock",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "ILidoMock",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "LidoLocator",
+                        "content_type": "FLAG",
+                        "content": "false",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "OperatorGrid",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "PayableMock",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "PredepositGuarantee",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "StakingVault",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "StorageExtension",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "VaultHubHarness",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    },
+                    {
+                        "inner_title": "WithdrawableRequestMock",
+                        "content_type": "FLAG",
+                        "content": "true",
+                        "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                        "tooltip": "",
+                        "unsound": false
+                    }
+                ],
+                "doc_link": "https://docs.certora.com/en/latest/docs/prover/cli/options.html#solc-via-ir-map",
+                "tooltip": "",
+                "unsound": false
+            }
+        ]
+    }
+]

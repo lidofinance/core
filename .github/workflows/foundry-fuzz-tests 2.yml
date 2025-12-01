@@ -1,0 +1,48 @@
+name: Foundry Fuzz Tests
+
+on:
+  - pull_request
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  fuzz-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: install nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: yarn install
+        run: |
+          corepack enable
+          yarn install
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install dependencies
+        run: forge install
+
+      - name: Run VaultHub Locked Covers Liability Invariant Test
+        run: forge test --match-contract VaultHubLockedInvariantTest -vvv
+
+      - name: Run VaultHub Health Invariant Test
+        run: forge test --match-contract VaultHubHealthInvariantTest -vvv
+
+      - name: Run VaultHub Shortfall Fuzz Test
+        run: forge test --match-contract VaultHubShortfallFuzzTest -vvv
