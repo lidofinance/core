@@ -15,9 +15,9 @@ import {
 import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
 import { Snapshot } from "test/suite";
 
-// TODO: update upon TW integrations arrive
-describe.skip("Report Validator Exit Delay", () => {
+describe("Integration: Report Validator Exit Delay", () => {
   let ctx: ProtocolContext;
+  let rootSnapshot: string;
   let beforeEachSnapshot: string;
 
   let vebReportSubmitter: HardhatEthersSigner;
@@ -26,6 +26,7 @@ describe.skip("Report Validator Exit Delay", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
+    rootSnapshot = await Snapshot.take();
 
     [vebReportSubmitter] = await ethers.getSigners();
 
@@ -56,6 +57,8 @@ describe.skip("Report Validator Exit Delay", () => {
     // Ensure that nor is a first module in staking router
     expect((await stakingRouter.getStakingModule(moduleId)).stakingModuleAddress).to.equal(nor.address);
   });
+
+  after(async () => await Snapshot.restore(rootSnapshot));
 
   beforeEach(async () => (beforeEachSnapshot = await Snapshot.take()));
 
@@ -176,9 +179,8 @@ describe.skip("Report Validator Exit Delay", () => {
         encodedExitRequests,
       ),
     )
-      .and.to.emit(nor, "ValidatorExitStatusUpdated")
+      .to.emit(nor, "ValidatorExitStatusUpdated")
       .withArgs(nodeOpId, ACTIVE_VALIDATOR_PROOF.validator.pubkey, eligibleToExitInSec, proofSlotTimestamp);
-
     expect(
       await nor.isValidatorExitDelayPenaltyApplicable(
         nodeOpId,
@@ -272,7 +274,7 @@ describe.skip("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "ExitHashNotSubmitted");
+    ).to.be.revertedWithCustomError(validatorsExitBusOracle, "ExitHashNotSubmitted");
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -283,7 +285,7 @@ describe.skip("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "ExitHashNotSubmitted");
+    ).to.be.revertedWithCustomError(validatorsExitBusOracle, "ExitHashNotSubmitted");
   });
 
   it("Should revert when exit request was not unpacked", async () => {
