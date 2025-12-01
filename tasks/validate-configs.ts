@@ -121,6 +121,14 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     path: "v3VoteScript.timeConstraintsContract",
     reason: "V3 vote script time constraints contract is upgrade-specific configuration",
   },
+  {
+    path: "v3VoteScript.odcSlashingReserveWeRightShiftEpochs",
+    reason: "V3 vote script ODC slashing reserve right shift epochs is upgrade-specific configuration",
+  },
+  {
+    path: "v3VoteScript.odcSlashingReserveWeLeftShiftEpochs",
+    reason: "V3 vote script ODC slashing reserve left shift epochs is upgrade-specific configuration",
+  },
 ];
 
 // Special mappings where the same concept has different names

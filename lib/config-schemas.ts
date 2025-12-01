@@ -105,6 +105,8 @@ const V3VoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
   initialMaxExternalRatioBP: BasisPointsSchema,
   timeConstraintsContract: EthereumAddressSchema,
+  odcSlashingReserveWeRightShiftEpochs: NonNegativeIntSchema,
+  odcSlashingReserveWeLeftShiftEpochs: NonNegativeIntSchema,
 });
 
 // Aragon app versions schema

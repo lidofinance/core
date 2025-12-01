@@ -80,3 +80,8 @@ initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial
 # - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504
 
 timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"  # Predeployed TimeConstraints contract on mainnet
+
+# Oracle Daemon Config slashing reserve parameters
+# how it is used: https://github.com/lidofinance/lido-oracle/blob/d6c09a16736b2c132343a4e349c8f27179c73e6e/src/services/staking_vaults.py#L207-L235
+odcSlashingReserveWeRightShiftEpochs = 8100  # 36 days in epochs (= 36 * 24 * 60 * 60 / (12 * 32))
+odcSlashingReserveWeLeftShiftEpochs = 8100   # 36 days in epochs (= 36 * 24 * 60 * 60 / (12 * 32))
