@@ -39,6 +39,7 @@ export async function makeTx(
   log.withArguments(`Call: ${yl(contract.name)}[${cy(contract.address)}].${yl(funcName)}`, args);
 
   const tx = await contract.getFunction(funcName)(...args, txParams);
+  await log.txLink(tx.hash);
 
   const receipt = await tx.wait();
   const gasUsed = receipt.gasUsed;
@@ -79,6 +80,8 @@ async function deployContractType2(
   if (!tx) {
     throw new Error(`Failed to send the deployment transaction for ${artifactName}`);
   }
+
+  await log.txLink(tx.hash);
 
   const receipt = await tx.wait();
   if (!receipt) {
