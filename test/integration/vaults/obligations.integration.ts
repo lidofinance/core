@@ -731,7 +731,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       await expect(dashboard.withdraw(stranger, 100n))
         .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
-        .withArgs(100n, 0n);
+        .withArgs(100n, ether("2") - (await calculateLockedValue(ctx, stakingVault)));
     });
 
     it("Works when trying to withdraw all the withdrawable balance", async () => {
@@ -753,9 +753,10 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       withdrawableValue = await vaultHub.withdrawableValue(stakingVault);
       expect(withdrawableValue).to.approximately(0n, 2n);
 
+      const expectedRebalance = await lido.getPooledEthBySharesRoundUp(redemptionShares);
       await expect(dashboard.rebalanceVaultWithShares(redemptionShares))
         .to.emit(vaultHub, "VaultRebalanced")
-        .withArgs(stakingVault, redemptionShares, await lido.getPooledEthBySharesRoundUp(redemptionShares))
+        .withArgs(stakingVault, redemptionShares, expectedRebalance)
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVault, 0n);
 
@@ -765,7 +766,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       await reportVaultDataWithProof(ctx, stakingVault);
 
       expect(await vaultHub.locked(stakingVault)).to.equal(await calculateLockedValue(ctx, stakingVault)); // connection deposit
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2") - expectedRebalance);
     });
   });
 
