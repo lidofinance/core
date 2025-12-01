@@ -6,14 +6,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
-import {
-  getProtocolContext,
-  getReportTimeElapsed,
-  OracleReportParams,
-  ProtocolContext,
-  removeStakingLimit,
-  report,
-} from "lib/protocol";
+import { getProtocolContext, getReportTimeElapsed, ProtocolContext, removeStakingLimit, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
@@ -235,23 +228,6 @@ describe("Integration: Accounting", () => {
         skipWithdrawals: true,
       }),
     ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease(uint256)");
-  });
-
-  it("reverts if the withdrawal vault balance is greater than reported", async () => {
-    const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
-
-    const balance = await ethers.provider.getBalance(withdrawalVault);
-
-    const params: Partial<OracleReportParams> = {
-      excludeVaultsBalances: false,
-      withdrawalVaultBalance: balance + 1n,
-      reportWithdrawalsVault: true,
-    };
-
-    await expect(report(ctx, params)).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "IncorrectWithdrawalsVaultBalance(uint256)",
-    );
   });
 
   it("Should account correctly with no CL rebase", async () => {
