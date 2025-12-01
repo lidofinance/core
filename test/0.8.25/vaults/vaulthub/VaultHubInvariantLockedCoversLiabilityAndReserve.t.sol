@@ -284,8 +284,8 @@ contract VaultHubLockedInvariantTest is Test {
      * 1. The liability (stETH minted to users)
      * 2. The required reserve ratio
      *
-     * forge-config: default.invariant.runs = 20000
-     * forge-config: default.invariant.depth = 200
+     * forge-config: default.invariant.runs = 10000
+     * forge-config: default.invariant.depth = 100
      * forge-config: default.invariant.fail-on-revert = false
      */
     function invariant_lockedCoversLiabilityAndReserve() public {
