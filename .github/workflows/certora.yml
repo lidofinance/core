@@ -15,7 +15,6 @@ env:
     certora/confs/lido/Lido_staking.conf
     certora/confs/misc/burner.conf
     certora/confs/misc/node_operators.conf
-    certora/confs/vaults/VaultHub.conf --rule "obligatedVaultIsConnected"
     certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultHasNoLiability"
     certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultHasNoLocked"
     certora/confs/vaults/VaultHub.conf --rule "tierReserveRatioLeqOne"
@@ -73,6 +72,46 @@ jobs:
           solc-versions: 0.8.25 0.8.9 0.6.12 0.6.11 0.4.24
           solc-remove-version-prefix: "0."
           job-name: "Verified Rules"
+          certora-key: ${{ secrets.CERTORAKEY }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  check-long-running:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    continue-on-error: true
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: install nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: yarn install
+        run: |
+          corepack enable
+          yarn install
+
+      - name: Perform munges
+        run: ./certora/scripts/munge.sh
+
+      - name: run long-running rules
+        uses: Certora/certora-run-action@v2
+        with:
+          configurations: certora/confs/vaults/VaultHub.conf --rule "obligatedVaultIsConnected"
+          cli-release: "beta"
+          solc-versions: 0.8.25 0.8.9 0.6.12 0.6.11 0.4.24
+          solc-remove-version-prefix: "0."
+          job-name: "Long-Running Rules"
           certora-key: ${{ secrets.CERTORAKEY }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
