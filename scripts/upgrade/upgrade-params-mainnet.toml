@@ -83,5 +83,5 @@ timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"  # Predep
 
 # Oracle Daemon Config slashing reserve parameters
 # how it is used: https://github.com/lidofinance/lido-oracle/blob/d6c09a16736b2c132343a4e349c8f27179c73e6e/src/services/staking_vaults.py#L207-L235
-odcSlashingReserveWeRightShiftEpochs = 8100  # 36 days in epochs (= 36 * 24 * 60 * 60 / (12 * 32))
-odcSlashingReserveWeLeftShiftEpochs = 8100   # 36 days in epochs (= 36 * 24 * 60 * 60 / (12 * 32))
+odcSlashingReserveWeRightShiftEpochs = 8192  # EPOCHS_PER_SLASHINGS_VECTOR - https://eth2book.info/capella/part3/config/preset/#epochs_per_slashings_vector
+odcSlashingReserveWeLeftShiftEpochs = 8192   # EPOCHS_PER_SLASHINGS_VECTOR
