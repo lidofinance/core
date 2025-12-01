@@ -1,0 +1,39 @@
+name: Verify State On Hoodi
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "feat/ci-hoodi-state"
+  schedule:
+    - cron: "0 0 * * *" # runs every day at midnight UTC
+
+jobs:
+  run_state_mate:
+    name: Run state-mate on hoodi
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      STATE_MATE_BRANCH: "feat/v3-hoodi"
+      HOODI_REMOTE_RPC_URL: "https://hoodi.drpc.org"
+
+    steps:
+      - name: Checkout state-mate
+        uses: actions/checkout@v4
+        with:
+          repository: lidofinance/state-mate
+          ref: ${{ env.STATE_MATE_BRANCH }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Run state-mate
+        run: yarn start configs/hoodi/lidov3-testnet.yaml

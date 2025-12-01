@@ -81,10 +81,18 @@ const TriggerableWithdrawalsGatewaySchema = z.object({
 
 // Easy track schema
 const EasyTrackSchema = z.object({
-  trustedCaller: EthereumAddressSchema,
-  initialValidatorExitFeeLimit: BigIntStringSchema,
-  maxGroupShareLimit: BigIntStringSchema,
-  maxDefaultTierShareLimit: NonNegativeIntSchema,
+  VaultsAdapter: EthereumAddressSchema,
+  newFactories: z.object({
+    AlterTiersInOperatorGrid: EthereumAddressSchema,
+    RegisterGroupsInOperatorGrid: EthereumAddressSchema,
+    RegisterTiersInOperatorGrid: EthereumAddressSchema,
+    SetJailStatusInOperatorGrid: EthereumAddressSchema,
+    SetLiabilitySharesTargetInVaultHub: EthereumAddressSchema,
+    SocializeBadDebtInVaultHub: EthereumAddressSchema,
+    ForceValidatorExitsInVaultHub: EthereumAddressSchema,
+    UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
+    UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
+  }),
 });
 
 // Oracle versions schema
@@ -96,6 +104,7 @@ const OracleVersionsSchema = z.object({
 const V3VoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
   initialMaxExternalRatioBP: BasisPointsSchema,
+  timeConstraintsContract: EthereumAddressSchema,
 });
 
 // Aragon app versions schema
@@ -109,7 +118,6 @@ export const UpgradeParametersSchema = z.object({
   chainSpec: ChainSpecSchema.extend({
     genesisTime: z.number().int(),
     depositContract: EthereumAddressSchema,
-    isHoodi: z.boolean(),
   }),
   gateSealForVaults: z.object({
     sealDuration: PositiveIntSchema,

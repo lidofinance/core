@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { encodeBytes32String, ZeroAddress } from "ethers";
+import { encodeBytes32String } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -302,12 +302,6 @@ describe("NodeOperatorsRegistry.sol:auxiliary", () => {
         .withArgs(nonce + 1n)
         .to.emit(nor, "NonceChanged")
         .withArgs(nonce + 1n);
-    });
-  });
-
-  context("transferToVault", () => {
-    it("Reverts always", async () => {
-      await expect(nor.transferToVault(ZeroAddress)).to.be.revertedWith("NOT_SUPPORTED");
     });
   });
 });

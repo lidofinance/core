@@ -357,7 +357,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      *
      * @dev Reverts if:
      * - `_maxStakeLimit` == 0
-     * - `_maxStakeLimit` >= 2^96
+     * - `_maxStakeLimit` >= 2^95 (1/2 of uint96)
      * - `_maxStakeLimit` < `_stakeLimitIncreasePerBlock`
      * - `_maxStakeLimit` / `_stakeLimitIncreasePerBlock` >= 2^32 (only if `_stakeLimitIncreasePerBlock` != 0)
      *
@@ -366,6 +366,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function setStakingLimit(uint256 _maxStakeLimit, uint256 _stakeLimitIncreasePerBlock) external {
         _auth(STAKING_CONTROL_ROLE);
+
+        require(_maxStakeLimit <= uint96(-1) / 2, "TOO_LARGE_MAX_STAKE_LIMIT");
 
         STAKING_STATE_POSITION.setStorageStakeLimitStruct(
             STAKING_STATE_POSITION.getStorageStakeLimitStruct().setStakingLimit(

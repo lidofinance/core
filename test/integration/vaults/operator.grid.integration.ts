@@ -97,7 +97,7 @@ describe("Integration: OperatorGrid", () => {
       const beforeInfo = await operatorGrid.vaultTierInfo(stakingVault);
       expect(beforeInfo.tierId).to.equal(0n);
 
-      const requestedTierId = 1n;
+      const requestedTierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
       const requestedShareLimit = ether("1000");
 
       // First confirmation from vault owner via Dashboard → returns false (not yet confirmed)
@@ -132,7 +132,7 @@ describe("Integration: OperatorGrid", () => {
         },
       ]);
 
-      const tierId = 1n;
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
       const initialLimit = ether("1200");
 
       // Confirm change tier into tier 1
@@ -197,8 +197,9 @@ describe("Integration: OperatorGrid", () => {
       ]);
 
       // Move to tier 1 first
-      await dashboard.changeTier(1n, ether("1000"));
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, ether("1000"));
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
+      await dashboard.changeTier(tierId, ether("1000"));
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, ether("1000"));
 
       // Try to change to default tier (0) → should revert
       await expect(
@@ -229,8 +230,9 @@ describe("Integration: OperatorGrid", () => {
       ]);
 
       // Change tier to 1 with initial limit 1000
-      await dashboard.changeTier(1n, ether("1000"));
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, ether("1000"));
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
+      await dashboard.changeTier(tierId, ether("1000"));
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, ether("1000"));
 
       // Try to increase to 1200 → first confirmation by owner via Dashboard returns false
       const increaseTo = ether("1200");
@@ -299,7 +301,26 @@ describe("Integration: OperatorGrid", () => {
       agentSigner = await ctx.getSigner("agent");
     });
 
-    it("changing tier doesn't affect jail status", async () => {
+    it("Vault in jail can't mint stETH", async () => {
+      // Put vault in jail before disconnecting
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
+      expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
+
+      // Verify vault is jailed and can't mint normally
+      await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+    });
+
+    it("Vault can mint again after being removed from jail", async () => {
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
+      expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
+      await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, false);
+      expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.false;
+      await expect(dashboard.mintShares(owner, 100n)).to.not.be.reverted;
+    });
+
+    it("Changing tier doesn't affect jail status", async () => {
       // Register a group and tiers for tier changing
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
       await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
@@ -333,12 +354,13 @@ describe("Integration: OperatorGrid", () => {
       expect(initialVaultInfo.tierId).to.equal(0); // Should be default tier
 
       // Change tier from default (0) to tier 1
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1, ether("1000"));
-      await dashboard.connect(owner).changeTier(1, ether("1000"));
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, ether("1000"));
+      await dashboard.connect(owner).changeTier(tierId, ether("1000"));
 
       // Verify tier changed
       const updatedVaultInfo = await operatorGrid.vaultTierInfo(stakingVault);
-      expect(updatedVaultInfo.tierId).to.equal(1);
+      expect(updatedVaultInfo.tierId).to.equal(tierId);
 
       // Verify jail status is preserved after tier change
       expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
@@ -347,7 +369,7 @@ describe("Integration: OperatorGrid", () => {
       await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
     });
 
-    it("disconnect and connect back preserves jail status", async () => {
+    it("Disconnect and connect back preserves jail status", async () => {
       // Put vault in jail before disconnecting
       await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
       expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
@@ -397,6 +419,57 @@ describe("Integration: OperatorGrid", () => {
       // Verify jail restrictions still apply after reconnection
       await dashboard.connect(owner).fund({ value: ether("2") });
       await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+    });
+
+    it("Jail blocks only minting and allows other operations", async () => {
+      const { lido } = ctx.contracts;
+
+      // Setup: Mint some shares first to prepare for testing burns and rebalances
+      await dashboard.mintShares(owner, ether("1"));
+      const initialLiabilityShares = await vaultHub.vaultRecord(stakingVault).then((r) => r.liabilityShares);
+      expect(initialLiabilityShares).to.be.gt(0n);
+
+      // Put vault in jail
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
+      expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
+
+      // 1. Verify minting is blocked
+      await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+
+      // 2. Verify burning is NOT blocked
+      const sharesToBurn = ether("0.1");
+      await lido.connect(owner).approve(dashboard, 10n * sharesToBurn);
+      await expect(dashboard.connect(owner).burnShares(sharesToBurn)).to.not.be.reverted;
+
+      // 3. Verify withdrawals are NOT blocked
+      const withdrawAmount = ether("0.1");
+      await expect(dashboard.withdraw(owner, withdrawAmount)).to.not.be.reverted;
+
+      // 4. Verify rebalancing is NOT blocked
+      // Add more funds to enable rebalancing
+      await dashboard.fund({ value: ether("2") });
+      const sharesToRebalance = await vaultHub.vaultRecord(stakingVault).then((r) => r.liabilityShares);
+      await expect(dashboard.rebalanceVaultWithShares(sharesToRebalance)).to.not.be.reverted;
+
+      // 5. Verify lazy reports are NOT blocked
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: await dashboard.totalValue() })).to.not.be
+        .reverted;
+
+      // 6. Verify disconnect is NOT blocked by jail status
+      // Ensure fresh report first
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        waitForNextRefSlot: true,
+        totalValue: await dashboard.totalValue(),
+      });
+      await expect(dashboard.connect(owner).voluntaryDisconnect()).to.not.be.reverted;
+
+      // Verify disconnect was initiated successfully
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
+
+      // Verify disconnect is completed
+      await expect(reportVaultDataWithProof(ctx, stakingVault))
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(stakingVault);
     });
   });
 });

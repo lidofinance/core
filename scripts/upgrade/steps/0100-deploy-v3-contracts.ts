@@ -1,4 +1,3 @@
-import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
@@ -35,22 +34,20 @@ export async function main() {
   const depositContract = state.chainSpec.depositContractAddress;
   const hashConsensusAddress = state[Sk.hashConsensusForAccountingOracle].address;
   const pdgDeployParams = parameters.predepositGuarantee;
+  const resealManagerAddress = state[Sk.resealManager].address;
 
   const proxyContractsOwner = agentAddress;
 
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const wstethAddress = state[Sk.wstETH].address;
+  const oldTokenRateNotifierAddress = state[Sk.tokenRebaseNotifier].address;
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
-  const vaultsAdapterAddress = getAddress(Sk.vaultsAdapter, state);
 
   //
   // Deploy V3TemporaryAdmin
   //
 
-  const v3TemporaryAdmin = await deployWithoutProxy(Sk.v3TemporaryAdmin, "V3TemporaryAdmin", deployer, [
-    agentAddress,
-    parameters.chainSpec.isHoodi,
-  ]);
+  const v3TemporaryAdmin = await deployWithoutProxy(Sk.v3TemporaryAdmin, "V3TemporaryAdmin", deployer, [agentAddress]);
 
   //
   // Deploy Lido new implementation
@@ -66,6 +63,19 @@ export async function main() {
     locatorAddress,
     lidoAddress,
   ]);
+
+  //
+  // Deploy new TokenRateNotifier
+  //
+
+  const newTokenRateNotifier = await deployWithoutProxy(Sk.tokenRebaseNotifierV3, "TokenRateNotifier", deployer, [
+    v3TemporaryAdmin.address,
+    accounting.address,
+  ]);
+
+  updateObjectInState(Sk.tokenRebaseNotifierV3, {
+    address: newTokenRateNotifier.address,
+  });
 
   //
   // Deploy AccountingOracle new implementation
@@ -110,7 +120,7 @@ export async function main() {
   // Prepare initialization data for LazyOracle.initialize(address admin, uint256 quarantinePeriod, uint256 maxRewardRatioBP, uint256 maxLidoFeeRatePerSecond)
   const lazyOracleInterface = await ethers.getContractFactory("LazyOracle");
   const lazyOracleInitData = lazyOracleInterface.interface.encodeFunctionData("initialize", [
-    v3TemporaryAdmin.address,
+    agentAddress,
     lazyOracleParams.quarantinePeriod,
     lazyOracleParams.maxRewardRatioBP,
     lazyOracleParams.maxLidoFeeRatePerSecond,
@@ -163,7 +173,7 @@ export async function main() {
     "VaultHub",
     proxyContractsOwner,
     deployer,
-    [locatorAddress, lidoAddress, hashConsensusAddress, vaultHubParams.relativeShareLimitBP],
+    [locatorAddress, lidoAddress, hashConsensusAddress, vaultHubParams.maxRelativeShareLimitBP],
     null, // implementation
     true, // withStateFile
     undefined, // signerOrOptions
@@ -310,7 +320,7 @@ export async function main() {
     elRewardsVault: await locator.elRewardsVault(),
     lido: lidoAddress,
     oracleReportSanityChecker: newSanityChecker.address,
-    postTokenRebaseReceiver: ZeroAddress,
+    postTokenRebaseReceiver: newTokenRateNotifier.address,
     burner: burner.address,
     stakingRouter: await locator.stakingRouter(),
     treasury: treasuryAddress,
@@ -382,7 +392,13 @@ export async function main() {
   await makeTx(
     v3TemporaryAdminContract,
     "completeSetup",
-    [lidoLocatorImpl.address, vaultsAdapterAddress, gateSealAddress],
+    [
+      lidoLocatorImpl.address,
+      parameters.easyTrack.VaultsAdapter,
+      gateSealAddress,
+      resealManagerAddress,
+      oldTokenRateNotifierAddress,
+    ],
     {
       from: deployer,
     },

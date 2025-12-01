@@ -378,10 +378,12 @@ describe("Accounting.sol:report", () => {
           }),
         ),
       )
-        .to.emit(lido, "TransferShares")
-        .withArgs(ZeroAddress, stakingModule.address, expectedModuleRewardInShares)
         .and.to.emit(lido, "TransferShares")
-        .withArgs(ZeroAddress, await locator.treasury(), expectedTreasuryCutInShares)
+        .withArgs(ZeroAddress, accounting, expectedSharesToMint)
+        .to.emit(lido, "TransferShares")
+        .withArgs(accounting, stakingModule.address, expectedModuleRewardInShares)
+        .and.to.emit(lido, "TransferShares")
+        .withArgs(accounting, await locator.treasury(), expectedTreasuryCutInShares)
         .and.to.emit(stakingRouter, "Mock__MintedRewardsReported");
     });
 
@@ -420,7 +422,9 @@ describe("Accounting.sol:report", () => {
         ),
       )
         .and.to.emit(lido, "TransferShares")
-        .withArgs(ZeroAddress, await locator.treasury(), expectedTreasuryCutInShares)
+        .withArgs(ZeroAddress, accounting, expectedSharesToMint)
+        .and.to.emit(lido, "TransferShares")
+        .withArgs(accounting, await locator.treasury(), expectedTreasuryCutInShares)
         .and.to.emit(stakingRouter, "Mock__MintedRewardsReported");
     });
 

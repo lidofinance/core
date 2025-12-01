@@ -73,7 +73,7 @@ export async function main(): Promise<void> {
     locatorAddress,
     lidoAddress,
     hashConsensusAddress,
-    vaultHubParams.relativeShareLimitBP,
+    vaultHubParams.maxRelativeShareLimitBP,
   ]);
   const newVaultHubAddress = state[Sk.vaultHub].implementation.address;
   console.log("New VaultHub implementation address", newVaultHubAddress);

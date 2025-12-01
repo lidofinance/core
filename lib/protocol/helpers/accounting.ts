@@ -45,6 +45,7 @@ export type OracleReportParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
+  reportBurner?: boolean;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
   silent?: boolean;
@@ -84,6 +85,7 @@ export const report = async (
     numExitedValidatorsByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
+    reportBurner = true,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
   }: OracleReportParams = {},
@@ -124,13 +126,13 @@ export const report = async (
   withdrawalVaultBalance = reportWithdrawalsVault ? withdrawalVaultBalance : 0n;
   elRewardsVaultBalance = reportElVault ? elRewardsVaultBalance : 0n;
 
-  if (sharesRequestedToBurn === null) {
+  if (sharesRequestedToBurn === null && reportBurner) {
     const [coverShares, nonCoverShares] = await burner.getSharesRequestedToBurn();
     sharesRequestedToBurn = coverShares + nonCoverShares;
   }
 
   log.debug("Burner", {
-    "Shares Requested To Burn": sharesRequestedToBurn,
+    "Shares Requested To Burn": sharesRequestedToBurn ?? "0",
     "Withdrawal vault": formatEther(withdrawalVaultBalance),
     "ElRewards vault": formatEther(elRewardsVaultBalance),
   });
@@ -184,7 +186,7 @@ export const report = async (
     numExitedValidatorsByStakingModule,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    sharesRequestedToBurn,
+    sharesRequestedToBurn: sharesRequestedToBurn ?? 0n,
     withdrawalFinalizationBatches,
     simulatedShareRate,
     isBunkerMode,
@@ -344,7 +346,7 @@ type SimulateReportResult = {
 /**
  * Simulate oracle report to get the expected result.
  */
-const simulateReport = async (
+export const simulateReport = async (
   ctx: ProtocolContext,
   { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
@@ -363,7 +365,7 @@ const simulateReport = async (
 
   const reportValues: ReportValuesStruct = {
     timestamp: reportTimestamp,
-    timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
+    timeElapsed: /* 1 day */ 86_400n,
     clValidators: beaconValidators,
     clBalance,
     withdrawalVaultBalance,

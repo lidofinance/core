@@ -86,52 +86,24 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Deposit contract address is set via environment variables in scratch deployment",
   },
   {
-    path: "chainSpec.isHoodi",
-    reason: "Scratch is on fork",
-  },
-  {
-    path: "gateSealForVaults.address",
-    reason: "Gate seal configuration differs between upgrade and scratch contexts",
-  },
-  {
     path: "gateSealForVaults.sealingCommittee",
-    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+    reason: "There are no GateSeals in scratch deployment",
   },
   {
     path: "gateSealForVaults.sealDuration",
-    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+    reason: "There are no GateSeals in scratch deployment",
   },
   {
-    path: "easyTrack.vaultsAdapter",
-    reason: "EasyTrack configuration is upgrade-specific",
+    path: "easyTrack.newFactories",
+    reason: "EasyTrack is missing in scratch deployment",
   },
   {
-    path: "easyTrack.trustedCaller",
-    reason: "EasyTrack configuration is upgrade-specific",
-  },
-  {
-    path: "easyTrack.initialValidatorExitFeeLimit",
-    reason: "EasyTrack configuration is upgrade-specific",
-  },
-  {
-    path: "easyTrack.maxGroupShareLimit",
-    reason: "EasyTrack configuration is upgrade-specific",
-  },
-  {
-    path: "easyTrack.maxDefaultTierShareLimit",
-    reason: "EasyTrack configuration is upgrade-specific",
+    path: "easyTrack.VaultsAdapter",
+    reason: "EasyTrack is missing in scratch deployment",
   },
   {
     path: "predepositGuarantee.genesisForkVersion",
-    reason: "Genesis fork version is upgrade-specific configuration",
-  },
-  {
-    path: "delegation.wethContract",
-    reason: "Delegation is upgrade-specific configuration",
-  },
-  {
-    path: "oracleVersions.vebo_consensus_version",
-    reason: "Oracle versions are upgrade-specific configuration",
+    reason: "Genesis fork version is taken from the network-state file during scratch deployment", //TODO: fix it
   },
   {
     path: "oracleVersions.ao_consensus_version",
@@ -145,12 +117,15 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     path: "v3VoteScript.initialMaxExternalRatioBP",
     reason: "V3 vote script initial max external ratio BP is upgrade-specific configuration",
   },
+  {
+    path: "v3VoteScript.timeConstraintsContract",
+    reason: "V3 vote script time constraints contract is upgrade-specific configuration",
+  },
 ];
 
 // Special mappings where the same concept has different names
 const PATH_MAPPINGS: Record<string, string> = {
-  "vaultHub.relativeShareLimitBP": "vaultHub.maxRelativeShareLimitBP",
-  "aragonAppVersions": "appVersions", // Handle different naming
+  aragonAppVersions: "appVersions", // Handle different naming
 };
 
 function getNestedValue(obj: unknown, path: string): unknown {

@@ -84,6 +84,21 @@ describe("Lido.sol:staking-limit", () => {
       expect(await lido.getCurrentStakeLimit()).to.equal(maxStakeLimit);
     });
 
+    it("Works with the maximum possible max stake limit", async () => {
+      const maxAllowed = (2n ** 96n - 1n) / 2n;
+      const bigStakeLimitIncreasePerBlock = maxAllowed / 7200n;
+      await expect(lido.setStakingLimit(maxAllowed, bigStakeLimitIncreasePerBlock))
+        .to.emit(lido, "StakingLimitSet")
+        .withArgs(maxAllowed, bigStakeLimitIncreasePerBlock);
+    });
+
+    it("Reverts if the max stake limit is too large", async () => {
+      const nonAllowed = (2n ** 96n - 1n) / 2n + 1n;
+      await expect(lido.setStakingLimit(nonAllowed, stakeLimitIncreasePerBlock)).to.be.revertedWith(
+        "TOO_LARGE_MAX_STAKE_LIMIT",
+      );
+    });
+
     it("Reverts if the caller is unauthorized", async () => {
       await expect(
         lido.connect(stranger).setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock),

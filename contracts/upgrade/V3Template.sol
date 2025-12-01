@@ -13,7 +13,6 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
@@ -22,6 +21,10 @@ import {V3Addresses} from "./V3Addresses.sol";
 
 interface IBaseOracle is IAccessControlEnumerable, IVersioned {
     function getConsensusContract() external view returns (address);
+}
+
+interface IEasyTrack {
+    function getEVMScriptFactories() external view returns (address[] memory);
 }
 
 interface IStakingRouter is IAccessControlEnumerable {
@@ -63,6 +66,16 @@ interface IOracleReportSanityChecker is IAccessControlEnumerable {
     function MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE() external view returns (bytes32);
     function SECOND_OPINION_MANAGER_ROLE() external view returns (bytes32);
     function INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE() external view returns (bytes32);
+}
+
+interface ITokenRateNotifier {
+    function owner() external view returns (address);
+    function observers(uint256 index) external view returns (address);
+    function observersLength() external view returns (uint256);
+}
+
+interface ILazyOracle {
+    function UPDATE_SANITY_PARAMS_ROLE() external view returns (bytes32);
 }
 
 
@@ -210,6 +223,7 @@ contract V3Template is V3Addresses {
 
         _assertFinalACL();
 
+        _checkTokenRateNotifierMigratedCorrectly();
         _checkBurnerMigratedCorrectly();
 
         if (VaultFactory(VAULT_FACTORY).BEACON() != UPGRADEABLE_BEACON) {
@@ -244,12 +258,11 @@ contract V3Template is V3Addresses {
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
         _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, AGENT);
 
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
-        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), AGENT, VAULTS_ADAPTER);
-
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);     
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULTS_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULTS_ADAPTER);
-        _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
+        _assertTwoOZRoleHolders(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER);
+        _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).RESUME_ROLE(), RESEAL_MANAGER);
 
         // OperatorGrid
         _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
@@ -259,7 +272,7 @@ contract V3Template is V3Addresses {
         // LazyOracle
         _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
         _assertSingleOZRoleHolder(LAZY_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(LAZY_ORACLE, LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
+        _assertZeroOZRoleHolders(LAZY_ORACLE, ILazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE());
 
         // AccountingOracle
         _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
@@ -291,11 +304,62 @@ contract V3Template is V3Addresses {
         // PredepositGuarantee
         _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
         _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL);
-
+        _assertTwoOZRoleHolders(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER);
+        _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).RESUME_ROLE(), RESEAL_MANAGER);
+        
         // StakingRouter
         bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
         _assertSingleOZRoleHolder(STAKING_ROUTER, reportRewardsMintedRole, ACCOUNTING);
+
+        _assertEasyTrackFactoriesAdded();
+    }
+
+    function _assertEasyTrackFactoriesAdded() internal view {
+        IEasyTrack easyTrack = IEasyTrack(EASY_TRACK);
+        address[] memory factories = easyTrack.getEVMScriptFactories();
+
+        // The expected order of the last 9 EasyTrack factories
+        address[9] memory expectedFactories = [
+            ETF_ALTER_TIERS_IN_OPERATOR_GRID,
+            ETF_REGISTER_GROUPS_IN_OPERATOR_GRID,
+            ETF_REGISTER_TIERS_IN_OPERATOR_GRID,
+            ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID,
+            ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID,
+            ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID,
+            ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB,
+            ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB,
+            ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB
+        ];
+
+        uint256 numFactories = factories.length;
+        if (numFactories < expectedFactories.length) {
+            revert UnexpectedEasyTrackFactories();
+        }
+
+        for (uint256 i = 0; i < expectedFactories.length; ++i) {
+            if (factories[numFactories - expectedFactories.length + i] != expectedFactories[i]) {
+                revert UnexpectedEasyTrackFactories();
+            }
+        }
+    }
+
+    function _checkTokenRateNotifierMigratedCorrectly() internal view {
+        ITokenRateNotifier oldNotifier = ITokenRateNotifier(OLD_TOKEN_RATE_NOTIFIER);
+        ITokenRateNotifier newNotifier = ITokenRateNotifier(NEW_TOKEN_RATE_NOTIFIER);
+
+        if (newNotifier.owner() != AGENT) {
+            revert IncorrectTokenRateNotifierOwnerMigration(NEW_TOKEN_RATE_NOTIFIER, AGENT);
+        }
+
+        if (oldNotifier.observersLength() != newNotifier.observersLength()) {
+            revert IncorrectTokenRateNotifierObserversLengthMigration();
+        }
+
+        for (uint256 i = 0; i < oldNotifier.observersLength(); i++) {
+            if (oldNotifier.observers(i) != newNotifier.observers(i)) {
+                revert IncorrectTokenRateNotifierObserversMigration();
+            }
+        }
     }
 
     function _checkBurnerMigratedCorrectly() internal view {
@@ -430,7 +494,6 @@ contract V3Template is V3Addresses {
     error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
     error NonZeroRoleHolders(address contractAddress, bytes32 role);
     error IncorrectAragonAppImplementation(address repo, address implementation);
-    error StartAndFinishMustBeInSameBlock();
     error StartAndFinishMustBeInSameTx();
     error StartAlreadyCalledInThisTx();
     error Expired();
@@ -442,4 +505,8 @@ contract V3Template is V3Addresses {
     error IncorrectUpgradeableBeaconOwner(address beacon, address owner);
     error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
     error TotalSharesOrPooledEtherChanged();
+    error UnexpectedEasyTrackFactories();
+    error IncorrectTokenRateNotifierOwnerMigration(address notifier, address owner);
+    error IncorrectTokenRateNotifierObserversLengthMigration();
+    error IncorrectTokenRateNotifierObserversMigration();
 }

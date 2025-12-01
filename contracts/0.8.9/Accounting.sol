@@ -117,7 +117,7 @@ contract Accounting {
     ) external view returns (CalculatedValues memory update) {
         Contracts memory contracts = _loadOracleReportContracts();
 
-        PreReportState memory pre = _snapshotPreReportState(contracts);
+        PreReportState memory pre = _snapshotPreReportState(contracts, true);
 
         return _simulateOracleReport(contracts, pre, _report);
     }
@@ -128,19 +128,26 @@ contract Accounting {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
-        PreReportState memory pre = _snapshotPreReportState(contracts);
+        PreReportState memory pre = _snapshotPreReportState(contracts, false);
         CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report);
         _applyOracleReportContext(contracts, _report, pre, update);
     }
 
     /// @dev reads the current state of the protocol to the memory
-    function _snapshotPreReportState(Contracts memory _contracts) internal view returns (PreReportState memory pre) {
+    function _snapshotPreReportState(Contracts memory _contracts, bool isSimulation) internal view returns (PreReportState memory pre) {
         (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
-        pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalize();
+
+        if (isSimulation) {
+            // for simulation we specifically fetch the current value, because during the refSlot `LastRefSlot` method
+            // will return the previous refSlot value, but Oracle use simulation to gather the current refSlot info
+            pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalize();
+        } else {
+            pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
+        }
     }
 
     /// @dev calculates all the state changes that is required to apply the report
@@ -359,6 +366,9 @@ contract Accounting {
         );
 
         if (_update.sharesToMintAsFees > 0) {
+            // this is a final action that changes share rate.
+            // so all transfers after this mint will reflect the actual postShareRate
+            LIDO.mintShares(address(this), _update.sharesToMintAsFees);
             _distributeFee(_update.feeDistribution);
             // important to have this callback last for modules to have updated state
             _contracts.stakingRouter.reportRewardsMinted(
@@ -434,13 +444,13 @@ contract Accounting {
         for (uint256 i; i < length; ++i) {
             uint256 moduleShares = sharesToMint[i];
             if (moduleShares > 0) {
-                LIDO.mintShares(recipients[i], moduleShares);
+                LIDO.transferShares(recipients[i], moduleShares);
             }
         }
 
         uint256 treasuryShares = _feeDistribution.treasurySharesToMint;
         if (treasuryShares > 0) { // zero is an edge case when all fees goes to modules
-            LIDO.mintShares(LIDO_LOCATOR.treasury(), treasuryShares);
+            LIDO.transferShares(LIDO_LOCATOR.treasury(), treasuryShares);
         }
     }
 

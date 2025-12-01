@@ -1,13 +1,12 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log } from "lib";
+import { certainAddress, ether, getCurrentBlockTimestamp, impersonate, log } from "lib";
 
 import { SHARE_RATE_PRECISION } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
 import { report } from "./accounting";
-import { removeStakingLimit } from "./staking";
 
 const DEPOSIT = 10000;
 const MIN_BURN = 1;
@@ -24,25 +23,21 @@ function logShareRate(shareRate: bigint): number {
   return Number(shareRate) / Number(SHARE_RATE_PRECISION);
 }
 
-async function increaseTotalPooledEther(ctx: ProtocolContext, etherAmount: bigint) {
-  const { lido, locator } = ctx.contracts;
-  // Impersonate whale and burner accounts
-  const whaleAddress = certainAddress("shareRate:eth:whale");
-  const burnerAddress = await locator.burner();
-  const [whale, burner] = await Promise.all([impersonate(whaleAddress, BIG_BAG), impersonate(burnerAddress, BIG_BAG)]);
+async function changeInternalEther(ctx: ProtocolContext, internalEtherDelta: bigint) {
+  const { lido, accounting } = ctx.contracts;
 
-  // Whale submits deposit
-  await removeStakingLimit(ctx);
-  await lido.connect(whale).submit(ZeroAddress, { value: etherAmount });
+  const accountingSigner = await impersonate(accounting, ether("1"));
 
-  const sharesToBurn = await lido.getSharesByPooledEth(etherAmount);
+  const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
 
-  // Whale transfers shares to burner, burner burns shares
-  await lido.connect(whale).transferShares(burner, sharesToBurn);
-  await lido.connect(burner).burnShares(sharesToBurn);
-
-  // Report accounting
-  await report(ctx, { clDiff: 0n });
+  await lido
+    .connect(accountingSigner)
+    .processClStateUpdate(
+      await getCurrentBlockTimestamp(),
+      beaconValidators,
+      beaconValidators,
+      beaconBalance + internalEtherDelta,
+    );
 }
 
 export const ensureExactShareRate = async (ctx: ProtocolContext, targetShareRate: bigint) => {
@@ -54,7 +49,8 @@ export const ensureExactShareRate = async (ctx: ProtocolContext, targetShareRate
   }
 
   const etherAmount = (totalShares * targetShareRate) / SHARE_RATE_PRECISION - totalPooledEther;
-  await increaseTotalPooledEther(ctx, etherAmount);
+
+  await changeInternalEther(ctx, etherAmount);
 
   const [totalPooledEtherAfter, totalSharesAfter] = await Promise.all([
     lido.getTotalPooledEther(),

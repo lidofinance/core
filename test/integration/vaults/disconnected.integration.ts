@@ -181,7 +181,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         },
       ]);
 
-      await expect(operatorGrid.connect(owner).changeTier(stakingVault, 1n, 1000n)).to.be.revertedWithCustomError(
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
+
+      await expect(operatorGrid.connect(owner).changeTier(stakingVault, tierId, 1000n)).to.be.revertedWithCustomError(
         operatorGrid,
         "VaultNotConnected",
       );
@@ -189,13 +191,13 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       const nodeOperatorRoleAsAddress = ethers.zeroPadValue(nodeOperator.address, 32);
       const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
         await stakingVault.getAddress(),
-        1n,
+        tierId,
         1000n,
       ]);
       const confirmTimestamp = await getNextBlockTimestamp();
       const expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
 
-      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
+      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, 1000n))
         .to.emit(operatorGrid, "RoleMemberConfirmed")
         .withArgs(nodeOperator, nodeOperatorRoleAsAddress, confirmTimestamp, expiryTimestamp, msgData);
     });

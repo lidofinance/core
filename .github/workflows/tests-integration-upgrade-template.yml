@@ -1,10 +1,10 @@
-name: Integration Test For Upgrade Template
+name: Integration Test (Upgrade)
 
 on: [push]
 
 jobs:
   test_hardhat_integration_fork_template:
-    name: Hardhat / Upgrade Template
+    name: Hardhat / Mainnet
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -26,3 +26,4 @@ jobs:
         env:
           RPC_URL: "${{ secrets.ETH_RPC_URL }}"
           UPGRADE_PARAMETERS_FILE: scripts/upgrade/upgrade-params-mainnet.toml
+          GAS_LIMIT: 30000000

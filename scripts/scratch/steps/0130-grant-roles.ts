@@ -2,7 +2,6 @@ import { ethers } from "hardhat";
 
 import {
   Burner,
-  LazyOracle,
   OperatorGrid,
   StakingRouter,
   TriggerableWithdrawalsGateway,
@@ -35,7 +34,6 @@ export async function main() {
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
   const triggerableWithdrawalsGatewayAddress = state[Sk.triggerableWithdrawalsGateway].address;
-  const lazyOracleAddress = state[Sk.lazyOracle].proxy.address;
   const validatorExitDelayVerifierAddress = state[Sk.validatorExitDelayVerifier].address;
 
   // StakingRouter
@@ -140,9 +138,6 @@ export async function main() {
   await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_MASTER_ROLE(), agentAddress], {
     from: deployer,
   });
-  await makeTx(vaultHub, "grantRole", [await vaultHub.REDEMPTION_MASTER_ROLE(), agentAddress], {
-    from: deployer,
-  });
   await makeTx(vaultHub, "grantRole", [await vaultHub.VALIDATOR_EXIT_ROLE(), agentAddress], {
     from: deployer,
   });
@@ -152,9 +147,4 @@ export async function main() {
   await makeTx(operatorGrid, "grantRole", [await operatorGrid.REGISTRY_ROLE(), agentAddress], {
     from: deployer,
   });
-
-  // LazyOracle
-  const lazyOracle = await loadContract<LazyOracle>("LazyOracle", lazyOracleAddress);
-  const updateSanityParamsRole = await lazyOracle.UPDATE_SANITY_PARAMS_ROLE();
-  await makeTx(lazyOracle, "grantRole", [updateSanityParamsRole, agentAddress], { from: deployer });
 }
