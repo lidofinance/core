@@ -1,0 +1,78 @@
+name: Certora CI
+
+on:
+  - pull_request
+
+env:
+  FOUNDRY_PROFILE: ci
+  CONFIGS: |
+    certora/confs/core/comprehensive-setup.conf
+    certora/confs/core/Accounting.conf --rule handleOracleReportRevertConditions feesMintShares
+    certora/confs/core/Accounting-fees-as-frac.conf
+    certora/confs/lido/Base.conf
+    certora/confs/lido/Lido_eth.conf
+    certora/confs/lido/Lido_shares.conf
+    certora/confs/lido/Lido_staking.conf
+    certora/confs/misc/burner.conf
+    certora/confs/misc/node_operators.conf
+    certora/confs/vaults/VaultHub.conf --rule "obligatedVaultIsConnected"
+    certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultHasNoLiability"
+    certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultHasNoLocked"
+    certora/confs/vaults/VaultHub.conf --rule "tierReserveRatioLeqOne"
+    certora/confs/vaults/VaultHub.conf --rule "reserveRatioNotBig"
+    certora/confs/vaults/VaultHub.conf --rule "maxLiabilitySharesGeqLiabilityShares"
+    certora/confs/vaults/VaultHub.conf --rule "tierReserveRatioGeThreshold" 
+    certora/confs/vaults/VaultHub.conf --rule "vaultReserveRatioGeThreshold"
+    certora/confs/vaults/VaultHub.conf --rule "redemptionSharesLeqLiabilityShares"
+    certora/confs/vaults/VaultHub.conf --rule "pendingHasNoShares" 
+    certora/confs/vaults/VaultHub.conf --rule "canIncreaseTotalValue"
+    certora/confs/vaults/VaultHub.conf --rule "redemptionsIncrease" 
+    certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultIsNotPending"
+    certora/confs/vaults/VaultHub.conf --rule "vaultsArrayIsNeverEmpty"
+    certora/confs/vaults/VaultHub.conf --rule "vaultToIndexIsCorrect"
+    certora/confs/vaults/VaultHub_health_part1.conf
+    certora/confs/vaults/VaultHub_health_part2.conf
+    certora/confs/vaults/VaultHub_health_part3.conf
+    certora/confs/vaults/lazy-oracle.conf
+    certora/confs/vaults/predeposit.conf
+    certora/confs/vaults/immutable-ratio.conf
+    
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: install nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: yarn install
+        run: |
+          corepack enable
+          yarn install
+
+      - name: Perform munges
+        run: ./certora/scripts/munge.sh
+
+      - name: run configs
+        uses: Certora/certora-run-action@v2
+        with:
+          configurations: ${{ env.CONFIGS }}
+          cli-release: "beta"
+          solc-versions: 0.8.25 0.8.9 0.6.12 0.6.11 0.4.24
+          solc-remove-version-prefix: "0."
+          job-name: "Verified Rules"
+          certora-key: ${{ secrets.CERTORAKEY }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

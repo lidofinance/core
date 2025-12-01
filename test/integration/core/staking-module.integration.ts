@@ -10,6 +10,8 @@ import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/staking-mo
 
 import { Snapshot } from "test/suite";
 
+const MAINNET_SDVT_ADDRESS = "0xaE7B191A31f627b4eB1d4DaC64eaB9976995b433".toLowerCase();
+
 describe("Integration: Staking module", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
@@ -30,6 +32,13 @@ describe("Integration: Staking module", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   after(async () => await Snapshot.restore(snapshot));
+
+  async function getSdvtNoManagerSigner() {
+    if (ctx.contracts.sdvt.address.toLowerCase() === MAINNET_SDVT_ADDRESS) {
+      return await ctx.getSigner("easyTrack");
+    }
+    return await ctx.getSigner("agent");
+  }
 
   async function testUpdateTargetValidatorsLimits(module: LoadedContract, addNodeOperatorSigner: HardhatEthersSigner) {
     const agentSigner = await ctx.getSigner("agent");
@@ -234,14 +243,14 @@ describe("Integration: Staking module", () => {
   it("should test SDVT update target validators limits", async () => {
     await testUpdateTargetValidatorsLimits(
       ctx.contracts.sdvt as unknown as LoadedContract,
-      ctx.isScratch ? await ctx.getSigner("agent") : await ctx.getSigner("easyTrack"),
+      await getSdvtNoManagerSigner(),
     );
   });
 
   it("should test SDVT decrease vetted signing keys count", async () => {
     await testDecreaseVettedSigningKeysCount(
       ctx.contracts.sdvt as unknown as LoadedContract,
-      ctx.isScratch ? await ctx.getSigner("agent") : await ctx.getSigner("easyTrack"),
+      await getSdvtNoManagerSigner(),
     );
   });
 });
