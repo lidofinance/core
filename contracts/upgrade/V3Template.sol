@@ -217,6 +217,7 @@ contract V3Template is V3Addresses {
         }
 
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), NEW_ACCOUNTING_ORACLE_IMPL);
 
         _assertContractVersion(IVersioned(LIDO), EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(IVersioned(ACCOUNTING_ORACLE), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
@@ -258,7 +259,7 @@ contract V3Template is V3Addresses {
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
         _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, AGENT);
 
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);     
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULTS_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULTS_ADAPTER);
         _assertTwoOZRoleHolders(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER);
@@ -275,6 +276,7 @@ contract V3Template is V3Addresses {
         _assertZeroOZRoleHolders(LAZY_ORACLE, ILazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE());
 
         // AccountingOracle
+        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING_ORACLE), AGENT);
         _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
         // OracleReportSanityChecker
@@ -306,7 +308,7 @@ contract V3Template is V3Addresses {
         _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, DEFAULT_ADMIN_ROLE, AGENT);
         _assertTwoOZRoleHolders(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER);
         _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).RESUME_ROLE(), RESEAL_MANAGER);
-        
+
         // StakingRouter
         bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
         _assertSingleOZRoleHolder(STAKING_ROUTER, reportRewardsMintedRole, ACCOUNTING);
@@ -401,6 +403,14 @@ contract V3Template is V3Addresses {
             if (ILidoWithFinalizeUpgrade(LIDO).allowance(contractsWithBurnerAllowances_[i], BURNER) != INFINITE_ALLOWANCE) {
                 revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], BURNER);
             }
+        }
+
+        // NO and SimpleDVT new Burner allowances are to be zero the same as old Burner on pre upgrade state
+        if (ILidoWithFinalizeUpgrade(LIDO).allowance(NODE_OPERATORS_REGISTRY, BURNER) != 0) {
+            revert IncorrectBurnerAllowance(NODE_OPERATORS_REGISTRY, BURNER);
+        }
+        if (ILidoWithFinalizeUpgrade(LIDO).allowance(SIMPLE_DVT, BURNER) != 0) {
+            revert IncorrectBurnerAllowance(SIMPLE_DVT, BURNER);
         }
     }
 
