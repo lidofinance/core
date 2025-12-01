@@ -365,7 +365,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "1.15. Set SLASHING_RESERVE_WE_RIGHT_SHIFT to 36 days at OracleDaemonConfig",
+            description: "1.15. Set SLASHING_RESERVE_WE_RIGHT_SHIFT at OracleDaemonConfig",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ORACLE_DAEMON_CONFIG(),
@@ -374,7 +374,7 @@ contract V3VoteScript is OmnibusBase {
         });
 
         voteItems[index++] = VoteItem({
-            description: "1.16. Set SLASHING_RESERVE_WE_LEFT_SHIFT to 36 days at OracleDaemonConfig",
+            description: "1.16. Set SLASHING_RESERVE_WE_LEFT_SHIFT at OracleDaemonConfig",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ORACLE_DAEMON_CONFIG(),
