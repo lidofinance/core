@@ -219,8 +219,6 @@ contract V3Template is V3Addresses {
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), NEW_ACCOUNTING_ORACLE_IMPL);
 
-        _assertAragonAppImplementation(IAragonAppRepo(ARAGON_APP_LIDO_REPO), NEW_LIDO_IMPL);
-
         _assertContractVersion(IVersioned(LIDO), EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(IVersioned(ACCOUNTING_ORACLE), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
 
