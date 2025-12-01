@@ -18,8 +18,6 @@ import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
 
-const STETH_ROUNDING_MARGIN = 10n;
-
 describe("Integration: VaultHub:fees", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
@@ -600,7 +598,7 @@ describe("Integration: VaultHub:fees", () => {
       const mintingCapacitySharesBefore = await vaultHub.totalMintingCapacityShares(stakingVault, 0);
       const mintingCapacityBefore = await ctx.contracts.lido.getPooledEthByShares(mintingCapacitySharesBefore);
       // With 20% reserve ratio: capacity = totalValue * 0.8 = 51 * 0.8 ≈ 40.8 ETH
-      expect(mintingCapacityBefore).to.be.closeTo(ether("40.8"), STETH_ROUNDING_MARGIN);
+      expect(mintingCapacityBefore).to.equalStETH(ether("40.8"));
 
       // Report unsettled fees = 10 ETH
       await reportVaultDataWithProof(ctx, stakingVault, {
@@ -615,7 +613,7 @@ describe("Integration: VaultHub:fees", () => {
 
       // Expected: minting capacity reduced by unsettled fees
       // (51 - 10) * 0.8 = 41 * 0.8 = 32.8 ETH
-      expect(mintingCapacityAfter).to.be.closeTo(ether("32.8"), STETH_ROUNDING_MARGIN);
+      expect(mintingCapacityAfter).to.equalStETH(ether("32.8"));
 
       // Verify obligations are tracked
       const obligations = await vaultHub.obligations(stakingVault);
@@ -650,7 +648,7 @@ describe("Integration: VaultHub:fees", () => {
       const obligationsAfter = await vaultHub.obligations(stakingVault);
 
       // Expected: minting capacity = totalValue * 0.8 = 18 * 0.8 = 14.4 ETH (no more unsettled fees)
-      expect(mintingCapacityAfter).to.be.closeTo(ether("14.4"), STETH_ROUNDING_MARGIN);
+      expect(mintingCapacityAfter).to.equalStETH(ether("14.4"));
 
       // Verify all fees have been settled
       expect(obligationsAfter.feesToSettle).to.equal(0n);
@@ -747,7 +745,7 @@ describe("Integration: VaultHub:fees", () => {
       const mintingCapacitySharesAfter = await vaultHub.totalMintingCapacityShares(stakingVault, 0);
       const mintingCapacityAfter = await ctx.contracts.lido.getPooledEthByShares(mintingCapacitySharesAfter);
       // Minting capacity = totalValue * 0.8 = 16 * 0.8 = 12.8 ETH (no unsettled fees)
-      expect(mintingCapacityAfter).to.be.closeTo(ether("12.8"), STETH_ROUNDING_MARGIN);
+      expect(mintingCapacityAfter).to.equalStETH(ether("12.8"));
     });
   });
 
