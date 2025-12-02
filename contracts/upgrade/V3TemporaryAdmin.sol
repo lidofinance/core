@@ -167,15 +167,12 @@ contract V3TemporaryAdmin {
         // Get roles from the contract
         bytes32 pauseRole = IPausableUntilWithRoles(_vaultHub).PAUSE_ROLE();
         bytes32 resumeRole = IPausableUntilWithRoles(_vaultHub).RESUME_ROLE();
-        bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
         bytes32 validatorExitRole = IVaultHub(_vaultHub).VALIDATOR_EXIT_ROLE();
         bytes32 badDebtMasterRole = IVaultHub(_vaultHub).BAD_DEBT_MASTER_ROLE();
 
         IAccessControl(_vaultHub).grantRole(pauseRole, _gateSeal);
         IAccessControl(_vaultHub).grantRole(pauseRole, _resealManager);
         IAccessControl(_vaultHub).grantRole(resumeRole, _resealManager);
-
-        IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
 
         IAccessControl(_vaultHub).grantRole(validatorExitRole, _vaultsAdapter);
         IAccessControl(_vaultHub).grantRole(badDebtMasterRole, _vaultsAdapter);
@@ -196,7 +193,7 @@ contract V3TemporaryAdmin {
     ) private {
         bytes32 pauseRole = IPausableUntilWithRoles(_predepositGuarantee).PAUSE_ROLE();
         bytes32 resumeRole = IPausableUntilWithRoles(_predepositGuarantee).RESUME_ROLE();
-        
+
         IAccessControl(_predepositGuarantee).grantRole(pauseRole, _gateSeal);
         IAccessControl(_predepositGuarantee).grantRole(pauseRole, _resealManager);
         IAccessControl(_predepositGuarantee).grantRole(resumeRole, _resealManager);
@@ -212,7 +209,6 @@ contract V3TemporaryAdmin {
      */
     function _setupOperatorGrid(address _operatorGrid, address _evmScriptExecutor, address _vaultsAdapter) private {
         bytes32 registryRole = IOperatorGrid(_operatorGrid).REGISTRY_ROLE();
-        IAccessControl(_operatorGrid).grantRole(registryRole, AGENT);
         IAccessControl(_operatorGrid).grantRole(registryRole, _evmScriptExecutor);
         IAccessControl(_operatorGrid).grantRole(registryRole, _vaultsAdapter);
         _transferAdminToAgent(_operatorGrid);
