@@ -512,15 +512,14 @@ contract HashConsensus is AccessControlEnumerable {
             return (variants, support);
         }
 
-        // Collect unique hashes and their support from member reports in one pass
-        address[] memory members = _memberAddresses;
-        variants = new bytes32[](members.length);
-        support = new uint256[](members.length);
+        address[] memory reporters = _currentFrameReporters;
+        variants = new bytes32[](reporters.length);
+        support = new uint256[](reporters.length);
 
         uint256 variantCount = 0;
 
-        for (uint256 i = 0; i < members.length; i++) {
-            bytes32 memberHash = _memberReports[members[i]];
+        for (uint256 i = 0; i < reporters.length; i++) {
+            bytes32 memberHash = _memberReports[reporters[i]];
             if (memberHash != ZERO_HASH) {
                 bool found = false;
                 for (uint256 j = 0; j < variantCount; j++) {
