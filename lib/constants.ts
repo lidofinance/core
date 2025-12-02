@@ -31,7 +31,7 @@ export const EPOCHS_PER_FRAME = 225n; // one day;
 export const GENESIS_FORK_VERSION = "0x00000000"; // for mainnet
 // Oracle report related
 export const GENESIS_TIME = 100n;
-export const GENESIS_TIME_MAINNET = 1639659600n;
+export const GENESIS_TIME_MAINNET = 1606824023n;
 export const SLOTS_PER_EPOCH = 32n;
 export const BASE_CONSENSUS_VERSION = 1n;
 export const AO_CONSENSUS_VERSION = 3n;
