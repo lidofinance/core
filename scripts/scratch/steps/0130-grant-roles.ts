@@ -2,11 +2,9 @@ import { ethers } from "hardhat";
 
 import {
   Burner,
-  OperatorGrid,
   StakingRouter,
   TriggerableWithdrawalsGateway,
   ValidatorsExitBusOracle,
-  VaultHub,
   WithdrawalQueueERC721,
 } from "typechain-types";
 
@@ -31,8 +29,6 @@ export async function main() {
   const accountingAddress = state[Sk.accounting].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
-  const vaultHubAddress = state[Sk.vaultHub].proxy.address;
-  const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
   const triggerableWithdrawalsGatewayAddress = state[Sk.triggerableWithdrawalsGateway].address;
   const validatorExitDelayVerifierAddress = state[Sk.validatorExitDelayVerifier].address;
 
@@ -130,21 +126,6 @@ export async function main() {
     from: deployer,
   });
   await makeTx(burner, "grantRole", [requestBurnSharesRole, accountingAddress], {
-    from: deployer,
-  });
-
-  // VaultHub
-  const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
-  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_MASTER_ROLE(), agentAddress], {
-    from: deployer,
-  });
-  await makeTx(vaultHub, "grantRole", [await vaultHub.VALIDATOR_EXIT_ROLE(), agentAddress], {
-    from: deployer,
-  });
-
-  // OperatorGrid
-  const operatorGrid = await loadContract<OperatorGrid>("OperatorGrid", operatorGridAddress);
-  await makeTx(operatorGrid, "grantRole", [await operatorGrid.REGISTRY_ROLE(), agentAddress], {
     from: deployer,
   });
 }
