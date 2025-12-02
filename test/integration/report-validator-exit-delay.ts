@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "lib";
+import { advanceChainTime, ether, GENESIS_TIME_MAINNET, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import {
@@ -132,8 +132,12 @@ describe("Integration: Report Validator Exit Delay", () => {
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
-  it("Should report validator exit delay historically", async () => {
+  it("Should report validator exit delay historically", async function () {
     const { nor, validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
+    if ((await validatorExitDelayVerifier.GENESIS_TIME()) != GENESIS_TIME_MAINNET) {
+      console.log("Skipping test because it's not mainnet");
+      this.skip();
+    }
 
     const nodeOpId = 2;
     const exitRequests = [
@@ -201,8 +205,13 @@ describe("Integration: Report Validator Exit Delay", () => {
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
-  it("Should revert when validator reported multiple times in a single transaction", async () => {
+  it("Should revert when validator reported multiple times in a single transaction", async function () {
     const { validatorsExitBusOracle, validatorExitDelayVerifier, nor } = ctx.contracts;
+
+    if ((await validatorExitDelayVerifier.GENESIS_TIME()) != GENESIS_TIME_MAINNET) {
+      console.log("Skipping test because it's not mainnet");
+      this.skip();
+    }
 
     // Setup multiple exit requests with the same pubkey
     const nodeOpIds = [1, 2];
@@ -250,8 +259,12 @@ describe("Integration: Report Validator Exit Delay", () => {
     await expect(tx2).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
-  it("Should revert when exit request hash is not submitted", async () => {
+  it("Should revert when exit request hash is not submitted", async function () {
     const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
+    if ((await validatorExitDelayVerifier.GENESIS_TIME()) != GENESIS_TIME_MAINNET) {
+      console.log("Skipping test because it's not mainnet");
+      this.skip();
+    }
 
     const exitRequests = [
       {
@@ -288,8 +301,13 @@ describe("Integration: Report Validator Exit Delay", () => {
     ).to.be.revertedWithCustomError(validatorsExitBusOracle, "ExitHashNotSubmitted");
   });
 
-  it("Should revert when exit request was not unpacked", async () => {
+  it("Should revert when exit request was not unpacked", async function () {
     const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
+
+    if ((await validatorExitDelayVerifier.GENESIS_TIME()) != GENESIS_TIME_MAINNET) {
+      console.log("Skipping test because it's not mainnet");
+      this.skip();
+    }
 
     const exitRequests = [
       {
@@ -313,7 +331,7 @@ describe("Integration: Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "RequestsNotDelivered");
+    ).to.be.revertedWithCustomError(validatorsExitBusOracle, "RequestsNotDelivered");
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -324,7 +342,7 @@ describe("Integration: Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "RequestsNotDelivered");
+    ).to.be.revertedWithCustomError(validatorsExitBusOracle, "RequestsNotDelivered");
   });
 
   it("Should revert when submitting validator exit delay with invalid beacon block root", async () => {
