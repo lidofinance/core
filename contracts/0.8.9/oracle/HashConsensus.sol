@@ -536,6 +536,11 @@ contract HashConsensus is AccessControlEnumerable {
             }
         }
 
+        assembly {
+            mstore(variants, variantCount)
+            mstore(support, variantCount)
+        }
+
         return (variants, support);
     }
 
