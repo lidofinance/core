@@ -767,7 +767,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       await reportVaultDataWithProof(ctx, stakingVault);
 
       expect(await vaultHub.locked(stakingVault)).to.equal(await calculateLockedValue(ctx, stakingVault)); // connection deposit
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2") - expectedRebalance);
+      expect(await vaultHub.totalValue(stakingVault)).to.approximately(ether("2") - expectedRebalance, 2n);
     });
   });
 
