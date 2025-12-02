@@ -16,6 +16,7 @@ env:
     certora/confs/misc/burner.conf
     certora/confs/misc/node_operators.conf
     certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultHasNoLiability"
+    certora/confs/vaults/VaultHub.conf --rule "obligatedVaultIsConnected"
     certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultHasNoLocked"
     certora/confs/vaults/VaultHub.conf --rule "tierReserveRatioLeqOne"
     certora/confs/vaults/VaultHub.conf --rule "reserveRatioNotBig"
@@ -77,15 +78,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
           
-      - name: run long run
-        uses: Certora/certora-run-action@v2
-        with:
-          configurations: certora/confs/vaults/VaultHub.conf --rule "obligatedVaultIsConnected"
-          cli-release: "beta"
-          solc-versions: 0.8.25 0.8.9 0.6.12 0.6.11 0.4.24
-          solc-remove-version-prefix: "0."
-          job-name: "Obligated Vault Is Connected only"
-          certora-key: ${{ secrets.CERTORAKEY }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
   
