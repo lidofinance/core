@@ -18,7 +18,6 @@ import {
   VaultRoles,
 } from "lib/protocol";
 import { vaultRoleKeys } from "lib/protocol/helpers/vaults";
-import { getChainIdFromState } from "lib/protocol/networks";
 
 import { Snapshot } from "test/suite";
 
@@ -75,7 +74,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       }
     });
 
-    describe.skip("Verify ACL for methods that require only role", () => {
+    describe("Verify ACL for methods that require only role", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
@@ -99,7 +98,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       }
     });
 
-    describe.skip("Verify ACL for methods that require only role", () => {
+    describe("Verify ACL for methods that require only role", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
@@ -393,8 +392,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         describe("renounceRole()", () => {
           for (const role of vaultRoleKeys) {
             it(`reverts if called for role ${role}`, async function () {
-              if (getChainIdFromState() === 560048) this.skip();
-
               const roleMethods = getRoleMethods(dashboard);
               const roleId = await roleMethods[role];
               const caller = roles[role];

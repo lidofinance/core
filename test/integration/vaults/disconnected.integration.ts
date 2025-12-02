@@ -13,6 +13,7 @@ import {
   generatePredeposit,
   generateValidator,
   getNextBlockTimestamp,
+  impersonate,
   MAX_SANE_SETTLED_GROWTH,
   toGwei,
   toLittleEndian64,
@@ -128,6 +129,13 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(owner, newOwner);
 
         expect(await stakingVault.pendingOwner()).to.equal(newOwner);
+      });
+
+      it("Cannot renounce ownership", async () => {
+        await expect(stakingVault.connect(owner).renounceOwnership()).to.be.revertedWithCustomError(
+          stakingVault,
+          "RenouncementNotAllowed",
+        );
       });
 
       it("Can reconnect the vault to the hub", async () => {
@@ -337,6 +345,56 @@ describe("Integration: Actions with vault disconnected from hub", () => {
             anyValue,
             anyValue,
           );
+      });
+    });
+
+    describe("Ossification", () => {
+      beforeEach(async () => {
+        await expect(stakingVault.connect(owner).ossify()).to.emit(stakingVault, "PinnedImplementationUpdated");
+      });
+
+      it("isOssified() returns true", async () => {
+        const pinnedBeaconProxy = await ethers.getContractAt("PinnedBeaconProxy", stakingVault);
+        expect(await pinnedBeaconProxy.isOssified()).to.be.true;
+      });
+
+      it("implementation() returns the ossified implementation", async () => {
+        const { stakingVaultBeacon } = ctx.contracts;
+        const pinnedBeaconProxy = await ethers.getContractAt("PinnedBeaconProxy", stakingVault);
+        expect(await pinnedBeaconProxy.implementation()).to.equal(await stakingVaultBeacon.implementation());
+      });
+
+      it("Ossified vault cannot be connected to the hub", async () => {
+        const { vaultHub } = ctx.contracts;
+
+        await expect(stakingVault.connect(owner).transferOwnership(vaultHub))
+          .to.emit(stakingVault, "OwnershipTransferStarted")
+          .withArgs(owner, vaultHub);
+
+        await expect(vaultHub.connect(owner).connectVault(stakingVault)).to.be.revertedWithCustomError(
+          vaultHub,
+          "VaultOssified",
+        );
+      });
+
+      it("Cannot ossify the vault again", async () => {
+        await expect(stakingVault.connect(owner).ossify()).to.be.revertedWithCustomError(
+          stakingVault,
+          "AlreadyOssified",
+        );
+      });
+
+      it("Ossified vault does not upgrade to a new implementation", async () => {
+        const { stakingVaultBeacon, vaultHub } = ctx.contracts;
+
+        const pinnedImplementation = await stakingVaultBeacon.implementation();
+
+        const beaconOwner = await impersonate(await stakingVaultBeacon.owner());
+        await stakingVaultBeacon.connect(beaconOwner).upgradeTo(vaultHub);
+
+        const pinnedBeaconProxy = await ethers.getContractAt("PinnedBeaconProxy", stakingVault);
+        expect(await pinnedBeaconProxy.implementation()).to.equal(pinnedImplementation);
+        expect(await stakingVaultBeacon.implementation()).to.equal(vaultHub);
       });
     });
   });

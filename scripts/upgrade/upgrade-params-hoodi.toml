@@ -7,7 +7,6 @@ slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum co
 secondsPerSlot = 12                   # Duration of each slot in seconds
 genesisTime = 1742213400              # Ethereum Hoodi testnet genesis timestamp
 depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Ethereum Hoodi testnet deposit contract
-isHoodi = true
 
 # Gate seal configuration for vault operations
 [gateSealForVaults]
@@ -29,7 +28,6 @@ AlterTiersInOperatorGrid = "0x00000000000000000000000000000000000fAc01"
 RegisterGroupsInOperatorGrid = "0x00000000000000000000000000000000000fAc02"
 RegisterTiersInOperatorGrid = "0x00000000000000000000000000000000000FAc03"
 SetJailStatusInOperatorGrid = "0x00000000000000000000000000000000000faC04"
-SetLiabilitySharesTargetInVaultHub = "0x00000000000000000000000000000000000FAc05"
 SocializeBadDebtInVaultHub = "0x00000000000000000000000000000000000Fac06"
 ForceValidatorExitsInVaultHub = "0x00000000000000000000000000000000000faC07"
 UpdateGroupsShareLimitInOperatorGrid = "0x00000000000000000000000000000000000FAc08"

@@ -60,8 +60,8 @@ contract V3Addresses {
 
         // Existing proxies and contracts
         address kernel;
+        bytes32 lidoAppId;
         address agent;
-        address aragonAppLidoRepo;
         address locator;
         address voting;
         address dualGovernance;
@@ -80,7 +80,6 @@ contract V3Addresses {
         address etfSetJailStatusInOperatorGrid;
         address etfUpdateVaultsFeesInOperatorGrid;
         address etfForceValidatorExitsInVaultHub;
-        address etfSetLiabilitySharesTargetInVaultHub;
         address etfSocializeBadDebtInVaultHub;
     }
 
@@ -139,7 +138,6 @@ contract V3Addresses {
     address public immutable ETF_REGISTER_GROUPS_IN_OPERATOR_GRID;
     address public immutable ETF_REGISTER_TIERS_IN_OPERATOR_GRID;
     address public immutable ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID;
-    address public immutable ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB;
     address public immutable ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB;
     address public immutable ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID;
     address public immutable ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID;
@@ -149,8 +147,8 @@ contract V3Addresses {
     // -------- Unchanged contracts --------
     //
     address public immutable KERNEL;
+    bytes32 public immutable LIDO_APP_ID;
     address public immutable AGENT;
-    address public immutable ARAGON_APP_LIDO_REPO;
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
     address public immutable ACL;
@@ -191,8 +189,8 @@ contract V3Addresses {
         NEW_ACCOUNTING_ORACLE_IMPL = params.newAccountingOracleImpl;
         NEW_TOKEN_RATE_NOTIFIER = params.newTokenRateNotifier;
         KERNEL = params.kernel;
+        LIDO_APP_ID = params.lidoAppId;
         AGENT = params.agent;
-        ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
         ACL = params.acl;
@@ -208,7 +206,6 @@ contract V3Addresses {
         ETF_REGISTER_GROUPS_IN_OPERATOR_GRID = params.etfRegisterGroupsInOperatorGrid;
         ETF_REGISTER_TIERS_IN_OPERATOR_GRID = params.etfRegisterTiersInOperatorGrid;
         ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID = params.etfSetJailStatusInOperatorGrid;
-        ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB = params.etfSetLiabilitySharesTargetInVaultHub;
         ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB = params.etfSocializeBadDebtInVaultHub;
         ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID = params.etfUpdateGroupsShareLimitInOperatorGrid;
         ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID = params.etfUpdateVaultsFeesInOperatorGrid;
@@ -278,6 +275,6 @@ contract V3Addresses {
     }
 
     error NewAndOldLocatorImplementationsMustBeDifferent();
-    error OldAndNewTokenRateNotifiersMustBeDifferent(); 
+    error OldAndNewTokenRateNotifiersMustBeDifferent();
     error StakingModuleNotFound(string moduleName);
 }

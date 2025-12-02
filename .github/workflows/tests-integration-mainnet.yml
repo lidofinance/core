@@ -1,5 +1,4 @@
-name: Integration Tests Mainnet
-# For local testing of this scenario use ./scripts/dao-upgrade-and-test-on-fork.sh
+name: Integration Tests
 
 on: [push]
 

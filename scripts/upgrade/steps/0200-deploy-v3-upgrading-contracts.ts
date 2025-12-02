@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { IAragonAppRepo, IOssifiableProxy, OssifiableProxy__factory } from "typechain-types";
+import { IAragonKernel, IOssifiableProxy, OssifiableProxy__factory } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
@@ -19,13 +19,15 @@ export async function main() {
     "IOssifiableProxy",
     state[Sk.accountingOracle].proxy.address,
   );
-  const lidoRepo = await loadContract<IAragonAppRepo>("IAragonAppRepo", state[Sk.aragonLidoAppRepo].proxy.address);
-  const [, lidoImplementation] = await lidoRepo.getLatest();
+
+  const kernel = await loadContract<IAragonKernel>("IAragonKernel", getAddress(Sk.aragonKernel, state));
+  const appBasesNamespace = await kernel.APP_BASES_NAMESPACE();
+  const oldLidoImpl = await kernel.getApp(appBasesNamespace, state[Sk.appLido].aragonApp.id);
 
   const addressesParams = [
     // Old implementations
     oldLocatorImplementation,
-    lidoImplementation,
+    oldLidoImpl,
     await accountingOracle.proxy__getImplementation(),
     getAddress(Sk.tokenRebaseNotifier, state),
 
@@ -43,8 +45,8 @@ export async function main() {
 
     // Existing proxies and contracts
     getAddress(Sk.aragonKernel, state),
+    state[Sk.appLido].aragonApp.id,
     getAddress(Sk.appAgent, state),
-    getAddress(Sk.aragonLidoAppRepo, state),
     getAddress(Sk.lidoLocator, state),
     getAddress(Sk.appVoting, state),
     getAddress(Sk.dgDualGovernance, state),
@@ -63,7 +65,6 @@ export async function main() {
     parameters.easyTrack.newFactories.SetJailStatusInOperatorGrid,
     parameters.easyTrack.newFactories.UpdateVaultsFeesInOperatorGrid,
     parameters.easyTrack.newFactories.ForceValidatorExitsInVaultHub,
-    parameters.easyTrack.newFactories.SetLiabilitySharesTargetInVaultHub,
     parameters.easyTrack.newFactories.SocializeBadDebtInVaultHub,
   ];
 
@@ -74,6 +75,11 @@ export async function main() {
   ]);
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [
-    [template.address, state[Sk.appLido].aragonApp.id, parameters.v3VoteScript.timeConstraintsContract],
+    [
+      template.address,
+      parameters.v3VoteScript.timeConstraintsContract,
+      parameters.v3VoteScript.odcSlashingReserveWeRightShiftEpochs,
+      parameters.v3VoteScript.odcSlashingReserveWeLeftShiftEpochs,
+    ],
   ]);
 }

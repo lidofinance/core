@@ -132,7 +132,7 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
   };
 
   const chainId = state[Sk.chainId];
-  const prefix = chainId === 1 ? "MAINNET" : chainId === 11155111 ? "SEPOLIA" : chainId === 560048 ? "HOODI" : "";
+  const prefix = chainId === 1 ? "MAINNET" : chainId === 560048 ? "HOODI" : "";
 
   return new ProtocolNetworkConfig(getPrefixedEnv(prefix, defaultEnv), defaults, "state-network-config");
 }
@@ -154,9 +154,4 @@ export async function getNetworkConfig(network: string): Promise<ProtocolNetwork
     default:
       throw new Error(`Network ${network} is not supported`);
   }
-}
-
-export function getChainIdFromState(): number {
-  const state = readNetworkState();
-  return parseInt(state[Sk.chainId] || "0");
 }
