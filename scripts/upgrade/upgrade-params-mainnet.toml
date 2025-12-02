@@ -24,7 +24,6 @@ AlterTiersInOperatorGrid = "0x00000000000000000000000000000000000fAc01"
 RegisterGroupsInOperatorGrid = "0x00000000000000000000000000000000000fAc02"
 RegisterTiersInOperatorGrid = "0x00000000000000000000000000000000000FAc03"
 SetJailStatusInOperatorGrid = "0x00000000000000000000000000000000000faC04"
-SetLiabilitySharesTargetInVaultHub = "0x00000000000000000000000000000000000FAc05"
 SocializeBadDebtInVaultHub = "0x00000000000000000000000000000000000Fac06"
 ForceValidatorExitsInVaultHub = "0x00000000000000000000000000000000000faC07"
 UpdateGroupsShareLimitInOperatorGrid = "0x00000000000000000000000000000000000FAc08"
@@ -80,3 +79,8 @@ initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial
 # - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504
 
 timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"  # Predeployed TimeConstraints contract on mainnet
+
+# Oracle Daemon Config slashing reserve parameters
+# how it is used: https://github.com/lidofinance/lido-oracle/blob/d6c09a16736b2c132343a4e349c8f27179c73e6e/src/services/staking_vaults.py#L207-L235
+odcSlashingReserveWeRightShiftEpochs = 8192  # EPOCHS_PER_SLASHINGS_VECTOR - https://eth2book.info/capella/part3/config/preset/#epochs_per_slashings_vector
+odcSlashingReserveWeLeftShiftEpochs = 8192   # EPOCHS_PER_SLASHINGS_VECTOR

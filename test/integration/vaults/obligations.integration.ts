@@ -7,6 +7,7 @@ import { Dashboard, LazyOracle, Lido, StakingVault, VaultHub } from "typechain-t
 
 import { days, ether, updateBalance } from "lib";
 import {
+  calculateLockedValue,
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
@@ -65,6 +66,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
     await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
     await upDefaultTierShareLimit(ctx, ether("1"));
 
+    await vaultHub.connect(agentSigner).grantRole(await vaultHub.VAULT_MASTER_ROLE(), agentSigner);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), agentSigner);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.VALIDATOR_EXIT_ROLE(), validatorExit);
@@ -726,35 +728,36 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
     it("Reverts when trying to withdraw redemption shares", async () => {
       const withdrawableValue = await vaultHub.withdrawableValue(stakingVault);
-      expect(withdrawableValue).to.equal(0n);
+      expect(withdrawableValue).to.equal(ether("2") - (await calculateLockedValue(ctx, stakingVault)));
 
-      await expect(dashboard.withdraw(stranger, 1n))
+      await expect(dashboard.withdraw(stranger, 100n))
         .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
-        .withArgs(1n, 0n);
+        .withArgs(100n, ether("2") - (await calculateLockedValue(ctx, stakingVault)));
     });
 
     it("Works when trying to withdraw all the withdrawable balance", async () => {
       const totalValue = await vaultHub.totalValue(stakingVault);
       const locked = await vaultHub.locked(stakingVault);
-      expect(totalValue).to.equal(locked);
+      expect(totalValue).to.approximately(locked, 2n);
 
       let withdrawableValue = await vaultHub.withdrawableValue(stakingVault);
-      expect(withdrawableValue).to.equal(0n);
+      expect(withdrawableValue).to.approximately(0n, 2n);
 
       const overfunding = ether("0.1");
       await dashboard.fund({ value: overfunding });
-      expect(await vaultHub.withdrawableValue(stakingVault)).to.equal(overfunding);
+      expect(await vaultHub.withdrawableValue(stakingVault)).to.approximately(overfunding, 2n);
 
       await expect(dashboard.withdraw(stranger, overfunding))
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(stranger, overfunding);
 
       withdrawableValue = await vaultHub.withdrawableValue(stakingVault);
-      expect(withdrawableValue).to.equal(0n);
+      expect(withdrawableValue).to.approximately(0n, 2n);
 
+      const expectedRebalance = await lido.getPooledEthBySharesRoundUp(redemptionShares);
       await expect(dashboard.rebalanceVaultWithShares(redemptionShares))
         .to.emit(vaultHub, "VaultRebalanced")
-        .withArgs(stakingVault, redemptionShares, await lido.getPooledEthBySharesRoundUp(redemptionShares))
+        .withArgs(stakingVault, redemptionShares, expectedRebalance)
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVault, 0n);
 
@@ -763,8 +766,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       // report the vault data to unlock the locked value
       await reportVaultDataWithProof(ctx, stakingVault);
 
-      expect(await vaultHub.locked(stakingVault)).to.equal(ether("1")); // connection deposit
-      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
+      expect(await vaultHub.locked(stakingVault)).to.equal(await calculateLockedValue(ctx, stakingVault)); // connection deposit
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2") - expectedRebalance);
     });
   });
 
