@@ -1110,8 +1110,10 @@ contract HashConsensus is AccessControlEnumerable {
 
     /// @dev Clears member reports and hash support mappings for a new frame
     function _clearMemberReports() internal {
-        for (uint256 i = 0; i < _currentFrameReporters.length; i++) {
-            address reporter = _currentFrameReporters[i];
+        address[] memory reporters = _currentFrameReporters;
+        uint256 reportersLength = reporters.length;
+        for (uint256 i = 0; i < reportersLength; i++) {
+            address reporter = reporters[i];
             bytes32 oldReport = _memberReports[reporter];
             if (oldReport != ZERO_HASH) {
                 delete _hashSupport[oldReport];
