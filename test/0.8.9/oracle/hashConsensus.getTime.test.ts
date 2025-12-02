@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HashConsensus } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
+  BASE_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_FAST_LANE_LENGTH_SLOTS,
@@ -25,7 +25,7 @@ async function deployOriginalHashConsensus(
     fastLaneLengthSlots = INITIAL_FAST_LANE_LENGTH_SLOTS,
   }: DeployHashConsensusParams = {},
 ) {
-  const reportProcessor = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION]);
+  const reportProcessor = await ethers.deployContract("ReportProcessor__Mock", [BASE_CONSENSUS_VERSION]);
 
   const consensus = await ethers.deployContract("HashConsensus", [
     slotsPerEpoch,

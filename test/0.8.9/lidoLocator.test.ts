@@ -10,10 +10,8 @@ const services = [
   "accountingOracle",
   "depositSecurityModule",
   "elRewardsVault",
-  "legacyOracle",
   "lido",
   "oracleReportSanityChecker",
-  "postTokenRebaseReceiver",
   "burner",
   "stakingRouter",
   "treasury",
@@ -23,17 +21,31 @@ const services = [
   "oracleDaemonConfig",
   "validatorExitDelayVerifier",
   "triggerableWithdrawalsGateway",
+  "accounting",
+  "predepositGuarantee",
+  "wstETH",
+  "vaultHub",
+  "vaultFactory",
+  "lazyOracle",
+  "operatorGrid",
+  "vaultFactory",
+  "lazyOracle",
 ] as const;
 
 type ArrayToUnion<A extends readonly unknown[]> = A[number];
 type Service = ArrayToUnion<typeof services>;
-type Config = Record<Service, string>;
+type Config = Record<Service, string> & {
+  postTokenRebaseReceiver: string; // can be ZeroAddress
+};
 
 function randomConfig(): Config {
-  return services.reduce<Config>((config, service) => {
-    config[service] = randomAddress();
-    return config;
-  }, {} as Config);
+  return {
+    ...services.reduce<Config>((config, service) => {
+      config[service] = randomAddress();
+      return config;
+    }, {} as Config),
+    postTokenRebaseReceiver: ZeroAddress,
+  };
 }
 
 describe("LidoLocator.sol", () => {
@@ -56,6 +68,11 @@ describe("LidoLocator.sol", () => {
         );
       });
     }
+
+    it("Does not revert if `postTokenRebaseReceiver` is zero address", async () => {
+      const randomConfiguration = randomConfig();
+      await expect(ethers.deployContract("LidoLocator", [randomConfiguration])).to.not.be.reverted;
+    });
   });
 
   context("coreComponents", () => {
@@ -74,26 +91,26 @@ describe("LidoLocator.sol", () => {
     });
   });
 
-  context("oracleReportComponentsForLido", () => {
+  context("oracleReportComponents", () => {
     it("Returns correct services in correct order", async () => {
       const {
         accountingOracle,
-        elRewardsVault,
         oracleReportSanityChecker,
         burner,
         withdrawalQueue,
-        withdrawalVault,
         postTokenRebaseReceiver,
+        stakingRouter,
+        vaultHub,
       } = config;
 
-      expect(await locator.oracleReportComponentsForLido()).to.deep.equal([
+      expect(await locator.oracleReportComponents()).to.deep.equal([
         accountingOracle,
-        elRewardsVault,
         oracleReportSanityChecker,
         burner,
         withdrawalQueue,
-        withdrawalVault,
         postTokenRebaseReceiver,
+        stakingRouter,
+        vaultHub,
       ]);
     });
   });

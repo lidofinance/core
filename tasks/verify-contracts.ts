@@ -18,7 +18,11 @@ type ProxyContract = {
   implementation: DeployedContract;
 };
 
-type Contract = DeployedContract | ProxyContract;
+type ImplementationContract = {
+  implementation: DeployedContract;
+};
+
+type Contract = DeployedContract | ProxyContract | ImplementationContract;
 
 type NetworkState = {
   deployer: string;
@@ -29,6 +33,7 @@ const errors = [] as string[];
 
 task("verify:deployed", "Verifies deployed contracts based on state file")
   .addOptionalParam("file", "Path to network state file")
+  .addOptionalParam("only", "Comma-separated list of paths to contracts to verify")
   .setAction(async (taskArgs: TaskArguments, hre: HardhatRuntimeEnvironment) => {
     try {
       const network = hre.network.name;
@@ -40,10 +45,12 @@ task("verify:deployed", "Verifies deployed contracts based on state file")
       const networkStateFilePath = path.resolve("./", networkStateFile);
       const data = await fs.readFile(networkStateFilePath, "utf8");
       const networkState = JSON.parse(data) as NetworkState;
+      const onlyContracts = taskArgs.only?.split(",") ?? [];
 
       const deployedContracts = Object.values(networkState)
-        .filter((contract): contract is Contract => typeof contract === "object")
-        .flatMap(getDeployedContract);
+        .filter((c): c is Contract => typeof c === "object")
+        .flatMap(getDeployedContract)
+        .filter((c) => (onlyContracts.length > 0 ? onlyContracts.includes(c.contract ?? "") : true));
 
       // Not using Promise.all to avoid logging messages out of order
       for (const contract of deployedContracts) {
@@ -70,7 +77,7 @@ async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnv
   await new Promise((resolve) => setTimeout(resolve, 3000));
 
   if (!contract.contract) {
-    // TODO: In the case of state processing on the local devnet there are skips, we need to find the cause
+    log.warning("Skipping contract without contract name:", contract);
     return;
   }
 

@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 
 import { log } from "lib";
-import { persistNetworkState, readNetworkState, Sk } from "lib/state-file";
+import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "lib/state-file";
 
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;
@@ -17,11 +17,13 @@ export async function main() {
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
   const gateSealFactoryAddress = getEnvVariable("GATE_SEAL_FACTORY", "");
   const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
-  const slotsPerEpoch = parseInt(getEnvVariable("SLOTS_PER_EPOCH", "32"), 10);
+  const slotsPerEpoch = parseInt(getEnvVariable("SLOTS_PER_EPOCH", "32"));
   const depositContractAddress = getEnvVariable("DEPOSIT_CONTRACT", "");
   const withdrawalQueueBaseUri = getEnvVariable("WITHDRAWAL_QUEUE_BASE_URI", "");
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
+  const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", "0x00000000");
 
+  await resetStateFileFromDeployParams();
   const state = readNetworkState();
 
   // Update network-related information
@@ -30,7 +32,12 @@ export async function main() {
   state.deployer = deployer;
 
   // Update state with new values from environment variables
-  state.chainSpec = { ...state.chainSpec, genesisTime, slotsPerEpoch };
+  state.chainSpec = {
+    ...state.chainSpec,
+    genesisTime,
+    genesisForkVersion,
+    slotsPerEpoch,
+  };
 
   if (depositContractAddress) {
     state.chainSpec.depositContract = ethers.getAddress(depositContractAddress);

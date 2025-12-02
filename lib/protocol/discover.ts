@@ -2,7 +2,7 @@ import hre from "hardhat";
 
 import {
   AccountingOracle,
-  ICSModule,
+  IStakingModule,
   Lido,
   LidoLocator,
   NodeOperatorsRegistry,
@@ -23,6 +23,7 @@ import {
   ProtocolContracts,
   ProtocolSigners,
   StakingModuleContracts,
+  VaultsContracts,
   WstETHContracts,
 } from "./types";
 
@@ -70,7 +71,11 @@ const loadContract = async <Name extends ContractName>(name: Name, address: stri
 /**
  * Load all Lido protocol foundation contracts.
  */
-const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: ProtocolNetworkConfig) => {
+const getCoreContracts = async (
+  locator: LoadedContract<LidoLocator>,
+  config: ProtocolNetworkConfig,
+  skipV3AndTwContracts: boolean,
+) => {
   return (await batch({
     accountingOracle: loadContract(
       "AccountingOracle",
@@ -84,7 +89,6 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       "LidoExecutionLayerRewardsVault",
       config.get("elRewardsVault") || (await locator.elRewardsVault()),
     ),
-    legacyOracle: loadContract("LegacyOracle", config.get("legacyOracle") || (await locator.legacyOracle())),
     lido: loadContract("Lido", config.get("lido") || (await locator.lido())),
     oracleReportSanityChecker: loadContract(
       "OracleReportSanityChecker",
@@ -92,17 +96,9 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
     ),
     burner: loadContract("Burner", config.get("burner") || (await locator.burner())),
     stakingRouter: loadContract("StakingRouter", config.get("stakingRouter") || (await locator.stakingRouter())),
-    validatorExitDelayVerifier: loadContract(
-      "ValidatorExitDelayVerifier",
-      config.get("validatorExitDelayVerifier") || (await locator.validatorExitDelayVerifier()),
-    ),
     validatorsExitBusOracle: loadContract(
       "ValidatorsExitBusOracle",
       config.get("validatorsExitBusOracle") || (await locator.validatorsExitBusOracle()),
-    ),
-    triggerableWithdrawalsGateway: loadContract(
-      "TriggerableWithdrawalsGateway",
-      config.get("triggerableWithdrawalsGateway") || (await locator.triggerableWithdrawalsGateway()),
     ),
     withdrawalQueue: loadContract(
       "WithdrawalQueueERC721",
@@ -116,6 +112,19 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       "OracleDaemonConfig",
       config.get("oracleDaemonConfig") || (await locator.oracleDaemonConfig()),
     ),
+    ...(skipV3AndTwContracts
+      ? {}
+      : {
+          validatorExitDelayVerifier: loadContract(
+            "ValidatorExitDelayVerifier",
+            config.get("validatorExitDelayVerifier") || (await locator.validatorExitDelayVerifier()),
+          ),
+          triggerableWithdrawalsGateway: loadContract(
+            "TriggerableWithdrawalsGateway",
+            config.get("triggerableWithdrawalsGateway") || (await locator.triggerableWithdrawalsGateway()),
+          ),
+          accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
+        }),
   })) as CoreContracts;
 };
 
@@ -135,15 +144,18 @@ const getAragonContracts = async (lido: LoadedContract<Lido>, config: ProtocolNe
  * Load staking modules contracts registered in the staking router.
  */
 const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, config: ProtocolNetworkConfig) => {
-  const [nor, sdvt, csm] = await stakingRouter.getStakingModules();
+  const modules = await stakingRouter.getStakingModules();
+  const nor = modules[0];
+  const sdvt = modules.find((m) => m.name === "SimpleDVT")!;
 
-  const promises: { [key: string]: Promise<LoadedContract<NodeOperatorsRegistry | ICSModule>> } = {
+  const promises: { [key: string]: Promise<LoadedContract<NodeOperatorsRegistry | IStakingModule>> } = {
     nor: loadContract("NodeOperatorsRegistry", config.get("nor") || nor.stakingModuleAddress),
     sdvt: loadContract("NodeOperatorsRegistry", config.get("sdvt") || sdvt.stakingModuleAddress),
   };
 
+  const csm = modules.find((m) => m.name === "Community Staking");
   if (csm) {
-    promises.csm = loadContract("ICSModule", config.get("csm") || csm.stakingModuleAddress);
+    promises.csm = loadContract("IStakingModule", config.get("csm") || csm.stakingModuleAddress);
   }
 
   return (await batch(promises)) as StakingModuleContracts;
@@ -176,10 +188,31 @@ const getWstEthContract = async (
   })) as WstETHContracts;
 };
 
-export async function discover() {
+/**
+ * Load all required vaults contracts.
+ */
+const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: LoadedContract<LidoLocator>) => {
+  return (await batch({
+    stakingVaultFactory: loadContract("VaultFactory", config.get("stakingVaultFactory")),
+    stakingVaultBeacon: loadContract("UpgradeableBeacon", config.get("stakingVaultBeacon")),
+    vaultHub: loadContract("VaultHub", config.get("vaultHub") || (await locator.vaultHub())),
+    predepositGuarantee: loadContract(
+      "PredepositGuarantee",
+      config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
+    ),
+    operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid") || (await locator.operatorGrid())),
+    lazyOracle: loadContract("LazyOracle", config.get("lazyOracle") || (await locator.lazyOracle())),
+    validatorConsolidationRequests: loadContract(
+      "ValidatorConsolidationRequests",
+      config.get("validatorConsolidationRequests"),
+    ),
+  })) as VaultsContracts;
+};
+
+export async function discover(skipV3Contracts: boolean) {
   const networkConfig = await getDiscoveryConfig();
   const locator = await loadContract("LidoLocator", networkConfig.get("locator"));
-  const foundationContracts = await getCoreContracts(locator, networkConfig);
+  const foundationContracts = await getCoreContracts(locator, networkConfig, skipV3Contracts);
 
   const contracts = {
     locator,
@@ -188,17 +221,19 @@ export async function discover() {
     ...(await getStakingModules(foundationContracts.stakingRouter, networkConfig)),
     ...(await getHashConsensusContract(foundationContracts.accountingOracle, networkConfig)),
     ...(await getWstEthContract(foundationContracts.withdrawalQueue, networkConfig)),
+    ...(skipV3Contracts ? {} : await getVaultsContracts(networkConfig, locator)),
   } as ProtocolContracts;
 
   log.debug("Contracts discovered", {
     "Locator": locator.address,
     "Lido": foundationContracts.lido.address,
+    "Accounting": foundationContracts.accounting?.address,
     "Accounting Oracle": foundationContracts.accountingOracle.address,
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
     "Withdrawal Queue": foundationContracts.withdrawalQueue.address,
     "Withdrawal Vault": foundationContracts.withdrawalVault.address,
-    "Validator Exit Delay Verifier": foundationContracts.validatorExitDelayVerifier.address,
+    "Validator Exit Delay Verifier": foundationContracts.validatorExitDelayVerifier?.address,
     "Validators Exit Bus Oracle": foundationContracts.validatorsExitBusOracle.address,
     "Oracle Daemon Config": foundationContracts.oracleDaemonConfig.address,
     "Oracle Report Sanity Checker": foundationContracts.oracleReportSanityChecker.address,
@@ -209,9 +244,16 @@ export async function discover() {
     "Kernel": contracts.kernel.address,
     "ACL": contracts.acl.address,
     "Burner": foundationContracts.burner.address,
-    "Legacy Oracle": foundationContracts.legacyOracle.address,
     "wstETH": contracts.wstETH.address,
-    "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway.address,
+    "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway?.address,
+    // Vaults
+    "Staking Vault Factory": contracts.stakingVaultFactory?.address,
+    "Staking Vault Beacon": contracts.stakingVaultBeacon?.address,
+    "Vault Hub": contracts.vaultHub?.address,
+    "Predeposit Guarantee": contracts.predepositGuarantee?.address,
+    "Operator Grid": contracts.operatorGrid?.address,
+    "Lazy Oracle": contracts.lazyOracle?.address,
+    "Validator Consolidation Requests": contracts.validatorConsolidationRequests?.address,
   });
 
   const signers = {

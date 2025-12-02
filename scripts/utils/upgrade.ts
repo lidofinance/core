@@ -1,23 +1,42 @@
-import { TransactionReceipt } from "ethers";
+import { TransactionReceipt, TransactionResponse } from "ethers";
 import fs from "fs";
+
+import * as toml from "@iarna/toml";
 
 import { IDualGovernance, IEmergencyProtectedTimelock, OmnibusBase, TokenManager, Voting } from "typechain-types";
 
 import { advanceChainTime, ether, log } from "lib";
 import { impersonate } from "lib/account";
+import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
 import { loadContract } from "lib/contract";
 import { findEventsWithInterfaces } from "lib/event";
-import { DeploymentState, Sk } from "lib/state-file";
+import { DeploymentState, getAddress, Sk } from "lib/state-file";
+
+import { ONE_HOUR } from "test/suite";
+
+const FUSAKA_TX_LIMIT = 2n ** 24n; // 16M =  16_777_216
 
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
 
-export function readUpgradeParameters() {
+export { UpgradeParameters };
+
+export function readUpgradeParameters(): UpgradeParameters {
   if (!UPGRADE_PARAMETERS_FILE) {
     throw new Error("UPGRADE_PARAMETERS_FILE is not set");
   }
 
-  const rawData = fs.readFileSync(UPGRADE_PARAMETERS_FILE);
-  return JSON.parse(rawData.toString());
+  if (!fs.existsSync(UPGRADE_PARAMETERS_FILE)) {
+    throw new Error(`Upgrade parameters file not found: ${UPGRADE_PARAMETERS_FILE}`);
+  }
+
+  const rawData = fs.readFileSync(UPGRADE_PARAMETERS_FILE, "utf8");
+  const parsedData = toml.parse(rawData);
+
+  try {
+    return validateUpgradeParameters(parsedData);
+  } catch (error) {
+    throw new Error(`Invalid upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
+  }
 }
 
 export async function mockDGAragonVoting(
@@ -33,9 +52,9 @@ export async function mockDGAragonVoting(
   proposalExecutedReceipt: TransactionReceipt;
 }> {
   log("Starting mock Aragon voting...");
-  const agentAddress = state[Sk.appAgent].proxy.address;
-  const votingAddress = state[Sk.appVoting].proxy.address;
-  const tokenManagerAddress = state[Sk.appTokenManager].proxy.address;
+  const agentAddress = getAddress(Sk.appAgent, state);
+  const votingAddress = getAddress(Sk.appVoting, state);
+  const tokenManagerAddress = getAddress(Sk.appTokenManager, state);
 
   const deployer = await impersonate(agentAddress, ether("100"));
   const tokenManager = await loadContract<TokenManager>("TokenManager", tokenManagerAddress);
@@ -49,16 +68,16 @@ export async function mockDGAragonVoting(
 
   const voteId = await voting.votesLength();
 
-  const voteScriptTw = await loadContract<OmnibusBase>("OmnibusBase", omnibusScriptAddress);
-  const voteBytecodeTw = await voteScriptTw.getNewVoteCallBytecode(description, proposalMetadata);
+  const voteScript = await loadContract<OmnibusBase>("OmnibusBase", omnibusScriptAddress);
+  const voteBytecode = await voteScript.getNewVoteCallBytecode(description, proposalMetadata);
 
-  await tokenManager.connect(deployer).forward(voteBytecodeTw);
-  if (!(await voteScriptTw.isValidVoteScript(voteId, proposalMetadata))) throw new Error("Vote script is not valid");
+  await tokenManager.connect(deployer).forward(voteBytecode);
+  if (!(await voteScript.isValidVoteScript(voteId, proposalMetadata))) throw new Error("Vote script is not valid");
   await voting.connect(deployer).vote(voteId, true, false);
   await advanceChainTime(await voting.voteTime());
   const executeTx = await voting.executeVote(voteId);
   const executeReceipt = (await executeTx.wait())!;
-  log.success("TW voting executed: gas used", executeReceipt.gasUsed);
+  log.success("Voting executed: gas used", executeReceipt.gasUsed);
 
   const dualGovernance = await loadContract<IDualGovernance>(
     "IDualGovernance",
@@ -74,9 +93,27 @@ export async function mockDGAragonVoting(
   log.success("Proposal scheduled: gas used", scheduleReceipt.gasUsed);
 
   await advanceChainTime(afterScheduleDelay);
-  const proposalExecutedTx = await timelock.connect(deployer).execute(proposalId);
-  const proposalExecutedReceipt = (await proposalExecutedTx.wait())!;
+  let proposalExecutedTx: TransactionResponse;
+  let revertedDueToTimeConstraints: boolean = true;
+  let attempts: number = 0;
+
+  while (revertedDueToTimeConstraints && attempts < 24) {
+    try {
+      proposalExecutedTx = await timelock.connect(deployer).execute(proposalId);
+      revertedDueToTimeConstraints = false;
+    } catch {
+      await advanceChainTime(ONE_HOUR);
+      attempts++;
+    }
+  }
+
+  const proposalExecutedReceipt = (await proposalExecutedTx!.wait())!;
   log.success("Proposal executed: gas used", proposalExecutedReceipt.gasUsed);
+
+  if (proposalExecutedReceipt.gasUsed > FUSAKA_TX_LIMIT) {
+    log.error("Proposal executed: gas used exceeds FUSAKA_TX_LIMIT");
+    process.exit(1);
+  }
 
   return { voteId, proposalId, executeReceipt, scheduleReceipt, proposalExecutedReceipt };
 }

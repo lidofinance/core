@@ -2,9 +2,11 @@
 .yarn/
 .vscode/
 .cursor/
+.claude/
 
 node_modules/
 coverage/
+state-mate/
 
 coverage.json
 
@@ -25,6 +27,7 @@ lib/abi/*.json
 .env
 accounts.json
 deployed-local.json
+deployed-local-devnet.json
 deployed-hardhat.json
 deployed-local-devnet.json
 deployed-mainnet-upgrade.json

@@ -1,33 +1,34 @@
-// SPDX-FileCopyrightText: 2020 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity 0.4.24;
 
-import "@aragon/os/contracts/factory/APMRegistryFactory.sol";
-import "@aragon/os/contracts/acl/ACL.sol";
-import "@aragon/os/contracts/apm/Repo.sol";
-import "@aragon/os/contracts/apm/APMRegistry.sol";
-import "@aragon/os/contracts/ens/ENSSubdomainRegistrar.sol";
-import "@aragon/os/contracts/kernel/Kernel.sol";
-import "@aragon/os/contracts/lib/ens/ENS.sol";
-import "@aragon/os/contracts/lib/ens/PublicResolver.sol";
-import "@aragon/os/contracts/factory/DAOFactory.sol";
-import "@aragon/os/contracts/common/IsContract.sol";
+import {APMRegistryFactory} from "@aragon/os/contracts/factory/APMRegistryFactory.sol";
+import {ACL} from "@aragon/os/contracts/acl/ACL.sol";
+import {Repo} from "@aragon/os/contracts/apm/Repo.sol";
+import {APMRegistry} from "@aragon/os/contracts/apm/APMRegistry.sol";
+import {ENSSubdomainRegistrar} from "@aragon/os/contracts/ens/ENSSubdomainRegistrar.sol";
+import {Kernel} from "@aragon/os/contracts/kernel/Kernel.sol";
+import {ENS} from "@aragon/os/contracts/lib/ens/ENS.sol";
+import {PublicResolver} from "@aragon/os/contracts/lib/ens/PublicResolver.sol";
+import {DAOFactory} from "@aragon/os/contracts/factory/DAOFactory.sol";
+import {IsContract} from "@aragon/os/contracts/common/IsContract.sol";
+import {MiniMeToken, MiniMeTokenFactory} from "@aragon/minime/contracts/MiniMeToken.sol";
+import {EVMScriptRegistry } from "@aragon/os/contracts/evmscript/EVMScriptRegistry.sol";
 
-import "@aragon/apps-agent/contracts/Agent.sol";
-import "@aragon/apps-vault/contracts/Vault.sol";
 
-import "@aragon/apps-lido/apps/voting/contracts/Voting.sol";
+import {Agent} from "@aragon/apps-agent/contracts/Agent.sol";
+import {Vault} from "@aragon/apps-vault/contracts/Vault.sol";
 
-import "@aragon/apps-finance/contracts/Finance.sol";
-import "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol";
+import {Voting} from "@aragon/apps-lido/apps/voting/contracts/Voting.sol";
+import {Finance} from "@aragon/apps-finance/contracts/Finance.sol";
+import {TokenManager} from "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol";
 
-import "@aragon/id/contracts/IFIFSResolvingRegistrar.sol";
+import {IFIFSResolvingRegistrar} from "@aragon/id/contracts/IFIFSResolvingRegistrar.sol";
 
-import "../Lido.sol";
-import "../oracle/LegacyOracle.sol";
-import "../nos/NodeOperatorsRegistry.sol";
+import {Lido} from "../Lido.sol";
+import {NodeOperatorsRegistry} from "../nos/NodeOperatorsRegistry.sol";
 
 contract LidoTemplate is IsContract {
     // Configuration errors
@@ -72,7 +73,6 @@ contract LidoTemplate is IsContract {
 
     // Lido app names
     string private constant LIDO_APP_NAME = "lido";
-    string private constant ORACLE_APP_NAME = "oracle";
     string private constant NODE_OPERATORS_REGISTRY_APP_NAME = "node-operators-registry";
     string private constant SIMPLE_DVT_APP_NAME = "simple-dvt";
 
@@ -84,7 +84,6 @@ contract LidoTemplate is IsContract {
 
     struct APMRepos {
         Repo lido;
-        Repo oracle;
         Repo nodeOperatorsRegistry;
         Repo simpleDVT;
         Repo aragonAgent;
@@ -104,7 +103,6 @@ contract LidoTemplate is IsContract {
         TokenManager tokenManager;
         Voting voting;
         Lido lido;
-        LegacyOracle oracle;
         NodeOperatorsRegistry operators;
         NodeOperatorsRegistry sdvt;
         address stakingRouter;
@@ -123,7 +121,7 @@ contract LidoTemplate is IsContract {
     APMRegistryFactory private apmRegistryFactory;
 
     DeployState private deployState;
-    APMRepos private apmRepos;
+    APMRepos public apmRepos;
 
     event TmplAPMDeployed(address apm);
     event TmplReposCreated();
@@ -261,9 +259,7 @@ contract LidoTemplate is IsContract {
         address _lidoImplAddress,
         bytes _lidoContentURI,
         address _nodeOperatorsRegistryImplAddress,
-        bytes _nodeOperatorsRegistryContentURI,
-        address _oracleImplAddress,
-        bytes _oracleContentURI
+        bytes _nodeOperatorsRegistryContentURI
     ) external onlyOwner {
         require(deployState.lidoRegistry != address(0), ERROR_REGISTRY_NOT_DEPLOYED);
 
@@ -285,14 +281,6 @@ contract LidoTemplate is IsContract {
             _initialSemanticVersion,
             _nodeOperatorsRegistryImplAddress,
             _nodeOperatorsRegistryContentURI
-        );
-
-        apmRepos.oracle = lidoRegistry.newRepoWithVersion(
-            ORACLE_APP_NAME,
-            this,
-            _initialSemanticVersion,
-            _oracleImplAddress,
-            _oracleContentURI
         );
 
         apmRepos.simpleDVT = lidoRegistry.newRepoWithVersion(
@@ -357,10 +345,6 @@ contract LidoTemplate is IsContract {
                 _getAppId(SIMPLE_DVT_APP_NAME, state.lidoRegistryEnsNode),
                 noInit
             )
-        );
-
-        state.oracle = LegacyOracle(
-            _installNonDefaultApp(state.dao, _getAppId(ORACLE_APP_NAME, state.lidoRegistryEnsNode), noInit)
         );
 
         // used for issuing vested tokens in the next step
@@ -587,17 +571,16 @@ contract LidoTemplate is IsContract {
         // APM repos
 
         // using loops to save contract size
-        Repo[10] memory repoAddresses;
+        Repo[9] memory repoAddresses;
         repoAddresses[0] = _repos.lido;
-        repoAddresses[1] = _repos.oracle;
-        repoAddresses[2] = _repos.nodeOperatorsRegistry;
-        repoAddresses[3] = _repos.aragonAgent;
-        repoAddresses[4] = _repos.aragonFinance;
-        repoAddresses[5] = _repos.aragonTokenManager;
-        repoAddresses[6] = _repos.aragonVoting;
-        repoAddresses[7] = _resolveRepo(_getAppId(APM_APP_NAME, _state.lidoRegistryEnsNode));
-        repoAddresses[8] = _resolveRepo(_getAppId(APM_REPO_APP_NAME, _state.lidoRegistryEnsNode));
-        repoAddresses[9] = _resolveRepo(_getAppId(APM_ENSSUB_APP_NAME, _state.lidoRegistryEnsNode));
+        repoAddresses[1] = _repos.nodeOperatorsRegistry;
+        repoAddresses[2] = _repos.aragonAgent;
+        repoAddresses[3] = _repos.aragonFinance;
+        repoAddresses[4] = _repos.aragonTokenManager;
+        repoAddresses[5] = _repos.aragonVoting;
+        repoAddresses[6] = _resolveRepo(_getAppId(APM_APP_NAME, _state.lidoRegistryEnsNode));
+        repoAddresses[7] = _resolveRepo(_getAppId(APM_REPO_APP_NAME, _state.lidoRegistryEnsNode));
+        repoAddresses[8] = _resolveRepo(_getAppId(APM_ENSSUB_APP_NAME, _state.lidoRegistryEnsNode));
         for (uint256 i = 0; i < repoAddresses.length; ++i) {
             _transferPermissionFromTemplate(apmACL, repoAddresses[i], agent, REPO_CREATE_VERSION_ROLE);
         }
@@ -751,7 +734,6 @@ contract LidoTemplate is IsContract {
         delete deployState.operators;
         delete deployState;
         delete apmRepos.lido;
-        delete apmRepos.oracle;
         delete apmRepos.nodeOperatorsRegistry;
         delete apmRepos.aragonAgent;
         delete apmRepos.aragonFinance;

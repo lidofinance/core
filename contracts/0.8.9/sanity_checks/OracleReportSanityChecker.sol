@@ -1,17 +1,19 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
+// solhint-disable one-contract-per-file
 pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import {Math256} from "../../common/lib/Math256.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
-import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../../common/interfaces/IBurner.sol";
-import {StakingRouter} from "../../0.8.9/StakingRouter.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+
+import {StakingRouter} from "../StakingRouter.sol";
 import {ISecondOpinionOracle} from "../interfaces/ISecondOpinionOracle.sol";
 
 interface IWithdrawalQueue {
@@ -58,6 +60,8 @@ struct LimitsList {
 
     /// @notice The max annual increase of the total validators' balances on the Consensus Layer
     ///     since the previous oracle report
+    /// (the increase that is limited does not include fresh deposits to the Beacon Chain as well as withdrawn ether)
+    ///
     /// @dev Represented in the Basis Points (100% == 10_000)
     uint256 annualBalanceIncreaseBPLimit;
 
@@ -164,7 +168,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ILidoLocator private immutable LIDO_LOCATOR;
     uint256 private immutable GENESIS_TIME;
     uint256 private immutable SECONDS_PER_SLOT;
-    address private immutable LIDO_ADDRESS;
+    address private immutable ACCOUNTING_ADDRESS;
 
     LimitsListPacked private _limits;
 
@@ -175,20 +179,23 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ISecondOpinionOracle public secondOpinionOracle;
 
     /// @param _lidoLocator address of the LidoLocator instance
+    /// @param _accountingOracle address of the AccountingOracle instance
+    /// @param _accounting address of the Accounting instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
     constructor(
         address _lidoLocator,
+        address _accountingOracle,
+        address _accounting,
         address _admin,
         LimitsList memory _limitsList
     ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
 
-        address accountingOracle = LIDO_LOCATOR.accountingOracle();
-        GENESIS_TIME = IBaseOracle(accountingOracle).GENESIS_TIME();
-        SECONDS_PER_SLOT = IBaseOracle(accountingOracle).SECONDS_PER_SLOT();
-        LIDO_ADDRESS = LIDO_LOCATOR.lido();
+        GENESIS_TIME = IBaseOracle(_accountingOracle).GENESIS_TIME();
+        SECONDS_PER_SLOT = IBaseOracle(_accountingOracle).SECONDS_PER_SLOT();
+        ACCOUNTING_ADDRESS = _accounting;
 
         _updateLimits(_limitsList);
 
@@ -364,7 +371,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Sets the address of the second opinion oracle and clBalanceOraclesErrorUpperBPLimit value
     /// @param _secondOpinionOracle second opinion oracle.
-    ///     If it's zero address — oracle is disabled.
+    ///     If it's zero address — oracle is disabled.
     ///     Default value is zero address.
     /// @param _clBalanceOraclesErrorUpperBPLimit new clBalanceOraclesErrorUpperBPLimit value
     function setSecondOpinionOracleAndCLBalanceUpperMargin(ISecondOpinionOracle _secondOpinionOracle, uint256 _clBalanceOraclesErrorUpperBPLimit)
@@ -380,9 +387,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Sets the initial slashing and penalties Amountficients
-    /// @param _initialSlashingAmountPWei - initial slashing Amountficient (in PWei)
-    /// @param _inactivityPenaltiesAmountPWei - penalties Amountficient (in PWei)
+    /// @notice Sets the initial slashing and penalties amounts
+    /// @param _initialSlashingAmountPWei - initial slashing amount (in PWei)
+    /// @param _inactivityPenaltiesAmountPWei - penalties amount (in PWei)
     function setInitialSlashingAndPenaltiesAmount(uint256 _initialSlashingAmountPWei, uint256 _inactivityPenaltiesAmountPWei)
         external
         onlyRole(INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE)
@@ -395,8 +402,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
     ///     rewards vault during Lido's oracle report processing
-    /// @param _preTotalPooledEther total amount of ETH controlled by the protocol
-    /// @param _preTotalShares total amount of minted stETH shares
+    /// @param _preInternalEther amount of internal ETH controlled by the protocol before the report
+    /// @param _preInternalShares number of internal shares before the report
     /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
     ///     current oracle report
     /// @param _postCLBalance sum of all Lido validators' balances on the Consensus Layer after the
@@ -408,11 +415,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _newSharesToBurnForWithdrawals new shares to burn due to withdrawal request finalization
     /// @return withdrawals ETH amount allowed to be taken from the withdrawals vault
     /// @return elRewards ETH amount allowed to be taken from the EL rewards vault
-    /// @return simulatedSharesToBurn simulated amount to be burnt (if no ether locked on withdrawals)
+    /// @return sharesFromWQToBurn amount of shares from Burner that should be burned due to WQ finalization
     /// @return sharesToBurn amount to be burnt (accounting for withdrawals finalization)
     function smoothenTokenRebase(
-        uint256 _preTotalPooledEther,
-        uint256 _preTotalShares,
+        uint256 _preInternalEther,
+        uint256 _preInternalShares,
         uint256 _preCLBalance,
         uint256 _postCLBalance,
         uint256 _withdrawalVaultBalance,
@@ -423,13 +430,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) external view returns (
         uint256 withdrawals,
         uint256 elRewards,
-        uint256 simulatedSharesToBurn,
+        uint256 sharesFromWQToBurn,
         uint256 sharesToBurn
     ) {
         TokenRebaseLimiterData memory tokenRebaseLimiter = PositiveTokenRebaseLimiter.initLimiterState(
             getMaxPositiveTokenRebase(),
-            _preTotalPooledEther,
-            _preTotalShares
+            _preInternalEther,
+            _preInternalShares
         );
 
         if (_postCLBalance < _preCLBalance) {
@@ -444,9 +451,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // determining the shares to burn limit that would have been
         // if no withdrawals finalized during the report
         // it's used to check later the provided `simulatedShareRate` value
-        // after the off-chain calculation via `eth_call` of `Lido.handleOracleReport()`
-        // see also step 9 of the `Lido._handleOracleReport()`
-        simulatedSharesToBurn = Math256.min(tokenRebaseLimiter.getSharesToBurnLimit(), _sharesRequestedToBurn);
+        uint256 simulatedSharesToBurn = Math256.min(tokenRebaseLimiter.getSharesToBurnLimit(), _sharesRequestedToBurn);
 
         // remove ether to lock for withdrawals from total pooled ether
         tokenRebaseLimiter.decreaseEther(_etherToLockForWithdrawals);
@@ -455,6 +460,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             tokenRebaseLimiter.getSharesToBurnLimit(),
             _newSharesToBurnForWithdrawals + _sharesRequestedToBurn
         );
+
+        sharesFromWQToBurn = sharesToBurn - simulatedSharesToBurn;
     }
 
     /// @notice Applies sanity checks to the accounting params of Lido's oracle report
@@ -482,8 +489,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _preCLValidators,
         uint256 _postCLValidators
     ) external {
-        if (msg.sender != LIDO_ADDRESS) {
-            revert CalledNotFromLido();
+        if (msg.sender != ACCOUNTING_ADDRESS) {
+            revert CalledNotFromAccounting();
         }
         LimitsList memory limitsList = _limits.unpack();
         uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
@@ -578,16 +585,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Applies sanity checks to the simulated share rate for withdrawal requests finalization
-    /// @param _postTotalPooledEther total pooled ether after report applied
-    /// @param _postTotalShares total shares after report applied
-    /// @param _etherLockedOnWithdrawalQueue ether locked on withdrawal queue for the current oracle report
-    /// @param _sharesBurntDueToWithdrawals shares burnt due to withdrawals finalization
+    /// @param _postInternalEther total pooled ether after report applied
+    /// @param _postInternalShares total shares after report applied
+    /// @param _etherToFinalizeWQ ether locked on withdrawal queue for the current oracle report
+    /// @param _sharesToBurnForWithdrawals shares burnt due to withdrawals finalization
     /// @param _simulatedShareRate share rate provided with the oracle report (simulated via off-chain "eth_call")
     function checkSimulatedShareRate(
-        uint256 _postTotalPooledEther,
-        uint256 _postTotalShares,
-        uint256 _etherLockedOnWithdrawalQueue,
-        uint256 _sharesBurntDueToWithdrawals,
+        uint256 _postInternalEther,
+        uint256 _postInternalShares,
+        uint256 _etherToFinalizeWQ,
+        uint256 _sharesToBurnForWithdrawals,
         uint256 _simulatedShareRate
     ) external view {
         LimitsList memory limitsList = _limits.unpack();
@@ -597,8 +604,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // virtually return burnt just finalized withdrawals shares back to `_postTotalShares`
         _checkSimulatedShareRate(
             limitsList,
-            _postTotalPooledEther + _etherLockedOnWithdrawalQueue,
-            _postTotalShares + _sharesBurntDueToWithdrawals,
+            _postInternalEther + _etherToFinalizeWQ,
+            _postInternalShares + _sharesToBurnForWithdrawals,
             _simulatedShareRate
         );
     }
@@ -786,18 +793,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _checkSimulatedShareRate(
         LimitsList memory _limitsList,
-        uint256 _noWithdrawalsPostTotalPooledEther,
-        uint256 _noWithdrawalsPostTotalShares,
+        uint256 _noWithdrawalsPostInternalEther,
+        uint256 _noWithdrawalsPostInternalShares,
         uint256 _simulatedShareRate
     ) internal pure {
+        assert(_noWithdrawalsPostInternalEther != 0);
         uint256 actualShareRate = (
-            _noWithdrawalsPostTotalPooledEther * SHARE_RATE_PRECISION_E27
-        ) / _noWithdrawalsPostTotalShares;
-
-        if (actualShareRate == 0) {
-            // can't finalize anything if the actual share rate is zero
-            revert ActualShareRateIsZero();
-        }
+            _noWithdrawalsPostInternalEther * SHARE_RATE_PRECISION_E27
+        ) / _noWithdrawalsPostInternalShares;
 
         // the simulated share rate can be either higher or lower than the actual one
         // in case of new user-submitted ether & minted `stETH` between the oracle reference slot
@@ -917,7 +920,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectNumberOfExitRequestsPerReport(uint256 maxRequestsCount);
     error IncorrectExitedValidators(uint256 exitedValidatorsLimit);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
-    error ActualShareRateIsZero();
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
     error TooManyItemsPerExtraDataTransaction(uint256 maxItemsCount, uint256 receivedItemsCount);
     error ExitedValidatorsLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
@@ -928,10 +930,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error NegativeRebaseFailedCLBalanceMismatch(uint256 reportedValue, uint256 provedValue, uint256 limitBP);
     error NegativeRebaseFailedWithdrawalVaultBalanceMismatch(uint256 reportedValue, uint256 provedValue);
     error NegativeRebaseFailedSecondOpinionReportIsNotReady();
-    error CalledNotFromLido();
+    error CalledNotFromAccounting();
 }
 
 library LimitsListPacker {
+    error BasisPointsOverflow(uint256 value, uint256 maxValue);
+
     function pack(LimitsList memory _limitsList) internal pure returns (LimitsListPacked memory res) {
         res.exitedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.exitedValidatorsPerDayLimit);
         res.appearedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.appearedValidatorsPerDayLimit);
@@ -948,7 +952,9 @@ library LimitsListPacker {
     }
 
     function _toBasisPoints(uint256 _value) private pure returns (uint16) {
-        require(_value <= MAX_BASIS_POINTS, "BASIS_POINTS_OVERFLOW");
+        if (_value > MAX_BASIS_POINTS) {
+            revert BasisPointsOverflow(_value, MAX_BASIS_POINTS);
+        }
         return uint16(_value);
     }
 }

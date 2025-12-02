@@ -29,22 +29,24 @@ const PETRIFIED_VERSION = MAX_UINT256;
 
 describe("WithdrawalVault.sol", () => {
   let owner: HardhatEthersSigner;
+  let user: HardhatEthersSigner;
   let treasury: HardhatEthersSigner;
   let triggerableWithdrawalsGateway: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let originalState: string;
 
+  let withdrawalsPredeployed: EIP7002WithdrawalRequest__Mock;
   let lido: Lido__MockForWithdrawalVault;
   let lidoAddress: string;
-
-  let withdrawalsPredeployed: EIP7002WithdrawalRequest__Mock;
 
   let impl: WithdrawalVault__Harness;
   let vault: WithdrawalVault__Harness;
   let vaultAddress: string;
 
   before(async () => {
+    [owner, user, treasury] = await ethers.getSigners();
+    // TODO
     [owner, treasury, triggerableWithdrawalsGateway, stranger] = await ethers.getSigners();
 
     withdrawalsPredeployed = await deployEIP7002WithdrawalRequestContractMock(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
@@ -61,6 +63,7 @@ describe("WithdrawalVault.sol", () => {
     );
 
     [vault] = await proxify({ impl, admin: owner });
+
     vaultAddress = await vault.getAddress();
   });
 
@@ -149,7 +152,7 @@ describe("WithdrawalVault.sol", () => {
     beforeEach(async () => await vault.initialize());
 
     it("Reverts if the caller is not Lido", async () => {
-      await expect(vault.connect(stranger).withdrawWithdrawals(0)).to.be.revertedWithCustomError(vault, "NotLido");
+      await expect(vault.connect(user).withdrawWithdrawals(0)).to.be.revertedWithCustomError(vault, "NotLido");
     });
 
     it("Reverts if amount is 0", async () => {
@@ -245,7 +248,7 @@ describe("WithdrawalVault.sol", () => {
     });
 
     ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
-      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
+      it(`Should revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
         await withdrawalsPredeployed.mock__setFeeRaw(unexpectedFee);
 
         await expect(vault.getWithdrawalRequestFee()).to.be.revertedWithCustomError(vault, "FeeInvalidData");
@@ -347,10 +350,10 @@ describe("WithdrawalVault.sol", () => {
     });
 
     it("Should revert if last pubkey not 48 bytes", async function () {
-      const validPubey =
+      const validPubkey =
         "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
       const invalidPubkey = "1234";
-      const pubkeysHexArray = [`0x${validPubey}`, `0x${invalidPubkey}`];
+      const pubkeysHexArray = [`0x${validPubkey}`, `0x${invalidPubkey}`];
 
       const fee = (await getFee()) * 2n; // 2 requests
 

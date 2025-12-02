@@ -1,4 +1,6 @@
 export const MAX_UINT256 = 2n ** 256n - 1n;
+export const MAX_UINT96 = 2n ** 96n - 1n;
+export const MAX_INT104 = 2n ** 103n - 1n;
 export const INITIAL_STETH_HOLDER = "0x000000000000000000000000000000000000dEaD";
 
 // https://eips.ethereum.org/EIPS/eip-165
@@ -26,11 +28,14 @@ export const INVALID_INTERFACE_ID = "0xffffffff";
 // Chain related
 export const SECONDS_PER_SLOT = 12n;
 export const EPOCHS_PER_FRAME = 225n; // one day;
-
+export const GENESIS_FORK_VERSION = "0x00000000"; // for mainnet
 // Oracle report related
 export const GENESIS_TIME = 100n;
+export const GENESIS_TIME_MAINNET = 1606824023n;
 export const SLOTS_PER_EPOCH = 32n;
-export const CONSENSUS_VERSION = 3n;
+export const BASE_CONSENSUS_VERSION = 1n;
+export const AO_CONSENSUS_VERSION = 3n;
+export const VEBO_CONSENSUS_VERSION = 2n;
 export const INITIAL_EPOCH = 1n;
 export const INITIAL_FAST_LANE_LENGTH_SLOTS = 0n;
 
@@ -57,5 +62,11 @@ export const EMPTY_SIGNATURE = "0x".padEnd(SIGNATURE_LENGTH_HEX + 2, "0");
 export const ONE_GWEI = 1_000_000_000n;
 
 export const TOTAL_BASIS_POINTS = 100_00n;
+export const ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00n;
 
+export const MAX_FEE_BP = 65_535n;
+export const MAX_RESERVE_RATIO_BP = 99_99n;
 export const LIMITER_PRECISION_BASE = 10n ** 9n;
+
+export const DISCONNECT_NOT_INITIATED = 2n ** 48n - 1n;
+export const MAX_SANE_SETTLED_GROWTH = MAX_INT104;

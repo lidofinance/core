@@ -63,15 +63,7 @@ contract WstETH__MockForWithdrawalQueue {
 
     // @dev Overrides the actual permit function to allow for testing without signatures based on `isSignatureValid` flag.
     // openzeppelin/contracts/drafts/ERC20Permit.sol
-    function permit(
-        address owner,
-        address spender,
-        uint256 value,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external {
+    function permit(address owner, address spender, uint256 value, uint256 deadline, uint8, bytes32, bytes32) external {
         require(block.timestamp <= deadline, "ERC20Permit: expired deadline");
         require(isSignatureValid, "ERC20Permit: invalid signature");
 

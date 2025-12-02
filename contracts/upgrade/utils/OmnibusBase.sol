@@ -53,16 +53,11 @@ abstract contract OmnibusBase {
         DUAL_GOVERNANCE = IDualGovernance(dualGovernance);
     }
 
-    /// @return VoteItem[] The list of voting items to be executed by Aragon Voting.
+    /// @return VoteItem[] The list of items to be executed by Dual Governance.
     function getVoteItems() public view virtual returns (VoteItem[] memory);
 
-    function getVotingVoteItems() public view virtual returns (VoteItem[] memory votingVoteItems) {
-        uint256 numVotingVoteItems = 0;
-        votingVoteItems = new VoteItem[](numVotingVoteItems);
-        uint256 index = 0;
-
-        assert(index == numVotingVoteItems);
-    }
+    /// @return VoteItem[] The list of voting items to be executed by Aragon Voting.
+    function getVotingVoteItems() public view virtual returns (VoteItem[] memory);
 
     /// @notice Converts all vote items to the Aragon-compatible EVMCallScript to validate against.
     /// @param proposalMetadata The metadata of the proposal.

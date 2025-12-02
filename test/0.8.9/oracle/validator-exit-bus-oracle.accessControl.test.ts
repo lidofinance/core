@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -89,7 +89,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     ];
 
     reportFields = {
-      consensusVersion: CONSENSUS_VERSION,
+      consensusVersion: VEBO_CONSENSUS_VERSION,
       refSlot: refSlot,
       dataFormat: DATA_FORMAT_LIST,
       requestsCount: exitRequests.length,
@@ -97,12 +97,45 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     };
 
     reportHash = calcValidatorsExitBusReportDataHash(reportFields);
-    await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
   };
 
   before(async () => {
     [admin, member1, member2, member3, stranger, account1] = await ethers.getSigners();
+
+    const deployed = await deployVEBO(admin.address);
+    oracle = deployed.oracle;
+    consensus = deployed.consensus;
+
+    initTx = await initVEBO({ admin: admin.address, oracle, consensus, resumeAfterDeploy: true });
+
+    oracleVersion = await oracle.getContractVersion();
+
+    await consensus.addMember(member1, 1);
+    await consensus.addMember(member2, 2);
+    await consensus.addMember(member3, 2);
+
+    const { refSlot } = await consensus.getCurrentFrame();
+    exitRequests = [
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+    ];
+
+    reportFields = {
+      consensusVersion: VEBO_CONSENSUS_VERSION,
+      dataFormat: DATA_FORMAT_LIST,
+      // consensusVersion: CONSENSUS_VERSION,
+      refSlot: refSlot,
+      requestsCount: exitRequests.length,
+      data: encodeExitRequestsDataList(exitRequests),
+    };
+
+    reportHash = calcValidatorsExitBusReportDataHash(reportFields);
+
+    await consensus.connect(member1).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, reportHash, VEBO_CONSENSUS_VERSION);
 
     await deploy();
   });
@@ -131,7 +164,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       });
       it("should revert without admin address", async () => {
         await expect(
-          oracle.initialize(ZeroAddress, await consensus.getAddress(), CONSENSUS_VERSION, 0, 600, 13000, 1, 48),
+          oracle.initialize(ZeroAddress, await consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0, 600, 13000, 1, 48),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");
       });
     });

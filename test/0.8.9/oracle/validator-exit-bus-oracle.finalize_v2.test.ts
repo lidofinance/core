@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, INITIAL_FAST_LANE_LENGTH_SLOTS, SLOTS_PER_EPOCH } from "lib";
+import { EPOCHS_PER_FRAME, INITIAL_FAST_LANE_LENGTH_SLOTS, SLOTS_PER_EPOCH, VEBO_CONSENSUS_VERSION } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -31,7 +31,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
       await oracle.getAddress(),
     ]);
 
-    await oracle.initialize(admin, await consensus.getAddress(), CONSENSUS_VERSION, 0, 10, 100, 1, 48);
+    await oracle.initialize(admin, await consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0, 10, 100, 1, 48);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

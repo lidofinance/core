@@ -1,0 +1,86 @@
+# Lido Protocol Upgrade Parameters - Mainnet Configuration
+# This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum mainnet
+
+[chainSpec]
+# Ethereum consensus layer specifications
+# TODO: take onchain?
+slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum consensus
+secondsPerSlot = 12                   # Duration of each slot in seconds
+genesisTime = 1606824023              # Ethereum mainnet genesis timestamp
+depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Official ETH2 deposit contract
+
+# Gate seal configuration for vault operations
+[gateSealForVaults]
+sealDuration = 1209600  # 14 days
+sealingCommittee = "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
+
+[easyTrack]
+VaultsAdapter = "0x4CC57Fcb95429CBdC596824a40A92D1245FDb92b"     # TODO: update upon deployment
+
+# Must be deployed before the V3 upgrading contracts
+[easyTrack.newFactories]
+# TODO: update upon deployment
+AlterTiersInOperatorGrid = "0x00000000000000000000000000000000000fAc01"
+RegisterGroupsInOperatorGrid = "0x00000000000000000000000000000000000fAc02"
+RegisterTiersInOperatorGrid = "0x00000000000000000000000000000000000FAc03"
+SetJailStatusInOperatorGrid = "0x00000000000000000000000000000000000faC04"
+SocializeBadDebtInVaultHub = "0x00000000000000000000000000000000000Fac06"
+ForceValidatorExitsInVaultHub = "0x00000000000000000000000000000000000faC07"
+UpdateGroupsShareLimitInOperatorGrid = "0x00000000000000000000000000000000000FAc08"
+UpdateVaultsFeesInOperatorGrid = "0x00000000000000000000000000000000000fac09"
+
+# Vault hub configuration for managing staking vaults
+[vaultHub]
+maxRelativeShareLimitBP = 1000           # 10%, Absolute Max possible shareLimit of a vault relative to Lido TVL (in basis points)
+
+# Lazy oracle configuration for delayed reward calculations - https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-32.md
+[lazyOracle]
+quarantinePeriod = 259200                      # Quarantine period in seconds (3 days) before rewards are distributed
+maxRewardRatioBP = 350                         # Maximum reward ratio in basis points (3.5%)
+maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per second, in wei (0.18 ETH)
+
+# Predeposit guarantee configuration for validator deposit guarantees
+[predepositGuarantee]
+genesisForkVersion = "0x00000000"     # Ethereum mainnet genesis fork version: https://github.com/ethereum/consensus-specs/blob/01b53691dcc36d37a5ad8994b3a32d8de69fb1aa/configs/mainnet.yaml#L30
+gIndex            = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification: https://research.lido.fi/t/lip-27-ensuring-compatibility-with-ethereum-s-pectra-upgrade/9444#p-20086-update-gindexes-5
+gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028" # Required for hardfork upgrades, the same for now
+changeSlot = 0                        # Slot number when the change takes effect
+
+# Operator grid configuration for managing staking operators
+[operatorGrid]
+# Default tier parameters for operator classification and fee structure
+# https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665#p-22926-rollout-plan-9
+[operatorGrid.defaultTierParams]
+shareLimitInEther = "0"               # Share limit per tier in ETH
+reserveRatioBP = 5000                 # Reserve ratio in basis points (50%)
+forcedRebalanceThresholdBP = 4975     # Threshold for forced rebalancing in basis points (49.75%)
+# https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504#p-22550-table-3-fees-9
+infraFeeBP = 100                      # Infrastructure fee in basis points (1%)
+liquidityFeeBP = 650                  # Liquidity provision fee in basis points (6.5%)
+reservationFeeBP = 0                  # Reservation fee in basis points (0%)
+
+[burner]
+isMigrationAllowed = true             # Must be on for the upgrade to work (for scratch is it false)
+
+# Oracle and consensus version configuration
+[oracleVersions]
+ao_consensus_version = 5              # Accounting Oracle consensus version: https://etherscan.io/address/0x852deD011285fe67063a08005c71a85690503Cee#readProxyContract#F16
+
+[v3VoteScript]
+# Expiry timestamp after which the upgrade transaction will revert
+# Format: Unix timestamp (seconds since epoch)
+# The upgrade transaction must be executed before this deadline
+expiryTimestamp = 1768435200          # January 15, 2026 0:00:00 UTC
+# Initial maximum external ratio in basis points for Lido v3
+# https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665#p-22926-rollout-plan-9
+initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial phase
+
+# Sources (todo)
+# - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504
+
+timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"  # Predeployed TimeConstraints contract on mainnet
+
+# Oracle Daemon Config slashing reserve parameters
+# how it is used: https://github.com/lidofinance/lido-oracle/blob/d6c09a16736b2c132343a4e349c8f27179c73e6e/src/services/staking_vaults.py#L207-L235
+odcSlashingReserveWeRightShiftEpochs = 8192  # EPOCHS_PER_SLASHINGS_VECTOR - https://eth2book.info/capella/part3/config/preset/#epochs_per_slashings_vector
+odcSlashingReserveWeLeftShiftEpochs = 8192   # EPOCHS_PER_SLASHINGS_VECTOR

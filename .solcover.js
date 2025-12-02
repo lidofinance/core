@@ -11,5 +11,9 @@ module.exports = {
     // Skip contracts that are tested by Foundry tests
     "common/lib", // 100% covered by test/common/*.t.sol
     "0.8.9/lib/UnstructuredStorage.sol", // 100% covered by test/0.8.9/unstructuredStorage.t.sol
+    "openzeppelin",
+    "testnet",
+    "upgrade",
   ],
+  irMinimum: true,
 };

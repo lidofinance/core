@@ -1,11 +1,8 @@
 import { bigintToHex } from "bigint-conversion";
-import { assert } from "chai";
 import { keccak256, ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
 import { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "typechain-types";
-
-import { CONSENSUS_VERSION } from "lib/constants";
 
 import { numberToHex } from "./string";
 
@@ -35,7 +32,7 @@ export const EXTRA_DATA_FORMAT_LIST = 1n;
 export const EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1n;
 export const EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2n;
 
-const DEFAULT_REPORT_FIELDS: OracleReport = {
+export const DEFAULT_REPORT_FIELDS: OracleReport = {
   consensusVersion: 1n,
   refSlot: 0n,
   numValidators: 0n,
@@ -46,8 +43,10 @@ const DEFAULT_REPORT_FIELDS: OracleReport = {
   elRewardsVaultBalance: 0n,
   sharesRequestedToBurn: 0n,
   withdrawalFinalizationBatches: [],
-  simulatedShareRate: 0n,
+  simulatedShareRate: 10n ** 27n,
   isBunkerMode: false,
+  vaultsDataTreeRoot: ethers.ZeroHash,
+  vaultsDataTreeCid: "",
   extraDataFormat: 0n,
   extraDataHash: ethers.ZeroHash,
   extraDataItemsCount: 0n,
@@ -67,6 +66,8 @@ export function getReportDataItems(r: OracleReport) {
     r.withdrawalFinalizationBatches,
     r.simulatedShareRate,
     r.isBunkerMode,
+    r.vaultsDataTreeRoot,
+    r.vaultsDataTreeCid,
     r.extraDataFormat,
     r.extraDataHash,
     r.extraDataItemsCount,
@@ -76,7 +77,7 @@ export function getReportDataItems(r: OracleReport) {
 export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, uint256, bytes32, uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, bytes32, string, uint256, bytes32, uint256)",
     ],
     [reportItems],
   );
@@ -99,44 +100,6 @@ export async function prepareOracleReport({
   const hash = calcReportDataHash(items);
 
   return { fields, items, hash };
-}
-
-export async function triggerConsensusOnHash(hash: string, consensus: HashConsensus) {
-  const { refSlot } = await consensus.getCurrentFrame();
-  const membersInfo = await consensus.getMembers();
-  const signers = [
-    await ethers.provider.getSigner(membersInfo.addresses[0]),
-    await ethers.provider.getSigner(membersInfo.addresses[1]),
-  ];
-  for (const s of signers) {
-    await consensus.connect(s).submitReport(refSlot, hash, CONSENSUS_VERSION);
-  }
-  assert.equal((await consensus.getConsensusState()).consensusReport, hash);
-}
-
-export async function reportOracle(
-  consensus: HashConsensus,
-  oracle: AccountingOracle,
-  reportFields: Partial<OracleReport> & { clBalance: bigint },
-) {
-  const { refSlot } = await consensus.getCurrentFrame();
-  const report = await prepareOracleReport({ ...reportFields, refSlot });
-
-  // non-empty extra data is not supported here yet
-  assert.equal(report.fields.extraDataFormat, 0n);
-  assert.equal(report.fields.extraDataHash, ethers.ZeroHash);
-  assert.equal(report.fields.extraDataItemsCount, 0n);
-
-  const membersInfo = await consensus.getMembers();
-  await triggerConsensusOnHash(report.hash, consensus);
-
-  const oracleVersion = await oracle.getContractVersion();
-
-  const memberSigner = await ethers.provider.getSigner(membersInfo.addresses[0]);
-  const submitDataTx = await oracle.connect(memberSigner).submitReportData(report.fields, oracleVersion);
-  const submitExtraDataTx = await oracle.connect(memberSigner).submitReportExtraDataEmpty();
-
-  return { report, submitDataTx, submitExtraDataTx };
 }
 
 export function encodeExtraDataItem(
@@ -252,28 +215,13 @@ export type OracleReportProps = {
 };
 
 export function constructOracleReport({ reportFieldsWithoutExtraData, extraData, config }: OracleReportProps) {
-  const extraDataItems: string[] = [];
-
-  if (Array.isArray(extraData)) {
-    if (isStringArray(extraData)) {
-      extraDataItems.push(...extraData);
-    } else if (isItemTypeArray(extraData)) {
-      extraDataItems.push(...encodeExtraDataItemsArray(extraData));
-    }
-  } else if (isExtraDataType(extraData)) {
-    extraDataItems.push(...encodeExtraDataItems(extraData));
-  }
-
-  const extraDataItemsCount = extraDataItems.length;
-  const maxItemsPerChunk = config?.maxItemsPerChunk || extraDataItemsCount;
-  const extraDataChunks = packExtraDataItemsToChunksLinkedByHash(extraDataItems, maxItemsPerChunk);
-  const extraDataChunkHashes = extraDataChunks.map((chunk) => calcExtraDataListHash(chunk));
+  const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = prepareExtraData(extraData, config);
 
   const report: OracleReport = {
     ...reportFieldsWithoutExtraData,
-    extraDataHash: extraDataItems.length ? extraDataChunkHashes[0] : ZeroHash,
-    extraDataItemsCount: extraDataItems.length,
-    extraDataFormat: extraDataItems.length ? EXTRA_DATA_FORMAT_LIST : EXTRA_DATA_FORMAT_EMPTY,
+    extraDataHash: extraDataItemsCount ? extraDataChunkHashes[0] : ZeroHash,
+    extraDataItemsCount,
+    extraDataFormat: extraDataItemsCount ? EXTRA_DATA_FORMAT_LIST : EXTRA_DATA_FORMAT_EMPTY,
   };
 
   const reportHash = calcReportDataHash(getReportDataItems(report));

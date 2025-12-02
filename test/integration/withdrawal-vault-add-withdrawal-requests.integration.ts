@@ -13,7 +13,7 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { encodeEIP7002Payload } from "test/0.8.9/withdrawalVault/eip7002Mock";
 import { Snapshot } from "test/suite";
 
-describe("WithdrawalVault: addWithdrawalRequests Integration", () => {
+describe("Integration: WithdrawalVault: addWithdrawalRequests", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
   let withdrawalVault: WithdrawalVault;

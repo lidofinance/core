@@ -23,8 +23,6 @@ export async function main() {
       NULL_CONTENT_URI,
       state[Sk.appNodeOperatorsRegistry].implementation.address,
       NULL_CONTENT_URI,
-      state[Sk.appOracle].implementation.address,
-      NULL_CONTENT_URI,
     ],
     { from: deployer },
   );

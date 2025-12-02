@@ -4,12 +4,12 @@ import { ethers } from "hardhat";
 import { HashConsensus__Harness, ReportProcessor__Mock, ValidatorsExitBusOracle } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_EPOCH,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
+  VEBO_CONSENSUS_VERSION,
 } from "lib";
 
 import { deployHashConsensus } from "./hashConsensus";
@@ -18,7 +18,7 @@ import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 export const DATA_FORMAT_LIST = 1;
 
 async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, genesisTime = GENESIS_TIME) {
-  const lido = await ethers.deployContract("Lido__MockForAccountingOracle");
+  const lido = await ethers.deployContract("Accounting__MockForAccountingOracle");
   const ao = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
     await lido.getAddress(),
     secondsPerSlot,
@@ -27,11 +27,28 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, admin: string) {
-  const maxValidatorExitRequestsPerReport = 2000;
-  const limitsList = [0, 0, 0, 0, maxValidatorExitRequestsPerReport, 0, 0, 0, 0, 0, 0, 0];
-
-  return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList]);
+async function deployOracleReportSanityCheckerForExitBus(
+  lidoLocator: string,
+  accountingOracle: string,
+  accounting: string,
+  admin: string,
+) {
+  return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
+    f.deploy(lidoLocator, accountingOracle, accounting, admin, {
+      exitedValidatorsPerDayLimit: 0n,
+      appearedValidatorsPerDayLimit: 0n,
+      annualBalanceIncreaseBPLimit: 0n,
+      simulatedShareRateDeviationBPLimit: 0n,
+      maxValidatorExitRequestsPerReport: 2000,
+      maxItemsPerExtraDataTransaction: 0n,
+      maxNodeOperatorsPerExtraDataItem: 0n,
+      requestTimestampMargin: 0n,
+      maxPositiveTokenRebase: 0n,
+      initialSlashingAmountPWei: 0n,
+      inactivityPenaltiesAmountPWei: 0n,
+      clBalanceOraclesErrorUpperBPLimit: 0n,
+    }),
+  );
 }
 
 async function deployTWG() {
@@ -61,15 +78,23 @@ export async function deployVEBO(
   });
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
-
   const triggerableWithdrawalsGateway = await deployTWG();
+
+  const accountingOracleAddress = await ao.getAddress();
+  const accountingAddress = await locator.accounting();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
-    accountingOracle: await ao.getAddress(),
+    accountingOracle: accountingOracleAddress,
+    triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
   });
 
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(locatorAddr, admin);
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
+    locatorAddr,
+    accountingOracleAddress,
+    accountingAddress,
+    admin,
+  );
 
   await updateLidoLocatorImplementation(locatorAddr, {
     validatorsExitBusOracle: await oracle.getAddress(),
@@ -108,7 +133,7 @@ export async function initVEBO({
   oracle,
   consensus,
   dataSubmitter = undefined,
-  consensusVersion = CONSENSUS_VERSION,
+  consensusVersion = VEBO_CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
   maxRequestsPerBatch = 600,
