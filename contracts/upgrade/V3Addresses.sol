@@ -80,7 +80,6 @@ contract V3Addresses {
         address etfSetJailStatusInOperatorGrid;
         address etfUpdateVaultsFeesInOperatorGrid;
         address etfForceValidatorExitsInVaultHub;
-        address etfSetLiabilitySharesTargetInVaultHub;
         address etfSocializeBadDebtInVaultHub;
     }
 
@@ -139,7 +138,6 @@ contract V3Addresses {
     address public immutable ETF_REGISTER_GROUPS_IN_OPERATOR_GRID;
     address public immutable ETF_REGISTER_TIERS_IN_OPERATOR_GRID;
     address public immutable ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID;
-    address public immutable ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB;
     address public immutable ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB;
     address public immutable ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID;
     address public immutable ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID;
@@ -208,7 +206,6 @@ contract V3Addresses {
         ETF_REGISTER_GROUPS_IN_OPERATOR_GRID = params.etfRegisterGroupsInOperatorGrid;
         ETF_REGISTER_TIERS_IN_OPERATOR_GRID = params.etfRegisterTiersInOperatorGrid;
         ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID = params.etfSetJailStatusInOperatorGrid;
-        ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB = params.etfSetLiabilitySharesTargetInVaultHub;
         ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB = params.etfSocializeBadDebtInVaultHub;
         ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID = params.etfUpdateGroupsShareLimitInOperatorGrid;
         ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID = params.etfUpdateVaultsFeesInOperatorGrid;

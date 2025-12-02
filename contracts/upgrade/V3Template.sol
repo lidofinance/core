@@ -264,6 +264,8 @@ contract V3Template is V3Addresses {
 
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULTS_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULTS_ADAPTER);
+        _assertZeroOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE());
+        _assertZeroOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE());
         _assertTwoOZRoleHolders(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER);
         _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).RESUME_ROLE(), RESEAL_MANAGER);
 
@@ -322,8 +324,8 @@ contract V3Template is V3Addresses {
         IEasyTrack easyTrack = IEasyTrack(EASY_TRACK);
         address[] memory factories = easyTrack.getEVMScriptFactories();
 
-        // The expected order of the last 9 EasyTrack factories
-        address[9] memory expectedFactories = [
+        // The expected order of the last 8 EasyTrack factories
+        address[8] memory expectedFactories = [
             ETF_ALTER_TIERS_IN_OPERATOR_GRID,
             ETF_REGISTER_GROUPS_IN_OPERATOR_GRID,
             ETF_REGISTER_TIERS_IN_OPERATOR_GRID,
@@ -331,7 +333,6 @@ contract V3Template is V3Addresses {
             ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID,
             ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID,
             ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB,
-            ETF_SET_LIABILITY_SHARES_TARGET_IN_VAULT_HUB,
             ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB
         ];
 

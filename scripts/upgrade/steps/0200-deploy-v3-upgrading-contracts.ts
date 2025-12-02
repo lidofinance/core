@@ -65,7 +65,6 @@ export async function main() {
     parameters.easyTrack.newFactories.SetJailStatusInOperatorGrid,
     parameters.easyTrack.newFactories.UpdateVaultsFeesInOperatorGrid,
     parameters.easyTrack.newFactories.ForceValidatorExitsInVaultHub,
-    parameters.easyTrack.newFactories.SetLiabilitySharesTargetInVaultHub,
     parameters.easyTrack.newFactories.SocializeBadDebtInVaultHub,
   ];
 
