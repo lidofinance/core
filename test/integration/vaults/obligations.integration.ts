@@ -65,6 +65,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
     await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
     await upDefaultTierShareLimit(ctx, ether("1"));
 
+    await vaultHub.connect(agentSigner).grantRole(await vaultHub.VAULT_MASTER_ROLE(), agentSigner);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), agentSigner);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.VALIDATOR_EXIT_ROLE(), validatorExit);
