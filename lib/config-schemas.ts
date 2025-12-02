@@ -87,7 +87,6 @@ const EasyTrackSchema = z.object({
     RegisterGroupsInOperatorGrid: EthereumAddressSchema,
     RegisterTiersInOperatorGrid: EthereumAddressSchema,
     SetJailStatusInOperatorGrid: EthereumAddressSchema,
-    SetLiabilitySharesTargetInVaultHub: EthereumAddressSchema,
     SocializeBadDebtInVaultHub: EthereumAddressSchema,
     ForceValidatorExitsInVaultHub: EthereumAddressSchema,
     UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
