@@ -222,6 +222,9 @@ contract HashConsensus is AccessControlEnumerable {
     /// @dev Mapping from report hash to the number of members supporting it
     mapping(bytes32 => uint256) internal _hashSupport;
 
+    /// @dev Array of addresses that submitted reports in the current frame
+    address[] internal _currentFrameReporters;
+
     /// @dev The address of the report processor contract
     address internal _reportProcessor;
 
@@ -947,6 +950,11 @@ contract HashConsensus is AccessControlEnumerable {
         _memberReports[member] = report;
         uint256 support = ++_hashSupport[report];
 
+        // Track this member as a reporter in current frame (avoid duplicates)
+        if (oldReport == ZERO_HASH) {
+            _currentFrameReporters.push(member);
+        }
+
         _memberStates[memberIndex] = MemberState({
             lastReportRefSlot: uint64(slot)
         });
@@ -1038,36 +1046,15 @@ contract HashConsensus is AccessControlEnumerable {
             return (ZERO_HASH, 0);
         }
 
-        // Check unique hashes reported by members and find one with sufficient support
         address[] memory members = _memberAddresses;
-        bytes32[] memory uniqueHashes = new bytes32[](members.length);
-        uint256 uniqueCount = 0;
 
-        // Collect unique hashes
         for (uint256 i = 0; i < members.length; i++) {
             bytes32 memberHash = _memberReports[members[i]];
             if (memberHash != ZERO_HASH) {
-                // Check if this hash is already in uniqueHashes
-                bool found = false;
-                for (uint256 j = 0; j < uniqueCount; j++) {
-                    if (uniqueHashes[j] == memberHash) {
-                        found = true;
-                        break;
-                    }
+                uint256 hashSupport = _hashSupport[memberHash];
+                if (hashSupport >= quorum) {
+                    return (memberHash, hashSupport);
                 }
-                if (!found) {
-                    uniqueHashes[uniqueCount] = memberHash;
-                    uniqueCount++;
-                }
-            }
-        }
-
-        // Find hash with sufficient support
-        for (uint256 i = 0; i < uniqueCount; i++) {
-            bytes32 hash = uniqueHashes[i];
-            uint256 hashSupport = _hashSupport[hash];
-            if (hashSupport >= quorum) {
-                return (hash, hashSupport);
             }
         }
 
@@ -1124,14 +1111,14 @@ contract HashConsensus is AccessControlEnumerable {
 
     /// @dev Clears member reports and hash support mappings for a new frame
     function _clearMemberReports() internal {
-        address[] memory members = _memberAddresses;
-        for (uint256 i = 0; i < members.length; i++) {
-            address member = members[i];
-            bytes32 oldReport = _memberReports[member];
+        for (uint256 i = 0; i < _currentFrameReporters.length; i++) {
+            address reporter = _currentFrameReporters[i];
+            bytes32 oldReport = _memberReports[reporter];
             if (oldReport != ZERO_HASH) {
                 delete _hashSupport[oldReport];
-                delete _memberReports[member];
+                delete _memberReports[reporter];
             }
         }
+        delete _currentFrameReporters;
     }
 }
