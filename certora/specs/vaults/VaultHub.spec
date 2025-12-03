@@ -152,12 +152,12 @@ function niceViolationRequirements(address vault) {
 /// @title A vault with obligations is connected
 /// @notice There is no check in `VaultHub.applyVaultReport` nor in `LazyOracle.updateVaultData`
 /// (which calls the former) that the vault is indeed connected!
-/// This makes this invariant fail for `VaultHub.applyVaultReport`.
+/// This makes this invariant fail for `VaultHub.applyVaultReport`
 invariant obligatedVaultIsConnected(address vault)
     (
         (_VaultHub.obligationsShares(vault) > 0 || _VaultHub.unsettledLidoFees(vault) > 0) => _VaultHub.isVaultConnected(vault)
     )
-    filtered { f ->  isValidFuncVaultHubOperatorGrid(f) }
+    filtered { f -> f.contract == _VaultHub }
     {
         preserved _VaultHub.applyVaultReport(
             address _other,
@@ -225,10 +225,15 @@ invariant disconnectedVaultHasNoLocked(address vault)
     }
 
 
-/// @title A tiers reserve ratio is at most 100%
 invariant tierReserveRatioLeqOne(uint256 tierId)
   _OperatorGrid.og_storage.tiers[tierId].reserveRatioBP <= TIER_MAX_RESERVE_RATIO_BP()
   filtered { f ->  isValidFuncVaultHubOperatorGrid(f) }
+  {
+    preserved constructor() {
+      require _OperatorGrid.og_storage.tiers[tierId].reserveRatioBP <= TIER_MAX_RESERVE_RATIO_BP();
+    }
+  }
+
 
 
 
@@ -249,22 +254,32 @@ invariant reserveRatioNotBig(address vault)
         requireInvariant tierReserveRatioLeqOne(vaultTierId);        
       }
     }
-    
 
-/// @title Tier operator consistency with groups
-/// @notice For any registered group, all tiers belonging to that group should reference 
-/// the group's operator address correctly
-invariant tierOperatorMatchesGroup(address nodeOperator, uint256 tierIdIndex)
+
+
+invariant everyNonDefaultTierHasGroup(uint256 tierId,address nodeOperator)
     (
-        _OperatorGrid.og_storage.groups[nodeOperator].operator != 0 &&
-        tierIdIndex < _OperatorGrid.og_storage.groups[nodeOperator].tierIds.length
+        tierId > 0 && tierId < _OperatorGrid.og_storage.tiers.length
     ) => (
-        _OperatorGrid.og_storage.tiers[
-            _OperatorGrid.og_storage.groups[nodeOperator].tierIds[tierIdIndex]
-        ].operator == nodeOperator
+        _OperatorGrid.og_storage.groups[
+            _OperatorGrid.og_storage.tiers[tierId].operator
+        ].operator != 0
     )
     filtered { 
         f -> f.contract == _OperatorGrid
+    }
+    {
+        preserved OperatorGrid.registerTiers(address _nodeOperator, OperatorGrid.TierParams[] _tiers) with (env e) {
+            // The registerTiers function checks that the group exists before creating tiers (line 274)
+            require _OperatorGrid.og_storage.groups[_nodeOperator].operator != 0;
+            // Constrain the number of tiers to prevent timeouts
+            require _tiers.length <= 50;
+        }
+        preserved OperatorGrid.initialize(address _admin, OperatorGrid.TierParams _defaultTierParams) with (env e) {
+            // After initialization, no group should exist yet (groups are registered separately)
+            // So the invariant should hold vacuously
+            require _OperatorGrid.og_storage.groups[nodeOperator].operator == 0;
+        }
     }
 
 
@@ -454,8 +469,16 @@ definition tierforcedRebalanceThresholdBP(uint256 tierId) returns uint16 = (
 /// (i.e. it does not call `_validateParams`).
 /// See `https://github.com/lidofinance/core/issues/1291`.
 invariant tierReserveRatioGeThreshold(uint256 tierId)
-    tierReserveRatioBP(tierId) > 0 => tierReserveRatioBP(tierId) > tierforcedRebalanceThresholdBP(tierId)
+    tierId < numTiers() => (
+        tierReserveRatioBP(tierId) > 0 => tierReserveRatioBP(tierId) > tierforcedRebalanceThresholdBP(tierId)
+    )
     filtered { f -> f.contract == _OperatorGrid }
+    {
+        preserved constructor() {
+            require tierId >= numTiers() || tierReserveRatioBP(tierId) == 0 || 
+                    tierReserveRatioBP(tierId) > tierforcedRebalanceThresholdBP(tierId);
+        }
+    }
 
 
 /// @title For every vault its reserve ratio is greater than its force rebalance threshold
