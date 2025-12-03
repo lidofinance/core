@@ -317,7 +317,6 @@ rule reportNotRevertsBySubmit(
     );
 
     // Check the report without withdrawals
-    // TODO: Try without the next line
     Accounting.CalculatedValues update = _Accounting.simulateOracleReport(e, report);
     uint256 postInternalShares = update.postInternalShares;
     uint256 postInternalEther = update.postInternalEther;

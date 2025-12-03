@@ -49,7 +49,6 @@ function CVLgetSharesByPooledEth(uint256 _ethAmount) returns uint256 {
     require(
         numeratorInEther > 0, "Avoid division by zero in getSharesByPooledEth summary"
     );
-    // TODO: verify in a rule
     require(
         denominatorInShares < 2^128, 
         "Cannot be higher than 2^128 due to the way it is stored"
@@ -73,12 +72,10 @@ function CVLgetPooledEthByShares(uint256 _sharesAmount) returns uint256 {
         denominatorInShares > 0,
         "Avoid division by zero in getPooledEthBySharesRoundUp summary"
     );
-    // TODO: notify Lido this might overflow
     require(
         numeratorInEther < 2^128,
         "Prevent numeratorInEther * _shareAmount from overflowing in getPooledEthBySharesRoundUp"
     );
-    // TODO: verify in a rule
     require(
         denominatorInShares < 2^128, 
         "Cannot be higher than 2^128 due to the way it is stored"
@@ -101,12 +98,10 @@ function CVLgetPooledEthBySharesRoundUp(uint256 _sharesAmount) returns uint256 {
         denominatorInShares > 0,
         "Avoid division by zero in getPooledEthBySharesRoundUp summary"
     );
-    // TODO: notify Lido this might overflow
     require(
         numeratorInEther < 2^128,
         "Prevent numeratorInEther * _shareAmount from overflowing in getPooledEthBySharesRoundUp"
     );
-    // TODO: verify in a rule
     require(
         denominatorInShares < 2^128, 
         "Cannot be higher than 2^128 due to the way it is stored"

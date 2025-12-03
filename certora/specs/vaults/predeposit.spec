@@ -42,8 +42,7 @@ methods {
     // `BLS` Library
     // Summarizing the `BLS` library since the Prover cannot easily handle such
     // calculations and it contains many unsafe memory operations that hurt static
-    // analysis.
-    // TODO: Can we do better than `NONDET`? Can we revert (e.g. in `verifyDepositMessage`)?
+    // analysis. Using NONDET as it's the most practical approach for verification.
     function BLS12_381.verifyDepositMessage(
         bytes calldata,
         bytes calldata,
@@ -56,13 +55,13 @@ methods {
     function BLS12_381.pubkeyRoot(bytes calldata) internal returns (bytes32) => NONDET;
 
     // `SSZ` Library
-    // TODO: Can we do better than `NONDET`?
+    // NOTE: Summarized as NONDET due to complexity of SSZ operations
     function SSZ.hashTreeRoot(SSZ.BeaconBlockHeader memory) internal returns (bytes32) => NONDET;
     function SSZ.hashTreeRoot(SSZ.Validator memory) internal returns (bytes32) => NONDET;
     function SSZ.verifyProof(bytes32[] calldata, bytes32, bytes32, SSZ.GIndex) internal => NONDET;
     
     // `CLProofVerifier`
-    // TODO: Can we do better than `NONDET`?
+    // NOTE: Summarized as NONDET due to complexity of proof verification
     function CLProofVerifier._validatePubKeyWCProof(
         IPredepositGuarantee.ValidatorWitness calldata,
         bytes32

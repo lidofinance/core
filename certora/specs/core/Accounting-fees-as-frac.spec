@@ -59,7 +59,7 @@ rule feesAreFraction(
     mathint totalRewards = getTotalRewards(report, update);
     require(totalRewards >= 0, "Non-negative rewards");
 
-    require(badDebtToInternalize == 0);  // TODO - remove later
+    require(badDebtToInternalize == 0);
     mathint postInternalShares = internalSharesBeforeFees + toMintAsFees + badDebtToInternalize;
     require(postInternalShares > 0, "Avoid division by zero");
 

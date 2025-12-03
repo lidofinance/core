@@ -69,7 +69,7 @@ function _withdrawableValueFeesIncludedCVL(env e, address vault) returns uint256
 
 function requireSoundVaultState(address vault) {
   requireInvariant vaultReserveRatioGeThreshold(vault);
-  // TODO: Change this to the invariant.
+  // NOTE: This should be formalized as an invariant
   require _VaultHub.vh_storage.records[vault].liabilityShares <= _VaultHub.vh_storage.records[vault].maxLiabilityShares; 
   require _VaultHub.vh_storage.connections[vault].reserveRatioBP > 0;
   requireInvariant reserveRatioNotBig(vault);
@@ -128,7 +128,7 @@ rule vaultIsHealtyhUntilReport(method f, address vault) filtered {
         uint256 _infraFeeBP;
         uint256 _liquidityFeeBP;
         uint256 _reservationFeeBP;
-        // TODO: Prove this invariant
+        // NOTE: This is enforced by PredepositGuarantee, see reserveRatioNotGreaterThanThreshold
         require(
             _forcedRebalanceThresholdBP <= _reserveRatioBP,
             "This is enforced by PredepositGuarantee, see reserveRatioNotGreaterThanThreshold"

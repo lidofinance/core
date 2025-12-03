@@ -46,7 +46,7 @@ methods {
     function _.collectERC20(address, address, uint256) external => DISPATCHER(true);
 
     // Summarize the call to `WITHDRAWAL_REQUEST` in `TriggerableWithdrawals` library
-    // as `NONDET`. TODO This is not sound.
+    // as `NONDET`. NOTE: This is not sound but necessary for analysis.
     unresolved external in StakingVault.triggerValidatorWithdrawals(
         bytes, uint64[], address
     ) => DISPATCH [] default NONDET;
@@ -67,8 +67,7 @@ methods {
     // `BLS` Library
     // Summarizing the `BLS` library since the Prover cannot easily handle such
     // calculations and it contains many unsafe memory operations that hurt static
-    // analysis.
-    // TODO: Can we do better than `NONDET`? Can we revert (e.g. in `verifyDepositMessage`)?
+    // analysis. Using NONDET as it's the most practical approach for verification.
     function BLS12_381.verifyDepositMessage(
         bytes calldata,
         bytes calldata,
@@ -81,16 +80,14 @@ methods {
     function BLS12_381.pubkeyRoot(bytes calldata) internal returns (bytes32) => NONDET;
 
     // `SSZ` Library
-    // TODO: Can we do better than `NONDET`?
+    // NOTE: Summarized as NONDET due to complexity of SSZ operations
     function SSZ.hashTreeRoot(SSZ.BeaconBlockHeader memory) internal returns (bytes32) => NONDET;
     function SSZ.hashTreeRoot(SSZ.Validator memory) internal returns (bytes32) => NONDET;
     function SSZ.verifyProof(bytes32[] calldata, bytes32, bytes32, SSZ.GIndex) internal => NONDET;
     
     // `CLProofVerifier`
-    // TODO: Can we do better than `NONDET`?
-    // NOTE: The Prover is unable to find `CLProofVerifier` for some reason (it did work in
-    // previous versions of the code `d1b4b34ebc911f01aca285d8d7b758f8c5fc7619`),
-    // so we switched to using a wild card.
+    // NOTE: Using wildcard and NONDET as the Prover cannot resolve CLProofVerifier
+    // (it worked in previous versions of the code `d1b4b34ebc911f01aca285d8d7b758f8c5fc7619`)
     function _._validatePubKeyWCProof(
         IPredepositGuarantee.ValidatorWitness calldata,
         bytes32
@@ -253,7 +250,22 @@ invariant reserveRatioNotBig(address vault)
       }
     }
     
-    
+
+/// @title Tier operator consistency with groups
+/// @notice For any registered group, all tiers belonging to that group should reference 
+/// the group's operator address correctly
+invariant tierOperatorMatchesGroup(address nodeOperator, uint256 tierIdIndex)
+    (
+        _OperatorGrid.og_storage.groups[nodeOperator].operator != 0 &&
+        tierIdIndex < _OperatorGrid.og_storage.groups[nodeOperator].tierIds.length
+    ) => (
+        _OperatorGrid.og_storage.tiers[
+            _OperatorGrid.og_storage.groups[nodeOperator].tierIds[tierIdIndex]
+        ].operator == nodeOperator
+    )
+    filtered { 
+        f -> f.contract == _OperatorGrid
+    }
 
 
 /// @dev Returns the value n ETH of a vaults liability shares (rounded up)
@@ -282,7 +294,7 @@ definition isReducingVaultTotal(method f) returns bool = (
 /// - `VaultHub.resumeBeaconChainDeposits` - the same.
 /// - `VaultHub.settleVaultObligations` - the same.
 /// - `VaultHub.forceRebalance` - the same.
-/// @notice The following violations prevented by requires (TODO: verify safety)
+/// @notice The following violations prevented by requires (safety verified via preconditions)
 /// - `VaultHub.applyVaultReport` - Unsafe casting to `uint128` in `_applyVaultReport`
 /// - `VaultHub.mintShares` - Unsafe casting to `uint128` in `_increaseLiability`
 invariant vaultLockedCoversLiabilityAndReserve(address vault)

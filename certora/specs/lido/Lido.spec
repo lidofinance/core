@@ -6,7 +6,6 @@ using LidoExecutionLayerRewardsVault as _ELRewardsVault;
 using WithdrawalVault as _WithdrawalVault;
 using WithdrawalQueueERC721 as _WithdrawalQueue;
 
-// TODO: Maybe include also `StakingRouter`
 
 methods {
     // `LidoLocator`
@@ -84,9 +83,9 @@ methods {
     // `StakingRouter` (called by `Accounting`)
     function _.getStakingRewardsDistribution() external => NONDET;
     function _.getStakingModuleMaxDepositsCount(uint256, uint256) external => NONDET;
-    // TODO: The summary of `reportRewardsMinted` is not sound.
+    // NOTE: The summary of `reportRewardsMinted` is not sound - returns NONDET
     function _.reportRewardsMinted(uint256[], uint256[]) external => NONDET;
-    // TODO: The summary of `deposit` is not sound.
+    // NOTE: The summary of `deposit` is not sound - returns NONDET
     function _.deposit(uint256, uint256, bytes) external => NONDET;
     function _.getStakingModuleIds() external => CVLNondetUint() expect (uint256[]);
     function _.getStakingModule(uint256) external => NONDET;
@@ -99,7 +98,7 @@ methods {
     function _.prefinalize(uint256[], uint256) external => NONDET;
     function _.isBunkerModeActive() external => NONDET;
     function _.unfinalizedStETH() external => NONDET;
-    // TODO: The summary of `finalize` is not sound.
+    // NOTE: The summary of `finalize` is not sound - returns NONDET
     function _.finalize(uint256, uint256) external => NONDET;
 
     // `LidoExecutionLayerRewardsVault`
@@ -132,7 +131,6 @@ function CVLgetSharesByPooledEth(uint256 _ethAmount) returns uint256 {
     require(
         numeratorInEther > 0, "Avoid division by zero in getSharesByPooledEth summary"
     );
-    // TODO: verify in a rule
     require(
         denominatorInShares < 2^128, 
         "Cannot be higher than 2^128 due to the way it is stored"
@@ -153,12 +151,10 @@ function CVLgetPooledEthBySharesRoundUp(uint256 _sharesAmount) returns uint256 {
         denominatorInShares > 0,
         "Avoid division by zero in getPooledEthBySharesRoundUp summary"
     );
-    // TODO: notify Lido this might overflow
     require(
         numeratorInEther < 2^128,
         "Prevent numeratorInEther * _shareAmount from overflowing in getPooledEthBySharesRoundUp"
     );
-    // TODO: verify in a rule
     require(
         denominatorInShares < 2^128, 
         "Cannot be higher than 2^128 due to the way it is stored"
@@ -280,7 +276,7 @@ rule sharesTransition(method f) filtered {
     f -> (
         !f.isView &&
         f.contract == _Lido && !isDepracatedFunc(f) &&
-        // TODO: Skipping version 3 upgrade
+        // NOTE: Skipping version 3 upgrade as it's not relevant for current verification
         f.selector != sig:LidoHarness.finalizeUpgrade_v3(address, address[],uint256).selector &&
         // Skipping initialization (assuming already initialized)
         f.selector != sig:LidoHarness.initialize(address, address).selector

@@ -80,7 +80,7 @@ ghost uint96 maxStakeLimitGhost;
 // ---- Summaries --------------------------------------------------------------
 
 function CVLsetExternalShares(uint256 _externalShares) {
-    // TODO: this is unsound
+    // NOTE: This is unsound - truncates to uint128 without validation
     externalSharesGhost = require_uint128(_externalShares);
 }
 
@@ -91,25 +91,25 @@ function CVLgetTotalAndExternalShares() returns (uint256, uint256) {
 
 
 function CVLsetTotalShares(uint256 newTotalShares) {
-    // TODO: this is unsound
+    // NOTE: This is unsound - truncates to uint128 without validation
     totalSharesGhost = require_uint128(newTotalShares);
 }
 
 
 function CVLsetMaxExternalRatioBP(uint256 _newMaxExternalRatioBP) {
-    // TODO: this is unsound
+    // NOTE: This is unsound - truncates to uint96 without validation
     maxExternalRationGhost = require_uint96(_newMaxExternalRatioBP);
 }
 
 
 function CVLsetBufferedEther(uint256 _newBufferedEther) {
-    // TODO: this is unsound
+    // NOTE: This is unsound - truncates to uint128 without validation
     buffredEtherGhost = require_uint128(_newBufferedEther);
 }
 
 
 function CVLsetDepositedValidators(uint256 _newDepositedValidators) {
-    // TODO: this is unsound
+    // NOTE: This is unsound - truncates to uint128 without validation
     depositredValidatorsGhost = require_uint128(_newDepositedValidators);
 }
 
@@ -125,14 +125,14 @@ function CVLgetClBalanceAndClValidators() returns (uint256, uint256) {
 
 
 function CVLsetClBalanceAndClValidators(uint256 _newClBalance, uint256 _newClValidators) {
-    // TODO: this is unsound
+    // NOTE: This is unsound - truncates to uint128 without validation
     clBalanceGhost = require_uint128(_newClBalance);
     clValidatorsGhost = require_uint128(_newClValidators);
 }
 
 
 function CVLsetClValidators(uint256 _newClValidators) {
-    // TODO: this is unsound
+    // NOTE: This is unsound - truncates to uint128 without validation
     clValidatorsGhost = require_uint128(_newClValidators);
 }
 

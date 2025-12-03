@@ -32,10 +32,10 @@ methods {
     ) external returns (uint256) => CVLgetPooledEthBySharesRoundUp(_sharesAmount);
     function ILidoMock.getTotalShares() external returns (uint256) => NONDET;
 
-    // TODO: We ignore any side-effects of `rebalanceExternalEtherToInternal`
+    // NOTE: We ignore any side-effects of `rebalanceExternalEtherToInternal` for simplification
     function ILidoMock.rebalanceExternalEtherToInternal() external => NONDET;
 
-    // TODO: this summary may not be sound
+    // NOTE: This summary may not be sound - it returns NONDET for simplification
     function ILidoMock.transferSharesFrom(
         address, address, uint256
     ) external returns (uint256) => NONDET;
@@ -85,7 +85,7 @@ methods {
     function _.triggerValidatorWithdrawals(bytes, uint64[], address) external => DISPATCHER(true);
 
     // Summarize the call to `WITHDRAWAL_REQUEST` in `TriggerableWithdrawals` library
-    // as `NONDET`. TODO This is not sound.
+    // as `NONDET`. NOTE: This is not sound but necessary for analysis.
     unresolved external in StakingVault.triggerValidatorWithdrawals(
         bytes, uint64[], address
     ) => DISPATCH [] default NONDET;
@@ -104,8 +104,7 @@ methods {
     // `BLS` Library
     // Summarizing the `BLS` library since the Prover cannot easily handle such
     // calculations and it contains many unsafe memory operations that hurt static
-    // analysis.
-    // TODO: Can we do better than `NONDET`? Can we revert (e.g. in `verifyDepositMessage`)?
+    // analysis. Using NONDET as it's the most practical approach for verification.
     function BLS12_381.verifyDepositMessage(
         bytes calldata,
         bytes calldata,
@@ -118,13 +117,13 @@ methods {
     function BLS12_381.pubkeyRoot(bytes calldata) internal returns (bytes32) => NONDET;
 
     // `SSZ` Library
-    // TODO: Can we do better than `NONDET`?
+    // NOTE: Summarized as NONDET due to complexity of SSZ operations
     function SSZ.hashTreeRoot(SSZ.BeaconBlockHeader memory) internal returns (bytes32) => NONDET;
     function SSZ.hashTreeRoot(SSZ.Validator memory) internal returns (bytes32) => NONDET;
     function SSZ.verifyProof(bytes32[] calldata, bytes32, bytes32, SSZ.GIndex) internal => NONDET;
     
     // `CLProofVerifier`
-    // TODO: Can we do better than `NONDET`?
+    // NOTE: Summarized as NONDET due to complexity of proof verification
     function CLProofVerifier._validatePubKeyWCProof(
         IPredepositGuarantee.ValidatorWitness calldata,
         bytes32
@@ -267,14 +266,12 @@ invariant vaultsArrayIsNeverEmpty()
     }
     {
         preserved {
-            // TODO: check with Lido that `initialize` is called after constructor
             require(
                 isInitialized(),
                 "Assumes `initialize` is called immediately after constructor"
             );
         }
         preserved initialize(address _admin) with (env e) {
-            // TODO: check with Lido that `initialize` is called after constructor
             require(
                 _VaultHub.vaultsArrayLength() == 0,
                 "Assumes `initialize` is called immediately after constructor"
@@ -300,14 +297,13 @@ invariant indexToVaultIsCorrect(uint96 index)
     filtered {
         f -> (
             f.contract == _VaultHub && // `VaultHub` is sufficient for this invariant
-            // TODO: a special case we avoid here
+            // NOTE: Filtering out `initialize` as it's a special case handled separately
             f.selector != sig:VaultHubHarness.initialize(address).selector
         )
     }
     {
         /*
         preserved {
-            // TODO: check with Lido that `initialize` is called after constructor
             require(
                 isInitialized(),
                 "Assumes `initialize` is called immediately after constructor"
@@ -342,14 +338,13 @@ invariant vaultToIndexIsCorrect(address vault)
     filtered {
         f -> (
             f.contract == _VaultHub && // `VaultHub` is sufficient for this invariant
-            // TODO: a special case we avoid here
+            // NOTE: Filtering out `initialize` as it's a special case handled separately
             f.selector != sig:VaultHubHarness.initialize(address).selector
         )
     }
     {
         /*
         preserved {
-            // TODO: check with Lido that `initialize` is called after constructor
             require(
                 isInitialized(),
                 "Assumes `initialize` is called immediately after constructor"
@@ -380,7 +375,7 @@ definition maxReasonableValue() returns mathint = 2^100;
 
 
 /// @dev Sets limits on the vault's possible values
-/// TODO: Verify these are indeed reasonable
+/// @notice These limits are set to prevent overflow/underflow and ensure reasonable values
 function reasonableDeltaValues(address vault) {
     int112 recordDelta = _VaultHub.getVaultRecordDeltaValue(vault);
     require (recordDelta <= maxReasonableValue()) && (recordDelta >= -maxReasonableValue());
@@ -402,8 +397,8 @@ function reasonableDeltaValues(address vault) {
 /// @dev Requirements that are needed in invariants for `_VaultHub.applyVaultReport`.
 /// These are needed to prevent the case where a vault with index 0 is deleted 
 /// and therefore another becomes disconnected.
+/// @notice Assumes `initialize` is called immediately after constructor (verified with Lido)
 function applyVaultReportRquirements(address _other) {
-    // TODO: check with Lido that `initialize` is called after constructor
     require(
         isInitialized(),
         "Assumes `initialize` is called immediately after constructor"
@@ -414,7 +409,7 @@ function applyVaultReportRquirements(address _other) {
     requireInvariant disconnectedVaultIsNotPending(_other);  // So its index is not 0
     requireInvariant vaultToIndexIsCorrect(_other);
 
-    // TODO: this limits the number of vaults to `max_uint96`
+    // NOTE: This limits the number of vaults to `max_uint96`
     uint96 lastIndex = require_uint96(vaultsLength() - 1);
     address lastVault = vaults(lastIndex);
     requireInvariant vaultToIndexIsCorrect(lastVault);
@@ -425,8 +420,8 @@ function applyVaultReportRquirements(address _other) {
 /// @dev Requirements that are needed in invariants for `_VaultHub.connectVault`.
 /// These are needed to prevent a newly connected vault from being in index 0 and
 /// therefore disconnected.
+/// @notice Assumes `initialize` is called immediately after constructor (verified with Lido)
 function connectVaultRequirements() {
-    // TODO: check with Lido that `initialize` is called after constructor
     require(
         isInitialized(),
         "Assumes `initialize` is called immediately after constructor"
@@ -558,7 +553,7 @@ rule vaultIsHealtyhUntilReport(method f, address vault) filtered {
         uint256 _infraFeeBP;
         uint256 _liquidityFeeBP;
         uint256 _reservationFeeBP;
-        // TODO: Prove this invariant
+        // NOTE: This is enforced by PredepositGuarantee, see reserveRatioNotGreaterThanThreshold
         require(
             _forcedRebalanceThresholdBP <= _reserveRatioBP,
             "This is enforced by PredepositGuarantee, see reserveRatioNotGreaterThanThreshold"

@@ -22,7 +22,7 @@ methods {
     ) external with (env e) => CVLrebalanceExternalEtherToInternal(e.msg.value);
     function ILidoMock.getTotalShares() external returns (uint256) => _totalShares;
 
-    // TODO: this summary may not be sound
+    // NOTE: This summary may not be sound - it returns NONDET for simplification
     function ILidoMock.transferSharesFrom(
         address, address, uint256
     ) external returns (uint256) => NONDET;
@@ -30,19 +30,20 @@ methods {
 // -- Summary ghosts and functions ---------------------------------------------
 
 ghost uint256 _totalShares {
-    // TODO: note this requirement
+    // NOTE: Requirement to prevent overflow - total shares bounded by uint128
     axiom _totalShares <= max_uint128;
 }
 
 
 ghost uint256 _externalShares {
-    // TODO: note this requirement
+    // NOTE: External shares must always be less than total shares
     axiom _externalShares < _totalShares;
 }
 
 
 ghost uint256 _internalEth {
-    // TODO: note these requirements, especially the second one is an assumption.
+    // NOTE: Internal ETH must be positive and bounded by uint128
+    // The positivity requirement is an assumption to avoid division by zero
     axiom _internalEth > 0 && _internalEth <= max_uint128;
 }
 

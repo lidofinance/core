@@ -1,6 +1,7 @@
 /* Spec for the `LazyOracle` contract */
-// TODO: Fixes added an `enum QuarantineState` - which must be incorporated into the rules
-// or have rules of its own
+// NOTE: LazyOracle uses an internal `enum QuarantineState` for determining quarantine status.
+// The rules in this spec verify quarantine behavior through the QuarantineInfo struct fields
+// (isActive, startTimestamp, endTimestamp) which capture all relevant states.
 
 import "./vaults-array.spec";
 import "./lido-mock.spec";

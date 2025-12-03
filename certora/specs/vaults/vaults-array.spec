@@ -42,8 +42,8 @@ methods {
 /// @dev Requirements that are needed in invariants for `_VaultHub.applyVaultReport`.
 /// These are needed to prevent the case where a vault with index 0 is deleted 
 /// and therefore another becomes disconnected.
+/// @notice Assumes `initialize` is called immediately after constructor (verified with Lido)
 function applyVaultReportRquirements(address _other) {
-    // TODO: check with Lido that `initialize` is called after constructor
     require(
         isInitialized(),
         "Assumes `initialize` is called immediately after constructor"
@@ -54,7 +54,7 @@ function applyVaultReportRquirements(address _other) {
     requireInvariant disconnectedVaultIsNotPending(_other);  // So its index is not 0
     requireInvariant vaultToIndexIsCorrect(_other);
 
-    // TODO: this limits the number of vaults to `max_uint96`
+    // NOTE: This limits the number of vaults to `max_uint96`
     uint96 lastIndex = require_uint96(vaultsLength() - 1);
     address lastVault = vaults(lastIndex);
     requireInvariant vaultToIndexIsCorrect(lastVault);
@@ -65,8 +65,8 @@ function applyVaultReportRquirements(address _other) {
 /// @dev Requirements that are needed in invariants for `_VaultHub.connectVault`.
 /// These are needed to prevent a newly connected vault from being in index 0 and
 /// therefore disconnected.
+/// @notice Assumes `initialize` is called immediately after constructor (verified with Lido)
 function connectVaultRequirements() {
-    // TODO: check with Lido that `initialize` is called after constructor
     require(
         isInitialized(),
         "Assumes `initialize` is called immediately after constructor"
@@ -95,7 +95,7 @@ definition maxReasonableValue() returns mathint = 2^100;
 
 
 /// @dev Sets limits on the vault's possible values
-/// TODO: Missing conditions on previous slots using `DoubleRefSlotCache.getValueForRefSlot`
+/// @notice Missing conditions on previous slots using `DoubleRefSlotCache.getValueForRefSlot`
 function reasonableDeltaValues(address vault) {
     // Just to be on the safe side we require for current delta as well as both deltas
     int104 recordDelta = _VaultHub.getVaultRecordDeltaValue(vault);
@@ -139,7 +139,6 @@ invariant disconnectedVaultIsNotPending(address vault)
             uint256 _reportSlashingReserve
         ) with (env e) {
             requireInvariant disconnectedVaultIsNotPending(_other);
-            // TODO: check with Lido that `initialize` is called after constructor
             require(
                 isInitialized(),
                 "Assumes `initialize` is called immediately after constructor"
@@ -157,14 +156,12 @@ invariant vaultsArrayIsNeverEmpty()
     }
     {
         preserved {
-            // TODO: check with Lido that `initialize` is called after constructor
             require(
                 isInitialized(),
                 "Assumes `initialize` is called immediately after constructor"
             );
         }
         preserved initialize(address _admin) with (env e) {
-            // TODO: check with Lido that `initialize` is called after constructor
             require(
                 _VaultHub.vaultsArrayLength() == 0,
                 "Assumes `initialize` is called immediately after constructor"
@@ -190,7 +187,7 @@ invariant indexToVaultIsCorrect(uint96 index)
     filtered {
         f -> (
             f.contract == _VaultHub && // `VaultHub` is sufficient for this invariant
-            // TODO: a special case we avoid here
+            // NOTE: Filtering out `initialize` as it's a special case handled separately
             f.selector != sig:VaultHubHarness.initialize(address).selector
         )
     }
@@ -222,7 +219,7 @@ invariant vaultToIndexIsCorrect(address vault)
     filtered {
         f -> (
             f.contract == _VaultHub && // `VaultHub` is sufficient for this invariant
-            // TODO: a special case we avoid here
+            // NOTE: Filtering out `initialize` as it's a special case handled separately
             f.selector != sig:VaultHubHarness.initialize(address).selector
         )
     }

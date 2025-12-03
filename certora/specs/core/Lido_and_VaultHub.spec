@@ -145,7 +145,6 @@ invariant externalSharesAtMostSumLiabilityShares()
         }
 
         preserved _VaultHub.rebalance(address _vault, uint256 _shares) with (env e) {
-            // TODO: alert Lido that this can overflow
             require(
                 _shares * _Lido.getInternalEther() < max_uint256,
                 "Prevent Lido.getPooledEthBySharesRoundUp from overflowing"
