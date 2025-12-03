@@ -15,19 +15,18 @@ sealDuration = 1209600  # 14 days
 sealingCommittee = "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
 
 [easyTrack]
-VaultsAdapter = "0x4CC57Fcb95429CBdC596824a40A92D1245FDb92b"     # TODO: update upon deployment
+VaultsAdapter = "0xe2DE6d2DefF15588a71849c0429101F8ca9FB14D"
 
 # Must be deployed before the V3 upgrading contracts
 [easyTrack.newFactories]
-# TODO: update upon deployment
-AlterTiersInOperatorGrid = "0x00000000000000000000000000000000000fAc01"
-RegisterGroupsInOperatorGrid = "0x00000000000000000000000000000000000fAc02"
-RegisterTiersInOperatorGrid = "0x00000000000000000000000000000000000FAc03"
-SetJailStatusInOperatorGrid = "0x00000000000000000000000000000000000faC04"
-SocializeBadDebtInVaultHub = "0x00000000000000000000000000000000000Fac06"
-ForceValidatorExitsInVaultHub = "0x00000000000000000000000000000000000faC07"
-UpdateGroupsShareLimitInOperatorGrid = "0x00000000000000000000000000000000000FAc08"
-UpdateVaultsFeesInOperatorGrid = "0x00000000000000000000000000000000000fac09"
+AlterTiersInOperatorGrid = "0xa29173C7BCf39dA48D5E404146A652d7464aee14"
+RegisterGroupsInOperatorGrid = "0x194A46DA1947E98c9D79af13E06Cfbee0D8610cC"
+RegisterTiersInOperatorGrid = "0x5292A1284e4695B95C0840CF8ea25A818751C17F"
+SetJailStatusInOperatorGrid = "0x93F1DEE4473Ee9F42c8257C201e33a6Da30E5d67"
+SocializeBadDebtInVaultHub = "0x1dF50522A1D868C12bF71747Bb6F24A18Fe6d32C"
+ForceValidatorExitsInVaultHub = "0x6C968cD89CA358fbAf57B18e77a8973Fa869a6aA"
+UpdateGroupsShareLimitInOperatorGrid = "0x8Bdc726a3147D8187820391D7c6F9F942606aEe6"
+UpdateVaultsFeesInOperatorGrid = "0x5C3bDFa3E7f312d8cf72F56F2b797b026f6B471c"
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
