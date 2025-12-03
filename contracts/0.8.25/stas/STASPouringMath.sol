@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {STASCore} from "./STASCore.sol";
 
-/// @dev Helper struct for sorting entities during "Water filling" allocation
+/// @dev Helper struct for input allocation state
 struct AllocationState {
     uint256[] shares;
     uint256[] amounts;
@@ -210,40 +210,27 @@ library STASPouringMath {
                     ++levelFillsCount;
                 }
 
-                // emit StdAssertions.log_named_uint("!levelFillsCount ", levelFillsCount);
-                // emit StdAssertions.log_named_uint("!levelDemandsCount ", levelDemandsCount);
-
                 uint256 amountQuant = _quantize(amount / levelFillsCount, step);
-                // emit StdAssertions.log_named_uint("!>>amountQuant ", amountQuant);
-                // emit StdAssertions.log_named_uint("!>>amount ", amount);
                 if (delta == 0 || delta > amountQuant) {
                     uint256 levelDemandsCount = levelFillsCount;
                     while (amountQuant == 0 && levelDemandsCount > 1) {
                         --levelDemandsCount;
-                        // emit StdAssertions.log_named_uint("levelDemandsCount NEW", levelDemandsCount);
                         amountQuant = _quantize(amount / levelDemandsCount, step);
-                        // emit StdAssertions.log_named_uint("!amountQuant NEW ", amountQuant);
                     }
 
                     // break the loop if `amount` is not enough to fill at least one demand item
                     if (amountQuant == 0) {
-                        // emit StdAssertions.log_named_uint("levelDemandsCount = 0", levelDemandsCount);
                         break;
                     }
                     if (delta > 0) {
                         // update current fill level by amountQuant only if delta was non-zero, i.e. we are below next level
                         currentFillLevel -= int256(amountQuant);
-                        // emit StdAssertions.log_named_int("!currentFillLevel NEW 1", currentFillLevel);
                     }
                     delta = amountQuant;
-                    // emit StdAssertions.log_named_uint("!delta NEW ", delta);
                 } else {
                     // update fill level to next level
                     currentFillLevel -= int256(delta);
-                    // emit StdAssertions.log_named_int("!currentFillLevel NEW 2", currentFillLevel);
                 }
-
-                // emit StdAssertions.log_named_uint("!!!delta", delta);
 
                 processedCount = 0;
 
@@ -317,21 +304,4 @@ library STASPouringMath {
             }
         }
     }
-
-    //  function _reverseArray(uint256[] memory values) internal pure {
-    //     uint256 i;
-    //     uint256 j = values.length;
-    //     if (j == 0) return;
-    //     unchecked {
-    //         --j;
-    //         while (i < j) {
-    //             uint256 vi = values[i];
-    //             uint256 vj = values[j];
-    //             values[i] = vj;
-    //             values[j] = vi;
-    //             ++i;
-    //             --j;
-    //         }
-    //     }
-    // }
 }
