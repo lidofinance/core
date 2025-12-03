@@ -247,13 +247,26 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       it("Can trigger validator withdrawal", async () => {
         const keys = getPubkeys(2);
         const value = await stakingVault.calculateValidatorWithdrawalFee(2);
-        await expect(
-          stakingVault
-            .connect(owner)
-            .triggerValidatorWithdrawals(keys.stringified, [ether("1"), ether("2")], owner.address, { value }),
-        )
+
+        const tx = stakingVault
+          .connect(owner)
+          .triggerValidatorWithdrawals(keys.stringified, [], owner, { value: value * 2n });
+        await expect(tx).to.changeEtherBalance(owner, -value);
+        await expect(tx)
           .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
-          .withArgs(keys.stringified, [ether("1"), ether("2")], 0, owner.address);
+          .withArgs(keys.stringified, [], value, owner);
+      });
+
+      it("Node operator can eject validators", async () => {
+        const keys = getPubkeys(2);
+        const value = await stakingVault.calculateValidatorWithdrawalFee(2);
+        const tx = stakingVault
+          .connect(nodeOperator)
+          .ejectValidators(keys.stringified, nodeOperator, { value: value * 2n });
+        await expect(tx).to.changeEtherBalance(nodeOperator, -value);
+        await expect(tx)
+          .to.emit(stakingVault, "ValidatorEjectionsTriggered")
+          .withArgs(keys.stringified, value, nodeOperator);
       });
     });
 
