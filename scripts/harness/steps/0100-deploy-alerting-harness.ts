@@ -17,7 +17,7 @@ export async function main(): Promise<void> {
   //
   // New AlertingHarness deployment
   //
-  await deployImplementation(Sk.alertingHarness, "AlertingHarness", deployer, [locatorAddress]);
-  const newAlertingHarnessAddress = state[Sk.alertingHarness].implementation.address;
-  console.log("New AlertingHarness address", newAlertingHarnessAddress);
+  const alertingHarness = await deployImplementation(Sk.alertingHarness, "AlertingHarness", deployer, [locatorAddress]);
+  const alertingHarnessAddress = await alertingHarness.getAddress();
+  console.log("AlertingHarness address", alertingHarnessAddress);
 }

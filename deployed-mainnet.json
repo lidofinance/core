@@ -25,6 +25,13 @@
       ]
     }
   },
+  "alertingHarness": {
+    "implementation": {
+      "contract": "contracts/harness/AlertingHarness.sol",
+      "address": "0xe3f9D755b3240AF7C988B05588A38461D40Bd558",
+      "constructorArgs": ["0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"]
+    }
+  },
   "apmRegistryFactoryAddress": "0xa0BC4B67F5FacDE4E50EAFF48691Cfc43F4E280A",
   "app:aragon-agent": {
     "implementation": {
