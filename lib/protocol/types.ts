@@ -1,26 +1,34 @@
-import { BaseContract as EthersBaseContract, ContractTransactionReceipt, LogDescription } from "ethers";
+import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interface, LogDescription } from "ethers";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting,
   AccountingOracle,
   ACL,
   Burner,
   DepositSecurityModule,
   HashConsensus,
   ICSModule,
+  IStakingModule,
   Kernel,
-  LegacyOracle,
+  LazyOracle,
   Lido,
   LidoExecutionLayerRewardsVault,
   LidoLocator,
   NodeOperatorsRegistry,
+  OperatorGrid,
   OracleDaemonConfig,
   OracleReportSanityChecker,
+  PredepositGuarantee,
   StakingRouter,
   TriggerableWithdrawalsGateway,
+  UpgradeableBeacon,
+  ValidatorConsolidationRequests,
   ValidatorExitDelayVerifier,
   ValidatorsExitBusOracle,
+  VaultFactory,
+  VaultHub,
   WithdrawalQueueERC721,
   WithdrawalVault,
   WstETH,
@@ -40,8 +48,8 @@ export type ProtocolNetworkItems = {
   accountingOracle: string;
   depositSecurityModule: string;
   elRewardsVault: string;
-  legacyOracle: string;
   lido: string;
+  accounting: string;
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
@@ -61,6 +69,14 @@ export type ProtocolNetworkItems = {
   csm: string;
   // hash consensus
   hashConsensus: string;
+  // vaults
+  stakingVaultFactory: string;
+  stakingVaultBeacon: string;
+  vaultHub: string;
+  predepositGuarantee: string;
+  operatorGrid: string;
+  validatorConsolidationRequests: string;
+  lazyOracle: string;
 };
 
 export interface ContractTypes {
@@ -68,8 +84,8 @@ export interface ContractTypes {
   AccountingOracle: AccountingOracle;
   DepositSecurityModule: DepositSecurityModule;
   LidoExecutionLayerRewardsVault: LidoExecutionLayerRewardsVault;
-  LegacyOracle: LegacyOracle;
   Lido: Lido;
+  Accounting: Accounting;
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
@@ -81,10 +97,18 @@ export interface ContractTypes {
   Kernel: Kernel;
   ACL: ACL;
   HashConsensus: HashConsensus;
+  PredepositGuarantee: PredepositGuarantee;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   ICSModule: ICSModule;
   WstETH: WstETH;
   TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
+  VaultFactory: VaultFactory;
+  UpgradeableBeacon: UpgradeableBeacon;
+  VaultHub: VaultHub;
+  OperatorGrid: OperatorGrid;
+  IStakingModule: IStakingModule;
+  ValidatorConsolidationRequests: ValidatorConsolidationRequests;
+  LazyOracle: LazyOracle;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -100,8 +124,8 @@ export type CoreContracts = {
   accountingOracle: LoadedContract<AccountingOracle>;
   depositSecurityModule: LoadedContract<DepositSecurityModule>;
   elRewardsVault: LoadedContract<LidoExecutionLayerRewardsVault>;
-  legacyOracle: LoadedContract<LegacyOracle>;
   lido: LoadedContract<Lido>;
+  accounting: LoadedContract<Accounting>;
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;
@@ -122,7 +146,7 @@ export type AragonContracts = {
 export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
-  csm?: LoadedContract<ICSModule>;
+  csm?: LoadedContract<IStakingModule>;
 };
 
 export type StakingModuleName = "nor" | "sdvt" | "csm";
@@ -135,11 +159,22 @@ export type WstETHContracts = {
   wstETH: LoadedContract<WstETH>;
 };
 
+export type VaultsContracts = {
+  stakingVaultFactory: LoadedContract<VaultFactory>;
+  stakingVaultBeacon: LoadedContract<UpgradeableBeacon>;
+  vaultHub: LoadedContract<VaultHub>;
+  predepositGuarantee: LoadedContract<PredepositGuarantee>;
+  operatorGrid: LoadedContract<OperatorGrid>;
+  validatorConsolidationRequests: LoadedContract<ValidatorConsolidationRequests>;
+  lazyOracle: LoadedContract<LazyOracle>;
+};
+
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
   AragonContracts &
   StakingModuleContracts &
   HashConsensusContracts &
-  WstETHContracts;
+  WstETHContracts &
+  VaultsContracts;
 
 export type ProtocolSigners = {
   agent: string;
@@ -160,5 +195,25 @@ export type ProtocolContext = {
   flags: ProtocolContextFlags;
   isScratch: boolean;
   getSigner: (signer: Signer, balance?: bigint) => Promise<HardhatEthersSigner>;
-  getEvents: (receipt: ContractTransactionReceipt, eventName: string) => LogDescription[];
+  getEvents: (
+    receipt: ContractTransactionReceipt,
+    eventName: string,
+    extraInterfaces?: Interface[], // additional interfaces to parse
+  ) => LogDescriptionExtended[];
 };
+
+export type RequireAllKeys<O, A extends readonly (keyof O)[]> =
+  Exclude<keyof O, A[number]> extends never // ← nothing missing?
+    ? A[number] extends keyof O
+      ? A
+      : never //   and nothing extra?
+    : never;
+
+/**
+ * Helper function to ensure all keys of an object are present in an array
+ * @param arr - The array of keys to check
+ * @returns The array of keys
+ */
+export function keysOf<O>() {
+  return <const A extends readonly (keyof O)[]>(arr: RequireAllKeys<O, A>) => arr;
+}

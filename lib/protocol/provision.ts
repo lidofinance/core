@@ -1,14 +1,20 @@
 import { certainAddress, ether, impersonate, log } from "lib";
-import { ensureEIP4788BeaconBlockRootContractPresent, ensureEIP7002WithdrawalRequestContractPresent } from "lib/eips";
+import {
+  ensureEIP4788BeaconBlockRootContractPresent,
+  ensureEIP7002WithdrawalRequestContractPresent,
+  ensureEIP7251MaxEffectiveBalanceRequestContractPresent,
+} from "lib/eips";
 
 import {
   ensureDsmGuardians,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
+  ensureSomeOddShareRate,
   ensureStakeLimit,
   norSdvtEnsureOperators,
   unpauseStaking,
   unpauseWithdrawalQueue,
+  upDefaultTierShareLimit,
 } from "./helpers";
 import { ProtocolContext } from "./types";
 
@@ -19,13 +25,14 @@ let alreadyProvisioned = false;
  */
 export const provision = async (ctx: ProtocolContext) => {
   if (alreadyProvisioned) {
-    log.success("Already provisioned");
+    log.debug("Already provisioned");
     return;
   }
 
   // Ensure necessary precompiled contracts are present
   await ensureEIP7002WithdrawalRequestContractPresent();
   await ensureEIP4788BeaconBlockRootContractPresent();
+  await ensureEIP7251MaxEffectiveBalanceRequestContractPresent();
 
   // Ensure protocol is fully operational
   await ensureHashConsensusInitialEpoch(ctx);
@@ -45,11 +52,18 @@ export const provision = async (ctx: ProtocolContext) => {
 
   // Ensure some initial TVL required for current tests
   const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000000"));
-  await ethHolder.sendTransaction({ to: ctx.contracts.lido.address, value: ether("100000") });
+  await ethHolder.sendTransaction({ to: ctx.contracts.lido.address, value: ether("10000") });
+  // await ethHolder.sendTransaction({ to: ctx.contracts.lido.address, value: ether("100000") });
 
   await ensureStakeLimit(ctx);
 
   await ensureDsmGuardians(ctx, 3n, 2n);
+
+  if (ctx.isScratch) {
+    await ensureSomeOddShareRate(ctx);
+  }
+
+  await upDefaultTierShareLimit(ctx, ether("250"));
 
   alreadyProvisioned = true;
 

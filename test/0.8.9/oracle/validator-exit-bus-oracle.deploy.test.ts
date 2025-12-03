@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness, ValidatorsExitBusOracle } from "typechain-types";
 
-import { CONSENSUS_VERSION, SECONDS_PER_SLOT } from "lib";
+import { SECONDS_PER_SLOT, VEBO_CONSENSUS_VERSION } from "lib";
 
 import { deployVEBO, initVEBO } from "test/deploy";
 
@@ -32,7 +32,7 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
         deployed.oracle.initialize(
           ZeroAddress,
           await deployed.consensus.getAddress(),
-          CONSENSUS_VERSION,
+          VEBO_CONSENSUS_VERSION,
           0,
           maxValidatorsPerReport,
           maxExitRequestsLimit,
@@ -79,7 +79,7 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
 
       it("initial configuration is correct", async () => {
         expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
-        expect(await oracle.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
+        expect(await oracle.getConsensusVersion()).to.equal(VEBO_CONSENSUS_VERSION);
         expect(await oracle.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
         expect(await oracle.isPaused()).to.equal(true);
       });

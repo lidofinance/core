@@ -16,7 +16,6 @@ fi
 echo "NETWORK is $NETWORK"
 
 rm -f "${NETWORK_STATE_FILE}"
-cp "${NETWORK_STATE_DEFAULTS_FILE}" "${NETWORK_STATE_FILE}"
 
 # Compile contracts
 yarn compile

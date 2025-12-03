@@ -7,19 +7,19 @@ import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 import { Lido, WithdrawalQueueERC721 } from "typechain-types";
 
 import { ether, findEventsWithInterfaces } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { finalizeWQViaElVault, report } from "lib/protocol/helpers";
+import { finalizeWQViaSubmit, getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { finalizeWQViaElVault } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
 
 describe("Integration: Withdrawal edge cases", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalState: string;
+
   let holder: HardhatEthersSigner;
   let lido: Lido;
   let wq: WithdrawalQueueERC721;
-
-  let snapshot: string;
-  let originalState: string;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -30,12 +30,12 @@ describe("Integration: Withdrawal edge cases", () => {
 
     [, holder] = await ethers.getSigners();
     await setBalance(holder.address, ether("1000000"));
+
+    await finalizeWQViaSubmit(ctx);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(originalState));
-
   after(async () => await Snapshot.restore(snapshot));
 
   it("Should handle bunker mode with multiple batches", async () => {

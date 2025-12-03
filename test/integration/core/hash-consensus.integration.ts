@@ -7,16 +7,16 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { HashConsensus } from "typechain-types";
 
 import { ether, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   calcReportDataHash,
+  getProtocolContext,
   getReportDataItems,
+  ProtocolContext,
   report,
   waitNextAvailableReportTime,
-  ZERO_HASH,
-} from "lib/protocol/helpers";
+} from "lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { Snapshot, ZERO_HASH } from "test/suite";
 
 const UINT64_MAX = 2n ** 64n - 1n;
 

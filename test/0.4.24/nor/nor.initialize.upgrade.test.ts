@@ -222,8 +222,9 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
     });
 
     it("Reverts when threshold is zero", async () => {
-      await expect(nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(0n, 3600n))
-        .to.be.revertedWith("INVALID_EXIT_DELAY_THRESHOLD");
+      await expect(nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(0n, 3600n)).to.be.revertedWith(
+        "INVALID_EXIT_DELAY_THRESHOLD",
+      );
     });
 
     it("Reverts when sum of threshold and reporting window causes underflow", async () => {
@@ -231,8 +232,9 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
       const threshold = BigInt(currentTime) + 1000n; // Future timestamp
       const reportingWindow = 1000n;
 
-      await expect(nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(threshold, reportingWindow))
-        .to.be.revertedWith("CUTOFF_TIMESTAMP_UNDERFLOW");
+      await expect(
+        nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(threshold, reportingWindow),
+      ).to.be.revertedWith("CUTOFF_TIMESTAMP_UNDERFLOW");
     });
 
     it("Reverts when new cutoff timestamp is less than current cutoff timestamp", async () => {
@@ -241,8 +243,9 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
 
       // Try to set a higher threshold that would result in a lower (earlier) cutoff timestamp
       // This should fail because cutoff timestamp must be monotonically increasing
-      await expect(nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(172800n, 3600n))
-        .to.be.revertedWith("INVALID_EXIT_PENALTY_CUTOFF_TIMESTAMP");
+      await expect(nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(172800n, 3600n)).to.be.revertedWith(
+        "INVALID_EXIT_PENALTY_CUTOFF_TIMESTAMP",
+      );
     });
 
     it("Works correctly with minimal values", async () => {
@@ -266,13 +269,13 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
       const currentTime = BigInt(await time.latest());
 
       // This should fail due to underflow protection
-      await expect(nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(currentTime, currentTime))
-        .to.be.revertedWith("CUTOFF_TIMESTAMP_UNDERFLOW");
+      await expect(
+        nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(currentTime, currentTime),
+      ).to.be.revertedWith("CUTOFF_TIMESTAMP_UNDERFLOW");
     });
 
     it("Only allows MANAGE_NODE_OPERATOR_ROLE to set threshold", async () => {
-      await expect(nor.connect(user).setExitDeadlineThreshold(43200n, 3600n))
-        .to.be.revertedWith("APP_AUTH_FAILED");
+      await expect(nor.connect(user).setExitDeadlineThreshold(43200n, 3600n)).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
     it("Updates cutoff timestamp correctly with monotonic increase", async () => {

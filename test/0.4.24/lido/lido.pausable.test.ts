@@ -36,20 +36,33 @@ describe("Lido.sol:pausable", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("resumeStaking", () => {
+    it("Reverts if the caller is unauthorized", async () => {
+      await expect(lido.connect(stranger).resumeStaking()).to.be.revertedWith("APP_AUTH_FAILED");
+    });
+
+    it("Reverts if contract is stopped", async () => {
+      await expect(lido.resumeStaking()).to.be.revertedWith("CONTRACT_IS_STOPPED");
+    });
+
     it("Resumes staking", async () => {
+      await lido.resume();
+      await lido.pauseStaking();
+
       expect(await lido.isStakingPaused()).to.equal(true);
       await expect(lido.resumeStaking()).to.emit(lido, "StakingResumed");
       expect(await lido.isStakingPaused()).to.equal(false);
     });
 
-    it("Reverts if the caller is unauthorized", async () => {
-      await expect(lido.connect(stranger).resumeStaking()).to.be.revertedWith("APP_AUTH_FAILED");
+    it("Reverts if staking is already resumed", async () => {
+      await lido.resume();
+
+      await expect(lido.resumeStaking()).to.be.revertedWith("ALREADY_RESUMED");
     });
   });
 
   context("pauseStaking", () => {
     beforeEach(async () => {
-      await expect(lido.resumeStaking()).to.emit(lido, "StakingResumed");
+      await lido.resume();
       expect(await lido.isStakingPaused()).to.equal(false);
     });
 
@@ -61,6 +74,12 @@ describe("Lido.sol:pausable", () => {
     it("Reverts if the caller is unauthorized", async () => {
       await expect(lido.connect(stranger).pauseStaking()).to.be.revertedWith("APP_AUTH_FAILED");
     });
+
+    it("Reverts if staking is already paused", async () => {
+      await lido.pauseStaking();
+
+      await expect(lido.pauseStaking()).to.be.revertedWith("ALREADY_PAUSED");
+    });
   });
 
   context("isStakingPaused", () => {
@@ -69,7 +88,7 @@ describe("Lido.sol:pausable", () => {
     });
 
     it("Returns false if staking is not paused", async () => {
-      await lido.resumeStaking();
+      await lido.resume();
       expect(await lido.isStakingPaused()).to.equal(false);
     });
   });

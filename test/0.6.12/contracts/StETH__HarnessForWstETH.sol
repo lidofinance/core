@@ -25,7 +25,7 @@ contract StETH__HarnessForWstETH is StETH {
         totalPooledEther = _totalPooledEther;
     }
 
-    function submit(address _referral) public payable returns (uint256) {
+    function submit(address) public payable returns (uint256) {
         uint256 sharesAmount = getSharesByPooledEth(msg.value);
         _mintShares(msg.sender, sharesAmount);
         _emitTransferAfterMintingShares(msg.sender, sharesAmount);

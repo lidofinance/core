@@ -9,7 +9,7 @@ import {
   ValidatorsExitBus__Harness,
 } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import { DATA_FORMAT_LIST, deployVEBO, initVEBO, SECONDS_PER_FRAME } from "test/deploy";
 
@@ -117,8 +117,8 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
@@ -147,7 +147,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       const { refSlot } = await consensus.getCurrentFrame();
 
       reportFields = {
-        consensusVersion: CONSENSUS_VERSION,
+        consensusVersion: VEBO_CONSENSUS_VERSION,
         refSlot: refSlot,
         requestsCount: exitRequests.length,
         dataFormat: DATA_FORMAT_LIST,

@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
 
-import { CONSENSUS_VERSION, findEventsWithInterfaces } from "lib";
+import { BASE_CONSENSUS_VERSION, findEventsWithInterfaces } from "lib";
 
 import { deployHashConsensus, DeployHashConsensusParams, HASH_1, ZERO_HASH } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -140,13 +140,13 @@ describe("HashConsensus.sol:setQuorum", function () {
 
       it("consensus is reached at 2/3 for quorum of 2", async () => {
         await consensus.setQuorum(2);
-        const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+        const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
         await expect(tx1)
           .to.emit(consensus, "ReportReceived")
           .withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
         await expect(tx1).not.to.emit(consensus, "ConsensusReached");
 
-        const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+        const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
         await expect(tx2)
           .to.emit(consensus, "ReportReceived")
           .withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
@@ -174,13 +174,13 @@ describe("HashConsensus.sol:setQuorum", function () {
       after(rollback);
 
       it("2/3 reports come in", async () => {
-        const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+        const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
         await expect(tx1)
           .to.emit(consensus, "ReportReceived")
           .withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
         await expect(tx1).not.to.emit(consensus, "ConsensusReached");
 
-        const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+        const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
         await expect(tx2)
           .to.emit(consensus, "ReportReceived")
           .withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
@@ -205,13 +205,13 @@ describe("HashConsensus.sol:setQuorum", function () {
 
       it("2/3 members reach consensus with quorum of 2", async () => {
         await consensus.setQuorum(2);
-        const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+        const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
         await expect(tx1)
           .to.emit(consensus, "ReportReceived")
           .withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
         await expect(tx1).not.to.emit(consensus, "ConsensusReached");
 
-        const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+        const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
         await expect(tx2)
           .to.emit(consensus, "ReportReceived")
           .withArgs(frame.refSlot, await member2.getAddress(), HASH_1);
@@ -250,13 +250,13 @@ describe("HashConsensus.sol:setQuorum", function () {
 
       it("2/3 members reach consensus with Quorum of 2", async () => {
         await consensus.setQuorum(2);
-        const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+        const tx1 = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
         await expect(tx1)
           .to.emit(consensus, "ReportReceived")
           .withArgs(frame.refSlot, await member1.getAddress(), HASH_1);
         await expect(tx1).not.to.emit(consensus, "ConsensusReached");
 
-        const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+        const tx2 = await consensus.connect(member2).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
         await expect(tx2)
           .to.emit(consensus, "ReportReceived")
           .withArgs(frame.refSlot, await member2.getAddress(), HASH_1);

@@ -22,17 +22,12 @@ import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
 import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
-import {
-  CSM_MODULE_ID,
-  NOR_MODULE_ID,
-  SDVT_MODULE_ID,
-} from "lib/protocol/helpers/staking-module";
+import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
-import { Snapshot } from "test/suite";
+import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MIN_KEYS_PER_OPERATOR = 5n;
 const MIN_OPERATORS_COUNT = 30n;
-const MAX_BASIS_POINTS = 100_00n;
 
 class ListKeyMapHelper<ValueType> {
   private map: Map<string, ValueType> = new Map();

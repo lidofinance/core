@@ -6,20 +6,15 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
 import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { report } from "lib/protocol/helpers";
-import {
-  OracleReportOptions,
-  reportWithoutExtraData,
-  waitNextAvailableReportTime,
-} from "lib/protocol/helpers/accounting";
+import { getProtocolContext, OracleReportParams, ProtocolContext, report } from "lib/protocol";
+import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
-import { Snapshot } from "test/suite";
+import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MODULE_ID = NOR_MODULE_ID;
 const NUM_NEWLY_EXITED_VALIDATORS = 1n;
-const MAX_BASIS_POINTS = 100_00n;
+const MAINNET_NOR_ADDRESS = "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5".toLowerCase();
 
 describe("Integration: AccountingOracle extra data", () => {
   let ctx: ProtocolContext;
@@ -44,7 +39,7 @@ describe("Integration: AccountingOracle extra data", () => {
     }
 
     {
-      // Prepare stuck and exited keys extra data for reusing in tests
+      // Prepare exited keys extra data for reusing in tests
       const { oracleReportSanityChecker } = ctx.contracts;
 
       // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
@@ -57,7 +52,7 @@ describe("Integration: AccountingOracle extra data", () => {
 
       let firstNodeOperatorInRange = 0;
       // Workaround for Mainnet
-      if (ctx.contracts.nor.address.toLowerCase() === "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5") {
+      if (ctx.contracts.nor.address.toLowerCase() === MAINNET_NOR_ADDRESS) {
         firstNodeOperatorInRange = 20;
       }
 
@@ -67,7 +62,6 @@ describe("Integration: AccountingOracle extra data", () => {
         nodeOpIds: [],
         keysCounts: [],
       };
-      
       // Add at least 2 node operators with exited validators to test chunking
       for (let i = firstNodeOperatorInRange; i < firstNodeOperatorInRange + Math.min(2, numNodeOperators); i++) {
         const oldNumExited = await getExitedCount(BigInt(i));
@@ -96,36 +90,29 @@ describe("Integration: AccountingOracle extra data", () => {
 
   async function submitMainReport() {
     const { nor } = ctx.contracts;
-    
     // Split exitedKeys into two separate entries for different node operators to test chunking
     const firstExitedKeys = {
       moduleId: Number(MODULE_ID),
       nodeOpIds: exitedKeys.nodeOpIds.length > 0 ? [exitedKeys.nodeOpIds[0]] : [],
       keysCounts: exitedKeys.keysCounts.length > 0 ? [exitedKeys.keysCounts[0]] : [],
     };
-    
     const secondExitedKeys = {
       moduleId: Number(MODULE_ID),
       nodeOpIds: exitedKeys.nodeOpIds.length > 1 ? [exitedKeys.nodeOpIds[1]] : [],
       keysCounts: exitedKeys.keysCounts.length > 1 ? [exitedKeys.keysCounts[1]] : [],
     };
-    
+
     const extraData = prepareExtraData(
-      { exitedKeys: [firstExitedKeys, secondExitedKeys] }, 
-      { maxItemsPerChunk: 1 } // This will create 2 chunks from 2 items
+      { exitedKeys: [firstExitedKeys, secondExitedKeys] },
+      { maxItemsPerChunk: 1 }, // This will create 2 chunks from 2 items
     );
 
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
-    
+
     // Add total exited validators for both entries
     const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
 
-    return await reportWithoutExtraData(
-      ctx,
-      [totalExitedValidators + totalNewExited],
-      [NOR_MODULE_ID],
-      extraData,
-    );
+    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData);
   }
 
   it("should accept report with multiple keys per node operator (single chunk)", async () => {
@@ -133,7 +120,6 @@ describe("Integration: AccountingOracle extra data", () => {
 
     // Get initial summary
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
-    
     // Use both node operators with exited keys for a single chunk test
     const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = prepareExtraData({
       exitedKeys: [exitedKeys], // Use all exitedKeys in one chunk
@@ -141,7 +127,7 @@ describe("Integration: AccountingOracle extra data", () => {
     expect(extraDataChunks.length).to.equal(1);
     expect(extraDataChunkHashes.length).to.equal(1);
 
-    const reportData: Partial<OracleReportOptions> = {
+    const reportData: Partial<OracleReportParams> = {
       clDiff: 0n,
       excludeVaultsBalances: true,
       extraDataFormat: EXTRA_DATA_FORMAT_LIST,

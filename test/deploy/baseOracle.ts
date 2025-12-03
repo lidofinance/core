@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ConsensusContract__Mock } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
+  BASE_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_EPOCH,
@@ -59,7 +59,7 @@ export async function deployBaseOracle(
 
   const oracle = await ethers.deployContract("BaseOracle__Harness", [secondsPerSlot, genesisTime, admin]);
 
-  await oracle.initialize(await consensusContract.getAddress(), CONSENSUS_VERSION, 0);
+  await oracle.initialize(await consensusContract.getAddress(), BASE_CONSENSUS_VERSION, 0);
 
   await consensusContract.setAsyncProcessor(await oracle.getAddress());
 

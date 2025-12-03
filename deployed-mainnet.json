@@ -186,6 +186,11 @@
       "constructorArgs": []
     }
   },
+  "aragon-acl": {
+    "proxy": {
+      "address": "0x9895f0f17cc1d1891b6f18ee0b483b6f221b37bb"
+    }
+  },
   "aragon-kernel": {
     "implementation": {
       "contract": "@aragon/os/contracts/kernel/Kernel.sol",
@@ -195,6 +200,21 @@
     "proxy": {
       "address": "0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc",
       "contract": "@aragon/os/contracts/kernel/KernelProxy.sol"
+    }
+  },
+  "aragon-lido-app-repo": {
+    "proxy": {
+      "address": "0xF5Dc67E54FC96F993CD06073f71ca732C1E654B1"
+    }
+  },
+  "aragon-node-operators-registry-app-repo": {
+    "proxy": {
+      "address": "0x0D97E876ad14DB2b183CFeEB8aa1A5C788eB1831"
+    }
+  },
+  "aragon-simple-dvt-app-repo": {
+    "proxy": {
+      "address": "0x2325b0a607808dE42D918DB07F925FFcCfBb2968"
     }
   },
   "aragonIDAddress": "0x546aa2eae2514494eeadb7bbb35243348983c59d",
@@ -260,11 +280,27 @@
       "pauseIntentValidityPeriodBlocks": 6646
     }
   },
+  "dg:dualGovernance": {
+    "proxy": {
+      "address": "0xC1db28B3301331277e307FDCfF8DE28242A4486E"
+    }
+  },
+  "dg:emergencyProtectedTimelock": {
+    "proxy": {
+      "address": "0xCE0425301C85c5Ea2A0873A2dEe44d78E02D2316"
+    }
+  },
   "dummyEmptyContract": {
     "address": "0x6F6541C2203196fEeDd14CD2C09550dA1CbEDa31",
     "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",
     "deployTx": "0x9d76786f639bd18365f10c087444761db5dafd0edc85c5c1a3e90219f2d1331d",
     "constructorArgs": []
+  },
+  "easyTrack": {
+    "address": "0xF0211b7660680B49De1A7E9f25C65660F0a13Fea"
+  },
+  "easyTrackEVMScriptExecutor": {
+    "address": "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"
   },
   "eip712StETH": {
     "address": "0x8F73e4C2A6D852bb4ab2A45E6a9CF5715b3228B7",
@@ -285,12 +321,18 @@
     "expiryTimestamp": 1788908579,
     "sealingCommittee": "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
   },
+  "gateSealFactory": {
+    "address": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24"
+  },
   "gateSealTW": {
     "factoryAddress": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24",
     "sealDuration": 1209600,
     "expiryTimestamp": 1788908579,
     "sealingCommittee": "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C",
     "address": "0xA6BC802fAa064414AA62117B4a53D27fFfF741F1"
+  },
+  "resealManager": {
+    "address": "0x7914b5a1539b97Bd0bbd155757F25FD79A522d24"
   },
   "hashConsensusForAccountingOracle": {
     "address": "0xD624B08C83bAECF0807Dd2c6880C3154a5F0B288",
@@ -430,7 +472,6 @@
       "maxPositiveTokenRebase": 750000
     }
   },
-  "scratchDeployGasUsed": "52987994",
   "stakingRouter": {
     "proxy": {
       "address": "0xFdDf38947aFB03C621C71b06C9C70bce73f12999",
@@ -449,42 +490,38 @@
     }
   },
   "triggerableWithdrawalsGateway": {
-    "implementation": {
-      "contract": "contracts/0.8.9/TriggerableWithdrawalsGateway.sol",
-      "address": "0xDC00116a0D3E064427dA2600449cfD2566B3037B",
-      "constructorArgs": [
-        "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
-        "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
-        11200,
-        1,
-        48
-      ]
-    }
+    "contract": "contracts/0.8.9/TriggerableWithdrawalsGateway.sol",
+    "address": "0xDC00116a0D3E064427dA2600449cfD2566B3037B",
+    "constructorArgs": [
+      "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
+      "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
+      11200,
+      1,
+      48
+    ]
   },
   "validatorExitDelayVerifier": {
-    "implementation": {
-      "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
-      "address": "0xbDb567672c867DB533119C2dcD4FB9d8b44EC82f",
-      "constructorArgs": [
-        "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
-        {
-          "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
-          "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
-          "gIFirstHistoricalSummaryPrev": "0x000000000000000000000000000000000000000000000000000000b600000018",
-          "gIFirstHistoricalSummaryCurr": "0x000000000000000000000000000000000000000000000000000000b600000018",
-          "gIFirstBlockRootInSummaryPrev": "0x000000000000000000000000000000000000000000000000000000000040000d",
-          "gIFirstBlockRootInSummaryCurr": "0x000000000000000000000000000000000000000000000000000000000040000d"
-        },
-        11649024,
-        11649024,
-        6209536,
-        8192,
-        32,
-        12,
-        1606824023,
-        98304
-      ]
-    }
+    "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
+    "address": "0xbDb567672c867DB533119C2dcD4FB9d8b44EC82f",
+    "constructorArgs": [
+      "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
+      {
+        "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+        "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+        "gIFirstHistoricalSummaryPrev": "0x000000000000000000000000000000000000000000000000000000b600000018",
+        "gIFirstHistoricalSummaryCurr": "0x000000000000000000000000000000000000000000000000000000b600000018",
+        "gIFirstBlockRootInSummaryPrev": "0x000000000000000000000000000000000000000000000000000000000040000d",
+        "gIFirstBlockRootInSummaryCurr": "0x000000000000000000000000000000000000000000000000000000000040000d"
+      },
+      11649024,
+      11649024,
+      6209536,
+      8192,
+      32,
+      12,
+      1606824023,
+      98304
+    ]
   },
   "validatorsExitBusOracle": {
     "proxy": {
@@ -614,14 +651,10 @@
     "deployTx": "0xaf2c1a501d2b290ef1e84ddcfc7beb3406f8ece2c46dee14e212e8233654ff05",
     "constructorArgs": ["0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
   },
-  "dg:dualGovernance": {
-    "proxy": {
-      "address": "0xC1db28B3301331277e307FDCfF8DE28242A4486E"
-    }
-  },
-  "dg:emergencyProtectedTimelock": {
-    "proxy": {
-      "address": "0xCE0425301C85c5Ea2A0873A2dEe44d78E02D2316"
-    }
+  "tokenRebaseNotifier": {
+    "address": "0xe6793B9e4FbA7DE0ee833F9D02bba7DB5EB27823",
+    "contract": "contracts/0.8.9/TokenRateNotifier.sol",
+    "deployTx": "0xcbffe641fe89657368a79e7482e90ec8517b4ac6f27ad6301f52d0e9db97887d",
+    "constructorArgs": ["0xBb01c09DE4Bf967AbaB418450c3e18Df46358322", "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
   }
 }

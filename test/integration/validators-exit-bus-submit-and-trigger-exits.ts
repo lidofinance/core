@@ -30,7 +30,7 @@ const hashExitRequest = (request: { dataFormat: number; data: string }) => {
   );
 };
 
-describe("ValidatorsExitBus integration", () => {
+describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -84,15 +84,13 @@ describe("ValidatorsExitBus integration", () => {
     if (await veb.isPaused()) {
       await veb.connect(resumer).resume();
 
-      expect(veb.isPaused()).to.be.false;
+      expect(await veb.isPaused()).to.be.false;
     }
   });
 
   before(async () => (snapshot = await Snapshot.take()));
   beforeEach(bailOnFailure);
   after(async () => await Snapshot.restore(snapshot));
-
-  it("check contract version", async () => {});
 
   it("should revert when non-authorized entity tries to submit hash", async () => {
     const SUBMIT_REPORT_HASH_ROLE = await veb.SUBMIT_REPORT_HASH_ROLE();

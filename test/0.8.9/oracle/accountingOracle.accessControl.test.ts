@@ -5,12 +5,16 @@ import { ethers } from "hardhat";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { AccountingOracle__Harness, HashConsensus__Harness, Lido__MockForAccountingOracle } from "typechain-types";
+import {
+  Accounting__MockForAccountingOracle,
+  AccountingOracle__Harness,
+  HashConsensus__Harness,
+} from "typechain-types";
 
 import {
+  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
-  CONSENSUS_VERSION,
   encodeExtraDataItems,
   ether,
   EXTRA_DATA_FORMAT_EMPTY,
@@ -20,7 +24,6 @@ import {
   OracleReport,
   packExtraDataList,
   ReportAsArray,
-  shareRate,
 } from "lib";
 
 import { deployAndConfigureAccountingOracle } from "test/deploy";
@@ -29,7 +32,7 @@ import { Snapshot } from "test/suite";
 describe("AccountingOracle.sol:accessControl", () => {
   let consensus: HashConsensus__Harness;
   let oracle: AccountingOracle__Harness;
-  let mockLido: Lido__MockForAccountingOracle;
+  let mockAccounting: Accounting__MockForAccountingOracle;
   let reportItems: ReportAsArray;
   let reportFields: OracleReport;
   let extraDataList: string;
@@ -61,7 +64,7 @@ describe("AccountingOracle.sol:accessControl", () => {
     extraDataList = packExtraDataList(extraDataItems);
     const extraDataHash = calcExtraDataListHash(extraDataList);
     reportFields = {
-      consensusVersion: CONSENSUS_VERSION,
+      consensusVersion: AO_CONSENSUS_VERSION,
       refSlot: refSlot,
       numValidators: 10,
       clBalanceGwei: 320n * ONE_GWEI,
@@ -71,8 +74,10 @@ describe("AccountingOracle.sol:accessControl", () => {
       elRewardsVaultBalance: ether("2"),
       sharesRequestedToBurn: ether("3"),
       withdrawalFinalizationBatches: [1],
-      simulatedShareRate: shareRate(1n),
+      simulatedShareRate: 10n ** 27n,
       isBunkerMode: true,
+      vaultsDataTreeRoot: ethers.ZeroHash,
+      vaultsDataTreeCid: "",
       extraDataFormat: emptyExtraData ? EXTRA_DATA_FORMAT_EMPTY : EXTRA_DATA_FORMAT_LIST,
       extraDataHash: emptyExtraData ? ZeroHash : extraDataHash,
       extraDataItemsCount: emptyExtraData ? 0 : extraDataItems.length,
@@ -80,11 +85,11 @@ describe("AccountingOracle.sol:accessControl", () => {
     reportItems = getReportDataItems(reportFields);
     const reportHash = calcReportDataHash(reportItems);
     await deployed.consensus.connect(admin).addMember(member, 1);
-    await deployed.consensus.connect(member).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+    await deployed.consensus.connect(member).submitReport(refSlot, reportHash, AO_CONSENSUS_VERSION);
 
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    mockLido = deployed.lido;
+    mockAccounting = deployed.accounting;
   };
 
   before(async () => {
@@ -101,17 +106,23 @@ describe("AccountingOracle.sol:accessControl", () => {
     it("deploying accounting oracle", async () => {
       expect(oracle).to.be.not.null;
       expect(consensus).to.be.not.null;
-      expect(mockLido).to.be.not.null;
+      expect(mockAccounting).to.be.not.null;
       expect(reportItems).to.be.not.null;
       expect(extraDataList).to.be.not.null;
     });
   });
 
   context("SUBMIT_DATA_ROLE", () => {
+    let contractVersion: bigint;
+
+    before(async () => {
+      contractVersion = await oracle.getContractVersion();
+    });
+
     context("submitReportData", () => {
       it("reverts when sender is not allowed", async () => {
         await expect(
-          oracle.connect(stranger).submitReportData(reportFields, CONSENSUS_VERSION),
+          oracle.connect(stranger).submitReportData(reportFields, contractVersion),
         ).to.be.revertedWithCustomError(oracle, "SenderNotAllowed");
       });
 
@@ -121,12 +132,12 @@ describe("AccountingOracle.sol:accessControl", () => {
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        const tx = await oracle.connect(account).submitReportData(reportFields, CONSENSUS_VERSION);
+        const tx = await oracle.connect(account).submitReportData(reportFields, contractVersion);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, anyValue);
       });
 
       it("should allow calling from a member", async () => {
-        const tx = await oracle.connect(member).submitReportData(reportFields, CONSENSUS_VERSION);
+        const tx = await oracle.connect(member).submitReportData(reportFields, contractVersion);
         await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, anyValue);
       });
     });
@@ -145,7 +156,7 @@ describe("AccountingOracle.sol:accessControl", () => {
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        await oracle.connect(account).submitReportData(reportFields, CONSENSUS_VERSION);
+        await oracle.connect(account).submitReportData(reportFields, contractVersion);
         const tx = await oracle.connect(account).submitReportExtraDataList(extraDataList);
 
         await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
@@ -155,7 +166,7 @@ describe("AccountingOracle.sol:accessControl", () => {
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        await oracle.connect(member).submitReportData(reportFields, CONSENSUS_VERSION);
+        await oracle.connect(member).submitReportData(reportFields, contractVersion);
         const tx = await oracle.connect(member).submitReportExtraDataList(extraDataList);
 
         await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
@@ -178,7 +189,7 @@ describe("AccountingOracle.sol:accessControl", () => {
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        await oracle.connect(account).submitReportData(reportFields, CONSENSUS_VERSION);
+        await oracle.connect(account).submitReportData(reportFields, contractVersion);
         const tx = await oracle.connect(account).submitReportExtraDataEmpty();
 
         await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
@@ -188,7 +199,7 @@ describe("AccountingOracle.sol:accessControl", () => {
         const deadline = (await oracle.getConsensusReport()).processingDeadlineTime;
         await consensus.setTime(deadline);
 
-        await oracle.connect(member).submitReportData(reportFields, CONSENSUS_VERSION);
+        await oracle.connect(member).submitReportData(reportFields, contractVersion);
         const tx = await oracle.connect(member).submitReportExtraDataEmpty();
 
         await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);

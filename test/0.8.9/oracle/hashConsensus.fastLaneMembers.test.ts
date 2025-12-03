@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HashConsensus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, MAX_UINT256 } from "lib";
+import { BASE_CONSENSUS_VERSION, MAX_UINT256 } from "lib";
 
 import { deployHashConsensus, DeployHashConsensusParams, HASH_1 } from "test/deploy";
 
@@ -135,19 +135,19 @@ describe("HashConsensus.sol:fastlaneMembers", () => {
 
           expect((await consensus.getConsensusStateForMember(fastLaneMembers[0].getAddress())).canReport).to.be.true;
           await expect(
-            consensus.connect(fastLaneMembers[0]).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION),
+            consensus.connect(fastLaneMembers[0]).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION),
           ).to.emit(consensus, "ReportReceived");
 
           expect((await consensus.getConsensusStateForMember(fastLaneMembers[1].getAddress())).canReport).to.be.true;
           await expect(
-            consensus.connect(fastLaneMembers[1]).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION),
+            consensus.connect(fastLaneMembers[1]).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION),
           ).to.emit(consensus, "ReportReceived");
 
           await consensus.advanceTimeBySlots(fastLaneLengthSlots - 1n);
 
           expect((await consensus.getConsensusStateForMember(fastLaneMembers[2].getAddress())).canReport).to.be.true;
           await expect(
-            consensus.connect(fastLaneMembers[2]).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION),
+            consensus.connect(fastLaneMembers[2]).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION),
           ).to.emit(consensus, "ReportReceived");
 
           expect((await consensus.getConsensusState()).consensusReport).to.equal(HASH_1);
@@ -157,7 +157,7 @@ describe("HashConsensus.sol:fastlaneMembers", () => {
           for (const member of preparedFrameData.restMembers) {
             expect((await consensus.getConsensusStateForMember(member)).canReport).to.be.false;
             await expect(
-              consensus.connect(member).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION),
+              consensus.connect(member).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION),
             ).to.be.revertedWithCustomError(consensus, "NonFastLaneMemberCannotReportWithinFastLaneInterval()");
           }
         });
@@ -166,8 +166,8 @@ describe("HashConsensus.sol:fastlaneMembers", () => {
           await consensus.advanceTimeBySlots(1);
           for (const member of preparedFrameData.restMembers) {
             expect((await consensus.getConsensusStateForMember(member)).canReport).to.be.true;
-            await expect(consensus.connect(member).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION)).not.to.be
-              .reverted;
+            await expect(consensus.connect(member).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION)).not.to
+              .be.reverted;
           }
 
           const { variants, support } = await consensus.getReportVariants();

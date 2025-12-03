@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import { computeTimestampAtSlot, DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -71,8 +71,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
@@ -82,7 +82,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   ) => {
     const { refSlot } = await consensus.getCurrentFrame();
     const reportData = {
-      consensusVersion: CONSENSUS_VERSION,
+      consensusVersion: VEBO_CONSENSUS_VERSION,
       dataFormat: DATA_FORMAT_LIST,
       refSlot,
       requestsCount: requests.length,
@@ -140,7 +140,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const { refSlot } = await consensus.getCurrentFrame();
 
       // change of mind
-      const tx = await consensus.connect(member3).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
+      const tx = await consensus.connect(member3).submitReport(refSlot, HASH_1, VEBO_CONSENSUS_VERSION);
 
       await expect(tx).to.emit(oracle, "ReportDiscarded").withArgs(refSlot, reportHash);
     });
@@ -453,7 +453,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const { refSlot } = await consensus.getCurrentFrame();
       // change pubkey
       const reportData = {
-        consensusVersion: CONSENSUS_VERSION,
+        consensusVersion: VEBO_CONSENSUS_VERSION,
         refSlot,
         requestsCount: requests.length,
         dataFormat: DATA_FORMAT_LIST,
@@ -654,7 +654,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         .withArgs(requests[3].moduleId, requests[3].nodeOpId, requests[3].valIndex, requests[3].valPubkey, timestamp);
     });
 
-    it("oracle doesnt consume common veb limits", async () => {
+    it("oracle does not consume common veb limits", async () => {
       const requests = [
         { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
         { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
