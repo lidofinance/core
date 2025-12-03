@@ -477,6 +477,7 @@ certoraRun certora/confs/vaults/VaultHub.conf --rule <rule_name>
 
 ---
 
+
 ## Fuzzing Tests - Complementary Verification
 
 For properties where formal verification times out, we use extensive Foundry fuzzing tests as complementary verification:
