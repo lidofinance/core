@@ -2,6 +2,7 @@
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity >=0.8.9 <0.9.0;
 
+import {BitMask16} from "./BitMask16.sol";
 
 /**
  * @title Packed16
@@ -9,6 +10,8 @@ pragma solidity >=0.8.9 <0.9.0;
  * @notice Provides an interface for gas-efficient store uint16 values tightly packed into one uint256
  */
 library Packed16 {
+    using BitMask16 for uint16;
+
     function get16(uint256 x, uint8 p) internal pure returns (uint16 v) {
         assembly ("memory-safe") {
             let s := shl(4, p) // p * 16
@@ -33,6 +36,25 @@ library Packed16 {
         vs = new uint16[](16);
         for (uint8 i = 0; i < 16; ++i) {
             vs[i] = uint16(get16(x, i));
+        }
+    }
+
+    function product(uint256 x) internal pure returns (uint256 prod) {
+        prod = 1;
+        for (uint8 i = 0; i < 16; ++i) {
+            prod *= uint16(get16(x, i));
+        }
+    }
+
+    function product(uint256 x, uint16 mask) internal pure returns (uint256 prod) {
+        if (mask == 0) {
+            return 0;
+        }
+        prod = 1;
+        for (uint8 i = 0; i < 16; ++i) {
+            if (mask.isBitSet(i)) {
+                prod *= uint16(get16(x, i));
+            }
         }
     }
 }

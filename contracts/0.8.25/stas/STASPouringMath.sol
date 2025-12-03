@@ -3,7 +3,14 @@ pragma solidity 0.8.25;
 
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {STASCore} from "./STASCore.sol";
-import {SortIndexedTarget} from "./STASTypes.sol";
+
+/// @dev Helper struct for input allocation state
+struct AllocationState {
+    uint256[] shares;
+    uint256[] amounts;
+    uint256[] capacities;
+    uint256 totalAmount;
+}
 
 /**
  * @title Pouring Math for STAS
@@ -12,351 +19,289 @@ import {SortIndexedTarget} from "./STASTypes.sol";
  * @dev This library includes functions for calculating allocation based on 2 approaches of water-filling algorithms
  */
 library STASPouringMath {
-    /// @param shares The shares of each  entity
-    /// @param amounts The current amounts allocated to each entity
-    /// @param capacities The maximum capacities for each entity
-    /// @param totalAmount The total inflow currently allocated across all entities
+    struct DemandFillsCache {
+        int256[] imbalances; // quantized imbalances versus target shares
+        uint256[] imbalancesSortMap;
+        uint256[] capacities; // quantized capacities
+        uint256[] fills;
+        uint256[] demands;
+        uint256[] demandsMap;
+        uint256 demandsCount;
+    }
+
+    /// @param state The current allocation state
     /// @param inflow The new inflow to allocate
-    function _allocate(
-        uint256[] memory shares,
-        uint256[] memory amounts,
-        uint256[] memory capacities,
-        uint256 totalAmount,
-        uint256 inflow
-    ) internal pure returns (uint256[] memory imbalance, uint256[] memory fills, uint256 rest) {
-        uint256 n = shares.length;
-        if (amounts.length != n || capacities.length != n) revert STASCore.LengthMismatch();
-
-        imbalance = new uint256[](n);
-        fills = new uint256[](n);
-
-        if (n == 0 || inflow == 0) {
-            // nothing to do or nothing to distribute
-            return (imbalance, fills, inflow);
-        }
-        // new target total volume after allocation
-        totalAmount = totalAmount + inflow;
-        // calculate imbalance only for entities that not exceed their target share of the new total volume
-        _calcImbalanceInflow({
-            imbalance: imbalance,
-            shares: shares,
-            amounts: amounts,
-            capacities: capacities,
-            fills: fills,
-            totalAmount: totalAmount
-        });
-        rest = _pourSimple(imbalance, fills, inflow);
-        // rest = _pourWaterFill(imbalance, fills, inflow);
-    }
-
-    /// @param shares The shares of each  entity
-    /// @param amounts The current amounts allocated to each entity
-    /// @param totalAmount The total inflow currently allocated across all entities
-    /// @param outflow The new inflow to allocate
-    function _deallocate(uint256[] memory shares, uint256[] memory amounts, uint256 totalAmount, uint256 outflow)
+    /// @param step The quantization step for imbalances
+    /// @param ignoreShares If true, ignores shares and allocates outflow proportionally to
+    function _allocate(AllocationState memory state, uint256 inflow, uint256 step, bool ignoreShares)
         internal
         pure
-        returns (uint256[] memory imbalance, uint256[] memory fills, uint256 rest)
+        returns (int256[] memory imbalances, uint256[] memory fills, uint256 rest)
     {
-        uint256 n = shares.length;
-        if (amounts.length != n) revert STASCore.LengthMismatch();
-
-        imbalance = new uint256[](n);
-        fills = new uint256[](n);
-
-        // new target total volume after deallocation
-        unchecked {
-            totalAmount = totalAmount < outflow ? 0 : totalAmount - outflow;
+        (DemandFillsCache memory cache, uint256 n) = _checkAndPrepareCache(state, inflow, step, true);
+        if (n == 0) {
+            // no baskets, return full inflow as rest
+            return (new int256[](0), new uint256[](0), inflow);
         }
-        // calculate imbalance only for entities that exceed their target share of the new total volume
-        _calcImbalanceOutflow({
-            imbalance: imbalance,
-            shares: shares,
-            amounts: amounts,
-            fills: fills,
-            totalAmount: totalAmount
-        });
-        rest = _pourSimple(imbalance, fills, outflow);
-        // rest = _pourWaterFill(imbalance, fills, outflow);
+        rest = inflow;
+        if (rest > 0) {
+            _calculateDemands(cache, ignoreShares);
+            rest = _fulfillDemands(cache, rest, step);
+        }
+        return (cache.imbalances, cache.fills, rest);
     }
 
-    // `capacity` - extra inflow for current entity that can be fitted into
-    // i.e. max total inflow of current entity is `inflow + capacity`
-    // capacity = 0, means no more can be added
-    // `target` - max desired total inflow that should be allocated to current entity
+    /// @param state The current allocation state
+    /// @param outflow The new outflow to deallocate
+    /// @param step The quantization step for imbalances
+    /// @param ignoreShares If true, ignores shares and allocates outflow proportionally to
+    /// @dev assumes all inputs in `state` are valid:
+    /// - sum of all `shares` less or equal to `STASCore.S_SCALE`
+    /// - sum of all `amounts` less or equal to `totalAmount`
+    function _deallocate(AllocationState memory state, uint256 outflow, uint256 step, bool ignoreShares)
+        internal
+        pure
+        returns (int256[] memory imbalances, uint256[] memory fills, uint256 rest)
+    {
+        (DemandFillsCache memory cache, uint256 n) = _checkAndPrepareCache(state, outflow, step, false);
+        if (n == 0) {
+            // no baskets, return full outflow as rest
+            return (new int256[](0), new uint256[](0), outflow);
+        }
+        rest = outflow;
 
-    /// @param imbalance The current imbalance for each entity (mutated array)
-    /// @param shares The shares of each  entity
-    /// @param amounts The current amounts allocated to each entity
-    /// @param capacities The maximum capacities for each entity
-    /// @param fills The current fills for each entity (mutated array)
-    /// @param totalAmount The total inflow currently allocated across all entities
-    /// @dev imbalance is mutated arrays should be initialized before the call
-    function _calcImbalanceInflow(
-        uint256[] memory imbalance,
-        uint256[] memory shares,
-        uint256[] memory amounts,
-        uint256[] memory capacities,
-        uint256[] memory fills,
-        uint256 totalAmount
-    ) internal pure {
-        uint256 n = shares.length;
-        if (amounts.length != n || capacities.length != n || fills.length != n || imbalance.length != n) {
+        if (rest > 0) {
+            _calculateDemands(cache, ignoreShares);
+            rest = _fulfillDemands(cache, rest, step);
+        }
+        return (cache.imbalances, cache.fills, rest);
+    }
+
+    /// @notice Check input data and prepare cache for allocation/deallocation
+    /// @dev imbalance/capacities values are quantized to `step` multiples
+    function _checkAndPrepareCache(AllocationState memory state, uint256 diffAmount, uint256 step, bool allocate)
+        internal
+        pure
+        returns (DemandFillsCache memory cache, uint256 n)
+    {
+        n = state.shares.length;
+
+        if (state.amounts.length != n || (allocate && state.capacities.length != n)) {
             revert STASCore.LengthMismatch();
         }
 
-        unchecked {
-            for (uint256 i; i < n; ++i) {
-                uint256 target = shares[i];
-                if (target != 0) {
-                    // target = Math.mulShr(target, totalAmount, STASCore.S_FRAC, Math.Rounding.Ceil);
-                    target = Math.mulDiv(target, totalAmount, STASCore.S_SCALE, Math.Rounding.Ceil);
-                }
+        if (n > 0) {
+            cache.imbalances = new int256[](n);
+            cache.fills = new uint256[](n);
 
-                uint256 amt = amounts[i] + fills[i];
-                target = target <= amt ? 0 : target - amt;
-                if (target > 0) {
-                    uint256 cap = capacities[i];
-                    target = cap < target ? cap : target; // enforce capacity if limited
+            uint256 totalAmount = state.totalAmount;
+            uint256 targetAmount;
+
+            if (allocate) {
+                targetAmount = totalAmount + diffAmount;
+                // reuse input capacities array for quantization
+                cache.capacities = state.capacities;
+            } else {
+                unchecked {
+                    // prevent underflow
+                    targetAmount = totalAmount > diffAmount ? totalAmount - diffAmount : 0;
                 }
-                imbalance[i] = target;
+                // reuse input capacities array for quantization
+                cache.capacities = state.amounts;
             }
-        }
-    }
 
-    /// @param imbalance The current imbalance for each entity (mutated array)
-    /// @param shares The shares of each  entity
-    /// @param amounts The current amounts allocated to each entity
-    /// @param fills The current fills for each entity (mutated array)
-    /// @param totalAmount The total inflow currently allocated across all entities
-    /// @dev imbalance is mutated arrays should be initialized before the call
-    function _calcImbalanceOutflow(
-        uint256[] memory imbalance,
-        uint256[] memory shares,
-        uint256[] memory amounts,
-        uint256[] memory fills,
-        uint256 totalAmount
-    ) internal pure {
-        uint256 n = shares.length;
-        if (amounts.length != n || fills.length != n || imbalance.length != n) {
-            revert STASCore.LengthMismatch();
-        }
-
-        unchecked {
-            for (uint256 i; i < n; ++i) {
-                uint256 target = shares[i];
-                if (target != 0) {
-                    // target = Math.mulShr(target, totalAmount, STASCore.S_FRAC, Math.Rounding.Ceil);
-                    target = Math.mulDiv(target, totalAmount, STASCore.S_SCALE, Math.Rounding.Ceil);
-                }
-                uint256 amt = amounts[i] - fills[i];
-                target = amt <= target ? 0 : amt - target;
-                imbalance[i] = target;
-            }
-        }
-    }
-
-    /// @notice Simplified water-fill style allocator that distributes an `inflow` across baskets
-    ///         toward absolute target amounts, respecting per-basket capacities.
-    function _pourSimple(uint256[] memory targets, uint256[] memory fills, uint256 inflow)
-        internal
-        pure
-        returns (uint256 rest)
-    {
-        uint256 n = targets.length;
-        if (fills.length != n) revert STASCore.LengthMismatch();
-        rest = inflow;
-
-        // nothing to do or nothing to distribute
-        if (n == 0 || rest == 0) {
-            return rest;
-        }
-
-        uint256 total;
-        uint256 count;
-        unchecked {
-            for (uint256 i; i < n; ++i) {
-                uint256 t = targets[i];
-                if (t != 0) {
-                    total += t;
-                    ++count;
-                }
-            }
-        }
-
-        // all targets are zero
-        if (total == 0) {
-            return rest;
-        }
-
-        // can satisfy all deficits outright
-        if (rest >= total) {
             unchecked {
                 for (uint256 i; i < n; ++i) {
-                    fills[i] = targets[i];
-                    targets[i] = 0;
-                }
-                rest -= total;
-            }
-            return rest;
-        }
-
-        // simple Water-fill loop: distribute `rest` across remaining deficits roughly evenly.
-        // Complexity: O(k * n) where k is number of rounds; in worst case k <= max(deficit) when per==1.
-        while (rest > 0 && count > 0) {
-            uint256 per = rest / count;
-            if (per == 0) per = 1;
-
-            unchecked {
-                for (uint256 i; i < n && rest > 0; ++i) {
-                    uint256 need = targets[i];
-                    if (need == 0) continue; // already filled
-
-                    uint256 use = need < per ? need : per;
-                    if (use > rest) use = rest;
-                    fills[i] += use;
-                    targets[i] = need - use; // reduce deficit directly in targets
-                    rest -= use;
-
-                    if (targets[i] == 0) --count;
+                    uint256 target = state.shares[i];
+                    if (target != 0) {
+                        target = Math.mulDiv(target, targetAmount, STASCore.S_SCALE, Math.Rounding.Ceil);
+                    }
+                    // get quantized imbalance versus target
+                    // forge-lint: disable-next-line(unsafe-typecast)
+                    cache.imbalances[i] = _quantize(
+                        allocate
+                            ? int256(target) - int256(state.amounts[i])
+                            : int256(state.amounts[i]) - int256(target),
+                        step
+                    );
+                    // mutate capacities to quantized values
+                    cache.capacities[i] = _quantize(cache.capacities[i], step);
                 }
             }
+            // sorting imbalances descending
+            cache.imbalancesSortMap = _getSortMap(cache.imbalances);
+            // preallocate demands helper arrays
+            cache.demands = new uint256[](n);
+            cache.demandsMap = new uint256[](n);
         }
     }
 
-    function _pourWaterFill(uint256[] memory targets, uint256[] memory fills, uint256 inflow)
-        internal
-        pure
-        returns (uint256 rest)
-    {
-        uint256 n = targets.length;
-        if (fills.length != n) revert STASCore.LengthMismatch();
-        rest = inflow;
+    function _calculateDemands(DemandFillsCache memory cache, bool ignoreImbalance) internal pure {
+        uint256 n = cache.imbalancesSortMap.length;
+        uint256 demandsCount = 0;
 
-        // nothing to do or nothing to distribute
-        if (n == 0 || rest == 0) {
-            return rest;
-        }
-
-        // 1) One element
-        if (n == 1) {
-            uint256 t = targets[0];
-            uint256 fill = rest >= t ? t : rest;
-            fills[0] = fill;
-            unchecked {
-                rest -= fill;
-            }
-            return rest;
-        }
-
-        // 1) create array ofSortIndexedTarget
-        SortIndexedTarget[] memory items = new SortIndexedTarget[](n);
-        for (uint256 i; i < n; ++i) {
-            uint256 t = targets[i];
-            items[i] = SortIndexedTarget({idx: i, target: t});
-        }
-
-        // 2) Quick sort by target DESC (pivot = middle element)
-        // forge-lint: disable-next-line(unsafe-typecast)
-        _quickSort(items, int256(0), int256(n - 1));
-
-        // 3) Compute prefix sums and quick path if inflow >= total
-        uint256 total;
-        uint256[] memory prefix = new uint256[](n);
         unchecked {
             for (uint256 i; i < n; ++i) {
-                total += items[i].target;
-                prefix[i] = total;
-            }
-        }
-        if (total == 0) {
-            return rest;
-        }
+                uint256 idx = cache.imbalancesSortMap[i];
+                uint256 capacity = cache.capacities[idx];
+                if (capacity == 0) continue;
 
-        // can satisfy all deficits outright
-        if (rest >= total) {
-            unchecked {
-                for (uint256 i; i < n; ++i) {
-                    uint256 t = items[i].target;
-                    if (t != 0) {
-                        fills[items[i].idx] = t;
-                        // targets[i] = 0;
+                uint256 filled = cache.fills[idx];
+                if (filled > 0) {
+                    capacity = capacity > filled ? capacity - filled : 0;
+                }
+
+                if (capacity > 0) {
+                    uint256 demand;
+                    if (ignoreImbalance) {
+                        demand = capacity;
+                    } else {
+                        // select under-filled only
+                        int256 imbalance = cache.imbalances[idx];
+                        if (imbalance > 0) {
+                            // forge-lint: disable-next-line(unsafe-typecast)
+                            demand = Math.min(uint256(imbalance), capacity);
+                        }
+                    }
+
+                    // safely ignore zero demands as they won't be included in demandsMap and counted in demandsCount
+                    if (demand > 0) {
+                        cache.demands[idx] = demand;
+                        cache.demandsMap[demandsCount] = idx;
+                        ++demandsCount;
                     }
                 }
-                rest -= total;
             }
-            return rest;
-        }
-
-        // 4) find level L: 1st k where
-        //    items[k].target ≥ Lk ≥ nextTarget; Lk = (prefix[k]-inflow)/(k+1)
-        uint256 level;
-        unchecked {
-            for (uint256 k; k < n; ++k) {
-                if (prefix[k] < inflow) {
-                    continue;
-                }
-                level = (prefix[k] - inflow) / (k + 1);
-                uint256 nextTarget = k + 1 < n ? items[k + 1].target : 0;
-                if (items[k].target >= level && level >= nextTarget) {
-                    break;
-                }
-            }
-        }
-
-        // 5) final pass: fill = max(0, cap - L)
-        uint256 filled;
-        unchecked {
-            for (uint256 i; i < n; ++i) {
-                uint256 t = items[i].target;
-                uint256 fill = t > level ? t - level : 0;
-                if (fill > 0) {
-                    uint256 idx = items[i].idx;
-                    fills[idx] = fill;
-                    targets[idx] = t - fill;
-                    filled += fill;
-                }
-            }
-            assert(filled <= inflow);
-            rest -= filled;
+            cache.demandsCount = demandsCount;
         }
     }
 
-    // forge-lint: disable-start(unsafe-typecast)
-    /// @dev In-place quicksort on SortIndexedTarget[] by target DESC, tiebreaker idx ASC.
-    function _quickSort(SortIndexedTarget[] memory arr, int256 left, int256 right) internal pure {
-        if (left >= right) return;
-        int256 i = left;
-        int256 j = right;
-        // Pivot = middle element's target
-        uint256 pivot = arr[uint256((left + right) / 2)].target;
-        while (i <= j) {
-            // move i forward while arr[i].target > pivot
-            while (arr[uint256(i)].target > pivot) {
-                unchecked {
-                    ++i;
+    // @nietice Distribute `amount` across demands in `cache`, modifying `cache.fills`
+    // @dev Assumes `cache` is prepared:
+    // - `cache.imbalances` filled via `_checkAndPrepareCache`
+    // - `cache.demands` and `cache.demandsMap` are filled and sorted via `_calculateDemands` (i.e. based on  `cache.imbalancesSortMap`)
+    function _fulfillDemands(DemandFillsCache memory cache, uint256 amount, uint256 step)
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 demandsCount = cache.demandsCount;
+        if (demandsCount == 0) return amount;
+
+        unchecked {
+            // initial demand fills count at current level, at least one
+            uint256 levelFillsCount = 1;
+            // initial("ground") fill level, assume  at least first element present
+            int256 currentFillLevel = cache.imbalances[cache.demandsMap[0]];
+            uint256 processedCount = 0;
+            uint256 delta;
+            while (amount > 0 && processedCount < demandsCount) {
+                while (levelFillsCount < demandsCount) {
+                    int256 nextFillLevel = cache.imbalances[cache.demandsMap[levelFillsCount]];
+                    // fillLevel values should be sorted via demandsMap
+                    assert(currentFillLevel >= nextFillLevel);
+
+                    // due to *fillLevel (imbalances) values are quantized, the delta is also quantized
+                    // forge-lint: disable-next-line(unsafe-typecast)
+                    delta = uint256(currentFillLevel - nextFillLevel);
+                    if (delta > 0) {
+                        break;
+                    }
+                    ++levelFillsCount;
                 }
-            }
-            // move j backward while arr[j].target < pivot
-            while (arr[uint256(j)].target < pivot) {
-                unchecked {
-                    --j;
+
+                uint256 amountQuant = _quantize(amount / levelFillsCount, step);
+                if (delta == 0 || delta > amountQuant) {
+                    uint256 levelDemandsCount = levelFillsCount;
+                    while (amountQuant == 0 && levelDemandsCount > 1) {
+                        --levelDemandsCount;
+                        amountQuant = _quantize(amount / levelDemandsCount, step);
+                    }
+
+                    // break the loop if `amount` is not enough to fill at least one demand item
+                    if (amountQuant == 0) {
+                        break;
+                    }
+                    if (delta > 0) {
+                        // update current fill level by amountQuant only if delta was non-zero, i.e. we are below next level
+                        currentFillLevel -= int256(amountQuant);
+                    }
+                    delta = amountQuant;
+                } else {
+                    // update fill level to next level
+                    currentFillLevel -= int256(delta);
                 }
-            }
-            if (i <= j) {
-                // swap arr[i] <-> arr[j]
-                // SortIndexedTarget memory tmp = arr[uint256(i)];
-                // arr[uint256(i)] = arr[uint256(j)];
-                // arr[uint256(j)] = tmp;
-                (arr[uint256(i)], arr[uint256(j)]) = (arr[uint256(j)], arr[uint256(i)]);
-                unchecked {
-                    ++i;
-                    --j;
+
+                processedCount = 0;
+
+                // need to fill all remaining items at same level, try spread evenly starting from first item
+                for (uint256 i = 0; i < levelFillsCount && amount > 0; ++i) {
+                    // get original item index
+                    uint256 idx = cache.demandsMap[i];
+                    // get current demand & filled amount
+                    uint256 demand = cache.demands[idx];
+                    uint256 filled = cache.fills[idx];
+                    // if (demand == 0) continue;
+
+                    if (filled < demand) {
+                        // demand and delta are quantized, so fill is also quantized
+                        uint256 fill = Math.min(demand - filled, delta);
+                        if (fill > amount) {
+                            break;
+                        }
+                        amount -= fill;
+                        filled += fill;
+                        cache.fills[idx] = filled;
+                    }
+                    // if element reached capacity and already (over) filled, skip it
+                    if (filled >= demand) {
+                        ++processedCount;
+                    }
                 }
             }
         }
-        if (left < j) _quickSort(arr, left, j);
-        if (i < right) _quickSort(arr, i, right);
+        return amount;
     }
-    // forge-lint: disable-end(unsafe-typecast)
+
+    /// HELPERS
+
+    /// @notice quantize int value multiple of step
+    function _quantize(int256 value, uint256 step) internal pure returns (int256) {
+        // early return for step=0/1, or zero value
+        if (step < 2 || value == 0) {
+            return value;
+        }
+
+        unchecked {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            return value - value % int256(step);
+            // return (value / step) * step;
+        }
+    }
+
+    /// @notice quantize uint value multiple of step
+    function _quantize(uint256 value, uint256 step) internal pure returns (uint256) {
+        return uint256(_quantize(int256(value), step));
+    }
+
+    function _getSortMap(int256[] memory values) internal pure returns (uint256[] memory sortMap) {
+        uint256 count = values.length;
+        sortMap = new uint256[](count);
+
+        unchecked {
+            uint256 lastPos;
+            for (uint256 i; i < count; ++i) {
+                int256 value = values[i];
+                uint256 pos = lastPos;
+                while (pos > 0) {
+                    uint256 idx = sortMap[pos - 1];
+                    if (values[idx] >= value) break;
+                    sortMap[pos] = idx;
+                    --pos;
+                }
+                sortMap[pos] = i;
+                ++lastPos;
+            }
+        }
+    }
 }

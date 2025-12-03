@@ -14,8 +14,7 @@ import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol"
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
-import {STASStorage} from "contracts/0.8.25/stas/STASTypes.sol";
-import {STASCore} from "contracts/0.8.25/stas/STASCore.sol";
+import {STASCore, STASStorage} from "contracts/0.8.25/stas/STASCore.sol";
 import {SRLib} from "./SRLib.sol";
 import {SRStorage} from "./SRStorage.sol";
 import {SRUtils} from "./SRUtils.sol";

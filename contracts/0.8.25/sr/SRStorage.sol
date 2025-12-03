@@ -5,13 +5,9 @@ import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/Enumerab
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
 import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
+import {STASCore, STASStorage} from "contracts/0.8.25/stas/STASCore.sol";
 import {
-    ModuleState,
-    ModuleStateConfig,
-    ModuleStateDeposits,
-    ModuleStateAccounting,
-    RouterStorage,
-    STASStorage
+    ModuleState, ModuleStateConfig, ModuleStateDeposits, ModuleStateAccounting, RouterStorage
 } from "./SRTypes.sol";
 
 library SRStorage {
@@ -31,7 +27,6 @@ library SRStorage {
 
     /// @dev Module trackers will be derived from this position
     bytes32 internal constant DEPOSITS_TRACKER = keccak256("lido.StakingRouter.depositTracker");
-
 
     function getIStakingModule(uint256 _moduleId) internal view returns (IStakingModule) {
         return _moduleId.getModuleState().getIStakingModule();
@@ -86,11 +81,11 @@ library SRStorage {
     }
 
     function getStakingModuleTrackerStorage(uint256 stakingModuleId) internal pure returns (DepositedState storage $) {
-      return _getDepositTrackerStorage(keccak256(abi.encode(stakingModuleId, DEPOSITS_TRACKER)));
+        return _getDepositTrackerStorage(keccak256(abi.encode(stakingModuleId, DEPOSITS_TRACKER)));
     }
-    
+
     function getLidoDepositTrackerStorage() internal pure returns (DepositedState storage $) {
-      return _getDepositTrackerStorage(DEPOSITS_TRACKER);
+        return _getDepositTrackerStorage(DEPOSITS_TRACKER);
     }
 
     function _getDepositTrackerStorage(bytes32 _position) private pure returns (DepositedState storage $) {
@@ -117,10 +112,7 @@ library SRStorage {
 
     /// @dev get STASStorage storage reference
     function getSTASStorage() internal pure returns (STASStorage storage $) {
-        bytes32 _position = STAS_STORAGE_POSITION;
-        assembly ("memory-safe") {
-            $.slot := _position
-        }
+        return STASCore.getSTAStorage(STAS_STORAGE_POSITION);
     }
 
     /// @dev Save the last deposit state for the staking module

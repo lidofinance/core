@@ -5,9 +5,8 @@ import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
-import {STASStorage} from "contracts/0.8.25/stas/STASTypes.sol";
-import {STASCore} from "contracts/0.8.25/stas/STASCore.sol";
-import {STASPouringMath} from "contracts/0.8.25/stas/STASPouringMath.sol";
+import {STASCore, STASStorage} from "contracts/0.8.25/stas/STASCore.sol";
+import {STASPouringMath, AllocationState} from "contracts/0.8.25/stas/STASPouringMath.sol";
 import {SRStorage} from "./SRStorage.sol";
 import {SRUtils} from "./SRUtils.sol";
 import {
@@ -60,6 +59,7 @@ library SRLib {
     // event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
+    uint256 internal constant ALLOCATE_STEP = 32 ether; // 32 ETH
 
     /// @dev [deprecated] old storage slots, remove after 1st migration
     bytes32 internal constant STAKING_MODULES_MAPPING_POSITION = keccak256("lido.StakingRouter.moduleStates");
@@ -98,34 +98,29 @@ library SRLib {
     function _initializeSTAS() public {
         STASStorage storage _stas = SRStorage.getSTASStorage();
 
-        if (_stas.getEnabledMetrics().length > 0 || _stas.getEnabledStrategies().length > 0) {
-            // data already exists, skip initialization
+        if (_stas.getEnabledStrategies().length > 0) {
+            // assuming data already exists, skip initialization
             return;
         }
-
-        uint8[] memory metricIds = SRUtils._getMetricIds();
-        assert(metricIds.length == 2);
 
         uint8[] memory strategyIds = SRUtils._getStrategyIds();
         assert(strategyIds.length == 2);
 
-        _stas.enableMetric(metricIds[0], 0);
-        _stas.enableMetric(metricIds[1], 0);
         _stas.enableStrategy(strategyIds[0]);
         _stas.enableStrategy(strategyIds[1]);
-        // _stas.enableStrategy(strategyIds[2], 0);
 
-        uint16[] memory metricWeights = new uint16[](metricIds.length);
+        uint8[] memory metricIds = SRUtils._getMetricIds();
+        assert(metricIds.length == 2);
 
-        // set metric weights for Deposit strategy: 100% for DepositTargetShare, 0% for WithdrawalProtectShare
-        metricWeights[0] = 10000; // some big relative number (uint16)
-        metricWeights[1] = 0;
-        _stas.setWeights(strategyIds[0], metricIds, metricWeights);
+        uint8[] memory enabledMetricIds = new uint8[](1);
 
-        // set metric weights for Withdrawal strategy: 0% for DepositTargetShare, 100% for WithdrawalProtectShare
-        metricWeights[0] = 0;
-        metricWeights[1] = 10000; // some big relative number (uint16)
-        _stas.setWeights(strategyIds[1], metricIds, metricWeights);
+        // enable metrics for Deposit strategy: only DepositTargetShare
+        enabledMetricIds[0] = metricIds[0];
+        _stas.enableStrategyMetrics(strategyIds[0], enabledMetricIds);
+
+        // enable metrics for Withdrawal strategy: only WithdrawalProtectShare
+        enabledMetricIds[0] = metricIds[1];
+        _stas.enableStrategyMetrics(strategyIds[1], enabledMetricIds);
     }
 
     function _migrateStorage() public {
@@ -398,19 +393,21 @@ library SRLib {
         returns (uint256 allocated, uint256[] memory allocations)
     {
         uint256 n = _moduleIds.length;
-        uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Deposit));
-        uint256[] memory balances = new uint256[](n);
-        uint256[] memory capacities = new uint256[](n);
+        AllocationState memory allocState;
+
+        allocState.shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Deposit));
+        allocState.amounts = new uint256[](n);
+        allocState.capacities = new uint256[](n);
 
         for (uint256 i; i < n; ++i) {
             // load module current balance
-            (balances[i], capacities[i]) = _getStakingModuleBalanceAndCapacity(_moduleIds[i], true);
+            (allocState.amounts[i], allocState.capacities[i]) = _getStakingModuleBalanceAndCapacity(_moduleIds[i], true);
         }
 
-        uint256 totalBalance = SRUtils._getTotalModulesBalance();
+        allocState.totalAmount = SRUtils._getTotalModulesBalance();
+
         uint256 notAllocated;
-        (, allocations, notAllocated) =
-            STASPouringMath._allocate(shares, balances, capacities, totalBalance, _allocateAmount);
+        (, allocations, notAllocated) = STASPouringMath._allocate(allocState, _allocateAmount, ALLOCATE_STEP, false);
 
         allocated = _allocateAmount - notAllocated;
     }
@@ -421,17 +418,23 @@ library SRLib {
         returns (uint256 deallocated, uint256[] memory allocations)
     {
         uint256 n = _moduleIds.length;
-        uint256[] memory balances = new uint256[](n);
+        AllocationState memory allocState;
+
+        allocState.shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Withdrawal));
+        allocState.amounts = new uint256[](n);
+        // allocState.capacities = new uint256[](0);
+
+        // uint256[] memory balances = new uint256[](n);
 
         for (uint256 i; i < n; ++i) {
             // load module current balance
-            (balances[i],) = _getStakingModuleBalanceAndCapacity(_moduleIds[i], false);
+            (allocState.amounts[i],) = _getStakingModuleBalanceAndCapacity(_moduleIds[i], false);
         }
 
-        uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Withdrawal));
-        uint256 totalBalance = SRUtils._getTotalModulesBalance();
+        allocState.totalAmount = SRUtils._getTotalModulesBalance();
         uint256 notDeallocated;
-        (, allocations, notDeallocated) = STASPouringMath._deallocate(shares, balances, totalBalance, _deallocateAmount);
+        (, allocations, notDeallocated) =
+            STASPouringMath._deallocate(allocState, _deallocateAmount, ALLOCATE_STEP, false);
 
         deallocated = _deallocateAmount - notDeallocated;
     }
@@ -464,7 +467,7 @@ library SRLib {
         unchecked {
             for (uint256 i; i < n; ++i) {
                 uint256 v = vals[i];
-                if (v == 10000) {
+                if (v == SRUtils.TOTAL_BASIS_POINTS) {
                     ++undefinedCount;
                 } else {
                     totalDefined += v;
@@ -523,9 +526,8 @@ library SRLib {
         uint256 _eligibleToExitInSec
     ) public {
         SRUtils._validateModuleId(_stakingModuleId);
-        _stakingModuleId.getIStakingModule().reportValidatorExitDelay(
-            _nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec
-        );
+        _stakingModuleId.getIStakingModule()
+            .reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
     }
 
     /// @notice Handles the triggerable exit event for a set of validators.
@@ -547,9 +549,9 @@ library SRLib {
         for (uint256 i = 0; i < validatorExitData.length; ++i) {
             data = validatorExitData[i];
             SRUtils._validateModuleId(data.stakingModuleId);
-            try data.stakingModuleId.getIStakingModule().onValidatorExitTriggered(
-                data.nodeOperatorId, data.pubkey, _withdrawalRequestPaidFee, _exitType
-            ) {} catch (bytes memory lowLevelRevertData) {
+            try data.stakingModuleId.getIStakingModule()
+                .onValidatorExitTriggered(data.nodeOperatorId, data.pubkey, _withdrawalRequestPaidFee, _exitType) {}
+            catch (bytes memory lowLevelRevertData) {
                 /// @dev This check is required to prevent incorrect gas estimation of the method.
                 ///      Without it, Ethereum nodes that use binary search for gas estimation may
                 ///      return an invalid value when the onValidatorExitTriggered()

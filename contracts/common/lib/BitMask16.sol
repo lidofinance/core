@@ -2,7 +2,6 @@
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity >=0.8.9 <0.9.0;
 
-
 /**
  * @title BitMask16
  * @author KRogLA
