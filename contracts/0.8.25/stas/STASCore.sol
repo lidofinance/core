@@ -372,8 +372,8 @@ library STASCore {
 
         uint16 smMask = $.packedEnabledStrategyMetricsBitMasks.get16(sId);
         uint256 pVals = $.packedEntityMetricValues[eId];
-        //  return Math.mulDiv(pVals.product(smMask), S_SCALE, sW, Math.Rounding.Ceil);
-        return (pVals.product(smMask) << S_FRAC) / sW;
+         return Math.mulDiv(pVals.product(smMask), S_SCALE, sW, Math.Rounding.Ceil);
+        // return (pVals.product(smMask) << S_FRAC) / sW;
     }
 
     function _checkEntity(STASStorage storage $, uint256 eId) private view {
