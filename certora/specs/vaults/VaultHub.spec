@@ -176,6 +176,17 @@ invariant obligatedVaultIsConnected(address vault)
         preserved _VaultHub.triggerValidatorWithdrawals(address _vault, bytes _pubkeys, uint64[] _amountsInGwei, address _refundRecipient) with (env e) {
           require(_amountsInGwei.length <= 2, "Limit loop iterations to mitigate timeouts");
         }
+        preserved _VaultHub.forceRebalance(address _vault) with (env e) {
+            // Constrain the vault parameter to reduce complexity
+            requireInvariant disconnectedVaultHasNoLiability(vault);
+            requireInvariant disconnectedVaultHasNoLocked(vault);
+        }
+        preserved _VaultHub.forceValidatorExit(address _vault, bytes _pubkeys, address _refundRecipient) with (env e) {
+            // Limit the complexity by constraining pubkeys length
+            require(_pubkeys.length <= 96, "Limit to 2 validators (48 bytes each)");
+            requireInvariant disconnectedVaultHasNoLiability(vault);
+            requireInvariant disconnectedVaultHasNoLocked(vault);
+        }
     }
 
 

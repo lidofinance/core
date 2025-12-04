@@ -16,7 +16,6 @@ env:
     certora/confs/misc/burner.conf
     certora/confs/misc/node_operators.conf
     certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultHasNoLiability"
-    certora/confs/vaults/VaultHub.conf --rule "obligatedVaultIsConnected"
     certora/confs/vaults/VaultHub.conf --rule "disconnectedVaultHasNoLocked"
     certora/confs/vaults/VaultHub.conf --rule "tierReserveRatioLeqOne"
     certora/confs/vaults/VaultHub.conf --rule "reserveRatioNotBig"
@@ -36,6 +35,8 @@ env:
     certora/confs/vaults/lazy-oracle.conf
     certora/confs/vaults/predeposit.conf
     certora/confs/vaults/immutable-ratio.conf
+    certora/confs/vaults/VaultHub-obligatedVaultIsConnected.conf
+
     
 
 jobs:
