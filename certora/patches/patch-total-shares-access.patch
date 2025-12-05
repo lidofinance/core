@@ -6,7 +6,7 @@ index b8c8d47f2..0094ebcf8 100644
          return TOTAL_SHARES_POSITION_LOW128.getLowUint128();
      }
  
-+    // MUNGED BY CERTORA
++    // PATCHED BY CERTORA
 +    function _setTotalShares(uint256 newTotalShares) internal {
 +        TOTAL_SHARES_POSITION_LOW128.setLowUint128(uint128(newTotalShares));
 +    }
@@ -19,7 +19,7 @@ index b8c8d47f2..0094ebcf8 100644
          require(newTotalShares & UINT128_HIGH_MASK == 0, "SHARES_OVERFLOW");
  
 -        TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
-+        // MUNGED BY CERTORA
++        // PATCHED BY CERTORA
 +        // TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
 +        _setTotalShares(newTotalShares);
  
@@ -30,7 +30,7 @@ index b8c8d47f2..0094ebcf8 100644
  
          newTotalShares = _getTotalShares().sub(_sharesAmount);
 -        TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
-+        // MUNGED BY CERTORA
++        // PATCHED BY CERTORA
 +        // TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
 +        _setTotalShares(newTotalShares);
  
