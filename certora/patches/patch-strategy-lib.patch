@@ -7,7 +7,7 @@ index 606b35d48..2865d8b9b 100644
          uint256[] memory capacities,
          uint256 allocationSize
 -    ) public pure returns (uint256 allocated, uint256[] memory) {
-+    ) internal pure returns (uint256 allocated, uint256[] memory) { // MUNGED BY CERTORA
++    ) internal pure returns (uint256 allocated, uint256[] memory) { // PATCHED BY CERTORA
          uint256 allocatedToBestCandidate = 0;
          while (allocated < allocationSize) {
              allocatedToBestCandidate = allocateToBestCandidate(buckets, capacities, allocationSize - allocated);

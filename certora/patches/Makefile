@@ -12,14 +12,14 @@ CWD=$(shell realpath --relative-to="${GIT_ROOT}" .)
 
 patch:
 	cd ${GIT_ROOT} ; \
-	for f in ${CWD}/munge-*.patch; do \
+	for f in ${CWD}/patch-*.patch; do \
 		echo applying $$f ; \
 		git apply $$f ; \
 	done
 
 patch-undo:
 	cd ${GIT_ROOT} ; \
-	for f in ${CWD}/munge-*.patch; do \
+	for f in ${CWD}/patch-*.patch; do \
 		echo applying $$f ; \
 		git apply -R $$f ; \
 	done
