@@ -63,8 +63,8 @@ jobs:
           corepack enable
           yarn install
 
-      - name: Perform munges
-        run: ./certora/scripts/munge.sh
+      - name: Perform patches
+        run: ./certora/scripts/patch.sh
 
       - name: run configs
         uses: Certora/certora-run-action@v2
