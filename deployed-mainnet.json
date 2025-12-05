@@ -87,7 +87,7 @@
   "app:aragon-voting": {
     "implementation": {
       "contract": "@aragon/apps-lido/apps/voting/contracts/Voting.sol",
-      "address": "0x72fb5253AD16307B9E773d2A78CaC58E309d5Ba4",
+      "address": "0xf165148978Fa3cE74d76043f833463c340CFB704",
       "constructorArgs": []
     },
     "aragonApp": {
