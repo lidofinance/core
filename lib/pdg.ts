@@ -161,10 +161,23 @@ export const setBeaconBlockRoot = async (root: string) => {
   return block.timestamp;
 };
 
+export interface LocalMerkleTree {
+  sszMerkleTree: SSZMerkleTree;
+  firstValidatorLeafIndex: bigint;
+  gIFirstValidator: string;
+  totalValidators: number;
+  addValidator: (validator: SSZBLSHelpers.ValidatorStruct) => Promise<{ validatorIndex: number }>;
+  validatorAtIndex: (index: number) => SSZBLSHelpers.ValidatorStruct;
+  commitChangesToBeaconRoot: (
+    slot?: number,
+  ) => Promise<{ childBlockTimestamp: number; beaconBlockHeader: SSZBLSHelpers.BeaconBlockHeaderStruct }>;
+  buildProof: (validatorIndex: number, beaconBlockHeader: SSZBLSHelpers.BeaconBlockHeaderStruct) => Promise<string[]>;
+}
+
 // Default mainnet values for validator state tree
 export const prepareLocalMerkleTree = async (
   gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028",
-) => {
+): Promise<LocalMerkleTree> => {
   const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [gIndex], {});
   const firstValidator = generateValidator();
 
