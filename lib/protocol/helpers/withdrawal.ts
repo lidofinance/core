@@ -34,7 +34,7 @@ export const finalizeWQViaElVault = async (ctx: ProtocolContext) => {
 
   const initialMaxPositiveTokenRebase = await setMaxPositiveTokenRebase(ctx, LIMITER_PRECISION_BASE);
 
-  const ethToSubmit = ether("10000000"); // don't calculate required eth from withdrawal queue to accelerate tests
+  const ethToSubmit = ether("1000000"); // don't calculate required eth from withdrawal queue to accelerate tests
 
   const lastRequestId = await withdrawalQueue.getLastRequestId();
   while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
