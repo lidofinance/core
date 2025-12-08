@@ -247,6 +247,7 @@ describe("Integration: Quarantine", () => {
     await reportTotalValue(INITIAL_VAULT_VALUE + LARGE_UNSAFE_VALUE + depositAmount + accruedFee);
 
     // Wait for next refslot
+    await advanceChainTime(60n * 60n);
     await waitNextAvailableReportTime(ctx);
 
     // Withdraw after quarantine expired and refslot advanced
