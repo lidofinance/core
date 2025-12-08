@@ -244,7 +244,7 @@ describe("Integration: Quarantine", () => {
 
     // Report while quarantine is still active but near expiry
     await advanceChainTime(quarantinePeriod / 2n - 60n * 60n);
-    await reportTotalValue(INITIAL_VAULT_VALUE + depositAmount + LARGE_UNSAFE_VALUE + accruedFee, true);
+    await reportTotalValue(INITIAL_VAULT_VALUE + LARGE_UNSAFE_VALUE + depositAmount + accruedFee);
 
     // Wait for next refslot
     await waitNextAvailableReportTime(ctx);
