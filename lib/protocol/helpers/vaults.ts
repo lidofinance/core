@@ -21,7 +21,6 @@ import {
   de0x,
   findEventsWithInterfaces,
   generatePredeposit,
-  generateTopUp,
   getCurrentBlockTimestamp,
   impersonate,
   log,
@@ -520,12 +519,7 @@ export const generatePredepositData = async (
   });
 };
 
-export const getProofAndDepositData = async (
-  ctx: ProtocolContext,
-  validator: Validator,
-  withdrawalCredentials: string,
-  amount: bigint = ether("31"),
-) => {
+export const mockProof = async (ctx: ProtocolContext, validator: Validator) => {
   const { predepositGuarantee } = ctx.contracts;
 
   // Step 3: Prove and deposit the validator
@@ -538,20 +532,16 @@ export const getProofAndDepositData = async (
   );
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
-  const postdeposit = generateTopUp(validator.container, amount);
   const pubkey = hexlify(validator.container.pubkey);
 
-  const witnesses = [
-    {
-      proof,
-      pubkey,
-      validatorIndex,
-      childBlockTimestamp,
-      slot: beaconBlockHeader.slot,
-      proposerIndex: beaconBlockHeader.proposerIndex,
-    },
-  ];
-  return { witnesses, postdeposit };
+  return {
+    proof,
+    pubkey,
+    validatorIndex,
+    childBlockTimestamp,
+    slot: beaconBlockHeader.slot,
+    proposerIndex: beaconBlockHeader.proposerIndex,
+  };
 };
 
 export async function calculateLockedValue(
