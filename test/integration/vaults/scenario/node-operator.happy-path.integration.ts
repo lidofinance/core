@@ -57,8 +57,8 @@ const OPERATOR_GROUP_INFRA_FEE_BP = 1_00n;
 const OPERATOR_GROUP_LIQUIDITY_FEE_BP = 6_00n;
 const OPERATOR_GROUP_RESERVATION_FEE_BP = 50n;
 
-const TIER_1_ID = 1n;
-const TIER_1_PARAMS: TierParamsStruct = {
+let OPERATOR_GROUP_TIER_1_ID: bigint;
+const OPERATOR_GROUP_TIER_1_PARAMS: TierParamsStruct = {
   shareLimit: ether("1000"),
   reserveRatioBP: 10_00n,
   forcedRebalanceThresholdBP: 9_75n,
@@ -67,8 +67,8 @@ const TIER_1_PARAMS: TierParamsStruct = {
   reservationFeeBP: OPERATOR_GROUP_RESERVATION_FEE_BP,
 };
 
-const TIER_2_ID = 2n;
-const TIER_2_PARAMS: TierParamsStruct = {
+let OPERATOR_GROUP_TIER_2_ID: bigint;
+const OPERATOR_GROUP_TIER_2_PARAMS: TierParamsStruct = {
   shareLimit: ether("1500"),
   reserveRatioBP: 15_00n,
   forcedRebalanceThresholdBP: 14_75n,
@@ -244,7 +244,9 @@ resetState(
     });
 
     it("registers tiers", async () => {
-      await operatorGrid.connect(agent).registerTiers(nodeOperator, [TIER_1_PARAMS, TIER_2_PARAMS]);
+      await operatorGrid
+        .connect(agent)
+        .registerTiers(nodeOperator, [OPERATOR_GROUP_TIER_1_PARAMS, OPERATOR_GROUP_TIER_2_PARAMS]);
 
       const group = await operatorGrid.group(nodeOperator);
       await mEqual([
@@ -252,26 +254,29 @@ resetState(
         [group.shareLimit, OPERATOR_GROUP_SHARE_LIMIT],
       ]);
 
-      const tier0 = await operatorGrid.tier(Number(TIER_1_ID));
+      OPERATOR_GROUP_TIER_1_ID = group.tierIds[0];
+      OPERATOR_GROUP_TIER_2_ID = group.tierIds[1];
+
+      const tier0 = await operatorGrid.tier(Number(OPERATOR_GROUP_TIER_1_ID));
       await mEqual([
         [tier0.operator, nodeOperator],
-        [tier0.shareLimit, TIER_1_PARAMS.shareLimit],
-        [tier0.reserveRatioBP, TIER_1_PARAMS.reserveRatioBP],
-        [tier0.forcedRebalanceThresholdBP, TIER_1_PARAMS.forcedRebalanceThresholdBP],
-        [tier0.infraFeeBP, TIER_1_PARAMS.infraFeeBP],
-        [tier0.liquidityFeeBP, TIER_1_PARAMS.liquidityFeeBP],
-        [tier0.reservationFeeBP, TIER_1_PARAMS.reservationFeeBP],
+        [tier0.shareLimit, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit],
+        [tier0.reserveRatioBP, OPERATOR_GROUP_TIER_1_PARAMS.reserveRatioBP],
+        [tier0.forcedRebalanceThresholdBP, OPERATOR_GROUP_TIER_1_PARAMS.forcedRebalanceThresholdBP],
+        [tier0.infraFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.infraFeeBP],
+        [tier0.liquidityFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.liquidityFeeBP],
+        [tier0.reservationFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.reservationFeeBP],
       ]);
 
-      const tier1 = await operatorGrid.tier(Number(TIER_2_ID));
+      const tier1 = await operatorGrid.tier(Number(OPERATOR_GROUP_TIER_2_ID));
       await mEqual([
         [tier1.operator, nodeOperator],
-        [tier1.shareLimit, TIER_2_PARAMS.shareLimit],
-        [tier1.reserveRatioBP, TIER_2_PARAMS.reserveRatioBP],
-        [tier1.forcedRebalanceThresholdBP, TIER_2_PARAMS.forcedRebalanceThresholdBP],
-        [tier1.infraFeeBP, TIER_2_PARAMS.infraFeeBP],
-        [tier1.liquidityFeeBP, TIER_2_PARAMS.liquidityFeeBP],
-        [tier1.reservationFeeBP, TIER_2_PARAMS.reservationFeeBP],
+        [tier1.shareLimit, OPERATOR_GROUP_TIER_2_PARAMS.shareLimit],
+        [tier1.reserveRatioBP, OPERATOR_GROUP_TIER_2_PARAMS.reserveRatioBP],
+        [tier1.forcedRebalanceThresholdBP, OPERATOR_GROUP_TIER_2_PARAMS.forcedRebalanceThresholdBP],
+        [tier1.infraFeeBP, OPERATOR_GROUP_TIER_2_PARAMS.infraFeeBP],
+        [tier1.liquidityFeeBP, OPERATOR_GROUP_TIER_2_PARAMS.liquidityFeeBP],
+        [tier1.reservationFeeBP, OPERATOR_GROUP_TIER_2_PARAMS.reservationFeeBP],
       ]);
     });
 
@@ -282,11 +287,17 @@ resetState(
         [tierInfoBeforeConnect.nodeOperator, operatorGrid.DEFAULT_TIER_OPERATOR()],
       ]);
 
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, TIER_1_ID, TIER_1_PARAMS.shareLimit);
+      await operatorGrid
+        .connect(nodeOperator)
+        .changeTier(stakingVault, OPERATOR_GROUP_TIER_1_ID, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit);
+
+      const vaultsCountBeforeConnect = await vaultHub.vaultsCount();
 
       await dashboard
         .connect(vaultOwner)
-        .connectAndAcceptTier(TIER_1_ID, TIER_1_PARAMS.shareLimit, { value: VAULT_CONNECTION_DEPOSIT });
+        .connectAndAcceptTier(OPERATOR_GROUP_TIER_1_ID, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit, {
+          value: VAULT_CONNECTION_DEPOSIT,
+        });
 
       vaultTotalValue += VAULT_CONNECTION_DEPOSIT;
 
@@ -298,29 +309,29 @@ resetState(
         [vaultHub.obligations(stakingVault), [0n, 0n]],
         [vaultHub.locked(stakingVault), VAULT_CONNECTION_DEPOSIT],
         [vaultHub.liabilityShares(stakingVault), 0n],
-        [vaultHub.vaultsCount(), 1],
+        [vaultHub.vaultsCount(), vaultsCountBeforeConnect + 1n],
       ]);
 
       const tierInfoAfterConnect = await operatorGrid.vaultTierInfo(stakingVault);
       await mEqual([
         [tierInfoAfterConnect.nodeOperator, nodeOperator],
-        [tierInfoAfterConnect.tierId, TIER_1_ID],
-        [tierInfoAfterConnect.shareLimit, TIER_1_PARAMS.shareLimit],
-        [tierInfoAfterConnect.reserveRatioBP, TIER_1_PARAMS.reserveRatioBP],
-        [tierInfoAfterConnect.forcedRebalanceThresholdBP, TIER_1_PARAMS.forcedRebalanceThresholdBP],
-        [tierInfoAfterConnect.infraFeeBP, TIER_1_PARAMS.infraFeeBP],
-        [tierInfoAfterConnect.liquidityFeeBP, TIER_1_PARAMS.liquidityFeeBP],
-        [tierInfoAfterConnect.reservationFeeBP, TIER_1_PARAMS.reservationFeeBP],
+        [tierInfoAfterConnect.tierId, OPERATOR_GROUP_TIER_1_ID],
+        [tierInfoAfterConnect.shareLimit, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit],
+        [tierInfoAfterConnect.reserveRatioBP, OPERATOR_GROUP_TIER_1_PARAMS.reserveRatioBP],
+        [tierInfoAfterConnect.forcedRebalanceThresholdBP, OPERATOR_GROUP_TIER_1_PARAMS.forcedRebalanceThresholdBP],
+        [tierInfoAfterConnect.infraFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.infraFeeBP],
+        [tierInfoAfterConnect.liquidityFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.liquidityFeeBP],
+        [tierInfoAfterConnect.reservationFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.reservationFeeBP],
       ]);
 
       const connectionAfterConnect = await vaultHub.vaultConnection(stakingVault);
       await mEqual([
-        [connectionAfterConnect.shareLimit, TIER_1_PARAMS.shareLimit],
-        [connectionAfterConnect.reserveRatioBP, TIER_1_PARAMS.reserveRatioBP],
-        [connectionAfterConnect.forcedRebalanceThresholdBP, TIER_1_PARAMS.forcedRebalanceThresholdBP],
-        [connectionAfterConnect.infraFeeBP, TIER_1_PARAMS.infraFeeBP],
-        [connectionAfterConnect.liquidityFeeBP, TIER_1_PARAMS.liquidityFeeBP],
-        [connectionAfterConnect.reservationFeeBP, TIER_1_PARAMS.reservationFeeBP],
+        [connectionAfterConnect.shareLimit, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit],
+        [connectionAfterConnect.reserveRatioBP, OPERATOR_GROUP_TIER_1_PARAMS.reserveRatioBP],
+        [connectionAfterConnect.forcedRebalanceThresholdBP, OPERATOR_GROUP_TIER_1_PARAMS.forcedRebalanceThresholdBP],
+        [connectionAfterConnect.infraFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.infraFeeBP],
+        [connectionAfterConnect.liquidityFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.liquidityFeeBP],
+        [connectionAfterConnect.reservationFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.reservationFeeBP],
       ]);
     });
 
@@ -939,13 +950,13 @@ resetState(
       await mEqual([[vaultHub.vaultConnection(stakingVault).then((c) => c.shareLimit), newShareLimit]]);
 
       const updatedTierParams: TierParamsStruct = {
-        ...TIER_1_PARAMS,
+        ...OPERATOR_GROUP_TIER_1_PARAMS,
         infraFeeBP: 4_00n,
         liquidityFeeBP: 3_00n,
       };
 
-      await operatorGrid.connect(agent).alterTiers([TIER_1_ID], [updatedTierParams]);
-      const tierAfterAlter = await operatorGrid.tier(Number(TIER_1_ID));
+      await operatorGrid.connect(agent).alterTiers([OPERATOR_GROUP_TIER_1_ID], [updatedTierParams]);
+      const tierAfterAlter = await operatorGrid.tier(Number(OPERATOR_GROUP_TIER_1_ID));
       await mEqual([
         [tierAfterAlter.infraFeeBP, updatedTierParams.infraFeeBP],
         [tierAfterAlter.liquidityFeeBP, updatedTierParams.liquidityFeeBP],
@@ -1019,16 +1030,16 @@ resetState(
 
       const stakingVault2Address = await stakingVault2.getAddress();
 
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault2Address, TIER_1_ID, ether("400"));
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault2Address, OPERATOR_GROUP_TIER_1_ID, ether("400"));
       await dashboard2
         .connect(vaultOwner)
-        .connectAndAcceptTier(TIER_1_ID, ether("400"), { value: VAULT_CONNECTION_DEPOSIT });
+        .connectAndAcceptTier(OPERATOR_GROUP_TIER_1_ID, ether("400"), { value: VAULT_CONNECTION_DEPOSIT });
 
       const tierInfo = await operatorGrid.vaultTierInfo(stakingVault2Address);
       await mEqual([
         [vaultHub.isVaultConnected(stakingVault2Address), true],
-        [tierInfo.tierId, TIER_1_ID],
-        [tierInfo.shareLimit, TIER_1_PARAMS.shareLimit],
+        [tierInfo.tierId, OPERATOR_GROUP_TIER_1_ID],
+        [tierInfo.shareLimit, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit],
       ]);
 
       const connectionVault2 = await vaultHub.vaultConnection(stakingVault2Address);
@@ -1076,10 +1087,12 @@ resetState(
 
       const tierAltShareLimit = ether("800");
 
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, TIER_2_ID, tierAltShareLimit);
-      const canApplyAlt = await dashboard.connect(vaultOwner).changeTier.staticCall(TIER_2_ID, tierAltShareLimit);
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, OPERATOR_GROUP_TIER_2_ID, tierAltShareLimit);
+      const canApplyAlt = await dashboard
+        .connect(vaultOwner)
+        .changeTier.staticCall(OPERATOR_GROUP_TIER_2_ID, tierAltShareLimit);
       expect(canApplyAlt).to.equal(true);
-      await expect(dashboard.connect(vaultOwner).changeTier(TIER_2_ID, tierAltShareLimit)).to.emit(
+      await expect(dashboard.connect(vaultOwner).changeTier(OPERATOR_GROUP_TIER_2_ID, tierAltShareLimit)).to.emit(
         vaultHub,
         "VaultConnectionUpdated",
       );
@@ -1087,18 +1100,20 @@ resetState(
       const [, tierAfterId, tierAfterShareLimit] = await operatorGrid.vaultTierInfo(stakingVault);
       const connectionAfterAlt = await vaultHub.vaultConnection(stakingVault);
       await mEqual([
-        [tierAfterId, TIER_2_ID],
-        [tierAfterShareLimit, TIER_2_PARAMS.shareLimit],
+        [tierAfterId, OPERATOR_GROUP_TIER_2_ID],
+        [tierAfterShareLimit, OPERATOR_GROUP_TIER_2_PARAMS.shareLimit],
         [connectionAfterAlt.shareLimit, tierAltShareLimit],
       ]);
 
       const tierPrimaryShareLimit = ether("900");
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, TIER_1_ID, tierPrimaryShareLimit);
+      await operatorGrid
+        .connect(nodeOperator)
+        .changeTier(stakingVault, OPERATOR_GROUP_TIER_1_ID, tierPrimaryShareLimit);
       const canApplyPrimary = await dashboard
         .connect(vaultOwner)
-        .changeTier.staticCall(TIER_1_ID, tierPrimaryShareLimit);
+        .changeTier.staticCall(OPERATOR_GROUP_TIER_1_ID, tierPrimaryShareLimit);
       expect(canApplyPrimary).to.equal(true);
-      await expect(dashboard.connect(vaultOwner).changeTier(TIER_1_ID, tierPrimaryShareLimit)).to.emit(
+      await expect(dashboard.connect(vaultOwner).changeTier(OPERATOR_GROUP_TIER_1_ID, tierPrimaryShareLimit)).to.emit(
         vaultHub,
         "VaultConnectionUpdated",
       );
@@ -1106,8 +1121,8 @@ resetState(
       const [, tierFinalId, tierFinalShareLimit] = await operatorGrid.vaultTierInfo(stakingVault);
       const connectionAfterPrimary = await vaultHub.vaultConnection(stakingVault);
       await mEqual([
-        [tierFinalId, TIER_1_ID],
-        [tierFinalShareLimit, TIER_1_PARAMS.shareLimit],
+        [tierFinalId, OPERATOR_GROUP_TIER_1_ID],
+        [tierFinalShareLimit, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit],
         [connectionAfterPrimary.shareLimit, tierPrimaryShareLimit],
       ]);
     });
@@ -1186,16 +1201,16 @@ resetState(
       );
       const acceptorAddress = await acceptorVault.getAddress();
 
-      await operatorGrid.connect(nodeOperator).changeTier(acceptorAddress, TIER_1_ID, ether("600"));
-      await acceptorDashboard.connect(vaultOwner).connectAndAcceptTier(TIER_1_ID, ether("600"), {
+      await operatorGrid.connect(nodeOperator).changeTier(acceptorAddress, OPERATOR_GROUP_TIER_1_ID, ether("600"));
+      await acceptorDashboard.connect(vaultOwner).connectAndAcceptTier(OPERATOR_GROUP_TIER_1_ID, ether("600"), {
         value: VAULT_CONNECTION_DEPOSIT,
       });
       const [, acceptorTierId, acceptorTierShareLimit] = await operatorGrid.vaultTierInfo(acceptorVault);
       const acceptorConnection = await vaultHub.vaultConnection(acceptorVault);
       await mEqual([
         [vaultHub.isVaultConnected(acceptorVault), true],
-        [acceptorTierId, TIER_1_ID],
-        [acceptorTierShareLimit, TIER_1_PARAMS.shareLimit],
+        [acceptorTierId, OPERATOR_GROUP_TIER_1_ID],
+        [acceptorTierShareLimit, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit],
         [acceptorConnection.shareLimit, ether("600")],
       ]);
 
