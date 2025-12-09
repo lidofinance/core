@@ -662,7 +662,7 @@
   },
   "v3VoteScript": {
     "contract": "contracts/upgrade/V3VoteScript.sol",
-    "address": "0xa47Ca1d2029D8e735237ea4E74c607426d4aA07e",
+    "address": "0xf2BeCc7aF0AA50DaD54781e06d5ce1A7eAD59AfA",
     "constructorArgs": [
       ["0x34E01ecFebd403370b0879C628f8A5319dDb8507", "0x2a30F5aC03187674553024296bed35Aa49749DDa", 8192, 8192]
     ]
