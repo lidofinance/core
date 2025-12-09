@@ -37,8 +37,8 @@ interface IStakingRouter {
 
 interface IVaultsAdapter {
     function setVaultJailStatus(address _vault, bool _isInJail) external;
-    function updateVaultFees(address _vault, uint16 _infrastructureFeeBP, uint16 _liquidityFeeBP, uint16 _reservationFeeBP) external;
-    function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _feeRecipient) external payable;
+    function updateVaultFees(address _vault, uint256 _infrastructureFeeBP, uint256 _liquidityFeeBP, uint256 _reservationFeeBP) external;
+    function forceValidatorExit(address _vault, bytes calldata _pubkeys) external payable;
     function socializeBadDebt(address _debtVault, address _acceptorVault, uint256 _shares) external;
 }
 

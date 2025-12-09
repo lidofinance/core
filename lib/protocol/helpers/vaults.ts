@@ -257,12 +257,14 @@ export async function reportVaultDataWithProof(
 ) {
   const { vaultHub, locator, lazyOracle, hashConsensus } = ctx.contracts;
 
+  const vaultRecord = await vaultHub.vaultRecord(stakingVault);
+
   const vaultReport: VaultReportItem = {
     vault: await stakingVault.getAddress(),
     totalValue: params.totalValue ?? (await vaultHub.totalValue(stakingVault)),
-    cumulativeLidoFees: params.cumulativeLidoFees ?? 0n,
+    cumulativeLidoFees: params.cumulativeLidoFees ?? vaultRecord.cumulativeLidoFees,
     liabilityShares: params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault)),
-    maxLiabilityShares: params.maxLiabilityShares ?? (await vaultHub.vaultRecord(stakingVault)).maxLiabilityShares,
+    maxLiabilityShares: params.maxLiabilityShares ?? vaultRecord.maxLiabilityShares,
     slashingReserve: params.slashingReserve ?? 0n,
   };
 
@@ -330,18 +332,17 @@ export async function reportVaultsDataWithProof(
 
   // Build vault reports for all vaults
   const vaultReports: VaultReportItem[] = await Promise.all(
-    stakingVaults.map(async (vault, index) => ({
-      vault: await vault.getAddress(),
-      totalValue: getValue(params.totalValue, index, await vaultHub.totalValue(vault)),
-      cumulativeLidoFees: getValue(params.cumulativeLidoFees, index, 0n),
-      liabilityShares: getValue(params.liabilityShares, index, await vaultHub.liabilityShares(vault)),
-      maxLiabilityShares: getValue(
-        params.maxLiabilityShares,
-        index,
-        (await vaultHub.vaultRecord(vault)).maxLiabilityShares,
-      ),
-      slashingReserve: getValue(params.slashingReserve, index, 0n),
-    })),
+    stakingVaults.map(async (vault, index) => {
+      const vaultRecord = await vaultHub.vaultRecord(vault);
+      return {
+        vault: await vault.getAddress(),
+        totalValue: getValue(params.totalValue, index, await vaultHub.totalValue(vault)),
+        cumulativeLidoFees: getValue(params.cumulativeLidoFees, index, vaultRecord.cumulativeLidoFees),
+        liabilityShares: getValue(params.liabilityShares, index, await vaultHub.liabilityShares(vault)),
+        maxLiabilityShares: getValue(params.maxLiabilityShares, index, vaultRecord.maxLiabilityShares),
+        slashingReserve: getValue(params.slashingReserve, index, 0n),
+      };
+    }),
   );
 
   // Create single Merkle tree for all vaults
