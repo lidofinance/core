@@ -774,6 +774,20 @@ describe("PredepositGuarantee.sol", () => {
             },
           ),
         ).to.revertedWithCustomError(pdg, "InvalidCompressedComponent");
+
+        const predepositDataWrongSignSignature = await generatePredeposit(validator, {
+          signatureFlipBitmask: 0b001,
+        });
+        await expect(
+          pdg.predeposit(
+            stakingVault,
+            [predepositDataWrongSignSignature.deposit],
+            [predepositDataWrongSignSignature.depositY],
+            {
+              value: balance,
+            },
+          ),
+        ).to.revertedWithCustomError(pdg, "InvalidCompressedComponentSignBit");
       });
     });
 

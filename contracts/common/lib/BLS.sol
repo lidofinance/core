@@ -251,9 +251,9 @@ library BLS12_381 {
             revert InvalidCompressedComponent();
          }
 
-        bool signBit = input & 1 !=0;
+        bool signBit = (input & 1) !=0;
 
-        // lgtm but recheck for edgecase because of P division
+        // needs recheck for edgecase because of P division
         bool correctSignBit = depositY.pubkeyY.a > UPPER_HALF_P || (depositY.pubkeyY.a == UPPER_HALF_P && depositY.pubkeyY.b > LOWER_HALF_P);
 
         if(signBit != correctSignBit){
@@ -262,7 +262,7 @@ library BLS12_381 {
             
     }
 
-    function checkSignBitFp2(bytes calldata signature,DepositY calldata /*depositY*/) internal pure {
+    function checkSignBitFp2(bytes calldata signature,DepositY calldata depositY) internal pure {
         uint8 input = uint8(signature[0]);
          
         input = (input & 0xe0) >> 5;
@@ -272,19 +272,12 @@ library BLS12_381 {
          }
 
 
-        // // this is broken 
-        // bool signBit = input & 1 !=0;
-        // bool correctSignBit;
-       
-        // if(depositY.signatureY.c0_a == 0 && depositY.signatureY.c0_b == 0){
-        //      correctSignBit = (depositY.signatureY.c1_a > UPPER_HALF_P || (depositY.signatureY.c1_a == UPPER_HALF_P && depositY.signatureY.c1_b > LOWER_HALF_P));
-        // } else {
-        //     correctSignBit = (depositY.signatureY.c0_a > UPPER_HALF_P || (depositY.signatureY.c0_a == UPPER_HALF_P && depositY.signatureY.c0_b > LOWER_HALF_P));
-        // }
+        bool signBit = (input & 1) !=0;
+        bool correctSignBit = depositY.signatureY.c1_a > UPPER_HALF_P || (depositY.signatureY.c1_a == UPPER_HALF_P && depositY.signatureY.c1_b > LOWER_HALF_P);
 
-        // if(signBit != correctSignBit){
-        //     revert InvalidCompressedComponentSignBit();
-        // }
+        if(signBit != correctSignBit){
+            revert InvalidCompressedComponentSignBit();
+        }
             
     }
 
