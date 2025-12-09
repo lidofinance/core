@@ -695,6 +695,86 @@ describe("PredepositGuarantee.sol", () => {
         expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([totalBalance, totalBalance]);
         expect(await pdg.unlockedBalance(vaultOperator)).to.equal(0n);
       });
+
+      it("bytes revert on BLS", async () => {
+        // Staking Vault is funded with enough ether to run validator
+        await stakingVault.fund({ value: ether("32") });
+
+        const balance = ether("1");
+
+        await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+
+        const vaultWC = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(vaultWC);
+
+        const predepositDataWrongCompressPubkey = await generatePredeposit(validator, { pubkeyFlipBitmask: 0b100 });
+        await expect(
+          pdg.predeposit(
+            stakingVault,
+            [predepositDataWrongCompressPubkey.deposit],
+            [predepositDataWrongCompressPubkey.depositY],
+            {
+              value: balance,
+            },
+          ),
+        ).to.revertedWithCustomError(pdg, "InvalidCompressedComponent");
+
+        const predepositDataWrongInfinityPubkey = await generatePredeposit(validator, {
+          pubkeyFlipBitmask: 0b010,
+        });
+        await expect(
+          pdg.predeposit(
+            stakingVault,
+            [predepositDataWrongInfinityPubkey.deposit],
+            [predepositDataWrongInfinityPubkey.depositY],
+            {
+              value: balance,
+            },
+          ),
+        ).to.revertedWithCustomError(pdg, "InvalidCompressedComponent");
+
+        const predepositDataWrongSignPubkey = await generatePredeposit(validator, {
+          pubkeyFlipBitmask: 0b001,
+        });
+        await expect(
+          pdg.predeposit(
+            stakingVault,
+            [predepositDataWrongSignPubkey.deposit],
+            [predepositDataWrongSignPubkey.depositY],
+            {
+              value: balance,
+            },
+          ),
+        ).to.revertedWithCustomError(pdg, "InvalidCompressedComponentSignBit");
+
+        const predepositDataWrongCompressSignature = await generatePredeposit(validator, {
+          signatureFlipBitmask: 0b100,
+        });
+        await expect(
+          pdg.predeposit(
+            stakingVault,
+            [predepositDataWrongCompressSignature.deposit],
+            [predepositDataWrongCompressSignature.depositY],
+            {
+              value: balance,
+            },
+          ),
+        ).to.revertedWithCustomError(pdg, "InvalidCompressedComponent");
+
+        const predepositDataWrongInfinitySignature = await generatePredeposit(validator, {
+          signatureFlipBitmask: 0b010,
+        });
+        await expect(
+          pdg.predeposit(
+            stakingVault,
+            [predepositDataWrongInfinitySignature.deposit],
+            [predepositDataWrongInfinitySignature.depositY],
+            {
+              value: balance,
+            },
+          ),
+        ).to.revertedWithCustomError(pdg, "InvalidCompressedComponent");
+      });
     });
 
     context("invalid WC vault", () => {

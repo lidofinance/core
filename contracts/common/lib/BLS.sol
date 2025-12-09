@@ -26,6 +26,12 @@ library BLS12_381 {
     /// Due to the size of `p`,
     /// `0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab`
     /// the top 16 bytes are always zeroes.
+
+    bytes32 internal constant UPPER_HALF_P =
+        0x000000000000000000000000000000000d0088f51cbff34d258dd3db21a5d66b;
+    bytes32 internal constant LOWER_HALF_P =
+        0xb23ba5c279c2895fb39869507b587b120f55ffff58a9ffffdcff7fffffffd555;    
+
     struct Fp {
         bytes32 a; // Upper 32 bytes.
         bytes32 b; // Lower 32 bytes.
@@ -114,6 +120,9 @@ library BLS12_381 {
 
     /// @dev provided BLS signature is invalid
     error InvalidSignature();
+
+    error InvalidCompressedComponent();
+    error InvalidCompressedComponentSignBit();
 
     /// @dev provided pubkey length is not 48
     error InvalidPubkeyLength();
@@ -232,6 +241,53 @@ library BLS12_381 {
         }
     }
 
+
+    function checkSignBit(bytes calldata pubkey,DepositY calldata depositY) internal pure {
+        uint8 input = uint8(pubkey[0]);
+         
+        input = (input & 0xe0) >> 5;
+         
+         if(input != 4 && input != 5){
+            revert InvalidCompressedComponent();
+         }
+
+        bool signBit = input & 1 !=0;
+
+        // lgtm but recheck for edgecase because of P division
+        bool correctSignBit = depositY.pubkeyY.a > UPPER_HALF_P || (depositY.pubkeyY.a == UPPER_HALF_P && depositY.pubkeyY.b > LOWER_HALF_P);
+
+        if(signBit != correctSignBit){
+            revert InvalidCompressedComponentSignBit();
+        }
+            
+    }
+
+    function checkSignBitFp2(bytes calldata signature,DepositY calldata /*depositY*/) internal pure {
+        uint8 input = uint8(signature[0]);
+         
+        input = (input & 0xe0) >> 5;
+         
+         if(input != 4 && input != 5){
+            revert InvalidCompressedComponent();
+         }
+
+
+        // // this is broken 
+        // bool signBit = input & 1 !=0;
+        // bool correctSignBit;
+       
+        // if(depositY.signatureY.c0_a == 0 && depositY.signatureY.c0_b == 0){
+        //      correctSignBit = (depositY.signatureY.c1_a > UPPER_HALF_P || (depositY.signatureY.c1_a == UPPER_HALF_P && depositY.signatureY.c1_b > LOWER_HALF_P));
+        // } else {
+        //     correctSignBit = (depositY.signatureY.c0_a > UPPER_HALF_P || (depositY.signatureY.c0_a == UPPER_HALF_P && depositY.signatureY.c0_b > LOWER_HALF_P));
+        // }
+
+        // if(signBit != correctSignBit){
+        //     revert InvalidCompressedComponentSignBit();
+        // }
+            
+    }
+
     /**
      * @notice Verifies the deposit message signature using BLS12-381 pairing check.
      * @param pubkey The BLS public key of the deposit.
@@ -254,8 +310,11 @@ library BLS12_381 {
         // Hash the deposit message and map it to G2 point on the curve
         G2Point memory msgG2 = hashToG2(depositMessageSigningRoot(pubkey, amount, withdrawalCredentials, depositDomain));
 
+        checkSignBit(pubkey,depositY);
+        checkSignBitFp2(signature,depositY);
+
         // BLS Pairing check input
-        // pubkeyG1 | msgG2 | NEGATED_G1_GENERATOR | signatureG2
+        // pubkeyG1(pubkey | depositY.pubkeyY) | msgG2 | NEGATED_G1_GENERATOR | signatureG2(signature | depositY.signatureY)
         bytes32[24] memory input;
 
         // Load pubkeyG1 directly from calldata to input array
