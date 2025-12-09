@@ -5,6 +5,11 @@ import { ProtocolContext } from "../types";
 export const ensurePredepositGuaranteeUnpaused = async (ctx: ProtocolContext) => {
   const { predepositGuarantee } = ctx.contracts;
 
+  if (!predepositGuarantee) {
+    log.warning("PredepositGuarantee not found, skipping");
+    return;
+  }
+
   const paused = await predepositGuarantee.isPaused();
   if (!paused) {
     log.debug("PredepositGuarantee is not paused, skipping");
