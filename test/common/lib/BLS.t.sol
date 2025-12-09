@@ -88,6 +88,88 @@ contract BLSVerifyingKeyTest is Test {
         assertEq(depositDomain, hex"03000000719103511efa4f1362ff2a50996cccf329cc84cb410c5e5c7d351d03");
     }
 
+    /**
+     * @notice Test that verifyDepositMessage REJECTS a signature with flipped sign bit
+     * @dev After the fix, the sign bit must match the Y coordinate provided in depositY.
+     *      Flipping the sign bit without changing Y coordinate should cause SignBitMismatch error.
+     */
+    function test_verifyDeposit_rejectsFlippedSignBitInSignature() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Flip the sign bit in the signature (toggle bit 5 = 0x20)
+        bytes memory sig = message.deposit.signature;
+        sig[0] = bytes1(uint8(sig[0]) ^ 0x20);
+        message.deposit.signature = sig;
+
+        // Should now FAIL because sign bit doesn't match depositY.signatureY
+        vm.expectRevert(BLS12_381.SignBitMismatch.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    /**
+     * @notice Test that verifyDepositMessage REJECTS a pubkey with flipped sign bit
+     * @dev The sign bit must match the Y coordinate in depositY.pubkeyY
+     */
+    function test_verifyDeposit_rejectsFlippedSignBitInPubkey() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Flip the sign bit in the pubkey (toggle bit 5 = 0x20)
+        bytes memory pubkey = message.deposit.pubkey;
+        pubkey[0] = bytes1(uint8(pubkey[0]) ^ 0x20);
+        message.deposit.pubkey = pubkey;
+
+        // Should now FAIL because sign bit doesn't match depositY.pubkeyY
+        vm.expectRevert(BLS12_381.SignBitMismatch.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    /**
+     * @notice Test that verifyDepositMessage REJECTS both pubkey and signature with flipped sign bits
+     * @dev First mismatch encountered (pubkey) should trigger the revert
+     */
+    function test_verifyDeposit_rejectsFlippedSignBitInBoth() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Flip sign bits in both pubkey and signature
+        bytes memory pubkey = message.deposit.pubkey;
+        pubkey[0] = bytes1(uint8(pubkey[0]) ^ 0x20);
+        message.deposit.pubkey = pubkey;
+
+        bytes memory sig = message.deposit.signature;
+        sig[0] = bytes1(uint8(sig[0]) ^ 0x20);
+        message.deposit.signature = sig;
+
+        // Should FAIL - pubkey sign bit mismatch is checked first
+        vm.expectRevert(BLS12_381.SignBitMismatch.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    /**
+     * @notice Test that verification FAILS when depositY has wrong (corrupted) Y coordinate
+     * @dev This proves the Y coordinate in depositY must be correct for the pairing to succeed
+     */
+    function test_verifyDeposit_rejectsWrongYCoordinate() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Corrupt the signatureY by zeroing part of it (simulating wrong Y coordinate)
+        message.depositYComponents.signatureY.c0_a = bytes32(0);
+
+        // Should fail - either SignBitMismatch or InvalidSignature depending on the corruption
+        vm.expectRevert();
+        harness.verifyDepositMessage(message);
+    }
+
+    /**
+     * @notice Test that valid deposits with correct sign bits still pass
+     * @dev Sanity check that the fix doesn't break valid deposits
+     */
+    function test_verifyDeposit_acceptsCorrectSignBits() external view {
+        // All existing valid test messages should still pass
+        harness.verifyDepositMessage(LOCAL_MESSAGE_1());
+        harness.verifyDepositMessage(LOCAL_MESSAGE_2());
+        harness.verifyDepositMessage(BENCHMARK_MAINNET_MESSAGE());
+    }
+
     function test_zeroingForStaticArrays() public view {
         assembly {
             // Get the current free memory pointer

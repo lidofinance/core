@@ -72,6 +72,15 @@ library BLS12_381 {
     /// @dev mask to remove sign bit from Fp via bitwise AND
     bytes32 internal constant FP_NO_SIGN_MASK = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
+    /// @dev Sign bit mask (bit 5 of first byte)
+    bytes1 internal constant SIGN_BIT_MASK = 0x20;
+
+    /// @dev (p - 1) / 2 for BLS12-381 field, used to determine sign of Y coordinate
+    /// p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
+    /// (p - 1) / 2 split into two bytes32 for Fp comparison
+    bytes32 internal constant P_MINUS_1_OVER_2_A = 0x000000000000000000000000000000000d0088f51cbff34d258dd3db21a5d66b;
+    bytes32 internal constant P_MINUS_1_OVER_2_B = 0xb23ba5c279c2895fb39869507b587b120f55ffff58a9ffffdcff7fffffffd555;
+
     /// @notice Domain for deposit message signing
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#domain-types
     bytes4 internal constant DOMAIN_DEPOSIT_TYPE = 0x03000000;
@@ -114,6 +123,9 @@ library BLS12_381 {
 
     /// @dev provided BLS signature is invalid
     error InvalidSignature();
+
+    /// @dev sign bit in compressed format doesn't match provided Y coordinate
+    error SignBitMismatch();
 
     /// @dev provided pubkey length is not 48
     error InvalidPubkeyLength();
@@ -242,6 +254,7 @@ library BLS12_381 {
      * @param depositDomain The domain of the deposit message for the current chain.
      * @dev Reverts with `InvalidSignature` if the signature is invalid.
      * @dev Reverts with `InputHasInfinityPoints` if the input contains infinity points (zero values).
+     * @dev Reverts with `SignBitMismatch` if sign bit in compressed format doesn't match Y coordinate.
      */
     function verifyDepositMessage(
         bytes calldata pubkey,
@@ -251,6 +264,10 @@ library BLS12_381 {
         bytes32 withdrawalCredentials,
         bytes32 depositDomain
     ) internal view {
+        // Validate sign bits match Y coordinates
+        _validatePubkeySignBit(pubkey, depositY.pubkeyY);
+        _validateSignatureSignBit(signature, depositY.signatureY);
+
         // Hash the deposit message and map it to G2 point on the curve
         G2Point memory msgG2 = hashToG2(depositMessageSigningRoot(pubkey, amount, withdrawalCredentials, depositDomain));
 
@@ -466,5 +483,72 @@ library BLS12_381 {
             ),
             depositDomain
         );
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    SIGN BIT VALIDATION                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /**
+     * @notice Validates that the sign bit in compressed pubkey matches the Y coordinate
+     * @param pubkey The compressed BLS public key (48 bytes)
+     * @param pubkeyY The Y coordinate of the uncompressed pubkey
+     * @dev Sign bit is bit 5 (0x20) of first byte. If set, Y should be > (p-1)/2
+     */
+    function _validatePubkeySignBit(bytes calldata pubkey, Fp calldata pubkeyY) private pure {
+        bool signBitSet = (pubkey[0] & SIGN_BIT_MASK) != 0;
+        bool yIsLarger = _fpIsLarger(pubkeyY);
+
+        if (signBitSet != yIsLarger) {
+            revert SignBitMismatch();
+        }
+    }
+
+    /**
+     * @notice Validates that the sign bit in compressed signature matches the Y coordinate
+     * @param signature The compressed BLS signature (96 bytes)
+     * @param signatureY The Y coordinate of the uncompressed signature (Fp2 element)
+     * @dev Sign bit is bit 5 (0x20) of first byte. If set, Y should be > (p-1)/2 (lexicographic)
+     */
+    function _validateSignatureSignBit(bytes calldata signature, Fp2 calldata signatureY) private pure {
+        bool signBitSet = (signature[0] & SIGN_BIT_MASK) != 0;
+        bool yIsLarger = _fp2IsLarger(signatureY);
+
+        if (signBitSet != yIsLarger) {
+            revert SignBitMismatch();
+        }
+    }
+
+    /**
+     * @notice Checks if an Fp element is greater than (p-1)/2
+     * @param y The Fp element to check
+     * @return True if y > (p-1)/2
+     */
+    function _fpIsLarger(Fp calldata y) private pure returns (bool) {
+        // Compare y with (p-1)/2 using big-endian comparison
+        // First compare upper bytes (a), then lower bytes (b)
+        if (y.a > P_MINUS_1_OVER_2_A) return true;
+        if (y.a < P_MINUS_1_OVER_2_A) return false;
+        return y.b > P_MINUS_1_OVER_2_B;
+    }
+
+    /**
+     * @notice Checks if an Fp2 element is greater than (p-1)/2 using lexicographic ordering
+     * @param y The Fp2 element to check (c0, c1 where element = c0 + c1*u)
+     * @return True if y > (p-1)/2 in lexicographic order
+     * @dev Per BLS12-381 spec, Fp2 comparison is: first compare c1, if equal compare c0
+     */
+    function _fp2IsLarger(Fp2 calldata y) private pure returns (bool) {
+        // Lexicographic comparison: compare c1 first (imaginary part)
+        // c1 is stored in (c1_a, c1_b)
+        if (y.c1_a > P_MINUS_1_OVER_2_A) return true;
+        if (y.c1_a < P_MINUS_1_OVER_2_A) return false;
+        if (y.c1_b > P_MINUS_1_OVER_2_B) return true;
+        if (y.c1_b < P_MINUS_1_OVER_2_B) return false;
+
+        // c1 == (p-1)/2, compare c0 (real part)
+        if (y.c0_a > P_MINUS_1_OVER_2_A) return true;
+        if (y.c0_a < P_MINUS_1_OVER_2_A) return false;
+        return y.c0_b > P_MINUS_1_OVER_2_B;
     }
 }
