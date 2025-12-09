@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Dashboard, ERC20__Harness, Lido, StakingVault, WstETH } from "typechain-types";
+import { Dashboard, ERC20__Harness, EthRejector, Lido, StakingVault, WstETH } from "typechain-types";
 
 import { ether, impersonate } from "lib";
 import {
@@ -279,6 +279,15 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
           dashboard.connect(stranger).recoverERC20(ETH_ADDRESS, stranger, ethAmount),
         ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
       });
+
+      it("Reverts with EthTransferFailed when recipient rejects ETH", async () => {
+        // Deploy a contract that rejects ETH transfers
+        const ethRejector: EthRejector = await ethers.deployContract("EthRejector");
+
+        await expect(dashboard.connect(owner).recoverERC20(ETH_ADDRESS, ethRejector, ethAmount))
+          .to.be.revertedWithCustomError(dashboard, "EthTransferFailed")
+          .withArgs(ethRejector, ethAmount);
+      });
     });
   });
 
@@ -523,6 +532,42 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
       await expect(dashboard.connect(owner).recoverERC20(ETH_ADDRESS, stranger, extraETH))
         .to.emit(dashboard, "AssetsRecovered")
         .withArgs(stranger, ETH_ADDRESS, extraETH);
+    });
+
+    it("recoverFeeLeftover reverts with EthTransferFailed when feeRecipient rejects ETH", async () => {
+      // Deploy a contract that rejects ETH transfers
+      const ethRejector: EthRejector = await ethers.deployContract("EthRejector");
+
+      // Set the fee recipient to the rejector contract
+      await dashboard.connect(nodeOperator).setFeeRecipient(ethRejector);
+      expect(await dashboard.feeRecipient()).to.equal(await ethRejector.getAddress());
+
+      // Setup: Fund vault to have enough balance for fees
+      await dashboard.connect(owner).fund({ value: ether("10") });
+
+      // Simulate rewards to trigger fee accrual
+      const totalValue = ether("15");
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue,
+        waitForNextRefSlot: true,
+      });
+
+      const accruedFee = await dashboard.accruedFee();
+      expect(accruedFee).to.be.gt(0n);
+
+      // Perform voluntary disconnect to collect fees to feeLeftover
+      await dashboard.connect(owner).voluntaryDisconnect();
+
+      const feeLeftover = await dashboard.feeLeftover();
+      expect(feeLeftover).to.be.gt(0n);
+
+      // Complete the disconnection
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue });
+
+      // Try to recover fee leftover - should fail because recipient rejects ETH
+      await expect(dashboard.recoverFeeLeftover())
+        .to.be.revertedWithCustomError(dashboard, "EthTransferFailed")
+        .withArgs(ethRejector, feeLeftover);
     });
   });
 });
