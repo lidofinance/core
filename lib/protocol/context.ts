@@ -5,6 +5,7 @@ import { getMode } from "hardhat.helpers";
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
 import { discover } from "./discover";
+import { ensurePredepositGuaranteeUnpaused } from "./helpers";
 import { provision } from "./provision";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
@@ -87,6 +88,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
     await provision(context);
   } else {
     await ensureVaultsShareLimit(context);
+    await ensurePredepositGuaranteeUnpaused(context);
   }
 
   return context;

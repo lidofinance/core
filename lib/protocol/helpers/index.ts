@@ -18,6 +18,7 @@ export {
 } from "./accounting";
 
 export { ensureDsmGuardians } from "./dsm";
+export { ensurePredepositGuaranteeUnpaused } from "./pdg";
 export { norSdvtEnsureOperators } from "./nor-sdvt";
 export { calcNodeOperatorRewards } from "./staking-module";
 
