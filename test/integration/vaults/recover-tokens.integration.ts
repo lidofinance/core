@@ -31,6 +31,7 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let tokenHolder: HardhatEthersSigner;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
@@ -46,7 +47,7 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
 
     await setupLidoForVaults(ctx);
 
-    [owner, nodeOperator, stranger] = await ethers.getSigners();
+    [owner, nodeOperator, stranger, tokenHolder] = await ethers.getSigners();
 
     ({ stakingVault, dashboard } = await createVaultWithDashboard(
       ctx,
@@ -55,9 +56,6 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
       nodeOperator,
       nodeOperator,
     ));
-
-    // Fund the vault for connection
-    await dashboard.connect(owner).fund({ value: ether("1") });
 
     // Autofill roles to have asset collector
     roles = await autofillRoles(dashboard, nodeOperator);
@@ -68,6 +66,17 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
     // Get stETH and wstETH from protocol context
     stETH = ctx.contracts.lido;
     wstETH = ctx.contracts.wstETH;
+
+    // Mint lots of tokens to tokenHolder for use in tests
+    await erc20Token.mint(tokenHolder, ether("10000"));
+
+    // Get stETH for tokenHolder
+    await stETH.connect(tokenHolder).submit(tokenHolder, { value: ether("1000") });
+
+    // Wrap half to get wstETH
+    const stETHBalance = await stETH.balanceOf(tokenHolder);
+    await stETH.connect(tokenHolder).approve(wstETH, stETHBalance / 2n);
+    await wstETH.connect(tokenHolder).wrap(stETHBalance / 2n);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -105,6 +114,13 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
       await expect(stakingVault.connect(nodeOperator).collectERC20(erc20Token, stranger, tokenAmount))
         .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
         .withArgs(nodeOperator);
+    });
+
+    it("Reverts when called by owner directly on VaultHub", async () => {
+      // Only the Dashboard (vault's owner in VaultHub) can call collectERC20FromVault
+      await expect(
+        ctx.contracts.vaultHub.connect(owner).collectERC20FromVault(stakingVault, erc20Token, stranger, tokenAmount),
+      ).to.be.revertedWithCustomError(ctx.contracts.vaultHub, "NotAuthorized");
     });
   });
 
@@ -418,6 +434,92 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
         const recipientBalanceAfter = await wstETH.balanceOf(stranger);
         expect(recipientBalanceAfter - recipientBalanceBefore).to.equal(vaultWstETHBefore);
         expect(await wstETH.balanceOf(stakingVault)).to.equal(0n);
+      });
+    });
+
+    describe("Multiple different tokens on both stakingVault and dashboard", () => {
+      const erc20Amount = ether("100");
+      const stETHAmount = ether("10");
+      const wstETHAmount = ether("5");
+
+      beforeEach(async () => {
+        // Transfer tokens from tokenHolder to both stakingVault and dashboard
+        await erc20Token.connect(tokenHolder).transfer(stakingVault, erc20Amount);
+        await erc20Token.connect(tokenHolder).transfer(dashboard, erc20Amount);
+
+        await stETH.connect(tokenHolder).transfer(stakingVault, stETHAmount);
+        await stETH.connect(tokenHolder).transfer(dashboard, stETHAmount);
+
+        await wstETH.connect(tokenHolder).transfer(stakingVault, wstETHAmount);
+        await wstETH.connect(tokenHolder).transfer(dashboard, wstETHAmount);
+      });
+
+      it("Allows recovering multiple different tokens from both stakingVault and dashboard", async () => {
+        // Record initial balances
+        const recipientERC20Before = await erc20Token.balanceOf(stranger);
+        const recipientStETHBefore = await stETH.balanceOf(stranger);
+        const recipientWstETHBefore = await wstETH.balanceOf(stranger);
+
+        // Get balances on vault and dashboard
+        const vaultERC20 = await erc20Token.balanceOf(stakingVault);
+        const vaultStETH = await stETH.balanceOf(stakingVault);
+        const vaultWstETH = await wstETH.balanceOf(stakingVault);
+
+        const dashboardERC20 = await erc20Token.balanceOf(dashboard);
+        const dashboardStETH = await stETH.balanceOf(dashboard);
+        const dashboardWstETH = await wstETH.balanceOf(dashboard);
+
+        // Verify tokens are on the expected locations
+        expect(vaultERC20).to.equal(erc20Amount);
+        expect(vaultStETH).to.be.closeTo(stETHAmount, 2n);
+        expect(vaultWstETH).to.equal(wstETHAmount);
+
+        expect(dashboardERC20).to.equal(erc20Amount);
+        expect(dashboardStETH).to.be.closeTo(stETHAmount, 2n);
+        expect(dashboardWstETH).to.equal(wstETHAmount);
+
+        // Recover tokens from stakingVault via collectERC20FromVault
+        await expect(dashboard.connect(owner).collectERC20FromVault(erc20Token, stranger, vaultERC20))
+          .to.emit(stakingVault, "AssetsRecovered")
+          .withArgs(stranger, erc20Token, vaultERC20);
+
+        await expect(dashboard.connect(owner).collectERC20FromVault(stETH, stranger, vaultStETH))
+          .to.emit(stakingVault, "AssetsRecovered")
+          .withArgs(stranger, stETH, vaultStETH);
+
+        await expect(dashboard.connect(owner).collectERC20FromVault(wstETH, stranger, vaultWstETH))
+          .to.emit(stakingVault, "AssetsRecovered")
+          .withArgs(stranger, wstETH, vaultWstETH);
+
+        // Recover tokens from dashboard via recoverERC20
+        await expect(dashboard.connect(owner).recoverERC20(erc20Token, stranger, dashboardERC20))
+          .to.emit(dashboard, "AssetsRecovered")
+          .withArgs(stranger, erc20Token, dashboardERC20);
+
+        await expect(dashboard.connect(owner).recoverERC20(stETH, stranger, dashboardStETH))
+          .to.emit(dashboard, "AssetsRecovered")
+          .withArgs(stranger, stETH, dashboardStETH);
+
+        await expect(dashboard.connect(owner).recoverERC20(wstETH, stranger, dashboardWstETH))
+          .to.emit(dashboard, "AssetsRecovered")
+          .withArgs(stranger, wstETH, dashboardWstETH);
+
+        // Verify all tokens were recovered to recipient
+        expect(await erc20Token.balanceOf(stranger)).to.equal(recipientERC20Before + vaultERC20 + dashboardERC20);
+        expect(await stETH.balanceOf(stranger)).to.be.closeTo(
+          recipientStETHBefore + vaultStETH + dashboardStETH,
+          4n, // stETH has rounding
+        );
+        expect(await wstETH.balanceOf(stranger)).to.equal(recipientWstETHBefore + vaultWstETH + dashboardWstETH);
+
+        // Verify all tokens were removed from vault and dashboard
+        expect(await erc20Token.balanceOf(stakingVault)).to.equal(0n);
+        expect(await stETH.balanceOf(stakingVault)).to.be.closeTo(0n, 2n);
+        expect(await wstETH.balanceOf(stakingVault)).to.equal(0n);
+
+        expect(await erc20Token.balanceOf(dashboard)).to.equal(0n);
+        expect(await stETH.balanceOf(dashboard)).to.be.closeTo(0n, 2n);
+        expect(await wstETH.balanceOf(dashboard)).to.equal(0n);
       });
     });
   });
