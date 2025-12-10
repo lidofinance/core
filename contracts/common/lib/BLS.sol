@@ -26,12 +26,6 @@ library BLS12_381 {
     /// Due to the size of `p`,
     /// `0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab`
     /// the top 16 bytes are always zeroes.
-
-    bytes32 internal constant UPPER_HALF_P =
-        0x000000000000000000000000000000000d0088f51cbff34d258dd3db21a5d66b;
-    bytes32 internal constant LOWER_HALF_P =
-        0xb23ba5c279c2895fb39869507b587b120f55ffff58a9ffffdcff7fffffffd555;    
-
     struct Fp {
         bytes32 a; // Upper 32 bytes.
         bytes32 b; // Lower 32 bytes.
@@ -74,6 +68,14 @@ library BLS12_381 {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         CONSTANTS                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev upper(a) part of the HALF of the prime field modulus P to check againts FP.a 
+    bytes32 internal constant HALF_P_A =
+        0x000000000000000000000000000000000d0088f51cbff34d258dd3db21a5d66b;
+    
+    /// @dev lower(b) part of the HALF of the prime field modulus P to check againts FP.b 
+    bytes32 internal constant HALF_P_B =
+        0xb23ba5c279c2895fb39869507b587b120f55ffff58a9ffffdcff7fffffffd555;    
 
     /// @dev mask to remove sign bit from Fp via bitwise AND
     bytes32 internal constant FP_NO_SIGN_MASK = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
@@ -121,8 +123,13 @@ library BLS12_381 {
     /// @dev provided BLS signature is invalid
     error InvalidSignature();
 
-    error InvalidCompressedComponent();
-    error InvalidCompressedComponentSignBit();
+    /// @dev compression/infinity flag bits in compressed component are invalid
+    /// @param component the number of incorect component, 0 for pubkey, 1 for signature
+    error InvalidCompressedComponent(uint8 component);
+    
+    /// @dev sign flag bit in compressed component is invalid
+    /// @param component the number of incorect component, 0 for pubkey, 1 for signature
+    error InvalidCompressedComponentSignBit(uint8 component);
 
     /// @dev provided pubkey length is not 48
     error InvalidPubkeyLength();
@@ -242,41 +249,67 @@ library BLS12_381 {
     }
 
 
-    function checkSignBit(bytes calldata pubkey,DepositY calldata depositY) internal pure {
-        uint8 input = uint8(pubkey[0]);
-         
-        input = (input & 0xe0) >> 5;
-         
-         if(input != 4 && input != 5){
-            revert InvalidCompressedComponent();
-         }
+    /**
+     * @notice extracts sign bit and validates other flags from compressed component header byte
+     * @param componentHeaderByte first byte of compressed component
+     * @return signBit extracted sign bit
+     * @return areOtherFlagsValid whether other flags are valid
+     * @dev details on flags: https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization
+     */
+    function extractFlags(bytes1 componentHeaderByte) internal pure returns (bool signBit, bool areOtherFlagsValid) {
+        // Binary structure of compressed component: [ compression flag(always 1), infinity flag(always 0), sign bit of Y, ...rest of component ]
+        uint8 componentHeader = uint8(componentHeaderByte);
+        // extract sign bit via mask 0b00100000
+        signBit = (componentHeader & 0x20) !=0;
+        // extract other flags via mask 0b11000000 and make sure they are equal to 0b10
+        areOtherFlagsValid = (componentHeaderByte & 0xc0) == 0x80;    
+    }
 
-        bool signBit = (input & 1) !=0;
+     /**
+     * @notice validates flags in compressed pubkey against provided Y coordinate
+     * @param pubkey compressed pubkey to validate
+     * @param pubkeyY Y component of uncompressed pubkey
+     */
+    function validateCompressedPubkeyFlags(bytes calldata pubkey,Fp calldata pubkeyY) internal pure {
+        (bool signBit, bool areOtherFlagsValid) = extractFlags(pubkey[0]);
+        if(!areOtherFlagsValid){
+            revert InvalidCompressedComponent(0);
+        }
 
-        // needs recheck for edgecase because of P division
-        bool correctSignBit = depositY.pubkeyY.a > UPPER_HALF_P || (depositY.pubkeyY.a == UPPER_HALF_P && depositY.pubkeyY.b > LOWER_HALF_P);
+        // to determine correct sign bit we need to check y > p - y which is equivalent to y > p/2 
+        // because FP components are 48(+16 padding) bytes we compare left part of halfP first 
+        // and if that not enough then right part of halfP 
+        bool computedSignBit = pubkeyY.a > HALF_P_A || (pubkeyY.a == HALF_P_A && pubkeyY.b > HALF_P_B);
 
-        if(signBit != correctSignBit){
-            revert InvalidCompressedComponentSignBit();
+        if(signBit != computedSignBit){
+            revert InvalidCompressedComponentSignBit(0);
         }
             
     }
 
-    function checkSignBitFp2(bytes calldata signature,DepositY calldata depositY) internal pure {
-        uint8 input = uint8(signature[0]);
-         
-        input = (input & 0xe0) >> 5;
-         
-         if(input != 4 && input != 5){
-            revert InvalidCompressedComponent();
-         }
+    /**
+     * @notice validates flags in compressed signature against provided Y coordinate
+     * @param signature compressed signature to validate
+     * @param signatureY Y component of uncompressed signature
+     */
+    function validateCompressedSignatureFlags(bytes calldata signature,Fp2 calldata signatureY) internal pure {
+       (bool signBit, bool areOtherFlagsValid) = extractFlags(signature[0]);
+        if(!areOtherFlagsValid){
+            revert InvalidCompressedComponent(1);
+        }
+
+        
+        bool computedSignBit;
+        // in ultra-rare cases c1 is zero and we need to use c0 to determine sign bit
+        if(signatureY.c1_a == 0 && signatureY.c1_b == 0){
+           computedSignBit = signatureY.c0_a > HALF_P_A || (signatureY.c0_a == HALF_P_A && signatureY.c0_b > HALF_P_B);
+        }
+        // normal case, use c1 to determine sign bit similar to FP
+        else { computedSignBit = signatureY.c1_a > HALF_P_A || (signatureY.c1_a == HALF_P_A && signatureY.c1_b > HALF_P_B);}
 
 
-        bool signBit = (input & 1) !=0;
-        bool correctSignBit = depositY.signatureY.c1_a > UPPER_HALF_P || (depositY.signatureY.c1_a == UPPER_HALF_P && depositY.signatureY.c1_b > LOWER_HALF_P);
-
-        if(signBit != correctSignBit){
-            revert InvalidCompressedComponentSignBit();
+        if(signBit != computedSignBit){
+            revert InvalidCompressedComponentSignBit(1);
         }
             
     }
@@ -300,11 +333,15 @@ library BLS12_381 {
         bytes32 withdrawalCredentials,
         bytes32 depositDomain
     ) internal view {
+        // validate compression flags in pubkey and signature to ensure that they correspond to provided Y coordinates
+        // this ensures that this verification is equivalent to one by CL:
+        // - we recieve Y componets and throw away compression flags in X
+        // - CL recomputes Y from X and compression flags  
+        validateCompressedPubkeyFlags(pubkey,depositY.pubkeyY);
+        validateCompressedSignatureFlags(signature,depositY.signatureY);
+
         // Hash the deposit message and map it to G2 point on the curve
         G2Point memory msgG2 = hashToG2(depositMessageSigningRoot(pubkey, amount, withdrawalCredentials, depositDomain));
-
-        checkSignBit(pubkey,depositY);
-        checkSignBitFp2(signature,depositY);
 
         // BLS Pairing check input
         // pubkeyG1(pubkey | depositY.pubkeyY) | msgG2 | NEGATED_G1_GENERATOR | signatureG2(signature | depositY.signatureY)
