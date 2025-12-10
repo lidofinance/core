@@ -1,7 +1,7 @@
 import { hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "ethers";
 import { ethers } from "hardhat";
 
-import { SecretKey } from "@chainsafe/blst";
+import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
 
 import { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types";
 import {
@@ -116,6 +116,28 @@ export const generatePredeposit = async (
   const sigY_c1 = signatureY.slice(0, 48);
   const sigY_c1_a = zeroPadValue(sigY_c1.slice(0, 16), 32);
   const sigY_c1_b = zeroPadValue(sigY_c1.slice(16), 32);
+
+  let offChainVerification;
+  try {
+    offChainVerification = verify(
+      messageRoot,
+      PublicKey.fromHex(flippedPubkey, false),
+      Signature.fromHex(flippedSignature, false),
+      true,
+      true,
+    );
+  } catch {
+    offChainVerification = false;
+  }
+
+  if (typeof signatureFlipBitmask === "number" || typeof pubkeyFlipBitmask === "number") {
+    if (offChainVerification)
+      throw new Error(
+        `invariant: off-chain verification should fail with flipped bits pk:${flippedPubkey},sig:${flippedSignature}`,
+      );
+  } else if (!offChainVerification) {
+    throw new Error(`invariant: off-chain verification failed pk:${flippedPubkey},sig:${flippedSignature}`);
+  }
 
   return {
     deposit: {
