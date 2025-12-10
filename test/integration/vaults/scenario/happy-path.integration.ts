@@ -423,6 +423,26 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(reportEvents.length).to.equal(1n);
 
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(0);
+    expect(await vaultHub.isVaultConnected(stakingVaultAddress)).to.equal(false);
+  });
+
+  it("Should allow to transfer the StakingVault ownership to the owner", async () => {
+    const { vaultHub } = ctx.contracts;
+
+    await expect(dashboard.connect(owner).abandonDashboard(owner))
+      .to.emit(stakingVault, "OwnershipTransferred")
+      .withArgs(vaultHub, dashboard)
+      .to.emit(stakingVault, "OwnershipTransferStarted")
+      .withArgs(dashboard, owner);
+    await expect(stakingVault.connect(owner).acceptOwnership())
+      .to.emit(stakingVault, "OwnershipTransferred")
+      .withArgs(dashboard, owner);
+  });
+
+  it("Should allow to withdraw the deposit from the vault", async () => {
+    const withdrawTx = await stakingVault.connect(owner).withdraw(owner, VAULT_CONNECTION_DEPOSIT);
+    await expect(withdrawTx).to.emit(stakingVault, "EtherWithdrawn").withArgs(owner, VAULT_CONNECTION_DEPOSIT);
+    await expect(withdrawTx).changeEtherBalance(owner, VAULT_CONNECTION_DEPOSIT);
   });
 
   async function isSoleRoleMember(account: HardhatEthersSigner, role: string) {
