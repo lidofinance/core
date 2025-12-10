@@ -434,9 +434,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       .withArgs(vaultHub, dashboard)
       .to.emit(stakingVault, "OwnershipTransferStarted")
       .withArgs(dashboard, owner);
+    expect(await stakingVault.pendingOwner()).to.equal(owner);
+
     await expect(stakingVault.connect(owner).acceptOwnership())
       .to.emit(stakingVault, "OwnershipTransferred")
       .withArgs(dashboard, owner);
+    expect(await stakingVault.owner()).to.equal(owner);
   });
 
   it("Should allow to withdraw the deposit from the vault", async () => {
