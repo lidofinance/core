@@ -245,3 +245,11 @@ export enum PDGPolicy {
   ALLOW_PROVE,
   ALLOW_DEPOSIT_AND_PROVE,
 }
+
+export enum ValidatorStage {
+  NONE,
+  PREDEPOSITED,
+  PROVEN,
+  ACTIVATED,
+  COMPENSATED,
+}
