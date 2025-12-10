@@ -300,6 +300,7 @@ library BLS12_381 {
 
         
         bool computedSignBit;
+        // ref: https://github.com/ethereum/py_ecc/blob/05167bc2f11281a32cd18a8d4a7a7da6085be48d/py_ecc/bls/point_compression.py#L165
         // in ultra-rare cases c1 is zero and we need to use c0 to determine sign bit
         if(signatureY.c1_a == 0 && signatureY.c1_b == 0){
            computedSignBit = signatureY.c0_a > HALF_P_A || (signatureY.c0_a == HALF_P_A && signatureY.c0_b > HALF_P_B);
