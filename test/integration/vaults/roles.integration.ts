@@ -5,12 +5,21 @@ import { beforeEach } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, LazyOracle, OperatorGrid, StakingVault, VaultHub } from "typechain-types";
+import {
+  Accounting,
+  Dashboard,
+  LazyOracle,
+  OperatorGrid,
+  PredepositGuarantee,
+  StakingVault,
+  VaultHub,
+} from "typechain-types";
 
 import { days, ether, impersonate, PDGPolicy, randomValidatorPubkey } from "lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
+  ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getRoleMethods,
   ProtocolContext,
@@ -640,6 +649,8 @@ describe("Integration: VaultHub Roles and Access Control", () => {
   let redemptionMaster: HardhatEthersSigner;
   let validatorExitRole: HardhatEthersSigner;
   let badDebtMaster: HardhatEthersSigner;
+  let pauseRole: HardhatEthersSigner;
+  let resumeRole: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let vaultHub: VaultHub;
@@ -659,14 +670,25 @@ describe("Integration: VaultHub Roles and Access Control", () => {
     // Get DAO agent - it has DEFAULT_ADMIN_ROLE on VaultHub
     agent = await ctx.getSigner("agent");
 
-    [owner, nodeOperatorManager, vaultMaster, redemptionMaster, validatorExitRole, badDebtMaster, stranger] =
-      await ethers.getSigners();
+    [
+      owner,
+      nodeOperatorManager,
+      vaultMaster,
+      redemptionMaster,
+      validatorExitRole,
+      badDebtMaster,
+      pauseRole,
+      resumeRole,
+      stranger,
+    ] = await ethers.getSigners();
 
     // Grant roles from agent (DEFAULT_ADMIN)
     await vaultHub.connect(agent).grantRole(await vaultHub.VAULT_MASTER_ROLE(), vaultMaster);
     await vaultHub.connect(agent).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
     await vaultHub.connect(agent).grantRole(await vaultHub.VALIDATOR_EXIT_ROLE(), validatorExitRole);
     await vaultHub.connect(agent).grantRole(await vaultHub.BAD_DEBT_MASTER_ROLE(), badDebtMaster);
+    await vaultHub.connect(agent).grantRole(await vaultHub.PAUSE_ROLE(), pauseRole);
+    await vaultHub.connect(agent).grantRole(await vaultHub.RESUME_ROLE(), resumeRole);
 
     // Create a vault for testing (owner will be the admin of Dashboard)
     ({ stakingVault, dashboard } = await createVaultWithDashboard(
@@ -692,6 +714,49 @@ describe("Integration: VaultHub Roles and Access Control", () => {
   after(async () => await Snapshot.restore(originalSnapshot));
 
   describe("Role-protected methods", () => {
+    it("pauseFor - requires PAUSE_ROLE", async () => {
+      const method = "pauseFor";
+      const args: [bigint] = [days(1n)];
+
+      // Should fail for non-role holders
+      await expect(vaultHub.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await vaultHub.PAUSE_ROLE());
+
+      // Should succeed for role holder
+      await expect(vaultHub.connect(pauseRole)[method](...args)).to.not.be.reverted;
+    });
+
+    it("pauseUntil - requires PAUSE_ROLE", async () => {
+      const method = "pauseUntil";
+      const futureTimestamp = BigInt(Math.floor(Date.now() / 1000) + 86400);
+      const args: [bigint] = [futureTimestamp];
+
+      // Should fail for non-role holders
+      await expect(vaultHub.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await vaultHub.PAUSE_ROLE());
+
+      // Should succeed for role holder
+      await expect(vaultHub.connect(pauseRole)[method](...args)).to.not.be.reverted;
+    });
+
+    it("resume - requires RESUME_ROLE", async () => {
+      const method = "resume";
+      const args: [] = [];
+
+      // First pause the contract
+      await vaultHub.connect(pauseRole).pauseFor(days(1n));
+
+      // Should fail for non-role holders
+      await expect(vaultHub.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await vaultHub.RESUME_ROLE());
+
+      // Should succeed for role holder
+      await expect(vaultHub.connect(resumeRole)[method](...args)).to.not.be.reverted;
+    });
+
     it("setLiabilitySharesTarget - requires REDEMPTION_MASTER_ROLE", async () => {
       const method = "setLiabilitySharesTarget";
       const args: [string, bigint] = [vaultAddress, 0n];
@@ -1550,6 +1615,285 @@ describe("Integration: OperatorGrid Roles and Access Control", () => {
         operatorGrid,
         "NotAuthorized",
       );
+    });
+  });
+});
+
+describe("Integration: Accounting Roles and Access Control", () => {
+  let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
+
+  let stranger: HardhatEthersSigner;
+
+  let accounting: Accounting;
+
+  before(async () => {
+    ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
+
+    await setupLidoForVaults(ctx);
+
+    accounting = ctx.contracts.accounting;
+
+    [stranger] = await ethers.getSigners();
+  });
+
+  beforeEach(async () => (snapshot = await Snapshot.take()));
+  afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => await Snapshot.restore(originalSnapshot));
+
+  describe("Special sender-protected methods", () => {
+    it("handleOracleReport - requires AccountingOracle as sender", async () => {
+      const method = "handleOracleReport";
+      // Minimal report structure (will fail for other reasons but not NotAuthorized for stranger)
+      const report = {
+        timestamp: 0n,
+        timeElapsed: 0n,
+        clValidators: 0n,
+        clBalance: 0n,
+        withdrawalVaultBalance: 0n,
+        elRewardsVaultBalance: 0n,
+        sharesRequestedToBurn: 0n,
+        withdrawalFinalizationBatches: [],
+        simulatedShareRate: 0n,
+      };
+      const args: [typeof report] = [report];
+
+      // Should fail for unauthorized callers
+      await expect(accounting.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        accounting,
+        "NotAuthorized",
+      );
+
+      // Should succeed for AccountingOracle
+      const accountingOracleSigner = await impersonate(await ctx.contracts.accountingOracle.getAddress(), ether("10"));
+      await expect(accounting.connect(accountingOracleSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        accounting,
+        "NotAuthorized",
+      );
+    });
+  });
+});
+
+describe("Integration: PredepositGuarantee Roles and Access Control", () => {
+  let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
+
+  let agent: HardhatEthersSigner;
+  let pauseRole: HardhatEthersSigner;
+  let resumeRole: HardhatEthersSigner;
+  let stranger: HardhatEthersSigner;
+  let nodeOperator: HardhatEthersSigner;
+  let depositor: HardhatEthersSigner;
+
+  let predepositGuarantee: PredepositGuarantee;
+  let stakingVault: StakingVault;
+
+  before(async () => {
+    ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
+
+    await setupLidoForVaults(ctx);
+
+    await ensurePredepositGuaranteeUnpaused(ctx);
+
+    predepositGuarantee = ctx.contracts.predepositGuarantee;
+
+    // Get DAO agent - it has DEFAULT_ADMIN_ROLE on PredepositGuarantee
+    agent = await ctx.getSigner("agent");
+
+    [pauseRole, resumeRole, stranger, nodeOperator, depositor] = await ethers.getSigners();
+
+    // Grant roles from agent
+    await predepositGuarantee.connect(agent).grantRole(await predepositGuarantee.PAUSE_ROLE(), pauseRole);
+    await predepositGuarantee.connect(agent).grantRole(await predepositGuarantee.RESUME_ROLE(), resumeRole);
+
+    // Create a vault for testing
+    const [vaultOwner] = await ethers.getSigners();
+    ({ stakingVault } = await createVaultWithDashboard(
+      ctx,
+      ctx.contracts.stakingVaultFactory,
+      vaultOwner,
+      nodeOperator,
+      nodeOperator,
+    ));
+
+    // Set depositor for node operator
+    await predepositGuarantee.connect(nodeOperator).setNodeOperatorDepositor(depositor);
+  });
+
+  beforeEach(async () => (snapshot = await Snapshot.take()));
+  afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => await Snapshot.restore(originalSnapshot));
+
+  describe("Role-protected methods", () => {
+    it("pauseFor - requires PAUSE_ROLE", async () => {
+      const method = "pauseFor";
+      const args: [bigint] = [days(1n)];
+
+      // Should fail for non-role holders
+      await expect(predepositGuarantee.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(predepositGuarantee, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await predepositGuarantee.PAUSE_ROLE());
+
+      // Should succeed for role holder
+      await expect(predepositGuarantee.connect(pauseRole)[method](...args)).to.not.be.reverted;
+    });
+
+    it("pauseUntil - requires PAUSE_ROLE", async () => {
+      const method = "pauseUntil";
+      const futureTimestamp = BigInt(Math.floor(Date.now() / 1000) + 86400);
+      const args: [bigint] = [futureTimestamp];
+
+      // Should fail for non-role holders
+      await expect(predepositGuarantee.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(predepositGuarantee, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await predepositGuarantee.PAUSE_ROLE());
+
+      // Should succeed for role holder
+      await expect(predepositGuarantee.connect(pauseRole)[method](...args)).to.not.be.reverted;
+    });
+
+    it("resume - requires RESUME_ROLE", async () => {
+      const method = "resume";
+      const args: [] = [];
+
+      // First pause the contract
+      await predepositGuarantee.connect(pauseRole).pauseFor(days(1n));
+
+      // Should fail for non-role holders
+      await expect(predepositGuarantee.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(predepositGuarantee, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await predepositGuarantee.RESUME_ROLE());
+
+      // Should succeed for role holder
+      await expect(predepositGuarantee.connect(resumeRole)[method](...args)).to.not.be.reverted;
+    });
+  });
+
+  describe("Sender-specific methods", () => {
+    it("predeposit - requires depositor for node operator", async () => {
+      const method = "predeposit";
+      const deposits = [
+        {
+          pubkey: randomValidatorPubkey(),
+          amount: ether("1"),
+          signature: new Uint8Array(96),
+          depositDataRoot: new Uint8Array(32),
+        },
+      ];
+      const depositsY = [
+        {
+          pubkeyY: {
+            a: "0x" + "0".repeat(64),
+            b: "0x" + "0".repeat(64),
+          },
+          signatureY: {
+            c0_a: "0x" + "0".repeat(64),
+            c0_b: "0x" + "0".repeat(64),
+            c1_a: "0x" + "0".repeat(64),
+            c1_b: "0x" + "0".repeat(64),
+          },
+        },
+      ];
+      const args: [typeof stakingVault, typeof deposits, typeof depositsY] = [stakingVault, deposits, depositsY];
+
+      // Should fail for non-depositor
+      await expect(predepositGuarantee.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        predepositGuarantee,
+        "NotDepositor",
+      );
+
+      // Should succeed for depositor (but might fail for other reasons like balance)
+      await expect(predepositGuarantee.connect(depositor)[method](...args)).to.not.be.revertedWithCustomError(
+        predepositGuarantee,
+        "NotDepositor",
+      );
+    });
+
+    it("proveUnknownValidator - requires staking vault owner", async () => {
+      const method = "proveUnknownValidator";
+      const witness = {
+        proof: [
+          "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        ],
+        pubkey: "0x",
+        validatorIndex: 0n,
+        childBlockTimestamp: 0n,
+        slot: 0n,
+        proposerIndex: 0n,
+      };
+      const args: [typeof witness, typeof stakingVault] = [witness, stakingVault];
+
+      // Should fail for non-owner
+      await expect(predepositGuarantee.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        predepositGuarantee,
+        "NotStakingVaultOwner",
+      );
+
+      // Should succeed for vault owner (VaultHub, since vault is connected to VaultHub)
+      const vaultOwner = await stakingVault.owner();
+      const vaultOwnerSigner = await impersonate(vaultOwner, ether("10"));
+      await expect(predepositGuarantee.connect(vaultOwnerSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        predepositGuarantee,
+        "NotStakingVaultOwner",
+      );
+    });
+
+    it("topUpExistingValidators - requires depositor for node operator of each validator", async () => {
+      const method = "topUpExistingValidators";
+      const topUps = [
+        {
+          pubkey: randomValidatorPubkey(),
+          amount: ether("1"),
+        },
+      ];
+      const args: [typeof topUps] = [topUps];
+
+      // For non-existent validator, nodeOperator is address(0), so depositor is also address(0)
+      // Both stranger and depositor will fail with NotDepositor since they are not address(0)
+      await expect(predepositGuarantee.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        predepositGuarantee,
+        "NotDepositor",
+      );
+
+      // Note: To properly test that depositor can call this, we would need a fully activated validator
+      // with nodeOperator set, which is beyond the scope of this ACL test
+    });
+
+    it("topUpNodeOperatorBalance - requires guarantor", async () => {
+      const method = "topUpNodeOperatorBalance";
+      const args: [string] = [nodeOperator.address];
+
+      // Should fail for stranger (not a guarantor)
+      await expect(
+        predepositGuarantee.connect(stranger)[method](...args, { value: ether("1") }),
+      ).to.be.revertedWithCustomError(predepositGuarantee, "NotGuarantor");
+
+      // Should succeed for node operator (default guarantor is the node operator itself)
+      await expect(predepositGuarantee.connect(nodeOperator)[method](...args, { value: ether("1") })).to.not.be
+        .reverted;
+    });
+
+    it("setNodeOperatorGuarantor - can be called by node operator", async () => {
+      const method = "setNodeOperatorGuarantor";
+      const [newGuarantor] = await ethers.getSigners();
+      const args: [string] = [newGuarantor.address];
+
+      // Should succeed for node operator (permissionless for the node operator to set their own guarantor)
+      await expect(predepositGuarantee.connect(nodeOperator)[method](...args)).to.not.be.reverted;
+    });
+
+    it("setNodeOperatorDepositor - can be called by node operator", async () => {
+      const method = "setNodeOperatorDepositor";
+      const [newDepositor] = await ethers.getSigners();
+      const args: [string] = [newDepositor.address];
+
+      // Should succeed for node operator (permissionless for the node operator to set their own depositor)
+      await expect(predepositGuarantee.connect(nodeOperator)[method](...args)).to.not.be.reverted;
     });
   });
 });
