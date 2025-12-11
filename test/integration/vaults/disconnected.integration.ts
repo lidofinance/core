@@ -22,6 +22,7 @@ import {
 } from "lib";
 import {
   createVaultWithDashboard,
+  ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getPubkeys,
   mockProof,
@@ -273,6 +274,10 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
 
     describe("Deposits", () => {
+      before(async () => {
+        await ensurePredepositGuaranteeUnpaused(ctx);
+      });
+
       beforeEach(async () => {
         await stakingVault.connect(owner).fund({ value: ether("2048") });
       });

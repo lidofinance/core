@@ -21,6 +21,7 @@ import {
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 import {
   calculateLockedValue,
+  ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getReportTimeElapsed,
   OracleReportParams,
@@ -76,6 +77,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
 
+    await ensurePredepositGuaranteeUnpaused(ctx);
     await setupLidoForVaults(ctx);
 
     // add ETH to NO for PDG deposit + gas
