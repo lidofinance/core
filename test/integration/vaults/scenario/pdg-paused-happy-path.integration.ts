@@ -127,8 +127,16 @@ resetState(
       await setBalance(nodeOperator.address, ether("100"));
 
       // Pause PDG before any tests
-      await predepositGuarantee.connect(agent).grantRole(await predepositGuarantee.PAUSE_ROLE(), agent);
-      await predepositGuarantee.connect(agent).pauseFor(await predepositGuarantee.PAUSE_INFINITELY());
+      const PAUSE_ROLE = await predepositGuarantee.PAUSE_ROLE();
+      await expect(predepositGuarantee.connect(agent).grantRole(PAUSE_ROLE, agent))
+        .to.emit(predepositGuarantee, "RoleGranted")
+        .withArgs(PAUSE_ROLE, agent, agent);
+
+      const PAUSE_INFINITELY = await predepositGuarantee.PAUSE_INFINITELY();
+      await expect(predepositGuarantee.connect(agent).pauseFor(PAUSE_INFINITELY))
+        .to.emit(predepositGuarantee, "Paused")
+        .withArgs(PAUSE_INFINITELY);
+
       expect(await predepositGuarantee.isPaused()).to.equal(true);
 
       slot = await predepositGuarantee.PIVOT_SLOT();
@@ -228,7 +236,9 @@ resetState(
     });
 
     it("registers operator group", async () => {
-      await operatorGrid.connect(agent).registerGroup(nodeOperator, OPERATOR_GROUP_SHARE_LIMIT);
+      await expect(operatorGrid.connect(agent).registerGroup(nodeOperator, OPERATOR_GROUP_SHARE_LIMIT))
+        .to.emit(operatorGrid, "GroupAdded")
+        .withArgs(nodeOperator, OPERATOR_GROUP_SHARE_LIMIT);
 
       const registeredGroup = await operatorGrid.group(nodeOperator);
       await mEqual([
@@ -239,30 +249,63 @@ resetState(
     });
 
     it("registers tiers", async () => {
-      await operatorGrid
-        .connect(agent)
-        .registerTiers(nodeOperator, [OPERATOR_GROUP_TIER_1_PARAMS, OPERATOR_GROUP_TIER_2_PARAMS]);
+      const tiersCount = await operatorGrid.tiersCount();
+      OPERATOR_GROUP_TIER_1_ID = tiersCount;
+      OPERATOR_GROUP_TIER_2_ID = tiersCount + 1n;
+
+      await expect(
+        operatorGrid
+          .connect(agent)
+          .registerTiers(nodeOperator, [OPERATOR_GROUP_TIER_1_PARAMS, OPERATOR_GROUP_TIER_2_PARAMS]),
+      )
+        .to.emit(operatorGrid, "TierAdded")
+        .withArgs(
+          nodeOperator,
+          OPERATOR_GROUP_TIER_1_ID,
+          OPERATOR_GROUP_TIER_1_PARAMS.shareLimit,
+          OPERATOR_GROUP_TIER_1_PARAMS.reserveRatioBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.forcedRebalanceThresholdBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.infraFeeBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.liquidityFeeBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.reservationFeeBP,
+        )
+        .and.to.emit(operatorGrid, "TierAdded")
+        .withArgs(
+          nodeOperator,
+          OPERATOR_GROUP_TIER_2_ID,
+          OPERATOR_GROUP_TIER_2_PARAMS.shareLimit,
+          OPERATOR_GROUP_TIER_2_PARAMS.reserveRatioBP,
+          OPERATOR_GROUP_TIER_2_PARAMS.forcedRebalanceThresholdBP,
+          OPERATOR_GROUP_TIER_2_PARAMS.infraFeeBP,
+          OPERATOR_GROUP_TIER_2_PARAMS.liquidityFeeBP,
+          OPERATOR_GROUP_TIER_2_PARAMS.reservationFeeBP,
+        );
 
       const group = await operatorGrid.group(nodeOperator);
       await mEqual([
         [group.tierIds.length, 2],
         [group.shareLimit, OPERATOR_GROUP_SHARE_LIMIT],
       ]);
-
-      OPERATOR_GROUP_TIER_1_ID = group.tierIds[0];
-      OPERATOR_GROUP_TIER_2_ID = group.tierIds[1];
     });
 
     it("connects to VaultHub with tier", async () => {
-      await operatorGrid
-        .connect(nodeOperator)
-        .changeTier(stakingVault, OPERATOR_GROUP_TIER_1_ID, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit);
+      // Node operator pre-approves tier change (no event - just stores approval)
+      await expect(
+        operatorGrid
+          .connect(nodeOperator)
+          .changeTier(stakingVault, OPERATOR_GROUP_TIER_1_ID, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit),
+      ).to.not.emit(operatorGrid, "TierChanged");
 
-      await dashboard
-        .connect(vaultOwner)
-        .connectAndAcceptTier(OPERATOR_GROUP_TIER_1_ID, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit, {
-          value: VAULT_CONNECTION_DEPOSIT,
-        });
+      await expect(
+        dashboard
+          .connect(vaultOwner)
+          .connectAndAcceptTier(OPERATOR_GROUP_TIER_1_ID, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit, {
+            value: VAULT_CONNECTION_DEPOSIT,
+          }),
+      )
+        .to.emit(vaultHub, "VaultConnected")
+        .and.to.emit(stakingVault, "EtherFunded")
+        .withArgs(VAULT_CONNECTION_DEPOSIT);
 
       vaultTotalValue += VAULT_CONNECTION_DEPOSIT;
 
@@ -294,7 +337,13 @@ resetState(
       const settledGrowthBefore = await dashboard.settledGrowth();
       const accruedFeeBefore = await dashboard.accruedFee();
 
-      await dashboard.connect(vaultOwner).fund({ value: fundAmount });
+      const expectedInOutDeltaAfterFund = vaultTotalValue + fundAmount;
+      await expect(dashboard.connect(vaultOwner).fund({ value: fundAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundAmount)
+        .and.to.emit(vaultHub, "VaultInOutDeltaUpdated")
+        .withArgs(stakingVault, expectedInOutDeltaAfterFund);
+
       vaultTotalValue += fundAmount;
 
       await mEqual([
@@ -416,25 +465,72 @@ resetState(
 
     // ==================== Part 3: Vault Operations Work ====================
 
-    it("allows fund", async () => {
-      const additionalFund = ether("10");
-      const totalValueBefore = await vaultHub.totalValue(stakingVault);
+    it("allows direct ETH transfer via receive()", async () => {
+      const directTransferAmount = ether("1");
       const inOutDeltaBefore = await currentInOutDelta(stakingVault);
       const settledGrowthBefore = await dashboard.settledGrowth();
       const accruedFeeBefore = await dashboard.accruedFee();
+      const balanceBefore = await stakingVault.availableBalance();
 
-      await dashboard.connect(vaultOwner).fund({ value: additionalFund });
-      vaultTotalValue += additionalFund;
+      // Send ETH directly to the vault via receive() - simulates execution layer rewards
+      await stranger.sendTransaction({
+        to: stakingVault,
+        value: directTransferAmount,
+      });
 
-      // Funding increases both totalValue and inOutDelta equally, so growth unchanged
+      // Balance increases but no events emitted (receive() is a bare function)
+      const newBalance = await stakingVault.availableBalance();
+      expect(newBalance).to.equal(balanceBefore + directTransferAmount);
+
+      // KEY ASSERTION: inOutDelta should NOT change - this is the difference from VaultHub.fund()
+      // When ETH is sent directly to the vault (e.g., execution layer rewards), it creates "growth"
+      // because the balance increases but inOutDelta stays the same
+      expect(await currentInOutDelta(stakingVault)).to.equal(inOutDeltaBefore);
+
+      // Fees don't change until a report is submitted (VaultHub reads from cached report data)
       await mEqual([
-        [vaultHub.totalValue(stakingVault), totalValueBefore + additionalFund],
-        [currentInOutDelta(stakingVault), inOutDeltaBefore + additionalFund],
-        [stakingVault.availableBalance(), vaultTotalValue],
-        // Fee state should be unchanged (funding doesn't affect growth)
         [dashboard.settledGrowth(), settledGrowthBefore],
         [dashboard.accruedFee(), accruedFeeBefore],
       ]);
+
+      // Submit a fresh report with the new total value (including direct transfer)
+      const totalValueBefore = await vaultHub.totalValue(stakingVault);
+      const newTotalValue = totalValueBefore + directTransferAmount;
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        waitForNextRefSlot: true,
+        totalValue: newTotalValue,
+      });
+
+      // After report: totalValue increases but inOutDelta stays the same, creating growth
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(newTotalValue);
+      expect(await currentInOutDelta(stakingVault)).to.equal(inOutDeltaBefore);
+
+      // Growth = totalValue - inOutDelta, unsettledGrowth = growth - settledGrowth
+      const currentGrowth = newTotalValue - inOutDeltaBefore;
+      const unsettledGrowth = currentGrowth - settledGrowthBefore;
+
+      // With a non-zero fee rate, accrued fee should increase based on unsettled growth
+      const feeRate = await dashboard.feeRate();
+      const expectedFee = (unsettledGrowth * feeRate) / 10000n;
+
+      expect(await dashboard.accruedFee()).to.equal(expectedFee);
+      expect(expectedFee).to.be.gt(accruedFeeBefore);
+
+      // Disburse fees to reset fee state for subsequent tests
+      const feeRecipient = await dashboard.feeRecipient();
+      const feeRecipientBalanceBefore = await ethers.provider.getBalance(feeRecipient);
+
+      const disburseTx = await dashboard.disburseFee();
+      await expect(disburseTx).to.emit(dashboard, "FeeDisbursed");
+
+      // Verify fee was disbursed correctly
+      const feeRecipientBalanceAfter = await ethers.provider.getBalance(feeRecipient);
+      expect(feeRecipientBalanceAfter).to.equal(feeRecipientBalanceBefore + expectedFee);
+      expect(await dashboard.accruedFee()).to.equal(0n);
+
+      // Update tracking variable for subsequent tests
+      // Direct transfer added funds, fee disbursement withdrew funds
+      vaultTotalValue += directTransferAmount - expectedFee;
     });
 
     it("allows mint shares", async () => {
@@ -445,7 +541,10 @@ resetState(
       const stETHBalanceBefore = await lido.balanceOf(vaultOwner);
       const stETHToReceive = await lido.getPooledEthByShares(sharesToMint);
 
-      await dashboard.connect(vaultOwner).mintShares(vaultOwner, sharesToMint);
+      await expect(dashboard.connect(vaultOwner).mintShares(vaultOwner, sharesToMint))
+        .to.emit(vaultHub, "MintedSharesOnVault")
+        .and.to.emit(lido, "Transfer")
+        .withArgs(ethers.ZeroAddress, vaultOwner, stETHToReceive);
 
       await mEqual([[vaultHub.liabilityShares(stakingVault), liabilityBefore + sharesToMint]]);
       expect(await lido.balanceOf(vaultOwner)).to.equalStETH(stETHBalanceBefore + stETHToReceive);
@@ -457,8 +556,13 @@ resetState(
       const stETHBalanceBefore = await lido.balanceOf(vaultOwner);
       const stETHToBurn = await lido.getPooledEthByShares(sharesToBurn);
 
-      await lido.connect(vaultOwner).approve(dashboard, stETHToBurn);
-      await dashboard.connect(vaultOwner).burnShares(sharesToBurn);
+      await expect(lido.connect(vaultOwner).approve(dashboard, stETHToBurn))
+        .to.emit(lido, "Approval")
+        .withArgs(vaultOwner, dashboard, stETHToBurn);
+
+      await expect(dashboard.connect(vaultOwner).burnShares(sharesToBurn))
+        .to.emit(vaultHub, "BurnedSharesOnVault")
+        .withArgs(stakingVault, sharesToBurn);
 
       await mEqual([[vaultHub.liabilityShares(stakingVault), liabilityBefore - sharesToBurn]]);
       expect(await lido.balanceOf(vaultOwner)).to.equalStETH(stETHBalanceBefore - stETHToBurn);
@@ -468,27 +572,28 @@ resetState(
       await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
       const withdrawAmount = ether("5");
-      const balanceBefore = await ethers.provider.getBalance(vaultOwner);
+      const balanceBefore = await ethers.provider.getBalance(stranger);
       const withdrawable = await dashboard.withdrawableValue();
       const inOutDeltaBefore = await currentInOutDelta(stakingVault);
       const settledGrowthBefore = await dashboard.settledGrowth();
 
       expect(withdrawable).to.be.gte(withdrawAmount);
 
-      const tx = await dashboard.connect(vaultOwner).withdraw(vaultOwner, withdrawAmount);
-      const receipt = await tx.wait();
-      const gasCost = receipt!.gasPrice * receipt!.gasUsed;
+      await expect(dashboard.connect(vaultOwner).withdraw(stranger, withdrawAmount))
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(stranger, withdrawAmount)
+        .and.to.emit(vaultHub, "VaultInOutDeltaUpdated")
+        .withArgs(stakingVault, inOutDeltaBefore - withdrawAmount);
 
       vaultTotalValue -= withdrawAmount;
 
-      const balanceAfter = await ethers.provider.getBalance(vaultOwner);
-      expect(balanceAfter).to.equal(balanceBefore + withdrawAmount - gasCost);
-
       // Withdrawal decreases both totalValue and inOutDelta equally, so growth unchanged
       await mEqual([
+        [vaultHub.totalValue(stakingVault), vaultTotalValue],
         [currentInOutDelta(stakingVault), inOutDeltaBefore - withdrawAmount],
         // Fee state should be unchanged (withdrawal doesn't affect growth)
         [dashboard.settledGrowth(), settledGrowthBefore],
+        [ethers.provider.getBalance(stranger), balanceBefore + withdrawAmount],
       ]);
     });
 
@@ -508,7 +613,9 @@ resetState(
     });
 
     it("sets PDG policy to ALLOW_PROVE", async () => {
-      await dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_PROVE))
+        .to.emit(dashboard, "PDGPolicyEnacted")
+        .withArgs(PDGPolicy.ALLOW_PROVE);
 
       await mEqual([[dashboard.pdgPolicy(), PDGPolicy.ALLOW_PROVE]]);
     });
@@ -518,9 +625,10 @@ resetState(
       const deposit = generateDepositStruct(validator.container, minActiveValidatorBalance);
 
       // Grant unguaranteed deposit role
-      await dashboard
-        .connect(nodeOperatorManager)
-        .grantRole(await dashboard.NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE(), nodeOperatorManager);
+      const UNGUARANTEED_DEPOSIT_ROLE = await dashboard.NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE();
+      await expect(dashboard.connect(nodeOperatorManager).grantRole(UNGUARANTEED_DEPOSIT_ROLE, nodeOperatorManager))
+        .to.emit(dashboard, "RoleGranted")
+        .withArgs(UNGUARANTEED_DEPOSIT_ROLE, nodeOperatorManager, nodeOperatorManager);
 
       await expect(
         dashboard.connect(nodeOperatorManager).unguaranteedDepositToBeaconChain([deposit]),
@@ -528,324 +636,261 @@ resetState(
     });
 
     it("sets PDG policy to ALLOW_DEPOSIT_AND_PROVE", async () => {
-      await dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE))
+        .to.emit(dashboard, "PDGPolicyEnacted")
+        .withArgs(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
 
       await mEqual([[dashboard.pdgPolicy(), PDGPolicy.ALLOW_DEPOSIT_AND_PROVE]]);
     });
 
     // ==================== Part 5: Unguaranteed Deposits Work ====================
 
-    it("makes unguaranteed deposit", async () => {
+    it("makes unguaranteed deposit, quarantines, and releases after waiting period", async () => {
       // Note: NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE was already granted in ALLOW_PROVE test above
       const validator = createValidators(1)[0];
       unguaranteedValidators.push(validator);
 
       const deposit = generateDepositStruct(validator.container, minActiveValidatorBalance);
 
+      // ========== Step 1: Make unguaranteed deposit ==========
       // Capture complete state before deposit
-      const totalValueBefore = await vaultHub.totalValue(stakingVault);
-      const inOutDeltaBefore = await currentInOutDelta(stakingVault);
-      const settledGrowthBefore = await dashboard.settledGrowth();
-      const accruedFeeBefore = await dashboard.accruedFee();
-      const feeRateBefore = await dashboard.feeRate();
-      const latestCorrectionTimestampBefore = await dashboard.latestCorrectionTimestamp();
+      const totalValueBeforeDeposit = await vaultHub.totalValue(stakingVault);
+      const inOutDeltaBeforeDeposit = await currentInOutDelta(stakingVault);
+      const settledGrowthBeforeDeposit = await dashboard.settledGrowth();
+      const accruedFeeBeforeDeposit = await dashboard.accruedFee();
+      const feeRateBeforeDeposit = await dashboard.feeRate();
+      const latestCorrectionTimestampBeforeDeposit = await dashboard.latestCorrectionTimestamp();
 
       // Unguaranteed deposit bypasses PDG - deposits directly to beacon chain
       // Fee exemption is automatically added inside unguaranteedDepositToBeaconChain
-      await dashboard.connect(nodeOperatorManager).unguaranteedDepositToBeaconChain([deposit]);
+      await expect(dashboard.connect(nodeOperatorManager).unguaranteedDepositToBeaconChain([deposit]))
+        .to.emit(dashboard, "UnguaranteedDeposits")
+        .withArgs(stakingVault, 1, minActiveValidatorBalance)
+        .and.to.emit(dashboard, "SettledGrowthSet")
+        .withArgs(settledGrowthBeforeDeposit, settledGrowthBeforeDeposit + minActiveValidatorBalance)
+        .and.to.emit(dashboard, "CorrectionTimestampUpdated")
+        .and.to.emit(vaultHub, "VaultInOutDeltaUpdated")
+        .withArgs(stakingVault, inOutDeltaBeforeDeposit - minActiveValidatorBalance)
+        .and.to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(dashboard, minActiveValidatorBalance);
 
       vaultTotalValue -= minActiveValidatorBalance;
 
-      // Verify all state changes after deposit
+      // Verify state after deposit
       await mEqual([
-        // Vault state
-        [vaultHub.totalValue(stakingVault), totalValueBefore - minActiveValidatorBalance],
-        [currentInOutDelta(stakingVault), inOutDeltaBefore - minActiveValidatorBalance],
+        // Vault state - balance decreased (ETH sent to beacon chain)
+        [vaultHub.totalValue(stakingVault), totalValueBeforeDeposit - minActiveValidatorBalance],
+        [currentInOutDelta(stakingVault), inOutDeltaBeforeDeposit - minActiveValidatorBalance],
         [lazyOracle.quarantineValue(stakingVault), 0n], // quarantine not kicked in yet
-        // Fee state - exemption was automatically added
-        [dashboard.settledGrowth(), settledGrowthBefore + minActiveValidatorBalance],
-        [dashboard.feeRate(), feeRateBefore], // unchanged
+        // Fee state - exemption was automatically added for the deposit
+        [dashboard.settledGrowth(), settledGrowthBeforeDeposit + minActiveValidatorBalance],
+        [dashboard.feeRate(), feeRateBeforeDeposit], // unchanged
+        [dashboard.accruedFee(), accruedFeeBeforeDeposit], // unchanged
       ]);
 
       // Fee exemption updates latestCorrectionTimestamp
-      const latestCorrectionTimestampAfter = await dashboard.latestCorrectionTimestamp();
-      expect(latestCorrectionTimestampAfter).to.be.gt(latestCorrectionTimestampBefore);
+      expect(await dashboard.latestCorrectionTimestamp()).to.be.gt(latestCorrectionTimestampBeforeDeposit);
 
-      // Accrued fee should still be 0 (no unsettled growth yet)
-      expect(await dashboard.accruedFee()).to.equal(accruedFeeBefore);
-    });
+      // ========== Step 2: Report validator to quarantine ==========
+      // Simulates beacon chain showing the validator has been activated
+      const totalValueBeforeReport = await vaultHub.totalValue(stakingVault);
+      const inOutDeltaBeforeReport = await currentInOutDelta(stakingVault);
+      const settledGrowthBeforeReport = await dashboard.settledGrowth();
+      const accruedFeeBeforeReport = await dashboard.accruedFee();
 
-    it("reports unguaranteed validator to quarantine", async () => {
-      const totalValueBefore = await vaultHub.totalValue(stakingVault);
-      const inOutDeltaBefore = await currentInOutDelta(stakingVault);
-      const settledGrowthBefore = await dashboard.settledGrowth();
-      const accruedFeeBefore = await dashboard.accruedFee();
-
-      // Report the validator as part of totalValue (simulates beacon chain showing the validator)
-      const reportedValue = totalValueBefore + minActiveValidatorBalance;
-
+      // Report the validator as part of totalValue
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: reportedValue,
+        totalValue: totalValueBeforeReport + minActiveValidatorBalance,
         waitForNextRefSlot: true,
         updateReportData: true,
       });
 
-      // Total value still at previous value (quarantined)
+      // Value increase is quarantined - totalValue stays the same until release
       await mEqual([
-        [vaultHub.totalValue(stakingVault), totalValueBefore],
-        [currentInOutDelta(stakingVault), inOutDeltaBefore],
+        [vaultHub.totalValue(stakingVault), totalValueBeforeReport],
+        [currentInOutDelta(stakingVault), inOutDeltaBeforeReport],
         [lazyOracle.quarantineValue(stakingVault), minActiveValidatorBalance],
-        // Fee state should be unchanged during quarantine
-        [dashboard.settledGrowth(), settledGrowthBefore],
-        [dashboard.accruedFee(), accruedFeeBefore],
+        // Fee state unchanged during quarantine
+        [dashboard.settledGrowth(), settledGrowthBeforeReport],
+        [dashboard.accruedFee(), accruedFeeBeforeReport],
       ]);
-    });
 
-    it("releases unguaranteed validator from quarantine after waiting period", async () => {
+      // ========== Step 3: Release from quarantine after waiting period ==========
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
       await advanceChainTime(quarantinePeriod);
 
       const quarantinedValue = await lazyOracle.quarantineValue(stakingVault);
-      const totalValueBefore = await vaultHub.totalValue(stakingVault);
-      const settledGrowthBefore = await dashboard.settledGrowth();
+      const totalValueBeforeRelease = await vaultHub.totalValue(stakingVault);
+      const settledGrowthBeforeRelease = await dashboard.settledGrowth();
 
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: totalValueBefore + quarantinedValue,
+        totalValue: totalValueBeforeRelease + quarantinedValue,
         waitForNextRefSlot: true,
         updateReportData: true,
       });
 
       vaultTotalValue += minActiveValidatorBalance;
 
-      // Quarantine released - total value increased
-      // Fee state: growth increased but settledGrowth was already set via exemption
-      const newTotalValue = totalValueBefore + quarantinedValue;
-
+      // Quarantine released - total value now includes the validator
       await mEqual([
-        [vaultHub.totalValue(stakingVault), newTotalValue],
+        [vaultHub.totalValue(stakingVault), totalValueBeforeRelease + quarantinedValue],
         [lazyOracle.quarantineValue(stakingVault), 0n],
-        [dashboard.settledGrowth(), settledGrowthBefore], // unchanged - was pre-exempted
+        // settledGrowth unchanged - was pre-exempted during deposit
+        [dashboard.settledGrowth(), settledGrowthBeforeRelease],
       ]);
 
-      // Verify no unexpected fee accrued (growth should match settled growth for exempted deposits)
-      // Fee = (growth - settledGrowth) * feeRate / 10000
-      // Since we exempted the deposit, unsettledGrowth should be 0
-      const accruedFee = await dashboard.accruedFee();
-      expect(accruedFee).to.equal(0n);
+      // Verify no unexpected fee accrued
+      // Since we pre-exempted the deposit amount, unsettledGrowth should be 0
+      expect(await dashboard.accruedFee()).to.equal(0n);
     });
 
     // ==================== Part 6: Side Deposits Work ====================
 
-    it("simulates side deposit (external validator appears)", async () => {
+    it("handles side deposit: exempts fee, quarantines, and releases after waiting period", async () => {
       const sideValidator = createValidators(1)[0];
       sideDepositedValidators.push(sideValidator);
 
       const sideDepositAmount = minActiveValidatorBalance;
-      const totalValueBefore = await vaultHub.totalValue(stakingVault);
-      const inOutDeltaBefore = await currentInOutDelta(stakingVault);
-      const accruedFeeBefore = await dashboard.accruedFee();
-      const feeRateBefore = await dashboard.feeRate();
-      const latestCorrectionTimestampBefore = await dashboard.latestCorrectionTimestamp();
 
-      // Add fee exemption to prevent side deposit being counted as rewards
-      // This is REQUIRED for side deposits (unlike unguaranteed deposits which auto-exempt)
-      const settledGrowthBefore = await dashboard.settledGrowth();
-      await dashboard.connect(nodeOperatorManager).addFeeExemption(sideDepositAmount);
+      // ========== Step 1: Add fee exemption for side deposit ==========
+      // Unlike unguaranteed deposits, side deposits require MANUAL fee exemption
+      const totalValueBeforeExemption = await vaultHub.totalValue(stakingVault);
+      const inOutDeltaBeforeExemption = await currentInOutDelta(stakingVault);
+      const settledGrowthBeforeExemption = await dashboard.settledGrowth();
+      const accruedFeeBeforeExemption = await dashboard.accruedFee();
+      const feeRateBeforeExemption = await dashboard.feeRate();
+      const latestCorrectionTimestampBeforeExemption = await dashboard.latestCorrectionTimestamp();
+
+      await expect(dashboard.connect(nodeOperatorManager).addFeeExemption(sideDepositAmount))
+        .to.emit(dashboard, "SettledGrowthSet")
+        .withArgs(settledGrowthBeforeExemption, settledGrowthBeforeExemption + sideDepositAmount)
+        .and.to.emit(dashboard, "CorrectionTimestampUpdated");
 
       // Verify fee exemption state changes
       const settledGrowthAfterExemption = await dashboard.settledGrowth();
-      const latestCorrectionTimestampAfterExemption = await dashboard.latestCorrectionTimestamp();
 
-      expect(settledGrowthAfterExemption).to.equal(settledGrowthBefore + sideDepositAmount);
-      expect(latestCorrectionTimestampAfterExemption).to.be.gt(latestCorrectionTimestampBefore);
-      expect(await dashboard.feeRate()).to.equal(feeRateBefore); // unchanged
-      expect(await dashboard.accruedFee()).to.equal(accruedFeeBefore); // unchanged until report
+      await mEqual([
+        [dashboard.settledGrowth(), settledGrowthBeforeExemption + sideDepositAmount],
+        [dashboard.feeRate(), feeRateBeforeExemption], // unchanged
+        [dashboard.accruedFee(), accruedFeeBeforeExemption], // unchanged until report
+      ]);
+      expect(await dashboard.latestCorrectionTimestamp()).to.be.gt(latestCorrectionTimestampBeforeExemption);
 
-      // Report side deposit - will be quarantined
+      // ========== Step 2: Report side deposit to quarantine ==========
+      // Simulates an external validator appearing on the beacon chain
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: totalValueBefore + sideDepositAmount,
+        totalValue: totalValueBeforeExemption + sideDepositAmount,
         waitForNextRefSlot: true,
         updateReportData: true,
       });
 
-      // Value quarantined - fee state should remain unchanged
+      // Value is quarantined - totalValue unchanged, fee state unchanged
       await mEqual([
-        [vaultHub.totalValue(stakingVault), totalValueBefore],
-        [currentInOutDelta(stakingVault), inOutDeltaBefore],
+        [vaultHub.totalValue(stakingVault), totalValueBeforeExemption],
+        [currentInOutDelta(stakingVault), inOutDeltaBeforeExemption],
         [lazyOracle.quarantineValue(stakingVault), sideDepositAmount],
         [dashboard.settledGrowth(), settledGrowthAfterExemption], // unchanged
-        [dashboard.feeRate(), feeRateBefore], // unchanged
+        [dashboard.feeRate(), feeRateBeforeExemption], // unchanged
       ]);
-    });
 
-    it("releases side deposit from quarantine after waiting period", async () => {
+      // ========== Step 3: Release from quarantine after waiting period ==========
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
       await advanceChainTime(quarantinePeriod);
 
       const quarantinedValue = await lazyOracle.quarantineValue(stakingVault);
-      const totalValueBefore = await vaultHub.totalValue(stakingVault);
-      const settledGrowthBefore = await dashboard.settledGrowth();
-      const inOutDeltaBefore = await currentInOutDelta(stakingVault);
+      const totalValueBeforeRelease = await vaultHub.totalValue(stakingVault);
+      const settledGrowthBeforeRelease = await dashboard.settledGrowth();
+      const inOutDeltaBeforeRelease = await currentInOutDelta(stakingVault);
 
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: totalValueBefore + quarantinedValue,
+        totalValue: totalValueBeforeRelease + quarantinedValue,
         waitForNextRefSlot: true,
         updateReportData: true,
       });
 
       vaultTotalValue += minActiveValidatorBalance;
 
-      const newTotalValue = totalValueBefore + quarantinedValue;
-      const newGrowth = newTotalValue - inOutDeltaBefore;
-
+      // Quarantine released - total value now includes the side deposit
       await mEqual([
-        [vaultHub.totalValue(stakingVault), newTotalValue],
+        [vaultHub.totalValue(stakingVault), vaultTotalValue],
+        [currentInOutDelta(stakingVault), inOutDeltaBeforeRelease],
         [lazyOracle.quarantineValue(stakingVault), 0n],
-        [dashboard.settledGrowth(), settledGrowthBefore], // unchanged - was pre-exempted
+        // settledGrowth unchanged - was pre-exempted
+        [dashboard.settledGrowth(), settledGrowthBeforeRelease],
+        [dashboard.accruedFee(), 0n],
       ]);
-
-      // Verify no unexpected fee accrued from exempted side deposit
-      const accruedFee = await dashboard.accruedFee();
-      const unsettledGrowth = newGrowth - settledGrowthBefore;
-      if (unsettledGrowth <= 0n) {
-        expect(accruedFee).to.equal(0n);
-      }
     });
 
     // ==================== Part 7: Node Operator Fee and Settled Growth Tests ====================
 
-    it("has zero accrued fee after fee exemptions for deposits", async () => {
-      // Fee exemptions were added for:
-      // 1. Unguaranteed deposit (auto-exempted in unguaranteedDepositToBeaconChain)
-      // 2. Side deposit (manually exempted via addFeeExemption)
-      const accruedFee = await dashboard.accruedFee();
-      const settledGrowth = await dashboard.settledGrowth();
-      const latestReport = await dashboard.latestReport();
-      const currentGrowth = BigInt(latestReport.totalValue) - latestReport.inOutDelta;
-
-      // Settled growth should exactly equal 2x minActiveValidatorBalance
-      // (one for unguaranteed deposit, one for side deposit)
-      const expectedSettledGrowth = minActiveValidatorBalance * 2n;
-      expect(settledGrowth).to.equal(expectedSettledGrowth);
-
-      // Calculate unsettled growth
-      const unsettledGrowth = currentGrowth - settledGrowth;
-
-      // Since we exempted exactly the deposit amounts, unsettled growth should be <= 0
-      // (growth from deposits matches exemptions)
-      expect(unsettledGrowth).to.be.lte(0n);
-
-      // Accrued fee should be zero because all growth was exempted
-      expect(accruedFee).to.equal(0n);
-
-      // Verify fee calculation: fee = max(0, unsettledGrowth) * feeRate / 10000
-      const feeRate = await dashboard.feeRate();
-      expect(feeRate).to.equal(VAULT_NODE_OPERATOR_FEE); // Verify rate hasn't changed
-    });
-
-    it("accrues fee on CL rewards (growth above settled)", async () => {
-      // Get current state
-      const latestReportBefore = await dashboard.latestReport();
-      const currentGrowthBefore = BigInt(latestReportBefore.totalValue) - latestReportBefore.inOutDelta;
+    it("accrues fee on CL rewards and disburses to fee recipient", async () => {
+      // Verify starting state: unsettled growth is 0 (all previous growth was exempted)
       const settledGrowthBefore = await dashboard.settledGrowth();
-
-      // Calculate how much reward we need to add to exceed settled growth
-      // Add enough to ensure positive unsettled growth
-      const growthDeficit = settledGrowthBefore - currentGrowthBefore;
-      const clReward = growthDeficit > 0n ? growthDeficit + ether("2") : ether("2");
-
       const totalValueBefore = await vaultHub.totalValue(stakingVault);
+      const inOutDeltaBefore = await currentInOutDelta(stakingVault);
+      const feeRecipient = await dashboard.feeRecipient();
+      const recipientBalanceBefore = await ethers.provider.getBalance(feeRecipient);
+
+      await mEqual([[dashboard.accruedFee(), 0n]]);
+
+      // Step 1: Report CL rewards (1 ETH increase in totalValue)
+      // This is below maxRewardRatioBP so it won't be quarantined
+      const clReward = ether("1");
       const newTotalValue = totalValueBefore + clReward;
 
-      // Send ETH directly to vault to simulate rewards
-      const vaultAddress = await stakingVault.getAddress();
-      await setBalance(vaultAddress, (await ethers.provider.getBalance(vaultAddress)) + clReward);
-
-      // Report with increased totalValue - this might get quarantined if exceeds maxRewardRatioBP
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: newTotalValue,
         waitForNextRefSlot: true,
         updateReportData: true,
       });
 
-      // Check if value was quarantined
-      const quarantineValue = await lazyOracle.quarantineValue(stakingVault);
-      if (quarantineValue > 0n) {
-        // Wait out quarantine period
-        const quarantinePeriod = await lazyOracle.quarantinePeriod();
-        await advanceChainTime(quarantinePeriod);
+      // CL rewards are not quarantined (small amount relative to total value)
+      expect(await lazyOracle.quarantineValue(stakingVault)).to.equal(0n);
 
-        await reportVaultDataWithProof(ctx, stakingVault, {
-          totalValue: newTotalValue,
-          waitForNextRefSlot: true,
-          updateReportData: true,
-        });
-      }
+      // Growth increased by clReward, settledGrowth unchanged
+      // unsettledGrowth = clReward, so fee accrues
+      const expectedFee = (clReward * VAULT_NODE_OPERATOR_FEE) / 10000n; // 5% of 1 ETH = 0.05 ETH
 
-      // Verify accrued fee exists
-      const accruedFeeAfter = await dashboard.accruedFee();
+      await mEqual([
+        [vaultHub.totalValue(stakingVault), newTotalValue],
+        [dashboard.settledGrowth(), settledGrowthBefore],
+        [dashboard.accruedFee(), expectedFee],
+      ]);
 
-      // Calculate expected fee: unsettledGrowth × feeRate / 10000
-      const feeRate = await dashboard.feeRate();
-      const latestReportAfter = await dashboard.latestReport();
-      const currentGrowthAfter = BigInt(latestReportAfter.totalValue) - latestReportAfter.inOutDelta;
-      const unsettledGrowth = currentGrowthAfter - settledGrowthBefore;
+      // Step 2: Disburse the fee
+      await expect(dashboard.connect(nodeOperator).disburseFee())
+        .to.emit(dashboard, "FeeDisbursed")
+        .withArgs(nodeOperator, expectedFee, feeRecipient);
 
-      if (unsettledGrowth > 0n) {
-        const expectedFee = (unsettledGrowth * BigInt(feeRate)) / 10000n;
-        expect(accruedFeeAfter).to.equal(expectedFee);
-        expect(accruedFeeAfter).to.be.gt(0n);
-      } else {
-        // If still no unsettled growth, fee should be 0
-        expect(accruedFeeAfter).to.equal(0n);
-      }
-    });
+      // Verify fee was paid and state updated
+      const newSettledGrowth = settledGrowthBefore + clReward;
 
-    it("disburses node operator fee", async () => {
-      const accruedFee = await dashboard.accruedFee();
-      const feeRecipient = await dashboard.feeRecipient();
-      const recipientBalanceBefore = await ethers.provider.getBalance(feeRecipient);
-      const settledGrowthBefore = await dashboard.settledGrowth();
+      await mEqual([
+        [ethers.provider.getBalance(feeRecipient), recipientBalanceBefore + expectedFee],
+        [dashboard.settledGrowth(), newSettledGrowth],
+        [dashboard.accruedFee(), 0n],
+        [currentInOutDelta(stakingVault), inOutDeltaBefore - expectedFee],
+      ]);
 
-      if (accruedFee > 0n) {
-        // If there's a fee to disburse, verify the full flow
-        await expect(dashboard.connect(nodeOperator).disburseFee()).to.emit(dashboard, "FeeDisbursed");
-
-        // Verify fee was paid
-        const recipientBalanceAfter = await ethers.provider.getBalance(feeRecipient);
-        expect(recipientBalanceAfter).to.equal(recipientBalanceBefore + accruedFee);
-
-        // Verify settled growth was updated
-        const settledGrowthAfter = await dashboard.settledGrowth();
-        expect(settledGrowthAfter).to.be.gte(settledGrowthBefore);
-
-        // Verify accrued fee is now zero
-        await mEqual([[dashboard.accruedFee(), 0n]]);
-      } else {
-        // If no fee, disburseFee should still succeed and update settled growth if needed
-        const latestReport = await dashboard.latestReport();
-        const currentGrowth = BigInt(latestReport.totalValue) - latestReport.inOutDelta;
-
-        if (currentGrowth > settledGrowthBefore) {
-          await expect(dashboard.connect(nodeOperator).disburseFee()).to.emit(dashboard, "SettledGrowthSet");
-        } else {
-          // No growth change needed, disburseFee should be a no-op
-          await dashboard.connect(nodeOperator).disburseFee();
-        }
-        await mEqual([[dashboard.accruedFee(), 0n]]);
-      }
+      // Update tracking variable (CL rewards added, fee withdrawn)
+      vaultTotalValue += clReward - expectedFee;
     });
 
     it("changes fee recipient", async () => {
       const currentRecipient = await dashboard.feeRecipient();
-      const newRecipient = stranger.address;
+      const newRecipient = stranger;
 
-      await dashboard.connect(nodeOperatorManager).setFeeRecipient(newRecipient);
+      await expect(dashboard.connect(nodeOperatorManager).setFeeRecipient(newRecipient))
+        .to.emit(dashboard, "FeeRecipientSet")
+        .withArgs(nodeOperatorManager, currentRecipient, newRecipient);
 
       await mEqual([[dashboard.feeRecipient(), newRecipient]]);
 
       // Change back
-      await dashboard.connect(nodeOperatorManager).setFeeRecipient(currentRecipient);
+      await expect(dashboard.connect(nodeOperatorManager).setFeeRecipient(currentRecipient))
+        .to.emit(dashboard, "FeeRecipientSet")
+        .withArgs(nodeOperatorManager, newRecipient, currentRecipient);
+
       await mEqual([[dashboard.feeRecipient(), currentRecipient]]);
     });
 
@@ -857,12 +902,18 @@ resetState(
 
       // First confirmation from node operator manager - returns false (pending)
       expect(await dashboard.connect(nodeOperatorManager).setFeeRate.staticCall(newFeeRate)).to.equal(false);
-      await dashboard.connect(nodeOperatorManager).setFeeRate(newFeeRate);
+
+      // Should NOT emit FeeRateSet yet (only pending)
+      await expect(dashboard.connect(nodeOperatorManager).setFeeRate(newFeeRate)).to.not.emit(dashboard, "FeeRateSet");
       await mEqual([[dashboard.feeRate(), currentFeeRate]]); // Not changed yet
 
       // Second confirmation from vault owner - returns true (applied)
       expect(await dashboard.connect(vaultOwner).setFeeRate.staticCall(newFeeRate)).to.equal(true);
-      await dashboard.connect(vaultOwner).setFeeRate(newFeeRate);
+
+      await expect(dashboard.connect(vaultOwner).setFeeRate(newFeeRate))
+        .to.emit(dashboard, "FeeRateSet")
+        .withArgs(vaultOwner, currentFeeRate, newFeeRate);
+
       await mEqual([[dashboard.feeRate(), newFeeRate]]);
     });
 
@@ -873,9 +924,11 @@ resetState(
       const exemptionAmount = ether("0.5");
 
       // nodeOperatorManager can call addFeeExemption because they are admin of NODE_OPERATOR_FEE_EXEMPT_ROLE
-      await expect(dashboard.connect(nodeOperatorManager).addFeeExemption(exemptionAmount))
+      const addExemptionTx = dashboard.connect(nodeOperatorManager).addFeeExemption(exemptionAmount);
+      await expect(addExemptionTx)
         .to.emit(dashboard, "SettledGrowthSet")
-        .to.emit(dashboard, "CorrectionTimestampUpdated");
+        .withArgs(settledGrowthBefore, settledGrowthBefore + exemptionAmount);
+      await expect(addExemptionTx).to.emit(dashboard, "CorrectionTimestampUpdated");
 
       await mEqual([
         // Settled growth increased by exemption amount
@@ -912,9 +965,13 @@ resetState(
       expect(
         await dashboard.connect(vaultOwner).correctSettledGrowth.staticCall(newSettledGrowth, currentSettledGrowth),
       ).to.equal(true);
-      await expect(dashboard.connect(vaultOwner).correctSettledGrowth(newSettledGrowth, currentSettledGrowth))
+      const correctGrowthTx = dashboard
+        .connect(vaultOwner)
+        .correctSettledGrowth(newSettledGrowth, currentSettledGrowth);
+      await expect(correctGrowthTx)
         .to.emit(dashboard, "SettledGrowthSet")
-        .to.emit(dashboard, "CorrectionTimestampUpdated");
+        .withArgs(currentSettledGrowth, newSettledGrowth);
+      await expect(correctGrowthTx).to.emit(dashboard, "CorrectionTimestampUpdated");
 
       // Verify changes applied
       await mEqual([[dashboard.settledGrowth(), newSettledGrowth]]);
@@ -927,23 +984,25 @@ resetState(
     // ==================== Part 8: Tier Changes Work (with PDG paused) ====================
 
     it("changes tier", async () => {
-      // Burn all shares first (tier 2 has higher reserve ratio)
-      const liabilityShares = await vaultHub.liabilityShares(stakingVault);
-      if (liabilityShares > 0n) {
-        await lido.connect(vaultOwner).approve(dashboard, await lido.getPooledEthByShares(liabilityShares));
-        await dashboard.connect(vaultOwner).burnShares(liabilityShares);
-      }
-      expect(await vaultHub.liabilityShares(stakingVault)).to.equal(0n);
-
       const settledGrowthBefore = await dashboard.settledGrowth();
       const totalValueBefore = await vaultHub.totalValue(stakingVault);
       const tierAltShareLimit = ether("800");
 
+      // Node operator confirms tier change first (partial approval - no event yet)
       await operatorGrid.connect(nodeOperator).changeTier(stakingVault, OPERATOR_GROUP_TIER_2_ID, tierAltShareLimit);
-      await expect(dashboard.connect(vaultOwner).changeTier(OPERATOR_GROUP_TIER_2_ID, tierAltShareLimit)).to.emit(
-        vaultHub,
-        "VaultConnectionUpdated",
-      );
+
+      // Vault owner completes tier change (emits events)
+      await expect(dashboard.connect(vaultOwner).changeTier(OPERATOR_GROUP_TIER_2_ID, tierAltShareLimit))
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(
+          stakingVault,
+          nodeOperator,
+          tierAltShareLimit,
+          OPERATOR_GROUP_TIER_2_PARAMS.reserveRatioBP,
+          OPERATOR_GROUP_TIER_2_PARAMS.forcedRebalanceThresholdBP,
+        )
+        .and.to.emit(operatorGrid, "TierChanged")
+        .withArgs(stakingVault, OPERATOR_GROUP_TIER_2_ID, tierAltShareLimit);
 
       const [, tierAfterId, tierAfterShareLimit] = await operatorGrid.vaultTierInfo(stakingVault);
       const connectionAfter = await vaultHub.vaultConnection(stakingVault);
@@ -968,13 +1027,23 @@ resetState(
       const settledGrowthBefore = await dashboard.settledGrowth();
       const tierPrimaryShareLimit = ether("900");
 
+      // Node operator confirms tier change first (partial approval - no event yet)
       await operatorGrid
         .connect(nodeOperator)
         .changeTier(stakingVault, OPERATOR_GROUP_TIER_1_ID, tierPrimaryShareLimit);
-      await expect(dashboard.connect(vaultOwner).changeTier(OPERATOR_GROUP_TIER_1_ID, tierPrimaryShareLimit)).to.emit(
-        vaultHub,
-        "VaultConnectionUpdated",
-      );
+
+      // Vault owner completes tier change (emits events)
+      await expect(dashboard.connect(vaultOwner).changeTier(OPERATOR_GROUP_TIER_1_ID, tierPrimaryShareLimit))
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(
+          stakingVault,
+          nodeOperator,
+          tierPrimaryShareLimit,
+          OPERATOR_GROUP_TIER_1_PARAMS.reserveRatioBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.forcedRebalanceThresholdBP,
+        )
+        .and.to.emit(operatorGrid, "TierChanged")
+        .withArgs(stakingVault, OPERATOR_GROUP_TIER_1_ID, tierPrimaryShareLimit);
 
       const [, tierFinalId, tierFinalShareLimit] = await operatorGrid.vaultTierInfo(stakingVault);
       const connectionAfter = await vaultHub.vaultConnection(stakingVault);
@@ -999,10 +1068,16 @@ resetState(
       const newShareLimit = ether("600");
 
       await operatorGrid.connect(nodeOperator).updateVaultShareLimit(stakingVault, newShareLimit);
-      await expect(dashboard.connect(vaultOwner).updateShareLimit(newShareLimit)).to.emit(
-        vaultHub,
-        "VaultConnectionUpdated",
-      );
+
+      await expect(dashboard.connect(vaultOwner).updateShareLimit(newShareLimit))
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(
+          stakingVault,
+          nodeOperator,
+          newShareLimit,
+          OPERATOR_GROUP_TIER_1_PARAMS.reserveRatioBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.forcedRebalanceThresholdBP,
+        );
 
       const connection = await vaultHub.vaultConnection(stakingVault);
       const [, tierId] = await operatorGrid.vaultTierInfo(stakingVault);
@@ -1032,9 +1107,10 @@ resetState(
       const witnesses = toWitnesses(unguaranteedValidators, header, timestamp);
 
       // Grant prove role
-      await dashboard
-        .connect(nodeOperatorManager)
-        .grantRole(await dashboard.NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE(), nodeOperatorManager);
+      const PROVE_ROLE = await dashboard.NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE();
+      await expect(dashboard.connect(nodeOperatorManager).grantRole(PROVE_ROLE, nodeOperatorManager))
+        .to.emit(dashboard, "RoleGranted")
+        .withArgs(PROVE_ROLE, nodeOperatorManager, nodeOperatorManager);
 
       // Proving should fail because PDG is paused
       await expect(
@@ -1050,11 +1126,18 @@ resetState(
       const sharesToMint = ether("5");
       const stETHBalanceBefore = await lido.balanceOf(vaultOwner);
       const stETHToReceive = await lido.getPooledEthByShares(sharesToMint);
+      const liabilitySharesBefore = await vaultHub.liabilityShares(stakingVault);
 
-      await dashboard.connect(vaultOwner).mintShares(vaultOwner, sharesToMint);
+      await expect(dashboard.connect(vaultOwner).mintShares(vaultOwner, sharesToMint)).to.emit(
+        vaultHub,
+        "MintedSharesOnVault",
+      );
 
       // Verify minting worked
-      expect(await lido.balanceOf(vaultOwner)).to.equalStETH(stETHBalanceBefore + stETHToReceive);
+      await mEqual([
+        [vaultHub.liabilityShares(stakingVault), liabilitySharesBefore + sharesToMint],
+        [lido.balanceOf(vaultOwner), stETHBalanceBefore + stETHToReceive],
+      ]);
 
       const liabilityShares = await vaultHub.liabilityShares(stakingVault);
       expect(liabilityShares).to.be.gt(0n);
@@ -1062,8 +1145,15 @@ resetState(
       const stETHNeeded = await lido.getPooledEthByShares(liabilityShares);
 
       // Approve and rebalance
-      await lido.connect(vaultOwner).approve(dashboard, stETHNeeded);
-      await dashboard.connect(vaultOwner).rebalanceVaultWithShares(liabilityShares);
+      await expect(lido.connect(vaultOwner).approve(dashboard, stETHNeeded))
+        .to.emit(lido, "Approval")
+        .withArgs(vaultOwner, dashboard, stETHNeeded);
+
+      // VaultRebalanced(vault, sharesBurned, etherWithdrawn)
+      await expect(dashboard.connect(vaultOwner).rebalanceVaultWithShares(liabilityShares)).to.emit(
+        vaultHub,
+        "VaultRebalanced",
+      );
 
       await mEqual([
         // Liability cleared
@@ -1074,12 +1164,181 @@ resetState(
       ]);
     });
 
+    it("handles slashing and force rebalance by stranger", async () => {
+      const preSlashingSnapshot = await Snapshot.take();
+
+      // Get a fresh report to ensure consistent state
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
+
+      const totalValueBefore = await vaultHub.totalValue(stakingVault);
+
+      // Step 1: Mint stETH to exactly max capacity (90% of totalValue for tier 1)
+      // This puts the vault right at the reserve ratio threshold
+      const totalMintable = await dashboard.remainingMintingCapacityShares(0n);
+      expect(totalMintable).to.be.gt(0n);
+
+      await dashboard.connect(vaultOwner).mintShares(vaultOwner, totalMintable);
+
+      // Verify we're at max capacity
+      expect(await dashboard.remainingMintingCapacityShares(0n)).to.equal(0n);
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true);
+
+      // Step 2: Simulate slashing - small slash (1%) will breach threshold when at max capacity
+      // At max capacity: liability = 90% of totalValue, reserve = 10%
+      // Unhealthy when: liability > totalValue * 0.9025 (9.75% reserve threshold)
+      // With 1% slash: new reserve = (0.99 * totalValue - 0.9 * totalValue) / (0.99 * totalValue) = 9.09% < 9.75%
+      const slashPercent = 1n;
+      const slashedTotalValue = (totalValueBefore * (100n - slashPercent)) / 100n;
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: slashedTotalValue,
+        waitForNextRefSlot: true,
+        updateReportData: true,
+      });
+
+      // Verify vault is now unhealthy
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(false);
+
+      // Check obligations - sharesToBurn should be > 0
+      const [sharesToBurn] = await vaultHub.obligations(stakingVault);
+      expect(sharesToBurn).to.be.gt(0n);
+
+      // Step 3: Stranger executes force rebalance
+      const liabilitySharesBeforeRebalance = await vaultHub.liabilityShares(stakingVault);
+
+      // Force rebalance - anyone can call this when vault is unhealthy
+      await expect(vaultHub.connect(stranger).forceRebalance(stakingVault)).to.emit(vaultHub, "VaultRebalanced");
+
+      // Step 4: Verify vault is healthy after force rebalance
+      const liabilitySharesAfterForce = await vaultHub.liabilityShares(stakingVault);
+
+      await mEqual([
+        // Liability shares reduced
+        [liabilitySharesAfterForce < liabilitySharesBeforeRebalance, true],
+        // Vault is now healthy
+        [vaultHub.isVaultHealthy(stakingVault), true],
+        // Vault still connected
+        [vaultHub.isVaultConnected(stakingVault), true],
+      ]);
+
+      // Verify no more force rebalance needed (obligations should be 0)
+      const [remainingObligations] = await vaultHub.obligations(stakingVault);
+      expect(remainingObligations).to.equal(0n);
+
+      await Snapshot.restore(preSlashingSnapshot);
+    });
+
+    it("pays Lido fees via settleLidoFees", async () => {
+      // Get fresh report and current state
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
+
+      const totalValueBefore = await vaultHub.totalValue(stakingVault);
+      const treasury = await ctx.contracts.locator.treasury();
+      const treasuryBalanceBefore = await ethers.provider.getBalance(treasury);
+
+      // Get current Lido fees state
+      const vaultRecord = await vaultHub.vaultRecord(stakingVault);
+      const settledLidoFeesBefore = vaultRecord.settledLidoFees;
+
+      // Report with cumulative Lido fees (simulates fees accrued over time)
+      const lidoFeesAmount = ether("2");
+      const newCumulativeLidoFees = settledLidoFeesBefore + lidoFeesAmount;
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: totalValueBefore,
+        cumulativeLidoFees: newCumulativeLidoFees,
+        waitForNextRefSlot: true,
+        updateReportData: true,
+      });
+
+      // Verify unsettled fees exist via obligations
+      const [, feesToSettle] = await vaultHub.obligations(stakingVault);
+      expect(feesToSettle).to.equal(lidoFeesAmount);
+
+      // Step 2: Stranger settles Lido fees (permissionless)
+      await expect(vaultHub.connect(stranger).settleLidoFees(stakingVault))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVault, lidoFeesAmount, newCumulativeLidoFees, newCumulativeLidoFees);
+
+      // Verify fees were transferred to treasury
+      await mEqual([[ethers.provider.getBalance(treasury), treasuryBalanceBefore + lidoFeesAmount]]);
+
+      // Verify no more fees to settle
+      const [, feesAfter] = await vaultHub.obligations(stakingVault);
+      expect(feesAfter).to.equal(0n);
+
+      vaultTotalValue = await vaultHub.totalValue(stakingVault);
+    });
+
+    it("settles redemptions via setLiabilitySharesTarget", async () => {
+      // Get fresh report
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
+
+      // Step 1: Mint some shares to create liability
+      const sharesToMint = ether("10");
+      await dashboard.connect(vaultOwner).mintShares(vaultOwner, sharesToMint);
+
+      const liabilitySharesBefore = await vaultHub.liabilityShares(stakingVault);
+      expect(liabilitySharesBefore).to.be.gte(sharesToMint);
+
+      // Get fresh report after minting
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
+
+      // Step 2: DAO sets redemption target (mark part of liability as redemption shares)
+      // This simulates Lido Core needing to redeem stETH from vaults
+      const redemptionAmount = sharesToMint / 2n; // Mark half as redemption
+      const liabilityTarget = liabilitySharesBefore - redemptionAmount;
+
+      // Grant REDEMPTION_MASTER_ROLE to agent if not already granted
+      const REDEMPTION_MASTER_ROLE = await vaultHub.REDEMPTION_MASTER_ROLE();
+      await vaultHub.connect(agent).grantRole(REDEMPTION_MASTER_ROLE, agent.address);
+
+      await expect(vaultHub.connect(agent).setLiabilitySharesTarget(stakingVault, liabilityTarget))
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+        .withArgs(stakingVault, redemptionAmount);
+
+      // Verify redemption shares are set
+      const vaultRecord = await vaultHub.vaultRecord(stakingVault);
+      expect(vaultRecord.redemptionShares).to.equal(redemptionAmount);
+
+      // Verify obligations include redemption shares
+      const [sharesToBurn] = await vaultHub.obligations(stakingVault);
+      expect(sharesToBurn).to.be.gte(redemptionAmount);
+
+      // Step 3: Vault owner settles redemptions by rebalancing
+      const stETHNeeded = await lido.getPooledEthByShares(redemptionAmount);
+      await lido.connect(vaultOwner).approve(dashboard, stETHNeeded);
+      await dashboard.connect(vaultOwner).rebalanceVaultWithShares(redemptionAmount);
+
+      // Verify redemption shares decreased
+      const vaultRecordAfter = await vaultHub.vaultRecord(stakingVault);
+      expect(vaultRecordAfter.redemptionShares).to.equal(0n);
+
+      // Verify obligations are cleared
+      const [remainingObligations] = await vaultHub.obligations(stakingVault);
+      expect(remainingObligations).to.equal(0n);
+
+      // Clean up: burn remaining liability shares for subsequent tests
+      const remainingLiability = await vaultHub.liabilityShares(stakingVault);
+      if (remainingLiability > 0n) {
+        const stETHForCleanup = await lido.getPooledEthByShares(remainingLiability);
+        await lido.connect(vaultOwner).approve(dashboard, stETHForCleanup);
+        await dashboard.connect(vaultOwner).burnShares(remainingLiability);
+      }
+
+      expect(await vaultHub.liabilityShares(stakingVault)).to.equal(0n);
+      vaultTotalValue = await vaultHub.totalValue(stakingVault);
+    });
+
     it("disconnects vault", async () => {
       await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
       const accruedFeeBefore = await dashboard.accruedFee();
 
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
+      await expect(dashboard.connect(vaultOwner).voluntaryDisconnect())
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(stakingVault);
+
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.equal(true);
 
       // Fee leftover should be set (collected before disconnect)
@@ -1100,32 +1359,43 @@ resetState(
         // Liability should be zero
         [vaultHub.liabilityShares(stakingVault), 0n],
       ]);
+
+      // Recover fee leftover to fee recipient
+      if (feeLeftover > 0n) {
+        const feeRecipient = await dashboard.feeRecipient();
+        const feeRecipientBalanceBefore = await ethers.provider.getBalance(feeRecipient);
+
+        await dashboard.connect(nodeOperatorManager).recoverFeeLeftover();
+
+        await mEqual([
+          [dashboard.feeLeftover(), 0n],
+          [ethers.provider.getBalance(feeRecipient), feeRecipientBalanceBefore + feeLeftover],
+        ]);
+      }
     });
 
     it("reconnects vault to VaultHub", async () => {
-      // Recover any fee leftover first
-      const feeLeftover = await dashboard.feeLeftover();
-      const feeRecipient = await dashboard.feeRecipient();
-      const feeRecipientBalanceBefore = await ethers.provider.getBalance(feeRecipient);
-
-      if (feeLeftover > 0n) {
-        await dashboard.connect(nodeOperatorManager).recoverFeeLeftover();
-        expect(await dashboard.feeLeftover()).to.equal(0n);
-        // Verify fee was paid to recipient
-        expect(await ethers.provider.getBalance(feeRecipient)).to.equal(feeRecipientBalanceBefore + feeLeftover);
-      }
-
       // Correct settled growth to zero for reconnection
       // This is required because settledGrowth is set to MAX during disconnect
       const currentSettledGrowth = await dashboard.settledGrowth();
-      if (currentSettledGrowth > 0n) {
-        await dashboard.connect(nodeOperatorManager).correctSettledGrowth(0n, currentSettledGrowth);
-        await dashboard.connect(vaultOwner).correctSettledGrowth(0n, currentSettledGrowth);
+      if (currentSettledGrowth !== 0n) {
+        // First confirmation (should NOT emit SettledGrowthSet yet)
+        await expect(dashboard.connect(nodeOperatorManager).correctSettledGrowth(0n, currentSettledGrowth)).to.not.emit(
+          dashboard,
+          "SettledGrowthSet",
+        );
+
+        // Second confirmation (should emit events)
+        const correctGrowthReconnectTx = dashboard.connect(vaultOwner).correctSettledGrowth(0n, currentSettledGrowth);
+        await expect(correctGrowthReconnectTx)
+          .to.emit(dashboard, "SettledGrowthSet")
+          .withArgs(currentSettledGrowth, 0n);
+        await expect(correctGrowthReconnectTx).to.emit(dashboard, "CorrectionTimestampUpdated");
       }
       expect(await dashboard.settledGrowth()).to.equal(0n);
 
       // Reconnect
-      await dashboard.connect(vaultOwner).reconnectToVaultHub();
+      await expect(dashboard.connect(vaultOwner).reconnectToVaultHub()).to.emit(vaultHub, "VaultConnected");
 
       await mEqual([
         // Vault reconnected
@@ -1148,14 +1418,21 @@ resetState(
       if (liabilityShares > 0n) {
         const stETHToApprove = await lido.getPooledEthByShares(liabilityShares);
         await lido.connect(vaultOwner).approve(dashboard, stETHToApprove);
-        await dashboard.connect(vaultOwner).burnShares(liabilityShares);
+        await expect(dashboard.connect(vaultOwner).burnShares(liabilityShares))
+          .to.emit(vaultHub, "BurnedSharesOnVault")
+          .withArgs(stakingVault, liabilityShares);
       }
       expect(await vaultHub.liabilityShares(stakingVault)).to.equal(0n);
 
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
+      await expect(dashboard.connect(vaultOwner).voluntaryDisconnect())
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(stakingVault);
+
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.equal(true);
 
-      await reportVaultDataWithProof(ctx, stakingVault);
+      await expect(reportVaultDataWithProof(ctx, stakingVault))
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(stakingVault);
 
       await mEqual([
         // Vault disconnected
@@ -1170,25 +1447,30 @@ resetState(
 
     it("ossifies vault after abandoning dashboard", async () => {
       // Verify preconditions (ownership is pending, not yet accepted)
-      expect(await stakingVault.pendingOwner()).to.equal(await dashboard.getAddress());
+      expect(await stakingVault.pendingOwner()).to.equal(dashboard);
       expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(false);
 
       // Abandon dashboard to transfer vault ownership to stranger
-      await dashboard.connect(vaultOwner).abandonDashboard(stranger.address);
+      // abandonDashboard internally calls acceptOwnership then transfers to new owner
+      await expect(dashboard.connect(vaultOwner).abandonDashboard(stranger))
+        .to.emit(stakingVault, "OwnershipTransferStarted")
+        .withArgs(dashboard, stranger);
 
       await mEqual([
         // Pending ownership transfer
-        [stakingVault.pendingOwner(), stranger.address],
+        [stakingVault.pendingOwner(), stranger],
         // Current owner still dashboard until acceptance
         [stakingVault.owner(), dashboard],
       ]);
 
       // Stranger accepts ownership
-      await stakingVault.connect(stranger).acceptOwnership();
+      await expect(stakingVault.connect(stranger).acceptOwnership())
+        .to.emit(stakingVault, "OwnershipTransferred")
+        .withArgs(dashboard, stranger);
 
       await mEqual([
         // Ownership transferred
-        [stakingVault.owner(), stranger.address],
+        [stakingVault.owner(), stranger],
         [stakingVault.pendingOwner(), ethers.ZeroAddress],
         // Vault still disconnected
         [vaultHub.isVaultConnected(stakingVault), false],
@@ -1198,15 +1480,15 @@ resetState(
       const proxy = await ethers.getContractAt("PinnedBeaconProxy", stakingVault);
       expect(await proxy.isOssified()).to.equal(false);
 
-      // Ossify the vault
+      // Ossify the vault (no event emitted)
       await stakingVault.connect(stranger).ossify();
 
       // Verify ossification
       expect(await proxy.isOssified()).to.equal(true);
 
       // Verify vault basic functionality still works (read-only)
-      expect(await stakingVault.nodeOperator()).to.equal(nodeOperator.address);
-      expect(await stakingVault.depositor()).to.equal(await predepositGuarantee.getAddress());
+      expect(await stakingVault.nodeOperator()).to.equal(nodeOperator);
+      expect(await stakingVault.depositor()).to.equal(predepositGuarantee);
     });
 
     // ==================== Helper Functions ====================
@@ -1256,7 +1538,7 @@ resetState(
     }
 
     async function currentInOutDelta(vault: StakingVault): Promise<bigint> {
-      const record = await vaultHub.vaultRecord(await vault.getAddress());
+      const record = await vaultHub.vaultRecord(vault);
       const [cache0, cache1] = record.inOutDelta;
       return cache0.refSlot >= cache1.refSlot ? cache0.value : cache1.value;
     }
