@@ -1134,10 +1134,9 @@ resetState(
       );
 
       // Verify minting worked
-      await mEqual([
-        [vaultHub.liabilityShares(stakingVault), liabilitySharesBefore + sharesToMint],
-        [lido.balanceOf(vaultOwner), stETHBalanceBefore + stETHToReceive],
-      ]);
+      await mEqual([[vaultHub.liabilityShares(stakingVault), liabilitySharesBefore + sharesToMint]]);
+
+      expect(await lido.balanceOf(vaultOwner)).to.equalStETH(stETHBalanceBefore + stETHToReceive);
 
       const liabilityShares = await vaultHub.liabilityShares(stakingVault);
       expect(liabilityShares).to.be.gt(0n);
