@@ -1449,27 +1449,27 @@ resetState(
       expect(await stakingVault.pendingOwner()).to.equal(dashboard);
       expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(false);
 
-      // Abandon dashboard to transfer vault ownership to stranger
+      // Abandon dashboard to transfer vault ownership to owner
       // abandonDashboard internally calls acceptOwnership then transfers to new owner
-      await expect(dashboard.connect(vaultOwner).abandonDashboard(stranger))
+      await expect(dashboard.connect(vaultOwner).abandonDashboard(vaultOwner))
         .to.emit(stakingVault, "OwnershipTransferStarted")
-        .withArgs(dashboard, stranger);
+        .withArgs(dashboard, vaultOwner);
 
       await mEqual([
         // Pending ownership transfer
-        [stakingVault.pendingOwner(), stranger],
+        [stakingVault.pendingOwner(), vaultOwner],
         // Current owner still dashboard until acceptance
         [stakingVault.owner(), dashboard],
       ]);
 
-      // Stranger accepts ownership
-      await expect(stakingVault.connect(stranger).acceptOwnership())
+      // Owner accepts ownership
+      await expect(stakingVault.connect(vaultOwner).acceptOwnership())
         .to.emit(stakingVault, "OwnershipTransferred")
-        .withArgs(dashboard, stranger);
+        .withArgs(dashboard, vaultOwner);
 
       await mEqual([
         // Ownership transferred
-        [stakingVault.owner(), stranger],
+        [stakingVault.owner(), vaultOwner],
         [stakingVault.pendingOwner(), ethers.ZeroAddress],
         // Vault still disconnected
         [vaultHub.isVaultConnected(stakingVault), false],
@@ -1480,7 +1480,7 @@ resetState(
       expect(await proxy.isOssified()).to.equal(false);
 
       // Ossify the vault (no event emitted)
-      await stakingVault.connect(stranger).ossify();
+      await stakingVault.connect(vaultOwner).ossify();
 
       // Verify ossification
       expect(await proxy.isOssified()).to.equal(true);
@@ -1488,6 +1488,17 @@ resetState(
       // Verify vault basic functionality still works (read-only)
       expect(await stakingVault.nodeOperator()).to.equal(nodeOperator);
       expect(await stakingVault.depositor()).to.equal(predepositGuarantee);
+
+      // Verify vault cannot reconnect after ossification
+      // Transfer ownership to VaultHub (first step of reconnection)
+      await stakingVault.connect(vaultOwner).transferOwnership(vaultHub);
+      expect(await stakingVault.pendingOwner()).to.equal(await vaultHub.getAddress());
+
+      // VaultHub.connectVault reverts because vault is ossified
+      await expect(vaultHub.connect(vaultOwner).connectVault(stakingVault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "VaultOssified",
+      );
     });
 
     // ==================== Helper Functions ====================
