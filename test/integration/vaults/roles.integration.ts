@@ -5,7 +5,7 @@ import { beforeEach } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, StakingVault, VaultHub } from "typechain-types";
+import { Dashboard, LazyOracle, OperatorGrid, StakingVault, VaultHub } from "typechain-types";
 
 import { days, ether, impersonate, PDGPolicy, randomValidatorPubkey } from "lib";
 import {
@@ -1111,6 +1111,445 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       await expect(
         vaultHub.connect(dashboardSigner).collectERC20FromVault(vaultAddress, ZeroAddress, stranger.address, 1n),
       ).to.not.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+    });
+  });
+});
+
+describe("Integration: LazyOracle Roles and Access Control", () => {
+  let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
+
+  let agent: HardhatEthersSigner;
+  let sanityParamsUpdater: HardhatEthersSigner;
+  let stranger: HardhatEthersSigner;
+
+  let lazyOracle: LazyOracle;
+
+  before(async () => {
+    ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
+
+    await setupLidoForVaults(ctx);
+
+    lazyOracle = ctx.contracts.lazyOracle;
+
+    // Get DAO agent - it has DEFAULT_ADMIN_ROLE on LazyOracle
+    agent = await ctx.getSigner("agent");
+
+    [sanityParamsUpdater, stranger] = await ethers.getSigners();
+
+    // Grant UPDATE_SANITY_PARAMS_ROLE from agent
+    await lazyOracle.connect(agent).grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), sanityParamsUpdater);
+  });
+
+  beforeEach(async () => (snapshot = await Snapshot.take()));
+  afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => await Snapshot.restore(originalSnapshot));
+
+  describe("Role-protected methods", () => {
+    it("updateSanityParams - requires UPDATE_SANITY_PARAMS_ROLE", async () => {
+      const method = "updateSanityParams";
+      const args: [bigint, bigint, bigint] = [days(1n), 100n, ether("0.01")];
+
+      // Should fail for non-role holders
+      await expect(lazyOracle.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(lazyOracle, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await lazyOracle.UPDATE_SANITY_PARAMS_ROLE());
+
+      // Should succeed for role holder
+      await expect(lazyOracle.connect(sanityParamsUpdater)[method](...args)).to.not.be.revertedWithCustomError(
+        lazyOracle,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+  });
+
+  describe("Special sender-protected methods", () => {
+    it("updateReportData - requires AccountingOracle as sender", async () => {
+      const method = "updateReportData";
+      const args: [bigint, bigint, string, string] = [
+        BigInt(Math.floor(Date.now() / 1000)),
+        1000n,
+        "0x" + "0".repeat(64),
+        "QmTest",
+      ];
+
+      // Should fail for unauthorized callers
+      await expect(lazyOracle.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        lazyOracle,
+        "NotAuthorized",
+      );
+
+      // Should succeed for AccountingOracle
+      const accountingOracleSigner = await impersonate(await ctx.contracts.accountingOracle.getAddress(), ether("10"));
+      await expect(lazyOracle.connect(accountingOracleSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        lazyOracle,
+        "NotAuthorized",
+      );
+    });
+
+    it("removeVaultQuarantine - requires VaultHub as sender", async () => {
+      const method = "removeVaultQuarantine";
+      const args: [string] = [ZeroAddress];
+
+      // Should fail for unauthorized callers
+      await expect(lazyOracle.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        lazyOracle,
+        "NotAuthorized",
+      );
+
+      // Should succeed for VaultHub
+      const vaultHubSigner = await impersonate(await ctx.contracts.vaultHub.getAddress(), ether("10"));
+      await expect(lazyOracle.connect(vaultHubSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        lazyOracle,
+        "NotAuthorized",
+      );
+    });
+  });
+
+  describe("Permissionless methods", () => {
+    it("updateVaultData - anyone can call with valid proof", async () => {
+      // This method is permissionless and uses merkle proof for validation
+      // We just verify that it doesn't revert with NotAuthorized for stranger
+      // (it will fail with InvalidProof, but that's expected)
+      const method = "updateVaultData";
+      const args: [string, bigint, bigint, bigint, bigint, bigint, string[]] = [ZeroAddress, 0n, 0n, 0n, 0n, 0n, []];
+
+      // Should not revert with NotAuthorized (will revert with InvalidProof instead)
+      await expect(lazyOracle.connect(stranger)[method](...args)).to.not.be.revertedWithCustomError(
+        lazyOracle,
+        "NotAuthorized",
+      );
+    });
+  });
+});
+
+describe("Integration: OperatorGrid Roles and Access Control", () => {
+  let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
+
+  let agent: HardhatEthersSigner;
+  let registryRole: HardhatEthersSigner;
+  let stranger: HardhatEthersSigner;
+  let vaultOwner: HardhatEthersSigner;
+  let nodeOperator: HardhatEthersSigner;
+
+  let operatorGrid: OperatorGrid;
+  let vaultHub: VaultHub;
+  let vaultAddress: string;
+  let dashboard: Dashboard;
+
+  before(async () => {
+    ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
+
+    await setupLidoForVaults(ctx);
+
+    operatorGrid = ctx.contracts.operatorGrid;
+    vaultHub = ctx.contracts.vaultHub;
+
+    // Get DAO agent - it has DEFAULT_ADMIN_ROLE on OperatorGrid
+    agent = await ctx.getSigner("agent");
+
+    [registryRole, stranger, vaultOwner, nodeOperator] = await ethers.getSigners();
+
+    // Grant REGISTRY_ROLE from agent
+    await operatorGrid.connect(agent).grantRole(await operatorGrid.REGISTRY_ROLE(), registryRole);
+
+    // Create a vault for testing
+    const { stakingVault, dashboard: dashboardContract } = await createVaultWithDashboard(
+      ctx,
+      ctx.contracts.stakingVaultFactory,
+      vaultOwner,
+      nodeOperator,
+      nodeOperator,
+    );
+    vaultAddress = await stakingVault.getAddress();
+    dashboard = dashboardContract;
+  });
+
+  beforeEach(async () => (snapshot = await Snapshot.take()));
+  afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => await Snapshot.restore(originalSnapshot));
+
+  describe("Role-protected methods", () => {
+    it("setConfirmExpiry - requires REGISTRY_ROLE", async () => {
+      const method = "setConfirmExpiry";
+      const args: [bigint] = [days(1n)];
+
+      // Should fail for non-role holders
+      await expect(operatorGrid.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
+
+      // Should succeed for role holder
+      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("registerGroup - requires REGISTRY_ROLE", async () => {
+      const method = "registerGroup";
+      const [newOperator] = await ethers.getSigners();
+      const args: [string, bigint] = [newOperator.address, ether("1000")];
+
+      // Should fail for non-role holders
+      await expect(operatorGrid.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
+
+      // Should succeed for role holder
+      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("updateGroupShareLimit - requires REGISTRY_ROLE", async () => {
+      const method = "updateGroupShareLimit";
+      // First register a group
+      const [newOperator] = await ethers.getSigners();
+      await operatorGrid.connect(registryRole).registerGroup(newOperator.address, ether("1000"));
+
+      const args: [string, bigint] = [newOperator.address, ether("2000")];
+
+      // Should fail for non-role holders
+      await expect(operatorGrid.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
+
+      // Should succeed for role holder
+      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("registerTiers - requires REGISTRY_ROLE", async () => {
+      const method = "registerTiers";
+      // First register a group
+      const [newOperator] = await ethers.getSigners();
+      await operatorGrid.connect(registryRole).registerGroup(newOperator.address, ether("1000"));
+
+      const tierParams = [
+        {
+          shareLimit: ether("100"),
+          reserveRatioBP: 1000n,
+          forcedRebalanceThresholdBP: 500n,
+          infraFeeBP: 100n,
+          liquidityFeeBP: 100n,
+          reservationFeeBP: 100n,
+        },
+      ];
+      const args: [string, typeof tierParams] = [newOperator.address, tierParams];
+
+      // Should fail for non-role holders
+      await expect(operatorGrid.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
+
+      // Should succeed for role holder
+      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("alterTiers - requires REGISTRY_ROLE", async () => {
+      const method = "alterTiers";
+      const tierParams = [
+        {
+          shareLimit: ether("200"),
+          reserveRatioBP: 1500n,
+          forcedRebalanceThresholdBP: 600n,
+          infraFeeBP: 150n,
+          liquidityFeeBP: 150n,
+          reservationFeeBP: 150n,
+        },
+      ];
+      const args: [bigint[], typeof tierParams] = [[0n], tierParams];
+
+      // Should fail for non-role holders
+      await expect(operatorGrid.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
+
+      // Should succeed for role holder
+      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("updateVaultFees - requires REGISTRY_ROLE", async () => {
+      const method = "updateVaultFees";
+      const args: [string, bigint, bigint, bigint] = [vaultAddress, 200n, 200n, 200n];
+
+      // Should fail for non-role holders
+      await expect(operatorGrid.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
+
+      // Should succeed for role holder (but might fail for other reasons)
+      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("setVaultJailStatus - requires REGISTRY_ROLE", async () => {
+      const method = "setVaultJailStatus";
+      const args: [string, boolean] = [vaultAddress, true];
+
+      // Should fail for non-role holders
+      await expect(operatorGrid.connect(stranger)[method](...args))
+        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
+
+      // Should succeed for role holder
+      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+  });
+
+  describe("Special sender-protected methods", () => {
+    it("onMintedShares - requires VaultHub as sender", async () => {
+      const method = "onMintedShares";
+      const args: [string, bigint, boolean] = [vaultAddress, 100n, false];
+
+      // Should fail for unauthorized callers
+      await expect(operatorGrid.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should succeed for VaultHub
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("10"));
+      await expect(operatorGrid.connect(vaultHubSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+    });
+
+    it("onBurnedShares - requires VaultHub as sender", async () => {
+      const method = "onBurnedShares";
+      const args: [string, bigint] = [vaultAddress, 100n];
+
+      // Should fail for unauthorized callers
+      await expect(operatorGrid.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should succeed for VaultHub
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("10"));
+      await expect(operatorGrid.connect(vaultHubSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+    });
+
+    it("resetVaultTier - requires VaultHub as sender", async () => {
+      const method = "resetVaultTier";
+      const args: [string] = [vaultAddress];
+
+      // Should fail for unauthorized callers
+      await expect(operatorGrid.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should succeed for VaultHub
+      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("10"));
+      await expect(operatorGrid.connect(vaultHubSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+    });
+  });
+
+  describe("Confirmation-based methods", () => {
+    it("changeTier - requires vault owner and node operator confirmations", async () => {
+      // This method requires confirmations from both vault owner and node operator
+      const method = "changeTier";
+      const args: [string, bigint, bigint] = [vaultAddress, 0n, ether("100")];
+
+      // Should not revert with NotAuthorized for stranger (will collect confirmation or fail for other reasons)
+      await expect(operatorGrid.connect(stranger)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should not revert with NotAuthorized for vault owner
+      // we use dashboard here becouse it is the vault owner when vault is connected to vault hub
+      const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
+      await expect(operatorGrid.connect(dashboardSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should not revert with NotAuthorized for node operator
+      await expect(operatorGrid.connect(nodeOperator)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+    });
+
+    it("syncTier - requires vault owner and node operator confirmations", async () => {
+      // This method requires confirmations from both vault owner and node operator
+      const method = "syncTier";
+      const args: [string] = [vaultAddress];
+
+      // Should not revert with NotAuthorized for stranger (will collect confirmation or fail for other reasons)
+      await expect(operatorGrid.connect(stranger)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should not revert with NotAuthorized for vault owner
+      // we use dashboard here becouse it is the vault owner when vault is connected to vault hub
+      const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
+      await expect(operatorGrid.connect(dashboardSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should not revert with NotAuthorized for node operator
+      await expect(operatorGrid.connect(nodeOperator)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+    });
+
+    it("updateVaultShareLimit - requires vault owner and node operator confirmations", async () => {
+      // This method requires confirmations from both vault owner and node operator
+      const method = "updateVaultShareLimit";
+      const args: [string, bigint] = [vaultAddress, ether("200")];
+
+      // Should not revert with NotAuthorized for stranger (will collect confirmation or fail for other reasons)
+      await expect(operatorGrid.connect(stranger)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should not revert with NotAuthorized for vault owner
+      // we use dashboard here becouse it is the vault owner when vault is connected to vault hub
+      const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
+      await expect(operatorGrid.connect(dashboardSigner)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
+
+      // Should not revert with NotAuthorized for node operator
+      await expect(operatorGrid.connect(nodeOperator)[method](...args)).to.not.be.revertedWithCustomError(
+        operatorGrid,
+        "NotAuthorized",
+      );
     });
   });
 });
