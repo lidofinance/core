@@ -15,7 +15,7 @@ import {
   waitNextAvailableReportTime,
 } from "lib/protocol";
 
-import { ONE_HOUR, Snapshot } from "test/suite";
+import { Snapshot } from "test/suite";
 
 describe("Integration: Quarantine", () => {
   let ctx: ProtocolContext;
@@ -242,9 +242,9 @@ describe("Integration: Quarantine", () => {
     await dashboard.fund({ value: depositAmount + accruedFee });
     expect(await vaultHub.totalValue(stakingVault)).to.equal(INITIAL_VAULT_VALUE + depositAmount + accruedFee);
 
-    // Report while quarantine is still active (leave 2 hours buffer)
-    await advanceChainTime(quarantinePeriod / 2n - 2n * ONE_HOUR);
-    await reportTotalValue(INITIAL_VAULT_VALUE + depositAmount + LARGE_UNSAFE_VALUE + accruedFee, true);
+    // Report while quarantine is still active but near expiry
+    await advanceChainTime(quarantinePeriod / 2n - 60n * 60n);
+    await reportTotalValue(INITIAL_VAULT_VALUE + LARGE_UNSAFE_VALUE + depositAmount + accruedFee);
 
     // Advance time to just past quarantine expiry
     const currentTime = await getCurrentBlockTimestamp();
@@ -253,6 +253,7 @@ describe("Integration: Quarantine", () => {
     await advanceChainTime(timeUntilExpiry + 1n);
 
     // Wait for next refslot
+    await advanceChainTime(60n * 60n);
     await waitNextAvailableReportTime(ctx);
 
     // Withdraw after quarantine expired and refslot advanced
