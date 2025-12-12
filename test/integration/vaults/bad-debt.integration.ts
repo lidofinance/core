@@ -176,6 +176,26 @@ describe("Integration: Vault with bad debt", () => {
       await expect(dashboard.withdraw(owner, ether("0.1"))).to.emit(stakingVault, "EtherWithdrawn");
     });
 
+    it("Does not internalize bad debt when vault value covers liabilities", async () => {
+      const { vaultHub, lido } = ctx.contracts;
+
+      const liabilityShares = await dashboard.liabilityShares();
+      const liabilityValue = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+
+      const depositAmount = liabilityValue * 5n;
+      await dashboard.fund({ value: depositAmount });
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
+
+      const totalValueShares = await lido.getSharesByPooledEth(await dashboard.totalValue());
+      expect(totalValueShares).to.be.greaterThan(
+        liabilityShares,
+        "Total value converted to shares should exceed liability shares",
+      );
+
+      const tx = await vaultHub.connect(daoAgent).internalizeBadDebt(stakingVault, liabilityShares);
+      await expect(tx).to.not.emit(vaultHub, "BadDebtWrittenOffToBeInternalized");
+    });
+
     it("Recovery via CL rewards", async () => {
       const { vaultHub, lazyOracle } = ctx.contracts;
 
