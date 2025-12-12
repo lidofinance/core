@@ -5,6 +5,7 @@ import { getMode } from "hardhat.helpers";
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
 import { discover } from "./discover";
+import { ensurePredepositGuaranteeUnpaused } from "./helpers";
 import { provision } from "./provision";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
@@ -34,13 +35,13 @@ export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
 
   const defaultTierParams = await operatorGrid.tier(defaultTierId);
 
-  if (defaultTierParams.shareLimit === 0n) {
+  if (defaultTierParams.shareLimit === 0n || defaultTierParams.reserveRatioBP !== 50_00n) {
     await operatorGrid.connect(agent).alterTiers(
       [defaultTierId],
       [
         {
           shareLimit: ether("250"),
-          reserveRatioBP: defaultTierParams.reserveRatioBP,
+          reserveRatioBP: 50_00n,
           forcedRebalanceThresholdBP: defaultTierParams.forcedRebalanceThresholdBP,
           infraFeeBP: defaultTierParams.infraFeeBP,
           liquidityFeeBP: defaultTierParams.liquidityFeeBP,
@@ -87,6 +88,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
     await provision(context);
   } else {
     await ensureVaultsShareLimit(context);
+    await ensurePredepositGuaranteeUnpaused(context);
   }
 
   return context;

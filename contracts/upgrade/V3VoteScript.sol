@@ -37,9 +37,14 @@ interface IStakingRouter {
 
 interface IVaultsAdapter {
     function setVaultJailStatus(address _vault, bool _isInJail) external;
-    function updateVaultFees(address _vault, uint16 _infrastructureFeeBP, uint16 _liquidityFeeBP, uint16 _reservationFeeBP) external;
-    function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _feeRecipient) external payable;
+    function updateVaultFees(address _vault, uint256 _infrastructureFeeBP, uint256 _liquidityFeeBP, uint256 _reservationFeeBP) external;
+    function forceValidatorExit(address _vault, bytes calldata _pubkeys) external payable;
     function socializeBadDebt(address _debtVault, address _acceptorVault, uint256 _shares) external;
+}
+
+interface IPausableUntilWithRoles {
+    function PAUSE_ROLE() external view returns (bytes32);
+    function pauseFor(uint256 _duration) external;
 }
 
 /// @title V3VoteScript
@@ -62,7 +67,7 @@ contract V3VoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant DG_ITEMS_COUNT = 18;
+    uint256 public constant DG_ITEMS_COUNT = 21;
     uint256 public constant VOTING_ITEMS_COUNT = 8;
 
     //
@@ -375,8 +380,39 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
+        bytes32 pdgPauseRole = IPausableUntilWithRoles(TEMPLATE.PREDEPOSIT_GUARANTEE()).PAUSE_ROLE();
+
         voteItems[index++] = VoteItem({
-            description: "1.18. Call V3Template.finishUpgrade",
+            description: "1.18. Grant PredepositGuarantee's PAUSE_ROLE to Agent",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.PREDEPOSIT_GUARANTEE(),
+                abi.encodeCall(IAccessControl.grantRole, (pdgPauseRole, TEMPLATE.AGENT()))
+            )
+        });
+
+        uint256 PAUSE_INFINITELY = type(uint256).max;
+
+        voteItems[index++] = VoteItem({
+            description: "1.19. Pause PredepositGuarantee",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.PREDEPOSIT_GUARANTEE(),
+                abi.encodeCall(IPausableUntilWithRoles.pauseFor, (PAUSE_INFINITELY))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.20. Revoke PredepositGuarantee's PAUSE_ROLE from Agent",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.PREDEPOSIT_GUARANTEE(),
+                abi.encodeCall(IAccessControl.revokeRole, (pdgPauseRole, TEMPLATE.AGENT()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.21. Call V3Template.finishUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
         });
 

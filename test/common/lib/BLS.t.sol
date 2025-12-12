@@ -88,6 +88,35 @@ contract BLSVerifyingKeyTest is Test {
         assertEq(depositDomain, hex"03000000719103511efa4f1362ff2a50996cccf329cc84cb410c5e5c7d351d03");
     }
 
+    function test_zeroingForStaticArrays() public view {
+        assembly {
+            // Get the current free memory pointer
+            let freeMemPtr := mload(0x40)
+
+            // Write dirty bits to the memory location where the array will be allocated
+            // We'll write a pattern of 0xDEADBEEF... to multiple slots
+            // The array will be 24 * 32 = 768 bytes (0x300 bytes)
+            for {
+                let i := 0
+            } lt(i, 0x300) {
+                i := add(i, 0x20)
+            } {
+                mstore(add(freeMemPtr, i), 0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF)
+            }
+
+            // Also write some dirty bits to a few more slots beyond the array size
+            mstore(add(freeMemPtr, 0x300), 0xCAFEBABECAFEBABECAFEBABECAFEBABECAFEBABECAFEBABECAFEBABECAFEBABE)
+        }
+
+        // Declare the array - this should zero-initialize it despite the dirty memory
+        bytes32[24] memory array;
+
+        // Verify that all elements are zero-initialized
+        for (uint256 i = 0; i < 24; i++) {
+            assertEq(array[i], bytes32(0), "Array element should be zero-initialized");
+        }
+    }
+
     function LOCAL_MESSAGE_1() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
