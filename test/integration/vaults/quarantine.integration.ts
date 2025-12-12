@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
-import { advanceChainTime, ether, getCurrentBlockTimestamp } from "lib";
+import { advanceChainTime, ether } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -245,12 +245,6 @@ describe("Integration: Quarantine", () => {
     // Report while quarantine is still active but near expiry
     await advanceChainTime(quarantinePeriod / 2n - 60n * 60n);
     await reportTotalValue(INITIAL_VAULT_VALUE + LARGE_UNSAFE_VALUE + depositAmount + accruedFee);
-
-    // Advance time to just past quarantine expiry
-    const currentTime = await getCurrentBlockTimestamp();
-    const quarantineExpiry = startTimestamp + quarantinePeriod;
-    const timeUntilExpiry = quarantineExpiry - currentTime;
-    await advanceChainTime(timeUntilExpiry + 1n);
 
     // Wait for next refslot
     await advanceChainTime(60n * 60n);
