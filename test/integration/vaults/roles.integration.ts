@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractMethodArgs, ZeroAddress } from "ethers";
+import { ContractMethodArgs, Interface, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 import { beforeEach } from "mocha";
 
@@ -30,12 +30,38 @@ import { vaultRoleKeys } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
 
+// Helper type to extract method names from a contract
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
 }[keyof T];
 
-type DashboardMethods = Methods<Dashboard>; // "foo" | "bar"
+// Helper functions for testing access control
+async function testMethod<
+  T extends unknown[],
+  C extends { connect: (signer: HardhatEthersSigner) => C; interface: Interface },
+>(
+  contract: C,
+  methodName: Methods<C> & string,
+  { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
+  argument: T,
+  requiredRole: string,
+  errorName = "AccessControlUnauthorizedAccount",
+) {
+  for (const user of failingUsers) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect((contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)))
+      .to.be.revertedWithCustomError(contract, errorName)
+      .withArgs(user, requiredRole);
+  }
+
+  for (const user of successUsers) {
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.not.be.revertedWithCustomError(contract, errorName);
+  }
+}
 
 describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   let ctx: ProtocolContext;
@@ -128,6 +154,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       describe("Dashboard methods", () => {
         it("recoverERC20", async () => {
           await testMethod(
+            dashboard,
             "recoverERC20",
             {
               successUsers: [owner],
@@ -140,6 +167,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("collectERC20FromVault", async () => {
           await testMethod(
+            dashboard,
             "collectERC20FromVault",
             {
               successUsers: [roles.assetCollector, owner],
@@ -156,6 +184,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("triggerValidatorWithdrawal", async () => {
           await testMethod(
+            dashboard,
             "triggerValidatorWithdrawals",
             {
               successUsers: [roles.validatorWithdrawalTriggerer, owner],
@@ -172,6 +201,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("requestValidatorExit", async () => {
           await testMethod(
+            dashboard,
             "requestValidatorExit",
             {
               successUsers: [roles.validatorExitRequester, owner],
@@ -188,6 +218,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("resumeBeaconChainDeposits", async () => {
           await testMethod(
+            dashboard,
             "resumeBeaconChainDeposits",
             {
               successUsers: [roles.depositResumer, owner],
@@ -204,6 +235,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("pauseBeaconChainDeposits", async () => {
           await testMethod(
+            dashboard,
             "pauseBeaconChainDeposits",
             {
               successUsers: [roles.depositPauser, owner],
@@ -220,6 +252,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("unguaranteedDepositToBeaconChain", async () => {
           await testMethod(
+            dashboard,
             "unguaranteedDepositToBeaconChain",
             {
               successUsers: [roles.unguaranteedDepositor, nodeOperatorManager],
@@ -243,6 +276,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("proveUnknownValidatorsToPDG", async () => {
           await testMethod(
+            dashboard,
             "proveUnknownValidatorsToPDG",
             {
               successUsers: [roles.unknownValidatorProver, nodeOperatorManager],
@@ -269,6 +303,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         // requires prepared state for this test to pass, skipping for now
         it("addFeeExemption", async () => {
           await testMethod(
+            dashboard,
             "addFeeExemption",
             {
               successUsers: [roles.nodeOperatorFeeExemptor, nodeOperatorManager],
@@ -283,6 +318,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("rebalanceVaultWithShares", async () => {
           await testMethod(
+            dashboard,
             "rebalanceVaultWithShares",
             {
               successUsers: [roles.rebalancer, owner],
@@ -299,6 +335,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("rebalanceVaultWithEther", async () => {
           await testMethod(
+            dashboard,
             "rebalanceVaultWithEther",
             {
               successUsers: [roles.rebalancer, owner],
@@ -315,6 +352,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("mintWstETH", async () => {
           await testMethod(
+            dashboard,
             "mintWstETH",
             {
               successUsers: [roles.minter, owner],
@@ -327,6 +365,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("mintStETH", async () => {
           await testMethod(
+            dashboard,
             "mintStETH",
             {
               successUsers: [roles.minter, owner],
@@ -339,6 +378,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("mintShares", async () => {
           await testMethod(
+            dashboard,
             "mintShares",
             {
               successUsers: [roles.minter, owner],
@@ -361,6 +401,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           }
 
           await testMethod(
+            dashboard,
             "burnShares",
             {
               successUsers: [roles.burner, owner],
@@ -373,6 +414,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("burnStETH", async () => {
           await testMethod(
+            dashboard,
             "burnStETH",
             {
               successUsers: [roles.burner, owner],
@@ -402,6 +444,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           }
 
           await testMethod(
+            dashboard,
             "burnWstETH",
             {
               successUsers: [roles.burner, owner],
@@ -417,6 +460,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         it("withdraw", async () => {
           await dashboard.connect(roles.funder).fund({ value: ether("2") });
           await testMethod(
+            dashboard,
             "withdraw",
             {
               successUsers: [roles.withdrawer, owner],
@@ -433,6 +477,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("fund", async () => {
           await testMethod(
+            dashboard,
             "fund",
             {
               successUsers: [roles.funder, owner],
@@ -445,6 +490,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("voluntaryDisconnect", async () => {
           await testMethod(
+            dashboard,
             "voluntaryDisconnect",
             {
               successUsers: [roles.disconnecter, owner],
@@ -461,6 +507,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("requestTierChange", async () => {
           await testMethod(
+            dashboard,
             "changeTier",
             {
               successUsers: [roles.tierChanger, owner],
@@ -477,6 +524,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("setPDGPolicy", async () => {
           await testMethod(
+            dashboard,
             "setPDGPolicy",
             {
               successUsers: [owner],
@@ -489,6 +537,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
         it("disburseAbnormallyHighFee", async () => {
           await testMethod(
+            dashboard,
             "disburseAbnormallyHighFee",
             {
               successUsers: [owner],
@@ -580,27 +629,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     });
   });
 
-  async function testMethod<T extends unknown[]>(
-    methodName: DashboardMethods,
-    { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
-    argument: T,
-    requiredRole: string,
-  ) {
-    for (const user of failingUsers) {
-      await expect(dashboard.connect(user)[methodName](...(argument as ContractMethodArgs<T>)))
-        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(user, requiredRole);
-    }
-
-    for (const user of successUsers) {
-      await expect(
-        dashboard.connect(user)[methodName](...(argument as ContractMethodArgs<T>)),
-      ).to.be.not.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
-    }
-  }
-
   async function testMethodConfirmedRoles<T extends unknown[]>(
-    methodName: DashboardMethods,
+    methodName: Methods<Dashboard>,
     { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
     argument: T,
   ) {
@@ -618,7 +648,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   }
 
   async function testGrantingRole<T extends unknown[]>(
-    methodName: DashboardMethods,
+    methodName: Methods<Dashboard>,
     roleToGrant: string,
     argument: T,
     roleGratingActor: HardhatEthersSigner,
@@ -715,77 +745,71 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
   describe("Role-protected methods", () => {
     it("pauseFor - requires PAUSE_ROLE", async () => {
-      const method = "pauseFor";
-      const args: [bigint] = [days(1n)];
-
-      // Should fail for non-role holders
-      await expect(vaultHub.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.PAUSE_ROLE());
-
-      // Should succeed for role holder
-      await expect(vaultHub.connect(pauseRole)[method](...args)).to.not.be.reverted;
+      await testMethod(
+        vaultHub,
+        "pauseFor",
+        {
+          successUsers: [pauseRole],
+          failingUsers: [stranger],
+        },
+        [days(1n)],
+        await vaultHub.PAUSE_ROLE(),
+      );
     });
 
     it("pauseUntil - requires PAUSE_ROLE", async () => {
-      const method = "pauseUntil";
       const futureTimestamp = BigInt(Math.floor(Date.now() / 1000) + 86400);
-      const args: [bigint] = [futureTimestamp];
-
-      // Should fail for non-role holders
-      await expect(vaultHub.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.PAUSE_ROLE());
-
-      // Should succeed for role holder
-      await expect(vaultHub.connect(pauseRole)[method](...args)).to.not.be.reverted;
+      await testMethod(
+        vaultHub,
+        "pauseUntil",
+        {
+          successUsers: [pauseRole],
+          failingUsers: [stranger],
+        },
+        [futureTimestamp],
+        await vaultHub.PAUSE_ROLE(),
+      );
     });
 
     it("resume - requires RESUME_ROLE", async () => {
-      const method = "resume";
-      const args: [] = [];
-
       // First pause the contract
       await vaultHub.connect(pauseRole).pauseFor(days(1n));
 
-      // Should fail for non-role holders
-      await expect(vaultHub.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.RESUME_ROLE());
-
-      // Should succeed for role holder
-      await expect(vaultHub.connect(resumeRole)[method](...args)).to.not.be.reverted;
+      await testMethod(
+        vaultHub,
+        "resume",
+        {
+          successUsers: [resumeRole],
+          failingUsers: [stranger],
+        },
+        [],
+        await vaultHub.RESUME_ROLE(),
+      );
     });
 
     it("setLiabilitySharesTarget - requires REDEMPTION_MASTER_ROLE", async () => {
-      const method = "setLiabilitySharesTarget";
-      const args: [string, bigint] = [vaultAddress, 0n];
-
-      // Should fail for non-role holders
-      await expect(vaultHub.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.REDEMPTION_MASTER_ROLE());
-
-      // Should succeed for role holder
-      await expect(vaultHub.connect(redemptionMaster)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         vaultHub,
-        "AccessControlUnauthorizedAccount",
+        "setLiabilitySharesTarget",
+        {
+          successUsers: [redemptionMaster],
+          failingUsers: [stranger],
+        },
+        [vaultAddress, 0n],
+        await vaultHub.REDEMPTION_MASTER_ROLE(),
       );
     });
 
     it("disconnect - requires VAULT_MASTER_ROLE", async () => {
-      const method = "disconnect";
-      const args: [string] = [vaultAddress];
-
-      // Should fail for non-role holders
-      await expect(vaultHub.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.VAULT_MASTER_ROLE());
-
-      // Should succeed for role holder (but might fail for other reasons - we only check ACL)
-      await expect(vaultHub.connect(vaultMaster)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         vaultHub,
-        "AccessControlUnauthorizedAccount",
+        "disconnect",
+        {
+          successUsers: [vaultMaster],
+          failingUsers: [stranger],
+        },
+        [vaultAddress],
+        await vaultHub.VAULT_MASTER_ROLE(),
       );
     });
 
@@ -801,50 +825,41 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       );
       const vault2Address = await vault2.getAddress();
 
-      const method = "socializeBadDebt";
-      const args: [string, string, bigint] = [vaultAddress, vault2Address, 1n];
-
-      // Should fail for non-role holders
-      await expect(vaultHub.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.BAD_DEBT_MASTER_ROLE());
-
-      // Should succeed for role holder (but might fail for other reasons - we only check ACL)
-      await expect(vaultHub.connect(badDebtMaster)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         vaultHub,
-        "AccessControlUnauthorizedAccount",
+        "socializeBadDebt",
+        {
+          successUsers: [badDebtMaster],
+          failingUsers: [stranger],
+        },
+        [vaultAddress, vault2Address, 1n],
+        await vaultHub.BAD_DEBT_MASTER_ROLE(),
       );
     });
 
     it("internalizeBadDebt - requires BAD_DEBT_MASTER_ROLE", async () => {
-      const method = "internalizeBadDebt";
-      const args: [string, bigint] = [vaultAddress, 1n];
-
-      // Should fail for non-role holders
-      await expect(vaultHub.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.BAD_DEBT_MASTER_ROLE());
-
-      // Should succeed for role holder (but might fail for other reasons - we only check ACL)
-      await expect(vaultHub.connect(badDebtMaster)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         vaultHub,
-        "AccessControlUnauthorizedAccount",
+        "internalizeBadDebt",
+        {
+          successUsers: [badDebtMaster],
+          failingUsers: [stranger],
+        },
+        [vaultAddress, 1n],
+        await vaultHub.BAD_DEBT_MASTER_ROLE(),
       );
     });
 
     it("forceValidatorExit - requires VALIDATOR_EXIT_ROLE", async () => {
-      const method = "forceValidatorExit";
-      const args: [string, string, string] = [vaultAddress, "0x", stranger.address];
-
-      // Should fail for non-role holders
-      await expect(vaultHub.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.VALIDATOR_EXIT_ROLE());
-
-      // Should succeed for role holder (but might fail for other reasons - we only check ACL)
-      await expect(vaultHub.connect(validatorExitRole)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         vaultHub,
-        "AccessControlUnauthorizedAccount",
+        "forceValidatorExit",
+        {
+          successUsers: [validatorExitRole],
+          failingUsers: [stranger],
+        },
+        [vaultAddress, "0x", stranger.address],
+        await vaultHub.VALIDATOR_EXIT_ROLE(),
       );
     });
   });
@@ -1214,18 +1229,15 @@ describe("Integration: LazyOracle Roles and Access Control", () => {
 
   describe("Role-protected methods", () => {
     it("updateSanityParams - requires UPDATE_SANITY_PARAMS_ROLE", async () => {
-      const method = "updateSanityParams";
-      const args: [bigint, bigint, bigint] = [days(1n), 100n, ether("0.01")];
-
-      // Should fail for non-role holders
-      await expect(lazyOracle.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(lazyOracle, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await lazyOracle.UPDATE_SANITY_PARAMS_ROLE());
-
-      // Should succeed for role holder
-      await expect(lazyOracle.connect(sanityParamsUpdater)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         lazyOracle,
-        "AccessControlUnauthorizedAccount",
+        "updateSanityParams",
+        {
+          successUsers: [sanityParamsUpdater],
+          failingUsers: [stranger],
+        },
+        [days(1n), 100n, ether("0.01")],
+        await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(),
       );
     });
   });
@@ -1341,60 +1353,50 @@ describe("Integration: OperatorGrid Roles and Access Control", () => {
 
   describe("Role-protected methods", () => {
     it("setConfirmExpiry - requires REGISTRY_ROLE", async () => {
-      const method = "setConfirmExpiry";
-      const args: [bigint] = [days(1n)];
-
-      // Should fail for non-role holders
-      await expect(operatorGrid.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
-
-      // Should succeed for role holder
-      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         operatorGrid,
-        "AccessControlUnauthorizedAccount",
+        "setConfirmExpiry",
+        {
+          successUsers: [registryRole],
+          failingUsers: [stranger],
+        },
+        [days(1n)],
+        await operatorGrid.REGISTRY_ROLE(),
       );
     });
 
     it("registerGroup - requires REGISTRY_ROLE", async () => {
-      const method = "registerGroup";
       const [newOperator] = await ethers.getSigners();
-      const args: [string, bigint] = [newOperator.address, ether("1000")];
-
-      // Should fail for non-role holders
-      await expect(operatorGrid.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
-
-      // Should succeed for role holder
-      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         operatorGrid,
-        "AccessControlUnauthorizedAccount",
+        "registerGroup",
+        {
+          successUsers: [registryRole],
+          failingUsers: [stranger],
+        },
+        [newOperator.address, ether("1000")],
+        await operatorGrid.REGISTRY_ROLE(),
       );
     });
 
     it("updateGroupShareLimit - requires REGISTRY_ROLE", async () => {
-      const method = "updateGroupShareLimit";
       // First register a group
       const [newOperator] = await ethers.getSigners();
       await operatorGrid.connect(registryRole).registerGroup(newOperator.address, ether("1000"));
 
-      const args: [string, bigint] = [newOperator.address, ether("2000")];
-
-      // Should fail for non-role holders
-      await expect(operatorGrid.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
-
-      // Should succeed for role holder
-      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         operatorGrid,
-        "AccessControlUnauthorizedAccount",
+        "updateGroupShareLimit",
+        {
+          successUsers: [registryRole],
+          failingUsers: [stranger],
+        },
+        [newOperator.address, ether("2000")],
+        await operatorGrid.REGISTRY_ROLE(),
       );
     });
 
     it("registerTiers - requires REGISTRY_ROLE", async () => {
-      const method = "registerTiers";
       // First register a group
       const [newOperator] = await ethers.getSigners();
       await operatorGrid.connect(registryRole).registerGroup(newOperator.address, ether("1000"));
@@ -1409,22 +1411,20 @@ describe("Integration: OperatorGrid Roles and Access Control", () => {
           reservationFeeBP: 100n,
         },
       ];
-      const args: [string, typeof tierParams] = [newOperator.address, tierParams];
 
-      // Should fail for non-role holders
-      await expect(operatorGrid.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
-
-      // Should succeed for role holder
-      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         operatorGrid,
-        "AccessControlUnauthorizedAccount",
+        "registerTiers",
+        {
+          successUsers: [registryRole],
+          failingUsers: [stranger],
+        },
+        [newOperator.address, tierParams],
+        await operatorGrid.REGISTRY_ROLE(),
       );
     });
 
     it("alterTiers - requires REGISTRY_ROLE", async () => {
-      const method = "alterTiers";
       const tierParams = [
         {
           shareLimit: ether("200"),
@@ -1435,49 +1435,42 @@ describe("Integration: OperatorGrid Roles and Access Control", () => {
           reservationFeeBP: 150n,
         },
       ];
-      const args: [bigint[], typeof tierParams] = [[0n], tierParams];
 
-      // Should fail for non-role holders
-      await expect(operatorGrid.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
-
-      // Should succeed for role holder
-      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         operatorGrid,
-        "AccessControlUnauthorizedAccount",
+        "alterTiers",
+        {
+          successUsers: [registryRole],
+          failingUsers: [stranger],
+        },
+        [[0n], tierParams],
+        await operatorGrid.REGISTRY_ROLE(),
       );
     });
 
     it("updateVaultFees - requires REGISTRY_ROLE", async () => {
-      const method = "updateVaultFees";
-      const args: [string, bigint, bigint, bigint] = [vaultAddress, 200n, 200n, 200n];
-
-      // Should fail for non-role holders
-      await expect(operatorGrid.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
-
-      // Should succeed for role holder (but might fail for other reasons)
-      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         operatorGrid,
-        "AccessControlUnauthorizedAccount",
+        "updateVaultFees",
+        {
+          successUsers: [registryRole],
+          failingUsers: [stranger],
+        },
+        [vaultAddress, 200n, 200n, 200n],
+        await operatorGrid.REGISTRY_ROLE(),
       );
     });
 
     it("setVaultJailStatus - requires REGISTRY_ROLE", async () => {
-      const method = "setVaultJailStatus";
-      const args: [string, boolean] = [vaultAddress, true];
-
-      // Should fail for non-role holders
-      await expect(operatorGrid.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await operatorGrid.REGISTRY_ROLE());
-
-      // Should succeed for role holder
-      await expect(operatorGrid.connect(registryRole)[method](...args)).to.not.be.revertedWithCustomError(
+      await testMethod(
         operatorGrid,
-        "AccessControlUnauthorizedAccount",
+        "setVaultJailStatus",
+        {
+          successUsers: [registryRole],
+          failingUsers: [stranger],
+        },
+        [vaultAddress, true],
+        await operatorGrid.REGISTRY_ROLE(),
       );
     });
   });
@@ -1730,46 +1723,46 @@ describe("Integration: PredepositGuarantee Roles and Access Control", () => {
 
   describe("Role-protected methods", () => {
     it("pauseFor - requires PAUSE_ROLE", async () => {
-      const method = "pauseFor";
-      const args: [bigint] = [days(1n)];
-
-      // Should fail for non-role holders
-      await expect(predepositGuarantee.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(predepositGuarantee, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await predepositGuarantee.PAUSE_ROLE());
-
-      // Should succeed for role holder
-      await expect(predepositGuarantee.connect(pauseRole)[method](...args)).to.not.be.reverted;
+      await testMethod(
+        predepositGuarantee,
+        "pauseFor",
+        {
+          successUsers: [pauseRole],
+          failingUsers: [stranger],
+        },
+        [days(1n)],
+        await predepositGuarantee.PAUSE_ROLE(),
+      );
     });
 
     it("pauseUntil - requires PAUSE_ROLE", async () => {
-      const method = "pauseUntil";
       const futureTimestamp = BigInt(Math.floor(Date.now() / 1000) + 86400);
-      const args: [bigint] = [futureTimestamp];
-
-      // Should fail for non-role holders
-      await expect(predepositGuarantee.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(predepositGuarantee, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await predepositGuarantee.PAUSE_ROLE());
-
-      // Should succeed for role holder
-      await expect(predepositGuarantee.connect(pauseRole)[method](...args)).to.not.be.reverted;
+      await testMethod(
+        predepositGuarantee,
+        "pauseUntil",
+        {
+          successUsers: [pauseRole],
+          failingUsers: [stranger],
+        },
+        [futureTimestamp],
+        await predepositGuarantee.PAUSE_ROLE(),
+      );
     });
 
     it("resume - requires RESUME_ROLE", async () => {
-      const method = "resume";
-      const args: [] = [];
-
       // First pause the contract
       await predepositGuarantee.connect(pauseRole).pauseFor(days(1n));
 
-      // Should fail for non-role holders
-      await expect(predepositGuarantee.connect(stranger)[method](...args))
-        .to.be.revertedWithCustomError(predepositGuarantee, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await predepositGuarantee.RESUME_ROLE());
-
-      // Should succeed for role holder
-      await expect(predepositGuarantee.connect(resumeRole)[method](...args)).to.not.be.reverted;
+      await testMethod(
+        predepositGuarantee,
+        "resume",
+        {
+          successUsers: [resumeRole],
+          failingUsers: [stranger],
+        },
+        [],
+        await predepositGuarantee.RESUME_ROLE(),
+      );
     });
   });
 
