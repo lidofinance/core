@@ -126,18 +126,21 @@ resetState(
       await setupLidoForVaults(ctx);
       await setBalance(nodeOperator.address, ether("100"));
 
-      // Pause PDG before any tests
-      const PAUSE_ROLE = await predepositGuarantee.PAUSE_ROLE();
-      await expect(predepositGuarantee.connect(agent).grantRole(PAUSE_ROLE, agent))
-        .to.emit(predepositGuarantee, "RoleGranted")
-        .withArgs(PAUSE_ROLE, agent, agent);
+      const pdgIsPaused = await predepositGuarantee.isPaused();
+      if (!pdgIsPaused) {
+        // Pause PDG before any tests
+        const PAUSE_ROLE = await predepositGuarantee.PAUSE_ROLE();
+        await expect(predepositGuarantee.connect(agent).grantRole(PAUSE_ROLE, agent))
+          .to.emit(predepositGuarantee, "RoleGranted")
+          .withArgs(PAUSE_ROLE, agent, agent);
 
-      const PAUSE_INFINITELY = await predepositGuarantee.PAUSE_INFINITELY();
-      await expect(predepositGuarantee.connect(agent).pauseFor(PAUSE_INFINITELY))
-        .to.emit(predepositGuarantee, "Paused")
-        .withArgs(PAUSE_INFINITELY);
+        const PAUSE_INFINITELY = await predepositGuarantee.PAUSE_INFINITELY();
+        await expect(predepositGuarantee.connect(agent).pauseFor(PAUSE_INFINITELY))
+          .to.emit(predepositGuarantee, "Paused")
+          .withArgs(PAUSE_INFINITELY);
 
-      expect(await predepositGuarantee.isPaused()).to.equal(true);
+        expect(await predepositGuarantee.isPaused()).to.equal(true);
+      }
 
       slot = await predepositGuarantee.PIVOT_SLOT();
       mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
