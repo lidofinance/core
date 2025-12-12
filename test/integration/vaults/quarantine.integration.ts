@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
-import { advanceChainTime, ether } from "lib";
+import { advanceChainTime, ether, getCurrentBlockTimestamp } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -15,7 +15,7 @@ import {
   waitNextAvailableReportTime,
 } from "lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { ONE_HOUR, Snapshot } from "test/suite";
 
 describe("Integration: Quarantine", () => {
   let ctx: ProtocolContext;
@@ -242,9 +242,15 @@ describe("Integration: Quarantine", () => {
     await dashboard.fund({ value: depositAmount + accruedFee });
     expect(await vaultHub.totalValue(stakingVault)).to.equal(INITIAL_VAULT_VALUE + depositAmount + accruedFee);
 
-    // Report while quarantine is still active but near expiry
-    await advanceChainTime(quarantinePeriod / 2n - 60n * 60n);
+    // Report while quarantine is still active (leave 2 hours buffer)
+    await advanceChainTime(quarantinePeriod / 2n - 2n * ONE_HOUR);
     await reportTotalValue(INITIAL_VAULT_VALUE + depositAmount + LARGE_UNSAFE_VALUE + accruedFee, true);
+
+    // Advance time to just past quarantine expiry
+    const currentTime = await getCurrentBlockTimestamp();
+    const quarantineExpiry = startTimestamp + quarantinePeriod;
+    const timeUntilExpiry = quarantineExpiry - currentTime;
+    await advanceChainTime(timeUntilExpiry + 1n);
 
     // Wait for next refslot
     await waitNextAvailableReportTime(ctx);
