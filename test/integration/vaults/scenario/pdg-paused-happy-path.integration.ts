@@ -299,6 +299,8 @@ resetState(
           .changeTier(stakingVault, OPERATOR_GROUP_TIER_1_ID, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit),
       ).to.not.emit(operatorGrid, "TierChanged");
 
+      const defaultTierParams = await operatorGrid.tier(0);
+
       await expect(
         dashboard
           .connect(vaultOwner)
@@ -308,7 +310,29 @@ resetState(
       )
         .to.emit(vaultHub, "VaultConnected")
         .and.to.emit(stakingVault, "EtherFunded")
-        .withArgs(VAULT_CONNECTION_DEPOSIT);
+        .withArgs(VAULT_CONNECTION_DEPOSIT)
+        .and.to.emit(stakingVault, "OwnershipTransferred")
+        .withArgs(dashboard, vaultHub)
+        .and.to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(
+          stakingVault,
+          nodeOperator,
+          OPERATOR_GROUP_TIER_1_PARAMS.shareLimit,
+          OPERATOR_GROUP_TIER_1_PARAMS.reserveRatioBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.forcedRebalanceThresholdBP,
+        )
+        .and.to.emit(vaultHub, "VaultFeesUpdated")
+        .withArgs(
+          stakingVault,
+          defaultTierParams.infraFeeBP,
+          defaultTierParams.liquidityFeeBP,
+          defaultTierParams.reservationFeeBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.infraFeeBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.liquidityFeeBP,
+          OPERATOR_GROUP_TIER_1_PARAMS.reservationFeeBP,
+        )
+        .and.to.emit(operatorGrid, "TierChanged")
+        .withArgs(stakingVault, OPERATOR_GROUP_TIER_1_ID, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit);
 
       vaultTotalValue += VAULT_CONNECTION_DEPOSIT;
 
@@ -328,6 +352,11 @@ resetState(
         [tierId, OPERATOR_GROUP_TIER_1_ID],
         [tierShareLimit, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit],
         [connection.shareLimit, OPERATOR_GROUP_TIER_1_PARAMS.shareLimit],
+        [connection.reserveRatioBP, OPERATOR_GROUP_TIER_1_PARAMS.reserveRatioBP],
+        [connection.forcedRebalanceThresholdBP, OPERATOR_GROUP_TIER_1_PARAMS.forcedRebalanceThresholdBP],
+        [connection.infraFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.infraFeeBP],
+        [connection.liquidityFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.liquidityFeeBP],
+        [connection.reservationFeeBP, OPERATOR_GROUP_TIER_1_PARAMS.reservationFeeBP],
         // Vault ownership transferred to VaultHub
         [stakingVault.owner(), vaultHub],
         // Fee state unchanged
@@ -395,6 +424,12 @@ resetState(
     it("reverts PDG claimGuarantorRefund when paused", async () => {
       await expect(
         predepositGuarantee.connect(nodeOperator).claimGuarantorRefund(nodeOperator),
+      ).to.be.revertedWithCustomError(predepositGuarantee, "ResumedExpected");
+    });
+
+    it("reverts PDG withdrawNodeOperatorBalance when paused", async () => {
+      await expect(
+        predepositGuarantee.connect(nodeOperator).withdrawNodeOperatorBalance(nodeOperator, ether("1"), nodeOperator),
       ).to.be.revertedWithCustomError(predepositGuarantee, "ResumedExpected");
     });
 
@@ -547,7 +582,9 @@ resetState(
       await expect(dashboard.connect(vaultOwner).mintShares(vaultOwner, sharesToMint))
         .to.emit(vaultHub, "MintedSharesOnVault")
         .and.to.emit(lido, "Transfer")
-        .withArgs(ethers.ZeroAddress, vaultOwner, stETHToReceive);
+        .withArgs(ethers.ZeroAddress, vaultOwner, stETHToReceive)
+        .and.to.emit(lido, "ExternalSharesMinted")
+        .withArgs(vaultOwner, sharesToMint);
 
       await mEqual([[vaultHub.liabilityShares(stakingVault), liabilityBefore + sharesToMint]]);
       expect(await lido.balanceOf(vaultOwner)).to.equalStETH(stETHBalanceBefore + stETHToReceive);
@@ -565,7 +602,9 @@ resetState(
 
       await expect(dashboard.connect(vaultOwner).burnShares(sharesToBurn))
         .to.emit(vaultHub, "BurnedSharesOnVault")
-        .withArgs(stakingVault, sharesToBurn);
+        .withArgs(stakingVault, sharesToBurn)
+        .and.to.emit(lido, "ExternalSharesBurnt")
+        .withArgs(sharesToBurn);
 
       await mEqual([[vaultHub.liabilityShares(stakingVault), liabilityBefore - sharesToBurn]]);
       expect(await lido.balanceOf(vaultOwner)).to.equalStETH(stETHBalanceBefore - stETHToBurn);
@@ -626,12 +665,6 @@ resetState(
     it("blocks unguaranteed deposits with ALLOW_PROVE policy", async () => {
       const validator = createValidators(1)[0];
       const deposit = generateDepositStruct(validator.container, minActiveValidatorBalance);
-
-      // Grant unguaranteed deposit role
-      const UNGUARANTEED_DEPOSIT_ROLE = await dashboard.NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE();
-      await expect(dashboard.connect(nodeOperatorManager).grantRole(UNGUARANTEED_DEPOSIT_ROLE, nodeOperatorManager))
-        .to.emit(dashboard, "RoleGranted")
-        .withArgs(UNGUARANTEED_DEPOSIT_ROLE, nodeOperatorManager, nodeOperatorManager);
 
       await expect(
         dashboard.connect(nodeOperatorManager).unguaranteedDepositToBeaconChain([deposit]),
@@ -1482,8 +1515,10 @@ resetState(
       const proxy = await ethers.getContractAt("PinnedBeaconProxy", stakingVault);
       expect(await proxy.isOssified()).to.equal(false);
 
-      // Ossify the vault (no event emitted)
-      await stakingVault.connect(vaultOwner).ossify();
+      // Ossify the vault
+      await expect(stakingVault.connect(vaultOwner).ossify())
+        .to.emit(stakingVault, "PinnedImplementationUpdated")
+        .withArgs(await ctx.contracts.stakingVaultBeacon.implementation());
 
       // Verify ossification
       expect(await proxy.isOssified()).to.equal(true);
