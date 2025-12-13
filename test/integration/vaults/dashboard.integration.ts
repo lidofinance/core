@@ -1,17 +1,22 @@
 import { expect } from "chai";
-import { MaxUint256, ZeroAddress } from "ethers";
+import { hexlify, MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
+import { SecretKey } from "@chainsafe/blst";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, Lido, StakingVault, VaultHub, WstETH } from "typechain-types";
+import { Dashboard, Lido, PredepositGuarantee, SSZBLSHelpers, StakingVault, VaultHub, WstETH } from "typechain-types";
 
 import {
   advanceChainTime,
   days,
   ether,
+  generateDepositStruct,
+  generateValidator,
+  LocalMerkleTree,
   mEqual,
   PDGPolicy,
+  prepareLocalMerkleTree,
   randomAddress,
   randomValidatorPubkey,
   TOTAL_BASIS_POINTS,
@@ -33,6 +38,13 @@ import { Snapshot } from "test/suite";
 // EIP-7528 ETH address
 const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
+type ValidatorInfo = {
+  container: SSZBLSHelpers.ValidatorStruct;
+  blsPrivateKey: SecretKey;
+  index: number;
+  proof: string[];
+};
+
 describe("Integration: Dashboard Full Coverage", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
@@ -45,10 +57,16 @@ describe("Integration: Dashboard Full Coverage", () => {
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
   let vaultHub: VaultHub;
+  let predepositGuarantee: PredepositGuarantee;
   let lido: Lido;
   let wstETH: WstETH;
 
   let roles: VaultRoles;
+
+  let mockCLtree: LocalMerkleTree | undefined;
+  let slot: bigint;
+  let childBlockTimestamp: number;
+  let beaconBlockHeader: SSZBLSHelpers.BeaconBlockHeaderStruct;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -66,6 +84,7 @@ describe("Integration: Dashboard Full Coverage", () => {
     ));
 
     vaultHub = ctx.contracts.vaultHub;
+    predepositGuarantee = ctx.contracts.predepositGuarantee;
     lido = ctx.contracts.lido;
     wstETH = ctx.contracts.wstETH;
 
@@ -80,6 +99,9 @@ describe("Integration: Dashboard Full Coverage", () => {
 
     // Set PDG policy to ALLOW_DEPOSIT_AND_PROVE for testing
     await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+
+    slot = await predepositGuarantee.PIVOT_SLOT();
+    mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -201,6 +223,21 @@ describe("Integration: Dashboard Full Coverage", () => {
       it("Returns the minimal reserve", async () => {
         expect(await dashboard.minimalReserve()).to.equal(ether("1"));
       });
+
+      it("Accounts for slashing reserve from report", async () => {
+        // Initial minimal reserve is CONNECT_DEPOSIT (1 ETH)
+        expect(await dashboard.minimalReserve()).to.equal(ether("1"));
+
+        const slashingReserve = ether("5");
+
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          slashingReserve,
+          waitForNextRefSlot: true,
+        });
+
+        // minimalReserve should now be max(CONNECT_DEPOSIT, slashingReserve) = 5 ETH
+        expect(await dashboard.minimalReserve()).to.equal(slashingReserve);
+      });
     });
 
     describe("maxLockableValue()", () => {
@@ -294,15 +331,16 @@ describe("Integration: Dashboard Full Coverage", () => {
         expect(withFunding).to.be.gt(withoutFunding);
 
         // Verify the increase is reasonable (funding contributes to capacity accounting for reserve ratio)
-        // With 30% reserve ratio, 10 ETH funding should contribute ~7.69 ETH worth of capacity
+        // mintableEth = maxLockableValue * (TOTAL_BASIS_POINTS - reserveRatioBP) / TOTAL_BASIS_POINTS
+        // With 50% reserve ratio, 10 ETH funding should contribute ~5 ETH worth of mintable capacity
         const fundingShares = await lido.getSharesByPooledEth(funding);
         const connection = await dashboard.vaultConnection();
         const reserveRatioBP = connection.reserveRatioBP;
-        const expectedContribution = (fundingShares * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS + reserveRatioBP);
+        const expectedContribution = (fundingShares * (TOTAL_BASIS_POINTS - reserveRatioBP)) / TOTAL_BASIS_POINTS;
         const actualIncrease = withFunding - withoutFunding;
 
-        // Allow for rounding differences and fee adjustments
-        expect(actualIncrease).to.be.closeTo(expectedContribution, ether("2"));
+        // Allow for rounding differences
+        expect(actualIncrease).to.be.closeTo(expectedContribution, 2n);
       });
 
       it("Returns 0 when capacity is exceeded by liabilities", async () => {
@@ -936,6 +974,15 @@ describe("Integration: Dashboard Full Coverage", () => {
         dashboard.connect(roles.unguaranteedDepositor).unguaranteedDepositToBeaconChain(deposits),
       ).to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable");
     });
+
+    it("Deposits to beacon chain successfully", async () => {
+      const validator = generateValidator(await stakingVault.withdrawalCredentials());
+      const deposit = generateDepositStruct(validator.container, ether("1"));
+
+      await expect(dashboard.connect(roles.unguaranteedDepositor).unguaranteedDepositToBeaconChain([deposit]))
+        .to.emit(dashboard, "UnguaranteedDeposits")
+        .withArgs(stakingVault, 1, deposit.amount);
+    });
   });
 
   describe("proveUnknownValidatorsToPDG()", () => {
@@ -961,21 +1008,16 @@ describe("Integration: Dashboard Full Coverage", () => {
     it("Allows proving when PDG policy is ALLOW_PROVE", async () => {
       await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_PROVE);
 
-      const witnesses = [
-        {
-          proof: ["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"],
-          pubkey: "0x",
-          validatorIndex: 0n,
-          childBlockTimestamp: 0n,
-          slot: 0n,
-          proposerIndex: 0n,
-        },
-      ];
+      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const validators = createValidators(1, withdrawalCredentials);
 
-      // Will revert with a different error (proof validation) not policy
-      await expect(
-        dashboard.connect(roles.unknownValidatorProver).proveUnknownValidatorsToPDG(witnesses),
-      ).to.not.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+      await addValidatorsToTree(validators);
+      const { header, timestamp } = await commitAndProveValidators(validators, 100);
+      const witnesses = toWitnesses(validators, header, timestamp);
+
+      await expect(dashboard.connect(roles.unknownValidatorProver).proveUnknownValidatorsToPDG(witnesses))
+        .to.emit(predepositGuarantee, "ValidatorProven")
+        .withArgs(witnesses[0].pubkey, nodeOperator, stakingVault, withdrawalCredentials);
     });
   });
 
@@ -1052,6 +1094,13 @@ describe("Integration: Dashboard Full Coverage", () => {
       await expect(dashboard.connect(stranger).triggerValidatorWithdrawals("0x", [0n], stranger, { value: 1n }))
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
+    });
+
+    it("Reverts when no msg.value provided", async () => {
+      const pubkey = "0x" + "ab".repeat(48);
+      await expect(dashboard.connect(owner).triggerValidatorWithdrawals(pubkey, [ether("1")], owner))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("msg.value");
     });
   });
 
@@ -1734,6 +1783,45 @@ describe("Integration: Dashboard Full Coverage", () => {
         "AccessControlUnauthorizedAccount",
       );
     });
+
+    it("Changes tier with dual confirmation", async () => {
+      const { operatorGrid } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
+
+      // Register a group and tier for the node operator
+      await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("1000"));
+      await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+        {
+          shareLimit: ether("100"),
+          reserveRatioBP: 10_00,
+          forcedRebalanceThresholdBP: 5_00,
+          infraFeeBP: 0,
+          liquidityFeeBP: 0,
+          reservationFeeBP: 0,
+        },
+      ]);
+
+      const group = await operatorGrid.group(nodeOperator);
+      const requestedTierId = group.tierIds[0];
+      const requestedShareLimit = ether("100");
+
+      // First confirmation from vault owner via Dashboard
+      const firstCallResult = await dashboard
+        .connect(owner)
+        .changeTier.staticCall(requestedTierId, requestedShareLimit);
+      expect(firstCallResult).to.be.false; // Not yet confirmed
+
+      await dashboard.connect(owner).changeTier(requestedTierId, requestedShareLimit);
+
+      // Second confirmation from node operator via OperatorGrid
+      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, requestedTierId, requestedShareLimit))
+        .to.emit(operatorGrid, "TierChanged")
+        .withArgs(stakingVault, requestedTierId, requestedShareLimit);
+
+      // Verify tier was changed
+      const tierInfo = await operatorGrid.vaultTierInfo(stakingVault);
+      expect(tierInfo.tierId).to.equal(requestedTierId);
+    });
   });
 
   describe("syncTier()", () => {
@@ -1751,6 +1839,58 @@ describe("Integration: Dashboard Full Coverage", () => {
         "AccessControlUnauthorizedAccount",
       );
     });
+
+    it("Syncs tier with dual confirmation", async () => {
+      const { operatorGrid } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
+
+      // Register a group and tier for the node operator
+      await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("1000"));
+      await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+        {
+          shareLimit: ether("100"),
+          reserveRatioBP: 10_00,
+          forcedRebalanceThresholdBP: 5_00,
+          infraFeeBP: 0,
+          liquidityFeeBP: 0,
+          reservationFeeBP: 0,
+        },
+      ]);
+
+      const group = await operatorGrid.group(nodeOperator);
+      const requestedTierId = group.tierIds[0];
+      const requestedShareLimit = ether("100");
+
+      // Change to the new tier first
+      await dashboard.connect(owner).changeTier(requestedTierId, requestedShareLimit);
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, requestedTierId, requestedShareLimit);
+
+      // Now alter the tier parameters
+      await operatorGrid.connect(agentSigner).alterTiers(
+        [requestedTierId],
+        [
+          {
+            shareLimit: ether("100"),
+            reserveRatioBP: 15_00, // Changed from 10_00
+            forcedRebalanceThresholdBP: 7_00, // Changed from 5_00
+            infraFeeBP: 0,
+            liquidityFeeBP: 0,
+            reservationFeeBP: 0,
+          },
+        ],
+      );
+
+      // First confirmation from vault owner via Dashboard
+      const firstCallResult = await dashboard.connect(owner).syncTier.staticCall();
+      expect(firstCallResult).to.be.false;
+
+      await dashboard.connect(owner).syncTier();
+
+      // Second confirmation from node operator via OperatorGrid
+      await expect(operatorGrid.connect(nodeOperator).syncTier(stakingVault))
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(stakingVault, nodeOperator, requestedShareLimit, 15_00, 7_00);
+    });
   });
 
   describe("updateShareLimit()", () => {
@@ -1764,6 +1904,50 @@ describe("Integration: Dashboard Full Coverage", () => {
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
+    });
+
+    it("Updates share limit with dual confirmation", async () => {
+      const { operatorGrid } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
+
+      // Register a group and tier for the node operator
+      await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("1000"));
+      await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+        {
+          shareLimit: ether("100"),
+          reserveRatioBP: 10_00,
+          forcedRebalanceThresholdBP: 5_00,
+          infraFeeBP: 0,
+          liquidityFeeBP: 0,
+          reservationFeeBP: 0,
+        },
+      ]);
+
+      const group = await operatorGrid.group(nodeOperator);
+      const requestedTierId = group.tierIds[0];
+      const initialShareLimit = ether("100");
+
+      // Change to the new tier first
+      await dashboard.connect(owner).changeTier(requestedTierId, initialShareLimit);
+      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, requestedTierId, initialShareLimit);
+
+      // Request a new share limit (lower than initial)
+      const newShareLimit = ether("50");
+
+      // First confirmation from vault owner via Dashboard
+      const firstCallResult = await dashboard.connect(owner).updateShareLimit.staticCall(newShareLimit);
+      expect(firstCallResult).to.be.false;
+
+      await dashboard.connect(owner).updateShareLimit(newShareLimit);
+
+      // Second confirmation from node operator via OperatorGrid
+      await expect(operatorGrid.connect(nodeOperator).updateVaultShareLimit(stakingVault, newShareLimit))
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(stakingVault, nodeOperator, newShareLimit, 10_00, 5_00);
+
+      // Verify share limit was updated
+      const connection = await vaultHub.vaultConnection(stakingVault);
+      expect(connection.shareLimit).to.equal(newShareLimit);
     });
   });
 
@@ -2245,19 +2429,38 @@ describe("Integration: Dashboard Full Coverage", () => {
 
   describe("connectAndAcceptTier() Tests", () => {
     it("Reverts with TierChangeNotConfirmed when tier change not confirmed", async () => {
-      // First disconnect
-      await dashboard.connect(owner).voluntaryDisconnect();
-      await reportVaultDataWithProof(ctx, stakingVault);
+      const { operatorGrid, stakingVaultFactory } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
 
-      // Correct settled growth
-      const settledGrowth = await dashboard.settledGrowth();
-      await dashboard.connect(owner).correctSettledGrowth(0n, settledGrowth);
-      await dashboard.connect(nodeOperator).correctSettledGrowth(0n, settledGrowth);
+      // Register a group and tier for the node operator
+      await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("1000"));
+      await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+        {
+          shareLimit: ether("100"),
+          reserveRatioBP: 10_00,
+          forcedRebalanceThresholdBP: 5_00,
+          infraFeeBP: 0,
+          liquidityFeeBP: 0,
+          reservationFeeBP: 0,
+        },
+      ]);
 
-      // Try to connect with tier change but without confirmation
-      // This should revert because _changeTier returns false (not confirmed)
-      const nonExistentTier = 999n;
-      await expect(dashboard.connect(owner).connectAndAcceptTier(nonExistentTier, ether("100"))).to.be.reverted;
+      const group = await operatorGrid.group(nodeOperator);
+      const tierId = group.tierIds[0];
+
+      // Create a fresh vault WITHOUT connecting to VaultHub
+      const tx = await stakingVaultFactory
+        .connect(owner)
+        .createVaultWithDashboardWithoutConnectingToVaultHub(owner, nodeOperator, nodeOperator, 500, 86400, []);
+      const receipt = await tx.wait();
+      const dashboardCreatedEvents = ctx.getEvents(receipt!, "DashboardCreated");
+      const newDashboard = await ethers.getContractAt("Dashboard", dashboardCreatedEvents[0].args!.dashboard, owner);
+
+      // Try to connect with tier change but without node operator confirmation
+      // This should revert because _changeTier returns false (pending confirmation)
+      await expect(
+        newDashboard.connect(owner).connectAndAcceptTier(tierId, ether("100"), { value: ether("1") }),
+      ).to.be.revertedWithCustomError(newDashboard, "TierChangeNotConfirmed");
     });
 
     it("Successfully connects when settled growth is corrected", async () => {
@@ -2488,4 +2691,38 @@ describe("Integration: Dashboard Full Coverage", () => {
       await dashboard.connect(owner).mintShares(owner, newCapacity);
     });
   });
+
+  const createValidators = (count: number, withdrawalCredentials: string): ValidatorInfo[] =>
+    Array.from({ length: count }, () => ({ ...generateValidator(withdrawalCredentials), index: 0, proof: [] }));
+
+  const addValidatorsToTree = async (validators: ValidatorInfo[]) => {
+    if (!mockCLtree) throw new Error("mockCLtree not initialized");
+    for (const validator of validators) {
+      validator.index = (await mockCLtree.addValidator(validator.container)).validatorIndex;
+    }
+  };
+
+  const commitAndProveValidators = async (validators: ValidatorInfo[], slotOffset: number) => {
+    if (!mockCLtree) throw new Error("mockCLtree not initialized");
+
+    ({ childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(
+      Number(slot) + slotOffset,
+    ));
+
+    for (const validator of validators) {
+      validator.proof = await mockCLtree.buildProof(validator.index, beaconBlockHeader);
+    }
+
+    return { header: beaconBlockHeader, timestamp: childBlockTimestamp };
+  };
+
+  const toWitnesses = (validators: ValidatorInfo[], header: SSZBLSHelpers.BeaconBlockHeaderStruct, timestamp: number) =>
+    validators.map((validator) => ({
+      proof: validator.proof,
+      pubkey: hexlify(validator.container.pubkey),
+      validatorIndex: validator.index,
+      childBlockTimestamp: timestamp,
+      slot: header.slot,
+      proposerIndex: header.proposerIndex,
+    }));
 });
