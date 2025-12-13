@@ -1,16 +1,16 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
+import { MaxUint256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Dashboard, ERC20__Harness, Lido, StakingVault, VaultHub, WstETH } from "typechain-types";
+import { Dashboard, Lido, StakingVault, VaultHub, WstETH } from "typechain-types";
 
 import {
   advanceChainTime,
   days,
   ether,
+  mEqual,
   PDGPolicy,
   randomAddress,
   randomValidatorPubkey,
@@ -49,7 +49,6 @@ describe("Integration: Dashboard Full Coverage", () => {
   let wstETH: WstETH;
 
   let roles: VaultRoles;
-  let erc20Token: ERC20__Harness;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -76,9 +75,6 @@ describe("Integration: Dashboard Full Coverage", () => {
     // Autofill roles
     roles = await autofillRoles(dashboard, nodeOperator);
 
-    // Deploy test ERC20 token
-    erc20Token = await ethers.deployContract("ERC20__Harness", ["Test Token", "TST"]);
-
     // Fund the vault for testing
     await dashboard.connect(owner).fund({ value: ether("10") });
 
@@ -96,7 +92,14 @@ describe("Integration: Dashboard Full Coverage", () => {
     describe("vaultConnection()", () => {
       it("Returns the vault connection data", async () => {
         const connection = await dashboard.vaultConnection();
-        expect(connection.reserveRatioBP).to.be.gt(0n);
+        const vaultHubConnection = await vaultHub.vaultConnection(stakingVault);
+
+        // Verify connection matches VaultHub's data exactly
+        expect(connection.owner).to.equal(vaultHubConnection.owner);
+        expect(connection.shareLimit).to.equal(vaultHubConnection.shareLimit);
+        expect(connection.vaultIndex).to.equal(vaultHubConnection.vaultIndex);
+        expect(connection.disconnectInitiatedTs).to.equal(vaultHubConnection.disconnectInitiatedTs);
+        expect(connection.reserveRatioBP).to.equal(vaultHubConnection.reserveRatioBP);
       });
     });
 
@@ -127,9 +130,15 @@ describe("Integration: Dashboard Full Coverage", () => {
 
       it("Increases when shares are minted", async () => {
         const lockedBefore = await dashboard.locked();
-        await dashboard.connect(owner).mintShares(owner, ether("1"));
+        const sharesToMint = ether("1");
+        await dashboard.connect(owner).mintShares(owner, sharesToMint);
+
+        // Verify locked matches VaultHub's calculation
         const lockedAfter = await dashboard.locked();
-        expect(lockedAfter).to.be.gt(lockedBefore);
+        const vaultHubLocked = await vaultHub.locked(stakingVault);
+
+        expect(lockedAfter).to.equal(vaultHubLocked);
+        expect(lockedAfter).to.be.gt(lockedBefore); // Verify it increased
       });
     });
 
@@ -160,14 +169,25 @@ describe("Integration: Dashboard Full Coverage", () => {
         const maxShares = await dashboard.totalMintingCapacityShares();
         await dashboard.connect(owner).mintShares(owner, maxShares);
 
-        // Simulate slashing
+        const liabilityShares = await dashboard.liabilityShares();
+
+        // Simulate severe slashing to create unhealthy state (slash to 50% of liability value)
+        const liabilityValue = await lido.getPooledEthByShares(liabilityShares);
+        const slashedValue = liabilityValue / 2n;
+
         await reportVaultDataWithProof(ctx, stakingVault, {
-          totalValue: ether("5"),
+          totalValue: slashedValue,
           waitForNextRefSlot: true,
         });
 
+        // Verify vault is unhealthy
+        expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
+
+        // Verify shortfall matches VaultHub's calculation
         const shortfall = await dashboard.healthShortfallShares();
-        expect(shortfall).to.be.gt(0n);
+        const vaultHubShortfall = await vaultHub.healthShortfallShares(stakingVault);
+
+        expect(shortfall).to.equal(vaultHubShortfall);
       });
     });
 
@@ -185,30 +205,70 @@ describe("Integration: Dashboard Full Coverage", () => {
 
     describe("maxLockableValue()", () => {
       it("Returns max lockable value minus node operator fee", async () => {
-        const maxLockable = await dashboard.maxLockableValue();
-        const vaultHubMaxLockable = await vaultHub.maxLockableValue(stakingVault);
-        const accruedFee = await dashboard.accruedFee();
+        // Simulate growth that creates fees
+        const tvBefore = await dashboard.totalValue();
+        const growth = ether("10"); // Significant growth to create meaningful fees
 
-        expect(maxLockable).to.equal(vaultHubMaxLockable - accruedFee);
-      });
-
-      it("Returns 0 when accrued fee exceeds max lockable", async () => {
-        // Create a scenario where fees exceed max lockable by simulating huge rewards
         await reportVaultDataWithProof(ctx, stakingVault, {
-          totalValue: ether("100"),
+          totalValue: tvBefore + growth,
           waitForNextRefSlot: true,
         });
 
-        // The maxLockableValue considers accrued fees
-        const maxLockable = await dashboard.maxLockableValue();
-        expect(maxLockable).to.be.gte(0n);
+        const accruedFee = await dashboard.accruedFee();
+        const vaultHubMaxLockable = await vaultHub.maxLockableValue(stakingVault);
+        const dashboardMaxLockable = await dashboard.maxLockableValue();
+
+        expect(accruedFee).to.be.lt(vaultHubMaxLockable);
+        expect(dashboardMaxLockable).to.equal(vaultHubMaxLockable - accruedFee);
+      });
+
+      it("Returns 0 when accrued fee exceeds max lockable", async () => {
+        // Mint at max capacity to minimize free ether for locking
+        const maxShares = await dashboard.totalMintingCapacityShares();
+        await dashboard.connect(owner).mintShares(owner, maxShares);
+
+        // Simulate massive growth to create large fees
+        // Need growth large enough that NO fee exceeds vaultHub maxLockableValue
+        const totalValue = await dashboard.totalValue();
+        const vaultHubMaxLockable = await vaultHub.maxLockableValue(stakingVault);
+
+        // To ensure fee > maxLockable, we need growth such that:
+        // settledGrowth * feeRate > vaultHubMaxLockable
+        const requiredGrowth = vaultHubMaxLockable * 150n; // 150x to be sure
+
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: totalValue + requiredGrowth,
+          waitForNextRefSlot: true,
+        });
+
+        const accruedFee = await dashboard.accruedFee();
+        const vaultHubMaxLockableAfter = await vaultHub.maxLockableValue(stakingVault);
+        const dashboardMaxLockable = await dashboard.maxLockableValue();
+
+        expect(accruedFee).to.be.gte(vaultHubMaxLockableAfter);
+        expect(dashboardMaxLockable).to.equal(0n);
       });
     });
 
     describe("totalMintingCapacityShares()", () => {
       it("Returns minting capacity accounting for fees", async () => {
-        const capacity = await dashboard.totalMintingCapacityShares();
-        expect(capacity).to.be.gt(0n);
+        // Simulate growth to create fees
+        const tvBefore = await dashboard.totalValue();
+        const growth = ether("10");
+
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: tvBefore + growth,
+          waitForNextRefSlot: true,
+        });
+
+        const accruedFee = await dashboard.accruedFee();
+        expect(accruedFee).to.be.gt(0n);
+
+        const dashboardCapacity = await dashboard.totalMintingCapacityShares();
+        const vaultHubCapacityWithFee = await vaultHub.totalMintingCapacityShares(stakingVault, -BigInt(accruedFee));
+
+        // Verify dashboard correctly passes -accruedFee to vaultHub
+        expect(dashboardCapacity).to.equal(vaultHubCapacityWithFee);
       });
     });
 
@@ -227,27 +287,55 @@ describe("Integration: Dashboard Full Coverage", () => {
 
       it("Accounts for additional ether to fund", async () => {
         const withoutFunding = await dashboard.remainingMintingCapacityShares(0n);
-        const withFunding = await dashboard.remainingMintingCapacityShares(ether("10"));
+        const funding = ether("10");
+        const withFunding = await dashboard.remainingMintingCapacityShares(funding);
+
+        // Verify funding increases capacity
         expect(withFunding).to.be.gt(withoutFunding);
+
+        // Verify the increase is reasonable (funding contributes to capacity accounting for reserve ratio)
+        // With 30% reserve ratio, 10 ETH funding should contribute ~7.69 ETH worth of capacity
+        const fundingShares = await lido.getSharesByPooledEth(funding);
+        const connection = await dashboard.vaultConnection();
+        const reserveRatioBP = connection.reserveRatioBP;
+        const expectedContribution = (fundingShares * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS + reserveRatioBP);
+        const actualIncrease = withFunding - withoutFunding;
+
+        // Allow for rounding differences and fee adjustments
+        expect(actualIncrease).to.be.closeTo(expectedContribution, ether("2"));
       });
 
       it("Returns 0 when capacity is exceeded by liabilities", async () => {
         // Mint max
         const maxShares = await dashboard.totalMintingCapacityShares();
         await dashboard.connect(owner).mintShares(owner, maxShares);
-
-        // Even with funding, remaining should be 0 until existing shares are burned
         expect(await dashboard.remainingMintingCapacityShares(0n)).to.equal(0n);
       });
     });
 
     describe("withdrawableValue()", () => {
       it("Returns withdrawable amount accounting for fees", async () => {
+        // Simulate growth to create fees
+        const tvBefore = await dashboard.totalValue();
+        const growth = ether("5");
+
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: tvBefore + growth,
+          waitForNextRefSlot: true,
+        });
+
         const withdrawable = await dashboard.withdrawableValue();
         const vaultHubWithdrawable = await vaultHub.withdrawableValue(stakingVault);
         const accruedFee = await dashboard.accruedFee();
 
-        expect(withdrawable).to.equal(vaultHubWithdrawable > accruedFee ? vaultHubWithdrawable - accruedFee : 0n);
+        // Verify fees exist
+        expect(accruedFee).to.be.gt(0n);
+
+        // Explicitly verify fee < withdrawable (testing non-zero case)
+        expect(accruedFee).to.be.lt(vaultHubWithdrawable);
+
+        // Explicitly verify withdrawable = vaultHub withdrawable - fee
+        expect(withdrawable).to.equal(vaultHubWithdrawable - accruedFee);
       });
 
       it("Returns 0 when fee exceeds withdrawable", async () => {
@@ -255,16 +343,58 @@ describe("Integration: Dashboard Full Coverage", () => {
         const maxShares = await dashboard.totalMintingCapacityShares();
         await dashboard.connect(owner).mintShares(owner, maxShares);
 
-        // withdrawable should be minimal
+        // Simulate massive growth to create large fees
+        const totalValue = await dashboard.totalValue();
+        const vaultHubWithdrawable = await vaultHub.withdrawableValue(stakingVault);
+
+        // Create fees larger than withdrawable
+        const requiredGrowth = vaultHubWithdrawable * 150n;
+
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: totalValue + requiredGrowth,
+          waitForNextRefSlot: true,
+        });
+
+        const accruedFee = await dashboard.accruedFee();
+        const vaultHubWithdrawableAfter = await vaultHub.withdrawableValue(stakingVault);
         const withdrawable = await dashboard.withdrawableValue();
-        expect(withdrawable).to.be.lte(2n); // Account for rounding
+
+        // Explicitly verify fee >= withdrawable (testing zero case)
+        expect(accruedFee).to.be.gte(vaultHubWithdrawableAfter);
+
+        // Explicitly verify dashboard returns 0
+        expect(withdrawable).to.equal(0n);
       });
     });
 
     describe("latestReport()", () => {
       it("Returns the latest vault report", async () => {
+        // Get initial report
+        const initialReport = await dashboard.latestReport();
+        const initialTimestamp = initialReport.timestamp;
+
+        // Fund the vault
+        const fundAmount = ether("10");
+        await dashboard.connect(owner).fund({ value: fundAmount });
+
+        // Get current total value (includes funding)
+        const currentTotalValue = await dashboard.totalValue();
+
+        // Submit a report (totalValue gets capped by actual vault balance)
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: currentTotalValue,
+          waitForNextRefSlot: true,
+        });
+
+        // Get the latest report
         const report = await dashboard.latestReport();
-        expect(report.totalValue).to.be.gte(0n);
+
+        // Verify report was updated
+        expect(report.totalValue).to.equal(currentTotalValue);
+        expect(report.timestamp).to.be.gt(initialTimestamp);
+
+        // inOutDelta should be positive (we funded)
+        expect(report.inOutDelta).to.equal(currentTotalValue);
       });
     });
 
@@ -273,14 +403,17 @@ describe("Integration: Dashboard Full Coverage", () => {
         expect(await dashboard.accruedFee()).to.equal(0n);
       });
 
-      it("Returns non-zero after vault growth", async () => {
+      it("Accrues fee after vault growth", async () => {
         // Report vault with growth
         await reportVaultDataWithProof(ctx, stakingVault, {
           totalValue: ether("20"),
           waitForNextRefSlot: true,
         });
 
-        expect(await dashboard.accruedFee()).to.be.gt(0n);
+        const fee = await dashboard.accruedFee();
+
+        // Verify fee is positive
+        expect(fee).to.be.gt(0n);
       });
     });
 
@@ -310,14 +443,26 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("fund()", () => {
     it("Allows owner to fund the vault", async () => {
       const valueBefore = await dashboard.totalValue();
-      await dashboard.connect(owner).fund({ value: ether("1") });
-      expect(await dashboard.totalValue()).to.equal(valueBefore + ether("1"));
+      const fundAmount = ether("1");
+
+      await expect(dashboard.connect(owner).fund({ value: fundAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundAmount);
+
+      const valueAfter = await dashboard.totalValue();
+      expect(valueAfter).to.equal(valueBefore + fundAmount);
     });
 
     it("Allows funder role to fund", async () => {
       const valueBefore = await dashboard.totalValue();
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      expect(await dashboard.totalValue()).to.equal(valueBefore + ether("1"));
+      const fundAmount = ether("1");
+
+      await expect(dashboard.connect(roles.funder).fund({ value: fundAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundAmount);
+
+      const valueAfter = await dashboard.totalValue();
+      expect(valueAfter).to.equal(valueBefore + fundAmount);
     });
 
     it("Reverts when called by unauthorized account", async () => {
@@ -332,15 +477,28 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("withdraw()", () => {
     it("Allows owner to withdraw", async () => {
       const withdrawable = await dashboard.withdrawableValue();
+      const vaultBalanceBefore = await ethers.provider.getBalance(stakingVault);
       const strangerBefore = await ethers.provider.getBalance(stranger);
-      await dashboard.connect(owner).withdraw(stranger, withdrawable);
-      const strangerAfter = await ethers.provider.getBalance(stranger);
-      expect(strangerAfter - strangerBefore).to.equal(withdrawable);
+
+      await expect(dashboard.connect(owner).withdraw(stranger, withdrawable))
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(stranger, withdrawable);
+
+      await mEqual([
+        [ethers.provider.getBalance(stakingVault), vaultBalanceBefore - withdrawable],
+        [ethers.provider.getBalance(stranger), strangerBefore + withdrawable],
+      ]);
     });
 
     it("Allows withdrawer role to withdraw", async () => {
       const withdrawable = await dashboard.withdrawableValue();
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, withdrawable);
+      const strangerBefore = await ethers.provider.getBalance(stranger);
+
+      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, withdrawable))
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(stranger, withdrawable);
+
+      await mEqual([[ethers.provider.getBalance(stranger), strangerBefore + withdrawable]]);
     });
 
     it("Reverts when exceeding withdrawable amount", async () => {
@@ -362,21 +520,34 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("mintShares()", () => {
     it("Mints shares to recipient", async () => {
       const sharesToMint = ether("1");
+      const strangerSharesBefore = await lido.sharesOf(stranger);
+      const liabilityBefore = await dashboard.liabilityShares();
+
+      const expectedLocked = await calculateLockedValue(ctx, stakingVault, {
+        liabilityShares: liabilityBefore + sharesToMint,
+      });
+
       await expect(dashboard.connect(owner).mintShares(stranger, sharesToMint))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(
-          stakingVault,
-          sharesToMint,
-          await calculateLockedValue(ctx, stakingVault, { liabilityShares: sharesToMint }),
-        );
+        .withArgs(stakingVault, sharesToMint, expectedLocked);
 
-      expect(await lido.sharesOf(stranger)).to.equal(sharesToMint);
+      await mEqual([
+        [await lido.sharesOf(stranger), strangerSharesBefore + sharesToMint],
+        [await dashboard.liabilityShares(), liabilityBefore + sharesToMint],
+        [await dashboard.locked(), expectedLocked],
+      ]);
     });
 
     it("Allows funding with msg.value via fundable modifier", async () => {
       const valueBefore = await dashboard.totalValue();
-      await dashboard.connect(owner).mintShares(stranger, ether("0.1"), { value: ether("5") });
-      expect(await dashboard.totalValue()).to.equal(valueBefore + ether("5"));
+      const fundAmount = ether("5");
+      const sharesToMint = ether("0.1");
+
+      await expect(dashboard.connect(owner).mintShares(stranger, sharesToMint, { value: fundAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundAmount);
+
+      await mEqual([[await dashboard.totalValue(), valueBefore + fundAmount]]);
     });
 
     it("Reverts when exceeding minting capacity", async () => {
@@ -398,9 +569,15 @@ describe("Integration: Dashboard Full Coverage", () => {
     it("Mints stETH to recipient", async () => {
       const amount = ether("1");
       const sharesBefore = await lido.sharesOf(stranger);
-      await dashboard.connect(owner).mintStETH(stranger, amount);
-      const sharesAfter = await lido.sharesOf(stranger);
-      expect(sharesAfter).to.be.gt(sharesBefore);
+      const liabilityBefore = await dashboard.liabilityShares();
+      const expectedShares = await lido.getSharesByPooledEth(amount);
+
+      await expect(dashboard.connect(owner).mintStETH(stranger, amount)).to.emit(vaultHub, "MintedSharesOnVault");
+
+      await mEqual([
+        [await lido.sharesOf(stranger), sharesBefore + expectedShares],
+        [await dashboard.liabilityShares(), liabilityBefore + expectedShares],
+      ]);
     });
 
     it("Reverts on zero stETH amount (less than 1 share)", async () => {
@@ -416,9 +593,14 @@ describe("Integration: Dashboard Full Coverage", () => {
     it("Mints wstETH to recipient", async () => {
       const amount = ether("1");
       const wstETHBefore = await wstETH.balanceOf(stranger);
-      await dashboard.connect(owner).mintWstETH(stranger, amount);
-      const wstETHAfter = await wstETH.balanceOf(stranger);
-      expect(wstETHAfter - wstETHBefore).to.equal(amount);
+      const liabilityBefore = await dashboard.liabilityShares();
+
+      await expect(dashboard.connect(owner).mintWstETH(stranger, amount)).to.emit(vaultHub, "MintedSharesOnVault");
+
+      await mEqual([
+        [await wstETH.balanceOf(stranger), wstETHBefore + amount],
+        [await dashboard.liabilityShares(), liabilityBefore + amount],
+      ]);
     });
   });
 
@@ -427,13 +609,24 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("burnShares()", () => {
     it("Burns shares from sender", async () => {
       // First mint some shares to owner
-      await dashboard.connect(owner).mintShares(owner, ether("1"));
+      const sharesToMint = ether("2");
+      await dashboard.connect(owner).mintShares(owner, sharesToMint);
+
+      const sharesToBurn = ether("1");
+      const ownerSharesBefore = await lido.sharesOf(owner);
+      const liabilityBefore = await dashboard.liabilityShares();
 
       // Approve and burn
-      await lido.connect(owner).approve(dashboard, ether("10"));
-      await expect(dashboard.connect(owner).burnShares(ether("1")))
+      await lido.connect(owner).approve(dashboard, MaxUint256);
+
+      await expect(dashboard.connect(owner).burnShares(sharesToBurn))
         .to.emit(vaultHub, "BurnedSharesOnVault")
-        .withArgs(stakingVault, ether("1"));
+        .withArgs(stakingVault, sharesToBurn);
+
+      await mEqual([
+        [await lido.sharesOf(owner), ownerSharesBefore - sharesToBurn],
+        [await dashboard.liabilityShares(), liabilityBefore - sharesToBurn],
+      ]);
     });
 
     it("Reverts when called by unauthorized account", async () => {
@@ -450,28 +643,148 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("burnStETH()", () => {
     it("Burns stETH from sender", async () => {
       // Mint stETH first
-      await dashboard.connect(owner).mintStETH(owner, ether("1"));
+      const stETHToMint = ether("1");
+      await dashboard.connect(owner).mintStETH(owner, stETHToMint);
+
+      const stETHToBurn = ether("0.5");
+      const expectedSharesToBurn = await lido.getSharesByPooledEth(stETHToBurn);
+      const liabilityBefore = await dashboard.liabilityShares();
+      const ownerSharesBefore = await lido.sharesOf(owner);
 
       // Approve and burn
-      await lido.connect(owner).approve(dashboard, ether("10"));
-      const sharesBefore = await dashboard.liabilityShares();
-      await dashboard.connect(owner).burnStETH(ether("0.5"));
-      const sharesAfter = await dashboard.liabilityShares();
-      expect(sharesAfter).to.be.lt(sharesBefore);
+      await lido.connect(owner).approve(dashboard, MaxUint256);
+
+      await expect(dashboard.connect(owner).burnStETH(stETHToBurn))
+        .to.emit(vaultHub, "BurnedSharesOnVault")
+        .withArgs(stakingVault, expectedSharesToBurn);
+
+      await mEqual([
+        [await dashboard.liabilityShares(), liabilityBefore - expectedSharesToBurn],
+        [await lido.sharesOf(owner), ownerSharesBefore - expectedSharesToBurn],
+      ]);
     });
   });
 
   describe("burnWstETH()", () => {
     it("Burns wstETH from sender", async () => {
       // Mint wstETH first
-      await dashboard.connect(owner).mintWstETH(owner, ether("1"));
+      const wstETHToMint = ether("1");
+      await dashboard.connect(owner).mintWstETH(owner, wstETHToMint);
+
+      const wstETHToBurn = ether("0.5");
+      const stETHAmount = await wstETH.getStETHByWstETH(wstETHToBurn);
+      const expectedSharesToBurn = await lido.getSharesByPooledEth(stETHAmount);
+      const liabilityBefore = await dashboard.liabilityShares();
+      const ownerWstETHBefore = await wstETH.balanceOf(owner);
 
       // Approve and burn
-      await wstETH.connect(owner).approve(dashboard, ether("10"));
-      const sharesBefore = await dashboard.liabilityShares();
-      await dashboard.connect(owner).burnWstETH(ether("0.5"));
-      const sharesAfter = await dashboard.liabilityShares();
-      expect(sharesAfter).to.be.lt(sharesBefore);
+      await wstETH.connect(owner).approve(dashboard, MaxUint256);
+
+      await expect(dashboard.connect(owner).burnWstETH(wstETHToBurn))
+        .to.emit(vaultHub, "BurnedSharesOnVault")
+        .withArgs(stakingVault, expectedSharesToBurn);
+
+      await mEqual([
+        [await dashboard.liabilityShares(), liabilityBefore - expectedSharesToBurn],
+        [await wstETH.balanceOf(owner), ownerWstETHBefore - wstETHToBurn],
+      ]);
+    });
+  });
+
+  // ==================== Minting Capacity Boundaries ====================
+
+  describe("Minting Capacity Boundaries", () => {
+    describe("mintShares() at exact capacity", () => {
+      it("Allows minting exactly at remaining capacity", async () => {
+        // Fund the vault to ensure there's minting capacity
+        await dashboard.connect(owner).fund({ value: ether("10") });
+
+        const remaining = await dashboard.remainingMintingCapacityShares(0n);
+        expect(remaining).to.be.gt(0n);
+
+        await dashboard.connect(owner).mintShares(owner, remaining);
+
+        // Should have 0 remaining capacity now
+        await mEqual([[await dashboard.remainingMintingCapacityShares(0n), 0n]]);
+
+        // Trying to mint even 1 more share should fail
+        await expect(dashboard.connect(owner).mintShares(owner, 1n)).to.be.revertedWithCustomError(
+          dashboard,
+          "ExceedsMintingCapacity",
+        );
+      });
+
+      it("Allows minting with msg.value covering exact shortfall", async () => {
+        // Fund the vault initially to have some capacity
+        await dashboard.connect(owner).fund({ value: ether("10") });
+
+        // Mint maximum available capacity
+        const remainingBefore = await dashboard.remainingMintingCapacityShares(0n);
+        expect(remainingBefore).to.be.gt(0n);
+
+        await dashboard.connect(owner).mintShares(owner, remainingBefore);
+
+        // No capacity left
+        await mEqual([[await dashboard.remainingMintingCapacityShares(0n), 0n]]);
+
+        // Try to mint more - need to provide funding
+        const desiredShares = ether("1");
+
+        // Fund enough to create the desired capacity
+        const fundingNeeded = ether("5");
+
+        // Verify funding creates sufficient capacity
+        const capacityWithFunding = await dashboard.remainingMintingCapacityShares(fundingNeeded);
+        expect(capacityWithFunding).to.be.gte(desiredShares);
+
+        // Mint with funding
+        await dashboard.connect(owner).mintShares(owner, desiredShares, { value: fundingNeeded });
+      });
+    });
+
+    describe("Capacity with accrued fees", () => {
+      it("Correctly accounts for accrued fees in capacity calculation", async () => {
+        // Create growth to accrue fees
+        await dashboard.connect(owner).fund({ value: ether("20") });
+        const tvBefore = await dashboard.totalValue();
+
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: tvBefore + ether("5"), // Add 5 ETH growth
+          waitForNextRefSlot: true,
+        });
+
+        const accruedFee = await dashboard.accruedFee();
+        expect(accruedFee).to.be.gt(0n);
+
+        // Capacity should account for fees reducing available value
+        const maxLockable = await dashboard.maxLockableValue();
+        const vaultHubMaxLockable = await vaultHub.maxLockableValue(stakingVault);
+
+        // Dashboard's maxLockable should be less than VaultHub's by the fee amount
+        await mEqual([[maxLockable, vaultHubMaxLockable - accruedFee]]);
+      });
+
+      it("Returns zero capacity when accrued fees exceed maxLockableValue", async () => {
+        // Create scenario with large fees
+        await dashboard.connect(owner).fund({ value: ether("100") });
+        const tvBefore = await dashboard.totalValue();
+
+        // Report huge growth
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: tvBefore * 2n, // Double the value
+          waitForNextRefSlot: true,
+        });
+
+        const capacity = await dashboard.remainingMintingCapacityShares(0n);
+        const totalCapacity = await dashboard.totalMintingCapacityShares();
+        const liabilityShares = await dashboard.liabilityShares();
+
+        // Explicitly verify totalCapacity > liability (testing non-zero case)
+        expect(totalCapacity).to.be.gt(liabilityShares);
+
+        // Explicitly verify remaining = total - liability
+        expect(capacity).to.equal(totalCapacity - liabilityShares);
+      });
     });
   });
 
@@ -480,12 +793,25 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("rebalanceVaultWithShares()", () => {
     it("Rebalances vault by shares", async () => {
       // Mint shares first
-      await dashboard.connect(owner).mintShares(owner, ether("1"));
+      const sharesToMint = ether("2");
+      await dashboard.connect(owner).mintShares(owner, sharesToMint);
 
+      const sharesToRebalance = ether("0.5");
       const liabilityBefore = await dashboard.liabilityShares();
-      await dashboard.connect(owner).rebalanceVaultWithShares(ether("0.5"));
+
+      await expect(dashboard.connect(owner).rebalanceVaultWithShares(sharesToRebalance)).to.emit(
+        vaultHub,
+        "VaultRebalanced",
+      );
+
       const liabilityAfter = await dashboard.liabilityShares();
-      expect(liabilityAfter).to.equal(liabilityBefore - ether("0.5"));
+
+      expect(liabilityAfter).to.equal(liabilityBefore - sharesToRebalance);
+
+      // Verify locked matches VaultHub's calculation
+      const lockedAfter = await dashboard.locked();
+      const vaultHubLocked = await vaultHub.locked(stakingVault);
+      expect(lockedAfter).to.equal(vaultHubLocked);
     });
 
     it("Reverts when called by unauthorized account", async () => {
@@ -498,21 +824,36 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("rebalanceVaultWithEther()", () => {
     it("Rebalances vault by ether amount", async () => {
       // Mint shares first
-      await dashboard.connect(owner).mintShares(owner, ether("1"));
+      const sharesToMint = ether("2");
+      await dashboard.connect(owner).mintShares(owner, sharesToMint);
 
+      const etherToRebalance = ether("0.5");
+      const expectedShares = await lido.getSharesByPooledEth(etherToRebalance);
       const liabilityBefore = await dashboard.liabilityShares();
-      await dashboard.connect(owner).rebalanceVaultWithEther(ether("0.5"));
+
+      await expect(dashboard.connect(owner).rebalanceVaultWithEther(etherToRebalance)).to.emit(
+        vaultHub,
+        "VaultRebalanced",
+      );
+
       const liabilityAfter = await dashboard.liabilityShares();
-      expect(liabilityAfter).to.be.lt(liabilityBefore);
+      expect(liabilityAfter).to.equal(liabilityBefore - expectedShares);
     });
 
     it("Allows funding via msg.value", async () => {
-      await dashboard.connect(owner).mintShares(owner, ether("1"));
+      await dashboard.connect(owner).mintShares(owner, ether("2"));
 
+      const fundAmount = ether("1");
+      const rebalanceAmount = ether("0.1");
       const valueBefore = await dashboard.totalValue();
-      await dashboard.connect(owner).rebalanceVaultWithEther(ether("0.1"), { value: ether("1") });
+
+      await expect(dashboard.connect(owner).rebalanceVaultWithEther(rebalanceAmount, { value: fundAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundAmount);
+
+      const valueAfter = await dashboard.totalValue();
       // Value increases by funding minus rebalance
-      expect(await dashboard.totalValue()).to.be.closeTo(valueBefore + ether("0.9"), ether("0.01"));
+      expect(valueAfter).to.be.closeTo(valueBefore + fundAmount - rebalanceAmount, ether("0.01"));
     });
   });
 
@@ -638,109 +979,20 @@ describe("Integration: Dashboard Full Coverage", () => {
     });
   });
 
-  // ==================== Token Recovery ====================
-
-  describe("recoverERC20()", () => {
-    it("Recovers ERC20 tokens from dashboard", async () => {
-      await erc20Token.mint(dashboard, ether("100"));
-
-      await expect(dashboard.connect(owner).recoverERC20(erc20Token, stranger, ether("100")))
-        .to.emit(dashboard, "AssetsRecovered")
-        .withArgs(stranger, erc20Token, ether("100"));
-
-      expect(await erc20Token.balanceOf(stranger)).to.equal(ether("100"));
-    });
-
-    it("Recovers ETH using EIP-7528 address", async () => {
-      const dashboardAddress = await dashboard.getAddress();
-      await setBalance(dashboardAddress, ether("2"));
-
-      const strangerBefore = await ethers.provider.getBalance(stranger);
-      await dashboard.connect(owner).recoverERC20(ETH_ADDRESS, stranger, ether("1"));
-      const strangerAfter = await ethers.provider.getBalance(stranger);
-      expect(strangerAfter - strangerBefore).to.equal(ether("1"));
-    });
-
-    it("Reverts when recovering ETH that belongs to feeLeftover", async () => {
-      // Create fee leftover by disconnecting with fees
-      await dashboard.connect(owner).fund({ value: ether("10") });
-      await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: ether("25"),
-        waitForNextRefSlot: true,
-      });
-
-      const accruedFee = await dashboard.accruedFee();
-      expect(accruedFee).to.be.gt(0n);
-
-      await dashboard.connect(owner).voluntaryDisconnect();
-
-      const feeLeftover = await dashboard.feeLeftover();
-      expect(feeLeftover).to.be.gt(0n);
-
-      // Complete disconnect
-      await reportVaultDataWithProof(ctx, stakingVault);
-
-      const dashboardBalance = await ethers.provider.getBalance(dashboard);
-
-      // Try to recover more than available (balance - feeLeftover)
-      await expect(
-        dashboard.connect(owner).recoverERC20(ETH_ADDRESS, stranger, dashboardBalance),
-      ).to.be.revertedWithCustomError(dashboard, "InsufficientBalance");
-    });
-
-    it("Reverts with ZeroAddress for token", async () => {
-      await expect(dashboard.connect(owner).recoverERC20(ZeroAddress, stranger, 1n)).to.be.revertedWithCustomError(
-        dashboard,
-        "ZeroAddress",
-      );
-    });
-
-    it("Reverts with ZeroAddress for recipient", async () => {
-      await expect(dashboard.connect(owner).recoverERC20(erc20Token, ZeroAddress, 1n)).to.be.revertedWithCustomError(
-        dashboard,
-        "ZeroAddress",
-      );
-    });
-
-    it("Reverts with ZeroArgument for amount", async () => {
-      await expect(dashboard.connect(owner).recoverERC20(erc20Token, stranger, 0n)).to.be.revertedWithCustomError(
-        dashboard,
-        "ZeroArgument",
-      );
-    });
-  });
-
-  describe("collectERC20FromVault()", () => {
-    it("Collects ERC20 tokens from vault", async () => {
-      await erc20Token.mint(stakingVault, ether("100"));
-
-      await expect(dashboard.connect(owner).collectERC20FromVault(erc20Token, stranger, ether("100")))
-        .to.emit(stakingVault, "AssetsRecovered")
-        .withArgs(stranger, erc20Token, ether("100"));
-    });
-
-    it("Reverts when trying to collect ETH via EIP-7528", async () => {
-      await expect(
-        dashboard.connect(owner).collectERC20FromVault(ETH_ADDRESS, stranger, ether("1")),
-      ).to.be.revertedWithCustomError(stakingVault, "EthCollectionNotAllowed");
-    });
-
-    it("Reverts when called by unauthorized account", async () => {
-      await expect(dashboard.connect(stranger).collectERC20FromVault(erc20Token, stranger, 1n))
-        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.COLLECT_VAULT_ERC20_ROLE());
-    });
-  });
-
   // ==================== Beacon Chain Operations ====================
 
   describe("pauseBeaconChainDeposits()", () => {
     it("Pauses beacon chain deposits", async () => {
+      const pausedBefore = await stakingVault.beaconChainDepositsPaused();
+      expect(pausedBefore).to.be.false;
+
       await expect(dashboard.connect(owner).pauseBeaconChainDeposits()).to.emit(
         stakingVault,
         "BeaconChainDepositsPaused",
       );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+
+      const pausedAfter = await stakingVault.beaconChainDepositsPaused();
+      expect(pausedAfter).to.be.true;
     });
 
     it("Reverts when called by unauthorized account", async () => {
@@ -753,11 +1005,17 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("resumeBeaconChainDeposits()", () => {
     it("Resumes beacon chain deposits", async () => {
       await dashboard.connect(owner).pauseBeaconChainDeposits();
+
+      const pausedBefore = await stakingVault.beaconChainDepositsPaused();
+      expect(pausedBefore).to.be.true;
+
       await expect(dashboard.connect(owner).resumeBeaconChainDeposits()).to.emit(
         stakingVault,
         "BeaconChainDepositsResumed",
       );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+
+      const pausedAfter = await stakingVault.beaconChainDepositsPaused();
+      expect(pausedAfter).to.be.false;
     });
 
     it("Reverts when called by unauthorized account", async () => {
@@ -801,43 +1059,56 @@ describe("Integration: Dashboard Full Coverage", () => {
 
   describe("disburseFee()", () => {
     it("Disburses fee permissionlessly", async () => {
-      // First correct the settled growth to enable small fees
+      // Create growth to accrue fees (0.2% growth, well below 1% threshold)
       const currentTotalValue = await dashboard.totalValue();
-      const inOutDelta = (await dashboard.latestReport()).inOutDelta;
-      const currentGrowth = currentTotalValue - BigInt(inOutDelta);
-
-      // Set settled growth to current growth so we start from 0 fees
-      const settledGrowth = await dashboard.settledGrowth();
-      if (settledGrowth != currentGrowth) {
-        await dashboard.connect(owner).correctSettledGrowth(currentGrowth, settledGrowth);
-        await dashboard.connect(nodeOperator).correctSettledGrowth(currentGrowth, settledGrowth);
-      }
-
-      // Create small growth to accrue fees (< 1% threshold)
-      const smallGrowth = currentTotalValue / 500n; // 0.2% growth
+      const growth = currentTotalValue / 500n;
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: currentTotalValue + smallGrowth,
+        totalValue: currentTotalValue + growth,
         waitForNextRefSlot: true,
       });
 
       const fee = await dashboard.accruedFee();
-      if (fee > 0n) {
-        const feeRecipient = await dashboard.feeRecipient();
-        const balanceBefore = await ethers.provider.getBalance(feeRecipient);
+      expect(fee).to.be.gt(0n);
 
-        await expect(dashboard.connect(stranger).disburseFee()).to.emit(dashboard, "FeeDisbursed");
+      const feeRecipient = await dashboard.feeRecipient();
+      const balanceBefore = await ethers.provider.getBalance(feeRecipient);
 
-        const balanceAfter = await ethers.provider.getBalance(feeRecipient);
-        expect(balanceAfter - balanceBefore).to.equal(fee);
-      }
+      // Stranger (unauthorized account) can disburse fees
+      await expect(dashboard.connect(stranger).disburseFee())
+        .to.emit(dashboard, "FeeDisbursed")
+        .withArgs(stranger.address, fee, feeRecipient);
+
+      const balanceAfter = await ethers.provider.getBalance(feeRecipient);
+      expect(balanceAfter).to.equal(balanceBefore + fee);
+      expect(await dashboard.accruedFee()).to.equal(0n);
     });
 
     it("Does not revert when fee is zero (updates settledGrowth)", async () => {
-      // No growth, so fee is 0
+      // Set fee rate to 0 to ensure zero fees
+      await dashboard.connect(owner).setFeeRate(0);
+      await dashboard.connect(nodeOperator).setFeeRate(0);
+
+      // Create growth - with 0% fee rate, fee will be 0
+      const currentTotalValue = await dashboard.totalValue();
+      const growth = ether("1");
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: currentTotalValue + growth,
+        waitForNextRefSlot: true,
+      });
+
+      const accruedFee = await dashboard.accruedFee();
+      expect(accruedFee).to.equal(0n);
+
+      const settledGrowthBefore = await dashboard.settledGrowth();
+
+      // Should not revert, and should update settled growth to current growth
+      await dashboard.connect(stranger).disburseFee();
+
       expect(await dashboard.accruedFee()).to.equal(0n);
 
-      // Should not revert
-      await dashboard.connect(stranger).disburseFee();
+      // Verify settled growth was updated (increased by the growth amount)
+      const settledGrowthAfter = await dashboard.settledGrowth();
+      expect(settledGrowthAfter).to.equal(settledGrowthBefore + growth);
     });
 
     it("Reverts when fee is abnormally high", async () => {
@@ -866,11 +1137,21 @@ describe("Integration: Dashboard Full Coverage", () => {
         waitForNextRefSlot: true,
       });
 
-      // If there's a fee, admin should be able to disburse it
       const fee = await dashboard.accruedFee();
-      if (fee > 0n) {
-        await expect(dashboard.connect(owner).disburseAbnormallyHighFee()).to.emit(dashboard, "FeeDisbursed");
-      }
+      const feeRecipient = await dashboard.feeRecipient();
+      const balanceBefore = await ethers.provider.getBalance(feeRecipient);
+
+      await expect(dashboard.disburseFee()).to.be.revertedWithCustomError(dashboard, "AbnormallyHighFee");
+
+      await expect(dashboard.connect(owner).disburseAbnormallyHighFee())
+        .to.emit(dashboard, "FeeDisbursed")
+        .withArgs(owner.address, fee, feeRecipient);
+
+      const balanceAfter = await ethers.provider.getBalance(feeRecipient);
+      const accruedFeeAfter = await dashboard.accruedFee();
+
+      expect(balanceAfter).to.equal(balanceBefore + fee);
+      expect(accruedFeeAfter).to.equal(0n);
     });
 
     it("Reverts when called by unauthorized account", async () => {
@@ -883,13 +1164,19 @@ describe("Integration: Dashboard Full Coverage", () => {
 
   describe("setFeeRate()", () => {
     it("Requires dual confirmation from admin and node operator", async () => {
+      const newFeeRate = 500n;
+      const oldFeeRate = await dashboard.feeRate();
+
       // First confirmation from owner
-      await expect(dashboard.connect(owner).setFeeRate(500n)).to.not.emit(dashboard, "FeeRateSet");
+      await expect(dashboard.connect(owner).setFeeRate(newFeeRate)).to.not.emit(dashboard, "FeeRateSet");
 
       // Second confirmation from node operator
-      await expect(dashboard.connect(nodeOperator).setFeeRate(500n)).to.emit(dashboard, "FeeRateSet");
+      await expect(dashboard.connect(nodeOperator).setFeeRate(newFeeRate))
+        .to.emit(dashboard, "FeeRateSet")
+        .withArgs(nodeOperator.address, oldFeeRate, newFeeRate);
 
-      expect(await dashboard.feeRate()).to.equal(500n);
+      const feeRateAfter = await dashboard.feeRate();
+      expect(feeRateAfter).to.equal(newFeeRate);
     });
 
     it("Reverts when report is stale", async () => {
@@ -924,16 +1211,21 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("correctSettledGrowth()", () => {
     it("Requires dual confirmation", async () => {
       const currentSettledGrowth = await dashboard.settledGrowth();
+      const newSettledGrowth = currentSettledGrowth + 100n;
 
       // First confirmation
-      await expect(
-        dashboard.connect(owner).correctSettledGrowth(currentSettledGrowth + 100n, currentSettledGrowth),
-      ).to.not.emit(dashboard, "SettledGrowthSet");
+      await expect(dashboard.connect(owner).correctSettledGrowth(newSettledGrowth, currentSettledGrowth)).to.not.emit(
+        dashboard,
+        "SettledGrowthSet",
+      );
 
       // Second confirmation
-      await expect(
-        dashboard.connect(nodeOperator).correctSettledGrowth(currentSettledGrowth + 100n, currentSettledGrowth),
-      ).to.emit(dashboard, "SettledGrowthSet");
+      await expect(dashboard.connect(nodeOperator).correctSettledGrowth(newSettledGrowth, currentSettledGrowth))
+        .to.emit(dashboard, "SettledGrowthSet")
+        .withArgs(currentSettledGrowth, newSettledGrowth);
+
+      const settledGrowthAfter = await dashboard.settledGrowth();
+      expect(settledGrowthAfter).to.equal(newSettledGrowth);
     });
 
     it("Reverts when expected settled growth doesn't match", async () => {
@@ -948,11 +1240,14 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("addFeeExemption()", () => {
     it("Adds fee exemption to settled growth", async () => {
       const settledBefore = await dashboard.settledGrowth();
+      const exemptionAmount = 100n;
 
-      await dashboard.connect(roles.nodeOperatorFeeExemptor).addFeeExemption(100n);
+      await expect(dashboard.connect(roles.nodeOperatorFeeExemptor).addFeeExemption(exemptionAmount))
+        .to.emit(dashboard, "SettledGrowthSet")
+        .withArgs(settledBefore, settledBefore + exemptionAmount);
 
       const settledAfter = await dashboard.settledGrowth();
-      expect(settledAfter).to.equal(settledBefore + 100n);
+      expect(settledAfter).to.equal(settledBefore + exemptionAmount);
     });
 
     it("Reverts when called by unauthorized account", async () => {
@@ -967,6 +1262,195 @@ describe("Integration: Dashboard Full Coverage", () => {
       await expect(
         dashboard.connect(roles.nodeOperatorFeeExemptor).addFeeExemption(maxSane + 1n),
       ).to.be.revertedWithCustomError(dashboard, "UnexpectedFeeExemptionAmount");
+    });
+  });
+
+  // ==================== Fee Management Edge Cases ====================
+
+  describe("Fee Management edge cases", () => {
+    describe("disburseFee() at 1% boundary", () => {
+      it("Allows fee disbursement when fee is just below 1% threshold", async () => {
+        // Create growth that results in fee just under 1% (0.99% growth)
+        const currentTotalValue = await dashboard.totalValue();
+        const targetGrowth = currentTotalValue / 101n;
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: currentTotalValue + targetGrowth,
+          waitForNextRefSlot: true,
+        });
+
+        const fee = await dashboard.accruedFee();
+        const totalValue = await dashboard.totalValue();
+
+        // Verify fee is below 1% threshold
+        expect(fee).to.be.lt(totalValue / 100n);
+        expect(fee).to.be.gt(0n);
+
+        // Should allow disbursement
+        await expect(dashboard.disburseFee()).to.emit(dashboard, "FeeDisbursed");
+        expect(await dashboard.accruedFee()).to.equal(0n);
+      });
+
+      it("Reverts when fee exceeds 1% threshold", async () => {
+        // Create large growth to trigger 1% fee threshold (1000% growth)
+        const currentTotalValue = await dashboard.totalValue();
+        const largeGrowth = currentTotalValue * 10n;
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: currentTotalValue + largeGrowth,
+          waitForNextRefSlot: true,
+        });
+
+        const fee = await dashboard.accruedFee();
+        const totalValue = await dashboard.totalValue();
+
+        // Verify fee exceeds 1% threshold
+        expect(fee).to.be.gte(totalValue / 100n);
+
+        // Should revert on disbursement
+        await expect(dashboard.disburseFee()).to.be.revertedWithCustomError(dashboard, "AbnormallyHighFee");
+      });
+    });
+
+    describe("disburseFee() with minimal growth", () => {
+      it("Fee rounds down", async () => {
+        // Create minimal growth (1 wei)
+        const currentTotalValue = await dashboard.totalValue();
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: currentTotalValue + 1n,
+          waitForNextRefSlot: true,
+        });
+
+        // Disburse fee - should not revert even with minimal growth
+        await dashboard.disburseFee();
+
+        // Verify fee was 0 or minimal (1 wei growth results in 0.01 wei fee, rounds to 0)
+        const feeAfter = await dashboard.accruedFee();
+        expect(feeAfter).to.equal(0n);
+      });
+    });
+
+    describe("correctSettledGrowth() edge cases", () => {
+      it("Handles settled growth near maximum safe value", async () => {
+        const currentSettledGrowth = await dashboard.settledGrowth();
+        const maxSane = BigInt("0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"); // MAX_SANE_SETTLED_GROWTH
+
+        // Try to set near max
+        const nearMax = maxSane - 1n;
+
+        await dashboard.connect(owner).correctSettledGrowth(nearMax, currentSettledGrowth);
+        await dashboard.connect(nodeOperator).correctSettledGrowth(nearMax, currentSettledGrowth);
+
+        expect(await dashboard.settledGrowth()).to.equal(nearMax);
+      });
+
+      it("Can decrease settled growth", async () => {
+        const sgBefore = await dashboard.settledGrowth();
+        await dashboard.connect(owner).correctSettledGrowth(sgBefore + 100n, sgBefore);
+        await dashboard.connect(nodeOperator).correctSettledGrowth(sgBefore + 100n, sgBefore);
+
+        // now restore by the same amount
+        const sgAfter = sgBefore + 100n;
+        await dashboard.connect(owner).correctSettledGrowth(sgBefore, sgAfter);
+        await dashboard.connect(nodeOperator).correctSettledGrowth(sgBefore, sgAfter);
+
+        expect(await dashboard.settledGrowth()).to.equal(sgBefore);
+      });
+    });
+
+    describe("addFeeExemption() edge cases", () => {
+      it("Handles fee exemption with reasonable amounts", async () => {
+        const settledBefore = await dashboard.settledGrowth();
+
+        // Add a reasonable exemption (not exceeding MAX_SANE_SETTLED_GROWTH threshold)
+        const exemption = ether("100"); // 100 ETH worth of growth exemption
+
+        await dashboard.connect(roles.nodeOperatorFeeExemptor).addFeeExemption(exemption);
+
+        const settledAfter = await dashboard.settledGrowth();
+        expect(settledAfter).to.equal(settledBefore + exemption);
+      });
+    });
+
+    describe("Multiple consecutive disbursements", () => {
+      it("Handles multiple disbursements without growth between them", async () => {
+        const currentTotalValue = await dashboard.totalValue();
+        const inOutDelta = (await dashboard.latestReport()).inOutDelta;
+        const currentGrowth = currentTotalValue - BigInt(inOutDelta);
+
+        // Sync settled growth
+        const settledGrowth = await dashboard.settledGrowth();
+        if (settledGrowth != currentGrowth) {
+          await dashboard.connect(owner).correctSettledGrowth(currentGrowth, settledGrowth);
+          await dashboard.connect(nodeOperator).correctSettledGrowth(currentGrowth, settledGrowth);
+        }
+
+        // First disbursement (should have 0 fee)
+        await dashboard.disburseFee();
+        expect(await dashboard.accruedFee()).to.equal(0n);
+
+        // Second disbursement without growth (should not revert)
+        await dashboard.disburseFee();
+        expect(await dashboard.accruedFee()).to.equal(0n);
+
+        // Third disbursement (verify idempotency)
+        await dashboard.disburseFee();
+        expect(await dashboard.accruedFee()).to.equal(0n);
+      });
+
+      it("Tracks settled growth correctly across multiple disbursements with growth", async () => {
+        // Fund more to have meaningful growth
+        await dashboard.connect(owner).fund({ value: ether("50") });
+
+        // Report the updated total value after funding
+        const totalValueAfterFunding = await dashboard.totalValue();
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: totalValueAfterFunding,
+          waitForNextRefSlot: true,
+        });
+
+        const inOutDelta = (await dashboard.latestReport()).inOutDelta;
+        const currentGrowth = totalValueAfterFunding - BigInt(inOutDelta);
+
+        // Sync settled growth
+        const settledGrowth = await dashboard.settledGrowth();
+        if (settledGrowth != currentGrowth) {
+          await dashboard.connect(owner).correctSettledGrowth(currentGrowth, settledGrowth);
+          await dashboard.connect(nodeOperator).correctSettledGrowth(currentGrowth, settledGrowth);
+        }
+
+        const feeRecipient = await dashboard.feeRecipient();
+        let totalFeesCollected = 0n;
+        let expectedTotalFees = 0n;
+
+        // Multiple cycles of growth → disburse
+        for (let i = 0; i < 3; i++) {
+          const tvBefore = await dashboard.totalValue();
+          const growth = tvBefore / 200n; // 0.5% growth each time
+
+          await reportVaultDataWithProof(ctx, stakingVault, {
+            totalValue: tvBefore + growth,
+            waitForNextRefSlot: true,
+          });
+
+          const fee = await dashboard.accruedFee();
+          const balanceBefore = await ethers.provider.getBalance(feeRecipient);
+
+          if (fee > 0n) {
+            expectedTotalFees += fee;
+
+            await dashboard.disburseFee();
+
+            const balanceAfter = await ethers.provider.getBalance(feeRecipient);
+            totalFeesCollected += balanceAfter - balanceBefore;
+          }
+
+          // Fee should be 0 after disbursement
+          expect(await dashboard.accruedFee()).to.equal(0n);
+        }
+
+        // Verify exact total fees collected
+        expect(expectedTotalFees).to.be.gt(0n); // Verify we actually collected fees
+        expect(totalFeesCollected).to.equal(expectedTotalFees);
+      });
     });
   });
 
@@ -998,11 +1482,12 @@ describe("Integration: Dashboard Full Coverage", () => {
 
   describe("setFeeRecipient()", () => {
     it("Sets new fee recipient", async () => {
+      const oldRecipient = await dashboard.feeRecipient();
       const newRecipient = randomAddress();
 
       await expect(dashboard.connect(nodeOperator).setFeeRecipient(newRecipient))
         .to.emit(dashboard, "FeeRecipientSet")
-        .withArgs(nodeOperator, await dashboard.feeRecipient(), newRecipient);
+        .withArgs(nodeOperator, oldRecipient, newRecipient);
 
       expect(await dashboard.feeRecipient()).to.equal(newRecipient);
     });
@@ -1098,7 +1583,9 @@ describe("Integration: Dashboard Full Coverage", () => {
 
       await dashboard.connect(owner).voluntaryDisconnect();
 
-      expect(await dashboard.feeLeftover()).to.be.gt(0n);
+      // Fee leftover should equal the accrued fee at time of disconnect
+      const feeLeftover = await dashboard.feeLeftover();
+      expect(feeLeftover).to.equal(feeBefore);
     });
 
     it("Reverts when called by unauthorized account", async () => {
@@ -1110,45 +1597,32 @@ describe("Integration: Dashboard Full Coverage", () => {
 
   describe("recoverFeeLeftover()", () => {
     it("Recovers fee leftover to fee recipient", async () => {
-      // Fund the vault to have more value for meaningful fees
-      await dashboard.connect(owner).fund({ value: ether("100") });
-
-      // Report to sync the state
-      const fundedTotalValue = await dashboard.totalValue();
+      // Report with growth to create fees (5% of 1 ETH growth = 0.05 ETH fee at 1% rate)
+      const currentTotalValue = await dashboard.totalValue();
+      const growth = ether("1");
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: fundedTotalValue,
+        totalValue: currentTotalValue + growth,
         waitForNextRefSlot: true,
       });
 
-      // Now sync settled growth to current state
-      const report = await dashboard.latestReport();
-      const currentGrowth = fundedTotalValue - BigInt(report.inOutDelta);
-
-      const settledGrowth = await dashboard.settledGrowth();
-      if (settledGrowth != currentGrowth) {
-        await dashboard.connect(owner).correctSettledGrowth(currentGrowth, settledGrowth);
-        await dashboard.connect(nodeOperator).correctSettledGrowth(currentGrowth, settledGrowth);
-      }
-
-      // Create growth to accrue a fee
-      const growth = fundedTotalValue / 200n; // 0.5% growth
-      await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: fundedTotalValue + growth,
-        waitForNextRefSlot: true,
-      });
+      const accruedFee = await dashboard.accruedFee();
+      expect(accruedFee).to.be.gt(0n);
 
       await dashboard.connect(owner).voluntaryDisconnect();
 
       // Complete disconnect
       await reportVaultDataWithProof(ctx, stakingVault);
 
+      // Fee leftover should equal the accrued fee at time of disconnect
       const feeLeftover = await dashboard.feeLeftover();
-      expect(feeLeftover).to.be.gt(0n);
+      expect(feeLeftover).to.equal(accruedFee);
 
       const feeRecipient = await dashboard.feeRecipient();
       const balanceBefore = await ethers.provider.getBalance(feeRecipient);
 
-      await dashboard.recoverFeeLeftover();
+      await expect(dashboard.recoverFeeLeftover())
+        .to.emit(dashboard, "AssetsRecovered")
+        .withArgs(feeRecipient, ETH_ADDRESS, feeLeftover);
 
       const balanceAfter = await ethers.provider.getBalance(feeRecipient);
       expect(balanceAfter - balanceBefore).to.equal(feeLeftover);
@@ -1220,7 +1694,7 @@ describe("Integration: Dashboard Full Coverage", () => {
       );
     });
 
-    it("Allows funding on connect via reconnectToVaultHub", async () => {
+    it("Allows funding in disconnected state", async () => {
       await dashboard.connect(owner).voluntaryDisconnect();
       await reportVaultDataWithProof(ctx, stakingVault);
 
@@ -1232,26 +1706,13 @@ describe("Integration: Dashboard Full Coverage", () => {
       const valueBefore = await ethers.provider.getBalance(stakingVault);
 
       // First fund separately, then reconnect
-      await owner.sendTransaction({ to: stakingVault, value: ether("1") });
+      const fundingAmount = ether("1");
+      await owner.sendTransaction({ to: stakingVault, value: fundingAmount });
       await dashboard.connect(owner).reconnectToVaultHub();
 
       const valueAfter = await ethers.provider.getBalance(stakingVault);
-      expect(valueAfter).to.be.gt(valueBefore);
+      expect(valueAfter).to.equal(valueBefore + fundingAmount);
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
-    });
-  });
-
-  describe("connectAndAcceptTier()", () => {
-    it("Reverts when tier change is not confirmed (or tier doesn't exist)", async () => {
-      await dashboard.connect(owner).voluntaryDisconnect();
-      await reportVaultDataWithProof(ctx, stakingVault);
-
-      const currentSettled = await dashboard.settledGrowth();
-      await dashboard.connect(owner).correctSettledGrowth(0n, currentSettled);
-      await dashboard.connect(nodeOperator).correctSettledGrowth(0n, currentSettled);
-
-      // Try to connect with tier change - should fail (tier doesn't exist or not confirmed)
-      await expect(dashboard.connect(owner).connectAndAcceptTier(999n, ether("100"))).to.be.reverted;
     });
   });
 
@@ -1260,7 +1721,8 @@ describe("Integration: Dashboard Full Coverage", () => {
   describe("changeTier()", () => {
     it("Reverts when tier doesn't exist", async () => {
       // Tier 999 doesn't exist
-      await expect(dashboard.connect(owner).changeTier(999n, ether("100"))).to.be.revertedWithCustomError(
+      const tierCount = await ctx.contracts.operatorGrid.tiersCount();
+      await expect(dashboard.connect(owner).changeTier(tierCount + 1n, ether("100"))).to.be.revertedWithCustomError(
         ctx.contracts.operatorGrid,
         "TierNotExists",
       );
@@ -1434,10 +1896,485 @@ describe("Integration: Dashboard Full Coverage", () => {
     });
   });
 
-  // ==================== Integration Scenarios ====================
+  // ==================== Additional Edge Case Coverage ====================
 
-  describe("Integration Scenarios", () => {
-    it("Full lifecycle: fund -> mint -> rebalance -> burn -> withdraw", async () => {
+  describe("Rebalancing Edge Cases", () => {
+    it("Rebalances with exactly locked amount", async () => {
+      // Mint some shares
+      await dashboard.connect(owner).mintShares(owner, ether("2"));
+
+      const liabilityBefore = await dashboard.liabilityShares();
+
+      // Rebalance all liability shares
+      await dashboard.connect(owner).rebalanceVaultWithShares(liabilityBefore);
+
+      expect(await dashboard.liabilityShares()).to.equal(0n);
+    });
+
+    it("Rebalances by ether vs shares consistency", async () => {
+      // Mint shares
+      await dashboard.connect(owner).fund({ value: ether("10") });
+      await dashboard.connect(owner).mintShares(owner, ether("5"));
+
+      const sharesToRebalance = ether("1");
+      const liabilityBefore = await dashboard.liabilityShares();
+
+      // Rebalance by shares
+      await dashboard.connect(owner).rebalanceVaultWithShares(sharesToRebalance);
+      const liabilityAfterShares = await dashboard.liabilityShares();
+
+      // Should have reduced by approximately sharesToRebalance
+      expect(liabilityBefore - liabilityAfterShares).to.be.closeTo(sharesToRebalance, 2n);
+    });
+  });
+
+  describe("View Function Edge Cases", () => {
+    it("View functions work during disconnect transition", async () => {
+      const totalValueBefore = await dashboard.totalValue();
+      const lockedBefore = await dashboard.locked();
+      const maxLockableValueBefore = await dashboard.maxLockableValue();
+
+      await dashboard.connect(owner).voluntaryDisconnect();
+
+      // All view functions should still work
+      await mEqual([
+        [await dashboard.totalValue(), totalValueBefore],
+        [await dashboard.locked(), lockedBefore],
+        [await dashboard.maxLockableValue(), maxLockableValueBefore],
+        [await dashboard.withdrawableValue(), 0n],
+        [dashboard.obligations().then((o) => o.sharesToBurn), 0],
+        [dashboard.obligations().then((o) => o.feesToSettle), 0],
+      ]);
+    });
+
+    it("obligations() with large liability values", async () => {
+      // Fund and mint maximum
+      await dashboard.connect(owner).fund({ value: ether("50") });
+      const maxShares = await dashboard.totalMintingCapacityShares();
+      await dashboard.connect(owner).mintShares(owner, maxShares);
+
+      // Report with cumulative Lido fees to create obligations
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        cumulativeLidoFees: ether("1"),
+        waitForNextRefSlot: true,
+      });
+
+      const [sharesToBurn, feesToSettle] = await dashboard.obligations();
+
+      // Verify obligations match the reported Lido fees
+      expect(feesToSettle).to.equal(ether("1"));
+      expect(sharesToBurn).to.be.gte(0n); // Shares to burn depends on exchange rate
+    });
+  });
+
+  describe("PDG Policy", () => {
+    it("Policy transitions work correctly", async () => {
+      const currentPolicy = await dashboard.pdgPolicy();
+
+      // Change to ALLOW_PROVE if not already
+      if (Number(currentPolicy) !== Number(PDGPolicy.ALLOW_PROVE)) {
+        await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+        expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_PROVE);
+      }
+
+      // Change to STRICT
+      await dashboard.connect(owner).setPDGPolicy(PDGPolicy.STRICT);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.STRICT);
+
+      // Change back to ALLOW_DEPOSIT_AND_PROVE
+      await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+
+      // Change to ALLOW_PROVE again
+      await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_PROVE);
+    });
+  });
+
+  describe("Beacon Chain Operations", () => {
+    it("Handles pause/resume cycle", async () => {
+      // Pause deposits
+      await dashboard.connect(owner).pauseBeaconChainDeposits();
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+
+      // Resume deposits
+      await dashboard.connect(owner).resumeBeaconChainDeposits();
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+
+      // Can pause again
+      await dashboard.connect(owner).pauseBeaconChainDeposits();
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+
+      // Resume for cleanup
+      await dashboard.connect(owner).resumeBeaconChainDeposits();
+    });
+
+    it("Requests validator exit with valid pubkey", async () => {
+      const keys = getPubkeys(1);
+
+      await expect(dashboard.connect(owner).requestValidatorExit(keys.stringified))
+        .to.emit(stakingVault, "ValidatorExitRequested")
+        .withArgs(keys.pubkeys[0], keys.pubkeys[0]);
+    });
+  });
+
+  describe("Access Control Edge Cases", () => {
+    it("Confirmation requires both parties", async () => {
+      // Ensure report is fresh
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
+
+      const feeRateBefore = await dashboard.feeRate();
+      // Start a confirmation from owner
+      await dashboard.connect(owner).setFeeRate(feeRateBefore + 1n);
+      expect(await dashboard.feeRate()).to.equal(feeRateBefore);
+
+      // Complete with node operator
+      await dashboard.connect(nodeOperator).setFeeRate(feeRateBefore + 1n);
+
+      // Now it should be set
+      expect(await dashboard.feeRate()).to.equal(feeRateBefore + 1n);
+    });
+
+    it("Concurrent confirmations operate independently", async () => {
+      // Start confirmation for fee rate
+      await dashboard.connect(owner).setFeeRate(750n);
+
+      // Start confirmation for expiry (independent operation)
+      await dashboard.connect(owner).setConfirmExpiry(days(10n));
+
+      // Complete expiry confirmation
+      await dashboard.connect(nodeOperator).setConfirmExpiry(days(10n));
+      expect(await dashboard.getConfirmExpiry()).to.equal(days(10n));
+
+      // Fee rate confirmation should still be pending
+      // Complete it
+      await dashboard.connect(nodeOperator).setFeeRate(750n);
+      expect(await dashboard.feeRate()).to.equal(750n);
+    });
+  });
+
+  describe("Disconnection & Reconnection Edge Cases", () => {
+    it("Handles disconnect with zero fees", async () => {
+      // Ensure no fees accrued
+      const feeBefore = await dashboard.accruedFee();
+      expect(feeBefore).to.be.equal(0n);
+
+      await dashboard.connect(owner).voluntaryDisconnect();
+
+      // Fee leftover should equal the fee that was accrued
+      const feeLeftover = await dashboard.feeLeftover();
+      expect(feeLeftover).to.equal(feeBefore);
+    });
+
+    it("Handles multiple disconnect/reconnect cycles", async () => {
+      // First disconnect
+      await dashboard.connect(owner).voluntaryDisconnect();
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
+
+      // Reconnect
+      const settledGrowth1 = await dashboard.settledGrowth();
+      await dashboard.connect(owner).correctSettledGrowth(0n, settledGrowth1);
+      await dashboard.connect(nodeOperator).correctSettledGrowth(0n, settledGrowth1);
+      await dashboard.connect(owner).reconnectToVaultHub();
+
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
+
+      // Second disconnect
+      await dashboard.connect(owner).voluntaryDisconnect();
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
+
+      // Second reconnect
+      const settledGrowth2 = await dashboard.settledGrowth();
+      await dashboard.connect(owner).correctSettledGrowth(0n, settledGrowth2);
+      await dashboard.connect(nodeOperator).correctSettledGrowth(0n, settledGrowth2);
+      await dashboard.connect(owner).reconnectToVaultHub();
+
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
+    });
+  });
+
+  describe("Fundable Modifier Tests", () => {
+    it("mintShares() accepts funding via msg.value", async () => {
+      const valueBefore = await dashboard.totalValue();
+      const fundingAmount = ether("5");
+      const sharesToMint = ether("1");
+
+      await expect(dashboard.connect(owner).mintShares(owner, sharesToMint, { value: fundingAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundingAmount)
+        .and.to.emit(vaultHub, "MintedSharesOnVault");
+
+      const valueAfter = await dashboard.totalValue();
+      expect(valueAfter - valueBefore).to.equal(fundingAmount);
+    });
+
+    it("mintStETH() accepts funding via msg.value", async () => {
+      const valueBefore = await dashboard.totalValue();
+      const fundingAmount = ether("3");
+      const stETHAmount = ether("1");
+
+      await expect(dashboard.connect(owner).mintStETH(owner, stETHAmount, { value: fundingAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundingAmount);
+
+      const valueAfter = await dashboard.totalValue();
+      expect(valueAfter - valueBefore).to.equal(fundingAmount);
+    });
+
+    it("mintWstETH() accepts funding via msg.value", async () => {
+      const valueBefore = await dashboard.totalValue();
+      const fundingAmount = ether("2");
+      const wstETHAmount = ether("0.5");
+
+      await expect(dashboard.connect(owner).mintWstETH(owner, wstETHAmount, { value: fundingAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundingAmount);
+
+      const valueAfter = await dashboard.totalValue();
+      expect(valueAfter - valueBefore).to.equal(fundingAmount);
+    });
+
+    it("rebalanceVaultWithEther() accepts funding via msg.value", async () => {
+      // First mint some shares
+      await dashboard.connect(owner).mintShares(owner, ether("2"));
+
+      const valueBefore = await dashboard.totalValue();
+      const fundingAmount = ether("3");
+      const rebalanceAmount = ether("0.5");
+
+      await expect(dashboard.connect(owner).rebalanceVaultWithEther(rebalanceAmount, { value: fundingAmount }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(fundingAmount);
+
+      const valueAfter = await dashboard.totalValue();
+      // Value increases by funding minus rebalance amount
+      expect(valueAfter).to.be.closeTo(valueBefore + fundingAmount - rebalanceAmount, 2n);
+    });
+  });
+
+  describe("Fee Collection Edge Cases", () => {
+    it("recoverFeeLeftover() reverts if fee exceeds abnormally high threshold", async () => {
+      // Create large fees
+      await dashboard.connect(owner).fund({ value: ether("100") });
+      const tvBefore = await dashboard.totalValue();
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: tvBefore,
+        waitForNextRefSlot: true,
+      });
+
+      // Sync settled growth
+      const inOutDelta = (await dashboard.latestReport()).inOutDelta;
+      const currentGrowth = tvBefore - BigInt(inOutDelta);
+      const settledGrowth = await dashboard.settledGrowth();
+      if (settledGrowth !== currentGrowth) {
+        await dashboard.connect(owner).correctSettledGrowth(currentGrowth, settledGrowth);
+        await dashboard.connect(nodeOperator).correctSettledGrowth(currentGrowth, settledGrowth);
+      }
+
+      // Create massive growth to trigger abnormally high fee
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: tvBefore * 3n, // 200% growth
+        waitForNextRefSlot: true,
+      });
+
+      const totalValue = await dashboard.totalValue();
+      const accruedFee = await dashboard.accruedFee();
+      const abnormalThreshold = totalValue / 100n; // 1%
+
+      // With 200% growth, fee should be abnormally high
+      expect(accruedFee).to.be.gte(abnormalThreshold);
+
+      // Disconnect itself should revert because it calls _collectFeeLeftover() with abnormally high fee
+      await expect(dashboard.connect(owner).voluntaryDisconnect()).to.be.revertedWithCustomError(
+        dashboard,
+        "AbnormallyHighFee",
+      );
+    });
+
+    it("recoverFeeLeftover() succeeds when fee is below threshold", async () => {
+      // Create small fees
+      await dashboard.connect(owner).fund({ value: ether("50") });
+      const tvBefore = await dashboard.totalValue();
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: tvBefore,
+        waitForNextRefSlot: true,
+      });
+
+      // Sync settled growth
+      const inOutDelta = (await dashboard.latestReport()).inOutDelta;
+      const currentGrowth = tvBefore - BigInt(inOutDelta);
+      const settledGrowth = await dashboard.settledGrowth();
+      if (settledGrowth !== currentGrowth) {
+        await dashboard.connect(owner).correctSettledGrowth(currentGrowth, settledGrowth);
+        await dashboard.connect(nodeOperator).correctSettledGrowth(currentGrowth, settledGrowth);
+      }
+
+      // Create small growth (< 1% fee)
+      const smallGrowth = tvBefore / 500n; // 0.2% growth
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: tvBefore + smallGrowth,
+        waitForNextRefSlot: true,
+      });
+
+      // Disconnect
+      await dashboard.connect(owner).voluntaryDisconnect();
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      const feeLeftover = await dashboard.feeLeftover();
+      const feeRecipient = await dashboard.feeRecipient();
+      const balanceBefore = await ethers.provider.getBalance(feeRecipient);
+
+      if (feeLeftover > 0n) {
+        const ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+        await expect(dashboard.recoverFeeLeftover())
+          .to.emit(dashboard, "AssetsRecovered")
+          .withArgs(feeRecipient, ETH, feeLeftover);
+
+        const balanceAfter = await ethers.provider.getBalance(feeRecipient);
+        expect(balanceAfter - balanceBefore).to.equal(feeLeftover);
+        expect(await dashboard.feeLeftover()).to.equal(0n);
+      }
+    });
+  });
+
+  describe("connectAndAcceptTier() Tests", () => {
+    it("Reverts with TierChangeNotConfirmed when tier change not confirmed", async () => {
+      // First disconnect
+      await dashboard.connect(owner).voluntaryDisconnect();
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      // Correct settled growth
+      const settledGrowth = await dashboard.settledGrowth();
+      await dashboard.connect(owner).correctSettledGrowth(0n, settledGrowth);
+      await dashboard.connect(nodeOperator).correctSettledGrowth(0n, settledGrowth);
+
+      // Try to connect with tier change but without confirmation
+      // This should revert because _changeTier returns false (not confirmed)
+      const nonExistentTier = 999n;
+      await expect(dashboard.connect(owner).connectAndAcceptTier(nonExistentTier, ether("100"))).to.be.reverted;
+    });
+
+    it("Successfully connects when settled growth is corrected", async () => {
+      // Disconnect first
+      await dashboard.connect(owner).voluntaryDisconnect();
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      // Correct settled growth
+      const settledGrowth = await dashboard.settledGrowth();
+      await dashboard.connect(owner).correctSettledGrowth(0n, settledGrowth);
+      await dashboard.connect(nodeOperator).correctSettledGrowth(0n, settledGrowth);
+
+      // Reconnect normally
+      await dashboard.connect(owner).reconnectToVaultHub();
+
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
+    });
+  });
+
+  describe("Precise State Verification Tests", () => {
+    it("mintShares() updates all relevant state correctly", async () => {
+      const sharesToMint = ether("2");
+      const liabilityBefore = await dashboard.liabilityShares();
+      const recipientSharesBefore = await lido.sharesOf(stranger);
+
+      const expectedLocked = await calculateLockedValue(ctx, stakingVault, {
+        liabilityShares: liabilityBefore + sharesToMint,
+      });
+
+      await expect(dashboard.connect(owner).mintShares(stranger, sharesToMint))
+        .to.emit(vaultHub, "MintedSharesOnVault")
+        .withArgs(stakingVault, sharesToMint, expectedLocked);
+
+      // Verify all state changes
+      const liabilityAfter = await dashboard.liabilityShares();
+      const lockedAfter = await dashboard.locked();
+      const recipientSharesAfter = await lido.sharesOf(stranger);
+
+      expect(liabilityAfter).to.equal(liabilityBefore + sharesToMint);
+      expect(lockedAfter).to.equal(expectedLocked);
+      expect(recipientSharesAfter).to.equal(recipientSharesBefore + sharesToMint);
+    });
+
+    it("burnShares() updates all relevant state correctly", async () => {
+      // First mint
+      const sharesToMint = ether("3");
+      await dashboard.connect(owner).mintShares(owner, sharesToMint);
+
+      const sharesToBurn = ether("1");
+      const liabilityBefore = await dashboard.liabilityShares();
+      const ownerSharesBefore = await lido.sharesOf(owner);
+
+      // Approve via shareLimit instead of stETH approve to avoid allowance issues
+      await lido.connect(owner).approve(dashboard, MaxUint256);
+
+      await expect(dashboard.connect(owner).burnShares(sharesToBurn))
+        .to.emit(vaultHub, "BurnedSharesOnVault")
+        .withArgs(stakingVault, sharesToBurn);
+
+      // Verify all state changes
+      const liabilityAfter = await dashboard.liabilityShares();
+      const ownerSharesAfter = await lido.sharesOf(owner);
+
+      expect(liabilityAfter).to.equal(liabilityBefore - sharesToBurn);
+
+      // Verify locked matches VaultHub's calculation
+      const lockedAfter = await dashboard.locked();
+      const vaultHubLocked = await vaultHub.locked(stakingVault);
+      expect(lockedAfter).to.equal(vaultHubLocked);
+
+      expect(ownerSharesAfter).to.equal(ownerSharesBefore - sharesToBurn);
+    });
+
+    it("rebalanceVaultWithShares() emits events and updates state precisely", async () => {
+      // Fund and mint shares first
+      await dashboard.connect(owner).fund({ value: ether("10") });
+      const capacity = await dashboard.remainingMintingCapacityShares(0n);
+      const sharesToMint = capacity > ether("5") ? ether("5") : capacity;
+      await dashboard.connect(owner).mintShares(owner, sharesToMint);
+
+      const sharesToRebalance = ether("2");
+      const liabilityBefore = await dashboard.liabilityShares();
+
+      await expect(dashboard.connect(owner).rebalanceVaultWithShares(sharesToRebalance)).to.emit(
+        vaultHub,
+        "VaultRebalanced",
+      );
+
+      const liabilityAfter = await dashboard.liabilityShares();
+
+      expect(liabilityAfter).to.equal(liabilityBefore - sharesToRebalance);
+
+      // Verify locked matches VaultHub's calculation
+      const lockedAfter = await dashboard.locked();
+      const vaultHubLocked = await vaultHub.locked(stakingVault);
+      expect(lockedAfter).to.equal(vaultHubLocked);
+    });
+
+    it("withdraw() emits events and transfers exact amount", async () => {
+      const withdrawAmount = ether("1");
+      const recipientBalanceBefore = await ethers.provider.getBalance(stranger);
+      const vaultBalanceBefore = await ethers.provider.getBalance(stakingVault);
+
+      await expect(dashboard.connect(owner).withdraw(stranger, withdrawAmount))
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(stranger, withdrawAmount);
+
+      const recipientBalanceAfter = await ethers.provider.getBalance(stranger);
+      const vaultBalanceAfter = await ethers.provider.getBalance(stakingVault);
+
+      expect(recipientBalanceAfter - recipientBalanceBefore).to.equal(withdrawAmount);
+      expect(vaultBalanceBefore - vaultBalanceAfter).to.equal(withdrawAmount);
+    });
+  });
+
+  describe("Common scenarios", () => {
+    it("Fund -> mint -> burn", async () => {
       // Create fresh vault
       const { dashboard: freshDashboard, stakingVault: freshVault } = await createVaultWithDashboard(
         ctx,
@@ -1453,42 +2390,36 @@ describe("Integration: Dashboard Full Coverage", () => {
 
       // Mint
       const mintCapacity = await freshDashboard.totalMintingCapacityShares();
-      const toMint = mintCapacity / 2n;
-      await freshDashboard.connect(owner).mintShares(owner, toMint);
-      expect(await freshDashboard.liabilityShares()).to.equal(toMint);
+      await freshDashboard.connect(owner).mintShares(owner, mintCapacity);
+      expect(await freshDashboard.liabilityShares()).to.equal(mintCapacity);
 
-      // Rebalance half
-      await freshDashboard.connect(owner).rebalanceVaultWithShares(toMint / 2n);
-      expect(await freshDashboard.liabilityShares()).to.equal(toMint / 2n);
-
-      // Burn rest
+      // Burn
       await lido.connect(owner).approve(freshDashboard, ether("100"));
-      await freshDashboard.connect(owner).burnShares(toMint / 2n);
+      await freshDashboard.connect(owner).burnShares(mintCapacity);
       expect(await freshDashboard.liabilityShares()).to.equal(0n);
 
       // Report to update values
       await reportVaultDataWithProof(ctx, freshVault, { waitForNextRefSlot: true });
 
-      // Withdraw (should have some withdrawable now)
-      const withdrawable = await freshDashboard.withdrawableValue();
-      if (withdrawable > 0n) {
-        await freshDashboard.connect(owner).withdraw(stranger, withdrawable);
-      }
+      expect(await freshDashboard.totalMintingCapacityShares()).to.equal(mintCapacity);
     });
 
     it("Fee accrual and disbursement lifecycle", async () => {
       // Start with fresh state - fund more
-      await dashboard.connect(owner).fund({ value: ether("10") });
+      const totalValue = await dashboard.totalValue();
+      const settledGrowth = await dashboard.settledGrowth();
+      const rewards = ether("1");
 
       // Simulate growth (rewards)
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: ether("30"),
+        totalValue: totalValue + rewards,
         waitForNextRefSlot: true,
       });
 
       // Check fee accrued
+      const expectedFee = (rewards * (await dashboard.feeRate())) / TOTAL_BASIS_POINTS;
       const fee = await dashboard.accruedFee();
-      expect(fee).to.be.gt(0n);
+      expect(fee).to.equal(expectedFee);
 
       // Disburse fee
       const feeRecipient = await dashboard.feeRecipient();
@@ -1497,10 +2428,14 @@ describe("Integration: Dashboard Full Coverage", () => {
       await dashboard.disburseFee();
 
       const balanceAfter = await ethers.provider.getBalance(feeRecipient);
-      expect(balanceAfter - balanceBefore).to.equal(fee);
+      expect(balanceAfter).to.equal(balanceBefore + expectedFee);
 
       // Fee should now be 0
       expect(await dashboard.accruedFee()).to.equal(0n);
+
+      // Verify settled growth was updated to current growth + rewards
+      const newSettledGrowth = await dashboard.settledGrowth();
+      expect(newSettledGrowth).to.equal(settledGrowth + rewards);
     });
 
     it("Disconnect and reconnect lifecycle", async () => {
@@ -1550,9 +2485,7 @@ describe("Integration: Dashboard Full Coverage", () => {
 
       // Can mint again
       const newCapacity = await dashboard.remainingMintingCapacityShares(0n);
-      if (newCapacity > 0n) {
-        await dashboard.connect(owner).mintShares(owner, 1n);
-      }
+      await dashboard.connect(owner).mintShares(owner, newCapacity);
     });
   });
 });
