@@ -1,10 +1,11 @@
-// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: UNLICENSED
+// for tooling purposes only
 
-// ======================================================================================================= //
-// DISCLAIMER: This contract is provided for tooling purposes only and is NOT part of the Lido core protocol.
-// It is not audited, and may be updated in the future without notice.
-// ======================================================================================================= //
+// ================================================================================================================= //
+// DISCLAIMER: This contract is intended solely for tooling and is NOT an official component of the Lido core protocol.
+// It is excluded from the Lido bug bounty program.
+// This contract has not undergone security auditing and its interface or functionality may change without notice.
+// ================================================================================================================= //
 
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
@@ -89,6 +90,11 @@ contract AlertingHarness {
         if (_lidoLocator == address(0)) revert ZeroAddress("_lidoLocator");
 
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
+    }
+
+    /// @return number of the vaults connected to the VaultHub
+    function vaultsCount() external view returns (uint256) {
+        return _vaultHub().vaultsCount();
     }
 
     /// @notice retrieves structured data for a single vault
@@ -245,11 +251,11 @@ contract AlertingHarness {
         uint256 _limit
     ) private view returns (VaultHub vaultHub, uint256 batchSize) {
         vaultHub = _vaultHub();
-        uint256 vaultsCount = vaultHub.vaultsCount();
+        uint256 _vaultsCount = vaultHub.vaultsCount();
 
-        if (_offset >= vaultsCount) return (vaultHub, 0);
+        if (_offset >= _vaultsCount) return (vaultHub, 0);
 
-        batchSize = _offset + _limit > vaultsCount ? vaultsCount - _offset : _limit;
+        batchSize = _offset + _limit > _vaultsCount ? _vaultsCount - _offset : _limit;
     }
 
     /// @notice internal utility to collect vault data from multiple protocol contracts

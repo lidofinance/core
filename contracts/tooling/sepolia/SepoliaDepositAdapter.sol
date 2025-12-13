@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
-// for testing purposes only
+// for tooling purposes only
+
+// ================================================================================================================= //
+// DISCLAIMER: This contract is intended solely for tooling and is NOT an official component of the Lido core protocol.
+// It is excluded from the Lido bug bounty program.
+// This contract has not undergone security auditing and its interface or functionality may change without notice.
+// ================================================================================================================= //
 
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
