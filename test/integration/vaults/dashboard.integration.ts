@@ -2415,10 +2415,9 @@ describe("Integration: Dashboard Full Coverage", () => {
       const balanceBefore = await ethers.provider.getBalance(feeRecipient);
 
       if (feeLeftover > 0n) {
-        const ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
         await expect(dashboard.recoverFeeLeftover())
           .to.emit(dashboard, "AssetsRecovered")
-          .withArgs(feeRecipient, ETH, feeLeftover);
+          .withArgs(feeRecipient, ETH_ADDRESS, feeLeftover);
 
         const balanceAfter = await ethers.provider.getBalance(feeRecipient);
         expect(balanceAfter - balanceBefore).to.equal(feeLeftover);
