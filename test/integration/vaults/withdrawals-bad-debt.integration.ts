@@ -205,12 +205,21 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     [, owner, nodeOperator, , , stranger] = await ethers.getSigners();
 
     await setupLidoForVaults(ctx);
-    await upDefaultTierShareLimit(ctx, ether("1000"));
+
+    const { oracleReportSanityChecker, operatorGrid, lido, vaultHub } = ctx.contracts;
+
+    // Increase default tier share limit to maximum allowed
+    const TOTAL_BASIS_POINTS = 100_00n;
+    const totalShares = await lido.getTotalShares();
+    const maxRelativeShareLimit = await vaultHub.MAX_RELATIVE_SHARE_LIMIT_BP();
+    const existingTierParams = await operatorGrid.tier(await operatorGrid.DEFAULT_TIER_ID());
+    const maxLimit = (totalShares * maxRelativeShareLimit) / TOTAL_BASIS_POINTS;
+    const increaseBy = maxLimit - existingTierParams.shareLimit;
+    await upDefaultTierShareLimit(ctx, increaseBy);
 
     // Make the sanity checker more sensitive to the activation of smoothen token rebase
     const maxPositiveTokenRebase = 1000n;
     const agent = await ctx.getSigner("agent");
-    const { oracleReportSanityChecker } = ctx.contracts;
     await oracleReportSanityChecker
       .connect(agent)
       .grantRole(await oracleReportSanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(), agent);
