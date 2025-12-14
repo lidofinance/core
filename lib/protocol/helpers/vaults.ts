@@ -1,5 +1,11 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
+import {
+  ContractMethodArgs,
+  ContractTransactionReceipt,
+  ContractTransactionResponse,
+  hexlify,
+  Interface,
+} from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -650,4 +656,37 @@ export async function calculateLockedValue(
 
 export function ceilDiv(a: bigint, b: bigint): bigint {
   return (a + b - 1n) / b;
+}
+
+// Helper type to extract method names from a contract
+export type Methods<T> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
+}[keyof T];
+
+// Helper functions for testing access control
+export async function testMethod<
+  T extends unknown[],
+  C extends { connect: (signer: HardhatEthersSigner) => C; interface: Interface },
+>(
+  contract: C,
+  methodName: Methods<C> & string,
+  { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
+  argument: T,
+  requiredRole: string,
+  errorName = "AccessControlUnauthorizedAccount",
+) {
+  for (const user of failingUsers) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect((contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)))
+      .to.be.revertedWithCustomError(contract, errorName)
+      .withArgs(user, requiredRole);
+  }
+
+  for (const user of successUsers) {
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.not.be.revertedWithCustomError(contract, errorName);
+  }
 }
