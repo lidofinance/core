@@ -18,9 +18,14 @@ import {
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
-import { createEntityStore, deriveExpectedTotalReward, GraphSimulator, processTransaction } from "../graph/simulator";
-import { captureChainState, capturePoolState, SimulatorInitialState } from "../graph/utils";
-import { extractAllLogs } from "../graph/utils/event-extraction";
+import {
+  createEntityStore,
+  deriveExpectedTotalReward,
+  GraphSimulator,
+  processTransaction,
+} from "../../graph/simulator";
+import { captureChainState, capturePoolState, SimulatorInitialState } from "../../graph/utils";
+import { extractAllLogs } from "../../graph/utils/event-extraction";
 
 /**
  * Graph TotalReward Entity Integration Tests
@@ -63,7 +68,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     // Initialize simulator with treasury address
     simulator = new GraphSimulator(initialState.treasuryAddress);
 
-    log.info("Graph Simulator initialized", {
+    log.debug("Graph Simulator initialized", {
       "Total Pooled Ether": formatEther(initialState.totalPooledEther),
       "Total Shares": initialState.totalShares.toString(),
       "Treasury Address": initialState.treasuryAddress,
@@ -103,7 +108,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
   it("Should deposit ETH and stake to modules", async () => {
     const { lido, stakingRouter, depositSecurityModule } = ctx.contracts;
 
-    log.info("Submitting ETH for deposits", {
+    log.debug("Submitting ETH for deposits", {
       Amount: formatEther(ether("3200")),
     });
 
@@ -129,7 +134,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       depositCount += deposits;
     }
 
-    log.info("Deposits completed", {
+    log.debug("Deposits completed", {
       "Total Deposits": depositCount.toString(),
       "ETH Staked": formatEther(depositCount * ether("32")),
     });
@@ -138,12 +143,10 @@ describe("Scenario: Graph TotalReward Validation", () => {
   });
 
   it("Should compute TotalReward correctly for first oracle report", async () => {
-    log("=== First Oracle Report: TotalReward Validation ===");
-
     // 1. Capture state before oracle report
     const stateBefore = await capturePoolState(ctx);
 
-    log.info("Pool state before report", {
+    log.debug("Pool state before report", {
       "Total Pooled Ether": formatEther(stateBefore.totalPooledEther),
       "Total Shares": stateBefore.totalShares.toString(),
     });
@@ -155,7 +158,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       clAppearedValidators: depositCount,
     };
 
-    log.info("Executing oracle report", {
+    log.debug("Executing oracle report", {
       "CL Diff": formatEther(clDiff),
       "Appeared Validators": depositCount.toString(),
     });
@@ -168,7 +171,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     const block = await ethers.provider.getBlock(receipt.blockNumber);
     const blockTimestamp = BigInt(block!.timestamp);
 
-    log.info("Oracle report transaction", {
+    log.debug("Oracle report transaction", {
       "Tx Hash": receipt.hash,
       "Block Number": receipt.blockNumber,
       "Block Timestamp": blockTimestamp.toString(),
@@ -179,7 +182,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     const store = createEntityStore();
     const result = processTransaction(receipt, ctx, store, blockTimestamp, initialState.treasuryAddress);
 
-    log.info("Simulator processing result", {
+    log.debug("Simulator processing result", {
       "Events Processed": result.eventsProcessed,
       "Had Profitable Report": result.hadProfitableReport,
       "TotalReward Entities Created": result.totalRewards.size,
@@ -188,7 +191,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     // 4. Capture state after
     const stateAfter = await capturePoolState(ctx);
 
-    log.info("Pool state after report", {
+    log.debug("Pool state after report", {
       "Total Pooled Ether": formatEther(stateAfter.totalPooledEther),
       "Total Shares": stateAfter.totalShares.toString(),
       "Ether Change": formatEther(stateAfter.totalPooledEther - stateBefore.totalPooledEther),
@@ -207,7 +210,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     expect(expected).to.not.be.null;
 
     // Log entity details
-    log.info("TotalReward Entity - Tier 1 (Metadata)", {
+    log.debug("TotalReward Entity - Tier 1 (Metadata)", {
       "ID": computed!.id,
       "Block": computed!.block.toString(),
       "Block Time": computed!.blockTime.toString(),
@@ -215,7 +218,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       "Log Index": computed!.logIndex.toString(),
     });
 
-    log.info("TotalReward Entity - Tier 2 (Pool State)", {
+    log.debug("TotalReward Entity - Tier 2 (Pool State)", {
       "Total Pooled Ether Before": formatEther(computed!.totalPooledEtherBefore),
       "Total Pooled Ether After": formatEther(computed!.totalPooledEtherAfter),
       "Total Shares Before": computed!.totalSharesBefore.toString(),
@@ -225,7 +228,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       "MEV Fee": formatEther(computed!.mevFee),
     });
 
-    log.info("TotalReward Entity - Tier 2 (Fee Distribution)", {
+    log.debug("TotalReward Entity - Tier 2 (Fee Distribution)", {
       "Total Rewards With Fees": formatEther(computed!.totalRewardsWithFees),
       "Total Rewards": formatEther(computed!.totalRewards),
       "Total Fee": formatEther(computed!.totalFee),
@@ -235,7 +238,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       "Shares To Operators": computed!.sharesToOperators.toString(),
     });
 
-    log.info("TotalReward Entity - Tier 3 (Calculated)", {
+    log.debug("TotalReward Entity - Tier 3 (Calculated)", {
       "APR": `${computed!.apr.toFixed(4)}%`,
       "APR Raw": `${computed!.aprRaw.toFixed(4)}%`,
       "APR Before Fees": `${computed!.aprBeforeFees.toFixed(4)}%`,
@@ -245,7 +248,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     });
 
     // 7. Verify Tier 1 fields (Direct Event Metadata)
-    log.info("Verifying Tier 1 fields (Direct Event Metadata)...");
+    log.debug("Verifying Tier 1 fields (Direct Event Metadata)...");
     expect(computed!.id.toLowerCase()).to.equal(receipt.hash.toLowerCase(), "id mismatch");
     expect(computed!.block).to.equal(BigInt(receipt.blockNumber), "block mismatch");
     expect(computed!.blockTime).to.equal(blockTimestamp, "blockTime mismatch");
@@ -254,7 +257,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     expect(computed!.logIndex).to.equal(expected!.logIndex, "logIndex mismatch");
 
     // 8. Verify Tier 2 fields (Pool State from TokenRebased)
-    log.info("Verifying Tier 2 fields (Pool State from TokenRebased)...");
+    log.debug("Verifying Tier 2 fields (Pool State from TokenRebased)...");
     expect(computed!.totalPooledEtherBefore).to.equal(
       expected!.totalPooledEtherBefore,
       "totalPooledEtherBefore mismatch",
@@ -267,7 +270,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     expect(computed!.mevFee).to.equal(expected!.mevFee, "mevFee mismatch");
 
     // 8b. Verify Tier 2 fields (Fee Distribution)
-    log.info("Verifying Tier 2 fields (Fee Distribution)...");
+    log.debug("Verifying Tier 2 fields (Fee Distribution)...");
     expect(computed!.totalRewardsWithFees).to.equal(expected!.totalRewardsWithFees, "totalRewardsWithFees mismatch");
     expect(computed!.totalRewards).to.equal(expected!.totalRewards, "totalRewards mismatch");
     expect(computed!.totalFee).to.equal(expected!.totalFee, "totalFee mismatch");
@@ -277,7 +280,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     expect(computed!.sharesToOperators).to.equal(expected!.sharesToOperators, "sharesToOperators mismatch");
 
     // 8c. Verify Tier 3 fields (Calculated)
-    log.info("Verifying Tier 3 fields (APR and Basis Points)...");
+    log.debug("Verifying Tier 3 fields (APR and Basis Points)...");
     expect(computed!.apr).to.equal(expected!.apr, "apr mismatch");
     expect(computed!.aprRaw).to.equal(expected!.aprRaw, "aprRaw mismatch");
     expect(computed!.aprBeforeFees).to.equal(expected!.aprBeforeFees, "aprBeforeFees mismatch");
@@ -292,7 +295,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     );
 
     // 8d. Verify fee consistency (shares2mint should equal sharesToTreasury + sharesToOperators)
-    log.info("Verifying fee consistency...");
+    log.debug("Verifying fee consistency...");
     expect(computed!.shares2mint).to.equal(
       computed!.sharesToTreasury + computed!.sharesToOperators,
       "shares2mint should equal sharesToTreasury + sharesToOperators",
@@ -303,7 +306,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     );
 
     // 9. Verify consistency with on-chain state
-    log.info("Verifying consistency with on-chain state...");
+    log.debug("Verifying consistency with on-chain state...");
     // TokenRebased.preTotalEther should match state before report
     expect(computed!.totalPooledEtherBefore).to.equal(stateBefore.totalPooledEther, "preTotalEther vs stateBefore");
     expect(computed!.totalSharesBefore).to.equal(stateBefore.totalShares, "preTotalShares vs stateBefore");
@@ -311,17 +314,13 @@ describe("Scenario: Graph TotalReward Validation", () => {
     // TokenRebased.postTotalEther should match state after report
     expect(computed!.totalPooledEtherAfter).to.equal(stateAfter.totalPooledEther, "postTotalEther vs stateAfter");
     expect(computed!.totalSharesAfter).to.equal(stateAfter.totalShares, "postTotalShares vs stateAfter");
-
-    log("First oracle report validation PASSED");
   });
 
   it("Should compute TotalReward correctly for second oracle report", async () => {
-    log("=== Second Oracle Report: TotalReward Validation ===");
-
     // 1. Capture state before second oracle report
     const stateBefore = await capturePoolState(ctx);
 
-    log.info("Pool state before second report", {
+    log.debug("Pool state before second report", {
       "Total Pooled Ether": formatEther(stateBefore.totalPooledEther),
       "Total Shares": stateBefore.totalShares.toString(),
     });
@@ -332,7 +331,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       clDiff, // Smaller reward
     };
 
-    log.info("Executing second oracle report", {
+    log.debug("Executing second oracle report", {
       "CL Diff": formatEther(clDiff),
     });
 
@@ -344,7 +343,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     const block = await ethers.provider.getBlock(receipt.blockNumber);
     const blockTimestamp = BigInt(block!.timestamp);
 
-    log.info("Second oracle report transaction", {
+    log.debug("Second oracle report transaction", {
       "Tx Hash": receipt.hash,
       "Block Number": receipt.blockNumber,
       "Block Timestamp": blockTimestamp.toString(),
@@ -354,7 +353,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     // 3. Process events through simulator (using same simulator instance)
     const result = simulator.processTransaction(receipt, ctx, blockTimestamp);
 
-    log.info("Simulator processing result (using persistent simulator)", {
+    log.debug("Simulator processing result (using persistent simulator)", {
       "Events Processed": result.eventsProcessed,
       "Had Profitable Report": result.hadProfitableReport,
       "TotalReward Entities Created": result.totalRewards.size,
@@ -364,7 +363,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     // 4. Capture state after
     const stateAfter = await capturePoolState(ctx);
 
-    log.info("Pool state after second report", {
+    log.debug("Pool state after second report", {
       "Total Pooled Ether": formatEther(stateAfter.totalPooledEther),
       "Total Shares": stateAfter.totalShares.toString(),
       "Ether Change": formatEther(stateAfter.totalPooledEther - stateBefore.totalPooledEther),
@@ -383,7 +382,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     expect(expected).to.not.be.null;
 
     // Log entity details
-    log.info("TotalReward Entity - Tier 1 (Metadata)", {
+    log.debug("TotalReward Entity - Tier 1 (Metadata)", {
       "ID": computed!.id,
       "Block": computed!.block.toString(),
       "Block Time": computed!.blockTime.toString(),
@@ -391,7 +390,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       "Log Index": computed!.logIndex.toString(),
     });
 
-    log.info("TotalReward Entity - Tier 2 (Pool State)", {
+    log.debug("TotalReward Entity - Tier 2 (Pool State)", {
       "Total Pooled Ether Before": formatEther(computed!.totalPooledEtherBefore),
       "Total Pooled Ether After": formatEther(computed!.totalPooledEtherAfter),
       "Total Shares Before": computed!.totalSharesBefore.toString(),
@@ -401,7 +400,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       "MEV Fee": formatEther(computed!.mevFee),
     });
 
-    log.info("TotalReward Entity - Tier 2 (Fee Distribution)", {
+    log.debug("TotalReward Entity - Tier 2 (Fee Distribution)", {
       "Total Rewards With Fees": formatEther(computed!.totalRewardsWithFees),
       "Total Rewards": formatEther(computed!.totalRewards),
       "Total Fee": formatEther(computed!.totalFee),
@@ -411,7 +410,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       "Shares To Operators": computed!.sharesToOperators.toString(),
     });
 
-    log.info("TotalReward Entity - Tier 3 (Calculated)", {
+    log.debug("TotalReward Entity - Tier 3 (Calculated)", {
       "APR": `${computed!.apr.toFixed(4)}%`,
       "APR Raw": `${computed!.aprRaw.toFixed(4)}%`,
       "APR Before Fees": `${computed!.aprBeforeFees.toFixed(4)}%`,
@@ -421,7 +420,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     });
 
     // 7. Verify Tier 1 fields
-    log.info("Verifying Tier 1 fields...");
+    log.debug("Verifying Tier 1 fields...");
     expect(computed!.id.toLowerCase()).to.equal(receipt.hash.toLowerCase(), "id mismatch");
     expect(computed!.block).to.equal(BigInt(receipt.blockNumber), "block mismatch");
     expect(computed!.blockTime).to.equal(blockTimestamp, "blockTime mismatch");
@@ -430,7 +429,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     expect(computed!.logIndex).to.equal(expected!.logIndex, "logIndex mismatch");
 
     // 8. Verify Tier 2 fields
-    log.info("Verifying Tier 2 fields...");
+    log.debug("Verifying Tier 2 fields...");
     expect(computed!.totalPooledEtherBefore).to.equal(
       expected!.totalPooledEtherBefore,
       "totalPooledEtherBefore mismatch",
@@ -443,7 +442,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     expect(computed!.mevFee).to.equal(expected!.mevFee, "mevFee mismatch");
 
     // 8b. Verify Tier 2 fields (Fee Distribution)
-    log.info("Verifying Tier 2 fields (Fee Distribution)...");
+    log.debug("Verifying Tier 2 fields (Fee Distribution)...");
     expect(computed!.totalRewardsWithFees).to.equal(expected!.totalRewardsWithFees, "totalRewardsWithFees mismatch");
     expect(computed!.totalRewards).to.equal(expected!.totalRewards, "totalRewards mismatch");
     expect(computed!.totalFee).to.equal(expected!.totalFee, "totalFee mismatch");
@@ -453,7 +452,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     expect(computed!.sharesToOperators).to.equal(expected!.sharesToOperators, "sharesToOperators mismatch");
 
     // 8c. Verify Tier 3 fields (APR and Basis Points)
-    log.info("Verifying Tier 3 fields (APR and Basis Points)...");
+    log.debug("Verifying Tier 3 fields (APR and Basis Points)...");
     expect(computed!.apr).to.equal(expected!.apr, "apr mismatch");
     expect(computed!.aprRaw).to.equal(expected!.aprRaw, "aprRaw mismatch");
     expect(computed!.aprBeforeFees).to.equal(expected!.aprBeforeFees, "aprBeforeFees mismatch");
@@ -468,7 +467,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     );
 
     // 8d. Verify fee consistency
-    log.info("Verifying fee consistency...");
+    log.debug("Verifying fee consistency...");
     expect(computed!.shares2mint).to.equal(
       computed!.sharesToTreasury + computed!.sharesToOperators,
       "shares2mint should equal sharesToTreasury + sharesToOperators",
@@ -479,32 +478,27 @@ describe("Scenario: Graph TotalReward Validation", () => {
     );
 
     // 9. Verify state consistency
-    log.info("Verifying on-chain state consistency...");
+    log.debug("Verifying on-chain state consistency...");
     expect(computed!.totalPooledEtherBefore).to.equal(stateBefore.totalPooledEther, "preTotalEther vs stateBefore");
     expect(computed!.totalSharesBefore).to.equal(stateBefore.totalShares, "preTotalShares vs stateBefore");
     expect(computed!.totalPooledEtherAfter).to.equal(stateAfter.totalPooledEther, "postTotalEther vs stateAfter");
     expect(computed!.totalSharesAfter).to.equal(stateAfter.totalShares, "postTotalShares vs stateAfter");
 
     // 10. Verify simulator state persistence (should have both reports)
-    log.info("Verifying simulator state persistence...");
+    log.debug("Verifying simulator state persistence...");
     const storedReport = simulator.getTotalReward(receipt.hash);
     expect(storedReport).to.not.be.undefined;
-
-    log("Second oracle report validation PASSED");
   });
 
   it("Should verify event processing order", async () => {
     // This test validates that events are processed in the correct order
     // by examining the logs from the last oracle report
-
-    log("=== Event Processing Order Verification ===");
-
     const clDiff = ether("0.002");
     const reportData: Partial<OracleReportParams> = {
       clDiff,
     };
 
-    log.info("Executing oracle report for event order test", {
+    log.debug("Executing oracle report for event order test", {
       "CL Diff": formatEther(clDiff),
     });
 
@@ -515,14 +509,14 @@ describe("Scenario: Graph TotalReward Validation", () => {
     // Extract and examine logs
     const logs = extractAllLogs(receipt, ctx);
 
-    log.info("Extracted logs from transaction", {
+    log.debug("Extracted logs from transaction", {
       "Total Logs": logs.length,
       "Tx Hash": receipt.hash,
     });
 
     // Log all event names in order
     const eventSummary = logs.map((l) => `${l.logIndex}: ${l.name}`).join(", ");
-    log.info("Event order", {
+    log.debug("Event order", {
       Events: eventSummary,
     });
 
@@ -531,7 +525,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
     const tokenRebasedIdx = logs.findIndex((l) => l.name === "TokenRebased");
     const processingStartedIdx = logs.findIndex((l) => l.name === "ProcessingStarted");
 
-    log.info("Key event positions", {
+    log.debug("Key event positions", {
       "ProcessingStarted Index": processingStartedIdx,
       "ETHDistributed Index": ethDistributedIdx,
       "TokenRebased Index": tokenRebasedIdx,
@@ -550,20 +544,16 @@ describe("Scenario: Graph TotalReward Validation", () => {
       (l) => l.name === "TransferShares" && l.logIndex > ethDistributedIdx && l.logIndex < tokenRebasedIdx,
     );
 
-    log.info("Fee distribution events between ETHDistributed and TokenRebased", {
+    log.debug("Fee distribution events between ETHDistributed and TokenRebased", {
       "Transfer Events": transferEvents.length,
       "TransferShares Events": transferSharesEvents.length,
     });
 
     // There should be at least some transfer events for fee distribution
     expect(transferEvents.length).to.be.greaterThanOrEqual(0, "Expected Transfer events for fee distribution");
-
-    log("Event processing order verification PASSED");
   });
 
   it("Should query TotalRewards with filtering and pagination", async () => {
-    log("=== Query Functionality Test ===");
-
     // Execute another oracle report to have more data
     const clDiff = ether("0.003");
     const reportData: Partial<OracleReportParams> = { clDiff };
@@ -580,7 +570,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
 
     // Test 1: Count all TotalRewards
     const totalCount = simulator.countTotalRewards(0n);
-    log.info("Query: Count all TotalRewards", {
+    log.debug("Query: Count all TotalRewards", {
       "Total Count": totalCount,
     });
     expect(totalCount).to.be.greaterThanOrEqual(2, "Should have at least 2 TotalReward entities");
@@ -594,7 +584,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       orderDirection: "asc",
     });
 
-    log.info("Query: TotalRewards (skip=0, limit=10, orderBy=blockTime asc)", {
+    log.debug("Query: TotalRewards (skip=0, limit=10, orderBy=blockTime asc)", {
       "Results Count": queryResult.length,
       "First Block Time": queryResult[0]?.blockTime.toString(),
       "Last Block Time": queryResult[queryResult.length - 1]?.blockTime.toString(),
@@ -612,7 +602,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
 
     // Test 3: Query result contains expected fields
     const firstResult = queryResult[0];
-    log.info("Query result fields check", {
+    log.debug("Query result fields check", {
       "Has id": firstResult.id !== undefined,
       "Has totalPooledEtherBefore": firstResult.totalPooledEtherBefore !== undefined,
       "Has totalPooledEtherAfter": firstResult.totalPooledEtherAfter !== undefined,
@@ -638,7 +628,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
       orderDirection: "asc",
     });
 
-    log.info("Query: TotalRewards with block filter", {
+    log.debug("Query: TotalRewards with block filter", {
       "Filter blockFrom": firstBlock.toString(),
       "Filtered Results Count": filteredResult.length,
     });
@@ -650,7 +640,7 @@ describe("Scenario: Graph TotalReward Validation", () => {
 
     // Test 5: Get latest TotalReward
     const latest = simulator.getLatestTotalReward();
-    log.info("Query: Latest TotalReward", {
+    log.debug("Query: Latest TotalReward", {
       "Latest ID": latest?.id ?? "N/A",
       "Latest Block": latest?.block.toString() ?? "N/A",
       "Latest APR": latest ? `${latest.apr.toFixed(4)}%` : "N/A",
@@ -661,14 +651,12 @@ describe("Scenario: Graph TotalReward Validation", () => {
 
     // Test 6: Get by ID
     const byId = simulator.getTotalRewardById(receipt.hash);
-    log.info("Query: Get by ID", {
+    log.debug("Query: Get by ID", {
       "Requested ID": receipt.hash,
       "Found": byId !== null,
     });
 
     expect(byId).to.not.be.null;
     expect(byId!.id.toLowerCase()).to.equal(receipt.hash.toLowerCase());
-
-    log("Query functionality test PASSED");
   });
 });
