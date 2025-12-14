@@ -25,6 +25,7 @@ import {
   autofillRoles,
   calculateLockedValue,
   createVaultWithDashboard,
+  ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getPubkeys,
   ProtocolContext,
@@ -986,6 +987,10 @@ describe("Integration: Dashboard Full Coverage", () => {
   });
 
   describe("proveUnknownValidatorsToPDG()", () => {
+    before(async () => {
+      await ensurePredepositGuaranteeUnpaused(ctx);
+    });
+
     it("Reverts when PDG policy is STRICT", async () => {
       await dashboard.connect(owner).setPDGPolicy(PDGPolicy.STRICT);
 
