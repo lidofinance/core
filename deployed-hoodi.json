@@ -11,7 +11,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/Accounting.sol",
-      "address": "0x41f0765b56d4f6b6AF231c217886ea7A8D1e7640",
+      "address": "0xd7eb46d18a07F78ed07201E1C7F7A4933967da6D",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8", "0x3508A952176b3c15387C97BE809eaffB1982176a"]
     }
   },
@@ -359,7 +359,7 @@
   },
   "dashboardImpl": {
     "contract": "contracts/0.8.25/vaults/dashboard/Dashboard.sol",
-    "address": "0x7D25D43D5a69ae0521440211C655C11840aF0FD6",
+    "address": "0x38131D5548Be57A34937521fe427a23f49e1e2d4",
     "constructorArgs": [
       "0x3508A952176b3c15387C97BE809eaffB1982176a",
       "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
@@ -558,7 +558,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0x778Dc3a94B24D0Cd66E36d3ED8d47cAa622688F6",
+      "address": "0x751A4AA1A29Bc0C0E587aa04c3EABF0797F9B1A4",
       "constructorArgs": [
         {
           "accountingOracle": "0xcb883B1bD0a41512b42D2dB267F2A2cd919FB216",
@@ -566,7 +566,7 @@
           "elRewardsVault": "0x9b108015fe433F173696Af3Aa0CF7CDb3E104258",
           "lido": "0x3508A952176b3c15387C97BE809eaffB1982176a",
           "oracleReportSanityChecker": "0x53417BA942bC86492bAF46FAbA8769f246422388",
-          "postTokenRebaseReceiver": "0x0000000000000000000000000000000000000000",
+          "postTokenRebaseReceiver": "0x9c53d0075eA00ad77dDAd1b71E67bb97AaBC1e3D",
           "burner": "0xb2c99cd38a2636a6281a849C8de938B3eF4A7C3D",
           "stakingRouter": "0xCc820558B39ee15C7C45B59390B503b83fb499A8",
           "treasury": "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
@@ -580,7 +580,7 @@
           "predepositGuarantee": "0xa5F55f3402beA2B14AE15Dae1b6811457D43581d",
           "wstETH": "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
           "vaultHub": "0x4C9fFC325392090F789255b9948Ab1659b797964",
-          "vaultFactory": "0x1d10DB6a66EF8D2A6f6D36Ad4dc7092Ef7C12569",
+          "vaultFactory": "0x7Ba269a03eeD86f2f54CB04CA3b4b7626636Df4E",
           "lazyOracle": "0xf41491C79C30e8f4862d3F4A5b790171adB8e04A",
           "operatorGrid": "0x501e678182bB5dF3f733281521D3f3D1aDe69917"
         }
@@ -631,7 +631,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/OperatorGrid.sol",
-      "address": "0x0f7b5BFA0FC13F2b8218a1624a5aF4055500cAe0",
+      "address": "0x4c29A1D1e14BaD29650c8B91Ad91c5AEdF5fd811",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
@@ -732,18 +732,25 @@
   },
   "stakingVaultFactory": {
     "contract": "contracts/0.8.25/vaults/VaultFactory.sol",
-    "address": "0x1d10DB6a66EF8D2A6f6D36Ad4dc7092Ef7C12569",
+    "address": "0x7Ba269a03eeD86f2f54CB04CA3b4b7626636Df4E",
     "constructorArgs": [
       "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
       "0xb3e6a8B6A752d3bb905A1B3Ef12bbdeE77E8160e",
-      "0x7D25D43D5a69ae0521440211C655C11840aF0FD6",
-      "0xf0Cf0c852Bb2b41eF8171399a71be79aa67e6295"
+      "0x38131D5548Be57A34937521fe427a23f49e1e2d4",
+      "0x1d10DB6a66EF8D2A6f6D36Ad4dc7092Ef7C12569"
     ]
   },
   "stakingVaultImplementation": {
     "contract": "contracts/0.8.25/vaults/StakingVault.sol",
     "address": "0xE96BE4FB723e68e7b96244b7399C64a58bcD0062",
     "constructorArgs": ["0x00000000219ab540356cBB839Cbe05303d7705Fa"]
+  },
+  "tokenRebaseNotifierV3": {
+    "implementation": {
+      "contract": "contracts/0.8.9/TokenRateNotifier.sol",
+      "address": "0x9c53d0075eA00ad77dDAd1b71E67bb97AaBC1e3D",
+      "constructorArgs": ["0x0534aA41907c9631fae990960bCC72d75fA7cfeD", "0x9b5b78D1C9A3238bF24662067e34c57c83E8c354"]
+    }
   },
   "triggerableWithdrawalsGateway": {
     "contract": "contracts/0.8.9/TriggerableWithdrawalsGateway.sol",

@@ -1,4 +1,3 @@
-import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { LidoLocator } from "typechain-types";
@@ -21,7 +20,7 @@ export async function main() {
     elRewardsVault: getAddress(Sk.executionLayerRewardsVault, state),
     lido: getAddress(Sk.appLido, state),
     oracleReportSanityChecker: getAddress(Sk.oracleReportSanityChecker, state),
-    postTokenRebaseReceiver: ZeroAddress,
+    postTokenRebaseReceiver: getAddress(Sk.tokenRebaseNotifier, state),
     burner: getAddress(Sk.burner, state),
     stakingRouter: getAddress(Sk.stakingRouter, state),
     treasury: getAddress(Sk.appAgent, state),

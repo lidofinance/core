@@ -7,21 +7,25 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard, DepositContract, StakingVault } from "typechain-types";
 
 import {
+  addressToWC,
   certainAddress,
   ether,
   generateDepositStruct,
   generatePredeposit,
   generateValidator,
   getNextBlockTimestamp,
+  impersonate,
   MAX_SANE_SETTLED_GROWTH,
   toGwei,
   toLittleEndian64,
+  ValidatorStage,
 } from "lib";
 import {
   createVaultWithDashboard,
-  getProofAndDepositData,
+  ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getPubkeys,
+  mockProof,
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
@@ -130,6 +134,13 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         expect(await stakingVault.pendingOwner()).to.equal(newOwner);
       });
 
+      it("Cannot renounce ownership", async () => {
+        await expect(stakingVault.connect(owner).renounceOwnership()).to.be.revertedWithCustomError(
+          stakingVault,
+          "RenouncementNotAllowed",
+        );
+      });
+
       it("Can reconnect the vault to the hub", async () => {
         const { vaultHub } = ctx.contracts;
 
@@ -181,7 +192,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         },
       ]);
 
-      await expect(operatorGrid.connect(owner).changeTier(stakingVault, 1n, 1000n)).to.be.revertedWithCustomError(
+      const tierId = (await operatorGrid.group(nodeOperator)).tierIds[0];
+
+      await expect(operatorGrid.connect(owner).changeTier(stakingVault, tierId, 1000n)).to.be.revertedWithCustomError(
         operatorGrid,
         "VaultNotConnected",
       );
@@ -189,13 +202,13 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       const nodeOperatorRoleAsAddress = ethers.zeroPadValue(nodeOperator.address, 32);
       const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
         await stakingVault.getAddress(),
-        1n,
+        tierId,
         1000n,
       ]);
       const confirmTimestamp = await getNextBlockTimestamp();
       const expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
 
-      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
+      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, 1000n))
         .to.emit(operatorGrid, "RoleMemberConfirmed")
         .withArgs(nodeOperator, nodeOperatorRoleAsAddress, confirmTimestamp, expiryTimestamp, msgData);
     });
@@ -237,17 +250,34 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       it("Can trigger validator withdrawal", async () => {
         const keys = getPubkeys(2);
         const value = await stakingVault.calculateValidatorWithdrawalFee(2);
-        await expect(
-          stakingVault
-            .connect(owner)
-            .triggerValidatorWithdrawals(keys.stringified, [ether("1"), ether("2")], owner.address, { value }),
-        )
+
+        const tx = stakingVault
+          .connect(owner)
+          .triggerValidatorWithdrawals(keys.stringified, [], owner, { value: value * 2n });
+        await expect(tx).to.changeEtherBalance(owner, -value);
+        await expect(tx)
           .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
-          .withArgs(keys.stringified, [ether("1"), ether("2")], 0, owner.address);
+          .withArgs(keys.stringified, [], value, owner);
+      });
+
+      it("Node operator can eject validators", async () => {
+        const keys = getPubkeys(2);
+        const value = await stakingVault.calculateValidatorWithdrawalFee(2);
+        const tx = stakingVault
+          .connect(nodeOperator)
+          .ejectValidators(keys.stringified, nodeOperator, { value: value * 2n });
+        await expect(tx).to.changeEtherBalance(nodeOperator, -value);
+        await expect(tx)
+          .to.emit(stakingVault, "ValidatorEjectionsTriggered")
+          .withArgs(keys.stringified, value, nodeOperator);
       });
     });
 
     describe("Deposits", () => {
+      before(async () => {
+        await ensurePredepositGuaranteeUnpaused(ctx);
+      });
+
       beforeEach(async () => {
         await stakingVault.connect(owner).fund({ value: ether("2048") });
       });
@@ -288,7 +318,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         );
       });
 
-      it("Can deposit to beacon chain using predeposit guarantee", async () => {
+      it("Can deposit to beacon chain using PDG", async () => {
         const { predepositGuarantee } = ctx.contracts;
         const withdrawalCredentials = await stakingVault.withdrawalCredentials();
         const validator = generateValidator(withdrawalCredentials, true);
@@ -315,26 +345,162 @@ describe("Integration: Actions with vault disconnected from hub", () => {
             anyValue,
           );
 
-        const { witnesses, postdeposit } = await getProofAndDepositData(
-          ctx,
-          validator,
-          withdrawalCredentials,
-          ether("2016"),
-        );
+        const witness = await mockProof(ctx, validator);
 
         await expect(
-          predepositGuarantee.connect(nodeOperator).proveWCActivateAndTopUpValidators(witnesses, [postdeposit.amount]),
+          predepositGuarantee.connect(nodeOperator).proveWCActivateAndTopUpValidators([witness], [ether("2016")]),
         )
           .to.emit(predepositGuarantee, "ValidatorProven")
-          .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
+          .withArgs(witness.pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
           .to.emit(depositContract, "DepositEvent")
-          .withArgs(
-            postdeposit.pubkey,
-            withdrawalCredentials,
-            toLittleEndian64(toGwei(ether("2047"))),
-            anyValue,
-            anyValue,
-          );
+          .withArgs(witness.pubkey, withdrawalCredentials, toLittleEndian64(toGwei(ether("2047"))), anyValue, anyValue);
+      });
+
+      it("Can deposit to beacon chain using PDG even if messing with staged balance", async () => {
+        const { predepositGuarantee, vaultHub } = ctx.contracts;
+        const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(withdrawalCredentials, true);
+
+        await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
+          value: ether("1"),
+        });
+
+        const predepositData = await generatePredeposit(validator, {
+          depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
+        });
+
+        await expect(
+          predepositGuarantee
+            .connect(nodeOperator)
+            .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
+        ).to.emit(depositContract, "DepositEvent");
+
+        await stakingVault.connect(await impersonate(await stakingVault.depositor())).unstage(ether("1"));
+
+        const witness = await mockProof(ctx, validator);
+        await expect(predepositGuarantee.connect(nodeOperator).proveWCAndActivate(witness))
+          .to.emit(predepositGuarantee, "ValidatorProven")
+          .withArgs(witness.pubkey, nodeOperator, stakingVault, withdrawalCredentials)
+          .not.to.emit(depositContract, "DepositEvent")
+          .not.to.emit(stakingVault, "EtherUnstaged");
+
+        const validatorStatus = await predepositGuarantee.validatorStatus(validator.container.pubkey);
+        expect(validatorStatus.stage).to.equal(ValidatorStage.PROVEN);
+        expect(validatorStatus.stakingVault).to.equal(stakingVault);
+        expect(validatorStatus.nodeOperator).to.equal(nodeOperator);
+
+        expect(await predepositGuarantee.pendingActivations(stakingVault)).to.equal(1);
+
+        await expect(stakingVault.connect(owner).transferOwnership(vaultHub))
+          .to.emit(stakingVault, "OwnershipTransferStarted")
+          .withArgs(owner, vaultHub);
+
+        await expect(vaultHub.connectVault(stakingVault)).to.be.revertedWithCustomError(
+          vaultHub,
+          "InsufficientStagedBalance",
+        );
+
+        await stakingVault.connect(await impersonate(await stakingVault.depositor())).stage(ether("1"));
+
+        await expect(vaultHub.connectVault(stakingVault))
+          .to.emit(stakingVault, "OwnershipTransferred")
+          .withArgs(owner, vaultHub);
+
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
+
+        await expect(predepositGuarantee.connect(stranger).activateValidator(validator.container.pubkey))
+          .to.emit(predepositGuarantee, "ValidatorActivated")
+          .withArgs(validator.container.pubkey, nodeOperator, stakingVault, withdrawalCredentials);
+      });
+
+      it("Can receive compensation for disproven predeposit even if messing with staged balance", async () => {
+        const { predepositGuarantee } = ctx.contracts;
+
+        await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
+          value: ether("1"),
+        });
+
+        const invalidWithdrawalCredentials = addressToWC(nodeOperator.address);
+        const invalidValidator = generateValidator(invalidWithdrawalCredentials);
+
+        const invalidValidatorHackedWC = {
+          ...invalidValidator,
+          container: {
+            ...invalidValidator.container,
+            withdrawalCredentials: await stakingVault.withdrawalCredentials(),
+          },
+        };
+
+        const predepositData = await generatePredeposit(invalidValidatorHackedWC, {
+          depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
+        });
+
+        await expect(
+          predepositGuarantee
+            .connect(nodeOperator)
+            .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
+        ).to.emit(depositContract, "DepositEvent");
+
+        await stakingVault.connect(await impersonate(predepositGuarantee, ether("10"))).unstage(ether("1"));
+
+        const witness = await mockProof(ctx, invalidValidator);
+        expect(await predepositGuarantee.pendingActivations(stakingVault)).to.equal(1);
+        await expect(
+          predepositGuarantee.connect(stranger).proveInvalidValidatorWC(witness, invalidWithdrawalCredentials),
+        )
+          .to.emit(predepositGuarantee, "ValidatorCompensated")
+          .withArgs(stakingVault, nodeOperator, invalidValidator.container.pubkey, ether("0"), ether("0"))
+          .not.to.emit(stakingVault, "EtherUnstaged");
+      });
+    });
+
+    describe("Ossification", () => {
+      beforeEach(async () => {
+        await expect(stakingVault.connect(owner).ossify()).to.emit(stakingVault, "PinnedImplementationUpdated");
+      });
+
+      it("isOssified() returns true", async () => {
+        const pinnedBeaconProxy = await ethers.getContractAt("PinnedBeaconProxy", stakingVault);
+        expect(await pinnedBeaconProxy.isOssified()).to.be.true;
+      });
+
+      it("implementation() returns the ossified implementation", async () => {
+        const { stakingVaultBeacon } = ctx.contracts;
+        const pinnedBeaconProxy = await ethers.getContractAt("PinnedBeaconProxy", stakingVault);
+        expect(await pinnedBeaconProxy.implementation()).to.equal(await stakingVaultBeacon.implementation());
+      });
+
+      it("Ossified vault cannot be connected to the hub", async () => {
+        const { vaultHub } = ctx.contracts;
+
+        await expect(stakingVault.connect(owner).transferOwnership(vaultHub))
+          .to.emit(stakingVault, "OwnershipTransferStarted")
+          .withArgs(owner, vaultHub);
+
+        await expect(vaultHub.connect(owner).connectVault(stakingVault)).to.be.revertedWithCustomError(
+          vaultHub,
+          "VaultOssified",
+        );
+      });
+
+      it("Cannot ossify the vault again", async () => {
+        await expect(stakingVault.connect(owner).ossify()).to.be.revertedWithCustomError(
+          stakingVault,
+          "AlreadyOssified",
+        );
+      });
+
+      it("Ossified vault does not upgrade to a new implementation", async () => {
+        const { stakingVaultBeacon, vaultHub } = ctx.contracts;
+
+        const pinnedImplementation = await stakingVaultBeacon.implementation();
+
+        const beaconOwner = await impersonate(await stakingVaultBeacon.owner());
+        await stakingVaultBeacon.connect(beaconOwner).upgradeTo(vaultHub);
+
+        const pinnedBeaconProxy = await ethers.getContractAt("PinnedBeaconProxy", stakingVault);
+        expect(await pinnedBeaconProxy.implementation()).to.equal(pinnedImplementation);
+        expect(await stakingVaultBeacon.implementation()).to.equal(vaultHub);
       });
     });
   });

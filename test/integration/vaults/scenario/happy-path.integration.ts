@@ -21,6 +21,7 @@ import {
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 import {
   calculateLockedValue,
+  ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getReportTimeElapsed,
   OracleReportParams,
@@ -76,6 +77,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
 
+    await ensurePredepositGuaranteeUnpaused(ctx);
     await setupLidoForVaults(ctx);
 
     // add ETH to NO for PDG deposit + gas
@@ -181,7 +183,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("1")); // has locked value cause of connection deposit
 
-    expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT);
   });
 
@@ -424,6 +425,29 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(reportEvents.length).to.equal(1n);
 
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(0);
+    expect(await vaultHub.isVaultConnected(stakingVaultAddress)).to.equal(false);
+  });
+
+  it("Should allow to transfer the StakingVault ownership to the owner", async () => {
+    const { vaultHub } = ctx.contracts;
+
+    await expect(dashboard.connect(owner).abandonDashboard(owner))
+      .to.emit(stakingVault, "OwnershipTransferred")
+      .withArgs(vaultHub, dashboard)
+      .to.emit(stakingVault, "OwnershipTransferStarted")
+      .withArgs(dashboard, owner);
+    expect(await stakingVault.pendingOwner()).to.equal(owner);
+
+    await expect(stakingVault.connect(owner).acceptOwnership())
+      .to.emit(stakingVault, "OwnershipTransferred")
+      .withArgs(dashboard, owner);
+    expect(await stakingVault.owner()).to.equal(owner);
+  });
+
+  it("Should allow to withdraw the deposit from the vault", async () => {
+    const withdrawTx = await stakingVault.connect(owner).withdraw(owner, VAULT_CONNECTION_DEPOSIT);
+    await expect(withdrawTx).to.emit(stakingVault, "EtherWithdrawn").withArgs(owner, VAULT_CONNECTION_DEPOSIT);
+    await expect(withdrawTx).changeEtherBalance(owner, VAULT_CONNECTION_DEPOSIT);
   });
 
   async function isSoleRoleMember(account: HardhatEthersSigner, role: string) {

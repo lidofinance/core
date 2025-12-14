@@ -14,7 +14,9 @@ import {
   report,
   reportVaultDataWithProof,
   reportVaultsDataWithProof,
+  resetDefaultTierShareLimit,
   setupLidoForVaults,
+  upDefaultTierShareLimit,
   waitNextAvailableReportTime,
 } from "lib/protocol";
 import { simulateReport } from "lib/protocol/helpers/accounting";
@@ -36,7 +38,7 @@ describe("Integration: Vault with bad debt", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
-    const { lido, stakingVaultFactory, vaultHub, operatorGrid } = ctx.contracts;
+    const { lido, stakingVaultFactory, vaultHub } = ctx.contracts;
     originalSnapshot = await Snapshot.take();
 
     [, owner, nodeOperator, otherOwner, daoAgent] = await ethers.getSigners();
@@ -50,25 +52,7 @@ describe("Integration: Vault with bad debt", () => {
       nodeOperator,
     ));
 
-    // Register node operator group with sufficient share limit
-    const agentSigner = await ctx.getSigner("agent");
-    await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
-    await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
-      {
-        shareLimit: ether("1000"),
-        reserveRatioBP: 2000,
-        forcedRebalanceThresholdBP: 1800,
-        infraFeeBP: 100,
-        liquidityFeeBP: 650,
-        reservationFeeBP: 0,
-      },
-    ]);
-
-    // Move vault to tier 1 with share limit
-    const requestedTierId = 1n;
-    const requestedShareLimit = ether("1000");
-    await dashboard.connect(owner).changeTier(requestedTierId, requestedShareLimit);
-    await operatorGrid.connect(nodeOperator).changeTier(stakingVault, requestedTierId, requestedShareLimit);
+    await upDefaultTierShareLimit(ctx, ether("1000"));
 
     dashboard = dashboard.connect(owner);
 
@@ -165,18 +149,20 @@ describe("Integration: Vault with bad debt", () => {
 
       // Owner deposits to cover bad debt
       // Use 2x the liability value to ensure we're above health threshold
-      const depositAmount = liabilityValue * 2n - totalValue;
+      const depositAmount = liabilityValue * 3n - totalValue;
       await dashboard.fund({ value: depositAmount });
 
       // Bring fresh report
-      await reportVaultDataWithProof(ctx, stakingVault);
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
       // Verify vault is now healthy
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(true, "Vault should be healthy after deposit");
 
       // Verify healthShortfallShares is no longer MAX_UINT256
-      const healthShortfall = await vaultHub.healthShortfallShares(stakingVault);
-      expect(healthShortfall).to.not.equal(MAX_UINT256, "healthShortfallShares should not be MAX_UINT256");
+      expect(await vaultHub.healthShortfallShares(stakingVault)).to.not.equal(
+        MAX_UINT256,
+        "healthShortfallShares should not be MAX_UINT256",
+      );
 
       // Mint should work - use actual minting capacity
       const mintingCapacity = await dashboard.remainingMintingCapacityShares(0n);
@@ -188,6 +174,26 @@ describe("Integration: Vault with bad debt", () => {
       const withdrawableValue = await vaultHub.withdrawableValue(stakingVault);
       expect(withdrawableValue).to.be.greaterThan(ether("0.1"), "Should have withdrawable value");
       await expect(dashboard.withdraw(owner, ether("0.1"))).to.emit(stakingVault, "EtherWithdrawn");
+    });
+
+    it("Does not internalize bad debt when vault value covers liabilities", async () => {
+      const { vaultHub, lido } = ctx.contracts;
+
+      const liabilityShares = await dashboard.liabilityShares();
+      const liabilityValue = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+
+      const depositAmount = liabilityValue * 5n;
+      await dashboard.fund({ value: depositAmount });
+      await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
+
+      const totalValueShares = await lido.getSharesByPooledEth(await dashboard.totalValue());
+      expect(totalValueShares).to.be.greaterThan(
+        liabilityShares,
+        "Total value converted to shares should exceed liability shares",
+      );
+
+      const tx = await vaultHub.connect(daoAgent).internalizeBadDebt(stakingVault, liabilityShares);
+      await expect(tx).to.not.emit(vaultHub, "BadDebtWrittenOffToBeInternalized");
     });
 
     it("Recovery via CL rewards", async () => {
@@ -226,21 +232,14 @@ describe("Integration: Vault with bad debt", () => {
     let acceptorDashboard: Dashboard;
 
     beforeEach(async () => {
-      const { stakingVaultFactory, operatorGrid } = ctx.contracts;
+      const { stakingVaultFactory } = ctx.contracts;
       // create vault acceptor
       ({ stakingVault: acceptorStakingVault, dashboard: acceptorDashboard } = await createVaultWithDashboard(
         ctx,
         stakingVaultFactory,
         otherOwner,
         nodeOperator,
-        nodeOperator,
       ));
-
-      // Move acceptor vault to tier 1 with sufficient share limit
-      const requestedTierId = 1n;
-      const requestedShareLimit = ether("1000");
-      await acceptorDashboard.connect(otherOwner).changeTier(requestedTierId, requestedShareLimit);
-      await operatorGrid.connect(nodeOperator).changeTier(acceptorStakingVault, requestedTierId, requestedShareLimit);
     });
 
     it("Vault's debt can be socialized", async () => {
@@ -333,12 +332,10 @@ describe("Integration: Vault with bad debt", () => {
 
     it("OperatorGrid shareLimits can't prevent socialization", async () => {
       await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
-      const { vaultHub, lido, operatorGrid } = ctx.contracts;
+      const { vaultHub, lido } = ctx.contracts;
 
-      // Update the group share limit to be lower than what we need
-      const agentSigner = await ctx.getSigner("agent");
-      const newGroupShareLimit = await acceptorDashboard.liabilityShares();
-      await operatorGrid.connect(agentSigner).updateGroupShareLimit(nodeOperator, newGroupShareLimit);
+      // Reset the default tier share limit to 0
+      await resetDefaultTierShareLimit(ctx);
 
       const badDebtShares =
         (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
@@ -403,14 +400,12 @@ describe("Integration: Vault with bad debt", () => {
         stakingVaultFactory,
         otherOwner,
         nodeOperator,
-        nodeOperator,
       );
 
       const { stakingVault: vaultC, dashboard: dashboardC } = await createVaultWithDashboard(
         ctx,
         stakingVaultFactory,
         otherOwner,
-        nodeOperator,
         nodeOperator,
       );
 

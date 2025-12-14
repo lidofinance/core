@@ -1,4 +1,5 @@
 export const MAX_UINT256 = 2n ** 256n - 1n;
+export const MAX_UINT96 = 2n ** 96n - 1n;
 export const MAX_INT104 = 2n ** 103n - 1n;
 export const INITIAL_STETH_HOLDER = "0x000000000000000000000000000000000000dEaD";
 
@@ -30,6 +31,7 @@ export const EPOCHS_PER_FRAME = 225n; // one day;
 export const GENESIS_FORK_VERSION = "0x00000000"; // for mainnet
 // Oracle report related
 export const GENESIS_TIME = 100n;
+export const GENESIS_TIME_MAINNET = 1606824023n;
 export const SLOTS_PER_EPOCH = 32n;
 export const BASE_CONSENSUS_VERSION = 1n;
 export const AO_CONSENSUS_VERSION = 3n;

@@ -23,17 +23,24 @@ export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
 
   const agent = await ctx.getSigner("agent");
 
+  // Grant REGISTRY_ROLE to agent if not granted (needed for alterTiers)
+  const registryRole = await operatorGrid.REGISTRY_ROLE();
+  const hasRegistryRole = await operatorGrid.hasRole(registryRole, agent);
+  if (!hasRegistryRole) {
+    await operatorGrid.connect(agent).grantRole(registryRole, agent);
+  }
+
   const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
 
   const defaultTierParams = await operatorGrid.tier(defaultTierId);
 
-  if (defaultTierParams.shareLimit === 0n) {
+  if (defaultTierParams.shareLimit === 0n || defaultTierParams.reserveRatioBP !== 50_00n) {
     await operatorGrid.connect(agent).alterTiers(
       [defaultTierId],
       [
         {
           shareLimit: ether("250"),
-          reserveRatioBP: defaultTierParams.reserveRatioBP,
+          reserveRatioBP: 50_00n,
           forcedRebalanceThresholdBP: defaultTierParams.forcedRebalanceThresholdBP,
           infraFeeBP: defaultTierParams.infraFeeBP,
           liquidityFeeBP: defaultTierParams.liquidityFeeBP,

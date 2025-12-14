@@ -1,6 +1,6 @@
 import { ZeroAddress } from "ethers";
 
-import { advanceChainTime, certainAddress, ether, impersonate, log } from "lib";
+import { certainAddress, ether, impersonate, log } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
 
 import { ProtocolContext } from "../types";
@@ -34,7 +34,7 @@ export const finalizeWQViaElVault = async (ctx: ProtocolContext) => {
 
   const initialMaxPositiveTokenRebase = await setMaxPositiveTokenRebase(ctx, LIMITER_PRECISION_BASE);
 
-  const ethToSubmit = ether("10000000"); // don't calculate required eth from withdrawal queue to accelerate tests
+  const ethToSubmit = ether("1000000"); // don't calculate required eth from withdrawal queue to accelerate tests
 
   const lastRequestId = await withdrawalQueue.getLastRequestId();
   while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
@@ -59,17 +59,8 @@ export const finalizeWQViaSubmit = async (ctx: ProtocolContext) => {
 
   const lastRequestId = await withdrawalQueue.getLastRequestId();
   while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
+    await lido.connect(ethHolder).submit(ZeroAddress, { value: ethToSubmit });
     await report(ctx, { clDiff: 0n, reportElVault: false });
-    try {
-      await lido.connect(ethHolder).submit(ZeroAddress, { value: ethToSubmit });
-    } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      if (errMsg.includes("STAKE_LIMIT")) {
-        await advanceChainTime(2n * 24n * 60n * 60n);
-        continue;
-      }
-      throw e;
-    }
   }
 
   await setStakingLimit(

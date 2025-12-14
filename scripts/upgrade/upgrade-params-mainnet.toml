@@ -8,7 +8,6 @@ slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum co
 secondsPerSlot = 12                   # Duration of each slot in seconds
 genesisTime = 1606824023              # Ethereum mainnet genesis timestamp
 depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Official ETH2 deposit contract
-isHoodi = false
 
 # Gate seal configuration for vault operations
 [gateSealForVaults]
@@ -16,24 +15,18 @@ sealDuration = 1209600  # 14 days
 sealingCommittee = "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
 
 [easyTrack]
-trustedCaller = "0x0000000000000000000000000000000000000000"     # Address of stVaults EasyTrack committee # TODO: update the placeholder
-initialValidatorExitFeeLimit = "100000000000000000"              # Max validator exit fee which can be spend for single key exit request
-# Phase 1: Pilot (starts with Lido V3 upgrade enacted) - https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665
-maxGroupShareLimit = "250000000000000000000000"                  # Max share limit which can be set for group by EasyTrack
-maxDefaultTierShareLimit = 0                                     # Max share limit which can be set for default tier by EasyTrack
+VaultsAdapter = "0xe2DE6d2DefF15588a71849c0429101F8ca9FB14D"
 
 # Must be deployed before the V3 upgrading contracts
 [easyTrack.newFactories]
-# TODO: update upon deployment
-AlterTiersInOperatorGrid = "0x00000000000000000000000000000000000fAc01"
-RegisterGroupsInOperatorGrid = "0x00000000000000000000000000000000000fAc02"
-RegisterTiersInOperatorGrid = "0x00000000000000000000000000000000000FAc03"
-SetJailStatusInOperatorGrid = "0x00000000000000000000000000000000000faC04"
-SetLiabilitySharesTargetInVaultHub = "0x00000000000000000000000000000000000FAc05"
-SocializeBadDebtInVaultHub = "0x00000000000000000000000000000000000Fac06"
-ForceValidatorExitsInVaultHub = "0x00000000000000000000000000000000000faC07"
-UpdateGroupsShareLimitInOperatorGrid = "0x00000000000000000000000000000000000FAc08"
-UpdateVaultsFeesInOperatorGrid = "0x00000000000000000000000000000000000fac09"
+AlterTiersInOperatorGrid = "0xa29173C7BCf39dA48D5E404146A652d7464aee14"
+RegisterGroupsInOperatorGrid = "0x194A46DA1947E98c9D79af13E06Cfbee0D8610cC"
+RegisterTiersInOperatorGrid = "0x5292A1284e4695B95C0840CF8ea25A818751C17F"
+SetJailStatusInOperatorGrid = "0x93F1DEE4473Ee9F42c8257C201e33a6Da30E5d67"
+SocializeBadDebtInVaultHub = "0x1dF50522A1D868C12bF71747Bb6F24A18Fe6d32C"
+ForceValidatorExitsInVaultHub = "0x6C968cD89CA358fbAf57B18e77a8973Fa869a6aA"
+UpdateGroupsShareLimitInOperatorGrid = "0x8Bdc726a3147D8187820391D7c6F9F942606aEe6"
+UpdateVaultsFeesInOperatorGrid = "0x5C3bDFa3E7f312d8cf72F56F2b797b026f6B471c"
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
@@ -76,10 +69,17 @@ ao_consensus_version = 5              # Accounting Oracle consensus version: htt
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-expiryTimestamp = 1764547200          # December 1, 2025 00:00:00 UTC
+expiryTimestamp = 1768435200          # January 15, 2026 0:00:00 UTC
 # Initial maximum external ratio in basis points for Lido v3
 # https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665#p-22926-rollout-plan-9
 initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial phase
 
 # Sources (todo)
 # - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504
+
+timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"  # Predeployed TimeConstraints contract on mainnet
+
+# Oracle Daemon Config slashing reserve parameters
+# how it is used: https://github.com/lidofinance/lido-oracle/blob/d6c09a16736b2c132343a4e349c8f27179c73e6e/src/services/staking_vaults.py#L207-L235
+odcSlashingReserveWeRightShiftEpochs = 8192  # EPOCHS_PER_SLASHINGS_VECTOR - https://eth2book.info/capella/part3/config/preset/#epochs_per_slashings_vector
+odcSlashingReserveWeLeftShiftEpochs = 8192   # EPOCHS_PER_SLASHINGS_VECTOR
