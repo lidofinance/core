@@ -481,6 +481,84 @@ export async function createVaultProxyWithoutConnectingToVaultHub(
   };
 }
 
+/**
+ * Sets up a staking vault with bad debt by slashing its total value below its liabilities
+ * @param ctx Protocol context
+ * @param vaultOwner Vault owner signer
+ * @param nodeOperator Node operator signer
+ * @param fundAmount Amount to fund the vault with
+ * @param slashTo Amount to slash the vault's total value to
+ * @returns Object containing the staking vault and the amount of bad debt shares
+ */
+export async function setupVaultWithBadDebt(
+  ctx: ProtocolContext,
+  vaultOwner: HardhatEthersSigner,
+  nodeOperator: HardhatEthersSigner,
+  fundAmount = ether("10"),
+  slashTo = ether("1"),
+): Promise<{ stakingVault: StakingVault; badDebtShares: bigint }> {
+  const { stakingVaultFactory, lido } = ctx.contracts;
+
+  // Create vault with dashboard
+  const { stakingVault, dashboard } = await createVaultWithDashboard(
+    ctx,
+    stakingVaultFactory,
+    vaultOwner,
+    nodeOperator,
+    nodeOperator,
+  );
+
+  // Fund and mint max shares
+  await dashboard.connect(vaultOwner).fund({ value: fundAmount });
+
+  const capacity = await dashboard.remainingMintingCapacityShares(0n);
+  await dashboard.connect(vaultOwner).mintShares(vaultOwner, capacity);
+
+  // Slash to create bad debt
+  await reportVaultDataWithProof(ctx, stakingVault, {
+    totalValue: slashTo,
+    slashingReserve: slashTo,
+    waitForNextRefSlot: true,
+  });
+
+  // Verify bad debt exists
+  const totalValue = await dashboard.totalValue();
+  const liabilityShares = await dashboard.liabilityShares();
+  const liabilityValue = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+  expect(totalValue).to.be.lessThan(liabilityValue, "Vault should have bad debt");
+
+  // Calculate bad debt amount
+  const badDebtShares = liabilityShares - (await lido.getSharesByPooledEth(totalValue));
+
+  return { stakingVault, badDebtShares };
+}
+
+/**
+ * Queue bad debt internalization for a staking vault
+ * @param ctx Protocol context
+ * @param stakingVault Staking vault to internalize bad debt for
+ * @param badDebtShares Amount of bad debt shares to internalize
+ */
+export async function queueBadDebtInternalization(
+  ctx: ProtocolContext,
+  stakingVault: StakingVault,
+  badDebtShares: bigint,
+): Promise<void> {
+  expect(badDebtShares).to.be.gt(0n, "Bad debt shares must be greater than zero");
+
+  // Grant BAD_DEBT_MASTER_ROLE to daoAgent
+  const { vaultHub } = ctx.contracts;
+  const aragonAgent = await ctx.getSigner("agent");
+  await vaultHub.connect(aragonAgent).grantRole(await vaultHub.BAD_DEBT_MASTER_ROLE(), aragonAgent);
+
+  // Queue bad debt for internalization
+  const badDebtToBefore = await vaultHub.badDebtToInternalize();
+  await vaultHub.connect(aragonAgent).internalizeBadDebt(stakingVault, badDebtShares);
+  const badDebtToAfter = await vaultHub.badDebtToInternalize();
+
+  expect(badDebtToAfter - badDebtToBefore).to.equal(badDebtShares, "Bad debt should be queued");
+}
+
 export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
   const pubkeys = Array.from({ length: num }, (_, i) => {
     const paddedIndex = (i + 1).toString().padStart(8, "0");
