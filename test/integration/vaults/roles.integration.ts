@@ -15,7 +15,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { days, ether, impersonate, PDGPolicy, randomValidatorPubkey } from "lib";
+import { days, ether, impersonate, MAX_SANE_SETTLED_GROWTH, PDGPolicy, randomValidatorPubkey } from "lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -23,6 +23,7 @@ import {
   getProtocolContext,
   getRoleMethods,
   ProtocolContext,
+  reportVaultDataWithProof,
   setupLidoForVaults,
   VaultRoles,
 } from "lib/protocol";
@@ -544,6 +545,156 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
               failingUsers: [...Object.values(roles), nodeOperatorManager, stranger],
             },
             [],
+            await dashboard.DEFAULT_ADMIN_ROLE(),
+          );
+        });
+
+        it("abandonDashboard - requires DEFAULT_ADMIN_ROLE", async () => {
+          // Setup: disconnect vault from hub first
+          const { vaultHub } = ctx.contracts;
+          const stakingVaultAddress = await dashboard.stakingVault();
+          const stakingVault = await ethers.getContractAt("StakingVault", stakingVaultAddress);
+
+          // Disconnect vault if connected
+          if (await vaultHub.isVaultConnected(stakingVaultAddress)) {
+            // Use voluntaryDisconnect to disconnect
+            await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
+            // Complete disconnect by reporting
+            await reportVaultDataWithProof(ctx, stakingVault);
+            // Verify vault is disconnected
+            expect(await vaultHub.isVaultConnected(stakingVaultAddress)).to.be.false;
+          }
+
+          await testMethod(
+            dashboard,
+            "abandonDashboard",
+            {
+              successUsers: [owner],
+              failingUsers: [...Object.values(roles), nodeOperatorManager, stranger],
+            },
+            [stranger.address],
+            await dashboard.DEFAULT_ADMIN_ROLE(),
+          );
+        });
+
+        it("reconnectToVaultHub - requires DEFAULT_ADMIN_ROLE", async () => {
+          // Setup: disconnect vault from hub and correct settled growth
+          const { vaultHub } = ctx.contracts;
+          const stakingVaultAddress = await dashboard.stakingVault();
+          const stakingVault = await ethers.getContractAt("StakingVault", stakingVaultAddress);
+
+          // Disconnect vault if connected
+          if (await vaultHub.isVaultConnected(stakingVaultAddress)) {
+            await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
+            // Complete disconnect by reporting
+            await reportVaultDataWithProof(ctx, stakingVault);
+            // Verify vault is disconnected
+            expect(await vaultHub.isVaultConnected(stakingVaultAddress)).to.be.false;
+          }
+
+          // Correct settled growth only if needed
+          const currentSettledGrowth = await dashboard.settledGrowth();
+          if (currentSettledGrowth >= MAX_SANE_SETTLED_GROWTH) {
+            await dashboard.connect(owner).correctSettledGrowth(0n, MAX_SANE_SETTLED_GROWTH);
+            await dashboard.connect(nodeOperatorManager).correctSettledGrowth(0n, MAX_SANE_SETTLED_GROWTH);
+          }
+
+          await testMethod(
+            dashboard,
+            "reconnectToVaultHub",
+            {
+              successUsers: [owner],
+              failingUsers: [...Object.values(roles), nodeOperatorManager, stranger],
+            },
+            [],
+            await dashboard.DEFAULT_ADMIN_ROLE(),
+          );
+        });
+
+        it("connectToVaultHub - requires DEFAULT_ADMIN_ROLE (via ownership)", async () => {
+          // Setup: disconnect vault from hub and correct settled growth
+          const { vaultHub } = ctx.contracts;
+          const stakingVaultAddress = await dashboard.stakingVault();
+          const stakingVault = await ethers.getContractAt("StakingVault", stakingVaultAddress);
+
+          // Disconnect vault if connected
+          if (await vaultHub.isVaultConnected(stakingVaultAddress)) {
+            await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
+            // Complete disconnect by reporting
+            await reportVaultDataWithProof(ctx, stakingVault);
+            // Verify vault is disconnected
+            expect(await vaultHub.isVaultConnected(stakingVaultAddress)).to.be.false;
+          }
+
+          // Correct settled growth only if needed
+          const currentSettledGrowth = await dashboard.settledGrowth();
+          if (currentSettledGrowth >= MAX_SANE_SETTLED_GROWTH) {
+            await dashboard.connect(owner).correctSettledGrowth(0n, MAX_SANE_SETTLED_GROWTH);
+            await dashboard.connect(nodeOperatorManager).correctSettledGrowth(0n, MAX_SANE_SETTLED_GROWTH);
+          }
+
+          // connectToVaultHub is public but requires ownership, so only owner (DEFAULT_ADMIN) can call it
+          await testMethod(
+            dashboard,
+            "connectToVaultHub",
+            {
+              successUsers: [owner],
+              failingUsers: [...Object.values(roles), nodeOperatorManager, stranger],
+            },
+            [{ value: 0n }],
+            await dashboard.DEFAULT_ADMIN_ROLE(),
+          );
+        });
+
+        it("connectAndAcceptTier - requires VAULT_CONFIGURATION_ROLE", async () => {
+          // Setup: disconnect vault from hub, correct settled growth, and register tier
+          const { vaultHub, operatorGrid } = ctx.contracts;
+          const stakingVaultAddress = await dashboard.stakingVault();
+          const stakingVault = await ethers.getContractAt("StakingVault", stakingVaultAddress);
+          const agent = await ctx.getSigner("agent");
+
+          // Disconnect vault if connected
+          if (await vaultHub.isVaultConnected(stakingVaultAddress)) {
+            await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
+            // Complete disconnect by reporting
+            await reportVaultDataWithProof(ctx, stakingVault);
+            // Verify vault is disconnected
+            expect(await vaultHub.isVaultConnected(stakingVaultAddress)).to.be.false;
+          }
+
+          // Correct settled growth only if needed
+          const currentSettledGrowth = await dashboard.settledGrowth();
+          if (currentSettledGrowth >= MAX_SANE_SETTLED_GROWTH) {
+            await dashboard.connect(owner).correctSettledGrowth(0n, MAX_SANE_SETTLED_GROWTH);
+            await dashboard.connect(nodeOperatorManager).correctSettledGrowth(0n, MAX_SANE_SETTLED_GROWTH);
+          }
+
+          // Register group and tier for nodeOperatorManager
+          const nodeOperatorAddress = await stakingVault.nodeOperator();
+          await operatorGrid.connect(agent).grantRole(await operatorGrid.REGISTRY_ROLE(), agent);
+          await operatorGrid.connect(agent).registerGroup(nodeOperatorAddress, ether("5000"));
+          await operatorGrid.connect(agent).registerTiers(nodeOperatorAddress, [
+            {
+              shareLimit: ether("1000"),
+              reserveRatioBP: 1000n,
+              forcedRebalanceThresholdBP: 500n,
+              infraFeeBP: 100n,
+              liquidityFeeBP: 100n,
+              reservationFeeBP: 100n,
+            },
+          ]);
+          const tierId = (await operatorGrid.group(nodeOperatorAddress)).tierIds[0];
+
+          // connectAndAcceptTier first calls connectToVaultHub() which requires DEFAULT_ADMIN_ROLE
+          // So the first access check is for DEFAULT_ADMIN_ROLE, not VAULT_CONFIGURATION_ROLE
+          await testMethod(
+            dashboard,
+            "connectAndAcceptTier",
+            {
+              successUsers: [owner],
+              failingUsers: [...Object.values(roles), nodeOperatorManager, stranger],
+            },
+            [tierId, ether("100"), { value: 0n }],
             await dashboard.DEFAULT_ADMIN_ROLE(),
           );
         });
