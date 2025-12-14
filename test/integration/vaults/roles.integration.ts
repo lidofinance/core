@@ -801,6 +801,10 @@ describe("Integration: VaultHub Roles and Access Control", () => {
     });
 
     it("setLiabilitySharesTarget - requires REDEMPTION_MASTER_ROLE", async () => {
+      // This role is granted to agent on Hoodi testnet
+      if (await vaultHub.hasRole(await vaultHub.REDEMPTION_MASTER_ROLE(), agent.address)) {
+        await vaultHub.connect(agent).revokeRole(await vaultHub.REDEMPTION_MASTER_ROLE(), agent.address);
+      }
       await testMethod(
         vaultHub,
         "setLiabilitySharesTarget",
@@ -814,6 +818,10 @@ describe("Integration: VaultHub Roles and Access Control", () => {
     });
 
     it("disconnect - requires VAULT_MASTER_ROLE", async () => {
+      // This role is granted to agent on Hoodi testnet
+      if (await vaultHub.hasRole(await vaultHub.VAULT_MASTER_ROLE(), agent.address)) {
+        await vaultHub.connect(agent).revokeRole(await vaultHub.VAULT_MASTER_ROLE(), agent.address);
+      }
       await testMethod(
         vaultHub,
         "disconnect",
