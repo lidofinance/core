@@ -396,7 +396,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           await dashboard.connect(roles.minter).mintShares(roles.minter, sharesAmount * BigInt(2 * allUsers.length));
           const stethAmount = await ctx.contracts.lido.getPooledEthByShares(sharesAmount);
           for (const user of allUsers) {
-            await ctx.contracts.lido.connect(roles.minter).transferShares(user, stethAmount);
+            await ctx.contracts.lido.connect(roles.minter).transfer(user, stethAmount);
             await ctx.contracts.lido.connect(user).approve(dashboard, stethAmount);
           }
 
@@ -601,7 +601,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           "transferVaultOwnership",
           {
             successUsers: [owner, nodeOperatorManager],
-            failingUsers: Object.values(roles),
+            failingUsers: [...Object.values(roles), stranger],
           },
           [stranger.address],
         );
@@ -612,7 +612,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           "correctSettledGrowth",
           {
             successUsers: [owner, nodeOperatorManager],
-            failingUsers: Object.values(roles),
+            failingUsers: [...Object.values(roles), stranger],
           },
           [0n, 0n],
         );
@@ -682,6 +682,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
   let pauseRole: HardhatEthersSigner;
   let resumeRole: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let roles: HardhatEthersSigner[];
 
   let vaultHub: VaultHub;
   let stakingVault: StakingVault;
@@ -720,6 +721,18 @@ describe("Integration: VaultHub Roles and Access Control", () => {
     await vaultHub.connect(agent).grantRole(await vaultHub.PAUSE_ROLE(), pauseRole);
     await vaultHub.connect(agent).grantRole(await vaultHub.RESUME_ROLE(), resumeRole);
 
+    roles = [
+      owner,
+      nodeOperatorManager,
+      vaultMaster,
+      redemptionMaster,
+      validatorExitRole,
+      badDebtMaster,
+      pauseRole,
+      resumeRole,
+      stranger,
+    ];
+
     // Create a vault for testing (owner will be the admin of Dashboard)
     ({ stakingVault, dashboard } = await createVaultWithDashboard(
       ctx,
@@ -750,7 +763,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
         "pauseFor",
         {
           successUsers: [pauseRole],
-          failingUsers: [stranger],
+          failingUsers: [...roles.filter((r) => r !== pauseRole), agent],
         },
         [days(1n)],
         await vaultHub.PAUSE_ROLE(),
@@ -764,7 +777,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
         "pauseUntil",
         {
           successUsers: [pauseRole],
-          failingUsers: [stranger],
+          failingUsers: [...roles.filter((r) => r !== pauseRole), agent],
         },
         [futureTimestamp],
         await vaultHub.PAUSE_ROLE(),
@@ -780,7 +793,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
         "resume",
         {
           successUsers: [resumeRole],
-          failingUsers: [stranger],
+          failingUsers: [...roles.filter((r) => r !== resumeRole), agent],
         },
         [],
         await vaultHub.RESUME_ROLE(),
@@ -793,7 +806,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
         "setLiabilitySharesTarget",
         {
           successUsers: [redemptionMaster],
-          failingUsers: [stranger],
+          failingUsers: [...roles.filter((r) => r !== redemptionMaster), agent],
         },
         [vaultAddress, 0n],
         await vaultHub.REDEMPTION_MASTER_ROLE(),
@@ -806,7 +819,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
         "disconnect",
         {
           successUsers: [vaultMaster],
-          failingUsers: [stranger],
+          failingUsers: [...roles.filter((r) => r !== vaultMaster), agent],
         },
         [vaultAddress],
         await vaultHub.VAULT_MASTER_ROLE(),
@@ -830,7 +843,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
         "socializeBadDebt",
         {
           successUsers: [badDebtMaster],
-          failingUsers: [stranger],
+          failingUsers: [...roles.filter((r) => r !== badDebtMaster), agent],
         },
         [vaultAddress, vault2Address, 1n],
         await vaultHub.BAD_DEBT_MASTER_ROLE(),
@@ -843,7 +856,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
         "internalizeBadDebt",
         {
           successUsers: [badDebtMaster],
-          failingUsers: [stranger],
+          failingUsers: [...roles.filter((r) => r !== badDebtMaster), agent],
         },
         [vaultAddress, 1n],
         await vaultHub.BAD_DEBT_MASTER_ROLE(),
@@ -856,7 +869,7 @@ describe("Integration: VaultHub Roles and Access Control", () => {
         "forceValidatorExit",
         {
           successUsers: [validatorExitRole],
-          failingUsers: [stranger],
+          failingUsers: [...roles.filter((r) => r !== validatorExitRole), agent],
         },
         [vaultAddress, "0x", stranger.address],
         await vaultHub.VALIDATOR_EXIT_ROLE(),
@@ -878,10 +891,9 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       ];
 
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user)[method](...args)).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for OperatorGrid (but might fail for other reasons)
       const operatorGridSigner = await impersonate(await ctx.contracts.operatorGrid.getAddress(), ether("10"));
@@ -905,10 +917,9 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       ];
 
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user)[method](...args)).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for LazyOracle (but might fail for other reasons)
       const lazyOracleSigner = await impersonate(await ctx.contracts.lazyOracle.getAddress(), ether("10"));
@@ -923,10 +934,9 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       const args: [bigint] = [1n];
 
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger)[method](...args)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user)[method](...args)).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for Accounting contract (but might fail for other reasons)
       const accountingSigner = await impersonate(await ctx.contracts.accounting.getAddress(), ether("10"));
@@ -960,11 +970,13 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       const newVaultAddress = ctx.getEvents(receipt!, "VaultCreated")[0].args!.vault;
       const newDashboardAddress = ctx.getEvents(receipt!, "DashboardCreated")[0].args!.dashboard;
 
-      // Should fail for unauthorized callers (stranger is not the vault owner)
-      await expect(vaultHub.connect(stranger).connectVault(newVaultAddress)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      // Should fail for unauthorized callers
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user).connectVault(newVaultAddress)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
 
       // Dashboard (vault owner) can call it - won't get NotAuthorized
       const newDashboardSigner = await impersonate(newDashboardAddress, ether("10"));
@@ -978,15 +990,16 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       // Need to give both stranger and dashboard shares and approval to pass the transfer check
       const sharesAmount = 100n;
 
-      // Prepare shares and approval for stranger
-      await dashboard.connect(dashboardRoles.minter).mintShares(stranger, sharesAmount);
-      await ctx.contracts.lido.connect(stranger).approve(vaultHub, sharesAmount);
-
       // Should fail for unauthorized callers (ACL check in burnShares)
-      await expect(vaultHub.connect(stranger).transferAndBurnShares(vaultAddress, 1n)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        // Prepare shares and approval for stranger
+        await dashboard.connect(dashboardRoles.minter).mintShares(user, sharesAmount);
+        await ctx.contracts.lido.connect(user).approve(vaultHub, sharesAmount);
+        await expect(vaultHub.connect(user).transferAndBurnShares(vaultAddress, 1n)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
 
       // Prepare shares and approval for Dashboard
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1001,11 +1014,12 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("fund - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger).fund(vaultAddress, { value: ether("1") })).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
-
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user).fund(vaultAddress, { value: ether("1") })).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
       // Should succeed for Dashboard (owner in VaultHub)
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
       await expect(
@@ -1015,9 +1029,11 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("withdraw - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(
-        vaultHub.connect(stranger).withdraw(vaultAddress, stranger.address, ether("1")),
-      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      for (const user of [...roles, agent]) {
+        await expect(
+          vaultHub.connect(user).withdraw(vaultAddress, stranger.address, ether("1")),
+        ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1028,9 +1044,11 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("mintShares - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(
-        vaultHub.connect(stranger).mintShares(vaultAddress, stranger.address, 100n),
-      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      for (const user of [...roles, agent]) {
+        await expect(
+          vaultHub.connect(user).mintShares(vaultAddress, stranger.address, 100n),
+        ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1041,10 +1059,12 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("burnShares - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger).burnShares(vaultAddress, 1n)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user).burnShares(vaultAddress, 1n)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1056,10 +1076,12 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("voluntaryDisconnect - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1070,9 +1092,11 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("transferVaultOwnership - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(
-        vaultHub.connect(stranger).transferVaultOwnership(vaultAddress, stranger.address),
-      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      for (const user of [...roles, agent]) {
+        await expect(
+          vaultHub.connect(user).transferVaultOwnership(vaultAddress, stranger.address),
+        ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for Dashboard (owner in VaultHub)
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1083,10 +1107,12 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("pauseBeaconChainDeposits - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger).pauseBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user).pauseBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
 
       // Should succeed for Dashboard (owner in VaultHub)
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1101,10 +1127,12 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       await vaultHub.connect(dashboardSigner).pauseBeaconChainDeposits(vaultAddress);
 
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       await expect(
@@ -1116,9 +1144,12 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       const pubkeys = "0x" + "ab".repeat(48);
 
       // Should fail for unauthorized callers
-      await expect(
-        vaultHub.connect(stranger).requestValidatorExit(vaultAddress, pubkeys),
-      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user).requestValidatorExit(vaultAddress, pubkeys)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
 
       // Should succeed for Dashboard (owner in VaultHub)
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1132,9 +1163,11 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       const amounts: bigint[] = [];
 
       // Should fail for unauthorized callers
-      await expect(
-        vaultHub.connect(stranger).triggerValidatorWithdrawals(vaultAddress, pubkeys, amounts, stranger.address),
-      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      for (const user of [...roles, agent]) {
+        await expect(
+          vaultHub.connect(user).triggerValidatorWithdrawals(vaultAddress, pubkeys, amounts, stranger.address),
+        ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1145,10 +1178,12 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("rebalance - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(vaultHub.connect(stranger).rebalance(vaultAddress, 1n)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      for (const user of [...roles, agent]) {
+        await expect(vaultHub.connect(user).rebalance(vaultAddress, 1n)).to.be.revertedWithCustomError(
+          vaultHub,
+          "NotAuthorized",
+        );
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1169,9 +1204,11 @@ describe("Integration: VaultHub Roles and Access Control", () => {
       };
 
       // Should fail for unauthorized callers
-      await expect(
-        vaultHub.connect(stranger).proveUnknownValidatorToPDG(vaultAddress, witness),
-      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      for (const user of [...roles, agent]) {
+        await expect(
+          vaultHub.connect(user).proveUnknownValidatorToPDG(vaultAddress, witness),
+        ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1182,9 +1219,11 @@ describe("Integration: VaultHub Roles and Access Control", () => {
 
     it("collectERC20FromVault - requires vault owner (Dashboard)", async () => {
       // Should fail for unauthorized callers
-      await expect(
-        vaultHub.connect(stranger).collectERC20FromVault(vaultAddress, ZeroAddress, stranger.address, 1n),
-      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      for (const user of [...roles, agent]) {
+        await expect(
+          vaultHub.connect(user).collectERC20FromVault(vaultAddress, ZeroAddress, stranger.address, 1n),
+        ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+      }
 
       // Should succeed for Dashboard (owner in VaultHub) - but might fail for other reasons
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
@@ -1544,7 +1583,7 @@ describe("Integration: OperatorGrid Roles and Access Control", () => {
       );
 
       // Should not revert with NotAuthorized for vault owner
-      // we use dashboard here becouse it is the vault owner when vault is connected to vault hub
+      // we use dashboard here because it is the vault owner when vault is connected to vault hub
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
       await expect(operatorGrid.connect(dashboardSigner)[method](...args)).to.not.be.revertedWithCustomError(
         operatorGrid,
@@ -1570,7 +1609,7 @@ describe("Integration: OperatorGrid Roles and Access Control", () => {
       );
 
       // Should not revert with NotAuthorized for vault owner
-      // we use dashboard here becouse it is the vault owner when vault is connected to vault hub
+      // we use dashboard here because it is the vault owner when vault is connected to vault hub
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
       await expect(operatorGrid.connect(dashboardSigner)[method](...args)).to.not.be.revertedWithCustomError(
         operatorGrid,
@@ -1596,7 +1635,7 @@ describe("Integration: OperatorGrid Roles and Access Control", () => {
       );
 
       // Should not revert with NotAuthorized for vault owner
-      // we use dashboard here becouse it is the vault owner when vault is connected to vault hub
+      // we use dashboard here because it is the vault owner when vault is connected to vault hub
       const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("10"));
       await expect(operatorGrid.connect(dashboardSigner)[method](...args)).to.not.be.revertedWithCustomError(
         operatorGrid,
