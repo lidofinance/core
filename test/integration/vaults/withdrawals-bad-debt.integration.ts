@@ -208,7 +208,7 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     await upDefaultTierShareLimit(ctx, ether("1000"));
 
     // Make the sanity checker more sensitive to the activation of smoothen token rebase
-    const maxPositiveTokenRebase = 5000n;
+    const maxPositiveTokenRebase = 1000n;
     const agent = await ctx.getSigner("agent");
     const { oracleReportSanityChecker } = ctx.contracts;
     await oracleReportSanityChecker
