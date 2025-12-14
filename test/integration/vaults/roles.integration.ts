@@ -1276,6 +1276,10 @@ describe("Integration: LazyOracle Roles and Access Control", () => {
 
   describe("Role-protected methods", () => {
     it("updateSanityParams - requires UPDATE_SANITY_PARAMS_ROLE", async () => {
+      // This role is granted to agent on Hoodi testnet
+      if (await lazyOracle.hasRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), agent.address)) {
+        await lazyOracle.connect(agent).revokeRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), agent.address);
+      }
       await testMethod(
         lazyOracle,
         "updateSanityParams",
