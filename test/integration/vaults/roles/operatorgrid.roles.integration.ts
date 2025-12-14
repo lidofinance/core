@@ -4,7 +4,7 @@ import { beforeEach } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard,OperatorGrid, VaultHub } from "typechain-types";
+import { Dashboard, OperatorGrid, VaultHub } from "typechain-types";
 
 import { days, ether, impersonate } from "lib";
 import {
