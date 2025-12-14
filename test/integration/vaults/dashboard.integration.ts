@@ -378,16 +378,17 @@ describe("Integration: Dashboard Full Coverage", () => {
       });
 
       it("Returns 0 when fee exceeds withdrawable", async () => {
+        // Set fee rate to 100% to make calculation simpler
+        await dashboard.connect(owner).setFeeRate(TOTAL_BASIS_POINTS);
+        await dashboard.connect(nodeOperator).setFeeRate(TOTAL_BASIS_POINTS);
+
         // Mint max to lock all value
         const maxShares = await dashboard.totalMintingCapacityShares();
         await dashboard.connect(owner).mintShares(owner, maxShares);
 
-        // Simulate massive growth to create large fees
         const totalValue = await dashboard.totalValue();
         const vaultHubWithdrawable = await vaultHub.withdrawableValue(stakingVault);
-
-        // Create fees larger than withdrawable
-        const requiredGrowth = vaultHubWithdrawable * 150n;
+        const requiredGrowth = vaultHubWithdrawable + ether("1");
 
         await reportVaultDataWithProof(ctx, stakingVault, {
           totalValue: totalValue + requiredGrowth,
