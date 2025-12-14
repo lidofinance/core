@@ -35,6 +35,7 @@ import { TOTAL_BASIS_POINTS } from "lib/constants";
 import { mEqual } from "lib/promise";
 import {
   createVaultProxyWithoutConnectingToVaultHub,
+  ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getReportTimeElapsed,
   ProtocolContext,
@@ -191,6 +192,7 @@ resetState(
       agent = await ctx.getSigner("agent");
 
       await setupLidoForVaults(ctx);
+      await ensurePredepositGuaranteeUnpaused(ctx);
       await setBalance(nodeOperator.address, ether("100"));
 
       slot = await predepositGuarantee.PIVOT_SLOT();
