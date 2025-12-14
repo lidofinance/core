@@ -2,11 +2,10 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
-import { ether } from "lib";
+import { ether, updateBalance } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -43,7 +42,6 @@ describe("Integration: VaultHub.obligationsShortfallValue", () => {
       ctx.contracts.stakingVaultFactory,
       owner,
       nodeOperator,
-      nodeOperator,
     ));
 
     vaultHub = ctx.contracts.vaultHub;
@@ -59,12 +57,10 @@ describe("Integration: VaultHub.obligationsShortfallValue", () => {
 
   describe("obligationsShortfallValue when connection is removed", () => {
     it("returns 0 after disconnect even if shortfall existed", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
       await dashboard.fund({ value: ether("3") });
       await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
-      await setBalance(vaultAddress, 0n);
+      await updateBalance(stakingVault, 0n);
       await reportVaultDataWithProof(ctx, stakingVault, {
         totalValue: ether("1"),
         cumulativeLidoFees: ether("2"),
@@ -84,9 +80,9 @@ describe("Integration: VaultHub.obligationsShortfallValue", () => {
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(stakingVault);
 
-      expect(await vaultHub.isVaultConnected(vaultAddress)).to.be.false;
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
 
-      const shortfallAfter = await vaultHub.obligationsShortfallValue(vaultAddress);
+      const shortfallAfter = await vaultHub.obligationsShortfallValue(stakingVault);
       expect(shortfallAfter).to.equal(0n);
     });
   });

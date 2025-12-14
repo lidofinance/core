@@ -27,7 +27,6 @@ describe("Integration: VaultHub.forceValidatorExit", () => {
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
   let lido: Lido;
-  let vaultAddress: string;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -46,10 +45,8 @@ describe("Integration: VaultHub.forceValidatorExit", () => {
       ctx.contracts.stakingVaultFactory,
       owner,
       nodeOperator,
-      nodeOperator,
     ));
 
-    vaultAddress = await stakingVault.getAddress();
     vaultHub = ctx.contracts.vaultHub;
     lido = ctx.contracts.lido;
     dashboard = dashboard.connect(owner);
@@ -67,12 +64,12 @@ describe("Integration: VaultHub.forceValidatorExit", () => {
     it("reverts when there is no obligations shortfall", async () => {
       const fee = await stakingVault.calculateValidatorWithdrawalFee(1n);
 
-      expect(await vaultHub.obligationsShortfallValue(vaultAddress)).to.equal(0n);
+      expect(await vaultHub.obligationsShortfallValue(stakingVault)).to.equal(0n);
 
       await expect(
         vaultHub
           .connect(validatorExitOperator)
-          .forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, validatorExitOperator.address, { value: fee }),
+          .forceValidatorExit(stakingVault, SAMPLE_PUBKEY, validatorExitOperator.address, { value: fee }),
       ).to.be.revertedWithCustomError(vaultHub, "ForcedValidatorExitNotAllowed");
     });
 
@@ -89,22 +86,22 @@ describe("Integration: VaultHub.forceValidatorExit", () => {
         waitForNextRefSlot: true,
       });
 
-      expect(await vaultHub.obligationsShortfallValue(vaultAddress)).to.equal(ether("2"));
+      expect(await vaultHub.obligationsShortfallValue(stakingVault)).to.equal(ether("2"));
 
       const tx = vaultHub
         .connect(validatorExitOperator)
-        .forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, validatorExitOperator.address, { value: fee });
+        .forceValidatorExit(stakingVault, SAMPLE_PUBKEY, validatorExitOperator.address, { value: fee });
 
       await expect(tx)
         .to.emit(vaultHub, "ForcedValidatorExitTriggered")
-        .withArgs(vaultAddress, SAMPLE_PUBKEY, validatorExitOperator.address);
+        .withArgs(stakingVault, SAMPLE_PUBKEY, validatorExitOperator.address);
 
       await expect(tx)
         .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
         .withArgs(SAMPLE_PUBKEY, [], 0n, validatorExitOperator.address);
     });
 
-    it("reduces redemptionShares after forced exit and refreshed report", async () => {
+    it("reduces redemptionShares after forced exit and rebalance", async () => {
       const fee = await stakingVault.calculateValidatorWithdrawalFee(1n);
 
       await dashboard.fund({ value: ether("4") });
@@ -114,7 +111,7 @@ describe("Integration: VaultHub.forceValidatorExit", () => {
       const redemptionShares = await lido.getSharesByPooledEth(redemptionValue);
 
       await dashboard.mintShares(owner, redemptionShares);
-      await vaultHub.connect(agentSigner).setLiabilitySharesTarget(vaultAddress, 0n);
+      await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVault, 0n);
 
       await updateBalance(stakingVault, 0n);
       await reportVaultDataWithProof(ctx, stakingVault, {
@@ -123,12 +120,12 @@ describe("Integration: VaultHub.forceValidatorExit", () => {
         waitForNextRefSlot: true,
       });
 
-      const recordBefore = await vaultHub.vaultRecord(vaultAddress);
+      const recordBefore = await vaultHub.vaultRecord(stakingVault);
       expect(recordBefore.redemptionShares).to.equal(redemptionShares);
 
       await vaultHub
         .connect(validatorExitOperator)
-        .forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, validatorExitOperator.address, { value: fee });
+        .forceValidatorExit(stakingVault, SAMPLE_PUBKEY, validatorExitOperator.address, { value: fee });
 
       const recovered = redemptionValue + ether("1");
       await dashboard.fund({ value: recovered });
@@ -142,13 +139,13 @@ describe("Integration: VaultHub.forceValidatorExit", () => {
 
       await expect(dashboard.rebalanceVaultWithShares(redemptionShares))
         .to.emit(vaultHub, "VaultRebalanced")
-        .withArgs(vaultAddress, redemptionShares, expectedRebalanceValue)
+        .withArgs(stakingVault, redemptionShares, expectedRebalanceValue)
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
-        .withArgs(vaultAddress, 0n);
+        .withArgs(stakingVault, 0n);
 
-      const recordAfter = await vaultHub.vaultRecord(vaultAddress);
+      const recordAfter = await vaultHub.vaultRecord(stakingVault);
       expect(recordAfter.redemptionShares).to.equal(0n);
-      expect(await vaultHub.obligationsShortfallValue(vaultAddress)).to.equal(0n);
+      expect(await vaultHub.obligationsShortfallValue(stakingVault)).to.equal(0n);
     });
   });
 });

@@ -51,7 +51,6 @@ describe("Integration: VaultHub.transferVaultOwnership", () => {
       ctx.contracts.stakingVaultFactory,
       owner,
       nodeOperator,
-      nodeOperator,
     ));
 
     dashboard = dashboard.connect(owner);
@@ -63,11 +62,9 @@ describe("Integration: VaultHub.transferVaultOwnership", () => {
 
   describe("VaultHub: transfer ownership through Dashboard", () => {
     it("allows Dashboard owner to transfer vault ownership to a new owner", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-      const dashboardAddress = await dashboard.getAddress();
-      const connectionBefore = await vaultHub.vaultConnection(vaultAddress);
+      const connectionBefore = await vaultHub.vaultConnection(stakingVault);
 
-      expect(connectionBefore.owner).to.equal(dashboardAddress);
+      expect(connectionBefore.owner).to.equal(await dashboard.getAddress());
 
       // First call - collects confirmation from owner
       await dashboard.connect(owner).transferVaultOwnership(newOwner.address);
@@ -75,64 +72,56 @@ describe("Integration: VaultHub.transferVaultOwnership", () => {
       // Second call - collects confirmation from nodeOperator and executes
       await expect(dashboard.connect(nodeOperator).transferVaultOwnership(newOwner.address))
         .to.emit(vaultHub, "VaultOwnershipTransferred")
-        .withArgs(vaultAddress, newOwner.address, dashboardAddress);
+        .withArgs(stakingVault, newOwner, dashboard);
 
-      const connectionAfter = await vaultHub.vaultConnection(vaultAddress);
+      const connectionAfter = await vaultHub.vaultConnection(stakingVault);
       expect(connectionAfter.owner).to.equal(newOwner.address);
     });
 
     it("vault remains connected to hub after ownership transfer", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
-      expect(await vaultHub.isVaultConnected(vaultAddress)).to.be.true;
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
 
       await dashboardTransferOwnership(newOwner.address);
 
-      expect(await vaultHub.isVaultConnected(vaultAddress)).to.be.true;
-      expect(await vaultHub.isPendingDisconnect(vaultAddress)).to.be.false;
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
 
-      const connection = await vaultHub.vaultConnection(vaultAddress);
+      const connection = await vaultHub.vaultConnection(stakingVault);
       expect(connection.vaultIndex).to.be.greaterThan(0);
     });
 
     it("old owner cannot perform owner-only actions after transfer", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
       await dashboard.fund({ value: ether("1") });
       await dashboardTransferOwnership(newOwner.address);
 
-      await expect(vaultHub.connect(owner).fund(vaultAddress, { value: ether("0.1") })).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(owner).fund(stakingVault, { value: ether("0.1") })).to.be.revertedWithCustomError(
         vaultHub,
         "NotAuthorized",
       );
     });
 
     it("New owner can perform owner-only actions after transfer", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
       await dashboard.fund({ value: ether("1") });
       await dashboardTransferOwnership(newOwner.address);
 
-      await expect(vaultHub.connect(newOwner).fund(vaultAddress, { value: ether("0.1") })).to.emit(
+      await expect(vaultHub.connect(newOwner).fund(stakingVault, { value: ether("0.1") })).to.emit(
         vaultHub,
         "VaultInOutDeltaUpdated",
       );
 
       await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
-      await expect(vaultHub.connect(newOwner).withdraw(vaultAddress, newOwner.address, ether("0.1")))
+      await expect(vaultHub.connect(newOwner).withdraw(stakingVault, newOwner.address, ether("0.1")))
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(newOwner.address, ether("0.1"));
     });
 
     it("Preserves all vault connection parameters during transfer", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
-      const connectionBefore = await vaultHub.vaultConnection(vaultAddress);
+      const connectionBefore = await vaultHub.vaultConnection(stakingVault);
 
       await dashboardTransferOwnership(newOwner.address);
 
-      const connectionAfter = await vaultHub.vaultConnection(vaultAddress);
+      const connectionAfter = await vaultHub.vaultConnection(stakingVault);
 
       expect(connectionAfter.shareLimit).to.equal(connectionBefore.shareLimit);
       expect(connectionAfter.vaultIndex).to.equal(connectionBefore.vaultIndex);
@@ -146,16 +135,14 @@ describe("Integration: VaultHub.transferVaultOwnership", () => {
     });
 
     it("Preserves all vault records during transfer", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
       await dashboard.fund({ value: ether("1") });
       await dashboard.mintStETH(owner, ether("0.5"));
 
-      const recordBefore = await vaultHub.vaultRecord(vaultAddress);
+      const recordBefore = await vaultHub.vaultRecord(stakingVault);
 
       await dashboardTransferOwnership(newOwner.address);
 
-      const recordAfter = await vaultHub.vaultRecord(vaultAddress);
+      const recordAfter = await vaultHub.vaultRecord(stakingVault);
 
       expect(recordAfter.liabilityShares).to.equal(recordBefore.liabilityShares);
       expect(recordAfter.maxLiabilityShares).to.equal(recordBefore.maxLiabilityShares);
@@ -170,20 +157,17 @@ describe("Integration: VaultHub.transferVaultOwnership", () => {
 
     it("allows transfer to the same owner (no-op)", async () => {
       await dashboardTransferOwnership(owner.address);
-      const vaultAddress = await stakingVault.getAddress();
 
-      await expect(vaultHub.connect(owner).transferVaultOwnership(vaultAddress, owner.address))
+      await expect(vaultHub.connect(owner).transferVaultOwnership(stakingVault, owner.address))
         .to.emit(vaultHub, "VaultOwnershipTransferred")
-        .withArgs(vaultAddress, owner.address, owner.address);
+        .withArgs(stakingVault, owner.address, owner.address);
 
-      expect((await vaultHub.vaultConnection(vaultAddress)).owner).to.equal(owner.address);
+      expect((await vaultHub.vaultConnection(stakingVault)).owner).to.equal(owner.address);
     });
 
     it("Reverts if new owner is zero address", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
       await expect(
-        vaultHub.connect(owner).transferVaultOwnership(vaultAddress, ethers.ZeroAddress),
+        vaultHub.connect(owner).transferVaultOwnership(stakingVault, ethers.ZeroAddress),
       ).to.be.revertedWithCustomError(vaultHub, "ZeroAddress");
     });
 
@@ -202,88 +186,80 @@ describe("Integration: VaultHub.transferVaultOwnership", () => {
     });
 
     it("Reverts if caller is not the current owner", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
       await expect(
-        vaultHub.connect(stranger).transferVaultOwnership(vaultAddress, newOwner.address),
+        vaultHub.connect(stranger).transferVaultOwnership(stakingVault, newOwner.address),
       ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
     });
 
     it("reverts if vault is pending disconnect", async () => {
       await dashboardTransferOwnership(owner.address);
 
-      const vaultAddress = await stakingVault.getAddress();
-      const dashboardAddress = await dashboard.getAddress();
-
-      await vaultHub.connect(owner).transferVaultOwnership(vaultAddress, dashboardAddress);
+      await vaultHub.connect(owner).transferVaultOwnership(stakingVault, dashboard);
       await dashboard.voluntaryDisconnect();
 
-      expect(await vaultHub.isPendingDisconnect(vaultAddress)).to.be.true;
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
 
       await dashboard.connect(owner).transferVaultOwnership(newOwner.address);
       await expect(dashboard.connect(nodeOperator).transferVaultOwnership(newOwner.address))
         .to.be.revertedWithCustomError(vaultHub, "VaultIsDisconnecting")
-        .withArgs(vaultAddress);
+        .withArgs(stakingVault);
     });
 
     it("can transfer ownership with active liability shares", async () => {
       await dashboardTransferOwnership(owner.address);
-      const vaultAddress = await stakingVault.getAddress();
 
-      await vaultHub.connect(owner).fund(vaultAddress, { value: ether("2") });
+      await vaultHub.connect(owner).fund(stakingVault, { value: ether("2") });
       await vaultHub
         .connect(owner)
-        .mintShares(vaultAddress, owner, await ctx.contracts.lido.getSharesByPooledEth(ether("1")));
+        .mintShares(stakingVault, owner, await ctx.contracts.lido.getSharesByPooledEth(ether("1")));
 
-      const liabilityBefore = await vaultHub.liabilityShares(vaultAddress);
+      const liabilityBefore = await vaultHub.liabilityShares(stakingVault);
       expect(liabilityBefore).to.be.greaterThan(0);
 
-      await vaultHub.connect(owner).transferVaultOwnership(vaultAddress, newOwner.address);
+      await vaultHub.connect(owner).transferVaultOwnership(stakingVault, newOwner.address);
 
-      const liabilityAfter = await vaultHub.liabilityShares(vaultAddress);
+      const liabilityAfter = await vaultHub.liabilityShares(stakingVault);
       expect(liabilityAfter).to.equal(liabilityBefore);
 
-      expect((await vaultHub.vaultConnection(vaultAddress)).owner).to.equal(newOwner.address);
+      expect((await vaultHub.vaultConnection(stakingVault)).owner).to.equal(newOwner.address);
     });
 
     it("can transfer ownership with unsettled Lido fees", async () => {
       await dashboardTransferOwnership(owner.address);
-      const vaultAddress = await stakingVault.getAddress();
 
-      await vaultHub.connect(owner).fund(vaultAddress, { value: ether("1") });
+      await vaultHub.connect(owner).fund(stakingVault, { value: ether("1") });
 
       await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("0.1"), waitForNextRefSlot: true });
 
-      const record = await vaultHub.vaultRecord(vaultAddress);
+      const record = await vaultHub.vaultRecord(stakingVault);
       const unsettledFees = record.cumulativeLidoFees - record.settledLidoFees;
       expect(unsettledFees).to.be.greaterThan(0);
 
-      await vaultHub.connect(owner).transferVaultOwnership(vaultAddress, newOwner.address);
+      await vaultHub.connect(owner).transferVaultOwnership(stakingVault, newOwner.address);
 
-      const recordAfter = await vaultHub.vaultRecord(vaultAddress);
+      const recordAfter = await vaultHub.vaultRecord(stakingVault);
       const unsettledFeesAfter = recordAfter.cumulativeLidoFees - recordAfter.settledLidoFees;
       expect(unsettledFeesAfter).to.equal(unsettledFees);
 
-      expect((await vaultHub.vaultConnection(vaultAddress)).owner).to.equal(newOwner.address);
+      expect((await vaultHub.vaultConnection(stakingVault)).owner).to.equal(newOwner.address);
     });
 
     it("can transfer ownership when vault is unhealthy", async () => {
       await dashboardTransferOwnership(owner.address);
-      const vaultAddress = await stakingVault.getAddress();
 
-      await vaultHub.connect(owner).fund(vaultAddress, { value: ether("2") });
+      await vaultHub.connect(owner).fund(stakingVault, { value: ether("2") });
       const shares = await ctx.contracts.lido.getSharesByPooledEth(ether("1"));
-      await vaultHub.connect(owner).mintShares(vaultAddress, owner, shares);
+      await vaultHub.connect(owner).mintShares(stakingVault, owner, shares);
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("0.5"), waitForNextRefSlot: true });
 
-      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
 
-      await expect(vaultHub.connect(owner).transferVaultOwnership(vaultAddress, newOwner.address))
+      await expect(vaultHub.connect(owner).transferVaultOwnership(stakingVault, newOwner.address))
         .to.emit(vaultHub, "VaultOwnershipTransferred")
-        .withArgs(vaultAddress, newOwner.address, owner.address);
+        .withArgs(stakingVault, newOwner.address, owner.address);
 
-      expect((await vaultHub.vaultConnection(vaultAddress)).owner).to.equal(newOwner.address);
+      expect((await vaultHub.vaultConnection(stakingVault)).owner).to.equal(newOwner.address);
     });
   });
 });

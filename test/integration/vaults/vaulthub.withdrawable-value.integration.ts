@@ -58,21 +58,19 @@ describe("Integration: VaultHub.withdrawableValue", () => {
 
   describe("withdrawableValue when disconnect is pending", () => {
     it("returns 0 even if vault has withdrawable value", async () => {
-      const vaultAddress = await stakingVault.getAddress();
-
       await dashboard.fund({ value: ether("3") });
       await reportVaultDataWithProof(ctx, stakingVault, { waitForNextRefSlot: true });
 
-      const withdrawableBefore = await vaultHub.withdrawableValue(vaultAddress);
+      const withdrawableBefore = await vaultHub.withdrawableValue(stakingVault);
       expect(withdrawableBefore).to.be.gt(0n);
 
       await dashboard.voluntaryDisconnect();
-      expect(await vaultHub.isPendingDisconnect(vaultAddress)).to.be.true;
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
 
-      const withdrawableAfter = await vaultHub.withdrawableValue(vaultAddress);
+      const withdrawableAfter = await vaultHub.withdrawableValue(stakingVault);
       expect(withdrawableAfter).to.equal(0n);
 
-      const totalValue = await vaultHub.totalValue(vaultAddress);
+      const totalValue = await vaultHub.totalValue(stakingVault);
       expect(totalValue).to.be.gt(0n);
     });
   });

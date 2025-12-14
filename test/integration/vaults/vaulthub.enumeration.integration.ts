@@ -59,7 +59,6 @@ describe("Integration: VaultHub enumeration functions", () => {
         ctx.contracts.stakingVaultFactory,
         owner1,
         nodeOperator,
-        nodeOperator,
       );
 
       await dashboard.connect(owner1).fund({ value: ether("1") });
@@ -75,7 +74,6 @@ describe("Integration: VaultHub enumeration functions", () => {
           ctx.contracts.stakingVaultFactory,
           owner,
           nodeOperator,
-          nodeOperator,
         );
 
         await dashboard.connect(owner).fund({ value: ether("1") });
@@ -85,22 +83,10 @@ describe("Integration: VaultHub enumeration functions", () => {
     });
 
     it("decreases count when vault is disconnected", async () => {
-      const vault1Info = await createVaultWithDashboard(
-        ctx,
-        ctx.contracts.stakingVaultFactory,
-        owner1,
-        nodeOperator,
-        nodeOperator,
-      );
+      const vault1Info = await createVaultWithDashboard(ctx, ctx.contracts.stakingVaultFactory, owner1, nodeOperator);
       await vault1Info.dashboard.connect(owner1).fund({ value: ether("1") });
 
-      const vault2Info = await createVaultWithDashboard(
-        ctx,
-        ctx.contracts.stakingVaultFactory,
-        owner2,
-        nodeOperator,
-        nodeOperator,
-      );
+      const vault2Info = await createVaultWithDashboard(ctx, ctx.contracts.stakingVaultFactory, owner2, nodeOperator);
       await vault2Info.dashboard.connect(owner2).fund({ value: ether("1") });
 
       expect(await vaultHub.vaultsCount()).to.equal(baseVaultsCount + 2n);
@@ -110,13 +96,7 @@ describe("Integration: VaultHub enumeration functions", () => {
 
       expect(await vaultHub.vaultsCount()).to.equal(baseVaultsCount + 1n);
 
-      const vault3Info = await createVaultWithDashboard(
-        ctx,
-        ctx.contracts.stakingVaultFactory,
-        owner3,
-        nodeOperator,
-        nodeOperator,
-      );
+      const vault3Info = await createVaultWithDashboard(ctx, ctx.contracts.stakingVaultFactory, owner3, nodeOperator);
       await vault3Info.dashboard.connect(owner3).fund({ value: ether("1") });
 
       expect(await vaultHub.vaultsCount()).to.equal(baseVaultsCount + 2n);
@@ -133,7 +113,6 @@ describe("Integration: VaultHub enumeration functions", () => {
         ctx,
         ctx.contracts.stakingVaultFactory,
         owner1,
-        nodeOperator,
         nodeOperator,
       );
 
@@ -178,22 +157,10 @@ describe("Integration: VaultHub enumeration functions", () => {
       );
       await vault1Info.dashboard.connect(owner1).fund({ value: ether("1") });
 
-      const vault2Info = await createVaultWithDashboard(
-        ctx,
-        ctx.contracts.stakingVaultFactory,
-        owner2,
-        nodeOperator,
-        nodeOperator,
-      );
+      const vault2Info = await createVaultWithDashboard(ctx, ctx.contracts.stakingVaultFactory, owner2, nodeOperator);
       await vault2Info.dashboard.connect(owner2).fund({ value: ether("1") });
 
-      const vault3Info = await createVaultWithDashboard(
-        ctx,
-        ctx.contracts.stakingVaultFactory,
-        owner3,
-        nodeOperator,
-        nodeOperator,
-      );
+      const vault3Info = await createVaultWithDashboard(ctx, ctx.contracts.stakingVaultFactory, owner3, nodeOperator);
       await vault3Info.dashboard.connect(owner3).fund({ value: ether("1") });
 
       const vault1Address = await vault1Info.stakingVault.getAddress();

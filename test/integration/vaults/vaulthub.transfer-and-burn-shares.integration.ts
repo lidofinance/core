@@ -42,7 +42,6 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
       ctx.contracts.stakingVaultFactory,
       owner,
       nodeOperator,
-      nodeOperator,
     ));
 
     const dashboardSigner = await impersonate(dashboard, ether("100"));
@@ -67,7 +66,7 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
       const sharesToBurn = ether("1");
 
       const tokenAmount = await lido.getPooledEthByShares(sharesToBurn);
-      await lido.connect(vaultHub.runner!).approve(await vaultHub.getAddress(), tokenAmount);
+      await lido.connect(vaultHub.runner!).approve(vaultHub, tokenAmount);
 
       const liabilitySharesBefore = await vaultHub.liabilityShares(stakingVault);
       const dashboardSharesBefore = await lido.sharesOf(dashboard);
@@ -76,7 +75,7 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
       await expect(vaultHub.transferAndBurnShares(stakingVault, sharesToBurn))
         .to.emit(lido, "TransferShares")
         .and.to.emit(vaultHub, "BurnedSharesOnVault")
-        .withArgs(await stakingVault.getAddress(), sharesToBurn);
+        .withArgs(stakingVault, sharesToBurn);
 
       const liabilitySharesAfter = await vaultHub.liabilityShares(stakingVault);
       const dashboardSharesAfter = await lido.sharesOf(dashboard);
@@ -91,7 +90,7 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
       const sharesToBurn = ether("1.5");
 
       const tokenAmount = await lido.getPooledEthByShares(sharesToBurn);
-      await lido.connect(vaultHub.runner!).approve(await vaultHub.getAddress(), tokenAmount);
+      await lido.connect(vaultHub.runner!).approve(vaultHub, tokenAmount);
 
       const dashboardBalanceBefore = await lido.balanceOf(dashboard);
       const vaultHubBalanceBefore = await lido.balanceOf(vaultHub);
@@ -110,7 +109,7 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
       const sharesToBurn = ether("0.5");
 
       const tokenAmount = await lido.getPooledEthByShares(sharesToBurn);
-      await lido.connect(vaultHub.runner!).approve(await vaultHub.getAddress(), tokenAmount);
+      await lido.connect(vaultHub.runner!).approve(vaultHub, tokenAmount);
 
       const recordBefore = await vaultHub.vaultRecord(stakingVault);
       const liabilityBefore = recordBefore.liabilityShares;
@@ -129,7 +128,7 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
       const totalBurn = firstBurn + secondBurn;
 
       const tokenAmount = await lido.getPooledEthByShares(totalBurn);
-      await lido.connect(vaultHub.runner!).approve(await vaultHub.getAddress(), tokenAmount);
+      await lido.connect(vaultHub.runner!).approve(vaultHub, tokenAmount);
 
       const liabilityBefore = await vaultHub.liabilityShares(stakingVault);
       const dashboardSharesBefore = await lido.sharesOf(dashboard);
@@ -148,7 +147,7 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
       const smallAmount = 1n;
 
       const tokenAmount = await lido.getPooledEthByShares(smallAmount);
-      await lido.connect(vaultHub.runner!).approve(await vaultHub.getAddress(), tokenAmount);
+      await lido.connect(vaultHub.runner!).approve(vaultHub, tokenAmount);
 
       const liabilityBefore = await vaultHub.liabilityShares(stakingVault);
 
@@ -163,11 +162,11 @@ describe("Integration: VaultHub.transferAndBurnShares", () => {
       const exactLiability = await vaultHub.liabilityShares(stakingVault);
 
       const tokenAmount = await lido.getPooledEthByShares(exactLiability);
-      await lido.connect(vaultHub.runner!).approve(await vaultHub.getAddress(), tokenAmount);
+      await lido.connect(vaultHub.runner!).approve(vaultHub, tokenAmount);
 
       await expect(vaultHub.transferAndBurnShares(stakingVault, exactLiability))
         .to.emit(vaultHub, "BurnedSharesOnVault")
-        .withArgs(await stakingVault.getAddress(), exactLiability);
+        .withArgs(stakingVault, exactLiability);
 
       const liabilityAfter = await vaultHub.liabilityShares(stakingVault);
       expect(liabilityAfter).to.equal(0n);
