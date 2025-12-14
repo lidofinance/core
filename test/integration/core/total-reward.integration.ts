@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, ether, log, updateBalance } from "lib";
+import { advanceChainTime, ether, impersonate, log, mEqual, updateBalance } from "lib";
 import {
   finalizeWQViaElVault,
   getProtocolContext,
@@ -26,6 +26,8 @@ import {
 } from "../../graph/simulator";
 import { captureChainState, capturePoolState, SimulatorInitialState } from "../../graph/utils";
 import { extractAllLogs } from "../../graph/utils/event-extraction";
+
+const INTERVAL_12_HOURS = 12n * 60n * 60n;
 
 /**
  * Graph TotalReward Entity Integration Tests
@@ -108,16 +110,10 @@ describe("Scenario: Graph TotalReward Validation", () => {
   it("Should deposit ETH and stake to modules", async () => {
     const { lido, stakingRouter, depositSecurityModule } = ctx.contracts;
 
-    log.debug("Submitting ETH for deposits", {
-      Amount: formatEther(ether("3200")),
-    });
-
     // Submit more ETH for deposits
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
 
-    const { impersonate, ether: etherFn } = await import("lib");
-
-    const dsmSigner = await impersonate(depositSecurityModule.address, etherFn("100"));
+    const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     const stakingModules = (await stakingRouter.getStakingModules()).filter((m) => m.id === 1n);
     depositCount = 0n;
 
@@ -134,409 +130,160 @@ describe("Scenario: Graph TotalReward Validation", () => {
       depositCount += deposits;
     }
 
-    log.debug("Deposits completed", {
-      "Total Deposits": depositCount.toString(),
-      "ETH Staked": formatEther(depositCount * ether("32")),
-    });
-
     expect(depositCount).to.be.gt(0n, "No deposits applied");
   });
 
   it("Should compute TotalReward correctly for first oracle report", async () => {
-    // 1. Capture state before oracle report
     const stateBefore = await capturePoolState(ctx);
 
-    log.debug("Pool state before report", {
-      "Total Pooled Ether": formatEther(stateBefore.totalPooledEther),
-      "Total Shares": stateBefore.totalShares.toString(),
-    });
-
-    // 2. Execute oracle report with rewards
     const clDiff = ether("32") * depositCount + ether("0.001");
     const reportData: Partial<OracleReportParams> = {
       clDiff,
       clAppearedValidators: depositCount,
     };
 
-    log.debug("Executing oracle report", {
-      "CL Diff": formatEther(clDiff),
-      "Appeared Validators": depositCount.toString(),
-    });
+    await advanceChainTime(INTERVAL_12_HOURS);
 
-    await advanceChainTime(12n * 60n * 60n); // 12 hours
     const { reportTx } = await report(ctx, reportData);
     const receipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    // Get block timestamp
     const block = await ethers.provider.getBlock(receipt.blockNumber);
     const blockTimestamp = BigInt(block!.timestamp);
 
-    log.debug("Oracle report transaction", {
-      "Tx Hash": receipt.hash,
-      "Block Number": receipt.blockNumber,
-      "Block Timestamp": blockTimestamp.toString(),
-      "Log Count": receipt.logs.length,
-    });
-
-    // 3. Process events through simulator
     const store = createEntityStore();
     const result = processTransaction(receipt, ctx, store, blockTimestamp, initialState.treasuryAddress);
 
-    log.debug("Simulator processing result", {
-      "Events Processed": result.eventsProcessed,
-      "Had Profitable Report": result.hadProfitableReport,
-      "TotalReward Entities Created": result.totalRewards.size,
-    });
-
-    // 4. Capture state after
     const stateAfter = await capturePoolState(ctx);
 
-    log.debug("Pool state after report", {
-      "Total Pooled Ether": formatEther(stateAfter.totalPooledEther),
-      "Total Shares": stateAfter.totalShares.toString(),
-      "Ether Change": formatEther(stateAfter.totalPooledEther - stateBefore.totalPooledEther),
-      "Shares Change": (stateAfter.totalShares - stateBefore.totalShares).toString(),
-    });
-
-    // 5. Verify a TotalReward entity was created
     expect(result.hadProfitableReport).to.be.true;
     expect(result.totalRewards.size).to.equal(1);
 
     const computed = result.totalRewards.get(receipt.hash);
     expect(computed).to.not.be.undefined;
 
-    // 6. Derive expected values directly from events
     const expected = deriveExpectedTotalReward(receipt, ctx, initialState.treasuryAddress);
     expect(expected).to.not.be.null;
 
-    // Log entity details
-    log.debug("TotalReward Entity - Tier 1 (Metadata)", {
-      "ID": computed!.id,
-      "Block": computed!.block.toString(),
-      "Block Time": computed!.blockTime.toString(),
-      "Tx Index": computed!.transactionIndex.toString(),
-      "Log Index": computed!.logIndex.toString(),
-    });
-
-    log.debug("TotalReward Entity - Tier 2 (Pool State)", {
-      "Total Pooled Ether Before": formatEther(computed!.totalPooledEtherBefore),
-      "Total Pooled Ether After": formatEther(computed!.totalPooledEtherAfter),
-      "Total Shares Before": computed!.totalSharesBefore.toString(),
-      "Total Shares After": computed!.totalSharesAfter.toString(),
-      "Shares Minted As Fees": computed!.shares2mint.toString(),
-      "Time Elapsed": computed!.timeElapsed.toString(),
-      "MEV Fee": formatEther(computed!.mevFee),
-    });
-
-    log.debug("TotalReward Entity - Tier 2 (Fee Distribution)", {
-      "Total Rewards With Fees": formatEther(computed!.totalRewardsWithFees),
-      "Total Rewards": formatEther(computed!.totalRewards),
-      "Total Fee": formatEther(computed!.totalFee),
-      "Treasury Fee": formatEther(computed!.treasuryFee),
-      "Operators Fee": formatEther(computed!.operatorsFee),
-      "Shares To Treasury": computed!.sharesToTreasury.toString(),
-      "Shares To Operators": computed!.sharesToOperators.toString(),
-    });
-
-    log.debug("TotalReward Entity - Tier 3 (Calculated)", {
-      "APR": `${computed!.apr.toFixed(4)}%`,
-      "APR Raw": `${computed!.aprRaw.toFixed(4)}%`,
-      "APR Before Fees": `${computed!.aprBeforeFees.toFixed(4)}%`,
-      "Fee Basis": computed!.feeBasis.toString(),
-      "Treasury Fee Basis Points": computed!.treasuryFeeBasisPoints.toString(),
-      "Operators Fee Basis Points": computed!.operatorsFeeBasisPoints.toString(),
-    });
-
-    // 7. Verify Tier 1 fields (Direct Event Metadata)
-    log.debug("Verifying Tier 1 fields (Direct Event Metadata)...");
-    expect(computed!.id.toLowerCase()).to.equal(receipt.hash.toLowerCase(), "id mismatch");
-    expect(computed!.block).to.equal(BigInt(receipt.blockNumber), "block mismatch");
-    expect(computed!.blockTime).to.equal(blockTimestamp, "blockTime mismatch");
-    expect(computed!.transactionHash.toLowerCase()).to.equal(receipt.hash.toLowerCase(), "transactionHash mismatch");
-    expect(computed!.transactionIndex).to.equal(BigInt(receipt.index), "transactionIndex mismatch");
-    expect(computed!.logIndex).to.equal(expected!.logIndex, "logIndex mismatch");
-
-    // 8. Verify Tier 2 fields (Pool State from TokenRebased)
-    log.debug("Verifying Tier 2 fields (Pool State from TokenRebased)...");
-    expect(computed!.totalPooledEtherBefore).to.equal(
-      expected!.totalPooledEtherBefore,
-      "totalPooledEtherBefore mismatch",
-    );
-    expect(computed!.totalPooledEtherAfter).to.equal(expected!.totalPooledEtherAfter, "totalPooledEtherAfter mismatch");
-    expect(computed!.totalSharesBefore).to.equal(expected!.totalSharesBefore, "totalSharesBefore mismatch");
-    expect(computed!.totalSharesAfter).to.equal(expected!.totalSharesAfter, "totalSharesAfter mismatch");
-    expect(computed!.shares2mint).to.equal(expected!.shares2mint, "shares2mint mismatch");
-    expect(computed!.timeElapsed).to.equal(expected!.timeElapsed, "timeElapsed mismatch");
-    expect(computed!.mevFee).to.equal(expected!.mevFee, "mevFee mismatch");
-
-    // 8b. Verify Tier 2 fields (Fee Distribution)
-    log.debug("Verifying Tier 2 fields (Fee Distribution)...");
-    expect(computed!.totalRewardsWithFees).to.equal(expected!.totalRewardsWithFees, "totalRewardsWithFees mismatch");
-    expect(computed!.totalRewards).to.equal(expected!.totalRewards, "totalRewards mismatch");
-    expect(computed!.totalFee).to.equal(expected!.totalFee, "totalFee mismatch");
-    expect(computed!.treasuryFee).to.equal(expected!.treasuryFee, "treasuryFee mismatch");
-    expect(computed!.operatorsFee).to.equal(expected!.operatorsFee, "operatorsFee mismatch");
-    expect(computed!.sharesToTreasury).to.equal(expected!.sharesToTreasury, "sharesToTreasury mismatch");
-    expect(computed!.sharesToOperators).to.equal(expected!.sharesToOperators, "sharesToOperators mismatch");
-
-    // 8c. Verify Tier 3 fields (Calculated)
-    log.debug("Verifying Tier 3 fields (APR and Basis Points)...");
-    expect(computed!.apr).to.equal(expected!.apr, "apr mismatch");
-    expect(computed!.aprRaw).to.equal(expected!.aprRaw, "aprRaw mismatch");
-    expect(computed!.aprBeforeFees).to.equal(expected!.aprBeforeFees, "aprBeforeFees mismatch");
-    expect(computed!.feeBasis).to.equal(expected!.feeBasis, "feeBasis mismatch");
-    expect(computed!.treasuryFeeBasisPoints).to.equal(
-      expected!.treasuryFeeBasisPoints,
-      "treasuryFeeBasisPoints mismatch",
-    );
-    expect(computed!.operatorsFeeBasisPoints).to.equal(
-      expected!.operatorsFeeBasisPoints,
-      "operatorsFeeBasisPoints mismatch",
-    );
-
-    // 8d. Verify fee consistency (shares2mint should equal sharesToTreasury + sharesToOperators)
-    log.debug("Verifying fee consistency...");
-    expect(computed!.shares2mint).to.equal(
-      computed!.sharesToTreasury + computed!.sharesToOperators,
-      "shares2mint should equal sharesToTreasury + sharesToOperators",
-    );
-    expect(computed!.totalFee).to.equal(
-      computed!.treasuryFee + computed!.operatorsFee,
-      "totalFee should equal treasuryFee + operatorsFee",
-    );
-
-    // 9. Verify consistency with on-chain state
-    log.debug("Verifying consistency with on-chain state...");
-    // TokenRebased.preTotalEther should match state before report
-    expect(computed!.totalPooledEtherBefore).to.equal(stateBefore.totalPooledEther, "preTotalEther vs stateBefore");
-    expect(computed!.totalSharesBefore).to.equal(stateBefore.totalShares, "preTotalShares vs stateBefore");
-
-    // TokenRebased.postTotalEther should match state after report
-    expect(computed!.totalPooledEtherAfter).to.equal(stateAfter.totalPooledEther, "postTotalEther vs stateAfter");
-    expect(computed!.totalSharesAfter).to.equal(stateAfter.totalShares, "postTotalShares vs stateAfter");
+    await mEqual([
+      [computed!.id.toLowerCase(), receipt.hash.toLowerCase()],
+      [computed!.block, BigInt(receipt.blockNumber)],
+      [computed!.blockTime, blockTimestamp],
+      [computed!.transactionHash.toLowerCase(), receipt.hash.toLowerCase()],
+      [computed!.transactionIndex, BigInt(receipt.index)],
+      [computed!.logIndex, expected!.logIndex],
+      [computed!.totalPooledEtherBefore, expected!.totalPooledEtherBefore],
+      [computed!.totalPooledEtherAfter, expected!.totalPooledEtherAfter],
+      [computed!.totalSharesBefore, expected!.totalSharesBefore],
+      [computed!.totalSharesAfter, expected!.totalSharesAfter],
+      [computed!.shares2mint, expected!.shares2mint],
+      [computed!.timeElapsed, expected!.timeElapsed],
+      [computed!.mevFee, expected!.mevFee],
+      [computed!.totalRewardsWithFees, expected!.totalRewardsWithFees],
+      [computed!.totalRewards, expected!.totalRewards],
+      [computed!.totalFee, expected!.totalFee],
+      [computed!.treasuryFee, expected!.treasuryFee],
+      [computed!.operatorsFee, expected!.operatorsFee],
+      [computed!.sharesToTreasury, expected!.sharesToTreasury],
+      [computed!.sharesToOperators, expected!.sharesToOperators],
+      [computed!.apr, expected!.apr],
+      [computed!.aprRaw, expected!.aprRaw],
+      [computed!.aprBeforeFees, expected!.aprBeforeFees],
+      [computed!.feeBasis, expected!.feeBasis],
+      [computed!.treasuryFeeBasisPoints, expected!.treasuryFeeBasisPoints],
+      [computed!.operatorsFeeBasisPoints, expected!.operatorsFeeBasisPoints],
+      [computed!.shares2mint, computed!.sharesToTreasury + computed!.sharesToOperators],
+      [computed!.totalFee, computed!.treasuryFee + computed!.operatorsFee],
+      [computed!.totalPooledEtherBefore, stateBefore.totalPooledEther],
+      [computed!.totalSharesBefore, stateBefore.totalShares],
+      [computed!.totalPooledEtherAfter, stateAfter.totalPooledEther],
+      [computed!.totalSharesAfter, stateAfter.totalShares],
+    ]);
   });
 
   it("Should compute TotalReward correctly for second oracle report", async () => {
-    // 1. Capture state before second oracle report
     const stateBefore = await capturePoolState(ctx);
 
-    log.debug("Pool state before second report", {
-      "Total Pooled Ether": formatEther(stateBefore.totalPooledEther),
-      "Total Shares": stateBefore.totalShares.toString(),
-    });
-
-    // 2. Execute second oracle report with different rewards
     const clDiff = ether("0.005");
-    const reportData: Partial<OracleReportParams> = {
-      clDiff, // Smaller reward
-    };
+    const reportData: Partial<OracleReportParams> = { clDiff };
 
-    log.debug("Executing second oracle report", {
-      "CL Diff": formatEther(clDiff),
-    });
+    await advanceChainTime(INTERVAL_12_HOURS);
 
-    await advanceChainTime(12n * 60n * 60n); // 12 hours
     const { reportTx } = await report(ctx, reportData);
     const receipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    // Get block timestamp
     const block = await ethers.provider.getBlock(receipt.blockNumber);
     const blockTimestamp = BigInt(block!.timestamp);
-
-    log.debug("Second oracle report transaction", {
-      "Tx Hash": receipt.hash,
-      "Block Number": receipt.blockNumber,
-      "Block Timestamp": blockTimestamp.toString(),
-      "Log Count": receipt.logs.length,
-    });
-
-    // 3. Process events through simulator (using same simulator instance)
     const result = simulator.processTransaction(receipt, ctx, blockTimestamp);
 
-    log.debug("Simulator processing result (using persistent simulator)", {
-      "Events Processed": result.eventsProcessed,
-      "Had Profitable Report": result.hadProfitableReport,
-      "TotalReward Entities Created": result.totalRewards.size,
-      "Total Entities in Store": simulator.getStore().totalRewards.size,
-    });
-
-    // 4. Capture state after
     const stateAfter = await capturePoolState(ctx);
 
-    log.debug("Pool state after second report", {
-      "Total Pooled Ether": formatEther(stateAfter.totalPooledEther),
-      "Total Shares": stateAfter.totalShares.toString(),
-      "Ether Change": formatEther(stateAfter.totalPooledEther - stateBefore.totalPooledEther),
-      "Shares Change": (stateAfter.totalShares - stateBefore.totalShares).toString(),
-    });
-
-    // 5. Verify a TotalReward entity was created
-    expect(result.hadProfitableReport).to.be.true;
-    expect(result.totalRewards.size).to.equal(1);
+    await mEqual([
+      [result.hadProfitableReport, true],
+      [result.totalRewards.size, 1],
+    ]);
 
     const computed = result.totalRewards.get(receipt.hash);
     expect(computed).to.not.be.undefined;
 
-    // 6. Derive expected values directly from events
     const expected = deriveExpectedTotalReward(receipt, ctx, initialState.treasuryAddress);
     expect(expected).to.not.be.null;
 
-    // Log entity details
-    log.debug("TotalReward Entity - Tier 1 (Metadata)", {
-      "ID": computed!.id,
-      "Block": computed!.block.toString(),
-      "Block Time": computed!.blockTime.toString(),
-      "Tx Index": computed!.transactionIndex.toString(),
-      "Log Index": computed!.logIndex.toString(),
-    });
-
-    log.debug("TotalReward Entity - Tier 2 (Pool State)", {
-      "Total Pooled Ether Before": formatEther(computed!.totalPooledEtherBefore),
-      "Total Pooled Ether After": formatEther(computed!.totalPooledEtherAfter),
-      "Total Shares Before": computed!.totalSharesBefore.toString(),
-      "Total Shares After": computed!.totalSharesAfter.toString(),
-      "Shares Minted As Fees": computed!.shares2mint.toString(),
-      "Time Elapsed": computed!.timeElapsed.toString(),
-      "MEV Fee": formatEther(computed!.mevFee),
-    });
-
-    log.debug("TotalReward Entity - Tier 2 (Fee Distribution)", {
-      "Total Rewards With Fees": formatEther(computed!.totalRewardsWithFees),
-      "Total Rewards": formatEther(computed!.totalRewards),
-      "Total Fee": formatEther(computed!.totalFee),
-      "Treasury Fee": formatEther(computed!.treasuryFee),
-      "Operators Fee": formatEther(computed!.operatorsFee),
-      "Shares To Treasury": computed!.sharesToTreasury.toString(),
-      "Shares To Operators": computed!.sharesToOperators.toString(),
-    });
-
-    log.debug("TotalReward Entity - Tier 3 (Calculated)", {
-      "APR": `${computed!.apr.toFixed(4)}%`,
-      "APR Raw": `${computed!.aprRaw.toFixed(4)}%`,
-      "APR Before Fees": `${computed!.aprBeforeFees.toFixed(4)}%`,
-      "Fee Basis": computed!.feeBasis.toString(),
-      "Treasury Fee Basis Points": computed!.treasuryFeeBasisPoints.toString(),
-      "Operators Fee Basis Points": computed!.operatorsFeeBasisPoints.toString(),
-    });
-
-    // 7. Verify Tier 1 fields
-    log.debug("Verifying Tier 1 fields...");
-    expect(computed!.id.toLowerCase()).to.equal(receipt.hash.toLowerCase(), "id mismatch");
-    expect(computed!.block).to.equal(BigInt(receipt.blockNumber), "block mismatch");
-    expect(computed!.blockTime).to.equal(blockTimestamp, "blockTime mismatch");
-    expect(computed!.transactionHash.toLowerCase()).to.equal(receipt.hash.toLowerCase(), "transactionHash mismatch");
-    expect(computed!.transactionIndex).to.equal(BigInt(receipt.index), "transactionIndex mismatch");
-    expect(computed!.logIndex).to.equal(expected!.logIndex, "logIndex mismatch");
-
-    // 8. Verify Tier 2 fields
-    log.debug("Verifying Tier 2 fields...");
-    expect(computed!.totalPooledEtherBefore).to.equal(
-      expected!.totalPooledEtherBefore,
-      "totalPooledEtherBefore mismatch",
-    );
-    expect(computed!.totalPooledEtherAfter).to.equal(expected!.totalPooledEtherAfter, "totalPooledEtherAfter mismatch");
-    expect(computed!.totalSharesBefore).to.equal(expected!.totalSharesBefore, "totalSharesBefore mismatch");
-    expect(computed!.totalSharesAfter).to.equal(expected!.totalSharesAfter, "totalSharesAfter mismatch");
-    expect(computed!.shares2mint).to.equal(expected!.shares2mint, "shares2mint mismatch");
-    expect(computed!.timeElapsed).to.equal(expected!.timeElapsed, "timeElapsed mismatch");
-    expect(computed!.mevFee).to.equal(expected!.mevFee, "mevFee mismatch");
-
-    // 8b. Verify Tier 2 fields (Fee Distribution)
-    log.debug("Verifying Tier 2 fields (Fee Distribution)...");
-    expect(computed!.totalRewardsWithFees).to.equal(expected!.totalRewardsWithFees, "totalRewardsWithFees mismatch");
-    expect(computed!.totalRewards).to.equal(expected!.totalRewards, "totalRewards mismatch");
-    expect(computed!.totalFee).to.equal(expected!.totalFee, "totalFee mismatch");
-    expect(computed!.treasuryFee).to.equal(expected!.treasuryFee, "treasuryFee mismatch");
-    expect(computed!.operatorsFee).to.equal(expected!.operatorsFee, "operatorsFee mismatch");
-    expect(computed!.sharesToTreasury).to.equal(expected!.sharesToTreasury, "sharesToTreasury mismatch");
-    expect(computed!.sharesToOperators).to.equal(expected!.sharesToOperators, "sharesToOperators mismatch");
-
-    // 8c. Verify Tier 3 fields (APR and Basis Points)
-    log.debug("Verifying Tier 3 fields (APR and Basis Points)...");
-    expect(computed!.apr).to.equal(expected!.apr, "apr mismatch");
-    expect(computed!.aprRaw).to.equal(expected!.aprRaw, "aprRaw mismatch");
-    expect(computed!.aprBeforeFees).to.equal(expected!.aprBeforeFees, "aprBeforeFees mismatch");
-    expect(computed!.feeBasis).to.equal(expected!.feeBasis, "feeBasis mismatch");
-    expect(computed!.treasuryFeeBasisPoints).to.equal(
-      expected!.treasuryFeeBasisPoints,
-      "treasuryFeeBasisPoints mismatch",
-    );
-    expect(computed!.operatorsFeeBasisPoints).to.equal(
-      expected!.operatorsFeeBasisPoints,
-      "operatorsFeeBasisPoints mismatch",
-    );
-
-    // 8d. Verify fee consistency
-    log.debug("Verifying fee consistency...");
-    expect(computed!.shares2mint).to.equal(
-      computed!.sharesToTreasury + computed!.sharesToOperators,
-      "shares2mint should equal sharesToTreasury + sharesToOperators",
-    );
-    expect(computed!.totalFee).to.equal(
-      computed!.treasuryFee + computed!.operatorsFee,
-      "totalFee should equal treasuryFee + operatorsFee",
-    );
-
-    // 9. Verify state consistency
-    log.debug("Verifying on-chain state consistency...");
-    expect(computed!.totalPooledEtherBefore).to.equal(stateBefore.totalPooledEther, "preTotalEther vs stateBefore");
-    expect(computed!.totalSharesBefore).to.equal(stateBefore.totalShares, "preTotalShares vs stateBefore");
-    expect(computed!.totalPooledEtherAfter).to.equal(stateAfter.totalPooledEther, "postTotalEther vs stateAfter");
-    expect(computed!.totalSharesAfter).to.equal(stateAfter.totalShares, "postTotalShares vs stateAfter");
-
-    // 10. Verify simulator state persistence (should have both reports)
-    log.debug("Verifying simulator state persistence...");
-    const storedReport = simulator.getTotalReward(receipt.hash);
-    expect(storedReport).to.not.be.undefined;
+    await mEqual([
+      [computed!.id.toLowerCase(), receipt.hash.toLowerCase()],
+      [computed!.block, BigInt(receipt.blockNumber)],
+      [computed!.blockTime, blockTimestamp],
+      [computed!.transactionHash.toLowerCase(), receipt.hash.toLowerCase()],
+      [computed!.transactionIndex, BigInt(receipt.index)],
+      [computed!.logIndex, expected!.logIndex],
+      [computed!.totalPooledEtherBefore, expected!.totalPooledEtherBefore],
+      [computed!.totalPooledEtherAfter, expected!.totalPooledEtherAfter],
+      [computed!.totalSharesBefore, expected!.totalSharesBefore],
+      [computed!.totalSharesAfter, expected!.totalSharesAfter],
+      [computed!.shares2mint, expected!.shares2mint],
+      [computed!.timeElapsed, expected!.timeElapsed],
+      [computed!.mevFee, expected!.mevFee],
+      [computed!.totalRewardsWithFees, expected!.totalRewardsWithFees],
+      [computed!.totalRewards, expected!.totalRewards],
+      [computed!.totalFee, expected!.totalFee],
+      [computed!.treasuryFee, expected!.treasuryFee],
+      [computed!.operatorsFee, expected!.operatorsFee],
+      [computed!.sharesToTreasury, expected!.sharesToTreasury],
+      [computed!.sharesToOperators, expected!.sharesToOperators],
+      [computed!.apr, expected!.apr],
+      [computed!.aprRaw, expected!.aprRaw],
+      [computed!.aprBeforeFees, expected!.aprBeforeFees],
+      [computed!.feeBasis, expected!.feeBasis],
+      [computed!.treasuryFeeBasisPoints, expected!.treasuryFeeBasisPoints],
+      [computed!.operatorsFeeBasisPoints, expected!.operatorsFeeBasisPoints],
+      [computed!.shares2mint, computed!.sharesToTreasury + computed!.sharesToOperators],
+      [computed!.totalFee, computed!.treasuryFee + computed!.operatorsFee],
+      [computed!.totalPooledEtherBefore, stateBefore.totalPooledEther],
+      [computed!.totalSharesBefore, stateBefore.totalShares],
+      [computed!.totalPooledEtherAfter, stateAfter.totalPooledEther],
+      [computed!.totalSharesAfter, stateAfter.totalShares],
+    ]);
   });
 
   it("Should verify event processing order", async () => {
     // This test validates that events are processed in the correct order
     // by examining the logs from the last oracle report
     const clDiff = ether("0.002");
-    const reportData: Partial<OracleReportParams> = {
-      clDiff,
-    };
+    const reportData: Partial<OracleReportParams> = { clDiff };
 
-    log.debug("Executing oracle report for event order test", {
-      "CL Diff": formatEther(clDiff),
-    });
+    await advanceChainTime(INTERVAL_12_HOURS);
 
-    await advanceChainTime(12n * 60n * 60n);
     const { reportTx } = await report(ctx, reportData);
     const receipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
-    // Extract and examine logs
     const logs = extractAllLogs(receipt, ctx);
 
-    log.debug("Extracted logs from transaction", {
-      "Total Logs": logs.length,
-      "Tx Hash": receipt.hash,
-    });
-
-    // Log all event names in order
-    const eventSummary = logs.map((l) => `${l.logIndex}: ${l.name}`).join(", ");
-    log.debug("Event order", {
-      Events: eventSummary,
-    });
-
-    // Find key events
     const ethDistributedIdx = logs.findIndex((l) => l.name === "ETHDistributed");
     const tokenRebasedIdx = logs.findIndex((l) => l.name === "TokenRebased");
-    const processingStartedIdx = logs.findIndex((l) => l.name === "ProcessingStarted");
 
-    log.debug("Key event positions", {
-      "ProcessingStarted Index": processingStartedIdx,
-      "ETHDistributed Index": ethDistributedIdx,
-      "TokenRebased Index": tokenRebasedIdx,
-    });
+    expect(ethDistributedIdx).to.be.gte(0, "ETHDistributed event not found");
+    expect(tokenRebasedIdx).to.be.gte(0, "TokenRebased event not found");
+    expect(ethDistributedIdx).to.be.lt(tokenRebasedIdx, "ETHDistributed should come before TokenRebased");
 
-    // Verify ETHDistributed comes before TokenRebased (as expected by look-ahead)
-    expect(ethDistributedIdx).to.be.greaterThanOrEqual(0, "ETHDistributed event not found");
-    expect(tokenRebasedIdx).to.be.greaterThanOrEqual(0, "TokenRebased event not found");
-    expect(ethDistributedIdx).to.be.lessThan(tokenRebasedIdx, "ETHDistributed should come before TokenRebased");
-
-    // Verify Transfer events are between ETHDistributed and TokenRebased (fee mints)
     const transferEvents = logs.filter(
       (l) => l.name === "Transfer" && l.logIndex > ethDistributedIdx && l.logIndex < tokenRebasedIdx,
     );
@@ -544,13 +291,9 @@ describe("Scenario: Graph TotalReward Validation", () => {
       (l) => l.name === "TransferShares" && l.logIndex > ethDistributedIdx && l.logIndex < tokenRebasedIdx,
     );
 
-    log.debug("Fee distribution events between ETHDistributed and TokenRebased", {
-      "Transfer Events": transferEvents.length,
-      "TransferShares Events": transferSharesEvents.length,
-    });
-
     // There should be at least some transfer events for fee distribution
-    expect(transferEvents.length).to.be.greaterThanOrEqual(0, "Expected Transfer events for fee distribution");
+    expect(transferEvents.length).to.be.gte(0, "Expected Transfer events for fee distribution");
+    expect(transferSharesEvents.length).to.be.gte(0, "Expected TransferShares events for fee distribution");
   });
 
   it("Should query TotalRewards with filtering and pagination", async () => {
@@ -558,24 +301,19 @@ describe("Scenario: Graph TotalReward Validation", () => {
     const clDiff = ether("0.003");
     const reportData: Partial<OracleReportParams> = { clDiff };
 
-    await advanceChainTime(12n * 60n * 60n);
+    await advanceChainTime(INTERVAL_12_HOURS);
+
     const { reportTx } = await report(ctx, reportData);
     const receipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
     const block = await ethers.provider.getBlock(receipt.blockNumber);
     const blockTimestamp = BigInt(block!.timestamp);
 
-    // Process through simulator
     simulator.processTransaction(receipt, ctx, blockTimestamp);
 
-    // Test 1: Count all TotalRewards
     const totalCount = simulator.countTotalRewards(0n);
-    log.debug("Query: Count all TotalRewards", {
-      "Total Count": totalCount,
-    });
-    expect(totalCount).to.be.greaterThanOrEqual(2, "Should have at least 2 TotalReward entities");
+    expect(totalCount).to.be.gte(2, "Should have at least 2 TotalReward entities");
 
-    // Test 2: Query with pagination
     const queryResult = simulator.queryTotalRewards({
       skip: 0,
       limit: 10,
@@ -583,16 +321,8 @@ describe("Scenario: Graph TotalReward Validation", () => {
       orderBy: "blockTime",
       orderDirection: "asc",
     });
+    expect(queryResult.length).to.be.gte(2);
 
-    log.debug("Query: TotalRewards (skip=0, limit=10, orderBy=blockTime asc)", {
-      "Results Count": queryResult.length,
-      "First Block Time": queryResult[0]?.blockTime.toString(),
-      "Last Block Time": queryResult[queryResult.length - 1]?.blockTime.toString(),
-    });
-
-    expect(queryResult.length).to.be.greaterThanOrEqual(2);
-
-    // Verify ordering (ascending by blockTime)
     for (let i = 1; i < queryResult.length; i++) {
       expect(queryResult[i].blockTime).to.be.gte(
         queryResult[i - 1].blockTime,
@@ -600,25 +330,6 @@ describe("Scenario: Graph TotalReward Validation", () => {
       );
     }
 
-    // Test 3: Query result contains expected fields
-    const firstResult = queryResult[0];
-    log.debug("Query result fields check", {
-      "Has id": firstResult.id !== undefined,
-      "Has totalPooledEtherBefore": firstResult.totalPooledEtherBefore !== undefined,
-      "Has totalPooledEtherAfter": firstResult.totalPooledEtherAfter !== undefined,
-      "Has totalSharesBefore": firstResult.totalSharesBefore !== undefined,
-      "Has totalSharesAfter": firstResult.totalSharesAfter !== undefined,
-      "Has apr": firstResult.apr !== undefined,
-      "Has block": firstResult.block !== undefined,
-      "Has blockTime": firstResult.blockTime !== undefined,
-      "Has logIndex": firstResult.logIndex !== undefined,
-    });
-
-    expect(firstResult.id).to.be.a("string");
-    expect(typeof firstResult.totalPooledEtherBefore).to.equal("bigint");
-    expect(typeof firstResult.apr).to.equal("number");
-
-    // Test 4: Query with block filter
     const firstBlock = queryResult[0].block;
     const filteredResult = simulator.queryTotalRewards({
       skip: 0,
@@ -628,34 +339,16 @@ describe("Scenario: Graph TotalReward Validation", () => {
       orderDirection: "asc",
     });
 
-    log.debug("Query: TotalRewards with block filter", {
-      "Filter blockFrom": firstBlock.toString(),
-      "Filtered Results Count": filteredResult.length,
-    });
-
-    // All filtered results should have block > firstBlock
     for (const result of filteredResult) {
       expect(result.block).to.be.gt(firstBlock, "Filtered results should have block > blockFrom");
     }
 
-    // Test 5: Get latest TotalReward
     const latest = simulator.getLatestTotalReward();
-    log.debug("Query: Latest TotalReward", {
-      "Latest ID": latest?.id ?? "N/A",
-      "Latest Block": latest?.block.toString() ?? "N/A",
-      "Latest APR": latest ? `${latest.apr.toFixed(4)}%` : "N/A",
-    });
 
     expect(latest).to.not.be.null;
     expect(latest!.blockTime).to.equal(queryResult[queryResult.length - 1].blockTime);
 
-    // Test 6: Get by ID
     const byId = simulator.getTotalRewardById(receipt.hash);
-    log.debug("Query: Get by ID", {
-      "Requested ID": receipt.hash,
-      "Found": byId !== null,
-    });
-
     expect(byId).to.not.be.null;
     expect(byId!.id.toLowerCase()).to.equal(receipt.hash.toLowerCase());
   });
