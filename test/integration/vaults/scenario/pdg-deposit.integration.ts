@@ -19,6 +19,7 @@ import {
 } from "lib";
 import {
   createVaultWithDashboard,
+  ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   mockProof,
   ProtocolContext,
@@ -48,6 +49,7 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
 
     originalSnapshot = await Snapshot.take();
 
+    await ensurePredepositGuaranteeUnpaused(ctx);
     await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, guarantor, depositor, stranger] = await ethers.getSigners();

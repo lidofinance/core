@@ -9,6 +9,7 @@ import { Dashboard, DepositContract, StakingVault } from "typechain-types";
 import { ether, generateValidator, PDGPolicy, toGwei, toLittleEndian64 } from "lib";
 import {
   createVaultWithDashboard,
+  ensurePredepositGuaranteeUnpaused,
   generatePredepositData,
   getProtocolContext,
   mockProof,
@@ -36,6 +37,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();
+
+    await ensurePredepositGuaranteeUnpaused(ctx);
 
     await setupLidoForVaults(ctx);
 
