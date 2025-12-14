@@ -18,9 +18,9 @@ import {
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
-import { createEntityStore, deriveExpectedTotalReward, GraphSimulator, processTransaction } from "./simulator";
-import { captureChainState, capturePoolState, SimulatorInitialState } from "./utils";
-import { extractAllLogs } from "./utils/event-extraction";
+import { createEntityStore, deriveExpectedTotalReward, GraphSimulator, processTransaction } from "../graph/simulator";
+import { captureChainState, capturePoolState, SimulatorInitialState } from "../graph/utils";
+import { extractAllLogs } from "../graph/utils/event-extraction";
 
 /**
  * Graph TotalReward Entity Integration Tests
