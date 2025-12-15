@@ -16,28 +16,22 @@ struct TopUpData {
     PendingWitness[][] pendingWitness;
 }
 
-// тоже пакуем
 struct BeaconRootData {
     uint64 childBlockTimestamp; // for EIP-4788 lookup
     uint64 slot; // header slot
     uint64 proposerIndex; // header proposer
 }
-// 
 
 struct ValidatorWitness {
     // Merkle path: Validator[i] → … → state_root → beacon_block_root
     bytes32[] proofValidator;
-    //  bytes32[] proofBalance;
     // Full Validator container fields (minus WC)
     bytes pubkey;
 
-    // доп слово 
     uint64 effectiveBalance;
     uint64 activationEligibilityEpoch;
     uint64 activationEpoch;
-    //  uint64 balanceGwei;
 
-    // допустим  пакуем 256 пакуем
     uint64 exitEpoch;
     uint64 withdrawableEpoch;
     bool slashed;
@@ -47,10 +41,8 @@ struct BalanceWitness {
     // Merkle path: balances[i] → … → state_root → beacon_block_root
     bytes32[] proofBalance;
     // balances[i] value
-    uint64 balanceGwei; // 
+    uint64 balanceGwei;
 }
-
-// pack 256 - uint32, uint64 , unit64 (160 вметсто 256 * 3)
 
 struct PendingWitness {
     bytes32[] proof;
