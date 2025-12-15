@@ -47,7 +47,7 @@ library BeaconChainDepositor {
         bytes memory publicKey = MemUtils.unsafeAllocateBytes(PUBLIC_KEY_LENGTH);
         bytes memory signature = MemUtils.unsafeAllocateBytes(SIGNATURE_LENGTH);
 
-        for (uint256 i; i < _keysCount; ) {
+        for (uint256 i; i < _keysCount; ++i) {
             MemUtils.copyBytes(_publicKeysBatch, publicKey, i * PUBLIC_KEY_LENGTH, 0, PUBLIC_KEY_LENGTH);
             MemUtils.copyBytes(_signaturesBatch, signature, i * SIGNATURE_LENGTH, 0, SIGNATURE_LENGTH);
 
@@ -57,10 +57,6 @@ library BeaconChainDepositor {
                 signature,
                 _computeDepositDataRootWithAmount(_withdrawalCredentials, publicKey, signature, DEPOSIT_SIZE_IN_GWEI)
             );
-
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -76,10 +72,9 @@ library BeaconChainDepositor {
 
         bytes memory dummySignature = new bytes(SIGNATURE_LENGTH);
 
-        for (uint256 i; i < len; ) {
+        for (uint256 i; i < len; ++i) {
             bytes memory pk = _publicKeys[i];
 
-            // TODO: maybe we should trust parameters passed to this method
             if (pk.length != PUBLIC_KEY_LENGTH) {
                 revert InvalidPublicKeysBatchLength(pk.length, PUBLIC_KEY_LENGTH);
             }
@@ -88,6 +83,9 @@ library BeaconChainDepositor {
             if (amountGwei256 > type(uint64).max) {
                 revert AmountTooLarge();
             }
+
+            // obtainDepositData can return 0 amount for some keys
+            if (amountGwei256 == 0) continue;
 
             uint64 amountGwei64 = uint64(amountGwei256);
             uint256 amountWei = uint256(amountGwei64) * 1 gwei;
@@ -106,10 +104,6 @@ library BeaconChainDepositor {
                 dummySignature,
                 depositDataRoot
             );
-
-            unchecked {
-                ++i;
-            }
         }
 
     }
@@ -150,7 +144,6 @@ library BeaconChainDepositor {
     }
 
     function _toLittleEndian64(uint64 value) private pure returns (bytes8 ret) { 
-        // 8 байт LE, как в deposit_contract.sol
         ret = bytes8(0);
         for (uint256 i = 0; i < 8; ++i) {
             ret |= bytes8(bytes1(uint8(value >> (8 * i)))) >> (8 * i); 

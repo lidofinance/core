@@ -786,7 +786,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             revert WrongWithdrawalCredentialsType();
         }
         bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
-        // TODO: check
         bytes memory wcBytes = abi.encodePacked(withdrawalCredentials);
 
         uint256 depositsValue = msg.value;

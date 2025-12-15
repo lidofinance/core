@@ -23,8 +23,6 @@ describe("TopUpGateway.sol", () => {
 
   let snapshot: string;
   let topUpRole: string;
-  let pauseRole: string;
-  let resumeRole: string;
   let manageLimitsRole: string;
 
   const MODULE_ID = 1n;
@@ -99,12 +97,8 @@ describe("TopUpGateway.sol", () => {
     ]);
 
     topUpRole = await topUpGateway.TOP_UP_ROLE();
-    pauseRole = await topUpGateway.PAUSE_ROLE();
-    resumeRole = await topUpGateway.RESUME_ROLE();
     manageLimitsRole = await topUpGateway.MANAGE_LIMITS_ROLE();
     await topUpGateway.grantRole(topUpRole, topUpOperator.address);
-    await topUpGateway.grantRole(pauseRole, admin.address);
-    await topUpGateway.grantRole(resumeRole, admin.address);
     await topUpGateway.grantRole(manageLimitsRole, limitsManager.address);
     await stakingRouter.setWithdrawalCredentials(MODULE_ID, WC_TYPE_02);
   });
@@ -475,6 +469,66 @@ describe("TopUpGateway.sol", () => {
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
           .to.emit(lido, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
+      });
+
+      it("returns minimum top-up of 1 Gwei when balance is 1 Gwei below max", async () => {
+        const data = await buildTopUpData();
+        // Balance = MAX - 1 Gwei
+        data.balanceWitness[0].balanceGwei = MAX_EFFECTIVE_BALANCE_GWEI - 1n;
+
+        await expect(topUpGateway.connect(topUpOperator).topUp(data))
+          .to.emit(lido, "TopUpCalled")
+          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [1n]);
+      });
+
+      it("returns correct top-up for balance just under max with small pending", async () => {
+        const data = await buildTopUpData();
+        // Balance = MAX - 100 Gwei
+        data.balanceWitness[0].balanceGwei = MAX_EFFECTIVE_BALANCE_GWEI - 100n;
+        // Pending = 50 Gwei
+        data.pendingWitness = [
+          [
+            {
+              proof: [],
+              amount: 50n,
+              signature: `0x${"00".repeat(96)}`,
+              slot: 100n,
+              index: 0n,
+            },
+          ],
+        ];
+
+        // Expected top-up = 100 - 50 = 50 Gwei
+        await expect(topUpGateway.connect(topUpOperator).topUp(data))
+          .to.emit(lido, "TopUpCalled")
+          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [50n]);
+      });
+
+      it("returns zero when validator is slashed", async () => {
+        const data = await buildTopUpData();
+        data.validatorWitness[0].slashed = true;
+
+        await expect(topUpGateway.connect(topUpOperator).topUp(data))
+          .to.emit(lido, "TopUpCalled")
+          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
+      });
+
+      it("returns zero when validator has exitEpoch set", async () => {
+        const data = await buildTopUpData();
+        data.validatorWitness[0].exitEpoch = 1000n; // not FAR_FUTURE_EPOCH
+
+        await expect(topUpGateway.connect(topUpOperator).topUp(data))
+          .to.emit(lido, "TopUpCalled")
+          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
+      });
+
+      it("returns zero when validator has withdrawableEpoch set", async () => {
+        const data = await buildTopUpData();
+        data.validatorWitness[0].withdrawableEpoch = 2000n; // not FAR_FUTURE_EPOCH
+
+        await expect(topUpGateway.connect(topUpOperator).topUp(data))
+          .to.emit(lido, "TopUpCalled")
+          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
       });
     });
   });

@@ -62,8 +62,6 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     uint256 internal constant FAR_FUTURE_EPOCH = type(uint64).max;
 
     bytes32 public constant TOP_UP_ROLE = keccak256("TOP_UP_GATEWAY_TOP_UP_ROLE");
-    bytes32 public constant PAUSE_ROLE = keccak256("TOP_UP_GATEWAY_PAUSE_ROLE");
-    bytes32 public constant RESUME_ROLE = keccak256("TOP_UP_GATEWAY_RESUME_ROLE");
     bytes32 public constant MANAGE_LIMITS_ROLE = keccak256("TOP_UP_GATEWAY_MANAGE_LIMITS_ROLE");
 
     struct TopUpData {
@@ -104,13 +102,10 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         )
         initializer
     {
-        // TODO: this should be called only on contracts with proxy?
-        // _disableInitializers();
-
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
-        // TODO: do we need to set here last top up slot as now like in dsm?
+        // TODO: do we need to set here last top up slot
 
         LOCATOR = ILidoLocator(_lidoLocator);
         _setMaxValidatorsPerTopUp(_maxValidatorsPerTopUp);
@@ -124,10 +119,6 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     function topUp(TopUpData calldata topUps) external onlyRole(TOP_UP_ROLE) {
         Storage storage $ = _gatewayStorage();
 
-        // max amount of validators for transaction
-        // Minimum amount for transaction - will block possibility to top-up one key, so will skip this check for now
-        // Maximum need to fit block max gas
-        // all arrays should have the same length
         uint256 validatorsCount = topUps.validatorIndices.length;
         if (validatorsCount == 0) revert WrongArrayLength();
 

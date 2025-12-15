@@ -707,11 +707,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      )
        external
     {
-        // ILidoLocator locator = _getLidoLocator();
-
-        // require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
-        // require(canDeposit(), "CAN_NOT_DEPOSIT");
-
         IStakingRouter stakingRouter = _getStakingRouterChecked();
 
         uint256 depositsAmount = stakingRouter.getTopUpDepositAmount(
@@ -720,7 +715,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _topUpLimitsGwei
         );
         
-        // should we decrease bufferedEther ?
         if (depositsAmount > 0) {
             /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
             ///     even if the StakingRouter is a trusted contract.
