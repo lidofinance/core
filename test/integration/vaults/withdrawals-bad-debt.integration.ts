@@ -70,14 +70,19 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
 
   // Helper to calculate the bad debt amount that would trigger smoothen token rebase
   const calculateBadDebtToTriggerSmoothing = async () => {
-    const { lido, oracleReportSanityChecker } = ctx.contracts;
-    const state = await captureState();
+    const { oracleReportSanityChecker } = ctx.contracts;
 
-    // Get shares to finalize for WQ
-    const sharesToFinalize = await lido.getSharesByPooledEth(state.unfinalizedSTETH);
+    // Simulate report with withdrawals finalization but without bad debt internalization
+    const beforeReportSnapshot = await Snapshot.take();
+    const { finalizedEvent, stateBefore } = await finalizeWithdrawals();
+
+    // Restore to before report state
+    await Snapshot.restore(beforeReportSnapshot);
+
+    const [, , ethToFinalizeWithoutBadDebt, sharesToFinalize] = finalizedEvent.args;
 
     // Total shares that need to be burned
-    const totalSharesToBurn = sharesToFinalize + state.burnerShares;
+    const totalSharesToBurn = sharesToFinalize + stateBefore.burnerShares;
 
     // Get rebase limit
     const limits = await oracleReportSanityChecker.getOracleReportLimits();
@@ -85,14 +90,14 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     const rebaseLimitPlus1 = maxPositiveTokenRebase + LIMITER_PRECISION_BASE;
 
     // Current share rate (this is batchShareRate in prefinalize)
-    const currentShareRate = state.shareRate;
+    const currentShareRate = stateBefore.shareRate;
 
     // Calculate maxSharesToBurn for a given badDebtShares amount
     const calculateMaxSharesToBurn = (badDebtShares: bigint): bigint => {
-      // Step 1: Calculate simulatedShareRate (simulation without WQ finalization)
-      const postInternalShares = state.internalShares + badDebtShares;
-      const postExternalShares = state.externalShares - badDebtShares;
-      const postInternalEther = state.internalEther; // postInternalEther = preInternalEther (no WQ finalization in simulation)
+      // Step 1: Calculate simulatedShareRate after internalizing bad debt
+      const postInternalShares = stateBefore.internalShares + badDebtShares;
+      const postExternalShares = stateBefore.externalShares - badDebtShares;
+      const postInternalEther = stateBefore.internalEther;
       const postExternalEther = (postExternalShares * postInternalEther) / postInternalShares;
       const postTotalPooledEther = postInternalEther + postExternalEther;
       const postTotalShares = postInternalShares + postExternalShares;
@@ -103,20 +108,15 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
       if (currentShareRate > simulatedShareRate) {
         etherToLock = (sharesToFinalize * simulatedShareRate) / SHARE_RATE_PRECISION;
       } else {
-        etherToLock = state.unfinalizedSTETH;
+        etherToLock = ethToFinalizeWithoutBadDebt;
       }
 
       // Step 3: Calculate maxSharesToBurn in smoothenTokenRebase
-      const currentTotalPooledEther = state.internalEther - etherToLock;
-      const pooledEtherRate = (currentTotalPooledEther * LIMITER_PRECISION_BASE) / state.internalEther;
-      const maxSharesToBurn = (state.internalShares * (rebaseLimitPlus1 - pooledEtherRate)) / rebaseLimitPlus1;
+      const currentTotalPooledEther = stateBefore.internalEther - etherToLock;
+      const pooledEtherRate = (currentTotalPooledEther * LIMITER_PRECISION_BASE) / stateBefore.internalEther;
+      const maxSharesToBurn = (stateBefore.internalShares * (rebaseLimitPlus1 - pooledEtherRate)) / rebaseLimitPlus1;
 
       return maxSharesToBurn;
-    };
-
-    // Convert ether to shares for calculation
-    const etherToShares = (etherAmount: bigint): bigint => {
-      return (etherAmount * state.totalShares) / state.totalPooledEther;
     };
 
     // Check if smoothening already triggers without bad debt
@@ -125,9 +125,12 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
 
     // Binary search to find the threshold
     let low = 0n;
-    let high = state.externalShares; // Bad debt can't exceed external shares
+    let high = stateBefore.externalShares; // Bad debt can't exceed external shares
 
-    while (high - low > etherToShares(ether("0.01"))) {
+    // Define accuracy for the search
+    const accuracy = 10n ** 9n;
+
+    while (high - low > accuracy) {
       const mid = (low + high) / 2n;
       const maxSharesToBurn = calculateMaxSharesToBurn(mid);
 
