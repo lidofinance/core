@@ -22,8 +22,6 @@ import {
     ValidatorExitData,
     ValidatorsCountsCorrection
 } from "./SRTypes.sol";
-// solhint-disable-next-line no-global-import
-import "hardhat/console.sol";
 
 
 library SRLib {

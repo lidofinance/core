@@ -12,8 +12,6 @@
     "lido/fixed-compiler-version": "error",
     "visibility-modifier-order": "error",
     "no-unused-vars": "error",
-    "no-console": "off",
-    "no-global-import": "off",
     "func-visibility": [
       "warn",
       {
