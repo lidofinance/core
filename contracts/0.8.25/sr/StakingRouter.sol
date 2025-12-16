@@ -765,12 +765,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice Calls `obtainDepositData` on the staking module to determine
     /// which keys to top up and for what amounts, based on the
-    /// provided key indices, operator IDs, pubkeys, and top-up limits.
+    /// provided key indices, operator IDs, pubkeys, and top-up limits. Then top up validators based on this information.
     /// @param _stakingModuleId Staking module id
     /// @param _keyIndices Array of key indicies
     /// @param _operatorIds Array of operator indicies
     /// @param _pubkeysPacked Packed list of public keys
     /// @param _topUpLimitsGwei Array of allowed top up in gwei on key
+    /// @dev Method allowed only for modules with 0x02 keys
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,

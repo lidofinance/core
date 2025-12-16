@@ -105,16 +105,18 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
-        // TODO: do we need to set here last top up slot
-
         LOCATOR = ILidoLocator(_lidoLocator);
         _setMaxValidatorsPerTopUp(_maxValidatorsPerTopUp);
         _setMinBlockDistance(_minBlockDistance);
     }
 
     /**
-     *
-     * @dev Check balance not exceed 2048
+     * @notice Method verifying Merkle proofs on validators, actual balances and pending deposits on validators, making check of age of slot's proof
+     * and proceeding to top up validators via Lido.topUp(stakingModuleId, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei)
+     * @param topUps TopUpData structure, containing validators' container fields, actual balances and pending deposits
+     *  and Merkle proofs on inclusion of each container in Beacon State tree
+     * @dev Amount of validators limited by maxValidatorsPerTopUp; Between topUp calls should pass minBlockDistance.
+     *      Only callable by accounts with TOP_UP_ROLE.
      */
     function topUp(TopUpData calldata topUps) external onlyRole(TOP_UP_ROLE) {
         Storage storage $ = _gatewayStorage();

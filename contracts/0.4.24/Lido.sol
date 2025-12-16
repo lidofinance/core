@@ -697,7 +697,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         stakingRouter.deposit.value(depositsValue)(_stakingModuleId, _depositCalldata);
     }
 
-    /// @notice Invoke a top up call to the Staking Router contract and update buffered counters
+    /// @notice Invoke a top up call to the Staking Router contract and update buffered counters.
+    ///         The method queries StakingRouter.getTopUpDepositAmount to calculate the actual top up amount
+    ///         based on depositable ETH and provided limits. Then it updates local buffered ether state
+    ///         and forwards the calculated amount to StakingRouter.topUp.
+    /// @param _stakingModuleId Id of the staking module to be deposited
+    /// @param _keyIndices List of keys' indices
+    /// @param _operatorIds List of operators' indices
+    /// @param _pubkeysPacked Packed list of public keys
+    /// @param _topUpLimitsGwei List of top up values for validators in gwei
     function topUp(
         uint256 _stakingModuleId,
         uint256[] _keyIndices,
