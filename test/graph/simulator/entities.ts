@@ -5,14 +5,74 @@
  * All numeric values use bigint to ensure exact matching without precision loss.
  * APR values use number (BigDecimal equivalent).
  *
- * Reference: lido-subgraph/schema.graphql - TotalReward entity
- * Reference: lido-subgraph/src/helpers.ts - _loadTotalRewardEntity()
+ * ## V2+ Testing Focus
+ *
+ * This simulator is designed for V2+ (post-V2 upgrade) testing. The following
+ * legacy V1 fields exist in the real Graph schema but are **intentionally omitted**
+ * from this simulator as they are not populated for V2+ oracle reports:
+ *
+ * | Field                     | Purpose                              | Why Omitted                        |
+ * | ------------------------- | ------------------------------------ | ---------------------------------- |
+ * | `insuranceFee`            | ETH minted to insurance fund         | No insurance fund since V2         |
+ * | `insuranceFeeBasisPoints` | Insurance fee as basis points        | No insurance fund since V2         |
+ * | `sharesToInsuranceFund`   | Shares minted to insurance fund      | No insurance fund since V2         |
+ * | `dust`                    | Rounding dust ETH to treasury        | V2 handles dust differently        |
+ * | `dustSharesToTreasury`    | Rounding dust shares to treasury     | V2 handles dust differently        |
+ *
+ * These fields are initialized to zero in the real Graph but never populated for V2+ reports.
+ * If testing V1 scenarios (historical data), these fields would need to be added.
+ *
+ * Reference: lido-subgraph/schema.graphql - TotalReward, Totals entities
+ * Reference: lido-subgraph/src/helpers.ts - _loadTotalRewardEntity(), _loadTotalsEntity()
  */
+
+/**
+ * Totals entity representing the current state of the Lido pool
+ *
+ * This entity is a singleton (id = "") that tracks the total pooled ether and shares.
+ * It is updated during oracle reports and other operations that change the pool state.
+ *
+ * Reference: lido-subgraph/src/helpers.ts _loadTotalsEntity()
+ */
+export interface TotalsEntity {
+  /** Singleton ID (always empty string) */
+  id: string;
+
+  /** Total pooled ether in the protocol */
+  totalPooledEther: bigint;
+
+  /** Total shares in the protocol */
+  totalShares: bigint;
+}
+
+/**
+ * Create a new Totals entity with default values
+ *
+ * @returns New TotalsEntity with zero values
+ */
+export function createTotalsEntity(): TotalsEntity {
+  return {
+    id: "",
+    totalPooledEther: 0n,
+    totalShares: 0n,
+  };
+}
 
 /**
  * TotalReward entity representing rewards data from an oracle report
  *
  * This entity is created by handleETHDistributed when processing a profitable oracle report.
+ *
+ * ## Legacy Fields Not Included (V1 only)
+ *
+ * The following fields exist in the real Graph schema but are **not implemented** here:
+ * - `insuranceFee`: ETH value minted to insurance fund (no insurance fund since V2)
+ * - `insuranceFeeBasisPoints`: Insurance fee as basis points (no insurance fund since V2)
+ * - `sharesToInsuranceFund`: Shares minted to insurance fund (no insurance fund since V2)
+ * - `dust`: Rounding dust ETH to treasury (V2 handles dust differently)
+ * - `dustSharesToTreasury`: Rounding dust shares to treasury (V2 handles dust differently)
+ *
+ * These would be set to 0 in V2+ oracle reports anyway.
  */
 export interface TotalRewardEntity {
   // ========== Tier 1 - Direct Event Metadata ==========

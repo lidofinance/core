@@ -21,7 +21,7 @@ import { ProtocolContext } from "lib/protocol";
 
 import { extractAllLogs, findTransferSharesPairs, ZERO_ADDRESS } from "../utils/event-extraction";
 
-import { TotalRewardEntity } from "./entities";
+import { TotalRewardEntity, TotalsEntity } from "./entities";
 import { HandlerContext, processTransactionEvents, ProcessTransactionResult } from "./handlers";
 import { calcAPR_v2, CALCULATION_UNIT } from "./helpers";
 import {
@@ -33,13 +33,13 @@ import {
   TotalRewardsQueryParamsExtended,
   TotalRewardsQueryResult,
 } from "./query";
-import { createEntityStore, EntityStore } from "./store";
+import { createEntityStore, EntityStore, loadTotalsEntity, saveTotals } from "./store";
 
 // Re-export types and utilities
-export { TotalRewardEntity, createTotalRewardEntity } from "./entities";
-export { EntityStore, createEntityStore, getTotalReward, saveTotalReward } from "./store";
+export { TotalRewardEntity, createTotalRewardEntity, TotalsEntity, createTotalsEntity } from "./entities";
+export { EntityStore, createEntityStore, getTotalReward, saveTotalReward, loadTotalsEntity, saveTotals } from "./store";
 export { SimulatorInitialState, PoolState, captureChainState, capturePoolState } from "../utils/state-capture";
-export { ProcessTransactionResult } from "./handlers";
+export { ProcessTransactionResult, ValidationWarning, SharesBurntResult } from "./handlers";
 
 // Re-export query types and functions
 export {
@@ -52,6 +52,19 @@ export {
   TotalRewardsQueryParamsExtended,
   TotalRewardsQueryResult,
 } from "./query";
+
+// Re-export helper functions and types for testing
+export {
+  calcAPR_v2,
+  calcAPR_v2Extended,
+  CALCULATION_UNIT,
+  E27_PRECISION_BASE,
+  SECONDS_PER_YEAR,
+  MAX_APR_SCALED,
+  MIN_SHARE_RATE,
+  APRResult,
+  APREdgeCase,
+} from "./helpers";
 
 /**
  * Process a transaction's events through the Graph simulator
@@ -161,6 +174,33 @@ export class GraphSimulator {
    */
   reset(): void {
     this.store = createEntityStore();
+  }
+
+  // ========== Totals Entity Methods ==========
+
+  /**
+   * Get the current Totals entity
+   *
+   * @returns The Totals entity or null if not initialized
+   */
+  getTotals(): TotalsEntity | null {
+    return this.store.totals;
+  }
+
+  /**
+   * Initialize Totals entity with values from chain state
+   *
+   * This should be called at test setup to initialize the simulator
+   * with the current chain state before processing transactions.
+   *
+   * @param totalPooledEther - Total pooled ether from lido.getTotalPooledEther()
+   * @param totalShares - Total shares from lido.getTotalShares()
+   */
+  initializeTotals(totalPooledEther: bigint, totalShares: bigint): void {
+    const totals = loadTotalsEntity(this.store, true)!;
+    totals.totalPooledEther = totalPooledEther;
+    totals.totalShares = totalShares;
+    saveTotals(this.store, totals);
   }
 
   // ========== Query Methods ==========

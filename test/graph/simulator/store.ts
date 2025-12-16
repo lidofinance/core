@@ -7,7 +7,7 @@
  * Reference: The Graph's store API provides load/save operations for entities
  */
 
-import { TotalRewardEntity } from "./entities";
+import { createTotalsEntity, TotalRewardEntity, TotalsEntity } from "./entities";
 
 /**
  * Entity store interface containing all entity collections
@@ -16,10 +16,13 @@ import { TotalRewardEntity } from "./entities";
  * Future iterations will add more entity types (NodeOperatorFees, etc.)
  */
 export interface EntityStore {
+  /** Totals singleton entity (pool state) */
+  totals: TotalsEntity | null;
+
   /** TotalReward entities keyed by transaction hash */
   totalRewards: Map<string, TotalRewardEntity>;
 
-  // Future entity collections (Iteration 2+):
+  // Future entity collections:
   // nodeOperatorFees: Map<string, NodeOperatorFeesEntity>;
   // nodeOperatorsShares: Map<string, NodeOperatorsSharesEntity>;
   // oracleReports: Map<string, OracleReportEntity>;
@@ -32,6 +35,7 @@ export interface EntityStore {
  */
 export function createEntityStore(): EntityStore {
   return {
+    totals: null,
     totalRewards: new Map<string, TotalRewardEntity>(),
   };
 }
@@ -44,7 +48,34 @@ export function createEntityStore(): EntityStore {
  * @param store - The store to clear
  */
 export function clearStore(store: EntityStore): void {
+  store.totals = null;
   store.totalRewards.clear();
+}
+
+/**
+ * Load or create the Totals entity
+ *
+ * Mimics _loadTotalsEntity from lido-subgraph/src/helpers.ts
+ *
+ * @param store - The entity store
+ * @param create - Whether to create if not exists
+ * @returns The Totals entity or null if not exists and create=false
+ */
+export function loadTotalsEntity(store: EntityStore, create: boolean = false): TotalsEntity | null {
+  if (!store.totals && create) {
+    store.totals = createTotalsEntity();
+  }
+  return store.totals;
+}
+
+/**
+ * Save the Totals entity to the store
+ *
+ * @param store - The entity store
+ * @param entity - The Totals entity to save
+ */
+export function saveTotals(store: EntityStore, entity: TotalsEntity): void {
+  store.totals = entity;
 }
 
 /**
