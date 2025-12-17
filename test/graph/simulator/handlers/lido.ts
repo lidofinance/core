@@ -9,6 +9,8 @@
  * Reference: lido-subgraph/src/Lido.ts lines 477-690
  */
 
+import { ProtocolContext } from "lib/protocol";
+
 import {
   findAllEventsByName,
   findEventByName,
@@ -17,9 +19,32 @@ import {
   LogDescriptionWithMeta,
   ZERO_ADDRESS,
 } from "../../utils/event-extraction";
-import { createTotalRewardEntity, TotalRewardEntity, TotalsEntity } from "../entities";
+import {
+  createTotalRewardEntity,
+  LidoSubmissionEntity,
+  LidoTransferEntity,
+  SharesBurnEntity,
+  TotalRewardEntity,
+  TotalsEntity,
+} from "../entities";
 import { calcAPR_v2, CALCULATION_UNIT } from "../helpers";
-import { EntityStore, loadTotalsEntity, saveTotalReward, saveTotals } from "../store";
+import {
+  EntityStore,
+  loadLidoSubmissionEntity,
+  loadLidoTransferEntity,
+  loadSharesBurnEntity,
+  loadSharesEntity,
+  loadTotalsEntity,
+  makeLidoSubmissionId,
+  makeLidoTransferId,
+  makeSharesBurnId,
+  saveLidoSubmission,
+  saveLidoTransfer,
+  saveShares,
+  saveSharesBurn,
+  saveTotalReward,
+  saveTotals,
+} from "../store";
 
 /**
  * Context passed to handlers containing transaction metadata
@@ -445,4 +470,576 @@ export function _processTokenRebase(
  */
 export function isETHDistributedEvent(event: LogDescriptionWithMeta): boolean {
   return event.name === "ETHDistributed";
+}
+
+// ============================================================================
+// Submitted Event Handler
+// ============================================================================
+
+/**
+ * Result of processing a Submitted event
+ */
+export interface SubmittedResult {
+  /** The created LidoSubmission entity */
+  submission: LidoSubmissionEntity;
+
+  /** The created LidoTransfer entity (mint transfer) */
+  transfer: LidoTransferEntity;
+
+  /** The updated Totals entity */
+  totals: TotalsEntity;
+}
+
+/**
+ * Handle Submitted event - creates LidoSubmission entity and updates Totals/Shares
+ *
+ * Reference: lido-subgraph/src/Lido.ts handleSubmitted() lines 72-164
+ *
+ * @param event - The Submitted event
+ * @param allLogs - All parsed logs from the transaction (for TransferShares look-ahead)
+ * @param store - Entity store
+ * @param ctx - Handler context with transaction metadata
+ * @returns Result containing the created entities and updated state
+ */
+export function handleSubmitted(
+  event: LogDescriptionWithMeta,
+  allLogs: LogDescriptionWithMeta[],
+  store: EntityStore,
+  ctx: HandlerContext,
+): SubmittedResult {
+  // Extract Submitted event params
+  // event Submitted(address indexed sender, uint256 amount, address referral)
+  const sender = getEventArg<string>(event, "sender");
+  const amount = getEventArg<bigint>(event, "amount");
+  const referral = getEventArg<string>(event, "referral");
+
+  // Find the paired TransferShares event to get the shares value (V2+: always present)
+  // The TransferShares event comes right after the Transfer event which follows Submitted
+  const transferSharesEvent = findEventByName(allLogs, "TransferShares", event.logIndex);
+  if (!transferSharesEvent) {
+    throw new Error(`TransferShares event not found after Submitted in tx ${ctx.transactionHash}`);
+  }
+  const shares = getEventArg<bigint>(transferSharesEvent, "sharesValue");
+
+  // Load Totals entity and capture state before update
+  const totals = loadTotalsEntity(store, true)!;
+  const totalPooledEtherBefore = totals.totalPooledEther;
+  const totalSharesBefore = totals.totalShares;
+
+  // Update Totals with the new submission
+  totals.totalPooledEther = totals.totalPooledEther + amount;
+  totals.totalShares = totals.totalShares + shares;
+  saveTotals(store, totals);
+
+  // Load/create Shares entity for sender
+  const sharesEntity = loadSharesEntity(store, sender, true)!;
+  const sharesBefore = sharesEntity.shares;
+  sharesEntity.shares = sharesEntity.shares + shares;
+  const sharesAfter = sharesEntity.shares;
+  saveShares(store, sharesEntity);
+
+  // Calculate balance after submission
+  const balanceAfter = totals.totalShares > 0n ? (sharesAfter * totals.totalPooledEther) / totals.totalShares : 0n;
+
+  // Create LidoSubmission entity
+  const submissionId = makeLidoSubmissionId(ctx.transactionHash, event.logIndex);
+  const submission = loadLidoSubmissionEntity(store, submissionId, true)!;
+
+  submission.sender = sender.toLowerCase();
+  submission.amount = amount;
+  submission.referral = referral.toLowerCase();
+  submission.shares = shares;
+  submission.sharesBefore = sharesBefore;
+  submission.sharesAfter = sharesAfter;
+  submission.totalPooledEtherBefore = totalPooledEtherBefore;
+  submission.totalPooledEtherAfter = totals.totalPooledEther;
+  submission.totalSharesBefore = totalSharesBefore;
+  submission.totalSharesAfter = totals.totalShares;
+  submission.balanceAfter = balanceAfter;
+  submission.block = ctx.blockNumber;
+  submission.blockTime = ctx.blockTimestamp;
+  submission.transactionHash = ctx.transactionHash;
+  submission.transactionIndex = BigInt(ctx.transactionIndex);
+  submission.logIndex = BigInt(event.logIndex);
+
+  saveLidoSubmission(store, submission);
+
+  // Create the mint transfer entity (handled by handleTransfer, but we create it here for completeness)
+  // Find the Transfer event that comes after Submitted
+  const transferEvent = findEventByName(allLogs, "Transfer", event.logIndex);
+  let transfer: LidoTransferEntity;
+
+  if (transferEvent) {
+    transfer = _createTransferEntity(
+      transferEvent,
+      allLogs,
+      store,
+      ctx,
+      totals.totalPooledEther,
+      totals.totalShares,
+      true, // Skip shares update since we already did it above
+    );
+  } else {
+    // Fallback: create a minimal transfer entity
+    const transferId = makeLidoTransferId(ctx.transactionHash, event.logIndex);
+    transfer = loadLidoTransferEntity(store, transferId, true)!;
+    transfer.from = ZERO_ADDRESS;
+    transfer.to = sender.toLowerCase();
+    transfer.value = amount;
+    transfer.shares = shares;
+    transfer.totalPooledEther = totals.totalPooledEther;
+    transfer.totalShares = totals.totalShares;
+    transfer.block = ctx.blockNumber;
+    transfer.blockTime = ctx.blockTimestamp;
+    transfer.transactionHash = ctx.transactionHash;
+    transfer.transactionIndex = BigInt(ctx.transactionIndex);
+    transfer.logIndex = BigInt(event.logIndex);
+    saveLidoTransfer(store, transfer);
+  }
+
+  return {
+    submission,
+    transfer,
+    totals,
+  };
+}
+
+/**
+ * Check if an event is a Submitted event
+ *
+ * @param event - The event to check
+ * @returns true if this is a Submitted event
+ */
+export function isSubmittedEvent(event: LogDescriptionWithMeta): boolean {
+  return event.name === "Submitted";
+}
+
+// ============================================================================
+// Transfer Event Handler
+// ============================================================================
+
+/**
+ * Result of processing a Transfer event
+ */
+export interface TransferResult {
+  /** The created LidoTransfer entity */
+  transfer: LidoTransferEntity;
+
+  /** Whether this was a mint transfer (from = 0x0) */
+  isMint: boolean;
+
+  /** Whether this was a burn transfer (to = 0x0) */
+  isBurn: boolean;
+}
+
+/**
+ * Handle Transfer event - creates LidoTransfer entity and updates Shares
+ *
+ * Reference: lido-subgraph/src/Lido.ts handleTransfer() lines 166-373
+ *
+ * @param event - The Transfer event
+ * @param allLogs - All parsed logs from the transaction (for TransferShares look-ahead)
+ * @param store - Entity store
+ * @param ctx - Handler context with transaction metadata
+ * @param skipSharesUpdate - Skip shares update if already handled by caller (e.g., Submitted handler)
+ * @returns Result containing the created entity
+ */
+export function handleTransfer(
+  event: LogDescriptionWithMeta,
+  allLogs: LogDescriptionWithMeta[],
+  store: EntityStore,
+  ctx: HandlerContext,
+  skipSharesUpdate: boolean = false,
+): TransferResult {
+  // Load current Totals state
+  const totals = loadTotalsEntity(store, true)!;
+
+  const transfer = _createTransferEntity(
+    event,
+    allLogs,
+    store,
+    ctx,
+    totals.totalPooledEther,
+    totals.totalShares,
+    skipSharesUpdate,
+  );
+
+  const from = transfer.from.toLowerCase();
+  const to = transfer.to.toLowerCase();
+
+  return {
+    transfer,
+    isMint: from === ZERO_ADDRESS.toLowerCase(),
+    isBurn: to === ZERO_ADDRESS.toLowerCase(),
+  };
+}
+
+/**
+ * Internal helper to create a LidoTransfer entity
+ *
+ * @param event - The Transfer event
+ * @param allLogs - All parsed logs from the transaction
+ * @param store - Entity store
+ * @param ctx - Handler context
+ * @param totalPooledEther - Current total pooled ether
+ * @param totalShares - Current total shares
+ * @param skipSharesUpdate - Skip shares update if already handled
+ * @returns The created LidoTransfer entity
+ */
+function _createTransferEntity(
+  event: LogDescriptionWithMeta,
+  allLogs: LogDescriptionWithMeta[],
+  store: EntityStore,
+  ctx: HandlerContext,
+  totalPooledEther: bigint,
+  totalShares: bigint,
+  skipSharesUpdate: boolean,
+): LidoTransferEntity {
+  // Extract Transfer event params
+  // event Transfer(address indexed from, address indexed to, uint256 value)
+  const from = getEventArg<string>(event, "from");
+  const to = getEventArg<string>(event, "to");
+  const value = getEventArg<bigint>(event, "value");
+
+  // Find the paired TransferShares event (V2+: always present, comes right after Transfer)
+  // Reference: lido-subgraph/src/Lido.ts lines 178-196
+  const transferSharesEvent = findEventByName(allLogs, "TransferShares", event.logIndex);
+  const shares = transferSharesEvent ? getEventArg<bigint>(transferSharesEvent, "sharesValue") : 0n;
+
+  // Create LidoTransfer entity
+  const transferId = makeLidoTransferId(ctx.transactionHash, event.logIndex);
+  const transfer = loadLidoTransferEntity(store, transferId, true)!;
+
+  transfer.from = from.toLowerCase();
+  transfer.to = to.toLowerCase();
+  transfer.value = value;
+  transfer.shares = shares;
+  transfer.totalPooledEther = totalPooledEther;
+  transfer.totalShares = totalShares;
+  transfer.block = ctx.blockNumber;
+  transfer.blockTime = ctx.blockTimestamp;
+  transfer.transactionHash = ctx.transactionHash;
+  transfer.transactionIndex = BigInt(ctx.transactionIndex);
+  transfer.logIndex = BigInt(event.logIndex);
+
+  // Update shares and track before/after balances
+  // Reference: lido-subgraph/src/helpers.ts _updateTransferShares() lines 197-238
+  if (!skipSharesUpdate) {
+    _updateTransferShares(transfer, store);
+  } else {
+    // Just capture current state without updating
+    const fromShares = loadSharesEntity(store, from, false);
+    const toShares = loadSharesEntity(store, to, false);
+    if (fromShares) {
+      transfer.sharesBeforeDecrease = fromShares.shares;
+      transfer.sharesAfterDecrease = fromShares.shares;
+    }
+    if (toShares) {
+      transfer.sharesBeforeIncrease = toShares.shares;
+      transfer.sharesAfterIncrease = toShares.shares;
+    }
+  }
+
+  // Calculate balances after transfer
+  // Reference: lido-subgraph/src/helpers.ts _updateTransferBalances() lines 183-195
+  _updateTransferBalances(transfer);
+
+  saveLidoTransfer(store, transfer);
+
+  return transfer;
+}
+
+/**
+ * Update shares for from/to addresses based on transfer
+ *
+ * Reference: lido-subgraph/src/helpers.ts _updateTransferShares() lines 197-238
+ *
+ * @param entity - The LidoTransfer entity to update
+ * @param store - Entity store
+ */
+function _updateTransferShares(entity: LidoTransferEntity, store: EntityStore): void {
+  const fromLower = entity.from.toLowerCase();
+  const toLower = entity.to.toLowerCase();
+  const zeroLower = ZERO_ADDRESS.toLowerCase();
+
+  // Decreasing from address shares (skip if from is zero address - mint)
+  if (fromLower !== zeroLower) {
+    const sharesFromEntity = loadSharesEntity(store, entity.from, true)!;
+    entity.sharesBeforeDecrease = sharesFromEntity.shares;
+
+    if (fromLower !== toLower && entity.shares > 0n) {
+      sharesFromEntity.shares = sharesFromEntity.shares - entity.shares;
+      saveShares(store, sharesFromEntity);
+    }
+    entity.sharesAfterDecrease = sharesFromEntity.shares;
+  }
+
+  // Increasing to address shares (skip if to is zero address - burn)
+  if (toLower !== zeroLower) {
+    const sharesToEntity = loadSharesEntity(store, entity.to, true)!;
+    entity.sharesBeforeIncrease = sharesToEntity.shares;
+
+    if (toLower !== fromLower && entity.shares > 0n) {
+      sharesToEntity.shares = sharesToEntity.shares + entity.shares;
+      saveShares(store, sharesToEntity);
+    }
+    entity.sharesAfterIncrease = sharesToEntity.shares;
+  }
+}
+
+/**
+ * Calculate balances after transfer based on current totals
+ *
+ * Reference: lido-subgraph/src/helpers.ts _updateTransferBalances() lines 183-195
+ *
+ * @param entity - The LidoTransfer entity to update
+ */
+function _updateTransferBalances(entity: LidoTransferEntity): void {
+  if (entity.totalShares === 0n) {
+    entity.balanceAfterIncrease = entity.value;
+    entity.balanceAfterDecrease = 0n;
+  } else {
+    entity.balanceAfterIncrease = (entity.sharesAfterIncrease * entity.totalPooledEther) / entity.totalShares;
+    entity.balanceAfterDecrease = (entity.sharesAfterDecrease * entity.totalPooledEther) / entity.totalShares;
+  }
+}
+
+/**
+ * Check if an event is a Transfer event
+ *
+ * @param event - The event to check
+ * @returns true if this is a Transfer event
+ */
+export function isTransferEvent(event: LogDescriptionWithMeta): boolean {
+  return event.name === "Transfer";
+}
+
+// ============================================================================
+// SharesBurn Entity Creation (Enhanced)
+// ============================================================================
+
+/**
+ * Enhanced result of processing a SharesBurnt event with entity
+ */
+export interface SharesBurntWithEntityResult extends SharesBurntResult {
+  /** The created SharesBurn entity */
+  entity: SharesBurnEntity;
+
+  /** The created burn transfer entity */
+  transfer: LidoTransferEntity;
+}
+
+/**
+ * Handle SharesBurnt event with entity creation
+ *
+ * This extends handleSharesBurnt to also create the SharesBurn entity.
+ *
+ * Reference: lido-subgraph/src/Lido.ts handleSharesBurnt() lines 375-471
+ *
+ * @param event - The SharesBurnt event
+ * @param allLogs - All logs (for potential paired events)
+ * @param store - Entity store
+ * @param ctx - Handler context
+ * @returns Result containing the entity and updated state
+ */
+export function handleSharesBurntWithEntity(
+  event: LogDescriptionWithMeta,
+  allLogs: LogDescriptionWithMeta[],
+  store: EntityStore,
+  ctx: HandlerContext,
+): SharesBurntWithEntityResult {
+  // Extract SharesBurnt event params
+  const account = getEventArg<string>(event, "account");
+  const preRebaseTokenAmount = getEventArg<bigint>(event, "preRebaseTokenAmount");
+  const postRebaseTokenAmount = getEventArg<bigint>(event, "postRebaseTokenAmount");
+  const sharesAmount = getEventArg<bigint>(event, "sharesAmount");
+
+  // Create SharesBurn entity
+  const entityId = makeSharesBurnId(ctx.transactionHash, event.logIndex);
+  const entity = loadSharesBurnEntity(store, entityId, true)!;
+
+  entity.account = account.toLowerCase();
+  entity.preRebaseTokenAmount = preRebaseTokenAmount;
+  entity.postRebaseTokenAmount = postRebaseTokenAmount;
+  entity.sharesAmount = sharesAmount;
+
+  saveSharesBurn(store, entity);
+
+  // Update Totals
+  const totals = loadTotalsEntity(store, true)!;
+  totals.totalShares = totals.totalShares - sharesAmount;
+  saveTotals(store, totals);
+
+  // Update account shares
+  const accountShares = loadSharesEntity(store, account, true)!;
+  const sharesBeforeDecrease = accountShares.shares;
+  accountShares.shares = accountShares.shares - sharesAmount;
+  saveShares(store, accountShares);
+
+  // Create burn transfer entity (from account to 0x0)
+  const transferId = makeLidoTransferId(ctx.transactionHash, event.logIndex);
+  const transfer = loadLidoTransferEntity(store, transferId, true)!;
+
+  transfer.from = account.toLowerCase();
+  transfer.to = ZERO_ADDRESS;
+  transfer.value = postRebaseTokenAmount;
+  transfer.shares = sharesAmount;
+  transfer.sharesBeforeDecrease = sharesBeforeDecrease;
+  transfer.sharesAfterDecrease = accountShares.shares;
+  transfer.sharesBeforeIncrease = 0n;
+  transfer.sharesAfterIncrease = 0n;
+  transfer.totalPooledEther = totals.totalPooledEther;
+  transfer.totalShares = totals.totalShares;
+  transfer.block = ctx.blockNumber;
+  transfer.blockTime = ctx.blockTimestamp;
+  transfer.transactionHash = ctx.transactionHash;
+  transfer.transactionIndex = BigInt(ctx.transactionIndex);
+  transfer.logIndex = BigInt(event.logIndex);
+
+  _updateTransferBalances(transfer);
+  saveLidoTransfer(store, transfer);
+
+  return {
+    sharesBurnt: sharesAmount,
+    account: account.toLowerCase(),
+    preRebaseTokenAmount,
+    postRebaseTokenAmount,
+    totals,
+    entity,
+    transfer,
+  };
+}
+
+// ============================================================================
+// V3 VaultHub Event Handlers
+// ============================================================================
+
+/**
+ * Result of processing an ExternalSharesMinted event
+ */
+export interface ExternalSharesMintedResult {
+  /** Amount of shares minted */
+  amountOfShares: bigint;
+
+  /** Receiver address */
+  receiver: string;
+
+  /** The updated Totals entity */
+  totals: TotalsEntity;
+}
+
+/**
+ * Handle ExternalSharesMinted event (V3) - updates Totals when VaultHub mints external shares
+ *
+ * Reference: lido-subgraph/src/LidoV3.ts handleExternalSharesMinted() lines 8-16
+ *
+ * @param event - The ExternalSharesMinted event
+ * @param store - Entity store
+ * @param ctx - Handler context
+ * @param protocolContext - Protocol context for contract reads
+ * @returns Result containing updated state
+ */
+export async function handleExternalSharesMinted(
+  event: LogDescriptionWithMeta,
+  store: EntityStore,
+  ctx: HandlerContext,
+  protocolContext: ProtocolContext,
+): Promise<ExternalSharesMintedResult> {
+  // Extract ExternalSharesMinted event params
+  // event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares)
+  const receiver = getEventArg<string>(event, "receiver");
+  const amountOfShares = getEventArg<bigint>(event, "amountOfShares");
+
+  // Load Totals entity
+  const totals = loadTotalsEntity(store, true)!;
+
+  // Update totalShares by adding minted shares
+  totals.totalShares = totals.totalShares + amountOfShares;
+
+  // Read totalPooledEther from contract (as done in real subgraph)
+  const totalPooledEther = await protocolContext.contracts.lido.getTotalPooledEther();
+  totals.totalPooledEther = totalPooledEther;
+
+  saveTotals(store, totals);
+
+  // Update receiver's shares
+  const receiverShares = loadSharesEntity(store, receiver, true)!;
+  receiverShares.shares = receiverShares.shares + amountOfShares;
+  saveShares(store, receiverShares);
+
+  return {
+    amountOfShares,
+    receiver: receiver.toLowerCase(),
+    totals,
+  };
+}
+
+/**
+ * Check if an event is an ExternalSharesMinted event
+ *
+ * @param event - The event to check
+ * @returns true if this is an ExternalSharesMinted event
+ */
+export function isExternalSharesMintedEvent(event: LogDescriptionWithMeta): boolean {
+  return event.name === "ExternalSharesMinted";
+}
+
+/**
+ * Result of processing an ExternalSharesBurnt event
+ */
+export interface ExternalSharesBurntResult {
+  /** Amount of shares burnt */
+  amountOfShares: bigint;
+
+  /** The updated Totals entity */
+  totals: TotalsEntity;
+}
+
+/**
+ * Handle ExternalSharesBurnt event (V3) - updates Totals when external shares are burnt
+ *
+ * Note: totalShares is not directly updated here as it's handled by the SharesBurnt event.
+ * This handler only updates totalPooledEther from contract.
+ *
+ * Reference: lido-subgraph/src/LidoV3.ts handleExternalSharesBurnt() lines 18-24
+ *
+ * @param event - The ExternalSharesBurnt event
+ * @param store - Entity store
+ * @param ctx - Handler context
+ * @param protocolContext - Protocol context for contract reads
+ * @returns Result containing updated state
+ */
+export async function handleExternalSharesBurnt(
+  event: LogDescriptionWithMeta,
+  store: EntityStore,
+  ctx: HandlerContext,
+  protocolContext: ProtocolContext,
+): Promise<ExternalSharesBurntResult> {
+  // Extract ExternalSharesBurnt event params
+  // event ExternalSharesBurnt(uint256 amountOfShares)
+  const amountOfShares = getEventArg<bigint>(event, "amountOfShares");
+
+  // Load Totals entity
+  const totals = loadTotalsEntity(store, true)!;
+
+  // Read totalPooledEther from contract (as done in real subgraph)
+  const totalPooledEther = await protocolContext.contracts.lido.getTotalPooledEther();
+  totals.totalPooledEther = totalPooledEther;
+
+  saveTotals(store, totals);
+
+  return {
+    amountOfShares,
+    totals,
+  };
+}
+
+/**
+ * Check if an event is an ExternalSharesBurnt event
+ *
+ * @param event - The event to check
+ * @returns true if this is an ExternalSharesBurnt event
+ */
+export function isExternalSharesBurntEvent(event: LogDescriptionWithMeta): boolean {
+  return event.name === "ExternalSharesBurnt";
 }

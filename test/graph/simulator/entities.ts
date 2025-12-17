@@ -211,3 +211,279 @@ export function createTotalRewardEntity(id: string): TotalRewardEntity {
     operatorsFeeBasisPoints: 0n,
   };
 }
+
+// ============================================================================
+// Shares Entity
+// ============================================================================
+
+/**
+ * Shares entity tracking per-holder share balance
+ *
+ * This entity tracks the share balance for each unique address.
+ * Updated on transfers, submissions, and burns.
+ *
+ * Reference: lido-subgraph/schema.graphql - Shares entity
+ * Reference: lido-subgraph/src/helpers.ts _loadSharesEntity()
+ */
+export interface SharesEntity {
+  /** Holder address (lowercase hex string) */
+  id: string;
+
+  /** Current share balance */
+  shares: bigint;
+}
+
+/**
+ * Create a new Shares entity with default values
+ *
+ * @param id - Holder address
+ * @returns New SharesEntity with zero shares
+ */
+export function createSharesEntity(id: string): SharesEntity {
+  return {
+    id: id.toLowerCase(),
+    shares: 0n,
+  };
+}
+
+// ============================================================================
+// LidoTransfer Entity
+// ============================================================================
+
+/**
+ * LidoTransfer entity representing a stETH transfer event
+ *
+ * This is an immutable entity created for each Transfer event.
+ * Tracks the transfer details including before/after share balances.
+ *
+ * Reference: lido-subgraph/schema.graphql - LidoTransfer entity
+ * Reference: lido-subgraph/src/helpers.ts _loadLidoTransferEntity()
+ */
+export interface LidoTransferEntity {
+  /** Entity ID: txHash-logIndex */
+  id: string;
+
+  /** Sender address (0x0 for mints) */
+  from: string;
+
+  /** Recipient address (0x0 for burns) */
+  to: string;
+
+  /** Transfer value in wei */
+  value: bigint;
+
+  /** Shares transferred (from paired TransferShares event) */
+  shares: bigint;
+
+  /** Sender's shares before the transfer */
+  sharesBeforeDecrease: bigint;
+
+  /** Sender's shares after the transfer */
+  sharesAfterDecrease: bigint;
+
+  /** Recipient's shares before the transfer */
+  sharesBeforeIncrease: bigint;
+
+  /** Recipient's shares after the transfer */
+  sharesAfterIncrease: bigint;
+
+  /** Total pooled ether at time of transfer */
+  totalPooledEther: bigint;
+
+  /** Total shares at time of transfer */
+  totalShares: bigint;
+
+  /** Sender's balance after transfer: sharesAfterDecrease * totalPooledEther / totalShares */
+  balanceAfterDecrease: bigint;
+
+  /** Recipient's balance after transfer: sharesAfterIncrease * totalPooledEther / totalShares */
+  balanceAfterIncrease: bigint;
+
+  // ========== Event Metadata ==========
+
+  /** Block number */
+  block: bigint;
+
+  /** Block timestamp (Unix seconds) */
+  blockTime: bigint;
+
+  /** Transaction hash */
+  transactionHash: string;
+
+  /** Transaction index within the block */
+  transactionIndex: bigint;
+
+  /** Log index within the transaction */
+  logIndex: bigint;
+}
+
+/**
+ * Create a new LidoTransfer entity with default values
+ *
+ * @param id - Entity ID (txHash-logIndex)
+ * @returns New LidoTransferEntity with zero/empty default values
+ */
+export function createLidoTransferEntity(id: string): LidoTransferEntity {
+  return {
+    id,
+    from: "",
+    to: "",
+    value: 0n,
+    shares: 0n,
+    sharesBeforeDecrease: 0n,
+    sharesAfterDecrease: 0n,
+    sharesBeforeIncrease: 0n,
+    sharesAfterIncrease: 0n,
+    totalPooledEther: 0n,
+    totalShares: 0n,
+    balanceAfterDecrease: 0n,
+    balanceAfterIncrease: 0n,
+    block: 0n,
+    blockTime: 0n,
+    transactionHash: "",
+    transactionIndex: 0n,
+    logIndex: 0n,
+  };
+}
+
+// ============================================================================
+// LidoSubmission Entity
+// ============================================================================
+
+/**
+ * LidoSubmission entity representing a user stake submission
+ *
+ * This is an immutable entity created for each Submitted event.
+ * Tracks the submission details including pool state before/after.
+ *
+ * Reference: lido-subgraph/schema.graphql - LidoSubmission entity
+ * Reference: lido-subgraph/src/Lido.ts handleSubmitted()
+ */
+export interface LidoSubmissionEntity {
+  /** Entity ID: txHash-logIndex */
+  id: string;
+
+  /** Sender address */
+  sender: string;
+
+  /** Amount of ETH submitted */
+  amount: bigint;
+
+  /** Referral address */
+  referral: string;
+
+  /** Shares minted to sender (from paired TransferShares event) */
+  shares: bigint;
+
+  /** Sender's shares before submission */
+  sharesBefore: bigint;
+
+  /** Sender's shares after submission */
+  sharesAfter: bigint;
+
+  /** Total pooled ether before submission */
+  totalPooledEtherBefore: bigint;
+
+  /** Total pooled ether after submission */
+  totalPooledEtherAfter: bigint;
+
+  /** Total shares before submission */
+  totalSharesBefore: bigint;
+
+  /** Total shares after submission */
+  totalSharesAfter: bigint;
+
+  /** Sender's balance after submission: sharesAfter * totalPooledEtherAfter / totalSharesAfter */
+  balanceAfter: bigint;
+
+  // ========== Event Metadata ==========
+
+  /** Block number */
+  block: bigint;
+
+  /** Block timestamp (Unix seconds) */
+  blockTime: bigint;
+
+  /** Transaction hash */
+  transactionHash: string;
+
+  /** Transaction index within the block */
+  transactionIndex: bigint;
+
+  /** Log index within the transaction */
+  logIndex: bigint;
+}
+
+/**
+ * Create a new LidoSubmission entity with default values
+ *
+ * @param id - Entity ID (txHash-logIndex)
+ * @returns New LidoSubmissionEntity with zero/empty default values
+ */
+export function createLidoSubmissionEntity(id: string): LidoSubmissionEntity {
+  return {
+    id,
+    sender: "",
+    amount: 0n,
+    referral: "",
+    shares: 0n,
+    sharesBefore: 0n,
+    sharesAfter: 0n,
+    totalPooledEtherBefore: 0n,
+    totalPooledEtherAfter: 0n,
+    totalSharesBefore: 0n,
+    totalSharesAfter: 0n,
+    balanceAfter: 0n,
+    block: 0n,
+    blockTime: 0n,
+    transactionHash: "",
+    transactionIndex: 0n,
+    logIndex: 0n,
+  };
+}
+
+// ============================================================================
+// SharesBurn Entity
+// ============================================================================
+
+/**
+ * SharesBurn entity representing a share burning event
+ *
+ * This is an immutable entity created for each SharesBurnt event.
+ * Occurs during withdrawal finalization.
+ *
+ * Reference: lido-subgraph/schema.graphql - SharesBurn entity
+ * Reference: lido-subgraph/src/Lido.ts handleSharesBurnt()
+ */
+export interface SharesBurnEntity {
+  /** Entity ID: txHash-logIndex */
+  id: string;
+
+  /** Account whose shares were burnt */
+  account: string;
+
+  /** Token amount before rebase */
+  preRebaseTokenAmount: bigint;
+
+  /** Token amount after rebase */
+  postRebaseTokenAmount: bigint;
+
+  /** Amount of shares burnt */
+  sharesAmount: bigint;
+}
+
+/**
+ * Create a new SharesBurn entity with default values
+ *
+ * @param id - Entity ID (txHash-logIndex)
+ * @returns New SharesBurnEntity with zero/empty default values
+ */
+export function createSharesBurnEntity(id: string): SharesBurnEntity {
+  return {
+    id,
+    account: "",
+    preRebaseTokenAmount: 0n,
+    postRebaseTokenAmount: 0n,
+    sharesAmount: 0n,
+  };
+}

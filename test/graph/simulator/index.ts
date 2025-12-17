@@ -21,8 +21,16 @@ import { ProtocolContext } from "lib/protocol";
 
 import { extractAllLogs, findTransferSharesPairs, ZERO_ADDRESS } from "../utils/event-extraction";
 
-import { TotalRewardEntity, TotalsEntity } from "./entities";
-import { HandlerContext, processTransactionEvents, ProcessTransactionResult } from "./handlers";
+import {
+  LidoSubmissionEntity,
+  LidoTransferEntity,
+  SharesBurnEntity,
+  SharesEntity,
+  TotalRewardEntity,
+  TotalsEntity,
+} from "./entities";
+import { HandlerContext, processTransactionEvents, ProcessTransactionResult, processV3Event } from "./handlers";
+import { isExternalSharesBurntEvent, isExternalSharesMintedEvent } from "./handlers/lido";
 import { calcAPR_v2, CALCULATION_UNIT } from "./helpers";
 import {
   countTotalRewards,
@@ -33,13 +41,64 @@ import {
   TotalRewardsQueryParamsExtended,
   TotalRewardsQueryResult,
 } from "./query";
-import { createEntityStore, EntityStore, loadTotalsEntity, saveTotals } from "./store";
+import {
+  createEntityStore,
+  EntityStore,
+  getLidoSubmission,
+  getLidoTransfer,
+  getShares,
+  getSharesBurn,
+  loadSharesEntity,
+  loadTotalsEntity,
+  saveShares,
+  saveTotals,
+} from "./store";
 
 // Re-export types and utilities
-export { TotalRewardEntity, createTotalRewardEntity, TotalsEntity, createTotalsEntity } from "./entities";
-export { EntityStore, createEntityStore, getTotalReward, saveTotalReward, loadTotalsEntity, saveTotals } from "./store";
+export {
+  TotalRewardEntity,
+  createTotalRewardEntity,
+  TotalsEntity,
+  createTotalsEntity,
+  SharesEntity,
+  createSharesEntity,
+  LidoTransferEntity,
+  createLidoTransferEntity,
+  LidoSubmissionEntity,
+  createLidoSubmissionEntity,
+  SharesBurnEntity,
+  createSharesBurnEntity,
+} from "./entities";
+export {
+  EntityStore,
+  createEntityStore,
+  getTotalReward,
+  saveTotalReward,
+  loadTotalsEntity,
+  saveTotals,
+  getShares,
+  saveShares,
+  loadSharesEntity,
+  getLidoTransfer,
+  getLidoSubmission,
+  getSharesBurn,
+  makeLidoTransferId,
+  makeLidoSubmissionId,
+  makeSharesBurnId,
+} from "./store";
 export { SimulatorInitialState, PoolState, captureChainState, capturePoolState } from "../utils/state-capture";
-export { ProcessTransactionResult, ValidationWarning, SharesBurntResult } from "./handlers";
+export {
+  HandlerContext,
+  ProcessTransactionResult,
+  ValidationWarning,
+  SharesBurntResult,
+  SharesBurntWithEntityResult,
+  SubmittedResult,
+  TransferResult,
+  ExternalSharesMintedResult,
+  ExternalSharesBurntResult,
+  processV3Event,
+} from "./handlers";
 
 // Re-export query types and functions
 export {
@@ -139,17 +198,74 @@ export class GraphSimulator {
   /**
    * Process a transaction and return the result
    *
+   * This method processes both regular Lido events (Submitted, Transfer, ETHDistributed, etc.)
+   * and V3 VaultHub events (ExternalSharesMinted, ExternalSharesBurnt).
+   *
+   * V3 events require async contract reads to sync totalPooledEther with the chain.
+   *
    * @param receipt - Transaction receipt
    * @param ctx - Protocol context
    * @param blockTimestamp - Optional block timestamp
-   * @returns Processing result
+   * @returns Processing result (note: V3 event results are included in totals update)
    */
   processTransaction(
     receipt: ContractTransactionReceipt,
     ctx: ProtocolContext,
     blockTimestamp?: bigint,
   ): ProcessTransactionResult {
-    return processTransaction(receipt, ctx, this.store, blockTimestamp, this.treasuryAddress);
+    // Process regular Lido events (synchronous)
+    const result = processTransaction(receipt, ctx, this.store, blockTimestamp, this.treasuryAddress);
+
+    // V3 events need to be processed asynchronously via processTransactionWithV3
+    // For backward compatibility, this method is still synchronous but won't process V3 events
+    // Call processTransactionWithV3 for full V3 support
+
+    return result;
+  }
+
+  /**
+   * Process a transaction including V3 VaultHub events (async)
+   *
+   * This method processes all Lido events including V3 events that require
+   * async contract reads to sync totalPooledEther with the chain.
+   *
+   * @param receipt - Transaction receipt
+   * @param ctx - Protocol context
+   * @param blockTimestamp - Optional block timestamp
+   * @returns Processing result with V3 events processed
+   */
+  async processTransactionWithV3(
+    receipt: ContractTransactionReceipt,
+    ctx: ProtocolContext,
+    blockTimestamp?: bigint,
+  ): Promise<ProcessTransactionResult> {
+    // Process regular Lido events (synchronous)
+    const result = processTransaction(receipt, ctx, this.store, blockTimestamp, this.treasuryAddress);
+
+    // Extract logs and process V3 events
+    const logs = extractAllLogs(receipt, ctx);
+    const ts = blockTimestamp ?? BigInt(Math.floor(Date.now() / 1000));
+
+    const handlerCtx: HandlerContext = {
+      blockNumber: BigInt(receipt.blockNumber),
+      blockTimestamp: ts,
+      transactionHash: receipt.hash,
+      transactionIndex: receipt.index,
+      treasuryAddress: this.treasuryAddress,
+    };
+
+    // Process V3 events (async - requires contract reads)
+    for (const log of logs) {
+      if (isExternalSharesMintedEvent(log) || isExternalSharesBurntEvent(log)) {
+        const v3Result = await processV3Event(log, this.store, handlerCtx, ctx);
+        if (v3Result) {
+          result.totalsUpdated = true;
+          result.totals = v3Result.totals;
+        }
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -266,6 +382,104 @@ export class GraphSimulator {
    */
   getTotalRewardsInBlockRange(fromBlock: bigint, toBlock: bigint): TotalRewardEntity[] {
     return getTotalRewardsInBlockRange(this.store, fromBlock, toBlock);
+  }
+
+  // ========== Shares Entity Methods ==========
+
+  /**
+   * Get a Shares entity by holder address
+   *
+   * @param address - Holder address
+   * @returns The entity if found
+   */
+  getShares(address: string): SharesEntity | undefined {
+    return getShares(this.store, address);
+  }
+
+  /**
+   * Initialize shares for an address
+   *
+   * Useful for setting up initial state before processing transactions.
+   *
+   * @param address - Holder address
+   * @param shares - Initial share balance
+   */
+  initializeShares(address: string, shares: bigint): void {
+    const sharesEntity = loadSharesEntity(this.store, address, true)!;
+    sharesEntity.shares = shares;
+    saveShares(this.store, sharesEntity);
+  }
+
+  /**
+   * Get all Shares entities
+   *
+   * @returns Map of all Shares entities keyed by address
+   */
+  getAllShares(): Map<string, SharesEntity> {
+    return this.store.shares;
+  }
+
+  // ========== LidoTransfer Entity Methods ==========
+
+  /**
+   * Get a LidoTransfer entity by ID
+   *
+   * @param id - Entity ID (txHash-logIndex)
+   * @returns The entity if found
+   */
+  getLidoTransfer(id: string): LidoTransferEntity | undefined {
+    return getLidoTransfer(this.store, id);
+  }
+
+  /**
+   * Get all LidoTransfer entities
+   *
+   * @returns Map of all LidoTransfer entities keyed by ID
+   */
+  getAllLidoTransfers(): Map<string, LidoTransferEntity> {
+    return this.store.lidoTransfers;
+  }
+
+  // ========== LidoSubmission Entity Methods ==========
+
+  /**
+   * Get a LidoSubmission entity by ID
+   *
+   * @param id - Entity ID (txHash-logIndex)
+   * @returns The entity if found
+   */
+  getLidoSubmission(id: string): LidoSubmissionEntity | undefined {
+    return getLidoSubmission(this.store, id);
+  }
+
+  /**
+   * Get all LidoSubmission entities
+   *
+   * @returns Map of all LidoSubmission entities keyed by ID
+   */
+  getAllLidoSubmissions(): Map<string, LidoSubmissionEntity> {
+    return this.store.lidoSubmissions;
+  }
+
+  // ========== SharesBurn Entity Methods ==========
+
+  /**
+   * Get a SharesBurn entity by ID
+   *
+   * @param id - Entity ID (txHash-logIndex)
+   * @returns The entity if found
+   */
+  getSharesBurn(id: string): SharesBurnEntity | undefined {
+    return getSharesBurn(this.store, id);
+  }
+
+  /**
+   * Get all SharesBurn entities
+   *
+   * @returns Map of all SharesBurn entities keyed by ID
+   */
+  getAllSharesBurns(): Map<string, SharesBurnEntity> {
+    return this.store.sharesBurns;
   }
 }
 
