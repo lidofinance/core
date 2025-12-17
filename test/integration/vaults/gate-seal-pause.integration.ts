@@ -23,6 +23,7 @@ const IGateSeal_ABI = [
 import { ether, generateValidator } from "lib";
 import {
   createVaultWithDashboard,
+  ensurePredepositGuaranteeUnpaused,
   generatePredepositData,
   getProtocolContext,
   ProtocolContext,
@@ -122,6 +123,7 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
   });
 
   it("GateSeal can pause PredepositGuarantee", async function () {
+    await ensurePredepositGuaranteeUnpaused(ctx);
     if (ctx.isScratch) {
       this.skip();
     }
@@ -164,6 +166,7 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
   });
 
   it("GateSeal can pause both VaultHub and PredepositGuarantee simultaneously", async function () {
+    await ensurePredepositGuaranteeUnpaused(ctx);
     if (ctx.isScratch) {
       this.skip();
     }
@@ -215,6 +218,7 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
   });
 
   it("Operations resume after RESUME_ROLE holder resumes the contracts", async function () {
+    await ensurePredepositGuaranteeUnpaused(ctx);
     if (ctx.isScratch) {
       this.skip();
     }
@@ -277,6 +281,7 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
   });
 
   it("Cannot seal when PredepositGuarantee is already paused", async function () {
+    await ensurePredepositGuaranteeUnpaused(ctx);
     if (ctx.isScratch) {
       this.skip();
     }
