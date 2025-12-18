@@ -63,9 +63,6 @@ describe("Comprehensive Mixed Scenario", () => {
   let simulator: GraphSimulator;
   let initialState: SimulatorInitialState;
 
-  // Initial shares for addresses (captured at test start for validation)
-  const initialShares: Map<string, bigint> = new Map();
-
   // Counters for statistics
   let depositCount = 0;
   let transferCount = 0;
@@ -122,9 +119,12 @@ describe("Comprehensive Mixed Scenario", () => {
     // NOW capture chain state and initialize simulator AFTER all setup is done
     initialState = await captureChainState(ctx);
     simulator = new GraphSimulator(initialState.treasuryAddress);
+
+    // Initialize simulator with current on-chain state
+    // Totals: totalPooledEther and totalShares from lido contract
     simulator.initializeTotals(initialState.totalPooledEther, initialState.totalShares);
 
-    // Capture initial shares for all relevant addresses
+    // Shares: initialize all addresses that may receive/send shares during the test
     // Include: treasury, staking modules, reward recipients, protocol contracts, users
     const { lido, locator, withdrawalQueue, accounting, stakingRouter } = ctx.contracts;
     const burnerAddress = await locator.burner();
@@ -138,7 +138,7 @@ describe("Comprehensive Mixed Scenario", () => {
     const moduleAddresses = allModules.map((m) => m.stakingModuleAddress);
 
     // Some staking modules (like CSM) have a separate Fee Distributor contract that receives rewards
-    // We need to capture these addresses as they receive transfers during oracle reports
+    // We need to initialize these addresses as they receive transfers during oracle reports
     const feeDistributorAddresses: string[] = [];
     for (const module of allModules) {
       try {
@@ -156,7 +156,7 @@ describe("Comprehensive Mixed Scenario", () => {
       }
     }
 
-    const addressesToCapture = [
+    const addressesToInitialize = [
       initialState.treasuryAddress,
       ...initialState.stakingRelatedAddresses,
       ...moduleAddresses,
@@ -172,9 +172,9 @@ describe("Comprehensive Mixed Scenario", () => {
       user4.address,
       user5.address,
     ];
-    for (const addr of addressesToCapture) {
+    for (const addr of addressesToInitialize) {
       const shares = await lido.sharesOf(addr);
-      initialShares.set(addr.toLowerCase(), shares);
+      simulator.initializeShares(addr, shares);
     }
 
     log.info("Setup complete", {
@@ -182,7 +182,7 @@ describe("Comprehensive Mixed Scenario", () => {
       "Vault2": await vault2.getAddress(),
       "Total Pooled Ether": formatEther(initialState.totalPooledEther),
       "Total Shares": initialState.totalShares.toString(),
-      "Addresses captured for Shares validation": addressesToCapture.length,
+      "Addresses initialized for Shares validation": addressesToInitialize.length,
     });
   });
 
@@ -392,20 +392,14 @@ describe("Comprehensive Mixed Scenario", () => {
     expect(totals!.totalShares).to.equal(poolState.totalShares, "Totals.totalShares should match chain");
 
     // Verify all Shares entities against on-chain state
-    // The simulator tracks share deltas from events, so we need to add initial shares
-    // All addresses should have been pre-captured (treasury, reward recipients, users, burner, WQ)
+    // Simulator tracks absolute values (initialized at test start, updated by events)
     const allShares = simulator.getAllShares();
     let validatedCount = 0;
     for (const [address, sharesEntity] of allShares) {
-      const initialSharesForAddress = initialShares.get(address.toLowerCase());
-      expect(initialSharesForAddress, `Address ${address} was not pre-captured - add it to addressesToCapture in setup`)
-        .to.not.be.undefined;
-
       const onChainShares = await lido.sharesOf(address);
-      const expectedShares = sharesEntity.shares + initialSharesForAddress!;
-      expect(expectedShares).to.equal(
+      expect(sharesEntity.shares).to.equal(
         onChainShares,
-        `Shares for ${address} should match chain (simulator: ${sharesEntity.shares}, initial: ${initialSharesForAddress}, expected: ${expectedShares}, on-chain: ${onChainShares})`,
+        `Shares for ${address} should match chain (simulator: ${sharesEntity.shares}, on-chain: ${onChainShares})`,
       );
       validatedCount++;
     }

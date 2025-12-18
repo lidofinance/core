@@ -56,10 +56,31 @@ To run graph integration tests (assuming localhost fork is running) do:
 - Mainnet: `RPC_URL=http://localhost:9122  yarn test:integration:upgrade:helper test/graph/*.ts`
 - Hoodi: `RPC_URL=http://localhost:9123  NETWORK_STATE_FILE=deployed-hoodi.json   yarn test:integration:helper test/graph/*.ts`
 
+## Simulator Initialization
+
+Before processing any transactions, the simulator must be initialized with current on-chain state. This establishes the baseline from which all subsequent event-driven updates are applied.
+
+**Required initialization:**
+
+1. **Totals** - `simulator.initializeTotals(totalPooledEther, totalShares)`
+
+   - `totalPooledEther` from `lido.getTotalPooledEther()`
+   - `totalShares` from `lido.getTotalShares()`
+
+2. **Shares** - `simulator.initializeShares(address, shares)` for each address that may send/receive shares:
+   - Treasury address (from `locator.treasury()`)
+   - Staking module addresses (from `stakingRouter.getStakingModules()`)
+   - Staking reward recipients (from `stakingRouter.getStakingRewardsDistribution()`)
+   - Fee distributor addresses (from `module.FEE_DISTRIBUTOR()` for modules like CSM)
+   - Protocol contracts: Burner, WithdrawalQueue, Accounting, StakingRouter, VaultHub
+   - Test user addresses
+
+The simulator then tracks **absolute values** (not deltas), updating them as events are processed.
+
 ## Success Criteria
 
 - **Totals consistency**: Simulator's `Totals` must match on-chain `lido.getTotalPooledEther()` and `lido.getTotalShares()`
-- **Shares consistency**: Simulator's `Shares` entity for each address must match on-chain `lido.sharesOf(address)` (delta from initial state)
+- **Shares consistency**: Simulator's `Shares` entity for each address must match on-chain `lido.sharesOf(address)`
 - **Exact match**: All `bigint` values must match exactly (no tolerance for rounding)
 - **No validation warnings**: `shares2mint_mismatch` and `totals_state_mismatch` warnings indicate bugs
 
@@ -122,25 +143,13 @@ Each transaction is processed through `GraphSimulator.processTransactionWithV3()
 - **`validateGlobalConsistency`**: Compares simulator state against on-chain state:
   - `Totals.totalPooledEther` vs `lido.getTotalPooledEther()`
   - `Totals.totalShares` vs `lido.getTotalShares()`
-  - For each `Shares` entity: `simulatorDelta + initialShares` vs `lido.sharesOf(address)`
-
-### Address Pre-capture
-
-At test setup, initial share balances are captured for all addresses that may receive shares during the test:
-
-- Treasury address
-- Staking module addresses (from `stakingRouter.getStakingModules()`)
-- Staking reward recipients (from `stakingRouter.getStakingRewardsDistribution()`)
-- Fee distributor addresses (from `module.FEE_DISTRIBUTOR()` for modules that have one, e.g., CSM)
-- Protocol contracts: Burner, WithdrawalQueue, Accounting, StakingRouter, VaultHub
-- Test user addresses (user1-5)
-
-This allows strict validation of Shares entities by computing: `expectedShares = simulatorDelta + initialShares`
+  - For each `Shares` entity: `simulator.shares` vs `lido.sharesOf(address)` (direct comparison)
 
 ## Specifics
 
 - This document does not describe legacy code written for pre-V2 upgrade.
-- there are specific workarounds for specific networks for cases when an event does not exist ([Voting example](https://github.com/lidofinance/lido-subgraph/blob/6334a6a28ab6978b66d45220a27c3c2dc78be918/src/Voting.ts#L67))
+- There are specific workarounds for specific networks for cases when an event does not exist ([Voting example](https://github.com/lidofinance/lido-subgraph/blob/6334a6a28ab6978b66d45220a27c3c2dc78be918/src/Voting.ts#L67))
+- The simulator (like the actual subgraph) is **event-triggered but not purely event-derived**. Some events don't contain all required data, so handlers must read from chain. For example, `ExternalSharesMinted` and `ExternalSharesBurnt` events don't include `totalPooledEther`, so the handler reads it via `lido.getTotalPooledEther()`.
 
 ## Entities
 
@@ -149,6 +158,8 @@ Subgraph calculates and stores various data structures called entities. Some of 
 ### Totals (cumulative)
 
 **Fields**: `totalPooledEther`, `totalShares`
+
+**Initialization**: At test start, `simulator.initializeTotals(totalPooledEther, totalShares)` is called with values from `lido.getTotalPooledEther()` and `lido.getTotalShares()`.
 
 **Update sources**
 
@@ -161,6 +172,8 @@ Subgraph calculates and stores various data structures called entities. Some of 
 
 **Fields**: `id` (holder), `shares`
 
+**Initialization**: At test start, `simulator.initializeShares(address, shares)` is called for each address with its on-chain balance from `lido.sharesOf(address)`.
+
 **Update sources**
 
 - Submission mint: `Lido.Transfer` (0x0→user) + `Lido.TransferShares`
@@ -169,7 +182,7 @@ Subgraph calculates and stores various data structures called entities. Some of 
 - Burn finalization: `Lido.SharesBurnt`
 - V3 external mints: `Lido.Transfer` (0x0→receiver) triggered by `ExternalSharesMinted`
 
-**Validation**: Simulator tracks share deltas from events. Final balance = `simulatorDelta + initialShares` must equal `lido.sharesOf(address)`
+**Validation**: Simulator tracks absolute values. `simulator.shares` must equal `lido.sharesOf(address)`.
 
 **Note**: `ExternalSharesMinted` only updates `Totals`, not `Shares`. The accompanying `Transfer` event updates per-address shares.
 
