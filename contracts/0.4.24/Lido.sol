@@ -663,13 +663,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _depositCalldata module calldata
      */
     function deposit(uint256 _maxDepositsCountPerBlock, uint256 _stakingModuleId, bytes _depositCalldata) external {
-        // TODO: get rid of _maxDepositsAmountPerBlock
-        // ILidoLocator locator = _getLidoLocator();
-
-        // require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
-        // require(canDeposit(), "CAN_NOT_DEPOSIT");
-
-        IStakingRouter stakingRouter = _getStakingRouterChecked();
+        ILidoLocator locator = _getLidoLocator();
+        _allowedDeposit(locator);
+        IStakingRouter stakingRouter = _getStakingRouter(locator);
         uint256 depositsCount = stakingRouter.getStakingModuleMaxDepositsCount(
             _stakingModuleId,
             Math256.min(_maxDepositsCountPerBlock, getDepositableEther())
@@ -715,7 +711,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      )
        external
     {
-        IStakingRouter stakingRouter = _getStakingRouterChecked();
+        ILidoLocator locator = _getLidoLocator();
+        _allowedDeposit(locator);
+        IStakingRouter stakingRouter = _getStakingRouter(locator);
 
         uint256 depositsAmount = stakingRouter.getTopUpDepositAmount(
             _stakingModuleId,
@@ -750,12 +748,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         }
     }
 
-    function _getStakingRouterChecked() internal view returns (IStakingRouter) {
-        ILidoLocator locator = _getLidoLocator();
-
+    function _allowedDeposit(ILidoLocator locator) internal view {
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
         require(canDeposit(), "CAN_NOT_DEPOSIT");
+    }
 
+    function _getStakingRouter(ILidoLocator locator) internal view returns (IStakingRouter) {
         return _stakingRouter(locator);
     }
 
