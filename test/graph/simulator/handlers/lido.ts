@@ -32,14 +32,20 @@ import {
   EntityStore,
   loadLidoSubmissionEntity,
   loadLidoTransferEntity,
+  loadNodeOperatorFeesEntity,
+  loadNodeOperatorsSharesEntity,
   loadSharesBurnEntity,
   loadSharesEntity,
   loadTotalsEntity,
   makeLidoSubmissionId,
   makeLidoTransferId,
+  makeNodeOperatorFeesId,
+  makeNodeOperatorsSharesId,
   makeSharesBurnId,
   saveLidoSubmission,
   saveLidoTransfer,
+  saveNodeOperatorFees,
+  saveNodeOperatorsShares,
   saveShares,
   saveSharesBurn,
   saveTotalReward,
@@ -257,12 +263,14 @@ export function handleETHDistributed(
 
   // Process TokenRebased to fill in pool state and fee distribution
   // This will also set entity.totalRewards = totalRewardsWithFees - totalFee
+  // Also creates NodeOperatorFees and NodeOperatorsShares entities for each staking module
   const rebaseWarnings = _processTokenRebase(
     entity,
     tokenRebasedEvent,
     allLogs,
     event.logIndex,
     ctx.treasuryAddress,
+    store,
     sharesMintedAsFees,
   );
   warnings.push(...rebaseWarnings);
@@ -337,6 +345,7 @@ export function isSharesBurntEvent(event: LogDescriptionWithMeta): boolean {
  * @param allLogs - All parsed logs from the transaction (for Transfer/TransferShares extraction)
  * @param ethDistributedLogIndex - Log index of the ETHDistributed event
  * @param treasuryAddress - Treasury address for fee categorization
+ * @param store - Entity store for creating per-module fee entities
  * @param sharesMintedAsFees - Expected shares minted as fees from TokenRebased (for validation)
  * @returns Array of validation warnings encountered during processing
  */
@@ -346,6 +355,7 @@ export function _processTokenRebase(
   allLogs: LogDescriptionWithMeta[],
   ethDistributedLogIndex: number,
   treasuryAddress: string,
+  store: EntityStore,
   sharesMintedAsFees?: bigint,
 ): ValidationWarning[] {
   const warnings: ValidationWarning[] = [];
@@ -390,6 +400,10 @@ export function _processTokenRebase(
 
   const treasuryAddressLower = treasuryAddress.toLowerCase();
 
+  // Track per-module fee distribution entities
+  const nodeOperatorFeesIds: string[] = [];
+  const nodeOperatorsSharesIds: string[] = [];
+
   for (const pair of transferPairs) {
     // Only process mint events (from = ZERO_ADDRESS)
     if (pair.transfer.from.toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
@@ -401,6 +415,24 @@ export function _processTokenRebase(
         // Mint to staking router module (operators)
         sharesToOperators += pair.transferShares.sharesValue;
         operatorsFee += pair.transfer.value;
+
+        // Create NodeOperatorFees entity for this module
+        const nodeOpFeesId = makeNodeOperatorFeesId(entity.transactionHash, pair.transfer.logIndex);
+        const nodeOpFeesEntity = loadNodeOperatorFeesEntity(store, nodeOpFeesId, true)!;
+        nodeOpFeesEntity.totalRewardId = entity.id;
+        nodeOpFeesEntity.address = pair.transfer.to.toLowerCase();
+        nodeOpFeesEntity.fee = pair.transfer.value;
+        saveNodeOperatorFees(store, nodeOpFeesEntity);
+        nodeOperatorFeesIds.push(nodeOpFeesId);
+
+        // Create NodeOperatorsShares entity for this module
+        const nodeOpSharesId = makeNodeOperatorsSharesId(entity.transactionHash, pair.transfer.to);
+        const nodeOpSharesEntity = loadNodeOperatorsSharesEntity(store, nodeOpSharesId, true)!;
+        nodeOpSharesEntity.totalRewardId = entity.id;
+        nodeOpSharesEntity.address = pair.transfer.to.toLowerCase();
+        nodeOpSharesEntity.shares = pair.transferShares.sharesValue;
+        saveNodeOperatorsShares(store, nodeOpSharesEntity);
+        nodeOperatorsSharesIds.push(nodeOpSharesId);
       }
     }
   }
@@ -412,6 +444,10 @@ export function _processTokenRebase(
   entity.operatorsFee = operatorsFee;
   entity.totalFee = treasuryFee + operatorsFee;
   entity.totalRewards = entity.totalRewardsWithFees - entity.totalFee;
+
+  // Set per-module fee distribution references
+  entity.nodeOperatorFeesIds = nodeOperatorFeesIds;
+  entity.nodeOperatorsSharesIds = nodeOperatorsSharesIds;
 
   // ========== shares2mint Validation (Sanity Check) ==========
   // Reference: lido-subgraph/src/Lido.ts lines 664-667

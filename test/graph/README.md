@@ -23,8 +23,25 @@ The goal is bug discovery.
 
 **Out of scope**
 
+- EasyTrack related entities
+- Voting related entities
+- Config entities (`LidoConfig`, `OracleConfig`, etc.)
 - Pre-V2 / legacy entities and fields (`insuranceFee`, `dust`, `sharesToInsuranceFund`, etc.).
 - `OracleCompleted` legacy tracking (replaced by `TokenRebased.timeElapsed`).
+
+## Current status
+
+Excludes out-of-scope graph parts.
+
+| Category         | Implemented | Total | Coverage |
+| ---------------- | ----------- | ----- | -------- |
+| Entities         | 8           | 30    | 27%      |
+| Lido Handlers    | 7           | 19    | 37%      |
+| All Handlers     | 7           | 78    | 9%       |
+| Core stETH Flow  | Full        | -     | ✅       |
+| Governance       | None        | -     | ❌       |
+| Node Operators   | Partial     | -     | ⚠️       |
+| Withdrawal Queue | None        | -     | ❌       |
 
 ## Test Environment
 
@@ -98,6 +115,9 @@ Each transaction is processed through `GraphSimulator.processTransactionWithV3()
 - **`validateOracleReport`**: For profitable reports, verifies `TotalReward` fee distribution:
   - `shares2mint == sharesToTreasury + sharesToOperators`
   - `totalFee == treasuryFee + operatorsFee`
+  - Per-module fee distribution: `NodeOperatorFees` and `NodeOperatorsShares` entities are created
+  - Sum of `NodeOperatorFees.fee` equals `operatorsFee`
+  - Sum of `NodeOperatorsShares.shares` equals `sharesToOperators`
   - For non-profitable (zero/negative), verifies no `TotalReward` is created
 - **`validateGlobalConsistency`**: Compares simulator state against on-chain state:
   - `Totals.totalPooledEther` vs `lido.getTotalPooledEther()`
@@ -111,7 +131,7 @@ At test setup, initial share balances are captured for all addresses that may re
 - Treasury address
 - Staking module addresses (from `stakingRouter.getStakingModules()`)
 - Staking reward recipients (from `stakingRouter.getStakingRewardsDistribution()`)
-- CSM address (Community Staking Module on Hoodi)
+- Fee distributor addresses (from `module.FEE_DISTRIBUTOR()` for modules that have one, e.g., CSM)
 - Protocol contracts: Burner, WithdrawalQueue, Accounting, StakingRouter, VaultHub
 - Test user addresses (user1-5)
 
@@ -217,6 +237,7 @@ Notable fields:
 - feeBasis / treasuryFeeBasisPoints / operatorsFeeBasisPoints
 - totalFee / treasuryFee / operatorsFee
 - shares2mint / sharesToTreasury / sharesToOperators
+- nodeOperatorFeesIds / nodeOperatorsSharesIds (references to per-module entities)
 - totalPooledEtherBefore / totalPooledEtherAfter
 - totalSharesBefore / totalSharesAfter
 - timeElapsed
@@ -229,6 +250,32 @@ When updated:
 - `Lido.ETHDistributed`: creates entity; uses `preCLBalance`, `postCLBalance`, `withdrawalsWithdrawn`, `executionLayerRewardsWithdrawn` to calculate `totalRewards` and `mevFee`
 - `Lido.TokenRebased`: provides values for `totalPooledEtherBefore/After`, `totalSharesBefore/After`, `shares2mint`, `timeElapsed`
 - `Lido.Transfer` / `Lido.TransferShares` pairs (between ETHDistributed and TokenRebased): used to calculate fee distribution to treasury and SR modules
+
+### NodeOperatorFees (immutable)
+
+One per staking module that receives fees during an oracle report.
+
+**Fields**: `id`, `totalRewardId`, `address`, `fee`
+
+**When created**:
+
+- During oracle report processing, for each `Lido.Transfer` from 0x0 to a staking module (NOR, SDVT, CSM)
+- The `fee` field contains the ETH value transferred to that module
+
+**Validation**: Sum of all `NodeOperatorFees.fee` for a report must equal `TotalReward.operatorsFee`
+
+### NodeOperatorsShares (immutable)
+
+One per staking module that receives shares during an oracle report.
+
+**Fields**: `id`, `totalRewardId`, `address`, `shares`
+
+**When created**:
+
+- During oracle report processing, for each `Lido.TransferShares` from 0x0 to a staking module
+- The `shares` field contains the shares minted to that module
+
+**Validation**: Sum of all `NodeOperatorsShares.shares` for a report must equal `TotalReward.sharesToOperators`
 
 ### LidoSubmission (immutable)
 

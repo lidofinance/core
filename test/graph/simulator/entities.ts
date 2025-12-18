@@ -144,6 +144,15 @@ export interface TotalRewardEntity {
   /** Shares minted to staking router modules (operators) */
   sharesToOperators: bigint;
 
+  // ========== Tier 2 - Per-Module Fee Distribution (V2+) ==========
+  // These track detailed per-module distribution during oracle reports
+
+  /** IDs of NodeOperatorFees entities for this report */
+  nodeOperatorFeesIds: string[];
+
+  /** IDs of NodeOperatorsShares entities for this report */
+  nodeOperatorsSharesIds: string[];
+
   // ========== Tier 3 - Calculated Fields ==========
 
   /**
@@ -201,6 +210,10 @@ export function createTotalRewardEntity(id: string): TotalRewardEntity {
     operatorsFee: 0n,
     sharesToTreasury: 0n,
     sharesToOperators: 0n,
+
+    // Tier 2 - Per-Module Fee Distribution
+    nodeOperatorFeesIds: [],
+    nodeOperatorsSharesIds: [],
 
     // Tier 3
     apr: 0,
@@ -485,5 +498,88 @@ export function createSharesBurnEntity(id: string): SharesBurnEntity {
     preRebaseTokenAmount: 0n,
     postRebaseTokenAmount: 0n,
     sharesAmount: 0n,
+  };
+}
+
+// ============================================================================
+// NodeOperatorFees Entity
+// ============================================================================
+
+/**
+ * NodeOperatorFees entity tracking per-module/operator fee distribution
+ *
+ * This is an immutable entity created for each staking module that receives
+ * fees during an oracle report. Tracks the ETH value (fee) distributed.
+ *
+ * Reference: lido-subgraph/schema.graphql - NodeOperatorFees entity
+ * Reference: lido-subgraph/src/Lido.ts handleTransfer() for V1 logic
+ */
+export interface NodeOperatorFeesEntity {
+  /** Entity ID: txHash-logIndex */
+  id: string;
+
+  /** Reference to parent TotalReward entity (transaction hash) */
+  totalRewardId: string;
+
+  /** Recipient address (staking module or operator address) */
+  address: string;
+
+  /** ETH value of fee distributed */
+  fee: bigint;
+}
+
+/**
+ * Create a new NodeOperatorFees entity with default values
+ *
+ * @param id - Entity ID (txHash-logIndex)
+ * @returns New NodeOperatorFeesEntity with zero/empty default values
+ */
+export function createNodeOperatorFeesEntity(id: string): NodeOperatorFeesEntity {
+  return {
+    id,
+    totalRewardId: "",
+    address: "",
+    fee: 0n,
+  };
+}
+
+// ============================================================================
+// NodeOperatorsShares Entity
+// ============================================================================
+
+/**
+ * NodeOperatorsShares entity tracking per-module/operator shares distribution
+ *
+ * This is an immutable entity created for each staking module that receives
+ * shares during an oracle report. Tracks the shares minted.
+ *
+ * Reference: lido-subgraph/schema.graphql - NodeOperatorsShares entity
+ */
+export interface NodeOperatorsSharesEntity {
+  /** Entity ID: txHash-address */
+  id: string;
+
+  /** Reference to parent TotalReward entity (transaction hash) */
+  totalRewardId: string;
+
+  /** Recipient address (staking module or operator address) */
+  address: string;
+
+  /** Shares minted to this recipient */
+  shares: bigint;
+}
+
+/**
+ * Create a new NodeOperatorsShares entity with default values
+ *
+ * @param id - Entity ID (txHash-address)
+ * @returns New NodeOperatorsSharesEntity with zero/empty default values
+ */
+export function createNodeOperatorsSharesEntity(id: string): NodeOperatorsSharesEntity {
+  return {
+    id,
+    totalRewardId: "",
+    address: "",
+    shares: 0n,
   };
 }

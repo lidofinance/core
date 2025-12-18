@@ -24,6 +24,8 @@ import { extractAllLogs, findTransferSharesPairs, ZERO_ADDRESS } from "../utils/
 import {
   LidoSubmissionEntity,
   LidoTransferEntity,
+  NodeOperatorFeesEntity,
+  NodeOperatorsSharesEntity,
   SharesBurnEntity,
   SharesEntity,
   TotalRewardEntity,
@@ -46,6 +48,10 @@ import {
   EntityStore,
   getLidoSubmission,
   getLidoTransfer,
+  getNodeOperatorFees,
+  getNodeOperatorFeesForReward,
+  getNodeOperatorsShares,
+  getNodeOperatorsSharesForReward,
   getShares,
   getSharesBurn,
   loadSharesEntity,
@@ -68,6 +74,10 @@ export {
   createLidoSubmissionEntity,
   SharesBurnEntity,
   createSharesBurnEntity,
+  NodeOperatorFeesEntity,
+  createNodeOperatorFeesEntity,
+  NodeOperatorsSharesEntity,
+  createNodeOperatorsSharesEntity,
 } from "./entities";
 export {
   EntityStore,
@@ -85,6 +95,12 @@ export {
   makeLidoTransferId,
   makeLidoSubmissionId,
   makeSharesBurnId,
+  getNodeOperatorFees,
+  getNodeOperatorFeesForReward,
+  getNodeOperatorsShares,
+  getNodeOperatorsSharesForReward,
+  makeNodeOperatorFeesId,
+  makeNodeOperatorsSharesId,
 } from "./store";
 export { SimulatorInitialState, PoolState, captureChainState, capturePoolState } from "../utils/state-capture";
 export {
@@ -481,6 +497,68 @@ export class GraphSimulator {
   getAllSharesBurns(): Map<string, SharesBurnEntity> {
     return this.store.sharesBurns;
   }
+
+  // ========== NodeOperatorFees Entity Methods ==========
+
+  /**
+   * Get a NodeOperatorFees entity by ID
+   *
+   * @param id - Entity ID (txHash-logIndex)
+   * @returns The entity if found
+   */
+  getNodeOperatorFees(id: string): NodeOperatorFeesEntity | undefined {
+    return getNodeOperatorFees(this.store, id);
+  }
+
+  /**
+   * Get all NodeOperatorFees entities for a given TotalReward
+   *
+   * @param totalRewardId - TotalReward transaction hash
+   * @returns Array of NodeOperatorFees entities
+   */
+  getNodeOperatorFeesForReward(totalRewardId: string): NodeOperatorFeesEntity[] {
+    return getNodeOperatorFeesForReward(this.store, totalRewardId);
+  }
+
+  /**
+   * Get all NodeOperatorFees entities
+   *
+   * @returns Map of all NodeOperatorFees entities keyed by ID
+   */
+  getAllNodeOperatorFees(): Map<string, NodeOperatorFeesEntity> {
+    return this.store.nodeOperatorFees;
+  }
+
+  // ========== NodeOperatorsShares Entity Methods ==========
+
+  /**
+   * Get a NodeOperatorsShares entity by ID
+   *
+   * @param id - Entity ID (txHash-address)
+   * @returns The entity if found
+   */
+  getNodeOperatorsShares(id: string): NodeOperatorsSharesEntity | undefined {
+    return getNodeOperatorsShares(this.store, id);
+  }
+
+  /**
+   * Get all NodeOperatorsShares entities for a given TotalReward
+   *
+   * @param totalRewardId - TotalReward transaction hash
+   * @returns Array of NodeOperatorsShares entities
+   */
+  getNodeOperatorsSharesForReward(totalRewardId: string): NodeOperatorsSharesEntity[] {
+    return getNodeOperatorsSharesForReward(this.store, totalRewardId);
+  }
+
+  /**
+   * Get all NodeOperatorsShares entities
+   *
+   * @returns Map of all NodeOperatorsShares entities keyed by ID
+   */
+  getAllNodeOperatorsShares(): Map<string, NodeOperatorsSharesEntity> {
+    return this.store.nodeOperatorsShares;
+  }
 }
 
 /**
@@ -602,6 +680,10 @@ export function deriveExpectedTotalReward(
     operatorsFee,
     sharesToTreasury,
     sharesToOperators,
+
+    // Tier 2 - Per-Module Fee Distribution (computed at runtime, not derived here)
+    nodeOperatorFeesIds: [],
+    nodeOperatorsSharesIds: [],
 
     // Tier 3 - calculated
     apr,

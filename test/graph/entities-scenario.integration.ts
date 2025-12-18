@@ -316,6 +316,59 @@ describe("Comprehensive Mixed Scenario", () => {
         [computed!.totalFee, computed!.treasuryFee + computed!.operatorsFee],
       ]);
 
+      // ========== Per-Module Fee Distribution Validation ==========
+      // Verify NodeOperatorFees and NodeOperatorsShares entities
+
+      // Get per-module fee entities from simulator
+      const nodeOpFees = simulator.getNodeOperatorFeesForReward(receipt.hash);
+      const nodeOpShares = simulator.getNodeOperatorsSharesForReward(receipt.hash);
+
+      // Validate that entities were created when there are operator fees
+      if (computed!.operatorsFee > 0n) {
+        expect(nodeOpFees.length, "NodeOperatorFees entities should be created for operator fees").to.be.gte(1);
+        expect(nodeOpShares.length, "NodeOperatorsShares entities should be created for operator fees").to.be.gte(1);
+
+        // Sum of all NodeOperatorFees should equal operatorsFee
+        const totalNodeOpFee = nodeOpFees.reduce((sum, e) => sum + e.fee, 0n);
+        expect(totalNodeOpFee).to.equal(computed!.operatorsFee, "Sum of NodeOperatorFees should equal operatorsFee");
+
+        // Sum of all NodeOperatorsShares should equal sharesToOperators
+        const totalNodeOpShares = nodeOpShares.reduce((sum, e) => sum + e.shares, 0n);
+        expect(totalNodeOpShares).to.equal(
+          computed!.sharesToOperators,
+          "Sum of NodeOperatorsShares should equal sharesToOperators",
+        );
+
+        // Verify each entity has correct totalRewardId
+        for (const entity of nodeOpFees) {
+          expect(entity.totalRewardId.toLowerCase()).to.equal(
+            receipt.hash.toLowerCase(),
+            "NodeOperatorFees.totalRewardId should match TotalReward.id",
+          );
+          expect(entity.address).to.not.equal("", "NodeOperatorFees.address should be set");
+          expect(entity.fee).to.be.gt(0n, "NodeOperatorFees.fee should be > 0");
+        }
+
+        for (const entity of nodeOpShares) {
+          expect(entity.totalRewardId.toLowerCase()).to.equal(
+            receipt.hash.toLowerCase(),
+            "NodeOperatorsShares.totalRewardId should match TotalReward.id",
+          );
+          expect(entity.address).to.not.equal("", "NodeOperatorsShares.address should be set");
+          expect(entity.shares).to.be.gt(0n, "NodeOperatorsShares.shares should be > 0");
+        }
+
+        // Verify nodeOperatorFeesIds and nodeOperatorsSharesIds arrays are populated
+        expect(computed!.nodeOperatorFeesIds.length).to.equal(
+          nodeOpFees.length,
+          "nodeOperatorFeesIds should match number of NodeOperatorFees entities",
+        );
+        expect(computed!.nodeOperatorsSharesIds.length).to.equal(
+          nodeOpShares.length,
+          "nodeOperatorsSharesIds should match number of NodeOperatorsShares entities",
+        );
+      }
+
       profitableReportCount++;
       return computed!;
     } else {

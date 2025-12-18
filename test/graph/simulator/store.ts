@@ -10,11 +10,15 @@
 import {
   createLidoSubmissionEntity,
   createLidoTransferEntity,
+  createNodeOperatorFeesEntity,
+  createNodeOperatorsSharesEntity,
   createSharesBurnEntity,
   createSharesEntity,
   createTotalsEntity,
   LidoSubmissionEntity,
   LidoTransferEntity,
+  NodeOperatorFeesEntity,
+  NodeOperatorsSharesEntity,
   SharesBurnEntity,
   SharesEntity,
   TotalRewardEntity,
@@ -44,6 +48,12 @@ export interface EntityStore {
 
   /** SharesBurn entities keyed by txHash-logIndex */
   sharesBurns: Map<string, SharesBurnEntity>;
+
+  /** NodeOperatorFees entities keyed by txHash-logIndex */
+  nodeOperatorFees: Map<string, NodeOperatorFeesEntity>;
+
+  /** NodeOperatorsShares entities keyed by txHash-address */
+  nodeOperatorsShares: Map<string, NodeOperatorsSharesEntity>;
 }
 
 /**
@@ -59,6 +69,8 @@ export function createEntityStore(): EntityStore {
     lidoTransfers: new Map<string, LidoTransferEntity>(),
     lidoSubmissions: new Map<string, LidoSubmissionEntity>(),
     sharesBurns: new Map<string, SharesBurnEntity>(),
+    nodeOperatorFees: new Map<string, NodeOperatorFeesEntity>(),
+    nodeOperatorsShares: new Map<string, NodeOperatorsSharesEntity>(),
   };
 }
 
@@ -76,6 +88,8 @@ export function clearStore(store: EntityStore): void {
   store.lidoTransfers.clear();
   store.lidoSubmissions.clear();
   store.sharesBurns.clear();
+  store.nodeOperatorFees.clear();
+  store.nodeOperatorsShares.clear();
 }
 
 /**
@@ -349,4 +363,159 @@ export function saveSharesBurn(store: EntityStore, entity: SharesBurnEntity): vo
  */
 export function getSharesBurn(store: EntityStore, id: string): SharesBurnEntity | undefined {
   return store.sharesBurns.get(id.toLowerCase());
+}
+
+// ============================================================================
+// NodeOperatorFees Entity Functions
+// ============================================================================
+
+/**
+ * Generate entity ID for NodeOperatorFees (txHash-logIndex)
+ *
+ * @param txHash - Transaction hash
+ * @param logIndex - Log index
+ * @returns Entity ID
+ */
+export function makeNodeOperatorFeesId(txHash: string, logIndex: number | bigint): string {
+  return `${txHash.toLowerCase()}-${logIndex.toString()}`;
+}
+
+/**
+ * Load or create a NodeOperatorFees entity
+ *
+ * @param store - The entity store
+ * @param id - Entity ID (txHash-logIndex)
+ * @param create - Whether to create if not exists
+ * @returns The NodeOperatorFees entity or null if not exists and create=false
+ */
+export function loadNodeOperatorFeesEntity(
+  store: EntityStore,
+  id: string,
+  create: boolean = false,
+): NodeOperatorFeesEntity | null {
+  const normalizedId = id.toLowerCase();
+  let entity = store.nodeOperatorFees.get(normalizedId);
+  if (!entity && create) {
+    entity = createNodeOperatorFeesEntity(normalizedId);
+    store.nodeOperatorFees.set(normalizedId, entity);
+  }
+  return entity ?? null;
+}
+
+/**
+ * Save a NodeOperatorFees entity to the store
+ *
+ * @param store - The entity store
+ * @param entity - The entity to save
+ */
+export function saveNodeOperatorFees(store: EntityStore, entity: NodeOperatorFeesEntity): void {
+  store.nodeOperatorFees.set(entity.id.toLowerCase(), entity);
+}
+
+/**
+ * Get a NodeOperatorFees entity by ID
+ *
+ * @param store - The entity store
+ * @param id - Entity ID (txHash-logIndex)
+ * @returns The entity if found, undefined otherwise
+ */
+export function getNodeOperatorFees(store: EntityStore, id: string): NodeOperatorFeesEntity | undefined {
+  return store.nodeOperatorFees.get(id.toLowerCase());
+}
+
+/**
+ * Get all NodeOperatorFees entities for a given TotalReward
+ *
+ * @param store - The entity store
+ * @param totalRewardId - TotalReward transaction hash
+ * @returns Array of NodeOperatorFees entities
+ */
+export function getNodeOperatorFeesForReward(store: EntityStore, totalRewardId: string): NodeOperatorFeesEntity[] {
+  const result: NodeOperatorFeesEntity[] = [];
+  const normalizedId = totalRewardId.toLowerCase();
+  for (const entity of store.nodeOperatorFees.values()) {
+    if (entity.totalRewardId.toLowerCase() === normalizedId) {
+      result.push(entity);
+    }
+  }
+  return result;
+}
+
+// ============================================================================
+// NodeOperatorsShares Entity Functions
+// ============================================================================
+
+/**
+ * Generate entity ID for NodeOperatorsShares (txHash-address)
+ *
+ * @param txHash - Transaction hash
+ * @param address - Recipient address
+ * @returns Entity ID
+ */
+export function makeNodeOperatorsSharesId(txHash: string, address: string): string {
+  return `${txHash.toLowerCase()}-${address.toLowerCase()}`;
+}
+
+/**
+ * Load or create a NodeOperatorsShares entity
+ *
+ * @param store - The entity store
+ * @param id - Entity ID (txHash-address)
+ * @param create - Whether to create if not exists
+ * @returns The NodeOperatorsShares entity or null if not exists and create=false
+ */
+export function loadNodeOperatorsSharesEntity(
+  store: EntityStore,
+  id: string,
+  create: boolean = false,
+): NodeOperatorsSharesEntity | null {
+  const normalizedId = id.toLowerCase();
+  let entity = store.nodeOperatorsShares.get(normalizedId);
+  if (!entity && create) {
+    entity = createNodeOperatorsSharesEntity(normalizedId);
+    store.nodeOperatorsShares.set(normalizedId, entity);
+  }
+  return entity ?? null;
+}
+
+/**
+ * Save a NodeOperatorsShares entity to the store
+ *
+ * @param store - The entity store
+ * @param entity - The entity to save
+ */
+export function saveNodeOperatorsShares(store: EntityStore, entity: NodeOperatorsSharesEntity): void {
+  store.nodeOperatorsShares.set(entity.id.toLowerCase(), entity);
+}
+
+/**
+ * Get a NodeOperatorsShares entity by ID
+ *
+ * @param store - The entity store
+ * @param id - Entity ID (txHash-address)
+ * @returns The entity if found, undefined otherwise
+ */
+export function getNodeOperatorsShares(store: EntityStore, id: string): NodeOperatorsSharesEntity | undefined {
+  return store.nodeOperatorsShares.get(id.toLowerCase());
+}
+
+/**
+ * Get all NodeOperatorsShares entities for a given TotalReward
+ *
+ * @param store - The entity store
+ * @param totalRewardId - TotalReward transaction hash
+ * @returns Array of NodeOperatorsShares entities
+ */
+export function getNodeOperatorsSharesForReward(
+  store: EntityStore,
+  totalRewardId: string,
+): NodeOperatorsSharesEntity[] {
+  const result: NodeOperatorsSharesEntity[] = [];
+  const normalizedId = totalRewardId.toLowerCase();
+  for (const entity of store.nodeOperatorsShares.values()) {
+    if (entity.totalRewardId.toLowerCase() === normalizedId) {
+      result.push(entity);
+    }
+  }
+  return result;
 }
