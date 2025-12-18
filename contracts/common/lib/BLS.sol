@@ -106,6 +106,12 @@ library BLS12_381 {
     /*                        CUSTOM ERRORS                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    /// @dev identifies which compressed component is invalid
+    enum Component {
+        PubKey,
+        Signature
+    }
+
     // A custom error for each precompile helps us in debugging which precompile has failed.
 
     /// @dev The G2Add operation failed.
@@ -124,12 +130,12 @@ library BLS12_381 {
     error InvalidSignature();
 
     /// @dev compression/infinity flag bits in compressed component are invalid
-    /// @param component the number of incorrect component, 0 for pubkey, 1 for signature
-    error InvalidCompressedComponent(uint8 component);
+    /// @param component which component is incorrect (pubkey or signature)
+    error InvalidCompressedComponent(Component component);
 
     /// @dev sign flag bit in compressed component is invalid
-    /// @param component the number of incorrect component, 0 for pubkey, 1 for signature
-    error InvalidCompressedComponentSignBit(uint8 component);
+    /// @param component which component is incorrect (pubkey or signature)
+    error InvalidCompressedComponentSignBit(Component component);
 
     /// @dev provided pubkey length is not 48
     error InvalidPubkeyLength();
@@ -248,7 +254,6 @@ library BLS12_381 {
         }
     }
 
-
     /**
      * @notice extracts sign bit and validates other flags from compressed component header byte
      * @param componentHeaderByte first byte of compressed component
@@ -261,11 +266,11 @@ library BLS12_381 {
         uint8 componentHeader = uint8(componentHeaderByte);
         // extract sign bit via mask 0b00100000
         signBit = (componentHeader & 0x20) != 0;
-        // extract other flags via mask 0b11000000 and make sure they are equal to 0b10
+        // extract compression & infinity flags via mask 0b11000000 and require the masked value to be 0x80 (top bits '10')
         areOtherFlagsValid = (componentHeaderByte & 0xc0) == 0x80;
     }
 
-     /**
+    /**
      * @notice validates flags in compressed pubkey against provided Y coordinate
      * @param pubkey compressed pubkey to validate
      * @param pubkeyY Y component of uncompressed pubkey
@@ -273,7 +278,7 @@ library BLS12_381 {
     function validateCompressedPubkeyFlags(bytes calldata pubkey, Fp calldata pubkeyY) internal pure {
         (bool signBit, bool areOtherFlagsValid) = extractFlags(pubkey[0]);
         if (!areOtherFlagsValid) {
-            revert InvalidCompressedComponent(0);
+            revert InvalidCompressedComponent(Component.PubKey);
         }
 
         // to determine correct sign bit we need to check y > p - y which is equivalent to y > p/2
@@ -282,7 +287,7 @@ library BLS12_381 {
         bool computedSignBit = pubkeyY.a > HALF_P_A || (pubkeyY.a == HALF_P_A && pubkeyY.b > HALF_P_B);
 
         if (signBit != computedSignBit) {
-            revert InvalidCompressedComponentSignBit(0);
+            revert InvalidCompressedComponentSignBit(Component.PubKey);
         }
     }
 
@@ -294,7 +299,7 @@ library BLS12_381 {
     function validateCompressedSignatureFlags(bytes calldata signature, Fp2 calldata signatureY) internal pure {
        (bool signBit, bool areOtherFlagsValid) = extractFlags(signature[0]);
         if (!areOtherFlagsValid) {
-            revert InvalidCompressedComponent(1);
+            revert InvalidCompressedComponent(Component.Signature);
         }
 
         bool computedSignBit;
@@ -307,7 +312,7 @@ library BLS12_381 {
         else { computedSignBit = signatureY.c1_a > HALF_P_A || (signatureY.c1_a == HALF_P_A && signatureY.c1_b > HALF_P_B); }
 
         if (signBit != computedSignBit) {
-            revert InvalidCompressedComponentSignBit(1);
+            revert InvalidCompressedComponentSignBit(Component.Signature);
         }
     }
 
