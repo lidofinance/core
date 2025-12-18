@@ -25,8 +25,8 @@ export interface SimulatorInitialState {
   /** Treasury address for fee categorization */
   treasuryAddress: string;
 
-  /** Staking module addresses from StakingRouter */
-  stakingModuleAddresses: string[];
+  /** All staking-related addresses that may receive shares (module addresses + reward recipients) */
+  stakingRelatedAddresses: string[];
 }
 
 /**
@@ -58,19 +58,29 @@ export async function captureChainState(ctx: ProtocolContext): Promise<Simulator
   // Get treasury address from locator
   const treasuryAddress = await locator.treasury();
 
-  // Get staking module addresses
-  const stakingModuleAddresses: string[] = [];
-  const modules = await stakingRouter.getStakingModules();
+  // Collect all staking-related addresses that may receive shares:
+  // 1. Staking module contract addresses from getStakingModules()
+  // 2. Reward distribution recipients from getStakingRewardsDistribution()
+  // We need both because getStakingRewardsDistribution() only returns modules with active validators
+  const addressSet = new Set<string>();
 
+  // Add all staking module contract addresses
+  const modules = await stakingRouter.getStakingModules();
   for (const module of modules) {
-    stakingModuleAddresses.push(module.stakingModuleAddress);
+    addressSet.add(module.stakingModuleAddress);
+  }
+
+  // Add reward distribution recipients (may be different from module addresses)
+  const [recipients] = await stakingRouter.getStakingRewardsDistribution();
+  for (const recipient of recipients) {
+    addressSet.add(recipient);
   }
 
   return {
     totalPooledEther,
     totalShares,
     treasuryAddress,
-    stakingModuleAddresses,
+    stakingRelatedAddresses: Array.from(addressSet),
   };
 }
 

@@ -1,24 +1,49 @@
 # Graph tests intro
 
-These graph integration tests are intended to simulate calculations done by the Graph based on
-(mostly) events and compare with the actual on-chain state after a number of transactions.
+## Problem frame
 
-## Scope & Limitations
+Subgraph mappings are event-driven and can silently drift from on-chain truth (ordering, missing events, legacy branches, rounding, network quirks). These integration tests provide a deterministic way to replay a multi-transaction scenario, simulate the subgraph entity updates from events, and prove (or falsify) that the resulting entity state matches on-chain state at the same block.
 
-- **V3 only**: Tests only V3 (post-V2) code paths; historical sync is skipped
-- **Initial state from chain**: Simulator initializes from current on-chain state at test start
-- **Legacy fields omitted**: V1 fields (`insuranceFee`, `dust`, `sharesToInsuranceFund`, etc.) are not implemented as they're unused since V2
-- **OracleCompleted skipped**: Legacy entity tracking replaced by `TokenRebased.timeElapsed`
+## Objective
+
+Detect mismatches between:
+
+- Simulated entity state (derived from events via GraphSimulator.processTransaction()), and
+- On-chain reads at the corresponding post-transaction block.
+
+The goal is bug discovery.
+
+## Scope and non-goals
+
+**In scope**
+
+- V3 (post-V2) code paths only.
+- Simulation starts from **current fork state** at test start (no historical indexing).
+- Entity correctness for: submissions, transfers, oracle reports, external share mints/burns, withdrawals finalization.
+
+**Out of scope**
+
+- Pre-V2 / legacy entities and fields (`insuranceFee`, `dust`, `sharesToInsuranceFund`, etc.).
+- `OracleCompleted` legacy tracking (replaced by `TokenRebased.timeElapsed`).
 
 ## Test Environment
 
+- Mainnet via forking
 - Hoodi testnet via forking
 - Uses `lib/protocol/` helpers and `test/suite/` utilities
 
+## How to
+
+To run graph integration tests (assuming localhost fork is running) do:
+
+- Mainnet: `RPC_URL=http://localhost:9122  yarn test:integration:upgrade:helper test/graph/*.ts`
+- Hoodi: `RPC_URL=http://localhost:9123  NETWORK_STATE_FILE=deployed-hoodi.json   yarn test:integration:helper test/graph/*.ts`
+
 ## Success Criteria
 
+- **Totals consistency**: Simulator's `Totals` must match on-chain `lido.getTotalPooledEther()` and `lido.getTotalShares()`
+- **Shares consistency**: Simulator's `Shares` entity for each address must match on-chain `lido.sharesOf(address)` (delta from initial state)
 - **Exact match**: All `bigint` values must match exactly (no tolerance for rounding)
-- **Entity consistency**: Simulator's `Totals` must match on-chain `lido.getTotalPooledEther()` and `lido.getTotalShares()`
 - **No validation warnings**: `shares2mint_mismatch` and `totals_state_mismatch` warnings indicate bugs
 
 ## Transactions Scenario
@@ -64,7 +89,7 @@ The test performs 32 interleaved actions across 6 phases:
 
 ### Validation Approach
 
-Each transaction is processed through `GraphSimulator.processTransaction()` which parses events and updates entities. Validation helpers check:
+Each transaction is processed through `GraphSimulator.processTransactionWithV3()` which parses events and updates entities. Validation helpers check:
 
 - **`validateSubmission`**: Verifies `LidoSubmission` entity fields (`sender`, `amount`, `referral`, `shares > 0`)
 - **`validateTransfer`**: Verifies `LidoTransfer` entity fields and share balance arithmetic:
@@ -74,7 +99,23 @@ Each transaction is processed through `GraphSimulator.processTransaction()` whic
   - `shares2mint == sharesToTreasury + sharesToOperators`
   - `totalFee == treasuryFee + operatorsFee`
   - For non-profitable (zero/negative), verifies no `TotalReward` is created
-- **`validateGlobalConsistency`**: Compares simulator's `Totals` entity against on-chain `lido.getTotalPooledEther()` and `lido.getTotalShares()`
+- **`validateGlobalConsistency`**: Compares simulator state against on-chain state:
+  - `Totals.totalPooledEther` vs `lido.getTotalPooledEther()`
+  - `Totals.totalShares` vs `lido.getTotalShares()`
+  - For each `Shares` entity: `simulatorDelta + initialShares` vs `lido.sharesOf(address)`
+
+### Address Pre-capture
+
+At test setup, initial share balances are captured for all addresses that may receive shares during the test:
+
+- Treasury address
+- Staking module addresses (from `stakingRouter.getStakingModules()`)
+- Staking reward recipients (from `stakingRouter.getStakingRewardsDistribution()`)
+- CSM address (Community Staking Module on Hoodi)
+- Protocol contracts: Burner, WithdrawalQueue, Accounting, StakingRouter, VaultHub
+- Test user addresses (user1-5)
+
+This allows strict validation of Shares entities by computing: `expectedShares = simulatorDelta + initialShares`
 
 ## Specifics
 
@@ -87,57 +128,30 @@ Subgraph calculates and stores various data structures called entities. Some of 
 
 ### Totals (cumulative)
 
-Notable fields:
+**Fields**: `totalPooledEther`, `totalShares`
 
-- totalPooledEther
-- totalShares
+**Update sources**
 
-Events used when:
-
-1. User submits ether
-
-- `Lido.Submitted`: `amount`
-
-2. Oracle reports
-
-- `Lido.TokenRebased`: `postTotalShares`, `postTotalEther`
-- `Lido.SharesBurnt.sharesAmount`
-
-3. StETH minted on VaultHub
-
-- `Lido.ExternalSharesMinted`: increases `totalShares` by `amountOfShares`, updates `totalPooledEther` via contract read
-
-4. External shares burnt (emitted by `VaultHub.burnShares`, `Lido.rebalanceExternalEtherToInternal()`, `Lido.internalizeExternalBadDebt`)
-
-- `Lido.ExternalSharesBurnt`: updates `totalPooledEther` via contract read
+- Submission: `Lido.Submitted.amount`
+- Oracle report: `Lido.TokenRebased.postTotalShares`, `postTotalEther`, plus `Lido.SharesBurnt.sharesAmount`
+- VaultHub mint: `Lido.ExternalSharesMinted` (shares delta + pooled ether via contract read)
+- External burn: `Lido.ExternalSharesBurnt` (pooled ether via contract read)
 
 ### Shares (cumulative)
 
-Notable fields:
+**Fields**: `id` (holder), `shares`
 
-- id (holder address as Bytes)
-- shares
+**Update sources**
 
-When updated:
+- Submission mint: `Lido.Transfer` (0x0→user) + `Lido.TransferShares`
+- User transfer: `Lido.Transfer` + `Lido.TransferShares`
+- Oracle fee mints: `Lido.Transfer` (0x0→Treasury / SR modules) + `Lido.TransferShares`
+- Burn finalization: `Lido.SharesBurnt`
+- V3 external mints: `Lido.Transfer` (0x0→receiver) triggered by `ExternalSharesMinted`
 
-1. User submits ether
+**Validation**: Simulator tracks share deltas from events. Final balance = `simulatorDelta + initialShares` must equal `lido.sharesOf(address)`
 
-- `Lido.Transfer` (from 0x0 to user): increases user's shares
-- `Lido.TransferShares` (from 0x0 to user): provides shares value
-
-2. User transfers stETH
-
-- `Lido.Transfer` (from user to recipient): decreases sender's shares, increases recipient's shares
-- `Lido.TransferShares` (from user to recipient): provides shares value
-
-3. Oracle reports rewards
-
-- `Lido.Transfer` (from 0x0 to Treasury): increases Treasury's shares
-- `Lido.Transfer` (from 0x0 to SR modules): increases SR module's shares
-
-4. Shares are burnt (withdrawal finalization)
-
-- `Lido.SharesBurnt`: decreases account's shares
+**Note**: `ExternalSharesMinted` only updates `Totals`, not `Shares`. The accompanying `Transfer` event updates per-address shares.
 
 ### LidoTransfer (immutable)
 
@@ -193,7 +207,7 @@ Other entities used:
 
 ### TotalReward (immutable)
 
-One per oracle report.
+One per oracle report. Created iff profitable.
 
 Notable fields:
 

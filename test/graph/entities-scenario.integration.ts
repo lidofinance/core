@@ -63,6 +63,9 @@ describe("Comprehensive Mixed Scenario", () => {
   let simulator: GraphSimulator;
   let initialState: SimulatorInitialState;
 
+  // Initial shares for addresses (captured at test start for validation)
+  const initialShares: Map<string, bigint> = new Map();
+
   // Counters for statistics
   let depositCount = 0;
   let transferCount = 0;
@@ -121,11 +124,65 @@ describe("Comprehensive Mixed Scenario", () => {
     simulator = new GraphSimulator(initialState.treasuryAddress);
     simulator.initializeTotals(initialState.totalPooledEther, initialState.totalShares);
 
+    // Capture initial shares for all relevant addresses
+    // Include: treasury, staking modules, reward recipients, protocol contracts, users
+    const { lido, locator, withdrawalQueue, accounting, stakingRouter } = ctx.contracts;
+    const burnerAddress = await locator.burner();
+    const wqAddress = await withdrawalQueue.getAddress();
+    const accountingAddress = await accounting.getAddress();
+    const stakingRouterAddress = await stakingRouter.getAddress();
+    const vaultHubAddress = await locator.vaultHub();
+
+    // Get all staking modules including CSM if registered
+    const allModules = await stakingRouter.getStakingModules();
+    const moduleAddresses = allModules.map((m) => m.stakingModuleAddress);
+
+    // Some staking modules (like CSM) have a separate Fee Distributor contract that receives rewards
+    // We need to capture these addresses as they receive transfers during oracle reports
+    const feeDistributorAddresses: string[] = [];
+    for (const module of allModules) {
+      try {
+        const moduleContract = new ethers.Contract(
+          module.stakingModuleAddress,
+          ["function FEE_DISTRIBUTOR() view returns (address)"],
+          ethers.provider,
+        );
+        const feeDistributor = await moduleContract.FEE_DISTRIBUTOR();
+        if (feeDistributor && feeDistributor !== ZeroAddress) {
+          feeDistributorAddresses.push(feeDistributor);
+        }
+      } catch {
+        // Module doesn't have FEE_DISTRIBUTOR (e.g., NOR, SDVT)
+      }
+    }
+
+    const addressesToCapture = [
+      initialState.treasuryAddress,
+      ...initialState.stakingRelatedAddresses,
+      ...moduleAddresses,
+      ...feeDistributorAddresses,
+      burnerAddress,
+      wqAddress,
+      accountingAddress,
+      stakingRouterAddress,
+      vaultHubAddress,
+      user1.address,
+      user2.address,
+      user3.address,
+      user4.address,
+      user5.address,
+    ];
+    for (const addr of addressesToCapture) {
+      const shares = await lido.sharesOf(addr);
+      initialShares.set(addr.toLowerCase(), shares);
+    }
+
     log.info("Setup complete", {
       "Vault1": await vault1.getAddress(),
       "Vault2": await vault2.getAddress(),
       "Total Pooled Ether": formatEther(initialState.totalPooledEther),
       "Total Shares": initialState.totalShares.toString(),
+      "Addresses captured for Shares validation": addressesToCapture.length,
     });
   });
 
@@ -137,7 +194,7 @@ describe("Comprehensive Mixed Scenario", () => {
   // Helper Functions
   // ============================================================================
 
-  async function processAndValidate(receipt: ContractTransactionReceipt, description: string) {
+  async function processTx(receipt: ContractTransactionReceipt, description: string) {
     const block = await ethers.provider.getBlock(receipt.blockNumber);
     const blockTimestamp = BigInt(block!.timestamp);
 
@@ -272,17 +329,38 @@ describe("Comprehensive Mixed Scenario", () => {
   }
 
   async function validateGlobalConsistency() {
+    const { lido } = ctx.contracts;
     const totals = simulator.getTotals();
     expect(totals, "Totals entity should exist").to.not.be.null;
 
-    // Verify against on-chain state
+    // Verify Totals against on-chain state
     const poolState = await capturePoolState(ctx);
     expect(totals!.totalPooledEther).to.equal(poolState.totalPooledEther, "Totals.totalPooledEther should match chain");
     expect(totals!.totalShares).to.equal(poolState.totalShares, "Totals.totalShares should match chain");
 
+    // Verify all Shares entities against on-chain state
+    // The simulator tracks share deltas from events, so we need to add initial shares
+    // All addresses should have been pre-captured (treasury, reward recipients, users, burner, WQ)
+    const allShares = simulator.getAllShares();
+    let validatedCount = 0;
+    for (const [address, sharesEntity] of allShares) {
+      const initialSharesForAddress = initialShares.get(address.toLowerCase());
+      expect(initialSharesForAddress, `Address ${address} was not pre-captured - add it to addressesToCapture in setup`)
+        .to.not.be.undefined;
+
+      const onChainShares = await lido.sharesOf(address);
+      const expectedShares = sharesEntity.shares + initialSharesForAddress!;
+      expect(expectedShares).to.equal(
+        onChainShares,
+        `Shares for ${address} should match chain (simulator: ${sharesEntity.shares}, initial: ${initialSharesForAddress}, expected: ${expectedShares}, on-chain: ${onChainShares})`,
+      );
+      validatedCount++;
+    }
+
     log.debug("Global consistency check passed", {
       "Total Pooled Ether": formatEther(totals!.totalPooledEther),
       "Total Shares": totals!.totalShares.toString(),
+      "Shares Entities Validated": validatedCount,
     });
   }
 
@@ -298,7 +376,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user1).submit(ZeroAddress, { value: amount });
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "user1 deposit 100 ETH");
+      await processTx(receipt, "user1 deposit 100 ETH");
       await validateSubmission(receipt, user1.address, amount, ZeroAddress);
 
       depositCount++;
@@ -311,7 +389,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user2).submit(user1.address, { value: amount });
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "user2 deposit 50 ETH with referral");
+      await processTx(receipt, "user2 deposit 50 ETH with referral");
       await validateSubmission(receipt, user2.address, amount, user1.address);
 
       depositCount++;
@@ -340,7 +418,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user3).submit(ZeroAddress, { value: amount });
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "user3 deposit 200 ETH");
+      await processTx(receipt, "user3 deposit 200 ETH");
       await validateSubmission(receipt, user3.address, amount);
 
       depositCount++;
@@ -353,7 +431,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user1).transfer(user2.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Transfer user1 -> user2");
+      await processTx(receipt, "Transfer user1 -> user2");
       await validateTransfer(receipt, user1.address, user2.address);
 
       transferCount++;
@@ -371,12 +449,12 @@ describe("Comprehensive Mixed Scenario", () => {
       // Report vault data to make it fresh and process through simulator
       const vaultReportTx = await reportVaultDataWithProof(ctx, vault1);
       const vaultReportReceipt = (await vaultReportTx.wait()) as ContractTransactionReceipt;
-      await processAndValidate(vaultReportReceipt, "Vault1 report");
+      await processTx(vaultReportReceipt, "Vault1 report");
 
       const tx = await dashboard1.mintStETH(user3.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Vault1 mint 50 stETH");
+      await processTx(receipt, "Vault1 mint 50 stETH");
 
       // Verify ExternalSharesMinted event
       const logs = extractAllLogs(receipt, ctx);
@@ -411,12 +489,12 @@ describe("Comprehensive Mixed Scenario", () => {
       // Report vault data to make it fresh and process through simulator
       const vaultReportTx = await reportVaultDataWithProof(ctx, vault2);
       const vaultReportReceipt = (await vaultReportTx.wait()) as ContractTransactionReceipt;
-      await processAndValidate(vaultReportReceipt, "Vault2 report");
+      await processTx(vaultReportReceipt, "Vault2 report");
 
       const tx = await dashboard2.mintStETH(user3.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Vault2 mint 30 stETH");
+      await processTx(receipt, "Vault2 mint 30 stETH");
 
       const logs = extractAllLogs(receipt, ctx);
       const extMintEvent = logs.find((l) => l.name === "ExternalSharesMinted");
@@ -432,7 +510,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user4).submit(ZeroAddress, { value: amount });
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "user4 deposit 25 ETH");
+      await processTx(receipt, "user4 deposit 25 ETH");
       await validateSubmission(receipt, user4.address, amount);
 
       depositCount++;
@@ -445,7 +523,7 @@ describe("Comprehensive Mixed Scenario", () => {
       // Report vault data to make it fresh and process through simulator
       const vaultReportTx = await reportVaultDataWithProof(ctx, vault1);
       const vaultReportReceipt = (await vaultReportTx.wait()) as ContractTransactionReceipt;
-      await processAndValidate(vaultReportReceipt, "Vault1 report");
+      await processTx(vaultReportReceipt, "Vault1 report");
 
       // Approve stETH for burning
       await lido.connect(user3).approve(await dashboard1.getAddress(), amount);
@@ -453,7 +531,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await dashboard1.burnStETH(amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Vault1 burn 20 stETH");
+      await processTx(receipt, "Vault1 burn 20 stETH");
 
       // Verify SharesBurnt event
       const logs = extractAllLogs(receipt, ctx);
@@ -477,6 +555,9 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await withdrawalQueue.connect(user1).requestWithdrawals([amount], user1.address);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
+      // Process the withdrawal request transaction (includes Transfer from user to WQ)
+      await processTx(receipt, "user1 withdrawal request 30 ETH");
+
       const withdrawalRequestedEvent = ctx.getEvents(receipt, "WithdrawalRequested")[0];
       const requestId = withdrawalRequestedEvent?.args?.requestId;
       expect(requestId).to.not.be.undefined;
@@ -494,6 +575,9 @@ describe("Comprehensive Mixed Scenario", () => {
       await lido.connect(user2).approve(await withdrawalQueue.getAddress(), amount);
       const tx = await withdrawalQueue.connect(user2).requestWithdrawals([amount], user2.address);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
+
+      // Process the withdrawal request transaction (includes Transfer from user to WQ)
+      await processTx(receipt, "user2 withdrawal request 20 ETH");
 
       const withdrawalRequestedEvent = ctx.getEvents(receipt, "WithdrawalRequested")[0];
       const requestId = withdrawalRequestedEvent?.args?.requestId;
@@ -536,7 +620,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user5).submit(ZeroAddress, { value: amount });
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "user5 deposit 500 ETH");
+      await processTx(receipt, "user5 deposit 500 ETH");
       await validateSubmission(receipt, user5.address, amount);
 
       depositCount++;
@@ -549,7 +633,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user3).transfer(user4.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Transfer user3 -> user4");
+      await processTx(receipt, "Transfer user3 -> user4");
       await validateTransfer(receipt, user3.address, user4.address);
 
       transferCount++;
@@ -584,12 +668,12 @@ describe("Comprehensive Mixed Scenario", () => {
       // Report vault data to make it fresh and process through simulator
       const vaultReportTx = await reportVaultDataWithProof(ctx, vault2);
       const vaultReportReceipt = (await vaultReportTx.wait()) as ContractTransactionReceipt;
-      await processAndValidate(vaultReportReceipt, "Vault2 report");
+      await processTx(vaultReportReceipt, "Vault2 report");
 
       const tx = await dashboard2.mintStETH(user3.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Vault2 mint 100 stETH");
+      await processTx(receipt, "Vault2 mint 100 stETH");
 
       v3MintCount++;
     });
@@ -601,6 +685,9 @@ describe("Comprehensive Mixed Scenario", () => {
       await lido.connect(user1).approve(await withdrawalQueue.getAddress(), amount);
       const tx = await withdrawalQueue.connect(user1).requestWithdrawals([amount], user1.address);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
+
+      // Process the withdrawal request transaction (includes Transfer from user to WQ)
+      await processTx(receipt, "user1 withdrawal request 50 ETH");
 
       const withdrawalRequestedEvent = ctx.getEvents(receipt, "WithdrawalRequested")[0];
       const requestId = withdrawalRequestedEvent?.args?.requestId;
@@ -638,7 +725,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user4).transfer(user1.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Transfer user4 -> user1 (near full balance)");
+      await processTx(receipt, "Transfer user4 -> user1 (near full balance)");
       await validateTransfer(receipt, user4.address, user1.address);
 
       transferCount++;
@@ -656,12 +743,12 @@ describe("Comprehensive Mixed Scenario", () => {
       // Report vault data to make it fresh and process through simulator
       const vaultReportTx = await reportVaultDataWithProof(ctx, vault1);
       const vaultReportReceipt = (await vaultReportTx.wait()) as ContractTransactionReceipt;
-      await processAndValidate(vaultReportReceipt, "Vault1 report");
+      await processTx(vaultReportReceipt, "Vault1 report");
 
       const tx = await dashboard1.mintStETH(user3.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Vault1 mint 75 stETH");
+      await processTx(receipt, "Vault1 mint 75 stETH");
 
       v3MintCount++;
     });
@@ -673,7 +760,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user2).submit(ZeroAddress, { value: amount });
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "user2 deposit 80 ETH");
+      await processTx(receipt, "user2 deposit 80 ETH");
       await validateSubmission(receipt, user2.address, amount);
 
       depositCount++;
@@ -686,14 +773,14 @@ describe("Comprehensive Mixed Scenario", () => {
       // Report vault data to make it fresh and process through simulator
       const vaultReportTx = await reportVaultDataWithProof(ctx, vault2);
       const vaultReportReceipt = (await vaultReportTx.wait()) as ContractTransactionReceipt;
-      await processAndValidate(vaultReportReceipt, "Vault2 report");
+      await processTx(vaultReportReceipt, "Vault2 report");
 
       await lido.connect(user3).approve(await dashboard2.getAddress(), amount);
 
       const tx = await dashboard2.burnStETH(amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Vault2 burn 50 stETH");
+      await processTx(receipt, "Vault2 burn 50 stETH");
 
       v3BurnCount++;
     });
@@ -705,6 +792,9 @@ describe("Comprehensive Mixed Scenario", () => {
       await lido.connect(user3).approve(await withdrawalQueue.getAddress(), amount);
       const tx = await withdrawalQueue.connect(user3).requestWithdrawals([amount], user3.address);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
+
+      // Process the withdrawal request transaction (includes Transfer from user to WQ)
+      await processTx(receipt, "user3 withdrawal request 40 ETH");
 
       const withdrawalRequestedEvent = ctx.getEvents(receipt, "WithdrawalRequested")[0];
       const requestId = withdrawalRequestedEvent?.args?.requestId;
@@ -750,7 +840,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user1).submit(user5.address, { value: amount });
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "user1 deposit 30 ETH with referral");
+      await processTx(receipt, "user1 deposit 30 ETH with referral");
       await validateSubmission(receipt, user1.address, amount, user5.address);
 
       depositCount++;
@@ -763,7 +853,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user1).transfer(user3.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Transfer user1 -> user3");
+      await processTx(receipt, "Transfer user1 -> user3");
       await validateTransfer(receipt, user1.address, user3.address);
 
       transferCount++;
@@ -776,14 +866,14 @@ describe("Comprehensive Mixed Scenario", () => {
       // Report vault data to make it fresh and process through simulator
       const vaultReportTx = await reportVaultDataWithProof(ctx, vault1);
       const vaultReportReceipt = (await vaultReportTx.wait()) as ContractTransactionReceipt;
-      await processAndValidate(vaultReportReceipt, "Vault1 report");
+      await processTx(vaultReportReceipt, "Vault1 report");
 
       await lido.connect(user3).approve(await dashboard1.getAddress(), amount);
 
       const tx = await dashboard1.burnStETH(amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Vault1 burn 30 stETH");
+      await processTx(receipt, "Vault1 burn 30 stETH");
 
       v3BurnCount++;
     });
@@ -795,6 +885,9 @@ describe("Comprehensive Mixed Scenario", () => {
       await lido.connect(user5).approve(await withdrawalQueue.getAddress(), amount);
       const tx = await withdrawalQueue.connect(user5).requestWithdrawals([amount], user5.address);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
+
+      // Process the withdrawal request transaction (includes Transfer from user to WQ)
+      await processTx(receipt, "user5 withdrawal request 100 ETH");
 
       const withdrawalRequestedEvent = ctx.getEvents(receipt, "WithdrawalRequested")[0];
       const requestId = withdrawalRequestedEvent?.args?.requestId;
@@ -827,7 +920,7 @@ describe("Comprehensive Mixed Scenario", () => {
       const tx = await lido.connect(user2).transfer(user5.address, amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Transfer user2 -> user5");
+      await processTx(receipt, "Transfer user2 -> user5");
       await validateTransfer(receipt, user2.address, user5.address);
 
       transferCount++;
@@ -840,14 +933,14 @@ describe("Comprehensive Mixed Scenario", () => {
       // Report vault data to make it fresh and process through simulator
       const vaultReportTx = await reportVaultDataWithProof(ctx, vault2);
       const vaultReportReceipt = (await vaultReportTx.wait()) as ContractTransactionReceipt;
-      await processAndValidate(vaultReportReceipt, "Vault2 report");
+      await processTx(vaultReportReceipt, "Vault2 report");
 
       await lido.connect(user3).approve(await dashboard2.getAddress(), amount);
 
       const tx = await dashboard2.burnStETH(amount);
       const receipt = (await tx.wait()) as ContractTransactionReceipt;
 
-      await processAndValidate(receipt, "Vault2 burn 30 stETH");
+      await processTx(receipt, "Vault2 burn 30 stETH");
 
       v3BurnCount++;
     });

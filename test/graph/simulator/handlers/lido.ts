@@ -931,6 +931,10 @@ export interface ExternalSharesMintedResult {
 /**
  * Handle ExternalSharesMinted event (V3) - updates Totals when VaultHub mints external shares
  *
+ * IMPORTANT: This handler only updates Totals (totalShares and totalPooledEther).
+ * The per-address Shares entity is updated by the accompanying Transfer event
+ * (from 0x0 to receiver) which is handled by handleTransfer. This avoids double-counting.
+ *
  * Reference: lido-subgraph/src/LidoV3.ts handleExternalSharesMinted() lines 8-16
  *
  * @param event - The ExternalSharesMinted event
@@ -962,10 +966,9 @@ export async function handleExternalSharesMinted(
 
   saveTotals(store, totals);
 
-  // Update receiver's shares
-  const receiverShares = loadSharesEntity(store, receiver, true)!;
-  receiverShares.shares = receiverShares.shares + amountOfShares;
-  saveShares(store, receiverShares);
+  // NOTE: Do NOT update receiver's Shares here!
+  // The accompanying Transfer(0x0 -> receiver) event will be processed by handleTransfer
+  // which correctly updates the per-address Shares entity. Updating here would double-count.
 
   return {
     amountOfShares,
