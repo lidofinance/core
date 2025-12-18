@@ -42,6 +42,17 @@ contract BLSHarness {
                 0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
             );
     }
+
+    function validateCompressedPubkeyFlags(bytes calldata pubkey, BLS12_381.Fp calldata pubkeyY) external pure {
+        BLS12_381.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    function validateCompressedSignatureFlags(
+        bytes calldata signature,
+        BLS12_381.Fp2 calldata signatureY
+    ) external pure {
+        BLS12_381.validateCompressedSignatureFlags(signature, signatureY);
+    }
 }
 
 contract BLSVerifyingKeyTest is Test {
@@ -226,5 +237,158 @@ contract BLSVerifyingKeyTest is Test {
 
     function wrapFp2(bytes memory x, bytes memory y) internal pure returns (BLS12_381.Fp2 memory) {
         return BLS12_381.Fp2(wrapFp(x).a, wrapFp(x).b, wrapFp(y).a, wrapFp(y).b);
+    }
+}
+
+contract BLSCompressionFlagsFuzzTest is Test {
+    BLSHarness internal harness;
+
+    constructor() {
+        harness = new BLSHarness();
+    }
+
+    function _copy(bytes memory data) internal pure returns (bytes memory copy) {
+        copy = new bytes(data.length);
+        for (uint256 i = 0; i < data.length; i++) {
+            copy[i] = data[i];
+        }
+    }
+
+    function _buildValidPubkey(BLS12_381.Fp memory pubkeyY) internal returns (bytes memory) {
+        // We don't care about the X-coordinate bytes here: validateCompressedPubkeyFlags()
+        // only inspects the first header byte and the provided Y-coordinate. Using zeroed
+        // bytes for the rest of the pubkey is therefore sufficient and keeps the test simple.
+        bytes memory pubkey = new bytes(48);
+
+        // Try with sign bit = 0 (header 0x80)
+        pubkey[0] = 0x80;
+        try harness.validateCompressedPubkeyFlags(pubkey, pubkeyY) {
+            return pubkey;
+        } catch {
+            // fall through
+        }
+        // Try with sign bit = 1 (header 0xA0)
+        pubkey[0] = 0xA0;
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+        return pubkey;
+    }
+
+    function _buildValidSignature(BLS12_381.Fp2 memory signatureY) internal returns (bytes memory) {
+        // We don't care about the X-coordinate bytes here either: validateCompressedSignatureFlags()
+        // only inspects the first header byte and the provided Y-coordinate. Using zeroed
+        // bytes for the rest of the signature is therefore sufficient and keeps the test simple.
+        bytes memory signature = new bytes(96);
+
+        // Try with sign bit = 0 (header 0x80)
+        signature[0] = 0x80;
+        try harness.validateCompressedSignatureFlags(signature, signatureY) {
+            return signature;
+        } catch {
+            // fall through
+        }
+        // Try with sign bit = 1 (header 0xA0)
+        signature[0] = 0xA0;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+        return signature;
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedPubkeyFlags_InvalidCompressionFlag(BLS12_381.Fp memory pubkeyY) external {
+        // Build a pubkey whose flags are accepted for this Y
+        bytes memory validPubkey = _buildValidPubkey(pubkeyY);
+
+        // Flip the compression flag bit (0x80) while keeping infinity and sign bits the same
+        bytes memory invalidFlagsPubkey = _copy(validPubkey);
+        invalidFlagsPubkey[0] = bytes1(uint8(invalidFlagsPubkey[0]) ^ 0x80);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponent.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(invalidFlagsPubkey, pubkeyY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedPubkeyFlags_InvalidInfinityFlag(BLS12_381.Fp memory pubkeyY) external {
+        // Build a pubkey whose flags are accepted for this Y
+        bytes memory validPubkey = _buildValidPubkey(pubkeyY);
+
+        // Flip the "infinity" flag bit (0x40) while keeping compression flag and sign bit the same
+        bytes memory invalidFlagsPubkey = _copy(validPubkey);
+        invalidFlagsPubkey[0] = bytes1(uint8(invalidFlagsPubkey[0]) ^ 0x40);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponent.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(invalidFlagsPubkey, pubkeyY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedPubkeyFlags_InvalidSignBit(BLS12_381.Fp memory pubkeyY) external {
+        bytes memory validPubkey = _buildValidPubkey(pubkeyY);
+
+        // Flip only the sign bit (0x20) while keeping compression/infinity flags valid
+        bytes memory invalidSignPubkey = _copy(validPubkey);
+        invalidSignPubkey[0] = bytes1(uint8(invalidSignPubkey[0]) ^ 0x20);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(invalidSignPubkey, pubkeyY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedSignatureFlags_InvalidCompressionFlag(
+        BLS12_381.Fp2 memory signatureY
+    ) external {
+        bytes memory validSignature = _buildValidSignature(signatureY);
+
+        // Flip the compression flag bit (0x80) while keeping infinity and sign bits the same
+        bytes memory invalidFlagsSignature = _copy(validSignature);
+        invalidFlagsSignature[0] = bytes1(uint8(invalidFlagsSignature[0]) ^ 0x80);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponent.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(invalidFlagsSignature, signatureY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedSignatureFlags_InvalidInfinityFlag(BLS12_381.Fp2 memory signatureY) external {
+        bytes memory validSignature = _buildValidSignature(signatureY);
+
+        // Flip the "infinity" flag bit (0x40) while keeping compression flag and sign bit the same
+        bytes memory invalidFlagsSignature = _copy(validSignature);
+        invalidFlagsSignature[0] = bytes1(uint8(invalidFlagsSignature[0]) ^ 0x40);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponent.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(invalidFlagsSignature, signatureY);
+    }
+
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 204800
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_validateCompressedSignatureFlags_InvalidSignBit(BLS12_381.Fp2 memory signatureY) external {
+        bytes memory validSignature = _buildValidSignature(signatureY);
+
+        // Flip only the sign bit (0x20) while keeping compression/infinity flags valid
+        bytes memory invalidSignSignature = _copy(validSignature);
+        invalidSignSignature[0] = bytes1(uint8(invalidSignSignature[0]) ^ 0x20);
+
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(invalidSignSignature, signatureY);
     }
 }
