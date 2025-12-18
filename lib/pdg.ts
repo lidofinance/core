@@ -20,7 +20,9 @@ export const randomInt = (max: number): number => Math.floor(Math.random() * max
 const ikm = Uint8Array.from(Buffer.from("test test test test test test test", "utf-8"));
 const masterSecret = SecretKey.deriveMasterEip2333(ikm);
 const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
-let secretIndex = 0;
+// Start from a pseudo-random child index so that every test run exercises a different
+// sequence of BLS keys, while still being deterministic within a single process.
+let secretIndex = randomInt(1_000_000);
 
 export const addressToWC = (address: string, version = 2) =>
   `${hexlify(new Uint8Array([version]))}${"00".repeat(11)}${de0x(address.toLowerCase())}`;
