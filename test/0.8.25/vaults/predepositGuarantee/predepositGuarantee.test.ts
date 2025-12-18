@@ -696,7 +696,7 @@ describe("PredepositGuarantee.sol", () => {
         expect(await pdg.unlockedBalance(vaultOperator)).to.equal(0n);
       });
 
-      it("revert on incorrect compressions flag during BLS check", async () => {
+      it("revert on incorrect compression flag during BLS check", async () => {
         // Staking Vault is funded with enough ether to run validator
         await stakingVault.fund({ value: ether("32") });
 
@@ -739,6 +739,7 @@ describe("PredepositGuarantee.sol", () => {
           )
             .to.revertedWithCustomError(pdg, "InvalidCompressedComponent")
             .withArgs(0);
+
           const predepositDataWrongSignPubkey = await generatePredeposit(validator, {
             pubkeyFlipBitmask: 0b001,
           });
@@ -754,6 +755,7 @@ describe("PredepositGuarantee.sol", () => {
           )
             .to.revertedWithCustomError(pdg, "InvalidCompressedComponentSignBit")
             .withArgs(0);
+
           const predepositDataWrongCompressSignature = await generatePredeposit(validator, {
             signatureFlipBitmask: 0b100,
           });
@@ -769,6 +771,7 @@ describe("PredepositGuarantee.sol", () => {
           )
             .to.revertedWithCustomError(pdg, "InvalidCompressedComponent")
             .withArgs(1);
+
           const predepositDataWrongInfinitySignature = await generatePredeposit(validator, {
             signatureFlipBitmask: 0b010,
           });
