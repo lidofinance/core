@@ -1002,7 +1002,7 @@ describe("Comprehensive Mixed Scenario", () => {
       // Validate global consistency - simulator state should match chain state
       await validateGlobalConsistency();
 
-      const totalRewardCount = simulator.countTotalRewards(0n);
+      const totalRewardCount = simulator.getStore().totalRewards.size;
       const allShares = simulator.getAllShares();
       const allTransfers = simulator.getAllLidoTransfers();
       const allSubmissions = simulator.getAllLidoSubmissions();

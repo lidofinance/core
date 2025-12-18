@@ -35,15 +35,6 @@ import { HandlerContext, processTransactionEvents, ProcessTransactionResult, pro
 import { isExternalSharesBurntEvent, isExternalSharesMintedEvent } from "./handlers/lido";
 import { calcAPR_v2, CALCULATION_UNIT } from "./helpers";
 import {
-  countTotalRewards,
-  getLatestTotalReward,
-  getTotalRewardById,
-  getTotalRewardsInBlockRange,
-  queryTotalRewards,
-  TotalRewardsQueryParamsExtended,
-  TotalRewardsQueryResult,
-} from "./query";
-import {
   createEntityStore,
   EntityStore,
   getLidoSubmission,
@@ -115,18 +106,6 @@ export {
   ExternalSharesBurntResult,
   processV3Event,
 } from "./handlers";
-
-// Re-export query types and functions
-export {
-  queryTotalRewards,
-  getTotalRewardById,
-  countTotalRewards,
-  getLatestTotalReward,
-  getTotalRewardsInBlockRange,
-  TotalRewardsQueryParams,
-  TotalRewardsQueryParamsExtended,
-  TotalRewardsQueryResult,
-} from "./query";
 
 // Re-export helper functions and types for testing
 export {
@@ -333,71 +312,6 @@ export class GraphSimulator {
     totals.totalPooledEther = totalPooledEther;
     totals.totalShares = totalShares;
     saveTotals(this.store, totals);
-  }
-
-  // ========== Query Methods ==========
-
-  /**
-   * Query TotalRewards with filtering, ordering, and pagination
-   *
-   * Mimics the GraphQL query:
-   * ```graphql
-   * query TotalRewards($skip: Int!, $limit: Int!, $block_from: BigInt!) {
-   *   totalRewards(
-   *     skip: $skip
-   *     first: $limit
-   *     where: { block_gt: $block_from }
-   *     orderBy: blockTime
-   *     orderDirection: asc
-   *   ) { ... }
-   * }
-   * ```
-   *
-   * @param params - Query parameters (skip, limit, blockFrom, orderBy, orderDirection)
-   * @returns Array of matching TotalReward results
-   */
-  queryTotalRewards(params: TotalRewardsQueryParamsExtended): TotalRewardsQueryResult[] {
-    return queryTotalRewards(this.store, params);
-  }
-
-  /**
-   * Get a TotalReward by ID
-   *
-   * @param id - Transaction hash
-   * @returns The entity if found, null otherwise
-   */
-  getTotalRewardById(id: string): TotalRewardEntity | null {
-    return getTotalRewardById(this.store, id);
-  }
-
-  /**
-   * Count TotalRewards matching filter criteria
-   *
-   * @param blockFrom - Only count entities where block > blockFrom
-   * @returns Count of matching entities
-   */
-  countTotalRewards(blockFrom: bigint = 0n): number {
-    return countTotalRewards(this.store, blockFrom);
-  }
-
-  /**
-   * Get the most recent TotalReward by block time
-   *
-   * @returns The latest entity or null if store is empty
-   */
-  getLatestTotalReward(): TotalRewardEntity | null {
-    return getLatestTotalReward(this.store);
-  }
-
-  /**
-   * Get TotalRewards within a block range
-   *
-   * @param fromBlock - Start block (inclusive)
-   * @param toBlock - End block (inclusive)
-   * @returns Array of entities within the range
-   */
-  getTotalRewardsInBlockRange(fromBlock: bigint, toBlock: bigint): TotalRewardEntity[] {
-    return getTotalRewardsInBlockRange(this.store, fromBlock, toBlock);
   }
 
   // ========== Shares Entity Methods ==========
