@@ -168,9 +168,7 @@ describe("TopUpGateway.sol", () => {
           G_INDEX,
           0,
         ),
-      )
-        .to.be.revertedWithCustomError(factory, "ZeroParameter")
-        .withArgs("maxValidatorsPerTopUp");
+      ).to.be.revertedWithCustomError(factory, "ZeroValue");
     });
 
     it("reverts when minBlockDistance is zero", async () => {
@@ -189,9 +187,7 @@ describe("TopUpGateway.sol", () => {
           G_INDEX,
           0,
         ),
-      )
-        .to.be.revertedWithCustomError(factory, "ZeroParameter")
-        .withArgs("minSlotDistance");
+      ).to.be.revertedWithCustomError(factory, "ZeroValue");
     });
   });
 

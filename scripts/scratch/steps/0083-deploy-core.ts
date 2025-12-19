@@ -376,6 +376,25 @@ export async function main() {
   );
 
   //
+  // Deploy TopUpGateway
+  //
+
+  const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
+  await deployWithoutProxy(Sk.topUpGateway, "TopUpGateway", deployer, [
+    admin,
+    locator.address,
+    topUpGatewayParams.maxValidatorsPerTopUp,
+    topUpGatewayParams.minBlockDistance,
+    topUpGatewayParams.gIFirstValidatorPrev,
+    topUpGatewayParams.gIFirstValidatorCurr,
+    topUpGatewayParams.gIFirstBalancePrev,
+    topUpGatewayParams.gIFirstBalanceCurr,
+    topUpGatewayParams.gIFirstPendingPrev,
+    topUpGatewayParams.gIFirstPendingCurr,
+    topUpGatewayParams.pivotSlot,
+  ]);
+
+  //
   // Deploy WithdrawalVault
   //
 

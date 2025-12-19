@@ -82,7 +82,6 @@ abstract contract CLTopUpVerifier {
         _verifyValidatorActive(beaconRootData.slot, vw);
 
         GIndex gIndexValidator = concat(GI_STATE_ROOT, _getValidatorGI(validatorIndex, beaconRootData.slot));
-        // TODO: think is it correct check of wc
         bytes32 validatorLeaf = _validatorHashTreeRoot(vw, expectedWithdrawalCredentials);
         SSZ.verifyProof({proof: vw.proofValidator, root: parentBlockRoot, leaf: validatorLeaf, gI: gIndexValidator});
 

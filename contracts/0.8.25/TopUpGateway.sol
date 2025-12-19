@@ -159,13 +159,12 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
 
         uint256[] memory topUpLimits = new uint256[](validatorsCount);
 
-        // 1. actual balance should not be bigger than 2048
+        // 1. actual balance should not be bigger than 2048_000_000_000 gwei
         // 2. Verify proof data through CLValidatorProofVerifier
         unchecked {
             for (uint256 i; i < validatorsCount; ++i) {
                 BalanceWitness calldata bw = topUps.balanceWitness[i];
 
-                // TODO: actual balance should not exceed 2048? or maybe 2047?
                 if (bw.balanceGwei >= MAX_EFFECTIVE_BALANCE_02_GWEI) {
                     revert ActualBalanceExceededMaximum();
                 }
@@ -270,13 +269,13 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     }
 
     function _setMaxValidatorsPerTopUp(uint256 newValue) internal {
-        if (newValue == 0) revert ZeroParameter("maxValidatorsPerTopUp");
+        if (newValue == 0) revert ZeroValue();
         _gatewayStorage().maxValidatorsPerTopUp = uint64(newValue);
         emit MaxValidatorsPerReportChanged(newValue);
     }
 
     function _setMinBlockDistance(uint256 newValue) internal {
-        if (newValue == 0) revert ZeroParameter("minSlotDistance");
+        if (newValue == 0) revert ZeroValue();
         _gatewayStorage().minBlockDistance = uint8(newValue);
         emit MinBlockDistanceChanged(newValue);
     }
@@ -291,10 +290,8 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     event MaxValidatorsPerReportChanged(uint256 newValue);
     event MinBlockDistanceChanged(uint256 newValue);
     event LastTopUpChanged(uint256 newValue);
-    event TopUpsPaused(address indexed account);
-    event TopUpsResumed(address indexed account);
 
-    error ZeroParameter(string parameter);
+    error ZeroValue();
     error RootIsTooOld();
     error SlotNotIncreasing();
     error WrongArrayLength();
@@ -302,7 +299,5 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     error ActualBalanceExceededMaximum();
     error WrongWithdrawalCredentials();
     error InvalidTopUpPubkeyLength();
-    error TopUpsPausedError();
-    error TopUpsNotPaused();
     error MinBlockDistanceNotMet();
 }

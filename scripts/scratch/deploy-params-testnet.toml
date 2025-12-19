@@ -190,3 +190,16 @@ forcedRebalanceThresholdBP = 1800     # Threshold for forced rebalancing in basi
 infraFeeBP = 500                      # Infrastructure fee in basis points (5%)
 liquidityFeeBP = 400                  # Liquidity provision fee in basis points (4%)
 reservationFeeBP = 100                # Reservation fee in basis points (1%)
+
+# Top-up gateway configuration for validator top-ups via Merkle proofs
+[topUpGateway]
+maxValidatorsPerTopUp = 100           # Maximum validators per top-up call
+minBlockDistance = 1                  # Minimum block distance between top-ups
+# Generalized indices for validator/balance/pending state verification
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstBalancePrev = "0x0000000000000000000000000000000000000000000000000000560000000015"
+gIFirstBalanceCurr = "0x0000000000000000000000000000000000000000000000000000560000000015"
+gIFirstPendingPrev = "0x0000000000000000000000000000000000000000000000000000b80000000021"
+gIFirstPendingCurr = "0x0000000000000000000000000000000000000000000000000000b80000000021"
+pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection

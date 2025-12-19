@@ -793,7 +793,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (depositsValue == 0) return;
 
         uint256 etherBalanceBeforeDeposits = address(this).balance;
-        // TODO: maybe we should make sanity check for _topUpLimitsGwei ? or should we trust TopUpGateway?
         (bytes[] memory pubkeys, uint256[] memory topUpAmounts) = IStakingModuleV2(stateConfig.moduleAddress)
             .obtainDepositData(depositsValue, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei);
 

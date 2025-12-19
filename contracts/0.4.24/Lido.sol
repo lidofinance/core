@@ -646,6 +646,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return !_withdrawalQueue().isBunkerModeActive() && !isStopped();
     }
 
+    function _requireCanDeposit() internal view {
+        require(canDeposit(), "CAN_NOT_DEPOSIT");
+    }
+
     /**
      * @return the amount of ether in the buffer that can be deposited to the Consensus Layer
      * @dev Takes into account unfinalized stETH required by WithdrawalQueue
@@ -664,8 +668,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function deposit(uint256 _maxDepositsCountPerBlock, uint256 _stakingModuleId, bytes _depositCalldata) external {
         ILidoLocator locator = _getLidoLocator();
-        _allowedDeposit(locator);
-        IStakingRouter stakingRouter = _getStakingRouter(locator);
+        require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
+        _requireCanDeposit();
+        IStakingRouter stakingRouter = _stakingRouter(locator);
         uint256 depositsCount = stakingRouter.getStakingModuleMaxDepositsCount(
             _stakingModuleId,
             Math256.min(_maxDepositsCountPerBlock, getDepositableEther())
@@ -676,15 +681,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             depositsValue = depositsCount.mul(DEPOSIT_SIZE);
             /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
             ///     even if the StakingRouter is a trusted contract.
-
-            // (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
-            // depositedValidators = depositedValidators.add(depositsCount);
-
-            // _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsValue), depositedValidators);
             _updateBufferedEtherAndDepositedValidators(depositsValue, depositsCount);
-
-            // emit Unbuffered(depositsValue);
-            // emit DepositedValidatorsChanged(depositedValidators);
         }
 
         /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether
@@ -712,8 +709,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
        external
     {
         ILidoLocator locator = _getLidoLocator();
-        _allowedDeposit(locator);
-        IStakingRouter stakingRouter = _getStakingRouter(locator);
+        require(msg.sender == locator.topUpGateway(), "APP_AUTH_FAILED");
+        _requireCanDeposit();
+        IStakingRouter stakingRouter = _stakingRouter(locator);
 
         uint256 depositsAmount = stakingRouter.getTopUpDepositAmount(
             _stakingModuleId,
@@ -746,15 +744,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         if (depositsCount > 0) {
             emit DepositedValidatorsChanged(depositedValidators);
         }
-    }
-
-    function _allowedDeposit(ILidoLocator locator) internal view {
-        require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
-        require(canDeposit(), "CAN_NOT_DEPOSIT");
-    }
-
-    function _getStakingRouter(ILidoLocator locator) internal view returns (IStakingRouter) {
-        return _stakingRouter(locator);
     }
 
     /**
