@@ -52,19 +52,17 @@ type GeneratePredepositOptions = {
   signatureFlipBitmask?: number;
 };
 
-function overrideLeftmost3Bits(nibble: number, new3Bits: number): number {
+function overrideLeftmost3Bits(nibble: number, flipBitmask: number): number {
   // Ensure the input is a single hexadecimal nibble (0-15)
   if (nibble < 0 || nibble > 15 || !Number.isInteger(nibble)) {
     throw new Error("Nibble must be an integer between 0 and 15.");
   }
 
-  const rightmostBit = nibble;
+  // Shift the flipped bits left by 1 bit
+  const shiftedFlipBitmask = (flipBitmask & 0b0111) << 1;
 
-  const newLeftmostBits = (new3Bits & 0b0111) << 1;
-
-  const result = newLeftmostBits ^ rightmostBit;
-
-  return result;
+  // Apply the flipped bit mask to the original nibble
+  return nibble ^ shiftedFlipBitmask;
 }
 
 export const generatePredeposit = async (
