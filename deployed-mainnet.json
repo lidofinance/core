@@ -35,6 +35,13 @@
       "constructorArgs": ["0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb", 12, 1606824023]
     }
   },
+  "alertingHarness": {
+    "implementation": {
+      "contract": "contracts/harness/AlertingHarness.sol",
+      "address": "0xe3f9D755b3240AF7C988B05588A38461D40Bd558",
+      "constructorArgs": ["0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"]
+    }
+  },
   "apmRegistryFactoryAddress": "0xa0BC4B67F5FacDE4E50EAFF48691Cfc43F4E280A",
   "app:aragon-agent": {
     "implementation": {
@@ -662,7 +669,7 @@
   },
   "v3VoteScript": {
     "contract": "contracts/upgrade/V3VoteScript.sol",
-    "address": "0xf2BeCc7aF0AA50DaD54781e06d5ce1A7eAD59AfA",
+    "address": "0xE1F4c16908fCE6935b5Ad38C6e3d58830fe86442",
     "constructorArgs": [
       ["0x34E01ecFebd403370b0879C628f8A5319dDb8507", "0x2a30F5aC03187674553024296bed35Aa49749DDa", 8192, 8192]
     ]

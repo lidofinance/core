@@ -1,5 +1,11 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
+import {
+  ContractMethodArgs,
+  ContractTransactionReceipt,
+  ContractTransactionResponse,
+  hexlify,
+  Interface,
+} from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -21,7 +27,6 @@ import {
   de0x,
   findEventsWithInterfaces,
   generatePredeposit,
-  generateTopUp,
   getCurrentBlockTimestamp,
   impersonate,
   log,
@@ -482,6 +487,84 @@ export async function createVaultProxyWithoutConnectingToVaultHub(
   };
 }
 
+/**
+ * Sets up a staking vault with bad debt by slashing its total value below its liabilities
+ * @param ctx Protocol context
+ * @param vaultOwner Vault owner signer
+ * @param nodeOperator Node operator signer
+ * @param fundAmount Amount to fund the vault with
+ * @param slashTo Amount to slash the vault's total value to
+ * @returns Object containing the staking vault and the amount of bad debt shares
+ */
+export async function setupVaultWithBadDebt(
+  ctx: ProtocolContext,
+  vaultOwner: HardhatEthersSigner,
+  nodeOperator: HardhatEthersSigner,
+  fundAmount = ether("10"),
+  slashTo = ether("1"),
+): Promise<{ stakingVault: StakingVault; badDebtShares: bigint }> {
+  const { stakingVaultFactory, lido } = ctx.contracts;
+
+  // Create vault with dashboard
+  const { stakingVault, dashboard } = await createVaultWithDashboard(
+    ctx,
+    stakingVaultFactory,
+    vaultOwner,
+    nodeOperator,
+    nodeOperator,
+  );
+
+  // Fund and mint max shares
+  await dashboard.connect(vaultOwner).fund({ value: fundAmount });
+
+  const capacity = await dashboard.remainingMintingCapacityShares(0n);
+  await dashboard.connect(vaultOwner).mintShares(vaultOwner, capacity);
+
+  // Slash to create bad debt
+  await reportVaultDataWithProof(ctx, stakingVault, {
+    totalValue: slashTo,
+    slashingReserve: slashTo,
+    waitForNextRefSlot: true,
+  });
+
+  // Verify bad debt exists
+  const totalValue = await dashboard.totalValue();
+  const liabilityShares = await dashboard.liabilityShares();
+  const liabilityValue = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+  expect(totalValue).to.be.lessThan(liabilityValue, "Vault should have bad debt");
+
+  // Calculate bad debt amount
+  const badDebtShares = liabilityShares - (await lido.getSharesByPooledEth(totalValue));
+
+  return { stakingVault, badDebtShares };
+}
+
+/**
+ * Queue bad debt internalization for a staking vault
+ * @param ctx Protocol context
+ * @param stakingVault Staking vault to internalize bad debt for
+ * @param badDebtShares Amount of bad debt shares to internalize
+ */
+export async function queueBadDebtInternalization(
+  ctx: ProtocolContext,
+  stakingVault: StakingVault,
+  badDebtShares: bigint,
+): Promise<void> {
+  expect(badDebtShares).to.be.gt(0n, "Bad debt shares must be greater than zero");
+
+  // Grant BAD_DEBT_MASTER_ROLE to daoAgent
+  const { vaultHub } = ctx.contracts;
+  const aragonAgent = await ctx.getSigner("agent");
+  await vaultHub.connect(aragonAgent).grantRole(await vaultHub.BAD_DEBT_MASTER_ROLE(), aragonAgent);
+
+  // Queue bad debt for internalization
+  const badDebtToBefore = await vaultHub.badDebtToInternalize();
+  await vaultHub.connect(aragonAgent).internalizeBadDebt(stakingVault, badDebtShares);
+  const badDebtToAfter = await vaultHub.badDebtToInternalize();
+
+  expect(badDebtToAfter - badDebtToBefore).to.equal(badDebtShares, "Bad debt should be queued");
+}
+
 export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
   const pubkeys = Array.from({ length: num }, (_, i) => {
     const paddedIndex = (i + 1).toString().padStart(8, "0");
@@ -521,12 +604,7 @@ export const generatePredepositData = async (
   });
 };
 
-export const getProofAndDepositData = async (
-  ctx: ProtocolContext,
-  validator: Validator,
-  withdrawalCredentials: string,
-  amount: bigint = ether("31"),
-) => {
+export const mockProof = async (ctx: ProtocolContext, validator: Validator) => {
   const { predepositGuarantee } = ctx.contracts;
 
   // Step 3: Prove and deposit the validator
@@ -539,20 +617,16 @@ export const getProofAndDepositData = async (
   );
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
-  const postdeposit = generateTopUp(validator.container, amount);
   const pubkey = hexlify(validator.container.pubkey);
 
-  const witnesses = [
-    {
-      proof,
-      pubkey,
-      validatorIndex,
-      childBlockTimestamp,
-      slot: beaconBlockHeader.slot,
-      proposerIndex: beaconBlockHeader.proposerIndex,
-    },
-  ];
-  return { witnesses, postdeposit };
+  return {
+    proof,
+    pubkey,
+    validatorIndex,
+    childBlockTimestamp,
+    slot: beaconBlockHeader.slot,
+    proposerIndex: beaconBlockHeader.proposerIndex,
+  };
 };
 
 export async function calculateLockedValue(
@@ -582,4 +656,37 @@ export async function calculateLockedValue(
 
 export function ceilDiv(a: bigint, b: bigint): bigint {
   return (a + b - 1n) / b;
+}
+
+// Helper type to extract method names from a contract
+export type Methods<T> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
+}[keyof T];
+
+// Helper functions for testing access control
+export async function testMethod<
+  T extends unknown[],
+  C extends { connect: (signer: HardhatEthersSigner) => C; interface: Interface },
+>(
+  contract: C,
+  methodName: Methods<C> & string,
+  { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
+  argument: T,
+  requiredRole: string,
+  errorName = "AccessControlUnauthorizedAccount",
+) {
+  for (const user of failingUsers) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect((contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)))
+      .to.be.revertedWithCustomError(contract, errorName)
+      .withArgs(user, requiredRole);
+  }
+
+  for (const user of successUsers) {
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.not.be.revertedWithCustomError(contract, errorName);
+  }
 }
