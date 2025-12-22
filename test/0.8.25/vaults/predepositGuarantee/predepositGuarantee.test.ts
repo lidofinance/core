@@ -696,7 +696,7 @@ describe("PredepositGuarantee.sol", () => {
         expect(await pdg.unlockedBalance(vaultOperator)).to.equal(0n);
       });
 
-      it("revert on incorrect compression flag during BLS check", async () => {
+      it("reverts on incorrect compression flag during BLS check", async () => {
         // Staking Vault is funded with enough ether to run validator
         await stakingVault.fund({ value: ether("32") });
 
