@@ -11,6 +11,7 @@ contract Lido__MockForTopUpGateway {
     );
 
     uint256 public topUpCalls;
+    bool public canDepositFlag = true;
 
     function topUp(
         uint256 _stakingModuleId,
@@ -24,5 +25,13 @@ contract Lido__MockForTopUpGateway {
         }
 
         emit TopUpCalled(_stakingModuleId, _keyIndices, _operatorIds, _pubkeysPacked, _topUpLimitsGwei);
+    }
+
+    function setCanDeposit(bool value) external {
+        canDepositFlag = value;
+    }
+
+    function canDeposit() external view returns (bool) {
+        return canDepositFlag;
     }
 }

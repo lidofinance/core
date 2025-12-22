@@ -24,6 +24,10 @@ library BeaconChainDepositor {
     uint256 internal constant DEPOSIT_SIZE = 32 ether;
     uint64 internal constant DEPOSIT_SIZE_IN_GWEI = 32 ether / 1 gwei;
 
+    /// @dev Minimum deposit amount required by the Ethereum Deposit Contract
+    uint256 internal constant MIN_DEPOSIT = 1 ether;
+    uint64 internal constant MIN_DEPOSIT_IN_GWEI = 1 ether / 1 gwei;
+
     /// @dev Invokes a deposit call to the official Beacon Deposit contract
     /// @param _depositContract - IDepositContract deposit contract
     /// @param _keysCount amount of keys to deposit
@@ -86,6 +90,11 @@ library BeaconChainDepositor {
 
             // obtainDepositData can return 0 amount for some keys
             if (amountGwei256 == 0) continue;
+
+            // Amounts below minimum deposit (1 ETH) would fail at deposit contract
+            if (amountGwei256 < MIN_DEPOSIT_IN_GWEI) {
+                revert DepositAmountTooLow();
+            }
 
             uint64 amountGwei64 = uint64(amountGwei256);
             uint256 amountWei = uint256(amountGwei64) * 1 gwei;
@@ -155,4 +164,5 @@ library BeaconChainDepositor {
     error InvalidSignaturesBatchLength(uint256 actual, uint256 expected);
     error ArrayLengthMismatch();
     error AmountTooLarge();
+    error DepositAmountTooLow();
 }

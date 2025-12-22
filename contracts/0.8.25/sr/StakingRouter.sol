@@ -104,7 +104,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error WrongArrayLength();
     error EmptyKeysList();
     error WrongPubkeysLength();
-    error ActualBalanceExceededMaximum();
 
     /// @dev compatibility getters for constants removed in favor of SRLib
     // function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
@@ -753,14 +752,16 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
         if (stakingModuleDepositableEthAmount == 0) return 0;
 
-        uint256 topUpAmount;
+        uint256 topUpAmountGwei;
         unchecked {
             for (uint256 i; i < _topUpLimits.length; i++) {
-                topUpAmount += _topUpLimits[i];
+                topUpAmountGwei += _topUpLimits[i];
             }
         }
 
-        return Math256.min(topUpAmount, stakingModuleDepositableEthAmount);
+        uint256 topUpAmountWei = topUpAmountGwei * 1 gwei;
+
+        return Math256.min(topUpAmountWei, stakingModuleDepositableEthAmount);
     }
 
     /// @notice Calls `obtainDepositData` on the staking module to determine
@@ -779,6 +780,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _pubkeysPacked,
         uint256[] calldata _topUpLimitsGwei
     ) external payable {
+        if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
         _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimitsGwei, _pubkeysPacked);
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
@@ -790,15 +792,21 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes memory wcBytes = abi.encodePacked(withdrawalCredentials);
 
         uint256 depositsValue = msg.value;
-        if (depositsValue == 0) return;
+        // Even if depositValue equals 0, obtainDepositData is still called.
+        // the CSM queue has a fixed size. Example: If all keys currently in the queue have exited,
+        // they must be popped to free up slots and new keys must be enqueued.
+        // This requires calling topUp with depositValue >= 0 and _topUpLimitsGwei = [0, ...].
 
         uint256 etherBalanceBeforeDeposits = address(this).balance;
         (bytes[] memory pubkeys, uint256[] memory topUpAmounts) = IStakingModuleV2(stateConfig.moduleAddress)
             .obtainDepositData(depositsValue, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei);
+        // TODO: should we check pubkeys in _pubkeysPacked ?
 
-        BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, pubkeys, topUpAmounts);
-
-        _trackDeposit(_stakingModuleId, msg.value);
+        // Skip tracking for zero deposits (CSM queue cursor advancement case)
+        if (msg.value > 0) {
+            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, pubkeys, topUpAmounts);
+            _trackDeposit(_stakingModuleId, msg.value);
+        }
 
         uint256 etherBalanceAfterDeposits = address(this).balance;
 

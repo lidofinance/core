@@ -27,6 +27,7 @@ describe("TopUpGateway.sol", () => {
 
   const MODULE_ID = 1n;
   const MAX_EFFECTIVE_BALANCE_GWEI = 2048n * 10n ** 9n;
+  const BALANCE_THRESHOLD_GWEI = 2047n * 10n ** 9n; // Threshold per TopUpDocs.md
   const FAR_FUTURE_EPOCH = (1n << 64n) - 1n;
   const SAMPLE_PUBKEY = `0x${"11".repeat(48)}`;
   const DEFAULT_MAX_VALIDATORS = 5n;
@@ -275,6 +276,27 @@ describe("TopUpGateway.sol", () => {
         "MaxValidatorsPerTopUpExceeded",
       );
     });
+    it("reverts when validatorIndices contain duplicates", async () => {
+      const data = await buildTopUpData();
+      data.validatorIndices = [1n, 1n];
+      data.keyIndices = [1n, 1n];
+      data.operatorIds = [1n, 1n];
+      const secondPubkey = `0x${"22".repeat(48)}`;
+      data.validatorWitness = [
+        data.validatorWitness[0],
+        {
+          ...data.validatorWitness[0],
+          pubkey: secondPubkey,
+        },
+      ];
+      data.balanceWitness = [data.balanceWitness[0], data.balanceWitness[0]];
+      data.pendingWitness = [[], []];
+
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "DuplicateValidatorIndex",
+      );
+    });
 
     it("reverts when beacon data is too old", async () => {
       await time.increase(400);
@@ -309,14 +331,14 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
-    it("reverts when balance exceeds the cap", async () => {
+    it("returns zero top-up limit when balance exceeds the threshold", async () => {
       const data = await buildTopUpData();
-      data.balanceWitness[0].balanceGwei = MAX_EFFECTIVE_BALANCE_GWEI;
+      // Balance > 2047 ETH threshold means top-up limit should be 0 (per TopUpDocs.md)
+      data.balanceWitness[0].balanceGwei = BALANCE_THRESHOLD_GWEI + 1n;
 
-      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
-        topUpGateway,
-        "ActualBalanceExceededMaximum",
-      );
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(lido, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
     });
 
     it("reverts when pubkey length is invalid", async () => {
@@ -467,26 +489,27 @@ describe("TopUpGateway.sol", () => {
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
       });
 
-      it("returns minimum top-up of 1 Gwei when balance is 1 Gwei below max", async () => {
+      it("returns minimum top-up of 1 ether when balance is at threshold", async () => {
         const data = await buildTopUpData();
-        // Balance = MAX - 1 Gwei
-        data.balanceWitness[0].balanceGwei = MAX_EFFECTIVE_BALANCE_GWEI - 1n;
+        // Balance = 2047 ETH (threshold), so top-up = 2048 - 2047 = 1 ETH
+        data.balanceWitness[0].balanceGwei = BALANCE_THRESHOLD_GWEI;
 
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
           .to.emit(lido, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [1n]);
+          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [1n * 10n ** 9n]);
       });
 
-      it("returns correct top-up for balance just under max with small pending", async () => {
+      it("returns correct top-up for balance just under threshold with small pending", async () => {
         const data = await buildTopUpData();
-        // Balance = MAX - 100 Gwei
-        data.balanceWitness[0].balanceGwei = MAX_EFFECTIVE_BALANCE_GWEI - 100n;
-        // Pending = 50 Gwei
+        // Balance = 2045 ETH (2 ETH below threshold)
+        data.balanceWitness[0].balanceGwei = 2045n * 10n ** 9n;
+        // Pending = 1 ETH
+        const pendingAmount = 1n * 10n ** 9n;
         data.pendingWitness = [
           [
             {
               proof: [],
-              amount: 50n,
+              amount: pendingAmount,
               signature: `0x${"00".repeat(96)}`,
               slot: 100n,
               index: 0n,
@@ -494,10 +517,13 @@ describe("TopUpGateway.sol", () => {
           ],
         ];
 
-        // Expected top-up = 100 - 50 = 50 Gwei
+        // Balance = 2045 ETH, Pending = 1 ETH
+        // Total = 2046 ETH <= 2047 ETH threshold
+        // Top-up = 2048 - 2046 = 2 ETH
+        const expectedTopUp = 2n * 10n ** 9n;
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
           .to.emit(lido, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [50n]);
+          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
       });
 
       it("returns zero when validator is slashed", async () => {
@@ -526,6 +552,37 @@ describe("TopUpGateway.sol", () => {
           .to.emit(lido, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
       });
+    });
+  });
+
+  describe("canTopUp", () => {
+    it("returns false when module is not registered", async () => {
+      expect(await topUpGateway.canTopUp(999n)).to.equal(false);
+    });
+
+    it("returns false when module is inactive", async () => {
+      await stakingRouter.setModuleActive(MODULE_ID, false);
+      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
+    });
+
+    it("returns false when block distance is not met", async () => {
+      await topUpGateway.connect(limitsManager).setMinBlockDistance(DEFAULT_MIN_BLOCK_DISTANCE + 1n);
+      await topUpGateway.harness_setLastTopUpSlot(123);
+      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
+    });
+
+    it("returns false when Lido cannot deposit", async () => {
+      await lido.setCanDeposit(false);
+      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
+    });
+
+    it("returns false when withdrawal credentials are not 0x02", async () => {
+      await stakingRouter.setWithdrawalCredentials(MODULE_ID, WC_TYPE_01);
+      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
+    });
+
+    it("returns true when all conditions are satisfied", async () => {
+      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(true);
     });
   });
 });

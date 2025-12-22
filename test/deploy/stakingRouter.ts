@@ -3,7 +3,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { DepositContract__MockForBeaconChainDepositor, SRLib, StakingRouter__Harness } from "typechain-types";
+import {
+  BeaconChainDepositor,
+  DepositContract__MockForBeaconChainDepositor,
+  SRLib,
+  StakingRouter__Harness,
+} from "typechain-types";
 
 import { GENESIS_TIME, proxify, SECONDS_PER_SLOT } from "lib";
 
@@ -29,6 +34,7 @@ export async function deployStakingRouter(
   stakingRouter: StakingRouter__Harness;
   impl: StakingRouter__Harness;
   stakingRouterWithLib: StakingRouterWithLib;
+  beaconChainDepositor: BeaconChainDepositor;
 }> {
   if (!depositContract) {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor");
@@ -53,5 +59,5 @@ export async function deployStakingRouter(
     stakingRouter.runner,
   ) as StakingRouterWithLib;
 
-  return { stakingRouter, depositContract, impl, stakingRouterWithLib };
+  return { stakingRouter, depositContract, impl, stakingRouterWithLib, beaconChainDepositor };
 }

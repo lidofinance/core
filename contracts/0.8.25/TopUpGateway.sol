@@ -23,6 +23,8 @@ interface ILidoLocator {
 
 interface IStakingRouter {
     function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32);
+    function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
+    function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
 }
 
 interface ILido {
@@ -33,6 +35,7 @@ interface ILido {
         bytes calldata _pubkeysPacked,
         uint256[] calldata _topUpLimitsGwei
     ) external;
+    function canDeposit() external view returns (bool);
 }
 
 /**
@@ -56,7 +59,8 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     bytes32 internal constant GATEWAY_STORAGE_POSITION =
         0x22e512057841e2bc1e6d80030c8bb8b4935377af2e64ba9bf8e6a3e88fb32200;
 
-    uint256 internal constant MAX_EFFECTIVE_BALANCE_02_GWEI = 2048 * 1e9;
+    uint256 internal constant BALANCE_THRESHOLD_GWEI = 2047 ether / 1 gwei;
+    uint256 internal constant MAX_EFFECTIVE_BALANCE_02_GWEI = 2048 ether / 1 gwei;
     uint256 internal constant PUBKEY_LENGTH = 48;
     uint256 internal constant MAX_ROOT_AGE = 5 minutes;
     uint256 internal constant FAR_FUTURE_EPOCH = type(uint64).max;
@@ -132,6 +136,15 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
             revert WrongArrayLength();
         }
 
+        // Check for duplicate validatorIndices (O(n^2) acceptable since bounded by maxValidatorsPerTopUp)
+        for (uint256 i; i < validatorsCount; ++i) {
+            for (uint256 j = i + 1; j < validatorsCount; ++j) {
+                if (topUps.validatorIndices[i] == topUps.validatorIndices[j]) {
+                    revert DuplicateValidatorIndex();
+                }
+            }
+        }
+
         // length should be less than or eq maxValidatorsPerTopUp
         if (validatorsCount > $.maxValidatorsPerTopUp) {
             revert MaxValidatorsPerTopUpExceeded();
@@ -159,15 +172,11 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
 
         uint256[] memory topUpLimits = new uint256[](validatorsCount);
 
-        // 1. actual balance should not be bigger than 2048_000_000_000 gwei
+        // 1. actual balance should not be bigger than 2047 ether
         // 2. Verify proof data through CLValidatorProofVerifier
         unchecked {
             for (uint256 i; i < validatorsCount; ++i) {
                 BalanceWitness calldata bw = topUps.balanceWitness[i];
-
-                if (bw.balanceGwei >= MAX_EFFECTIVE_BALANCE_02_GWEI) {
-                    revert ActualBalanceExceededMaximum();
-                }
 
                 // For each validator
                 ValidatorWitness calldata vw = topUps.validatorWitness[i];
@@ -218,6 +227,31 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         return _gatewayStorage().minBlockDistance;
     }
 
+    /**
+     * @notice Checks if top-up is possible for a given staking module
+     * @param _stakingModuleId Id of the staking module
+     * @return True if top-up is possible, false otherwise
+     * @dev Checks: module exists, module is active, block distance passed, Lido can deposit, and withdrawal credentials are 0x02
+     */
+    function canTopUp(uint256 _stakingModuleId) external view returns (bool) {
+        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
+
+        if (!stakingRouter.hasStakingModule(_stakingModuleId)) return false;
+
+        bool isModuleActive = stakingRouter.getStakingModuleIsActive(_stakingModuleId);
+
+        Storage storage $ = _gatewayStorage();
+        bool isBlockDistancePassed = $.lastTopUpBlock == 0 || block.number - $.lastTopUpBlock >= $.minBlockDistance;
+
+        bool isLidoCanDeposit = ILido(LOCATOR.lido()).canDeposit();
+
+        // Check 0x02 type
+        bytes32 wc = stakingRouter.getStakingModuleWithdrawalCredentials(_stakingModuleId);
+        bool isWC02 = wc.getType() == 2;
+
+        return isModuleActive && isBlockDistancePassed && isLidoCanDeposit && isWC02;
+    }
+
     function setMaxValidatorsPerTopUp(uint256 newValue) external onlyRole(MANAGE_LIMITS_ROLE) {
         _setMaxValidatorsPerTopUp(newValue);
     }
@@ -261,7 +295,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
 
         // Top-up limit = MAX_EFFECTIVE_BALANCE - current_balance - pending_deposits
         uint256 currentTotal = balance.balanceGwei + totalPendingGwei;
-        if (currentTotal >= MAX_EFFECTIVE_BALANCE_02_GWEI) {
+        if (currentTotal > BALANCE_THRESHOLD_GWEI) {
             return 0;
         }
 
@@ -296,8 +330,8 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     error SlotNotIncreasing();
     error WrongArrayLength();
     error MaxValidatorsPerTopUpExceeded();
-    error ActualBalanceExceededMaximum();
     error WrongWithdrawalCredentials();
     error InvalidTopUpPubkeyLength();
     error MinBlockDistanceNotMet();
+    error DuplicateValidatorIndex();
 }
