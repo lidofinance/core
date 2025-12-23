@@ -140,6 +140,9 @@ library BLS12_381 {
     /// @dev provided pubkey length is not 48
     error InvalidPubkeyLength();
 
+    /// @dev provided signature length is not 96
+    error InvalidSignatureLength();
+
     /// @dev provided block header is invalid
     error InvalidBlockHeader();
 
@@ -182,7 +185,7 @@ library BLS12_381 {
                 }
             }
 
-            /// @dev Map an fp2 field element to a point in G2 curve using BLS12 precompile (0x0a)
+            /// @dev Map an fp2 field element to a point in G2 curve using BLS12 precompile (0x11)
             function mapToG2(s_, r_) {
                 if iszero(
                     and(eq(returndatasize(), 0x100), staticcall(gas(), BLS12_MAP_FP2_TO_G2, s_, 0x80, r_, 0x100))
@@ -246,7 +249,7 @@ library BLS12_381 {
             mapToG2(b, result) // result at offset 0
             mapToG2(add(0x80, b), add(0x100, result)) // second point at result + 0x100
 
-            // Add the two G2 points together with BLS12_G2ADD precompile (0x0f)
+            // Add the two G2 points together with BLS12_G2ADD precompile (0x0d)
             if iszero(and(eq(returndatasize(), 0x100), staticcall(gas(), BLS12_G2ADD, result, 0x200, result, 0x100))) {
                 mstore(0x00, 0xc55e5e33) // Revert with G2AddFailed()
                 revert(0x1c, 0x04)
@@ -276,6 +279,8 @@ library BLS12_381 {
      * @param pubkeyY Y component of uncompressed pubkey
      */
     function validateCompressedPubkeyFlags(bytes calldata pubkey, Fp calldata pubkeyY) internal pure {
+        if (pubkey.length != 48) revert InvalidPubkeyLength();
+
         (bool signBit, bool areOtherFlagsValid) = extractFlags(pubkey[0]);
         if (!areOtherFlagsValid) {
             revert InvalidCompressedComponent(Component.PubKey);
@@ -297,6 +302,8 @@ library BLS12_381 {
      * @param signatureY Y component of uncompressed signature
      */
     function validateCompressedSignatureFlags(bytes calldata signature, Fp2 calldata signatureY) internal pure {
+        if (signature.length != 96) revert InvalidSignatureLength();
+
         (bool signBit, bool areOtherFlagsValid) = extractFlags(signature[0]);
         if (!areOtherFlagsValid) {
             revert InvalidCompressedComponent(Component.Signature);

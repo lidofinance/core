@@ -19,6 +19,7 @@
     "format:fix": "prettier . --write",
     "check": "yarn lint && yarn format && yarn typecheck && yarn validate:configs",
     "test": "hardhat test test/**/*.test.ts --parallel",
+    "test:bls:blst": "SKIP_INTERFACES_CHECK=true SKIP_LINT_SOLIDITY=true SKIP_GAS_REPORT=true hardhat test test/common/bls.blst.e2e.fuzz.test.ts",
     "upgrade:deploy": "STEPS_FILE=upgrade/steps-deploy.json yarn hardhat --network custom run scripts/utils/migrate.ts",
     "upgrade:deploy:mainnet": "STEPS_FILE=upgrade/steps-deploy.json yarn hardhat --network mainnet run scripts/utils/migrate.ts",
     "upgrade:mock-voting": "STEPS_FILE=upgrade/steps-mock-voting.json yarn hardhat --network custom run scripts/utils/migrate.ts",

@@ -391,4 +391,26 @@ contract BLSCompressionFlagsFuzzTest is Test {
         vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
         harness.validateCompressedSignatureFlags(invalidSignSignature, signatureY);
     }
+
+    function test_validateCompressedSignatureFlags_UsesC0WhenC1IsZero() external {
+        // `validateCompressedSignatureFlags()` must use `c0` for sign-bit computation if `c1 == 0`.
+        bytes memory signature = new bytes(96);
+
+        BLS12_381.Fp2 memory signatureY;
+        signatureY.c1_a = bytes32(0);
+        signatureY.c1_b = bytes32(0);
+
+        // Choose `c0` such that `c0 > p/2`, therefore computed sign bit must be `1`.
+        signatureY.c0_a = bytes32(type(uint256).max);
+        signatureY.c0_b = bytes32(0);
+
+        // sign bit = 0 => must revert
+        signature[0] = 0x80;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+
+        // sign bit = 1 => must pass
+        signature[0] = 0xA0;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
 }
