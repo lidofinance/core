@@ -459,7 +459,7 @@ library BLS12_381 {
         assembly {
             if iszero(
                 and(
-                    eq(returndatasize(), 0x20), // check that return data is only 32 bytes (executes after staticall)
+                    eq(returndatasize(), 0x20), // check that return data is only 32 bytes (executes after staticcall)
                     staticcall(
                         gas(),
                         BLS12_PAIRING_CHECK,

@@ -128,6 +128,29 @@ contract BLSVerifyingKeyTest is Test {
         harness.verifyDepositMessage(message);
     }
 
+    function test_revertOnPubkeyYOutOfField() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // BLS12-381 base field modulus p.
+        // P is 48 bytes: 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
+        // Fp struct has 2 bytes32: a (upper 32 bytes) and b (lower 32 bytes).
+        // Since P is 48 bytes, 'a' has 16 bytes of padding (zeros) followed by top 16 bytes of P.
+
+        bytes32 P_A = bytes32(uint256(0x000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd7));
+        bytes32 P_B = bytes32(uint256(0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab));
+
+        message.depositYComponents.pubkeyY = BLS12_381.Fp(P_A, P_B);
+
+        // We need to ensure the sign bit check passes.
+        // P >= P/2, so computed sign bit will be 1.
+        // We need pubkey to have sign bit 1.
+        message.deposit.pubkey = _withValidPubkeySignBit(message.deposit.pubkey, message.depositYComponents.pubkeyY);
+
+        // Pairing check should fail because Y is not a valid field element (< P).
+        vm.expectRevert(BLS12_381.PairingFailed.selector);
+        harness.verifyDepositMessage(message);
+    }
+
     function test_verifyDeposit_LOCAL_1() external view {
         PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
         harness.verifyDepositMessage(message);
