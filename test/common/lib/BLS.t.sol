@@ -70,8 +70,62 @@ contract BLSVerifyingKeyTest is Test {
 
     function test_revertOnInCorrectDeposit() external {
         PrecomputedDepositMessage memory deposit = CORRUPTED_MESSAGE();
-        vm.expectRevert();
+        vm.expectRevert(BLS12_381.InvalidSignature.selector);
         harness.verifyDepositMessage(deposit);
+    }
+
+    function test_revertOnInfinityPubkey() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Make pubkey decode to the "infinity" representation expected by EIP-2537 pairing ABI
+        // (all-zero uncompressed point) while keeping service bits valid for the flag checks.
+        message.deposit.pubkey = new bytes(48);
+        message.deposit.pubkey[0] = 0x80; // compressed=1, infinity=0, sign=0
+        message.depositYComponents.pubkeyY = BLS12_381.Fp(bytes32(0), bytes32(0));
+
+        vm.expectRevert(BLS12_381.InputHasInfinityPoints.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_revertOnInfinitySignature() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Make signature decode to the "infinity" representation expected by EIP-2537 pairing ABI.
+        message.deposit.signature = new bytes(96);
+        message.deposit.signature[0] = 0x80; // compressed=1, infinity=0, sign=0
+        message.depositYComponents.signatureY = BLS12_381.Fp2(bytes32(0), bytes32(0), bytes32(0), bytes32(0));
+
+        vm.expectRevert(BLS12_381.InputHasInfinityPoints.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function _withValidPubkeySignBit(bytes memory pubkey, BLS12_381.Fp memory pubkeyY) internal returns (bytes memory) {
+        // Ensure compression=1, infinity=0, sign=0 while preserving x high bits (lower 5 bits of the first byte).
+        pubkey[0] = bytes1((uint8(pubkey[0]) & 0x1f) | 0x80);
+        try harness.validateCompressedPubkeyFlags(pubkey, pubkeyY) {
+            return pubkey;
+        } catch {
+            // Flip sign bit and require it to pass.
+            pubkey[0] = bytes1(uint8(pubkey[0]) | 0x20);
+            harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+            return pubkey;
+        }
+    }
+
+    function test_revertOnPubkeyXOutOfField() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // BLS12-381 base field modulus p (48 bytes, from EIP-2537). Any x >= p is an invalid field element.
+        bytes
+            memory badPubkey = hex"1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab";
+
+        // Set the header bits so the flags validation passes for the provided pubkeyY.
+        badPubkey = _withValidPubkeySignBit(badPubkey, message.depositYComponents.pubkeyY);
+        message.deposit.pubkey = badPubkey;
+
+        // EIP-2537 pairing precompile must fail (STATICCALL returns 0) on invalid field elements.
+        vm.expectRevert(BLS12_381.PairingFailed.selector);
+        harness.verifyDepositMessage(message);
     }
 
     function test_verifyDeposit_LOCAL_1() external view {

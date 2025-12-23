@@ -421,6 +421,80 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
     }
   });
 
+  it("rejects on-curve but non-subgroup pubkeys (EIP-2537 subgroup checks) using blst as oracle", async () => {
+    // This test is specifically about the EIP-2537 *input validation* behavior:
+    // pairing precompile must reject points not in the correct subgroup.
+    //
+    // We deterministically search for a compressed G1 encoding that:
+    // - deserializes to an on-curve point (PublicKey.fromHex(..., pkValidate=false) succeeds)
+    // - fails subgroup validation (pk.keyValidate() throws)
+
+    function candidatePubkey(i: number): string {
+      const seed = keccak256(toBeHex(1_000_000 + i, 32));
+      const seed2 = keccak256(seed);
+      const b = new Uint8Array(48);
+      b.set(getBytes(seed), 0);
+      // Only 16 bytes remain after offset 32.
+      b.set(getBytes(seed2).slice(0, 16), 32);
+      // Force service bits: compressed=1, infinity=0, keep sign bit as generated.
+      b[0] = (b[0] & 0x3f) | 0x80;
+      return hexlify(b);
+    }
+
+    let pubkey = "";
+    let pk: PublicKey | null = null;
+    for (let i = 0; i < 2048; i++) {
+      const cand = candidatePubkey(i);
+      try {
+        const candPk = PublicKey.fromHex(cand, false);
+        // We expect subgroup validation to fail for almost any on-curve point (G1 cofactor is huge).
+        try {
+          candPk.keyValidate();
+          // Extremely unlikely: point in the correct subgroup; keep searching.
+          continue;
+        } catch {
+          pubkey = cand;
+          pk = candPk;
+          break;
+        }
+      } catch {
+        // Not on-curve / invalid encoding; keep searching.
+      }
+    }
+
+    if (!pk) throw new Error("invariant: failed to find an on-curve non-subgroup pubkey");
+
+    // Oracle: blst subgroup validation must reject this pubkey.
+    expect(() => pk!.keyValidate()).to.throw();
+
+    // Any valid signature point is fine here (we're not testing correctness of the BLS equation itself).
+    const sigSk = master.deriveChildEip2333(777_777);
+    const sig = sigSk.sign(getBytes(keccak256(Buffer.from("non-subgroup-test", "utf-8"))));
+    const signature = sig.toHex(true);
+
+    const depositY = buildDepositY(pk, sig);
+
+    // Arbitrary message parameters; signature is not expected to match.
+    const forkVersion = "0x00000000";
+    const withdrawalCredentials = keccak256(toBeHex(424242, 32));
+    const amount = 1_000_000_000n * ONE_GWEI; // 1 ETH in gwei, in wei.
+    const depositDomain = hexlify(await computeDepositDomain(forkVersion));
+
+    // On-chain must reject: pairing precompile should fail on subgroup checks => PairingFailed().
+    // Note: PairingFailed is reverted from inline assembly in BLS.sol, so it may not be present
+    // in the harness ABI; assert by checking the revert selector directly.
+    const pairingFailedSelector = keccak256(Buffer.from("PairingFailed()", "utf-8")).slice(0, 10);
+    try {
+      await harness.verifyDepositMessage(pubkey, signature, amount, depositY, withdrawalCredentials, depositDomain);
+      expect.fail("invariant: expected revert");
+    } catch (e) {
+      const err = e as { data?: string; error?: { data?: string } };
+      const data = err.data ?? err.error?.data;
+      expect(data, "missing revert data").to.be.a("string");
+      expect(data!.slice(0, 10)).to.equal(pairingFailedSelector);
+    }
+  });
+
   it("mutation oracle parity: accept/reject matches blst for randomized mutations", async () => {
     for (let i = 0; i < MUT_RUNS; i++) {
       const salt = keccak256(toBeHex(50_000 + i, 32));
