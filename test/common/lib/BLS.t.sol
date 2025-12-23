@@ -243,6 +243,9 @@ contract BLSVerifyingKeyTest is Test {
 contract BLSCompressionFlagsFuzzTest is Test {
     BLSHarness internal harness;
 
+    bytes32 internal constant HALF_P_A = 0x000000000000000000000000000000000d0088f51cbff34d258dd3db21a5d66b;
+    bytes32 internal constant HALF_P_B = 0xb23ba5c279c2895fb39869507b587b120f55ffff58a9ffffdcff7fffffffd555;
+
     constructor() {
         harness = new BLSHarness();
     }
@@ -411,6 +414,56 @@ contract BLSCompressionFlagsFuzzTest is Test {
 
         // sign bit = 1 => must pass
         signature[0] = 0xA0;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    function test_validateCompressedPubkeyFlags_HalfPBoundary() external {
+        bytes memory pubkey = new bytes(48);
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(HALF_P_A, HALF_P_B);
+
+        // y == p/2 => computed sign bit is 0
+        pubkey[0] = 0x80;
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+
+        pubkey[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    function test_validateCompressedSignatureFlags_HalfPBoundary_UsesC1() external {
+        bytes memory signature = new bytes(96);
+        BLS12_381.Fp2 memory signatureY;
+
+        // Ensure c1 != 0 so the normal "use c1" path is taken.
+        signatureY.c1_a = HALF_P_A;
+        signatureY.c1_b = HALF_P_B;
+        signatureY.c0_a = bytes32(0);
+        signatureY.c0_b = bytes32(0);
+
+        // y == p/2 => computed sign bit is 0
+        signature[0] = 0x80;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+
+        signature[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    function test_validateCompressedPubkeyFlags_InvalidLength() external {
+        bytes memory pubkey = new bytes(47);
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(bytes32(0), bytes32(0));
+        vm.expectRevert(BLS12_381.InvalidPubkeyLength.selector);
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    function test_validateCompressedSignatureFlags_InvalidLength() external {
+        bytes memory signature = new bytes(95);
+        BLS12_381.Fp2 memory signatureY;
+        signatureY.c0_a = bytes32(0);
+        signatureY.c0_b = bytes32(0);
+        signatureY.c1_a = bytes32(0);
+        signatureY.c1_b = bytes32(0);
+        vm.expectRevert(BLS12_381.InvalidSignatureLength.selector);
         harness.validateCompressedSignatureFlags(signature, signatureY);
     }
 }

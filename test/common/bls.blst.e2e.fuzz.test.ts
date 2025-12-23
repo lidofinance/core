@@ -87,6 +87,48 @@ function blstVerifyDeposit(messageRoot: Uint8Array, pubkey: string, signature: s
   }
 }
 
+// BLS12-381 base field modulus p (from EIP-2537).
+const FP_MODULUS = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
+const FP_MODULUS_HALF = FP_MODULUS / 2n;
+
+function fp48FromFpStruct(fp: FpStruct): Uint8Array {
+  const a = getBytes(fp.a);
+  const b = getBytes(fp.b);
+  if (a.length !== 32 || b.length !== 32) throw new Error("invariant: fp struct must be 32+32 bytes");
+  const out = new Uint8Array(48);
+  out.set(a.slice(16), 0);
+  out.set(b, 16);
+  return out;
+}
+
+function signBitFromFpStruct(fp: FpStruct): boolean {
+  const y = BigInt(hexlify(fp48FromFpStruct(fp)));
+  return y > FP_MODULUS_HALF;
+}
+
+function isZeroFpStruct(fp: FpStruct): boolean {
+  return BigInt(fp.a) === 0n && BigInt(fp.b) === 0n;
+}
+
+function negateFpStruct(fp: FpStruct): FpStruct {
+  const y = BigInt(hexlify(fp48FromFpStruct(fp)));
+  const neg = (FP_MODULUS - y) % FP_MODULUS;
+  const y48 = getBytes(`0x${neg.toString(16).padStart(96, "0")}`);
+  return fpFrom48(y48);
+}
+
+function negateFp2Struct(fp2: Fp2Struct): Fp2Struct {
+  const c0 = negateFpStruct({ a: fp2.c0_a, b: fp2.c0_b });
+  const c1 = negateFpStruct({ a: fp2.c1_a, b: fp2.c1_b });
+  return { c0_a: c0.a, c0_b: c0.b, c1_a: c1.a, c1_b: c1.b };
+}
+
+function signatureSignBitFromFp2Struct(fp2: Fp2Struct): boolean {
+  const c1 = { a: fp2.c1_a, b: fp2.c1_b };
+  const chosen = isZeroFpStruct(c1) ? ({ a: fp2.c0_a, b: fp2.c0_b } satisfies FpStruct) : c1;
+  return signBitFromFpStruct(chosen);
+}
+
 async function computeSigningRootOrNull(
   pubkey: string,
   withdrawalCredentials: string,
@@ -323,6 +365,58 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
         } else {
           await expect(tx, `case "${c.name}" (i=${i})`).to.be.reverted;
         }
+      }
+    }
+  });
+
+  it("rejects mismatched DepositY even when blst accepts the compressed bytes", async () => {
+    // This tests the on-chain invariant that the provided Y-coordinates must correspond
+    // to the compressed sign bits (to avoid being weaker than CL verification).
+    for (let i = 0; i < Math.min(NEG_RUNS, 25); i++) {
+      const salt = keccak256(toBeHex(90_000 + i, 32));
+      const forkVersion = `0x${salt.slice(2, 10)}`; // bytes4
+      const withdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
+      const amount = (1_000_000_000n + BigInt(i)) * ONE_GWEI;
+      const depositDomain = hexlify(await computeDepositDomain(forkVersion));
+
+      const sk = master.deriveChildEip2333(200_000 + i);
+      const pk = sk.toPublicKey();
+      const pubkey = pk.toHex(true);
+      const signingRoot = await computeDepositMessageRoot(pubkey, withdrawalCredentials, amount, depositDomain);
+      const sig = sk.sign(signingRoot);
+      const signature = sig.toHex(true);
+      const depositY = buildDepositY(pk, sig);
+
+      // CL oracle accepts the compressed bytes.
+      expect(blstVerifyDeposit(signingRoot, pubkey, signature), `invariant: blst valid failed (i=${i})`).to.equal(true);
+
+      // Sanity: Solidity accepts when DepositY matches.
+      await expect(
+        harness.verifyDepositMessage(pubkey, signature, amount, depositY, withdrawalCredentials, depositDomain),
+      ).not.to.be.reverted;
+
+      // Pubkey: flip Y to p - Y => must mismatch sign bit.
+      const pubkeyYNeg = negateFpStruct(depositY.pubkeyY);
+      if (signBitFromFpStruct(pubkeyYNeg) !== signBitFromFpStruct(depositY.pubkeyY)) {
+        const badDepositY = { ...depositY, pubkeyY: pubkeyYNeg };
+        await expect(
+          harness.verifyDepositMessage(pubkey, signature, amount, badDepositY, withdrawalCredentials, depositDomain),
+          `pubkeyY negation must be rejected (i=${i})`,
+        )
+          .to.be.revertedWithCustomError(harness, "InvalidCompressedComponentSignBit")
+          .withArgs(0);
+      }
+
+      // Signature: flip Y to p - Y => must mismatch sign bit.
+      const sigYNeg = negateFp2Struct(depositY.signatureY);
+      if (signatureSignBitFromFp2Struct(sigYNeg) !== signatureSignBitFromFp2Struct(depositY.signatureY)) {
+        const badDepositY = { ...depositY, signatureY: sigYNeg };
+        await expect(
+          harness.verifyDepositMessage(pubkey, signature, amount, badDepositY, withdrawalCredentials, depositDomain),
+          `signatureY negation must be rejected (i=${i})`,
+        )
+          .to.be.revertedWithCustomError(harness, "InvalidCompressedComponentSignBit")
+          .withArgs(1);
       }
     }
   });
