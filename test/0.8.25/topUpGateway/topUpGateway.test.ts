@@ -331,6 +331,24 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
+    it("reverts when block distance is not met", async () => {
+      // Set a large min block distance so we can test the revert
+      await topUpGateway.connect(limitsManager).setMinBlockDistance(100n);
+
+      // First successful top-up sets lastTopUpBlock
+      const data = await buildTopUpData();
+      await topUpGateway.connect(topUpOperator).topUp(data);
+
+      // Immediately try again - should fail since we haven't mined enough blocks
+      const data2 = await buildTopUpData();
+      data2.beaconRootData.slot = data.beaconRootData.slot + 1n;
+
+      await expect(topUpGateway.connect(topUpOperator).topUp(data2)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "MinBlockDistanceNotMet",
+      );
+    });
+
     it("returns zero top-up limit when balance exceeds the threshold", async () => {
       const data = await buildTopUpData();
       // Balance > 2047 ETH threshold means top-up limit should be 0 (per TopUpDocs.md)
@@ -552,6 +570,27 @@ describe("TopUpGateway.sol", () => {
           .to.emit(lido, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
       });
+    });
+  });
+
+  describe("role management", () => {
+    it("DEFAULT_ADMIN_ROLE can grant roles", async () => {
+      expect(await topUpGateway.hasRole(topUpRole, stranger.address)).to.be.false;
+      await topUpGateway.connect(admin).grantRole(topUpRole, stranger.address);
+      expect(await topUpGateway.hasRole(topUpRole, stranger.address)).to.be.true;
+    });
+
+    it("DEFAULT_ADMIN_ROLE can revoke roles", async () => {
+      await topUpGateway.connect(admin).grantRole(topUpRole, stranger.address);
+      expect(await topUpGateway.hasRole(topUpRole, stranger.address)).to.be.true;
+      await topUpGateway.connect(admin).revokeRole(topUpRole, stranger.address);
+      expect(await topUpGateway.hasRole(topUpRole, stranger.address)).to.be.false;
+    });
+
+    it("non-admin cannot grant roles", async () => {
+      await expect(topUpGateway.connect(stranger).grantRole(topUpRole, stranger.address))
+        .to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger.address, await topUpGateway.DEFAULT_ADMIN_ROLE());
     });
   });
 

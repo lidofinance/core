@@ -4,7 +4,7 @@
 pragma solidity 0.8.25;
 
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
-import {IStakingModuleV2 } from "contracts/common/interfaces/IStakingModuleV2.sol";
+import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
 
 contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModuleV2 {
     event Mock__TargetValidatorsLimitsUpdated(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit);
@@ -219,6 +219,11 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
     bytes[] private topUpPubkeys__mocked;
     uint256[] private topUpAmounts__mocked;
     bool private useCustomTopUpData__mocked;
+    bool private shouldRevert__mocked;
+
+    function mock__setShouldRevert(bool shouldRevert) external {
+        shouldRevert__mocked = shouldRevert;
+    }
 
     function mock__setTopUpDepositData(bytes[] calldata pubkeys, uint256[] calldata amounts) external {
         require(pubkeys.length == amounts.length, "mock: topup len mismatch");
@@ -240,7 +245,6 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
         useCustomTopUpData__mocked = false;
     }
 
-
     // *** TOP-UP (used by topUp()) ***
     function obtainDepositData(
         uint256 _depositsValue,
@@ -249,6 +253,8 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
         uint256[] calldata _operatorIds,
         uint256[] calldata _topUpLimitsGwei
     ) external returns (bytes[] memory pubkeys, uint256[] memory topUpAmounts) {
+        require(!shouldRevert__mocked, "Mock: revert requested");
+
         if (useCustomTopUpData__mocked) {
             uint256 len = topUpPubkeys__mocked.length;
             pubkeys = new bytes[](len);
@@ -261,12 +267,10 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
 
             return (pubkeys, topUpAmounts);
         }
-        
+
         uint256 keysCount = _keyIndices.length;
         require(
-            keysCount > 0 &&
-                keysCount == _operatorIds.length &&
-                keysCount == _topUpLimitsGwei.length,
+            keysCount > 0 && keysCount == _operatorIds.length && keysCount == _topUpLimitsGwei.length,
             "mock: invalid top up inputs"
         );
 

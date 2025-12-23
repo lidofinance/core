@@ -393,6 +393,53 @@ describe("StakingRouter.sol:topUp", () => {
         }),
       ).to.be.reverted;
     });
+
+    it("propagates revert when module's obtainDepositData reverts", async () => {
+      const [module, id] = await setupModule({
+        ...DEFAULT_CONFIG,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const keyIndices = [0n];
+      const operatorIds = [1n];
+      const topUpLimitsGwei = [10n * GWEI];
+      const pubkeysPacked = hexlify(randomBytes(48));
+      const depositAmount = 10n * GWEI * GWEI;
+
+      // Set module to revert
+      await module.mock__setShouldRevert(true);
+
+      await expect(
+        stakingRouter.connect(lido).topUp(id, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei, {
+          value: depositAmount,
+        }),
+      ).to.be.revertedWith("Mock: revert requested");
+    });
+
+    it("tracks deposits via deposit tracker", async () => {
+      const [, id] = await setupModule({
+        ...DEFAULT_CONFIG,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      const keyIndices = [0n];
+      const operatorIds = [1n];
+      const topUpLimitsGwei = [10n * GWEI];
+      const pubkeysPacked = hexlify(randomBytes(48));
+      const depositAmount = 10n * GWEI * GWEI;
+
+      // Get deposit amount tracked before
+      const depositBefore = await stakingRouter.getDepositAmountFromLastSlot(999999999n);
+
+      await stakingRouter.connect(lido).topUp(id, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei, {
+        value: depositAmount,
+      });
+
+      // Get deposit amount tracked after
+      const depositAfter = await stakingRouter.getDepositAmountFromLastSlot(999999999n);
+
+      expect(depositAfter).to.equal(depositBefore + depositAmount);
+    });
   });
 
   async function setupModule({
