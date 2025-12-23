@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="5009"  lines-covered="4775"  line-rate="0.9533"  branches-valid="2368"  branches-covered="2161"  branch-rate="0.9126000000000001"  timestamp="1766506723153" complexity="0" version="0.1">
+<coverage lines-valid="5009"  lines-covered="4775"  line-rate="0.9533"  branches-valid="2368"  branches-covered="2161"  branch-rate="0.9126000000000001"  timestamp="1766507313232" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2874,10 +2874,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="50"  branch="false" />
-			<line number="173"  hits="50"  branch="false" />
-			<line number="175"  hits="50"  branch="false" />
-			<line number="176"  hits="50"  branch="false" />
+			<line number="172"  hits="49"  branch="false" />
+			<line number="173"  hits="49"  branch="false" />
+			<line number="175"  hits="49"  branch="false" />
+			<line number="176"  hits="49"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -9166,14 +9166,14 @@
 			<method name="depositMessageSigningRoot"  hits="50"  signature="()V" >
 				<lines><line number="21"  hits="50" /></lines>
 			</method>
-			<method name="verifyDepositMessage"  hits="736"  signature="()V" >
-				<lines><line number="30"  hits="736" /></lines>
+			<method name="verifyDepositMessage"  hits="737"  signature="()V" >
+				<lines><line number="30"  hits="737" /></lines>
 			</method>
 		</methods>
 		<lines>
 			<line number="18"  hits="50"  branch="false" />
 			<line number="27"  hits="50"  branch="false" />
-			<line number="38"  hits="736"  branch="false" />
+			<line number="38"  hits="737"  branch="false" />
 		</lines>
 		</class>
 	</classes>
