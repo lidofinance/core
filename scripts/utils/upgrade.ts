@@ -40,25 +40,16 @@ export function readUpgradeParameters(): UpgradeParameters {
 }
 
 export async function mockDGAragonVoting(
-  omnibusScriptAddress: string,
-  description: string,
-  proposalMetadata: string,
   state: DeploymentState,
 ): Promise<{
-  voteId: bigint;
   proposalId: bigint;
-  executeReceipt: TransactionReceipt;
   scheduleReceipt: TransactionReceipt;
   proposalExecutedReceipt: TransactionReceipt;
 }> {
   log("Starting mock Aragon voting...");
   const agentAddress = getAddress(Sk.appAgent, state);
-  const votingAddress = getAddress(Sk.appVoting, state);
-  const tokenManagerAddress = getAddress(Sk.appTokenManager, state);
 
   const deployer = await impersonate(agentAddress, ether("100"));
-  const tokenManager = await loadContract<TokenManager>("TokenManager", tokenManagerAddress);
-  const voting = await loadContract<Voting>("Voting", votingAddress);
   const timelock = await loadContract<IEmergencyProtectedTimelock>(
     "IEmergencyProtectedTimelock",
     state[Sk.dgEmergencyProtectedTimelock].proxy.address,
@@ -66,25 +57,12 @@ export async function mockDGAragonVoting(
   const afterSubmitDelay = await timelock.getAfterSubmitDelay();
   const afterScheduleDelay = await timelock.getAfterScheduleDelay();
 
-  const voteId = await voting.votesLength();
-
-  const voteScript = await loadContract<OmnibusBase>("OmnibusBase", omnibusScriptAddress);
-  const voteBytecode = await voteScript.getNewVoteCallBytecode(description, proposalMetadata);
-
-  await tokenManager.connect(deployer).forward(voteBytecode);
-  if (!(await voteScript.isValidVoteScript(voteId, proposalMetadata))) throw new Error("Vote script is not valid");
-  await voting.connect(deployer).vote(voteId, true, false);
-  await advanceChainTime(await voting.voteTime());
-  const executeTx = await voting.executeVote(voteId);
-  const executeReceipt = (await executeTx.wait())!;
-  log.success("Voting executed: gas used", executeReceipt.gasUsed);
-
   const dualGovernance = await loadContract<IDualGovernance>(
     "IDualGovernance",
     state[Sk.dgDualGovernance].proxy.address,
   );
-  const events = findEventsWithInterfaces(executeReceipt, "ProposalSubmitted", [dualGovernance.interface]);
-  const proposalId = events[0].args.id;
+
+  const proposalId = 6n; // https://dg.lido.fi/proposals/6
   log.success("Proposal submitted: proposalId", proposalId);
 
   await advanceChainTime(afterSubmitDelay);
@@ -115,5 +93,5 @@ export async function mockDGAragonVoting(
     process.exit(1);
   }
 
-  return { voteId, proposalId, executeReceipt, scheduleReceipt, proposalExecutedReceipt };
+  return { proposalId, scheduleReceipt, proposalExecutedReceipt };
 }
