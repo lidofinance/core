@@ -10,7 +10,6 @@ import {AccessControlEnumerableUpgradeable} from
 import {BeaconChainDepositor, IDepositContract} from "contracts/0.8.25/lib/BeaconChainDepositor.sol";
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
-import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
@@ -22,7 +21,6 @@ import {SRUtils} from "./SRUtils.sol";
 
 import {
     ModuleState,
-    StakingModuleType,
     StakingModuleStatus,
     StakingModuleConfig,
     ValidatorsCountsCorrection,
@@ -71,9 +69,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     ///      For 0x02, the validator may later be topped up.
     ///      Top-ups are not supported for 0x01.
     uint256 public constant INITIAL_DEPOSIT_SIZE = SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
-
-    /// @dev Module trackers will be derived from this position
-    bytes32 internal constant DEPOSITS_TRACKER = keccak256("lido.StakingRouter.depositTracker");
+    uint64 internal constant PUBKEY_LENGTH = 48;
 
     /// @dev ACL roles
     bytes32 public constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
@@ -102,8 +98,12 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error DepositContractZeroAddress();
     error DepositValueNotMultipleOfInitialDeposit();
     error StakingModuleStatusTheSame();
-    error LegacyStakingModuleNotSupported();
+    error WrongWithdrawalCredentialsType();
     error LegacyStakingModuleRequired();
+    error KeysDoesntBelongToModule();
+    error WrongArrayLength();
+    error EmptyKeysList();
+    error WrongPubkeysLength();
 
     /// @dev compatibility getters for constants removed in favor of SRLib
     // function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
@@ -343,11 +343,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
-        /// @dev This method is only supported for new modules
-        if (stateConfig.moduleType != StakingModuleType.New) {
-            revert LegacyStakingModuleNotSupported();
+        /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
+        if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
+            revert WrongWithdrawalCredentialsType();
         }
 
+        // TODO: fix interface
+        // + refSlot
         _stakingModuleId.getIStakingModuleV2().updateOperatorBalances(_operatorIds, _effectiveBalances);
     }
 
@@ -681,16 +683,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return state.getStateDeposits().maxDepositsPerBlock;
     }
 
-    /// @notice Returns the max eth deposit amount per block for the staking module.
-    /// @param _stakingModuleId Id of the staking module.
-    /// @return Max deposits count per block for the staking module.
-    function getStakingModuleMaxDepositsAmountPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
-        // TODO: maybe will be defined via staking module config
-        // MAX_EFFECTIVE_BALANCE_WC_TYPE_01 here is old deposit value per validator
-        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
-        return (state.getStateDeposits().maxDepositsPerBlock * SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
-    }
-
     /// @notice Returns active validators count for the staking module.
     /// @param _stakingModuleId Id of the staking module.
     /// @return activeValidatorsCount Active validators count for the staking module.
@@ -710,105 +702,136 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @return withdrawal credentials: 0x01... - for Legacy modules, 0x02... - for New modules
     function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32) {
-        return _getWithdrawalCredentialsWithType(getStakingModuleType(_stakingModuleId));
-    }
-
-    /// @notice Returns the staking module type: Legacy or New, i.e. balance-based (uses 0x02 withdrawal credentials)
-    /// @param _stakingModuleId Id of the staking module
-    /// @return Staking module type: 0 - Legacy (WC type 0x01) or 1 - New (WC type 0x02)
-    function getStakingModuleType(uint256 _stakingModuleId) public view returns (StakingModuleType) {
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
-        return stateConfig.moduleType;
+        return _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
     }
 
-    /// @notice Returns the max amount of Eth for initial 32 eth deposits in staking module.
+    /// @notice Returns the max count of deposits which the staking module can provide data for based
+    /// on the passed `_maxDepositsValue` amount.
     /// @param _stakingModuleId Id of the staking module to be deposited.
-    /// @param _depositableEth Max amount of ether that might be used for deposits count calculation.
-    /// @return depositsAmount Max amount of Eth that can be deposited using the given staking module.
-    /// @return depositsCount Count of deposits corresponding to the deposits amount
-    function getStakingModuleMaxInitialDepositsAmount(uint256 _stakingModuleId, uint256 _depositableEth)
+    /// @param _maxDepositsValue Max amount of ether that might be used for deposits count calculation.
+    /// @return Max number of deposits might be done using the given staking module.
+    function getStakingModuleMaxDepositsCount(uint256 _stakingModuleId, uint256 _maxDepositsValue)
         public
-        returns (uint256 depositsAmount, uint256 depositsCount)
-    {
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
-
-        // get max eth amount that can be deposited into the module, capped by its capacity (depositable validators count)
-        // If module is not active, then it capacity is 0, so stakingModuleDepositableEthAmount will be 0.
-        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
-
-        if (stakingModuleDepositableEthAmount == 0) return (0, 0);
-
-        if (stateConfig.moduleType == StakingModuleType.New) {
-            // get operators and their available operatorAllocations for deposits. In general case, not all depositable validators
-            // will be used for deposits, due to Module can apply its own rules to limit deposits per operator
-            (uint256[] memory operators, uint256[] memory operatorAllocations) =
-                IStakingModuleV2(stateConfig.moduleAddress).getAllocation(stakingModuleDepositableEthAmount);
-
-            uint256[] memory counts;
-            (depositsCount, counts) = _getNewDepositsCount02(stakingModuleDepositableEthAmount, operatorAllocations);
-
-            // this will be read and clean in deposit method
-            DepositsTempStorage.storeOperatorCounts(operators, counts);
-
-            depositsAmount = _getInitialDepositAmountByCount(depositsCount);
-        } else if (stateConfig.moduleType == StakingModuleType.Legacy) {
-            depositsCount = _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount);
-            depositsAmount = _getInitialDepositAmountByCount(depositsCount);
-        } else {
-            revert SRUtils.InvalidStakingModuleType();
-        }
-    }
-
-    /// @notice DEPRECATED: use getStakingModuleMaxInitialDepositsAmount
-    /// This method only for the legacy modules
-    function getStakingModuleMaxDepositsCount(uint256 _stakingModuleId, uint256 _depositableEth)
-        external
         view
         returns (uint256)
     {
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
-
-        /// @dev This method is only supported for legacy modules
-        if (stateConfig.moduleType != StakingModuleType.Legacy) {
-            revert LegacyStakingModuleRequired();
-        }
-
+        SRUtils._validateModuleId(_stakingModuleId);
         // If module is not active, then it capacity is 0, so stakingModuleDepositableEthAmount will be 0.
         // Module capacity is calculated based on the depositableValidatorsCount (from getStakingModuleSummary), so
         // stakingModuleDepositableEthAmount is already capped by the module capacity and represents the max ETH amount possible to deposit.
-        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
-        return _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount);
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _maxDepositsValue);
+        if (stakingModuleDepositableEthAmount == 0) return 0;
+
+        (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
+
+        return
+            Math256.min(depositableValidatorsCount, _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount));
     }
 
-    function _getNewDepositsCount02(uint256 moduleMaxAllocation, uint256[] memory operatorAllocations)
-        internal
-        pure
-        returns (uint256 totalCount, uint256[] memory counts)
+    /// @notice Return how much can be topped up in moudle based on module target allocation
+    /// and top up amounts returned by TopUpGateway
+    /// @param _stakingModuleId Id of staking module
+    /// @param _depositableEth Amount that can be deposited in module
+    /// @param _topUpLimits Array of limits for top up on each keys based on CL data and TopUpGateway checks
+    /// @return amount Deposit amount to module
+    function getTopUpDepositAmount(uint256 _stakingModuleId, uint256 _depositableEth, uint256[] calldata _topUpLimits)
+        external
+        view
+        returns (uint256 amount)
     {
-        uint256 len = operatorAllocations.length;
-        counts = new uint256[](len);
+        // allowed top ups
+        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+
+        /// @dev This method is only supported for new modules
+        if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
+            revert WrongWithdrawalCredentialsType();
+        }
+
+        // getAllocation
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
+        if (stakingModuleDepositableEthAmount == 0) return 0;
+
+        uint256 topUpAmountGwei;
         unchecked {
-            for (uint256 i = 0; i < len; ++i) {
-                uint256 allocation = operatorAllocations[i];
-
-                // sum of all `operatorAllocations` items should be <= moduleMaxAllocation
-                if (allocation > moduleMaxAllocation) {
-                    revert AllocationExceedsTarget();
-                }
-
-                moduleMaxAllocation -= allocation;
-
-                if (allocation >= INITIAL_DEPOSIT_SIZE) {
-                    // if allocation is 4000 - 2 (= 2048 (enough for 1st key: initial deposit 32 and rest deposit 2016) +  1952 (enough for 2nd key: initial deposit 32 and rest deposit 1920) )
-                    // if allocation 32 - 1 (enough for initial deposit)
-                    // if less than 32 - 0 (not enough for initial deposit)
-                    // if allocation 2050 - 1 (= 2048 (enough for 1st key: initial deposit 32 and rest deposit 2016) + 2 (not enough even for initial deposit) )
-                    uint256 depositsCount =
-                        1 + (allocation - INITIAL_DEPOSIT_SIZE) / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
-                    counts[i] = depositsCount;
-                    totalCount += depositsCount;
-                }
+            for (uint256 i; i < _topUpLimits.length; i++) {
+                topUpAmountGwei += _topUpLimits[i];
             }
+        }
+
+        uint256 topUpAmountWei = topUpAmountGwei * 1 gwei;
+
+        return Math256.min(topUpAmountWei, stakingModuleDepositableEthAmount);
+    }
+
+    /// @notice Calls `obtainDepositData` on the staking module to determine
+    /// which keys to top up and for what amounts, based on the
+    /// provided key indices, operator IDs, pubkeys, and top-up limits. Then top up validators based on this information.
+    /// @param _stakingModuleId Staking module id
+    /// @param _keyIndices Array of key indicies
+    /// @param _operatorIds Array of operator indicies
+    /// @param _pubkeysPacked Packed list of public keys
+    /// @param _topUpLimitsGwei Array of allowed top up in gwei on key
+    /// @dev Method allowed only for modules with 0x02 keys
+    function topUp(
+        uint256 _stakingModuleId,
+        uint256[] calldata _keyIndices,
+        uint256[] calldata _operatorIds,
+        bytes calldata _pubkeysPacked,
+        uint256[] calldata _topUpLimitsGwei
+    ) external payable {
+        if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
+        _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimitsGwei, _pubkeysPacked);
+        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+
+        // check top ups allowed for module
+        if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
+            revert WrongWithdrawalCredentialsType();
+        }
+        bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
+        bytes memory wcBytes = abi.encodePacked(withdrawalCredentials);
+
+        uint256 depositsValue = msg.value;
+        // Even if depositValue equals 0, obtainDepositData is still called.
+        // the CSM queue has a fixed size. Example: If all keys currently in the queue have exited,
+        // they must be popped to free up slots and new keys must be enqueued.
+        // This requires calling topUp with depositValue >= 0 and _topUpLimitsGwei = [0, ...].
+
+        uint256 etherBalanceBeforeDeposits = address(this).balance;
+        (bytes[] memory pubkeys, uint256[] memory topUpAmounts) = IStakingModuleV2(stateConfig.moduleAddress)
+            .obtainDepositData(depositsValue, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei);
+        // TODO: should we check pubkeys in _pubkeysPacked ?
+
+        // Skip tracking for zero deposits (CSM queue cursor advancement case)
+        if (msg.value > 0) {
+            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, pubkeys, topUpAmounts);
+            _trackDeposit(_stakingModuleId, msg.value);
+        }
+
+        uint256 etherBalanceAfterDeposits = address(this).balance;
+
+        /// @dev All sent ETH must be deposited and self balance stay the same.
+        assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == depositsValue);
+    }
+
+    function _validateTopUpInputs(
+        uint256[] calldata _keyIndices,
+        uint256[] calldata _operatorIds,
+        uint256[] calldata _topUpLimitsGwei,
+        bytes calldata _pubkeysPacked
+    ) internal pure {
+        uint256 n = _keyIndices.length;
+
+        if (n == 0) {
+            revert EmptyKeysList();
+        }
+
+        if (_operatorIds.length != n || _topUpLimitsGwei.length != n) {
+            revert WrongArrayLength();
+        }
+
+        if (_pubkeysPacked.length != n * PUBKEY_LENGTH) {
+            revert WrongPubkeysLength();
         }
     }
 
@@ -977,7 +1000,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         if (stateConfig.status != StakingModuleStatus.Active) revert StakingModuleNotActive();
 
-        bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.moduleType);
+        bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
 
         uint256 depositsValue = msg.value;
         address stakingModuleAddress = stateConfig.moduleAddress;
@@ -996,17 +1019,12 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 depositsCount = _getInitialDepositCountByAmount(depositsValue);
 
         (bytes memory publicKeysBatch, bytes memory signaturesBatch) =
-            _getOperatorAvailableKeys(stateConfig.moduleType, stakingModuleAddress, depositsCount, _depositCalldata);
+            IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, _depositCalldata);
 
         // TODO: maybe some checks of  module's answer
 
         BeaconChainDepositor.makeBeaconChainDeposits32ETH(
-            DEPOSIT_CONTRACT,
-            depositsCount,
-            INITIAL_DEPOSIT_SIZE,
-            abi.encodePacked(withdrawalCredentials),
-            publicKeysBatch,
-            signaturesBatch
+            DEPOSIT_CONTRACT, depositsCount, abi.encodePacked(withdrawalCredentials), publicKeysBatch, signaturesBatch
         );
 
         // update counters for deposits that are not visible before ao report
@@ -1017,22 +1035,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         /// @dev All sent ETH must be deposited and self balance stay the same.
         assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == depositsValue);
-    }
-
-    function _getOperatorAvailableKeys(
-        StakingModuleType moduleType,
-        address stakingModuleAddress,
-        uint256 depositsCount,
-        bytes calldata depositCalldata
-    ) internal returns (bytes memory keys, bytes memory signatures) {
-        if (moduleType == StakingModuleType.Legacy) {
-            return IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, depositCalldata);
-        } else {
-            (uint256[] memory operators, uint256[] memory counts) = DepositsTempStorage.getOperatorCounts();
-            (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(operators, counts);
-
-            DepositsTempStorage.clearOperatorCounts();
-        }
     }
 
     /// @notice Set 0x01 credentials to withdraw ETH on Consensus Layer side.
@@ -1059,10 +1061,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         emit WithdrawalCredentialsSet(wc, _msgSender());
     }
 
-    function _getWithdrawalCredentialsWithType(StakingModuleType moduleType) internal view returns (bytes32) {
+    function _getWithdrawalCredentialsWithType(uint8 withdrawalCredentialsType) internal view returns (bytes32) {
         bytes32 wc = getWithdrawalCredentials();
         // if (wc == 0) revert EmptyWithdrawalsCredentials();
-        return wc.setType(SRUtils._getModuleWCType(moduleType));
+        return wc.setType(withdrawalCredentialsType);
     }
 
     /// @dev Save the last deposit state for the staking module and emit the event
@@ -1153,8 +1155,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         moduleState.stakeShareLimit = stateConfig.depositTargetShare;
         moduleState.status = uint8(stateConfig.status);
         moduleState.priorityExitShareThreshold = stateConfig.withdrawalProtectShare;
-        moduleState.moduleType = uint8(stateConfig.moduleType);
-        moduleState.withdrawalCredentialsType = SRUtils._getModuleWCType(stateConfig.moduleType);
+        moduleState.withdrawalCredentialsType = stateConfig.withdrawalCredentialsType;
 
         ModuleStateDeposits storage stateDeposits = state.getStateDeposits();
         moduleState.lastDepositAt = stateDeposits.lastDepositAt;

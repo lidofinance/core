@@ -133,9 +133,9 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         stakingModuleMaxDepositsPerBlock = value;
     }
 
-    function setStakingModuleMaxDepositsAmountPerBlock(uint256 value) external {
-        stakingModuleMaxDepositsAmountPerBlock = value;
-    }
+    // function setStakingModuleMaxDepositsAmountPerBlock(uint256 value) external {
+    //     stakingModuleMaxDepositsAmountPerBlock = value;
+    // }
 
     function getStakingModuleMinDepositBlockDistance(
         uint256 stakingModuleId

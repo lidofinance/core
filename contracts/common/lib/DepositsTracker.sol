@@ -6,7 +6,6 @@ pragma solidity >=0.8.9 <0.9.0;
 
 import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 
-
 /// @notice Deposit in slot
 struct SlotDeposit {
     /// Ethereum slot
@@ -33,7 +32,7 @@ library DepositsTracker {
     error SlotOutOfOrder();
     error SlotTooLarge(uint256 slot);
     error DepositAmountTooLarge(uint256 depositAmount);
-    error ZeroValue(string depositAmount);
+    error ZeroDepositAmount();
 
     /// @notice Add new deposit information in deposit state
     ///
@@ -43,17 +42,18 @@ library DepositsTracker {
     function insertSlotDeposit(DepositedState storage state, uint256 currentSlot, uint256 depositAmount) internal {
         if (currentSlot > type(uint64).max) revert SlotTooLarge(currentSlot);
         if (depositAmount > type(uint128).max) revert DepositAmountTooLarge(depositAmount);
-        if (depositAmount == 0) revert ZeroValue("depositAmount");
+        if (depositAmount == 0) revert ZeroDepositAmount();
 
         uint256 depositsEntryAmount = state.slotsDeposits.length;
 
         if (depositsEntryAmount == 0) {
-            state.slotsDeposits.push( SlotDepositPacking.pack(uint64(currentSlot), uint192(depositAmount)));
+            state.slotsDeposits.push(SlotDepositPacking.pack(uint64(currentSlot), uint192(depositAmount)));
             return;
         }
 
         // last deposit
-        (uint64 lastDepositSlot, uint192 lastDepositCumulativeEth) = state.slotsDeposits[depositsEntryAmount - 1].unpack();
+        (uint64 lastDepositSlot, uint192 lastDepositCumulativeEth) =
+            state.slotsDeposits[depositsEntryAmount - 1].unpack();
 
         // if last tracked deposit's slot newer than currentSlot, than such attempt should be reverted
         if (lastDepositSlot > currentSlot) {
@@ -63,7 +63,8 @@ library DepositsTracker {
         // if it is the same block, increase amount
         if (lastDepositSlot == currentSlot) {
             lastDepositCumulativeEth += uint192(depositAmount);
-            state.slotsDeposits[depositsEntryAmount - 1] = SlotDepositPacking.pack(lastDepositSlot, lastDepositCumulativeEth);
+            state.slotsDeposits[depositsEntryAmount - 1] =
+                SlotDepositPacking.pack(lastDepositSlot, lastDepositCumulativeEth);
             return;
         }
 
@@ -84,35 +85,31 @@ library DepositsTracker {
     {
         uint256 depositsEntryAmount = state.slotsDeposits.length;
         if (depositsEntryAmount == 0) return 0;
-        // data in tracker was already read, as cursor point to element that will be added later in state
-        if (state.cursor == depositsEntryAmount) return 0;
 
-        // define cursor start
-        uint256 startIndex = state.cursor;
+        // cache cursor to avoid multiple SLOADs
+        uint256 curCursor = state.cursor;
 
-        (uint64 startDepositSlot, ) = state.slotsDeposits[state.cursor].unpack();
+        // data in tracker was already read
+        if (curCursor == depositsEntryAmount) return 0;
+
+        (uint64 startDepositSlot,) = state.slotsDeposits[curCursor].unpack();
         if (startDepositSlot > _slot) return 0;
 
-        uint256 endIndex = type(uint256).max;
-        for (uint256 i = startIndex; i < depositsEntryAmount;) {
-            // SlotDeposit memory d = state.slotsDeposits[i].unpack();
-            (uint64 slot, ) = state.slotsDeposits[i].unpack();
+        // find the last index where slot <= _slot
+        uint256 endIndex = curCursor + 1;
+        for (; endIndex < depositsEntryAmount; ++endIndex) {
+            (uint64 slot,) = state.slotsDeposits[endIndex].unpack();
             if (slot > _slot) break;
-
-            endIndex = i;
-            unchecked {
-                ++i;
-            }
         }
-        (,uint192 endCumulativeEth) = state.slotsDeposits[endIndex].unpack();
 
-        // didnt move cursor yet
-        if (startIndex == 0) {
+        (, uint192 endCumulativeEth) = state.slotsDeposits[endIndex - 1].unpack();
+
+        if (curCursor == 0) {
             return endCumulativeEth;
         }
 
-        (,uint192 lastCumulativeEth) = state.slotsDeposits[startIndex - 1].unpack();
-        return endCumulativeEth - lastCumulativeEth;
+        (, uint192 prevCumulativeEth) = state.slotsDeposits[curCursor - 1].unpack();
+        return endCumulativeEth - prevCumulativeEth;
     }
 
     /// @notice Return the total ETH deposited since slot that correspondence to cursor to last slot in tracker
@@ -120,19 +117,22 @@ library DepositsTracker {
     /// @param state - deposited wei state
     /// @dev this method will use cursor for start reading data
     function getDepositedEthUpToLastSlot(DepositedState storage state) internal view returns (uint256 total) {
-        // DepositedEthState storage state = _getDataStorage(_depositedEthStatePosition);
         uint256 depositsEntryAmount = state.slotsDeposits.length;
         if (depositsEntryAmount == 0) return 0;
+
+        // cache cursor to avoid multiple SLOADs
+        uint256 curCursor = state.cursor;
+
         // data in tracker was already read
-        if (state.cursor == depositsEntryAmount) return 0;
+        if (curCursor == depositsEntryAmount) return 0;
 
         (, uint192 endSlotCumulativeEth) = state.slotsDeposits[depositsEntryAmount - 1].unpack();
 
-        if (state.cursor == 0) {
+        if (curCursor == 0) {
             return endSlotCumulativeEth;
         }
 
-        (, uint192 startSlotCumulativeEth) = state.slotsDeposits[state.cursor - 1].unpack();
+        (, uint192 startSlotCumulativeEth) = state.slotsDeposits[curCursor - 1].unpack();
         return endSlotCumulativeEth - startSlotCumulativeEth;
     }
 
@@ -152,7 +152,9 @@ library DepositsTracker {
         uint256 depositsEntryAmount = state.slotsDeposits.length;
         if (depositsEntryAmount == 0) return;
 
-        if (state.cursor == depositsEntryAmount) return;
+        uint256 curCursor = state.cursor;
+
+        if (curCursor == depositsEntryAmount) return;
 
         (uint64 lastDepositSlot,) = state.slotsDeposits[depositsEntryAmount - 1].unpack();
 
@@ -162,27 +164,24 @@ library DepositsTracker {
             return;
         }
 
-        (uint64 cursorSlot, ) = state.slotsDeposits[state.cursor].unpack();
+        (uint64 cursorSlotValue,) = state.slotsDeposits[curCursor].unpack();
 
-        if (_slot < cursorSlot) return;
+        if (_slot < cursorSlotValue) return;
 
-        if (cursorSlot == _slot) {
-            state.cursor = state.cursor + 1;
+        if (cursorSlotValue == _slot) {
+            state.cursor = curCursor + 1;
             return;
         }
 
-        uint256 startIndex = state.cursor + 1;
+        uint256 startIndex = curCursor + 1;
 
         for (uint256 i = startIndex; i < depositsEntryAmount;) {
-            (uint64 slot, ) = state.slotsDeposits[i].unpack();
+            (uint64 slot,) = state.slotsDeposits[i].unpack();
             if (slot > _slot) {
                 state.cursor = i;
                 break;
             }
-
-            unchecked {
-                ++i;
-            }
+            unchecked { ++i; }
         }
     }
 }

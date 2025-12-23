@@ -25,7 +25,7 @@ interface IStakingRouter {
 
     function getStakingModuleMaxDepositsCount(
         uint256 _stakingModuleId,
-        uint256 _depositableEth
+        uint256 _maxDepositsValue
     ) external view returns (uint256);
 
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
@@ -39,10 +39,19 @@ interface IStakingRouter {
         view
         returns (uint16 modulesFee, uint16 treasuryFee);
 
-    function getStakingModuleMaxInitialDepositsAmount(
+    function getTopUpDepositAmount(
         uint256 _stakingModuleId,
-        uint256 _depositableEth
-    ) external returns (uint256 depositsAmount, uint256 depositsCount);
+        uint256 _depositableEth,
+        uint256[] _topUpLimits
+    ) external view returns (uint256 amount);
+    
+    function topUp(
+        uint256 _stakingModuleId,
+        uint256[] _keyIndices,
+        uint256[] _operatorIds,
+        bytes _pubkeysPacked,
+        uint256[] _topUpLimitsGwei
+    ) external payable;
 }
 
 interface IWithdrawalQueue {
@@ -637,6 +646,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return !_withdrawalQueue().isBunkerModeActive() && !isStopped();
     }
 
+    function _requireCanDeposit() internal view {
+        require(canDeposit(), "CAN_NOT_DEPOSIT");
+    }
+
     /**
      * @return the amount of ether in the buffer that can be deposited to the Consensus Layer
      * @dev Takes into account unfinalized stETH required by WithdrawalQueue
@@ -649,39 +662,88 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Invoke a deposit call to the Staking Router contract and update buffered counters
-     * @param _maxDepositsAmountPerBlock max deposits amount per block
+     * @param _maxDepositsCountPerBlock max deposits count per block
      * @param _stakingModuleId id of the staking module to be deposited
      * @param _depositCalldata module calldata
      */
-    function deposit(uint256 _maxDepositsAmountPerBlock, uint256 _stakingModuleId, bytes _depositCalldata) external {
-        // TODO: get rid of _maxDepositsAmountPerBlock
+    function deposit(uint256 _maxDepositsCountPerBlock, uint256 _stakingModuleId, bytes _depositCalldata) external {
         ILidoLocator locator = _getLidoLocator();
-
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
-        require(canDeposit(), "CAN_NOT_DEPOSIT");
-
+        _requireCanDeposit();
         IStakingRouter stakingRouter = _stakingRouter(locator);
-        (uint256 depositsAmount, uint256 depositsCount) = stakingRouter.getStakingModuleMaxInitialDepositsAmount(
+        uint256 depositsCount = stakingRouter.getStakingModuleMaxDepositsCount(
             _stakingModuleId,
-            Math256.min(_maxDepositsAmountPerBlock, getDepositableEther())
+            Math256.min(_maxDepositsCountPerBlock, getDepositableEther())
         );
 
-        if (depositsAmount > 0) {
+        uint256 depositsValue;
+        if (depositsCount > 0) {
+            depositsValue = depositsCount.mul(DEPOSIT_SIZE);
             /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
             ///     even if the StakingRouter is a trusted contract.
-
-            (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
-            depositedValidators = depositedValidators.add(depositsCount);
-
-            _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsAmount), depositedValidators);
-            emit Unbuffered(depositsAmount);
-            emit DepositedValidatorsChanged(depositedValidators);
+            _updateBufferedEtherAndDepositedValidators(depositsValue, depositsCount);
         }
 
         /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether
         ///     sent to StakingRouter is counted as deposited. If StakingRouter can't deposit all
         ///     passed ether it MUST revert the whole transaction (never happens in normal circumstances)
-        stakingRouter.deposit.value(depositsAmount)(_stakingModuleId, _depositCalldata);
+        stakingRouter.deposit.value(depositsValue)(_stakingModuleId, _depositCalldata);
+    }
+
+    /// @notice Invoke a top up call to the Staking Router contract and update buffered counters.
+    ///         The method queries StakingRouter.getTopUpDepositAmount to calculate the actual top up amount
+    ///         based on depositable ETH and provided limits. Then it updates local buffered ether state
+    ///         and forwards the calculated amount to StakingRouter.topUp.
+    /// @param _stakingModuleId Id of the staking module to be deposited
+    /// @param _keyIndices List of keys' indices
+    /// @param _operatorIds List of operators' indices
+    /// @param _pubkeysPacked Packed list of public keys
+    /// @param _topUpLimitsGwei List of top up values for validators in gwei
+    function topUp(
+        uint256 _stakingModuleId,
+        uint256[] _keyIndices,
+        uint256[] _operatorIds,
+        bytes _pubkeysPacked,
+        uint256[] _topUpLimitsGwei
+     )
+       external
+    {
+        ILidoLocator locator = _getLidoLocator();
+        require(msg.sender == locator.topUpGateway(), "APP_AUTH_FAILED");
+        _requireCanDeposit();
+        IStakingRouter stakingRouter = _stakingRouter(locator);
+
+        uint256 depositsAmount = stakingRouter.getTopUpDepositAmount(
+            _stakingModuleId,
+            getDepositableEther(),
+            _topUpLimitsGwei
+        );
+        
+        if (depositsAmount > 0) {
+            /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
+            ///     even if the StakingRouter is a trusted contract.
+            _updateBufferedEtherAndDepositedValidators(depositsAmount, 0);
+        }
+
+        stakingRouter.topUp.value(depositsAmount)(
+            _stakingModuleId,
+            _keyIndices,
+            _operatorIds,
+            _pubkeysPacked,
+            _topUpLimitsGwei
+        );
+    }
+
+    function _updateBufferedEtherAndDepositedValidators(uint256 depositsAmount, uint256 depositsCount) internal {
+        (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
+        depositedValidators = depositedValidators.add(depositsCount);
+        _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsAmount), depositedValidators);
+
+        emit Unbuffered(depositsAmount);
+
+        if (depositsCount > 0) {
+            emit DepositedValidatorsChanged(depositedValidators);
+        }
     }
 
     /**

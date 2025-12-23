@@ -341,6 +341,7 @@ export async function main() {
     vaultFactory: vaultFactory.address,
     lazyOracle: lazyOracle.address,
     operatorGrid: operatorGrid.address,
+    topUpGateway: getAddress(Sk.topUpGateway, state),
   };
   const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 
