@@ -3,13 +3,12 @@ import fs from "fs";
 
 import * as toml from "@iarna/toml";
 
-import { IDualGovernance, IEmergencyProtectedTimelock, OmnibusBase, TokenManager, Voting } from "typechain-types";
+import { IDualGovernance, IEmergencyProtectedTimelock } from "typechain-types";
 
 import { advanceChainTime, ether, log } from "lib";
 import { impersonate } from "lib/account";
 import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
 import { loadContract } from "lib/contract";
-import { findEventsWithInterfaces } from "lib/event";
 import { DeploymentState, getAddress, Sk } from "lib/state-file";
 
 import { ONE_HOUR } from "test/suite";
@@ -39,9 +38,7 @@ export function readUpgradeParameters(): UpgradeParameters {
   }
 }
 
-export async function mockDGAragonVoting(
-  state: DeploymentState,
-): Promise<{
+export async function mockDGAragonVoting(state: DeploymentState): Promise<{
   proposalId: bigint;
   scheduleReceipt: TransactionReceipt;
   proposalExecutedReceipt: TransactionReceipt;
