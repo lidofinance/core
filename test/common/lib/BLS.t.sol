@@ -53,6 +53,14 @@ contract BLSHarness {
     ) external pure {
         BLS12_381.validateCompressedSignatureFlags(signature, signatureY);
     }
+
+    function hashToG2(bytes32 message) external view returns (BLS12_381.G2Point memory) {
+        return BLS12_381.hashToG2(message);
+    }
+
+    function computeDepositDomain(bytes4 genesisForkVersion) external view returns (bytes32) {
+        return BLS12_381.computeDepositDomain(genesisForkVersion);
+    }
 }
 
 contract BLSVerifyingKeyTest is Test {
@@ -315,6 +323,147 @@ contract BLSVerifyingKeyTest is Test {
     function wrapFp2(bytes memory x, bytes memory y) internal pure returns (BLS12_381.Fp2 memory) {
         return BLS12_381.Fp2(wrapFp(x).a, wrapFp(x).b, wrapFp(y).a, wrapFp(y).b);
     }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    hashToG2 EDGE CASES                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_hashToG2_ZeroMessage() external view {
+        // hashToG2 must handle any 32-byte input including zero
+        BLS12_381.G2Point memory result = harness.hashToG2(bytes32(0));
+        // Verify result is not infinity (all zeros would indicate infinity)
+        assertTrue(
+            result.x_c0_a != 0 || result.x_c0_b != 0 || result.x_c1_a != 0 || result.x_c1_b != 0,
+            "hashToG2 should not return infinity for zero message"
+        );
+    }
+
+    function test_hashToG2_MaxMessage() external view {
+        // hashToG2 must handle the maximum possible 32-byte value
+        BLS12_381.G2Point memory result = harness.hashToG2(bytes32(type(uint256).max));
+        // Verify result is not infinity
+        assertTrue(
+            result.x_c0_a != 0 || result.x_c0_b != 0 || result.x_c1_a != 0 || result.x_c1_b != 0,
+            "hashToG2 should not return infinity for max message"
+        );
+    }
+
+    function test_hashToG2_Deterministic() external view {
+        // Same input should always produce the same output
+        bytes32 message = keccak256("test message");
+        BLS12_381.G2Point memory result1 = harness.hashToG2(message);
+        BLS12_381.G2Point memory result2 = harness.hashToG2(message);
+
+        assertEq(result1.x_c0_a, result2.x_c0_a, "x_c0_a should be deterministic");
+        assertEq(result1.x_c0_b, result2.x_c0_b, "x_c0_b should be deterministic");
+        assertEq(result1.x_c1_a, result2.x_c1_a, "x_c1_a should be deterministic");
+        assertEq(result1.x_c1_b, result2.x_c1_b, "x_c1_b should be deterministic");
+        assertEq(result1.y_c0_a, result2.y_c0_a, "y_c0_a should be deterministic");
+        assertEq(result1.y_c0_b, result2.y_c0_b, "y_c0_b should be deterministic");
+        assertEq(result1.y_c1_a, result2.y_c1_a, "y_c1_a should be deterministic");
+        assertEq(result1.y_c1_b, result2.y_c1_b, "y_c1_b should be deterministic");
+    }
+
+    function test_hashToG2_DifferentMessages() external view {
+        // Different inputs should produce different outputs
+        BLS12_381.G2Point memory result1 = harness.hashToG2(bytes32(uint256(1)));
+        BLS12_381.G2Point memory result2 = harness.hashToG2(bytes32(uint256(2)));
+
+        bool isDifferent = result1.x_c0_a != result2.x_c0_a ||
+            result1.x_c0_b != result2.x_c0_b ||
+            result1.x_c1_a != result2.x_c1_a ||
+            result1.x_c1_b != result2.x_c1_b;
+
+        assertTrue(isDifferent, "Different messages should produce different G2 points");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  DEPOSIT DOMAIN EDGE CASES                  */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_computeDepositDomain_AllOnesForkVersion() external view {
+        // Edge case: maximum fork version value
+        bytes32 depositDomain = harness.computeDepositDomain(bytes4(0xffffffff));
+        // Should not be zero and should have correct domain type prefix
+        assertTrue(uint256(depositDomain) != 0, "Domain should not be zero");
+        assertEq(bytes4(depositDomain), bytes4(0x03000000), "Domain type prefix should be DOMAIN_DEPOSIT");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    AMOUNT EDGE CASES                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_revertOnModifiedAmount() external {
+        // Changing amount by 1 gwei should invalidate the signature
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+        message.deposit.amount = message.deposit.amount + 1 gwei;
+
+        vm.expectRevert(BLS12_381.InvalidSignature.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_amountSubGweiTruncation() external view {
+        // Amount not aligned to gwei boundary - library truncates to gwei via integer division
+        // This documents that sub-gwei amounts are truncated and verification still passes
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Original amount is 1 ether. Adding sub-gwei amounts doesn't change the signing root
+        // because (1 ether + X wei) / 1 gwei == 1 ether / 1 gwei for X < 1 gwei
+        message.deposit.amount = 1 ether + 1; // 1 wei extra - truncated to 1 ether in gwei
+
+        // Verification should PASS because the signing root is unchanged after truncation
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_revertOnAmountDiffersByOneGwei() external {
+        // Changing amount by exactly 1 gwei should invalidate the signature
+        // because it changes the signing root
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Add exactly 1 gwei (not 1 wei) - this changes the actual amount in the signing root
+        message.deposit.amount = 1 ether + 1 gwei;
+
+        vm.expectRevert(BLS12_381.InvalidSignature.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                POINT-NOT-ON-CURVE TESTS                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_revertOnPubkeyNotOnCurve() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Set Y to an arbitrary value that is valid in field but doesn't satisfy curve equation
+        // Y = 1 is very unlikely to be on the curve for the given X
+        message.depositYComponents.pubkeyY = BLS12_381.Fp(bytes32(0), bytes32(uint256(1)));
+
+        // Adjust sign bit to match the new Y (Y=1 < P/2, so sign bit = 0)
+        message.deposit.pubkey[0] = bytes1((uint8(message.deposit.pubkey[0]) & 0x1f) | 0x80);
+
+        // EIP-2537 pairing precompile should reject point not on curve
+        vm.expectRevert(BLS12_381.PairingFailed.selector);
+        harness.verifyDepositMessage(message);
+    }
+
+    function test_revertOnSignatureNotOnCurve() external {
+        PrecomputedDepositMessage memory message = LOCAL_MESSAGE_1();
+
+        // Set signature Y to an arbitrary value that won't be on the curve
+        message.depositYComponents.signatureY = BLS12_381.Fp2(
+            bytes32(0),
+            bytes32(uint256(1)),
+            bytes32(0),
+            bytes32(uint256(1))
+        );
+
+        // Adjust sign bit - c1 = 1 < P/2, so sign bit = 0
+        message.deposit.signature[0] = bytes1((uint8(message.deposit.signature[0]) & 0x1f) | 0x80);
+
+        // EIP-2537 pairing precompile should reject point not on curve
+        vm.expectRevert(BLS12_381.PairingFailed.selector);
+        harness.verifyDepositMessage(message);
+    }
 }
 
 contract BLSCompressionFlagsFuzzTest is Test {
@@ -542,5 +691,178 @@ contract BLSCompressionFlagsFuzzTest is Test {
         signatureY.c1_b = bytes32(0);
         vm.expectRevert(BLS12_381.InvalidSignatureLength.selector);
         harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Y COORDINATE EDGE CASES                  */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Test when pubkey Y coordinate is exactly zero
+    function test_validateCompressedPubkeyFlags_YIsZero() external {
+        bytes memory pubkey = new bytes(48);
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(bytes32(0), bytes32(0));
+
+        // y == 0 < p/2 => computed sign bit is 0
+        pubkey[0] = 0x80; // sign bit = 0
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+
+        // sign bit = 1 should fail
+        pubkey[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    /// @notice Test the exact boundary where sign bit flips from 0 to 1 (P/2 + 1)
+    function test_validateCompressedPubkeyFlags_JustAboveHalfP() external {
+        bytes memory pubkey = new bytes(48);
+
+        // HALF_P + 1 - this is the first value where sign bit = 1
+        // Need to handle potential overflow from HALF_P_B + 1
+        uint256 halfPB = uint256(HALF_P_B);
+        uint256 halfPA = uint256(HALF_P_A);
+
+        bytes32 yB;
+        bytes32 yA;
+
+        if (halfPB == type(uint256).max) {
+            // Overflow case: carry over to upper part
+            yB = bytes32(0);
+            yA = bytes32(halfPA + 1);
+        } else {
+            yB = bytes32(halfPB + 1);
+            yA = bytes32(halfPA);
+        }
+
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(yA, yB);
+
+        // y > p/2 => computed sign bit is 1
+        pubkey[0] = 0xA0; // sign bit = 1
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+
+        // sign bit = 0 should fail
+        pubkey[0] = 0x80;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    /// @notice Test maximum valid Y value (P - 1)
+    function test_validateCompressedPubkeyFlags_YIsMaxValid() external {
+        bytes memory pubkey = new bytes(48);
+
+        // P - 1 (maximum valid field element)
+        // P = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
+        bytes32 P_A = bytes32(uint256(0x000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd7));
+        bytes32 P_B = bytes32(uint256(0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab));
+
+        // P - 1
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(
+            P_A,
+            bytes32(uint256(P_B) - 1) // P_B - 1 = 0x...aaaa
+        );
+
+        // P - 1 > P/2, so sign bit = 1
+        pubkey[0] = 0xA0;
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+
+        // sign bit = 0 should fail
+        pubkey[0] = 0x80;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(0)));
+        harness.validateCompressedPubkeyFlags(pubkey, pubkeyY);
+    }
+
+    /// @notice Test signature Y when c1 is zero and c0 is also zero
+    function test_validateCompressedSignatureFlags_C1ZeroC0Zero() external {
+        bytes memory signature = new bytes(96);
+
+        BLS12_381.Fp2 memory signatureY;
+        signatureY.c1_a = bytes32(0);
+        signatureY.c1_b = bytes32(0);
+        signatureY.c0_a = bytes32(0);
+        signatureY.c0_b = bytes32(0);
+
+        // Both c1 and c0 are zero => c0 = 0 < P/2 => sign bit = 0
+        signature[0] = 0x80;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+
+        signature[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    /// @notice Test signature Y when c1 is zero and c0 < P/2
+    function test_validateCompressedSignatureFlags_C1ZeroC0LessThanHalfP() external {
+        bytes memory signature = new bytes(96);
+
+        BLS12_381.Fp2 memory signatureY;
+        signatureY.c1_a = bytes32(0);
+        signatureY.c1_b = bytes32(0);
+        signatureY.c0_a = bytes32(0);
+        signatureY.c0_b = bytes32(uint256(1)); // c0 = 1 < P/2
+
+        // c1 == 0, so use c0. c0 < P/2 => sign bit = 0
+        signature[0] = 0x80;
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+
+        signature[0] = 0xA0;
+        vm.expectRevert(abi.encodeWithSelector(BLS12_381.InvalidCompressedComponentSignBit.selector, uint8(1)));
+        harness.validateCompressedSignatureFlags(signature, signatureY);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                SIGN BIT PARITY INVARIANT                    */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Invariant: For any valid Y < P, exactly one sign bit value (0 or 1) should be valid
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 10000
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_signBitParityInvariant_Pubkey(bytes32 yA, bytes32 yB) external {
+        BLS12_381.Fp memory pubkeyY = BLS12_381.Fp(yA, yB);
+
+        bytes memory pubkey = new bytes(48);
+
+        bool pass0;
+        bool pass1;
+
+        // Try sign bit = 0
+        pubkey[0] = 0x80;
+        try harness.validateCompressedPubkeyFlags(pubkey, pubkeyY) {
+            pass0 = true;
+        } catch {}
+        // Try sign bit = 1
+        pubkey[0] = 0xA0;
+        try harness.validateCompressedPubkeyFlags(pubkey, pubkeyY) {
+            pass1 = true;
+        } catch {}
+        // Exactly one should pass (XOR) - this is the parity invariant
+        assertTrue(pass0 != pass1, "Exactly one sign bit value should be valid for any Y");
+    }
+
+    /// @notice Invariant: For any valid Fp2 Y, exactly one sign bit value should be valid
+    /**
+     * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
+     * forge-config: default.fuzz.runs = 10000
+     * forge-config: default.fuzz.max-test-rejects = 0
+     */
+    function testFuzz_signBitParityInvariant_Signature(BLS12_381.Fp2 memory signatureY) external {
+        bytes memory signature = new bytes(96);
+
+        bool pass0;
+        bool pass1;
+
+        // Try sign bit = 0
+        signature[0] = 0x80;
+        try harness.validateCompressedSignatureFlags(signature, signatureY) {
+            pass0 = true;
+        } catch {}
+        // Try sign bit = 1
+        signature[0] = 0xA0;
+        try harness.validateCompressedSignatureFlags(signature, signatureY) {
+            pass1 = true;
+        } catch {}
+        // Exactly one should pass (XOR) - this is the parity invariant
+        assertTrue(pass0 != pass1, "Exactly one sign bit value should be valid for any Fp2 Y");
     }
 }

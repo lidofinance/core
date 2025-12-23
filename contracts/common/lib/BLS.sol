@@ -406,9 +406,9 @@ library BLS12_381 {
         input[15] = 0x67816aef1db507c96655b9d5caac42364e6f38ba0ecb751bad54dcd6b939c2ca;
 
         // Signature G2
-        // Signature G2 X (deposit.signature has Fp2 flipped)
-        //  - signatureG2.X_c1 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
-        //  - signatureG2.X_c2 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
+        // Signature G2 X (deposit.signature has Fp2 flipped per BLS12-381 serialization)
+        //  - signatureG2.X_c0 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
+        //  - signatureG2.X_c1 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
         // SignatureG2 Y as is from calldata
         /// @solidity memory-safe-assembly
         assembly {
