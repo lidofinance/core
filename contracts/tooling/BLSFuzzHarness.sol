@@ -38,5 +38,3 @@ contract BLSFuzzHarness {
         BLS12_381.verifyDepositMessage(pubkey, signature, amount, depositY, withdrawalCredentials, depositDomain);
     }
 }
-
-
