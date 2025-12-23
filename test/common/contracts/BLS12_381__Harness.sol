@@ -13,7 +13,7 @@ pragma solidity 0.8.25;
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 
 /// @dev Thin wrapper around `BLS12_381` to enable E2E testing vs CL reference implementations (e.g. blst).
-contract BLSvsBLST__FuzzHarness {
+contract BLS12_381__Harness {
     function computeDepositDomain(bytes4 genesisForkVersion) external view returns (bytes32) {
         return BLS12_381.computeDepositDomain(genesisForkVersion);
     }

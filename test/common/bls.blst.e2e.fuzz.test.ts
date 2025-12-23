@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
 
-import { BLSvsBLST__FuzzHarness } from "typechain-types";
+import { BLS12_381__Harness } from "typechain-types";
 
 import { computeDepositDomain, computeDepositMessageRoot, ONE_GWEI } from "lib";
 
@@ -166,10 +166,10 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
   const IKM_SEED = process.env.BLS_BLST_FUZZ_SEED ?? "lido-bls-e2e-fuzz";
   const master = SecretKey.deriveMasterEip2333(getBytes(keccak256(Buffer.from(IKM_SEED, "utf-8"))));
 
-  let harness: BLSvsBLST__FuzzHarness;
+  let harness: BLS12_381__Harness;
 
   before(async () => {
-    harness = (await ethers.deployContract("BLSvsBLST__FuzzHarness")) as unknown as BLSvsBLST__FuzzHarness;
+    harness = (await ethers.deployContract("BLS12_381__Harness")) as unknown as BLS12_381__Harness;
   });
 
   it("matches consensus spec roots and accepts exactly the signatures that blst accepts (valid deposits)", async () => {
