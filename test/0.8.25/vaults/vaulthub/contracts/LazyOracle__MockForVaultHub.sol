@@ -4,11 +4,9 @@
 pragma solidity 0.8.25;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-<<<<<<< HEAD
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import "hardhat/console.sol";
-=======
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
+
 
 contract LazyOracle__MockForVaultHub {
     uint256 public latestReportTimestamp;
