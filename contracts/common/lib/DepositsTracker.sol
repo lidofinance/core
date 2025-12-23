@@ -33,12 +33,11 @@ library DepositsTracker {
     error SlotTooLarge(uint256 slot);
     error DepositAmountTooLarge(uint256 depositAmount);
     error ZeroDepositAmount();
-    error SlotOutOfRange();
 
     /// @notice Add new deposit information in deposit state
     ///
     /// @param state - deposited wei state
-    /// @param currentSlot - slot of deposit // Maybe it is more secure to calculate current slot in this method
+    /// @param currentSlot - slot of deposit
     /// @param depositAmount - Eth deposit amount
     function insertSlotDeposit(DepositedState storage state, uint256 currentSlot, uint256 depositAmount) internal {
         if (currentSlot > type(uint64).max) revert SlotTooLarge(currentSlot);
@@ -94,9 +93,7 @@ library DepositsTracker {
         if (curCursor == depositsEntryAmount) return 0;
 
         (uint64 startDepositSlot,) = state.slotsDeposits[curCursor].unpack();
-
-        // if cursor points to slot > _slot, the requested range is invalid
-        if (startDepositSlot > _slot) revert SlotOutOfRange();
+        if (startDepositSlot > _slot) return 0;
 
         // find the last index where slot <= _slot
         uint256 endIndex = curCursor + 1;
@@ -140,36 +137,36 @@ library DepositsTracker {
     }
 
     /// @notice Move cursor to next slot after provided
-    /// @param state - deposited wei state
+    /// @param state - Deposited wei state
     /// @param _slot - Upper bound slot
     /// @dev Rules:
     ///      - Cursor only moves to the right;
     ///      - _slot must be >= slot at current cursor;
-    ///      - Search only in the suffix (cursor, len);
+    ///      - _slot < cursorSlot, don't move cursor
+    ///      - Search only in the suffix (cursor, slotsDeposits.len);
     ///      - Find index of first element that higher than _slot;
-    ///      - max value that can have cursor is depositsEntryAmount
-    ///      - Method will revert only if _slot is less than cursor slot, as if there are no entries in tracker > _slot we think everything was read and set cursor to length of slotsDeposits
-    function moveCursorToSlot(DepositedState storage state, uint256 _slot) internal {
+    ///      - Cursor max value is depositsEntryAmount
+    function moveCursorPastSlot(DepositedState storage state, uint256 _slot) internal {
         if (_slot > type(uint64).max) revert SlotTooLarge(_slot);
 
         uint256 depositsEntryAmount = state.slotsDeposits.length;
         if (depositsEntryAmount == 0) return;
 
+        uint256 curCursor = state.cursor;
+
+        if (curCursor == depositsEntryAmount) return;
+
         (uint64 lastDepositSlot,) = state.slotsDeposits[depositsEntryAmount - 1].unpack();
 
+        // there are no deposits on slot higher than lastDepositSlot
         if (_slot >= lastDepositSlot) {
             state.cursor = depositsEntryAmount;
             return;
         }
 
-        // cache cursor to avoid multiple SLOADs
-        uint256 curCursor = state.cursor;
-
-        if (curCursor == depositsEntryAmount) return;
-
         (uint64 cursorSlotValue,) = state.slotsDeposits[curCursor].unpack();
 
-        if (_slot < cursorSlotValue) revert SlotOutOfOrder();
+        if (_slot < cursorSlotValue) return;
 
         if (cursorSlotValue == _slot) {
             state.cursor = curCursor + 1;
