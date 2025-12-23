@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="5009"  lines-covered="4775"  line-rate="0.9533"  branches-valid="2368"  branches-covered="2161"  branch-rate="0.9126000000000001"  timestamp="1766507362462" complexity="0" version="0.1">
+<coverage lines-valid="5006"  lines-covered="4772"  line-rate="0.9533"  branches-valid="2368"  branches-covered="2161"  branch-rate="0.9126000000000001"  timestamp="1766509938995" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2874,10 +2874,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="44"  branch="false" />
-			<line number="173"  hits="44"  branch="false" />
-			<line number="175"  hits="44"  branch="false" />
-			<line number="176"  hits="44"  branch="false" />
+			<line number="172"  hits="29"  branch="false" />
+			<line number="173"  hits="29"  branch="false" />
+			<line number="175"  hits="29"  branch="false" />
+			<line number="176"  hits="29"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -9051,7 +9051,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="tooling"  line-rate="0.9825"  branch-rate="1" >
+	<package name="tooling"  line-rate="0.9815"  branch-rate="1" >
 	<classes>
 		<class name="AlertingHarness.sol"  filename="contracts/tooling/AlertingHarness.sol"  line-rate="0.9815"  branch-rate="1" >
 		<methods>
@@ -9156,24 +9156,6 @@
 			<line number="302"  hits="18"  branch="false" />
 			<line number="308"  hits="7"  branch="false" />
 			<line number="314"  hits="7"  branch="false" />
-		</lines>
-		</class>
-		<class name="BLSFuzzHarness.sol"  filename="contracts/tooling/BLSFuzzHarness.sol"  line-rate="1"  branch-rate="1" >
-		<methods>
-			<method name="computeDepositDomain"  hits="50"  signature="()V" >
-				<lines><line number="17"  hits="50" /></lines>
-			</method>
-			<method name="depositMessageSigningRoot"  hits="50"  signature="()V" >
-				<lines><line number="21"  hits="50" /></lines>
-			</method>
-			<method name="verifyDepositMessage"  hits="737"  signature="()V" >
-				<lines><line number="30"  hits="737" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="18"  hits="50"  branch="false" />
-			<line number="27"  hits="50"  branch="false" />
-			<line number="38"  hits="737"  branch="false" />
 		</lines>
 		</class>
 	</classes>
