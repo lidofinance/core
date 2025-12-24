@@ -35,6 +35,14 @@ definition isValidBurnerFunc(method f) returns bool = (
 invariant burnerDoesNotApprove(address a)
     _Lido.allowance(_Burner, a) == 0
     filtered {f -> isValidBurnerFunc(f)}
+    {
+        preserved constructor() with (env e) {
+            // Before Burner is deployed, Lido cannot have an allowance 
+            // for the Burner address (it doesn't exist yet)
+            require _Lido.allowance(_Burner, a) == 0;
+        }
+    }
+
 
 
 /// @title `Burner` shares can only be reduced by burning (excluding excess shares)
