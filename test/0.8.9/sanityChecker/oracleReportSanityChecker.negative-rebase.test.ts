@@ -6,13 +6,14 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting__MockForSanityChecker,
   AccountingOracle__MockForSanityChecker,
   LidoLocator__MockForSanityChecker,
   OracleReportSanityChecker,
   StakingRouter__MockForSanityChecker,
 } from "typechain-types";
 
-import { ether, getCurrentBlockTimestamp } from "lib";
+import { ether, getCurrentBlockTimestamp, impersonate } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -22,14 +23,16 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let locator: LidoLocator__MockForSanityChecker;
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracle__MockForSanityChecker;
+  let accounting: Accounting__MockForSanityChecker;
   let stakingRouter: StakingRouter__MockForSanityChecker;
   let deployer: HardhatEthersSigner;
+  let accountingSigner: HardhatEthersSigner;
 
   const defaultLimitsList = {
     exitedValidatorsPerDayLimit: 50n,
     appearedValidatorsPerDayLimit: 75n,
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
-    simulatedShareRateDeviationBPLimit: 2_50n, // 2.5%
+    simulatedShareRateDeviationBPLimit: 2_00n, // 2%
     maxValidatorExitRequestsPerReport: 2000n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
@@ -60,6 +63,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     const sanityCheckerAddress = deployer.address;
 
     const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
+    accounting = await ethers.deployContract("Accounting__MockForSanityChecker", []);
+
     accountingOracle = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
       deployer.address,
       12,
@@ -73,7 +78,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         depositSecurityModule: deployer.address,
         elRewardsVault: deployer.address,
         accountingOracle: await accountingOracle.getAddress(),
-        legacyOracle: deployer.address,
         oracleReportSanityChecker: sanityCheckerAddress,
         burner: await burner.getAddress(),
         validatorsExitBusOracle: deployer.address,
@@ -85,22 +89,48 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         oracleDaemonConfig: deployer.address,
         validatorExitDelayVerifier: deployer.address,
         triggerableWithdrawalsGateway: deployer.address,
+        accounting: await accounting.getAddress(),
+        wstETH: deployer.address,
+        vaultHub: deployer.address,
+        vaultFactory: deployer.address,
+        lazyOracle: deployer.address,
+        predepositGuarantee: deployer.address,
+        operatorGrid: deployer.address,
       },
     ]);
 
-    checker = await ethers.deployContract("OracleReportSanityChecker", [
-      await locator.getAddress(),
-      deployer.address,
-      Object.values(defaultLimitsList),
-    ]);
+    const locatorAddress = await locator.getAddress();
+    const accountingOracleAddress = await accountingOracle.getAddress();
+    const accountingAddress = await accounting.getAddress();
+
+    checker = await ethers
+      .getContractFactory("OracleReportSanityChecker")
+      .then((f) =>
+        f.deploy(locatorAddress, accountingOracleAddress, accountingAddress, deployer.address, defaultLimitsList),
+      );
+
+    accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
 
+  context("OracleReportSanityChecker checkAccountingOracleReport authorization", () => {
+    it("should allow calling from Accounting address", async () => {
+      await checker.connect(accountingSigner).checkAccountingOracleReport(0, 110 * 1e9, 109.99 * 1e9, 0, 0, 0, 10, 10);
+    });
+
+    it("should not allow calling from non-Accounting address", async () => {
+      const [, otherClient] = await ethers.getSigners();
+      await expect(
+        checker.connect(otherClient).checkAccountingOracleReport(0, 110 * 1e9, 110.01 * 1e9, 0, 0, 0, 10, 10),
+      ).to.be.revertedWithCustomError(checker, "CalledNotFromAccounting");
+    });
+  });
+
   context("OracleReportSanityChecker is functional", () => {
-    it(`base parameters are correct`, async () => {
+    it("base parameters are correct", async () => {
       const locateChecker = await locator.oracleReportSanityChecker();
       expect(locateChecker).to.equal(deployer.address);
 
@@ -139,7 +169,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       expect(structSizeInBits).to.lessThanOrEqual(256);
     });
 
-    it(`second opinion can be changed or removed`, async () => {
+    it("second opinion can be changed or removed", async () => {
       expect(await checker.secondOpinionOracle()).to.equal(ZeroAddress);
 
       const clOraclesRole = await checker.SECOND_OPINION_MANAGER_ROLE();
@@ -160,12 +190,14 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     async function newChecker() {
       return await ethers.deployContract("OracleReportSanityCheckerWrapper", [
         await locator.getAddress(),
+        await accountingOracle.getAddress(),
+        await accounting.getAddress(),
         deployer.address,
         Object.values(defaultLimitsList),
       ]);
     }
 
-    it(`sums negative rebases for a few days`, async () => {
+    it("sums negative rebases for a few days", async () => {
       const reportChecker = await newChecker();
       const timestamp = await getCurrentBlockTimestamp();
       expect(await reportChecker.sumNegativeRebasesNotOlderThan(timestamp - 18n * SLOTS_PER_DAY)).to.equal(0);
@@ -174,7 +206,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       expect(await reportChecker.sumNegativeRebasesNotOlderThan(timestamp - 18n * SLOTS_PER_DAY)).to.equal(250);
     });
 
-    it(`sums negative rebases for 18 days`, async () => {
+    it("sums negative rebases for 18 days", async () => {
       const reportChecker = await newChecker();
       const timestamp = await getCurrentBlockTimestamp();
 
@@ -189,7 +221,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       expect(expectedSum).to.equal(100 + 150 + 5 + 10);
     });
 
-    it(`returns exited validators count`, async () => {
+    it("returns exited validators count", async () => {
       const reportChecker = await newChecker();
       const timestamp = await getCurrentBlockTimestamp();
 
@@ -205,7 +237,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 1n * SLOTS_PER_DAY)).to.equal(15);
     });
 
-    it(`returns exited validators count for missed or non-existent report`, async () => {
+    it("returns exited validators count for missed or non-existent report", async () => {
       const reportChecker = await newChecker();
       const timestamp = await getCurrentBlockTimestamp();
       await reportChecker.addReportData(timestamp - 19n * SLOTS_PER_DAY, 10, 100);
@@ -229,28 +261,34 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   });
 
   context("OracleReportSanityChecker additional balance decrease check", () => {
-    it(`works for IncorrectCLBalanceDecrease`, async () => {
-      await expect(checker.checkAccountingOracleReport(0, ether("320"), ether("300"), 0, 0, 0, 10, 10))
+    it("works for IncorrectCLBalanceDecrease", async () => {
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("320"), ether("300"), 0, 0, 0, 10, 10),
+      )
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
         .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"));
     });
 
-    it(`works as accamulation for IncorrectCLBalanceDecrease`, async () => {
+    it("works as accumulation for IncorrectCLBalanceDecrease", async () => {
       const genesisTime = await accountingOracle.GENESIS_TIME();
       const timestamp = await getCurrentBlockTimestamp();
       const refSlot = (timestamp - genesisTime) / 12n;
       const prevRefSlot = refSlot - SLOTS_PER_DAY;
 
       await accountingOracle.setLastProcessingRefSlot(prevRefSlot);
-      await checker.checkAccountingOracleReport(0, ether("320"), ether("310"), 0, 0, 0, 10, 10);
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(0, ether("320"), ether("310"), 0, 0, 0, 10, 10);
 
       await accountingOracle.setLastProcessingRefSlot(refSlot);
-      await expect(checker.checkAccountingOracleReport(0, ether("310"), ether("300"), 0, 0, 0, 10, 10))
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("310"), ether("300"), 0, 0, 0, 10, 10),
+      )
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
         .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"));
     });
 
-    it(`works for happy path and report is not ready`, async () => {
+    it("works for happy path and report is not ready", async () => {
       const genesisTime = await accountingOracle.GENESIS_TIME();
       const timestamp = await getCurrentBlockTimestamp();
       const refSlot = (timestamp - genesisTime) / 12n;
@@ -258,12 +296,12 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await accountingOracle.setLastProcessingRefSlot(refSlot);
 
       // Expect to pass through
-      await checker.checkAccountingOracleReport(0, 96 * 1e9, 96 * 1e9, 0, 0, 0, 10, 10);
+      await checker.connect(accountingSigner).checkAccountingOracleReport(0, 96 * 1e9, 96 * 1e9, 0, 0, 0, 10, 10);
 
       const secondOpinionOracle = await deploySecondOpinionOracle();
 
       await expect(
-        checker.checkAccountingOracleReport(0, ether("330"), ether("300"), 0, 0, 0, 10, 10),
+        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("330"), ether("300"), 0, 0, 0, 10, 10),
       ).to.be.revertedWithCustomError(checker, "NegativeRebaseFailedSecondOpinionReportIsNotReady");
 
       await secondOpinionOracle.addReport(refSlot, {
@@ -273,7 +311,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         numValidators: 0,
         exitedValidators: 0,
       });
-      await expect(checker.checkAccountingOracleReport(0, ether("330"), ether("300"), 0, 0, 0, 10, 10))
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("330"), ether("300"), 0, 0, 0, 10, 10),
+      )
         .to.emit(checker, "NegativeCLRebaseConfirmed")
         .withArgs(refSlot, ether("300"), ether("0"));
     });
@@ -290,28 +330,38 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       await stakingRouter.mock__addStakingModuleExitedValidators(1, 1);
       await accountingOracle.setLastProcessingRefSlot(refSlot55);
-      await checker.checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
 
       await stakingRouter.mock__removeStakingModule(1);
       await stakingRouter.mock__addStakingModuleExitedValidators(1, 2);
       await accountingOracle.setLastProcessingRefSlot(refSlot54);
-      await checker.checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
 
       await stakingRouter.mock__removeStakingModule(1);
       await stakingRouter.mock__addStakingModuleExitedValidators(1, 3);
       await accountingOracle.setLastProcessingRefSlot(refSlot18);
-      await checker.checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
 
       await accountingOracle.setLastProcessingRefSlot(refSlot17);
-      await checker.checkAccountingOracleReport(0, ether("320"), ether("315"), 0, 0, 0, 10, 10);
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(0, ether("320"), ether("315"), 0, 0, 0, 10, 10);
 
       await accountingOracle.setLastProcessingRefSlot(refSlot);
-      await expect(checker.checkAccountingOracleReport(0, ether("315"), ether("300"), 0, 0, 0, 10, 10))
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("315"), ether("300"), 0, 0, 0, 10, 10),
+      )
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
         .withArgs(20n * ether("1"), 7n * ether("1") + 8n * ether("0.101"));
     });
 
-    it(`works for reports close together`, async () => {
+    it("works for reports close together", async () => {
       const genesisTime = await accountingOracle.GENESIS_TIME();
       const timestamp = await getCurrentBlockTimestamp();
       const refSlot = (timestamp - genesisTime) / 12n;
@@ -329,7 +379,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         exitedValidators: 0,
       });
 
-      await expect(checker.checkAccountingOracleReport(0, ether("330"), ether("299"), 0, 0, 0, 10, 10))
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("330"), ether("299"), 0, 0, 0, 10, 10),
+      )
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLBalanceMismatch")
         .withArgs(ether("299"), ether("302"), anyValue);
 
@@ -341,7 +393,10 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         numValidators: 0,
         exitedValidators: 0,
       });
-      await expect(checker.checkAccountingOracleReport(0, ether("330"), ether("299"), 0, 0, 0, 10, 10))
+
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("330"), ether("299"), 0, 0, 0, 10, 10),
+      )
         .to.emit(checker, "NegativeCLRebaseConfirmed")
         .withArgs(refSlot, ether("299"), ether("0"));
 
@@ -353,12 +408,15 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         numValidators: 0,
         exitedValidators: 0,
       });
-      await expect(checker.checkAccountingOracleReport(0, 110 * 1e9, 100.01 * 1e9, 0, 0, 0, 10, 10))
+
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(0, 110 * 1e9, 100.01 * 1e9, 0, 0, 0, 10, 10),
+      )
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLBalanceMismatch")
         .withArgs(100.01 * 1e9, 100 * 1e9, anyValue);
     });
 
-    it(`works for reports with incorrect withdrawal vault balance`, async () => {
+    it("works for reports with incorrect withdrawal vault balance", async () => {
       const genesisTime = await accountingOracle.GENESIS_TIME();
       const timestamp = await getCurrentBlockTimestamp();
       const refSlot = (timestamp - genesisTime) / 12n;
@@ -367,7 +425,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       const secondOpinionOracle = await deploySecondOpinionOracle();
 
-      // Second opinion balance is almost equal general Oracle's (<0.74%) and withdrawal vauls is the same - should pass
+      // Second opinion balance is almost equal general Oracle's (<0.74%) and withdrawal value is the same - should pass
       await secondOpinionOracle.addReport(refSlot, {
         success: true,
         clBalanceGwei: parseUnits("300", "gwei"),
@@ -375,7 +433,12 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         numValidators: 0,
         exitedValidators: 0,
       });
-      await expect(checker.checkAccountingOracleReport(0, ether("330"), ether("299"), ether("1"), 0, 0, 10, 10))
+
+      await expect(
+        checker
+          .connect(accountingSigner)
+          .checkAccountingOracleReport(0, ether("330"), ether("299"), ether("1"), 0, 0, 10, 10),
+      )
         .to.emit(checker, "NegativeCLRebaseConfirmed")
         .withArgs(refSlot, ether("299"), ether("1"));
 
@@ -387,14 +450,19 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         numValidators: 0,
         exitedValidators: 0,
       });
-      await expect(checker.checkAccountingOracleReport(0, ether("330"), ether("299"), ether("1"), 0, 0, 10, 10))
+
+      await expect(
+        checker
+          .connect(accountingSigner)
+          .checkAccountingOracleReport(0, ether("330"), ether("299"), ether("1"), 0, 0, 10, 10),
+      )
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedWithdrawalVaultBalanceMismatch")
         .withArgs(ether("1"), 0);
     });
   });
 
   context("OracleReportSanityChecker roles", () => {
-    it(`CL Oracle related functions require INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE`, async () => {
+    it("CL Oracle related functions require INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE", async () => {
       const role = await checker.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE();
 
       await expect(checker.setInitialSlashingAndPenaltiesAmount(0, 0)).to.be.revertedWithOZAccessControlError(
@@ -406,7 +474,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await expect(checker.setInitialSlashingAndPenaltiesAmount(1000, 101)).to.not.be.reverted;
     });
 
-    it(`CL Oracle related functions require SECOND_OPINION_MANAGER_ROLE`, async () => {
+    it("CL Oracle related functions require SECOND_OPINION_MANAGER_ROLE", async () => {
       const clOraclesRole = await checker.SECOND_OPINION_MANAGER_ROLE();
 
       await expect(
@@ -415,19 +483,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       await checker.grantRole(clOraclesRole, deployer.address);
       await expect(checker.setSecondOpinionOracleAndCLBalanceUpperMargin(ZeroAddress, 74)).to.not.be.reverted;
-    });
-  });
-
-  context("OracleReportSanityChecker checkAccountingOracleReport authorization", () => {
-    it("should allow calling from Lido address", async () => {
-      await checker.checkAccountingOracleReport(0, 110 * 1e9, 109.99 * 1e9, 0, 0, 0, 10, 10);
-    });
-
-    it("should not allow calling from non-Lido address", async () => {
-      const [, otherClient] = await ethers.getSigners();
-      await expect(
-        checker.connect(otherClient).checkAccountingOracleReport(0, 110 * 1e9, 110.01 * 1e9, 0, 0, 0, 10, 10),
-      ).to.be.revertedWithCustomError(checker, "CalledNotFromLido");
     });
   });
 });

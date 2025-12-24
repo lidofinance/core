@@ -1,9 +1,9 @@
 import { expect } from "chai";
-import { CallExceptionError, ethers } from "ethers";
+import { ethers } from "ethers";
 
 import { NodeOperatorsRegistry } from "typechain-types";
 
-import { certainAddress, log } from "lib";
+import { certainAddress, ether, impersonate, log } from "lib";
 import { LoadedContract } from "lib/protocol/types";
 
 import { ProtocolContext, StakingModuleName } from "../types";
@@ -129,6 +129,7 @@ export const norSdvtAddNodeOperator = async (
     rewardAddress: string;
   },
 ) => {
+  const { acl } = ctx.contracts;
   const { name, rewardAddress } = params;
 
   log.debug(`Adding fake NOR operator`, {
@@ -138,8 +139,20 @@ export const norSdvtAddNodeOperator = async (
 
   const operatorId = await module.getNodeOperatorsCount();
 
-  const managerSigner = await ctx.getSigner("agent");
+  const role = await module.MANAGE_NODE_OPERATOR_ROLE();
+  const managerSigner = await impersonate(await acl.getPermissionManager(module.address, role), ether("100"));
+
+  const hasPermission = await acl["hasPermission(address,address,bytes32)"](managerSigner, module.address, role);
+
+  if (!hasPermission) {
+    await acl.connect(managerSigner).grantPermission(managerSigner, module.address, role);
+  }
+
   await module.connect(managerSigner).addNodeOperator(name, rewardAddress);
+
+  if (!hasPermission) {
+    await acl.connect(managerSigner).revokePermission(managerSigner, module.address, role);
+  }
 
   log.debug("Added NOR fake operator", {
     "Operator ID": operatorId,
@@ -161,6 +174,7 @@ export const norSdvtAddOperatorKeys = async (
     keysToAdd: bigint;
   },
 ) => {
+  const { acl } = ctx.contracts;
   const { operatorId, keysToAdd } = params;
 
   log.debug(`Adding fake keys to NOR operator ${operatorId}`, {
@@ -171,14 +185,23 @@ export const norSdvtAddOperatorKeys = async (
   const totalKeysBefore = await module.getTotalSigningKeyCount(operatorId);
   const unusedKeysBefore = await module.getUnusedSigningKeyCount(operatorId);
 
-  const agentSigner = await ctx.getSigner("agent");
-  const agentAddress = await agentSigner.getAddress();
+  const managerSigner = await impersonate(
+    await acl.getPermissionManager(module.address, await module.MANAGE_SIGNING_KEYS()),
+    ether("100"),
+  );
   const role = await module.MANAGE_SIGNING_KEYS();
-  await ctx.contracts.acl.connect(agentSigner).grantPermission(agentAddress, module.address, role);
+  const hasPermission = await acl["hasPermission(address,address,bytes32)"](managerSigner, module.address, role);
+  if (!hasPermission) {
+    await acl.connect(managerSigner).grantPermission(managerSigner, module.address, role);
+  }
+
   await module
-    .connect(agentSigner)
+    .connect(managerSigner)
     .addSigningKeys(operatorId, keysToAdd, randomPubkeys(Number(keysToAdd)), randomSignatures(Number(keysToAdd)));
-  await ctx.contracts.acl.connect(agentSigner).revokePermission(agentAddress, module.address, role);
+
+  if (!hasPermission) {
+    await acl.connect(managerSigner).revokePermission(managerSigner, module.address, role);
+  }
 
   const totalKeysAfter = await module.getTotalSigningKeyCount(operatorId);
   const unusedKeysAfter = await module.getUnusedSigningKeyCount(operatorId);
@@ -207,6 +230,7 @@ export const norSdvtSetOperatorStakingLimit = async (
     limit: bigint;
   },
 ) => {
+  const { acl } = ctx.contracts;
   const { operatorId, limit } = params;
 
   log.debug(`Setting NOR operator ${operatorId} staking limit`, {
@@ -214,17 +238,20 @@ export const norSdvtSetOperatorStakingLimit = async (
     "Limit": ethers.formatEther(limit),
   });
 
-  try {
-    // For SDVT scratch deployment and for NOR
-    const agentSigner = await ctx.getSigner("agent");
-    await module.connect(agentSigner).setNodeOperatorStakingLimit(operatorId, limit);
-  } catch (error: unknown) {
-    if ((error as CallExceptionError).message.includes("APP_AUTH_FAILED")) {
-      const easyTrackSigner = await ctx.getSigner("easyTrack");
-      await module.connect(easyTrackSigner).setNodeOperatorStakingLimit(operatorId, limit);
-    } else {
-      throw error;
-    }
+  const managerSigner = await impersonate(
+    await acl.getPermissionManager(module.address, await module.MANAGE_SIGNING_KEYS()),
+    ether("100"),
+  );
+  const role = await module.SET_NODE_OPERATOR_LIMIT_ROLE();
+  const hasPermission = await acl["hasPermission(address,address,bytes32)"](managerSigner, module.address, role);
+  if (!hasPermission) {
+    await acl.connect(managerSigner).grantPermission(managerSigner, module.address, role);
+  }
+
+  await module.connect(managerSigner).setNodeOperatorStakingLimit(operatorId, limit);
+
+  if (!hasPermission) {
+    await acl.connect(managerSigner).revokePermission(managerSigner, module.address, role);
   }
 };
 

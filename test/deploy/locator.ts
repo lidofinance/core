@@ -15,21 +15,27 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
 
   const locator = await factory.deploy({
     accountingOracle: certainAddress("dummy-locator:accountingOracle"),
-    burner: certainAddress("dummy-locator:burner"),
     depositSecurityModule: certainAddress("dummy-locator:depositSecurityModule"),
     elRewardsVault: certainAddress("dummy-locator:elRewardsVault"),
-    legacyOracle: certainAddress("dummy-locator:legacyOracle"),
     lido: certainAddress("dummy-locator:lido"),
-    oracleDaemonConfig: certainAddress("dummy-locator:oracleDaemonConfig"),
     oracleReportSanityChecker: certainAddress("dummy-locator:oracleReportSanityChecker"),
     postTokenRebaseReceiver: certainAddress("dummy-locator:postTokenRebaseReceiver"),
+    burner: certainAddress("dummy-locator:burner"),
     stakingRouter: certainAddress("dummy-locator:stakingRouter"),
     treasury: certainAddress("dummy-locator:treasury"),
     validatorsExitBusOracle: certainAddress("dummy-locator:validatorsExitBusOracle"),
     withdrawalQueue: certainAddress("dummy-locator:withdrawalQueue"),
     withdrawalVault: certainAddress("dummy-locator:withdrawalVault"),
+    oracleDaemonConfig: certainAddress("dummy-locator:oracleDaemonConfig"),
     validatorExitDelayVerifier: certainAddress("dummy-locator:validatorExitDelayVerifier"),
     triggerableWithdrawalsGateway: certainAddress("dummy-locator:triggerableWithdrawalsGateway"),
+    accounting: certainAddress("dummy-locator:accounting"),
+    predepositGuarantee: certainAddress("dummy-locator:predepositGuarantee"),
+    wstETH: certainAddress("dummy-locator:wstETH"),
+    vaultHub: certainAddress("dummy-locator:vaultHub"),
+    vaultFactory: certainAddress("dummy-locator:vaultFactory"),
+    operatorGrid: certainAddress("dummy-locator:operatorGrid"),
+    lazyOracle: certainAddress("dummy-locator:lazyOracle"),
     ...config,
   });
 
@@ -75,7 +81,7 @@ async function updateImplementation(
 
 export async function updateLidoLocatorImplementation(
   locatorAddress: string,
-  configUpdate = {},
+  configUpdate: Partial<LidoLocator.ConfigStruct> = {},
   customLocator?: string,
   admin?: HardhatEthersSigner,
 ) {
@@ -86,14 +92,13 @@ export async function updateLidoLocatorImplementation(
   await updateImplementation(locatorAddress, config, customLocator, admin);
 }
 
-async function getLocatorConfig(locatorAddress: string) {
+async function getLocatorConfig(locatorAddress: string): Promise<LidoLocator.ConfigStruct> {
   const locator = await ethers.getContractAt("LidoLocator", locatorAddress);
 
   const addresses = [
     "accountingOracle",
     "depositSecurityModule",
     "elRewardsVault",
-    "legacyOracle",
     "lido",
     "oracleReportSanityChecker",
     "postTokenRebaseReceiver",
@@ -106,6 +111,13 @@ async function getLocatorConfig(locatorAddress: string) {
     "oracleDaemonConfig",
     "validatorExitDelayVerifier",
     "triggerableWithdrawalsGateway",
+    "accounting",
+    "predepositGuarantee",
+    "wstETH",
+    "vaultHub",
+    "vaultFactory",
+    "lazyOracle",
+    "operatorGrid",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

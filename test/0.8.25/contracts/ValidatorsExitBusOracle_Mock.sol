@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity >=0.8.0;
 
 import {IValidatorsExitBus} from "contracts/0.8.25/ValidatorExitDelayVerifier.sol";
 

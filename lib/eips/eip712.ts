@@ -18,6 +18,15 @@ export async function stethDomain(verifyingContract: Addressable): Promise<Typed
   };
 }
 
+export async function wstethDomain(verifyingContract: Addressable): Promise<TypedDataDomain> {
+  return {
+    name: "Wrapped liquid staked Ether 2.0",
+    version: "1",
+    chainId: network.config.chainId!,
+    verifyingContract: await verifyingContract.getAddress(),
+  };
+}
+
 export async function signPermit(domain: TypedDataDomain, permit: Permit, signer: Signer): Promise<Signature> {
   const types = {
     Permit: [

@@ -8,8 +8,11 @@ import { addContractHelperFields, DeployedContract, getContractPath, loadContrac
 import { ConvertibleToString, cy, log, yl } from "lib/log";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
+import { keysOf } from "./protocol/types";
+
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
 const GAS_MAX_FEE = process.env.GAS_MAX_FEE || null;
+const GAS_LIMIT = process.env.GAS_LIMIT || null;
 
 const PROXY_CONTRACT_NAME = "OssifiableProxy";
 
@@ -36,6 +39,7 @@ export async function makeTx(
   log.withArguments(`Call: ${yl(contract.name)}[${cy(contract.address)}].${yl(funcName)}`, args);
 
   const tx = await contract.getFunction(funcName)(...args, txParams);
+  await log.txLink(tx.hash);
 
   const receipt = await tx.wait();
   const gasUsed = receipt.gasUsed;
@@ -55,6 +59,7 @@ async function getDeployTxParams(deployer: string) {
       type: 2,
       maxPriorityFeePerGas: ethers.parseUnits(String(GAS_PRIORITY_FEE), "gwei"),
       maxFeePerGas: ethers.parseUnits(String(GAS_MAX_FEE), "gwei"),
+      gasLimit: GAS_LIMIT,
     };
   } else {
     throw new Error('Must specify gas ENV vars: "GAS_PRIORITY_FEE" and "GAS_MAX_FEE" in gwei (like just "3")');
@@ -75,6 +80,8 @@ async function deployContractType2(
   if (!tx) {
     throw new Error(`Failed to send the deployment transaction for ${artifactName}`);
   }
+
+  await log.txLink(tx.hash);
 
   const receipt = await tx.wait();
   if (!receipt) {
@@ -113,6 +120,7 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
   withStateFile = true,
+  fields: Record<string, unknown> = {},
 ): Promise<DeployedContract> {
   logWithConstructorArgs(`Deploying: ${yl(artifactName)} (without proxy)`, constructorArgs);
 
@@ -124,6 +132,7 @@ export async function deployWithoutProxy(
       contract: contractPath,
       [addressFieldName]: contract.address,
       constructorArgs,
+      ...fields,
     });
   }
 
@@ -164,6 +173,7 @@ export async function deployBehindOssifiableProxy(
   implementation: null | string = null,
   withStateFile = true,
   signerOrOptions?: Signer | FactoryOptions,
+  initializationData: string = "0x",
 ) {
   if (implementation !== null) {
     log(`Using pre-deployed implementation of ${yl(artifactName)}: ${cy(implementation)}`);
@@ -173,7 +183,7 @@ export async function deployBehindOssifiableProxy(
     implementation = contract.address;
   }
 
-  const proxyConstructorArgs = [implementation, proxyOwner, "0x"];
+  const proxyConstructorArgs = [implementation, proxyOwner, initializationData];
   log.withArguments(
     `Deploying ${yl(PROXY_CONTRACT_NAME)} for ${yl(artifactName)} with constructor args `,
     proxyConstructorArgs,
@@ -231,11 +241,10 @@ export async function updateProxyImplementation(
 async function getLocatorConfig(locatorAddress: string) {
   const locator = await ethers.getContractAt("LidoLocator", locatorAddress);
 
-  const addresses = [
+  const locatorKeys = keysOf<LidoLocator.ConfigStruct>()([
     "accountingOracle",
     "depositSecurityModule",
     "elRewardsVault",
-    "legacyOracle",
     "lido",
     "oracleReportSanityChecker",
     "postTokenRebaseReceiver",
@@ -248,18 +257,24 @@ async function getLocatorConfig(locatorAddress: string) {
     "oracleDaemonConfig",
     "validatorExitDelayVerifier",
     "triggerableWithdrawalsGateway",
-  ] as (keyof LidoLocator.ConfigStruct)[];
+    "accounting",
+    "wstETH",
+    "predepositGuarantee",
+    "vaultHub",
+    "vaultFactory",
+    "lazyOracle",
+    "operatorGrid",
+    "vaultFactory",
+  ]) as (keyof LidoLocator.ConfigStruct)[];
 
-  const configPromises = addresses.map((name) => locator[name]());
+  const config = await Promise.all(locatorKeys.map((name) => locator[name]()));
 
-  const config = await Promise.all(configPromises);
-
-  return Object.fromEntries(addresses.map((n, i) => [n, config[i]])) as LidoLocator.ConfigStruct;
+  return Object.fromEntries(locatorKeys.map((n, i) => [n, config[i]])) as LidoLocator.ConfigStruct;
 }
 
 export async function deployLidoLocatorImplementation(
   locatorAddress: string,
-  configUpdate = {},
+  configUpdate: Partial<LidoLocator.ConfigStruct>,
   proxyOwner: string,
   withStateFile = true,
 ) {

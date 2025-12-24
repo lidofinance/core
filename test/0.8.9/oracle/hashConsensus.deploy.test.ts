@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
+  BASE_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_FAST_LANE_LENGTH_SLOTS,
@@ -22,7 +22,7 @@ describe("HashConsensus.sol:deploy", function () {
 
   before(async () => {
     [admin] = await ethers.getSigners();
-    mockReportProcessor = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION], admin);
+    mockReportProcessor = await ethers.deployContract("ReportProcessor__Mock", [BASE_CONSENSUS_VERSION], admin);
   });
 
   context("Deployment and initial configuration", () => {

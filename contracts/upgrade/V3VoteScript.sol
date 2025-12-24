@@ -1,0 +1,421 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity 0.8.25;
+
+import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
+
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+
+import {OmnibusBase} from "./utils/OmnibusBase.sol";
+import {V3Template} from "./V3Template.sol";
+
+import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
+
+interface ITimeConstraints {
+    function checkTimeAfterTimestampAndEmit(uint40 timestamp) external;
+    function checkTimeBeforeTimestampAndEmit(uint40 timestamp) external;
+    function checkTimeWithinDayTimeAndEmit(uint32 startDayTime, uint32 endDayTime) external;
+}
+
+interface IEasyTrack {
+    function addEVMScriptFactory(address _evmScriptFactory, bytes memory _permissions) external;
+}
+
+interface IKernel {
+    function setApp(bytes32 _namespace, bytes32 _appId, address _app) external;
+    function APP_BASES_NAMESPACE() external view returns (bytes32);
+}
+
+interface IOracleDaemonConfig {
+    function CONFIG_MANAGER_ROLE() external view returns (bytes32);
+    function set(string calldata _key, bytes calldata _value) external;
+}
+
+interface IStakingRouter {
+    function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
+}
+
+interface IVaultsAdapter {
+    function setVaultJailStatus(address _vault, bool _isInJail) external;
+    function updateVaultFees(address _vault, uint256 _infrastructureFeeBP, uint256 _liquidityFeeBP, uint256 _reservationFeeBP) external;
+    function forceValidatorExit(address _vault, bytes calldata _pubkeys) external payable;
+    function socializeBadDebt(address _debtVault, address _acceptorVault, uint256 _shares) external;
+}
+
+interface IPausableUntilWithRoles {
+    function PAUSE_ROLE() external view returns (bytes32);
+    function pauseFor(uint256 _duration) external;
+}
+
+/// @title V3VoteScript
+/// @notice Script for upgrading Lido protocol components
+contract V3VoteScript is OmnibusBase {
+
+    struct ScriptParams {
+        address upgradeTemplate;
+        address timeConstraints;
+        uint256 odcSlashingReserveWeRightShiftEpochs;
+        uint256 odcSlashingReserveWeLeftShiftEpochs;
+    }
+
+    //
+    // Execution window
+    //
+    uint32 public constant ENABLED_DAY_SPAN_START = 50400; // 14:00
+    uint32 public constant ENABLED_DAY_SPAN_END = 82800; // 23:00
+
+    //
+    // Constants
+    //
+    uint256 public constant DG_ITEMS_COUNT = 21;
+    uint256 public constant VOTING_ITEMS_COUNT = 8;
+
+    //
+    // Immutables
+    //
+    V3Template public immutable TEMPLATE;
+
+    //
+    // Structured storage
+    //
+    ScriptParams public params;
+
+    constructor(
+        ScriptParams memory _params
+    ) OmnibusBase(V3Template(_params.upgradeTemplate).VOTING(), V3Template(_params.upgradeTemplate).DUAL_GOVERNANCE()) {
+        TEMPLATE = V3Template(_params.upgradeTemplate);
+
+        params = _params;
+    }
+
+    function getVotingVoteItems() public view override returns (VoteItem[] memory votingVoteItems) {
+        votingVoteItems = new VoteItem[](VOTING_ITEMS_COUNT);
+        address easyTrack = TEMPLATE.EASY_TRACK();
+        address operatorGrid = TEMPLATE.OPERATOR_GRID();
+        address vaultsAdapter = TEMPLATE.VAULTS_ADAPTER();
+        uint256 index = 0;
+
+        votingVoteItems[index++] = VoteItem({
+            description: "2. Add AlterTiersInOperatorGrid factory to Easy Track (permissions: operatorGrid, alterTiers)", // 1 is reserved for DG submission item
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_ALTER_TIERS_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.alterTiers.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[index++] = VoteItem({
+            description: "3. Add RegisterGroupsInOperatorGrid factory to Easy Track (permissions: operatorGrid, registerGroup + registerTiers)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_REGISTER_GROUPS_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.registerGroup.selector),
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.registerTiers.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[index++] = VoteItem({
+            description: "4. Add RegisterTiersInOperatorGrid factory to Easy Track (permissions: operatorGrid, registerTiers)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_REGISTER_TIERS_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.registerTiers.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[index++] = VoteItem({
+            description: "5. Add UpdateGroupsShareLimitInOperatorGrid factory to Easy Track (permissions: operatorGrid, updateGroupShareLimit)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_UPDATE_GROUPS_SHARE_LIMIT_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(operatorGrid),
+                        bytes4(OperatorGrid.updateGroupShareLimit.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[index++] = VoteItem({
+            description: "6. Add SetJailStatusInOperatorGrid factory to Easy Track (permissions: vaultsAdapter, setVaultJailStatus)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_SET_JAIL_STATUS_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.setVaultJailStatus.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[index++] = VoteItem({
+            description: "7. Add UpdateVaultsFeesInOperatorGrid factory to Easy Track (permissions: vaultsAdapter, updateVaultFees)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_UPDATE_VAULTS_FEES_IN_OPERATOR_GRID(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.updateVaultFees.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[index++] = VoteItem({
+            description: "8. Add ForceValidatorExitsInVaultHub factory to Easy Track (permissions: vaultsAdapter, forceValidatorExit)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_FORCE_VALIDATOR_EXITS_IN_VAULT_HUB(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.forceValidatorExit.selector)
+                    )
+                ))
+            })
+        });
+
+        votingVoteItems[index++] = VoteItem({
+            description: "9. Add SocializeBadDebtInVaultHub factory to Easy Track (permissions: vaultsAdapter, socializeBadDebt)",
+            call: ScriptCall({
+                to: easyTrack,
+                data: abi.encodeCall(IEasyTrack.addEVMScriptFactory, (
+                    TEMPLATE.ETF_SOCIALIZE_BAD_DEBT_IN_VAULT_HUB(),
+                    bytes.concat(
+                        bytes20(vaultsAdapter),
+                        bytes4(IVaultsAdapter.socializeBadDebt.selector)
+                    )
+                ))
+            })
+        });
+
+        assert(index == VOTING_ITEMS_COUNT);
+    }
+
+    function getVoteItems() public view override returns (VoteItem[] memory voteItems) {
+        voteItems = new VoteItem[](DG_ITEMS_COUNT);
+        uint256 index = 0;
+
+        voteItems[index++] = VoteItem({
+            description: "1.1. Ensure DG proposal execution is within daily time window (14:00 UTC - 23:00 UTC)",
+            call: ScriptCall({
+                to: params.timeConstraints,
+                data: abi.encodeCall(
+                    ITimeConstraints.checkTimeWithinDayTimeAndEmit,
+                    (
+                        ENABLED_DAY_SPAN_START,
+                        ENABLED_DAY_SPAN_END
+                    )
+                )
+            })
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.2. Call V3Template.startUpgrade",
+            call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.startUpgrade, ()))
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.3. Upgrade LidoLocator implementation",
+            call: _forwardCall(TEMPLATE.AGENT(), TEMPLATE.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_LOCATOR_IMPL())))
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.4. Grant Aragon APP_MANAGER_ROLE to the AGENT",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ACL(),
+                abi.encodeWithSignature(
+                    "grantPermission(address,address,bytes32)",
+                    TEMPLATE.AGENT(),
+                    TEMPLATE.KERNEL(),
+                    keccak256("APP_MANAGER_ROLE")
+                )
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.5. Set Lido implementation in Kernel",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.KERNEL(),
+                abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), TEMPLATE.LIDO_APP_ID(), TEMPLATE.NEW_LIDO_IMPL()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.6. Revoke Aragon APP_MANAGER_ROLE from the AGENT",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ACL(),
+                abi.encodeWithSignature(
+                    "revokePermission(address,address,bytes32)",
+                    TEMPLATE.AGENT(),
+                    TEMPLATE.KERNEL(),
+                    keccak256("APP_MANAGER_ROLE")
+                )
+            )
+        });
+
+        bytes32 requestBurnSharesRole = IBurner(TEMPLATE.OLD_BURNER()).REQUEST_BURN_SHARES_ROLE();
+        voteItems[index++] = VoteItem({
+            description: "1.7. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.LIDO()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.8. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.NODE_OPERATORS_REGISTRY()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.9. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.SIMPLE_DVT()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.10. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.CSM_ACCOUNTING()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.11. Upgrade AccountingOracle implementation",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ACCOUNTING_ORACLE(),
+                abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_ACCOUNTING_ORACLE_IMPL()))
+            )
+        });
+
+        bytes32 reportRewardsMintedRole = IStakingRouter(TEMPLATE.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
+        voteItems[index++] = VoteItem({
+            description: "1.12. Revoke REPORT_REWARDS_MINTED_ROLE from Lido",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.STAKING_ROUTER(),
+                abi.encodeCall(IAccessControl.revokeRole, (reportRewardsMintedRole, TEMPLATE.LIDO()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.13. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.STAKING_ROUTER(),
+                abi.encodeCall(IAccessControl.grantRole, (reportRewardsMintedRole, TEMPLATE.ACCOUNTING()))
+            )
+        });
+
+        bytes32 configManagerRole = IOracleDaemonConfig(TEMPLATE.ORACLE_DAEMON_CONFIG()).CONFIG_MANAGER_ROLE();
+
+        voteItems[index++] = VoteItem({
+            description: "1.14. Grant OracleDaemonConfig's CONFIG_MANAGER_ROLE to Agent",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ORACLE_DAEMON_CONFIG(),
+                abi.encodeCall(IAccessControl.grantRole, (configManagerRole, TEMPLATE.AGENT()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.15. Set SLASHING_RESERVE_WE_RIGHT_SHIFT at OracleDaemonConfig",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ORACLE_DAEMON_CONFIG(),
+                abi.encodeCall(IOracleDaemonConfig.set, ("SLASHING_RESERVE_WE_RIGHT_SHIFT", abi.encode(params.odcSlashingReserveWeRightShiftEpochs)))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.16. Set SLASHING_RESERVE_WE_LEFT_SHIFT at OracleDaemonConfig",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ORACLE_DAEMON_CONFIG(),
+                abi.encodeCall(IOracleDaemonConfig.set, ("SLASHING_RESERVE_WE_LEFT_SHIFT", abi.encode(params.odcSlashingReserveWeLeftShiftEpochs)))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.17. Revoke OracleDaemonConfig's CONFIG_MANAGER_ROLE from Agent",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ORACLE_DAEMON_CONFIG(),
+                abi.encodeCall(IAccessControl.revokeRole, (configManagerRole, TEMPLATE.AGENT()))
+            )
+        });
+
+        bytes32 pdgPauseRole = IPausableUntilWithRoles(TEMPLATE.PREDEPOSIT_GUARANTEE()).PAUSE_ROLE();
+
+        voteItems[index++] = VoteItem({
+            description: "1.18. Grant PredepositGuarantee's PAUSE_ROLE to Agent",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.PREDEPOSIT_GUARANTEE(),
+                abi.encodeCall(IAccessControl.grantRole, (pdgPauseRole, TEMPLATE.AGENT()))
+            )
+        });
+
+        uint256 PAUSE_INFINITELY = type(uint256).max;
+
+        voteItems[index++] = VoteItem({
+            description: "1.19. Pause PredepositGuarantee",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.PREDEPOSIT_GUARANTEE(),
+                abi.encodeCall(IPausableUntilWithRoles.pauseFor, (PAUSE_INFINITELY))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.20. Revoke PredepositGuarantee's PAUSE_ROLE from Agent",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.PREDEPOSIT_GUARANTEE(),
+                abi.encodeCall(IAccessControl.revokeRole, (pdgPauseRole, TEMPLATE.AGENT()))
+            )
+        });
+
+        voteItems[index++] = VoteItem({
+            description: "1.21. Call V3Template.finishUpgrade",
+            call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
+        });
+
+        assert(index == DG_ITEMS_COUNT);
+    }
+}

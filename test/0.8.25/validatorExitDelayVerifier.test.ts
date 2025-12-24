@@ -2,13 +2,9 @@ import { expect } from "chai";
 import { ContractTransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
-import {
-  StakingRouter_Mock,
-  ValidatorExitDelayVerifier,
-  ValidatorExitDelayVerifier__Harness,
-  ValidatorsExitBusOracle_Mock,
-} from "typechain-types";
-import { ILidoLocator } from "typechain-types/test/0.8.9/contracts/oracle/OracleReportSanityCheckerMocks.sol";
+import { StakingRouter_Mock, ValidatorExitDelayVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
+import { LidoLocator } from "typechain-types";
+import { ValidatorExitDelayVerifier__Harness } from "typechain-types/test/0.8.25/contracts/ValidatorExitDelayVerifier__Harness";
 
 import { updateBeaconBlockRoot } from "lib";
 
@@ -86,7 +82,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     });
 
     it("sets all parameters correctly", async () => {
-      console.log(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV(), "????");
       expect(await validatorExitDelayVerifier.LOCATOR()).to.equal(LIDO_LOCATOR);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_CURR()).to.equal(GI_FIRST_VALIDATOR_CURR);
@@ -199,7 +194,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
-    let locator: ILidoLocator;
+    let locator: LidoLocator;
     let locatorAddr: string;
 
     let vebo: ValidatorsExitBusOracle_Mock;

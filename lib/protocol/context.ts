@@ -1,5 +1,6 @@
-import { ContractTransactionReceipt } from "ethers";
+import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
+import { getMode } from "hardhat.helpers";
 
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
@@ -16,19 +17,50 @@ export const withCSM = () => {
   return process.env.INTEGRATION_WITH_CSM !== "off";
 };
 
-export const getProtocolContext = async (): Promise<ProtocolContext> => {
-  let isScratch = false;
-  if (hre.network.name === "hardhat") {
-    const networkConfig = hre.config.networks[hre.network.name];
-    if (!networkConfig.forking?.enabled) {
-      await deployScratchProtocol(hre.network.name);
-      isScratch = true;
-    }
-  } else {
-    await deployUpgrade(hre.network.name);
+export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
+  const { operatorGrid } = ctx.contracts;
+  if (!operatorGrid) return;
+
+  const agent = await ctx.getSigner("agent");
+
+  // Grant REGISTRY_ROLE to agent if not granted (needed for alterTiers)
+  const registryRole = await operatorGrid.REGISTRY_ROLE();
+  const hasRegistryRole = await operatorGrid.hasRole(registryRole, agent);
+  if (!hasRegistryRole) {
+    await operatorGrid.connect(agent).grantRole(registryRole, agent);
   }
 
-  const { contracts, signers } = await discover();
+  const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+
+  const defaultTierParams = await operatorGrid.tier(defaultTierId);
+
+  if (defaultTierParams.shareLimit === 0n || defaultTierParams.reserveRatioBP !== 50_00n) {
+    await operatorGrid.connect(agent).alterTiers(
+      [defaultTierId],
+      [
+        {
+          shareLimit: ether("250"),
+          reserveRatioBP: 50_00n,
+          forcedRebalanceThresholdBP: defaultTierParams.forcedRebalanceThresholdBP,
+          infraFeeBP: defaultTierParams.infraFeeBP,
+          liquidityFeeBP: defaultTierParams.liquidityFeeBP,
+          reservationFeeBP: defaultTierParams.reservationFeeBP,
+        },
+      ],
+    );
+  }
+};
+
+export const getProtocolContext = async (skipV3Contracts: boolean = false): Promise<ProtocolContext> => {
+  const isScratch = getMode() === "scratch";
+
+  if (isScratch) {
+    await deployScratchProtocol();
+  } else if (process.env.UPGRADE) {
+    await deployUpgrade(hre.network.name, process.env.STEPS_FILE!);
+  }
+
+  const { contracts, signers } = await discover(skipV3Contracts);
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
 
   // By default, all flags are "on"
@@ -47,11 +79,15 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
     flags,
     isScratch,
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
-    getEvents: (receipt: ContractTransactionReceipt, eventName: string) =>
-      findEventsWithInterfaces(receipt, eventName, interfaces),
+    getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
+      findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
-  await provision(context);
+  if (isScratch) {
+    await provision(context);
+  } else {
+    await ensureVaultsShareLimit(context);
+  }
 
   return context;
 };

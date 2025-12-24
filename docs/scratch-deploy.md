@@ -20,11 +20,10 @@ The repository contains bash scripts for deploying the DAO across various enviro
 
 - Local Node Deployment - `scripts/dao-local-deploy.sh` (Supports Ganache, Anvil, Hardhat Network, and other local
   Ethereum nodes)
-- Holesky Testnet Deployment – `scripts/dao-holesky-deploy.sh`
 
 The protocol requires configuration of numerous parameters for a scratch deployment. The default configurations are
 stored in JSON files named `deployed-<deploy env>-defaults.json`, where `<deploy env>` represents the target
-environment. Currently, a single default configuration file exists: `deployed-testnet-defaults.json`, which is tailored
+environment. Currently, a single default configuration file exists: `testnet-defaults.json`, which is tailored
 for testnet deployments. This configuration differs from the mainnet setup, featuring shorter vote durations and more
 frequent oracle report cycles, among other adjustments.
 
@@ -34,7 +33,7 @@ frequent oracle report cycles, among other adjustments.
 
 The deployment script performs the following steps regarding configuration:
 
-1. Copies the appropriate default configuration file (e.g., `deployed-testnet-defaults.json`) to a new file named
+1. Copies the appropriate default configuration file (e.g., `testnet-defaults.json`) to a new file named
    `deployed-<network name>.json`, where `<network name>` corresponds to a network configuration defined in
    `hardhat.config.js`.
 
@@ -52,7 +51,7 @@ Detailed information for each setup is provided in the sections below.
 A detailed overview of the deployment script's process:
 
 - Prepare `deployed-<network name>.json` file
-  - Copied from `deployed-testnet-defaults.json`
+  - Copied from `testnet-defaults.json`
   - Enhanced with environment variable values, e.g., `DEPLOYER`
   - Progressively updated with deployed contract information
 - (optional) Deploy DepositContract
@@ -63,7 +62,7 @@ A detailed overview of the deployment script's process:
 - Deploy standard Aragon apps contracts (e.g., `Agent`, `Voting`)
 - Deploy `LidoTemplate` contract
   - Auxiliary contract for DAO configuration
-- Deploy Lido custom Aragon apps implementations (bases) for `Lido`, `LegacyOracle`, `NodeOperatorsRegistry`
+- Deploy Lido custom Aragon apps implementations (bases) for `Lido`, `NodeOperatorsRegistry`
 - Register Lido APM name in ENS
 - Deploy Aragon package manager contract `APMRegistry` (via `LidoTemplate`)
 - Deploy Lido custom Aragon apps repo contracts (via `LidoTemplate`)
@@ -104,8 +103,8 @@ Follow these steps for local deployment:
 
 1. Run `yarn install` (ensure repo dependencies are installed)
 2. Run the node on port 8555 (for the commands, see subsections below)
-3. Run the deploy script `bash scripts/dao-local-deploy.sh` from root repo directory
-4. Check out the deploy artifacts in `deployed-local.json`
+3. Run the script `bash scripts/dao-local-deploy.sh` from root repo directory
+4. Check out the artifacts in `deployed-local.json`
 
 #### Supported Local Nodes
 
@@ -121,15 +120,16 @@ anvil -p 8555 --mnemonic "test test test test test test test test test test test
 yarn hardhat node
 ```
 
-### Holesky Testnet Deployment
+### Testnet Deployment
 
-To do Holesky deployment, the following parameters must be set up via env variables:
+To do a testnet deployment, the following parameters must be set up via env variables:
 
 - `DEPLOYER`. The deployer address. The deployer must own its private key. To ensure proper operation, it should have an
   adequate amount of ether. The total deployment gas cost is approximately 120,000,000 gas, and this cost can vary based
   on whether specific components of the environment, such as the DepositContract, are deployed or not.
-- `RPC_URL`. Address of the Ethereum RPC node to use. E.g. for Infura it is
-  `https://holesky.infura.io/v3/<yourProjectId>`
+- `RPC_URL`. Address of the Ethereum RPC node to use, e.g.: `https://<network>.infura.io/v3/<yourProjectId>`
+- `GENESIS_FORK_VERSION`. Genesis fork version of the network to use, e.g. `0x00000000` for Mainnet, `0x90000069` for Sepolia,
+  `0x10000910` for Hoodi. Used to properly calculate the deposit domain for the network.
 - `GAS_PRIORITY_FEE`. Gas priority fee. By default set to `2`
 - `GAS_MAX_FEE`. Gas max fee. By default set to `100`
 - `GATE_SEAL_FACTORY`. Address of the [GateSeal Factory](https://github.com/lidofinance/gate-seals) contract. Must be
@@ -138,16 +138,16 @@ To do Holesky deployment, the following parameters must be set up via env variab
 - `DSM_PREDEFINED_ADDRESS`. Address to use instead of deploying `DepositSecurityModule` or `null` otherwise. If used,
   the deposits can be made by calling `Lido.deposit` from the address.
 
-Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/holesky` like `"holesky": ["<key>"]`. See
+Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/<network>` like `"<network>": ["<key>"]`. See
 `accounts.sample.json` for an example.
 
 To start the deployment, run (the env variables must already be defined) from the root repo directory, e.g.:
 
 ```shell
-bash scripts/scratch/dao-holesky-deploy.sh
+bash scripts/scratch/dao-<network>-deploy.sh
 ```
 
-Deployment artifacts information will be stored in `deployed-holesky.json`.
+Deployment artifacts information will be stored in `deployed-<network>.json`.
 
 ## Post-Deployment Tasks
 
@@ -216,7 +216,7 @@ await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { fr
 ## Protocol Parameters
 
 This section describes part of the parameters and their values used during deployment. The values are specified in
-`deployed-testnet-defaults.json`.
+`testnet-defaults.json`.
 
 ### OracleDaemonConfig
 
