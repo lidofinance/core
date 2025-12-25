@@ -166,16 +166,34 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
   const IKM_SEED = process.env.BLS_BLST_FUZZ_SEED ?? "lido-bls-e2e-fuzz";
   const master = SecretKey.deriveMasterEip2333(getBytes(keccak256(Buffer.from(IKM_SEED, "utf-8"))));
 
+  // Runtime seed for generating different starting indices on each run.
+  // This ensures different keys are tested each run while maintaining reproducibility via logged seed.
+  const RUNTIME_SEED = process.env.BLS_BLST_RUNTIME_SEED ?? Date.now().toString();
+
+  // Compute a deterministic starting index for a given test name.
+  // This gives each test a unique, reproducible key range that varies across runs.
+  function computeStartingIndex(testName: string): number {
+    const hash = keccak256(Buffer.from(RUNTIME_SEED + testName, "utf-8"));
+    // Use modulo to get a reasonable starting index (max ~1 billion to avoid overflow)
+    return Number(BigInt(hash.slice(0, 18)) % 1_000_000_000n);
+  }
+
   let harness: BLS12_381__Harness;
 
   before(async () => {
+    // Log runtime seed for reproducibility. To reproduce a specific run, set BLS_BLST_RUNTIME_SEED env var.
+    console.log(`    BLS fuzz runtime seed: ${RUNTIME_SEED} (set BLS_BLST_RUNTIME_SEED to reproduce)`);
     harness = (await ethers.deployContract("BLS12_381__Harness")) as unknown as BLS12_381__Harness;
   });
 
   it("matches consensus spec roots and accepts exactly the signatures that blst accepts (valid deposits)", async () => {
+    const testName = "valid-deposits";
+    const startingIndex = computeStartingIndex(testName);
+    console.log(`      [${testName}] starting key index: ${startingIndex}`);
+
     for (let i = 0; i < RUNS; i++) {
       // Deterministic forkVersion and withdrawal credentials from i.
-      const salt = keccak256(toBeHex(i, 32));
+      const salt = keccak256(toBeHex(startingIndex + i, 32));
       const forkVersion = `0x${salt.slice(2, 10)}`; // bytes4
       const withdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
 
@@ -191,7 +209,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
         depositDomain,
       );
 
-      const sk = master.deriveChildEip2333(i + 1);
+      const sk = master.deriveChildEip2333(startingIndex + i);
       const pk = sk.toPublicKey();
 
       const pubkey = pk.toHex(true); // 48 bytes (compressed)
@@ -221,14 +239,18 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
   });
 
   it("rejects CL-invalid encodings (service-bit flips + length mismatches) using blst as oracle", async () => {
+    const testName = "cl-invalid-encodings";
+    const startingIndex = computeStartingIndex(testName);
+    console.log(`      [${testName}] starting key index: ${startingIndex}`);
+
     for (let i = 0; i < NEG_RUNS; i++) {
-      const salt = keccak256(toBeHex(i, 32));
+      const salt = keccak256(toBeHex(startingIndex + i, 32));
       const forkVersion = `0x${salt.slice(2, 10)}`; // bytes4
       const withdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
       const amount = (1_000_000_000n + BigInt(i)) * ONE_GWEI; // >= 1 ETH
       const depositDomain = hexlify(await computeDepositDomain(forkVersion));
 
-      const sk = master.deriveChildEip2333(10_000 + i);
+      const sk = master.deriveChildEip2333(startingIndex + i);
       const pk = sk.toPublicKey();
       const pubkey = pk.toHex(true);
       const signingRoot = await computeDepositMessageRoot(pubkey, withdrawalCredentials, amount, depositDomain);
@@ -372,14 +394,18 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
   it("rejects mismatched DepositY even when blst accepts the compressed bytes", async () => {
     // This tests the on-chain invariant that the provided Y-coordinates must correspond
     // to the compressed sign bits (to avoid being weaker than CL verification).
+    const testName = "mismatched-deposit-y";
+    const startingIndex = computeStartingIndex(testName);
+    console.log(`      [${testName}] starting key index: ${startingIndex}`);
+
     for (let i = 0; i < Math.min(NEG_RUNS, 25); i++) {
-      const salt = keccak256(toBeHex(90_000 + i, 32));
+      const salt = keccak256(toBeHex(startingIndex + i, 32));
       const forkVersion = `0x${salt.slice(2, 10)}`; // bytes4
       const withdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
       const amount = (1_000_000_000n + BigInt(i)) * ONE_GWEI;
       const depositDomain = hexlify(await computeDepositDomain(forkVersion));
 
-      const sk = master.deriveChildEip2333(200_000 + i);
+      const sk = master.deriveChildEip2333(startingIndex + i);
       const pk = sk.toPublicKey();
       const pubkey = pk.toHex(true);
       const signingRoot = await computeDepositMessageRoot(pubkey, withdrawalCredentials, amount, depositDomain);
@@ -429,8 +455,12 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
     // - deserializes to an on-curve point (PublicKey.fromHex(..., pkValidate=false) succeeds)
     // - fails subgroup validation (pk.keyValidate() throws)
 
+    const testName = "non-subgroup-pubkeys";
+    const startingIndex = computeStartingIndex(testName);
+    console.log(`      [${testName}] starting key index: ${startingIndex}`);
+
     function candidatePubkey(i: number): string {
-      const seed = keccak256(toBeHex(1_000_000 + i, 32));
+      const seed = keccak256(toBeHex(startingIndex + i, 32));
       const seed2 = keccak256(seed);
       const b = new Uint8Array(48);
       b.set(getBytes(seed), 0);
@@ -468,7 +498,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
     expect(() => pk!.keyValidate()).to.throw();
 
     // Any valid signature point is fine here (we're not testing correctness of the BLS equation itself).
-    const sigSk = master.deriveChildEip2333(777_777);
+    const sigSk = master.deriveChildEip2333(startingIndex);
     const sig = sigSk.sign(getBytes(keccak256(Buffer.from("non-subgroup-test", "utf-8"))));
     const signature = sig.toHex(true);
 
@@ -503,8 +533,12 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
     // - deserializes to an on-curve point (Signature.fromHex(..., sigValidate=false) succeeds)
     // - fails subgroup validation (sig.sigValidate() throws)
 
+    const testName = "non-subgroup-signatures";
+    const startingIndex = computeStartingIndex(testName);
+    console.log(`      [${testName}] starting key index: ${startingIndex}`);
+
     function candidateSignature(i: number): string {
-      const seed = keccak256(toBeHex(2_000_000 + i, 32));
+      const seed = keccak256(toBeHex(startingIndex + i, 32));
       const seed2 = keccak256(seed);
       const seed3 = keccak256(seed2);
       const b = new Uint8Array(96);
@@ -543,7 +577,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
     expect(() => sig!.sigValidate()).to.throw();
 
     // Use a valid pubkey.
-    const sk = master.deriveChildEip2333(888_888);
+    const sk = master.deriveChildEip2333(startingIndex);
     const pk = sk.toPublicKey();
     const pubkey = pk.toHex(true);
 
@@ -569,14 +603,18 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
   });
 
   it("mutation oracle parity: accept/reject matches blst for randomized mutations", async () => {
+    const testName = "mutation-oracle-parity";
+    const startingIndex = computeStartingIndex(testName);
+    console.log(`      [${testName}] starting key index: ${startingIndex}`);
+
     for (let i = 0; i < MUT_RUNS; i++) {
-      const salt = keccak256(toBeHex(50_000 + i, 32));
+      const salt = keccak256(toBeHex(startingIndex + i, 32));
       const forkVersion = `0x${salt.slice(2, 10)}`; // bytes4
       const baseWithdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
       const baseAmount = (1_000_000_000n + BigInt(i)) * ONE_GWEI; // >= 1 ETH
       const baseDepositDomain = hexlify(await computeDepositDomain(forkVersion));
 
-      const sk = master.deriveChildEip2333(100_000 + i);
+      const sk = master.deriveChildEip2333(startingIndex + i);
       const pk = sk.toPublicKey();
       const basePubkey = pk.toHex(true);
       const baseSigningRoot = await computeDepositMessageRoot(
