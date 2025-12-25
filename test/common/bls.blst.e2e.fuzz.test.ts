@@ -198,7 +198,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
       const withdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
 
       // Amount in wei, must be a multiple of 1 gwei.
-      const gweiAmount = 1_000_000_000n + (BigInt(i) % (32_000_000_000n - 1_000_000_000n + 1n)); // [1 ETH..32 ETH] in gwei
+      const gweiAmount = 1_000_000_000n + (BigInt(startingIndex + i) % (32_000_000_000n - 1_000_000_000n + 1n)); // [1 ETH..32 ETH] in gwei
       const amount = gweiAmount * ONE_GWEI;
 
       const depositDomainBytes = await computeDepositDomain(forkVersion);
@@ -247,7 +247,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
       const salt = keccak256(toBeHex(startingIndex + i, 32));
       const forkVersion = `0x${salt.slice(2, 10)}`; // bytes4
       const withdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
-      const amount = (1_000_000_000n + BigInt(i)) * ONE_GWEI; // >= 1 ETH
+      const amount = (1_000_000_000n + BigInt(startingIndex + i)) * ONE_GWEI; // >= 1 ETH
       const depositDomain = hexlify(await computeDepositDomain(forkVersion));
 
       const sk = master.deriveChildEip2333(startingIndex + i);
@@ -402,7 +402,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
       const salt = keccak256(toBeHex(startingIndex + i, 32));
       const forkVersion = `0x${salt.slice(2, 10)}`; // bytes4
       const withdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
-      const amount = (1_000_000_000n + BigInt(i)) * ONE_GWEI;
+      const amount = (1_000_000_000n + BigInt(startingIndex + i)) * ONE_GWEI;
       const depositDomain = hexlify(await computeDepositDomain(forkVersion));
 
       const sk = master.deriveChildEip2333(startingIndex + i);
@@ -611,7 +611,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
       const salt = keccak256(toBeHex(startingIndex + i, 32));
       const forkVersion = `0x${salt.slice(2, 10)}`; // bytes4
       const baseWithdrawalCredentials = keccak256(`0x${salt.slice(2, 2 + 64)}`); // bytes32
-      const baseAmount = (1_000_000_000n + BigInt(i)) * ONE_GWEI; // >= 1 ETH
+      const baseAmount = (1_000_000_000n + BigInt(startingIndex + i)) * ONE_GWEI; // >= 1 ETH
       const baseDepositDomain = hexlify(await computeDepositDomain(forkVersion));
 
       const sk = master.deriveChildEip2333(startingIndex + i);
