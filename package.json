@@ -45,6 +45,8 @@
     "typecheck": "tsc --noEmit",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
+    "test:fuzzShateRate": "forge test --match-path \"test/0.8.25/ShareRate.t.sol\"",
+    "test:fuzzOracleReport": "forge test --match-path \"test/0.8.25/Accounting.t.sol\"",
     "postinstall": "husky"
   },
   "lint-staged": {
