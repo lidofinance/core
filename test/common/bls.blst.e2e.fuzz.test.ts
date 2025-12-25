@@ -507,7 +507,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
     // Arbitrary message parameters; signature is not expected to match.
     const forkVersion = "0x00000000";
     const withdrawalCredentials = keccak256(toBeHex(424242, 32));
-    const amount = 1_000_000_000n * ONE_GWEI; // 1 ETH in gwei, in wei.
+    const amount = 1_000_000_000n * ONE_GWEI; // 1 ETH in wei.
     const depositDomain = hexlify(await computeDepositDomain(forkVersion));
 
     // On-chain must reject: pairing precompile should fail on subgroup checks => PairingFailed().
