@@ -69,7 +69,16 @@ library BLS12_381 {
     /*                         CONSTANTS                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @dev mask to remove sign bit from Fp via bitwise AND
+    /// @dev upper(a) part of the HALF of the prime field modulus P to check against FP.a
+    bytes32 internal constant HALF_P_A =
+        0x000000000000000000000000000000000d0088f51cbff34d258dd3db21a5d66b;
+
+    /// @dev lower(b) part of the HALF of the prime field modulus P to check against FP.b
+    bytes32 internal constant HALF_P_B =
+        0xb23ba5c279c2895fb39869507b587b120f55ffff58a9ffffdcff7fffffffd555;
+
+    /// @dev Mask to clear the 3 MSB flag bits (compression / infinity / sign) in the first byte of a
+    ///      compressed point coordinate (the only non-fixed one is the sign bit).
     bytes32 internal constant FP_NO_SIGN_MASK = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
     /// @notice Domain for deposit message signing
@@ -79,10 +88,15 @@ library BLS12_381 {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    PRECOMPILE ADDRESSES                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    /// @dev Precompile addresses used by this library.
+    ///
+    /// @dev BLS12-381 precompiles are specified in EIP-2537:
+    ///      https://eips.ethereum.org/EIPS/eip-2537#specification
+    ///
     /// @dev SHA256 precompile address.
     address internal constant SHA256 = 0x0000000000000000000000000000000000000002;
 
-    /// @dev Mod Exp precompile address.
+    /// @dev ModExp precompile address (EIP-198): https://eips.ethereum.org/EIPS/eip-198
     address internal constant MOD_EXP = 0x0000000000000000000000000000000000000005;
 
     /// @dev For addition of two points on the BLS12-381 G2 curve.
@@ -97,6 +111,12 @@ library BLS12_381 {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                        CUSTOM ERRORS                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev identifies which compressed component is invalid
+    enum Component {
+        PubKey,
+        Signature
+    }
 
     // A custom error for each precompile helps us in debugging which precompile has failed.
 
@@ -115,8 +135,19 @@ library BLS12_381 {
     /// @dev provided BLS signature is invalid
     error InvalidSignature();
 
+    /// @dev compression/infinity flag bits in compressed component are invalid
+    /// @param component which component is incorrect (pubkey or signature)
+    error InvalidCompressedComponent(Component component);
+
+    /// @dev sign flag bit in compressed component is invalid
+    /// @param component which component is incorrect (pubkey or signature)
+    error InvalidCompressedComponentSignBit(Component component);
+
     /// @dev provided pubkey length is not 48
     error InvalidPubkeyLength();
+
+    /// @dev provided signature length is not 96
+    error InvalidSignatureLength();
 
     /// @dev provided block header is invalid
     error InvalidBlockHeader();
@@ -126,20 +157,20 @@ library BLS12_381 {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     /**
-     * @notice Computes a point in G2 from a message. Modified to accept bytes32 and have DSL per ETH 2.0 spec
+     * @notice Computes a point in G2 from a message. Modified to accept bytes32 and have DST per ETH 2.0 spec
      * @param message the message to hash and map to G2 point on BLS curve
      * @dev original at https://github.com/Vectorized/solady/blob/dcdfab80f4e6cb9ac35c91610b2a2ec42689ec79/src/utils/ext/ithaca/BLS.sol#L275
-     * @dev added comments and modified to use bytes32 instead of bytes and correct DSL per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#bls-signatures
+     * @dev added comments and modified to use bytes32 instead of bytes and correct DST per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#bls-signatures
      *  */
     function hashToG2(bytes32 message) internal view returns (G2Point memory result) {
         /// @solidity memory-safe-assembly
         assembly {
-            /// @dev Constructs the domain separation tag for hashing
+            /// @dev Writes `I2OSP(i_, 1) || DST || I2OSP(len(DST), 1)` (total 45 bytes) to `o_`.
             function dstPrime(o_, i_) -> _o {
-                mstore8(o_, i_) // Write a single byte at `o_` with value `i_` (counter/index)
-                mstore(add(o_, 0x01), "BLS_SIG_BLS12381G2_XMD:SHA-256_S") // Write main part of DST (32 bytes)
-                mstore(add(o_, 0x21), "SWU_RO_POP_\x2b") // Write final part (12 bytes, includes '+' as 0x2b)
-                _o := add(0x2d, o_) // Return pointer to the end of DST (total 45 bytes added)
+                mstore8(o_, i_) // `i_` (counter/index)
+                mstore(add(o_, 0x01), "BLS_SIG_BLS12381G2_XMD:SHA-256_S") // DST (part 1, 32 bytes)
+                mstore(add(o_, 0x21), "SWU_RO_POP_\x2b") // DST (part 2, 11 bytes) + len(DST)=43 => 0x2b
+                _o := add(0x2d, o_) // Return pointer after the 45 bytes
             }
 
             /// @dev Calls SHA256 precompile with `data_` of length `n_`, returns 32-byte hash
@@ -150,17 +181,18 @@ library BLS12_381 {
                 _h := mload(0x00) // Load and return hash result
             }
 
-            /// @dev Modular reduction using MOD_EXP precompile (0x05)
-            /// @param s_ Pointer to structure: [base offset][base size][modulus size][modulus]
-            /// @param b_ Pointer to base value (64 bytes for fp2 element)
+            /// @dev Modular reduction using MOD_EXP precompile: computes `base^1 mod p` i.e. `base mod p`.
+            /// @param s_ Pointer to the MOD_EXP input buffer:
+            ///        [baseLen|expLen|modLen|base(64)|exp(32)=1|mod(64)=p] (total 0x100 bytes).
+            /// @param b_ Pointer to the 64-byte big-endian `base` value (overwritten with the reduced value).
             function modfield(s_, b_) {
-                mcopy(add(s_, 0x60), b_, 0x40) // Copy 64-byte fp2 element into structure
+                mcopy(add(s_, 0x60), b_, 0x40) // Copy base (64 bytes) into structure
                 if iszero(and(eq(returndatasize(), 0x40), staticcall(gas(), MOD_EXP, s_, 0x100, b_, 0x40))) {
                     revert(calldatasize(), 0x00) // Revert on failure
                 }
             }
 
-            /// @dev Map an fp2 field element to a point in G2 curve using BLS12 precompile (0x0a)
+            /// @dev Map an fp2 field element to a point in G2 curve using BLS12_MAP_FP2_TO_G2 precompile
             function mapToG2(s_, r_) {
                 if iszero(
                     and(eq(returndatasize(), 0x100), staticcall(gas(), BLS12_MAP_FP2_TO_G2, s_, 0x80, r_, 0x100))
@@ -202,15 +234,17 @@ library BLS12_381 {
             }
 
             // === Prepare MOD_EXP input structure ===
-            // Format: baseLen=0x40, base=..., modulusLen=0x20, modulus=...
+            // MOD_EXP input layout:
+            // baseLen(0x40) | expLen(0x20) | modLen(0x40) | base(0x40) | exp(0x20) | mod(0x40)
+            // We set exp = 1 so MOD_EXP performs a modular reduction: base^1 mod p == base mod p.
 
-            // Set up structure offsets
-            mstore(add(s, 0x00), 0x40) // base size = 64
-            mstore(add(s, 0x20), 0x20) // modulus size = 32
-            mstore(add(s, 0x40), 0x40) // base size again for second call
+            // Set up lengths
+            mstore(add(s, 0x00), 0x40) // baseLen = 64
+            mstore(add(s, 0x20), 0x20) // expLen = 32
+            mstore(add(s, 0x40), 0x40) // modLen = 64
 
-            // Prime modulus for BLS12-381 field
-            mstore(add(s, 0xa0), 1) // dummy flag
+            // Exponent (1) and modulus (p) for BLS12-381 base field
+            mstore(add(s, 0xa0), 1) // exp = 1 (big-endian, left-padded to expLen)
             mstore(add(s, 0xc0), 0x000000000000000000000000000000001a0111ea397fe69a4b1ba7b6434bacd7)
             mstore(add(s, 0xe0), 0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab)
 
@@ -224,11 +258,77 @@ library BLS12_381 {
             mapToG2(b, result) // result at offset 0
             mapToG2(add(0x80, b), add(0x100, result)) // second point at result + 0x100
 
-            // Add the two G2 points together with BLS12_G2ADD precompile (0x0f)
+            // Add the two G2 points together with BLS12_G2ADD precompile
             if iszero(and(eq(returndatasize(), 0x100), staticcall(gas(), BLS12_G2ADD, result, 0x200, result, 0x100))) {
                 mstore(0x00, 0xc55e5e33) // Revert with G2AddFailed()
                 revert(0x1c, 0x04)
             }
+        }
+    }
+
+    /**
+     * @notice extracts sign bit and validates other flags from compressed component header byte
+     * @param componentHeaderByte first byte of compressed component
+     * @return signBit extracted sign bit
+     * @return areOtherFlagsValid whether other flags are valid
+     * @dev details on flags: https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization
+     */
+    function extractFlags(bytes1 componentHeaderByte) internal pure returns (bool signBit, bool areOtherFlagsValid) {
+        // Binary structure of compressed component: [ compression flag(always 1), infinity flag(always 0), sign bit of Y, ...rest of component ]
+        uint8 componentHeader = uint8(componentHeaderByte);
+        // extract sign bit via mask 0b00100000
+        signBit = (componentHeader & 0x20) != 0;
+        // extract compression & infinity flags via mask 0b11000000 and require the masked value to be 0x80 (top bits '10')
+        areOtherFlagsValid = (componentHeaderByte & 0xc0) == 0x80;
+    }
+
+    /**
+     * @notice validates flags in compressed pubkey against provided Y coordinate
+     * @param pubkey compressed pubkey to validate
+     * @param pubkeyY Y component of uncompressed pubkey
+     */
+    function validateCompressedPubkeyFlags(bytes calldata pubkey, Fp calldata pubkeyY) internal pure {
+        if (pubkey.length != 48) revert InvalidPubkeyLength();
+
+        (bool signBit, bool areOtherFlagsValid) = extractFlags(pubkey[0]);
+        if (!areOtherFlagsValid) {
+            revert InvalidCompressedComponent(Component.PubKey);
+        }
+
+        // to determine correct sign bit we need to check y > p - y which is equivalent to y > p/2
+        // because FP components are 48(+16 padding) bytes we compare left part of halfP first
+        // and if that not enough then right part of halfP
+        bool computedSignBit = pubkeyY.a > HALF_P_A || (pubkeyY.a == HALF_P_A && pubkeyY.b > HALF_P_B);
+
+        if (signBit != computedSignBit) {
+            revert InvalidCompressedComponentSignBit(Component.PubKey);
+        }
+    }
+
+    /**
+     * @notice validates flags in compressed signature against provided Y coordinate
+     * @param signature compressed signature to validate
+     * @param signatureY Y component of uncompressed signature
+     */
+    function validateCompressedSignatureFlags(bytes calldata signature, Fp2 calldata signatureY) internal pure {
+        if (signature.length != 96) revert InvalidSignatureLength();
+
+        (bool signBit, bool areOtherFlagsValid) = extractFlags(signature[0]);
+        if (!areOtherFlagsValid) {
+            revert InvalidCompressedComponent(Component.Signature);
+        }
+
+        bool computedSignBit;
+        // ref: https://github.com/ethereum/py_ecc/blob/05167bc2f11281a32cd18a8d4a7a7da6085be48d/py_ecc/bls/point_compression.py#L165
+        // in ultra-rare cases c1 is zero and we need to use c0 to determine sign bit
+        if (signatureY.c1_a == 0 && signatureY.c1_b == 0) {
+            computedSignBit = signatureY.c0_a > HALF_P_A || (signatureY.c0_a == HALF_P_A && signatureY.c0_b > HALF_P_B);
+        }
+        // normal case, use c1 to determine sign bit similar to FP
+        else { computedSignBit = signatureY.c1_a > HALF_P_A || (signatureY.c1_a == HALF_P_A && signatureY.c1_b > HALF_P_B); }
+
+        if (signBit != computedSignBit) {
+            revert InvalidCompressedComponentSignBit(Component.Signature);
         }
     }
 
@@ -251,35 +351,43 @@ library BLS12_381 {
         bytes32 withdrawalCredentials,
         bytes32 depositDomain
     ) internal view {
+        // validate compression flags in pubkey and signature to ensure that they correspond to provided Y coordinates
+        // this ensures that this verification is equivalent to one by CL:
+        // - we receive Y components and throw away compression flags in X
+        // - CL recomputes Y from X and compression flags
+        validateCompressedPubkeyFlags(pubkey, depositY.pubkeyY);
+        validateCompressedSignatureFlags(signature, depositY.signatureY);
+
         // Hash the deposit message and map it to G2 point on the curve
         G2Point memory msgG2 = hashToG2(depositMessageSigningRoot(pubkey, amount, withdrawalCredentials, depositDomain));
 
         // BLS Pairing check input
-        // pubkeyG1 | msgG2 | NEGATED_G1_GENERATOR | signatureG2
+        // pubkeyG1(pubkey | depositY.pubkeyY) | msgG2 | NEGATED_G1_GENERATOR | signatureG2(signature | depositY.signatureY)
         bytes32[24] memory input;
 
-        // Load pubkeyG1 directly from calldata to input array
-        // pubkeyG1.X = 16byte pad | flag_mask & deposit.pubkey(0 - 16 bytes) | deposit.pubkey(16 - 48 bytes)
-        // pubkeyG1.Y as is from calldata
+        // Load pubkeyG1 (G1) into `input[0..3]` as required by EIP-2537.
+        // - pubkey is a 48-byte compressed G1 X coordinate with flag bits in pubkey[0].
+        // - Pairing precompile expects a 64-byte X field element: 16 zero bytes || X (with the 3 flag bits cleared).
+        // - Y is provided uncompressed as `depositY.pubkeyY` (64 bytes).
         /// @solidity memory-safe-assembly
         assembly {
-            // load first 32 bytes of pubkey and apply sign mask
+            // Write pubkey[0:32] into X (skipping the 16-byte left-pad) and clear the 3 flag bits in pubkey[0].
             mstore(
-                add(input, 0x10), // to input[0.5-1.5] (16-46 bytes)
+                add(input, 0x10), // X[0:32] within the 64-byte field element (after 16-byte pad)
                 and(calldataload(pubkey.offset), FP_NO_SIGN_MASK)
             )
 
-            // load rest of 16 bytes of pubkey
+            // Write pubkey[32:48] into X[32:48].
             calldatacopy(
-                add(input, 0x30), // to input[1.5-2]
-                add(pubkey.offset, 0x20), // from last 16 bytes of pubkey
+                add(input, 0x30), // X[32:48] within the 64-byte field element
+                add(pubkey.offset, 0x20), // pubkey[32:48]
                 0x10 // 16 bytes
             )
 
-            //  Load all of depositY.pubkeyY
+            // Load depositY.pubkeyY (64 bytes) into input[2..3].
             calldatacopy(
-                add(input, 0x40), // to input[2-3]
-                depositY, // from depositY.pubkeyY
+                add(input, 0x40), // input[2]
+                depositY, // depositY.pubkeyY
                 0x40 // 64 bytes
             )
         }
@@ -307,34 +415,33 @@ library BLS12_381 {
         input[14] = 0x00000000000000000000000000000000114d1d6855d545a8aa7d76c8cf2e21f2;
         input[15] = 0x67816aef1db507c96655b9d5caac42364e6f38ba0ecb751bad54dcd6b939c2ca;
 
-        // Signature G2
-        // Signature G2 X (deposit.signature has Fp2 flipped)
-        //  - signatureG2.X_c1 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
-        //  - signatureG2.X_c2 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
-        // SignatureG2 Y as is from calldata
+        // Signature G2 (into `input[16..23]`)
+        // - signature is a 96-byte compressed G2 X coordinate (Fp2) encoded as `c1 || c0`, with flag bits in signature[0].
+        // - Pairing precompile expects X as `c0, c1` and each Fp limb as 64 bytes: 16 zero bytes || 48-byte limb.
+        // - Y is provided uncompressed as `depositY.signatureY` (Fp2, 128 bytes).
         /// @solidity memory-safe-assembly
         assembly {
-            // Load signatureG2.X_c2 skipping 16 bytes of zero padding
+            // signatureG2.X.c0 = signature[48:96] (left-pad with 16 zero bytes to 64 bytes).
             calldatacopy(
-                add(input, 0x210), // to input[16.5-20]
-                add(signature.offset, 0x30), // from  deposit.signature(48-96 bytes)
-                0x30 // 48 bytes of length
+                add(input, 0x210), // input[16] + 16 bytes
+                add(signature.offset, 0x30), // signature[48:96]
+                0x30 // 48 bytes
             )
 
-            // Load signatureG2.X_c1 first 32 bytes and apply sign mask
+            // signatureG2.X.c1[0:32] = signature[0:32] with flag bits cleared (after 16-byte pad).
             mstore(
-                add(input, 0x250), // to input[18.5-19.5]
+                add(input, 0x250), // input[18] + 16 bytes
                 and(calldataload(signature.offset), FP_NO_SIGN_MASK)
             )
 
-            // Load rest of 16 bytes of signatureG2.X_c1
+            // signatureG2.X.c1[32:48] = signature[32:48].
             calldatacopy(
-                add(input, 0x270), // to input[19.5-20]
-                add(signature.offset, 0x20), // from deposit.signature(32-48 bytes)
+                add(input, 0x270), // input[19] + 16 bytes
+                add(signature.offset, 0x20), // signature[32:48]
                 0x10 // 16 bytes
             )
 
-            // Load all of depositY.signatureY to input[20-23]
+            // Load depositY.signatureY (128 bytes) into input[20..23].
             calldatacopy(
                 add(input, 0x280), // copy to input[20]
                 add(depositY, 0x40), // from calldata at depositY.signatureY
@@ -361,7 +468,7 @@ library BLS12_381 {
         assembly {
             if iszero(
                 and(
-                    eq(returndatasize(), 0x20), // check that return data is only 32 bytes (executes after staticall)
+                    eq(returndatasize(), 0x20), // check that return data is only 32 bytes (executes after staticcall)
                     staticcall(
                         gas(),
                         BLS12_PAIRING_CHECK,
@@ -398,8 +505,8 @@ library BLS12_381 {
             // Store `right` at memory position 0x20
             mstore(0x20, right)
 
-            // Call SHA-256 precompile (0x02) with 64-byte input at memory 0x00
-            let success := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
+            // Call SHA-256 precompile with 64-byte input at memory 0x00.
+            let success := staticcall(gas(), SHA256, 0x00, 0x40, 0x00, 0x20)
             if iszero(success) {
                 revert(0, 0)
             }
@@ -416,14 +523,13 @@ library BLS12_381 {
 
         /// @solidity memory-safe-assembly
         assembly {
-            // write 32 bytes to 32-64 bytes of scratch space
-            // to ensure last 49-64 bytes of pubkey are zeroed
+            // Zero scratch space [0x20..0x3f] so bytes [48..63] are zero after copying a 48-byte pubkey.
             mstore(0x20, 0)
             // Copy 48 bytes of `pubkey` to start of scratch space
             calldatacopy(0x00, pubkey.offset, 48)
 
-            // Call the SHA-256 precompile (0x02) with the 64-byte input
-            if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
+            // Call the SHA-256 precompile with the 64-byte input.
+            if iszero(staticcall(gas(), SHA256, 0x00, 0x40, 0x00, 0x20)) {
                 revert(0, 0)
             }
 
@@ -442,7 +548,7 @@ library BLS12_381 {
     /**
      * @notice calculates the signing root for deposit message
      * @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
-     * @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
+     * @dev should not be confused with `depositDataRoot`, used for verifying BLS deposit signature
      */
     function depositMessageSigningRoot(
         bytes calldata pubkey,
