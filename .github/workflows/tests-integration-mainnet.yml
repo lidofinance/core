@@ -13,36 +13,14 @@ jobs:
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
 
-    services:
-      hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.26.0
-        ports:
-          - 8555:8545
-        env:
-          ETH_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
-          DONT_SET_CHAIN_ID: true
-          HARDFORK: "prague"
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      - name: Mock Aragon voting
-        run: yarn upgrade:mock-voting
-        env:
-          RPC_URL: http://localhost:8555
-          NETWORK_STATE_FILE: deployed-mainnet.json
-
-      - name: Workaround for not updated state error when forking a fork
-        run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
-        env:
-          RPC_URL: http://localhost:8555
-
       - name: Run integration tests
         run: yarn test:integration
         env:
-          RPC_URL: http://localhost:8555
-          LOG_LEVEL: debug
+          RPC_URL: "${{ secrets.ETH_RPC_URL }}"
           NETWORK_STATE_FILE: deployed-mainnet.json

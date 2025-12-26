@@ -538,6 +538,11 @@
       "maxPositiveTokenRebase": 750000
     }
   },
+  "pinnedBeaconProxy": {
+    "contract": "contracts/0.8.25/vaults/PinnedBeaconProxy.sol",
+    "address": "0x62e0D92cf7B8752b5292B9BCbbacE4cFa1633428",
+    "constructorArgs": ["0x5FbE8cEf9CCc56ad245736D3C5bAf82ad54Ca789", "0x"]
+  },
   "predepositGuarantee": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
