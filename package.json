@@ -93,7 +93,7 @@
     "eslint-plugin-simple-import-sort": "12.1.1",
     "ethereumjs-util": "7.1.5",
     "ethers": "6.14.4",
-    "glob": "11.0.3",
+    "glob": "11.1.0",
     "globals": "15.15.0",
     "hardhat": "2.26.1",
     "hardhat-contract-sizer": "2.10.0",
