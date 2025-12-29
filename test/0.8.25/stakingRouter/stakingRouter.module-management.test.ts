@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { StakingRouter } from "typechain-types";
 
-import { certainAddress, getNextBlock, randomString, StakingModuleType, WithdrawalCredentialsType } from "lib";
+import { certainAddress, getNextBlock, randomString, WithdrawalCredentialsType } from "lib";
 
 import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
 
@@ -72,7 +72,7 @@ describe("StakingRouter.sol:module-management", () => {
       minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
       /// @notice The type of withdrawal credentials for creation of validators.
       /// @dev 1 = 0x01 withdrawals, 2 = 0x02 withdrawals.
-      moduleType: StakingModuleType.Legacy,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
     };
 
     it("Reverts if the caller does not have the role", async () => {
@@ -145,7 +145,7 @@ describe("StakingRouter.sol:module-management", () => {
         treasuryFee: 100,
         maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
         minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
-        moduleType: StakingModuleType.Legacy,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
       };
 
       for (let i = 0; i < MAX_STAKING_MODULES_COUNT; i++) {
@@ -201,7 +201,6 @@ describe("StakingRouter.sol:module-management", () => {
         PRIORITY_EXIT_SHARE_THRESHOLD,
         MAX_DEPOSITS_PER_BLOCK,
         MIN_DEPOSIT_BLOCK_DISTANCE,
-        StakingModuleType.Legacy,
         WithdrawalCredentialsType.WC0x01,
       ]);
     });
@@ -235,7 +234,7 @@ describe("StakingRouter.sol:module-management", () => {
       treasuryFee: TREASURY_FEE,
       maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
       minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
-      moduleType: StakingModuleType.Legacy,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
     };
 
     beforeEach(async () => {

@@ -121,5 +121,8 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     operatorGrid: {
       deployParameters: params.operatorGrid,
     },
+    topUpGateway: {
+      deployParameters: params.topUpGateway,
+    },
   };
 }

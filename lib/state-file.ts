@@ -108,6 +108,7 @@ export enum Sk {
   operatorGrid = "operatorGrid",
   validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
+  topUpGateway = "topUpGateway",
   v3TemporaryAdmin = "v3TemporaryAdmin",
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
@@ -176,6 +177,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
     case Sk.consolidationGateway:
+    case Sk.topUpGateway:
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:

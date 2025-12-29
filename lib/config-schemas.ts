@@ -85,6 +85,19 @@ const ConsolidationGatewaySchema = z.object({
   consolidationsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
 });
+
+// Top-up gateway schema
+const TopUpGatewaySchema = z.object({
+  maxValidatorsPerTopUp: PositiveIntSchema,
+  minBlockDistance: PositiveIntSchema,
+  gIFirstValidatorPrev: HexStringSchema,
+  gIFirstValidatorCurr: HexStringSchema,
+  gIFirstBalancePrev: HexStringSchema,
+  gIFirstBalanceCurr: HexStringSchema,
+  gIFirstPendingPrev: HexStringSchema,
+  gIFirstPendingCurr: HexStringSchema,
+  pivotSlot: NonNegativeIntSchema,
+});
 // Easy track schema
 const EasyTrackSchema = z.object({
   trustedCaller: EthereumAddressSchema,
@@ -272,6 +285,7 @@ export const ScratchParametersSchema = z.object({
   consolidationGateway: ConsolidationGatewaySchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
+  topUpGateway: TopUpGatewaySchema,
 });
 
 // Inferred types from zod schemas

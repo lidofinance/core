@@ -126,6 +126,7 @@ export async function main(): Promise<void> {
     vaultFactory: newVaultFactoryAddress,
     lazyOracle: await locator.lazyOracle(),
     operatorGrid: await locator.operatorGrid(),
+    topUpGateway: await locator.topUpGateway(),
   };
   const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
   const newLocatorAddress = await lidoLocatorImpl.getAddress();

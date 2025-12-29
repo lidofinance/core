@@ -25,7 +25,7 @@ interface IStakingRouter {
 
     function getStakingModuleMaxDepositsCount(
         uint256 _stakingModuleId,
-        uint256 _depositableEth
+        uint256 _maxDepositsValue
     ) external view returns (uint256);
 
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
@@ -39,10 +39,24 @@ interface IStakingRouter {
         view
         returns (uint16 modulesFee, uint16 treasuryFee);
 
-    function getStakingModuleMaxInitialDepositsAmount(
+    function getTopUpDepositAmount(
         uint256 _stakingModuleId,
-        uint256 _depositableEth
-    ) external returns (uint256 depositsAmount, uint256 depositsCount);
+        uint256 _depositableEth,
+        uint256[] _keyIndices,
+        uint256[] _operatorIds,
+        bytes _pubkeysPacked,
+        uint256[] _topUpLimitsGwei
+    ) external returns (
+        uint256 amount,
+        bytes memory pubkeysPacked,
+        uint256[] memory allocations
+    );
+
+    function topUp(
+        uint256 _stakingModuleId,
+        bytes _pubkeysPacked,
+        uint256[] _topUpAmountsGwei
+    ) external payable;
 }
 
 interface IWithdrawalQueue {
@@ -262,74 +276,74 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _oldBurner The address of the old Burner contract to migrate from
      * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
      */
-    function finalizeUpgrade_v3(address _oldBurner, address[] _contractsWithBurnerAllowances) external {
-        require(hasInitialized(), "NOT_INITIALIZED");
-        _checkContractVersion(2);
-        _setContractVersion(3);
+    // function finalizeUpgrade_v3(address _oldBurner, address[] _contractsWithBurnerAllowances) external {
+    //     require(hasInitialized(), "NOT_INITIALIZED");
+    //     _checkContractVersion(2);
+    //     _setContractVersion(3);
 
-        _migrateStorage_v2_to_v3();
+    //     _migrateStorage_v2_to_v3();
 
-        _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
-    }
+    //     _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
+    // }
 
-    function _migrateStorage_v2_to_v3() internal {
-        // migrate storage to packed representation
-        bytes32 LIDO_LOCATOR_POSITION = keccak256("lido.Lido.lidoLocator");
-        address locator = LIDO_LOCATOR_POSITION.getStorageAddress();
-        assert(locator != address(0)); // sanity check
+    // function _migrateStorage_v2_to_v3() internal {
+    //     // migrate storage to packed representation
+    //     bytes32 LIDO_LOCATOR_POSITION = keccak256("lido.Lido.lidoLocator");
+    //     address locator = LIDO_LOCATOR_POSITION.getStorageAddress();
+    //     assert(locator != address(0)); // sanity check
 
-        _setLidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
-        LIDO_LOCATOR_POSITION.setStorageUint256(0);
+    //     _setLidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
+    //     LIDO_LOCATOR_POSITION.setStorageUint256(0);
 
-        bytes32 BUFFERED_ETHER_POSITION = keccak256("lido.Lido.bufferedEther");
-        _setBufferedEther(BUFFERED_ETHER_POSITION.getStorageUint256());
-        BUFFERED_ETHER_POSITION.setStorageUint256(0);
+    //     bytes32 BUFFERED_ETHER_POSITION = keccak256("lido.Lido.bufferedEther");
+    //     _setBufferedEther(BUFFERED_ETHER_POSITION.getStorageUint256());
+    //     BUFFERED_ETHER_POSITION.setStorageUint256(0);
 
-        bytes32 DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.depositedValidators");
-        _setDepositedValidators(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
-        DEPOSITED_VALIDATORS_POSITION.setStorageUint256(0);
+    //     bytes32 DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.depositedValidators");
+    //     _setDepositedValidators(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
+    //     DEPOSITED_VALIDATORS_POSITION.setStorageUint256(0);
 
-        bytes32 CL_VALIDATORS_POSITION = keccak256("lido.Lido.beaconValidators");
-        bytes32 CL_BALANCE_POSITION = keccak256("lido.Lido.beaconBalance");
-        _setClBalanceAndClValidators(
-            CL_BALANCE_POSITION.getStorageUint256(),
-            CL_VALIDATORS_POSITION.getStorageUint256()
-        );
-        CL_BALANCE_POSITION.setStorageUint256(0);
-        CL_VALIDATORS_POSITION.setStorageUint256(0);
+    //     bytes32 CL_VALIDATORS_POSITION = keccak256("lido.Lido.beaconValidators");
+    //     bytes32 CL_BALANCE_POSITION = keccak256("lido.Lido.beaconBalance");
+    //     _setClBalanceAndClValidators(
+    //         CL_BALANCE_POSITION.getStorageUint256(),
+    //         CL_VALIDATORS_POSITION.getStorageUint256()
+    //     );
+    //     CL_BALANCE_POSITION.setStorageUint256(0);
+    //     CL_VALIDATORS_POSITION.setStorageUint256(0);
 
-        bytes32 TOTAL_SHARES_POSITION = keccak256("lido.StETH.totalShares");
-        uint256 totalShares = TOTAL_SHARES_POSITION.getStorageUint256();
-        assert(totalShares > 0); // sanity check
-        TOTAL_AND_EXTERNAL_SHARES_POSITION.setLowUint128(totalShares);
-        TOTAL_SHARES_POSITION.setStorageUint256(0);
-    }
+    //     bytes32 TOTAL_SHARES_POSITION = keccak256("lido.StETH.totalShares");
+    //     uint256 totalShares = TOTAL_SHARES_POSITION.getStorageUint256();
+    //     assert(totalShares > 0); // sanity check
+    //     TOTAL_AND_EXTERNAL_SHARES_POSITION.setLowUint128(totalShares);
+    //     TOTAL_SHARES_POSITION.setStorageUint256(0);
+    // }
 
-    function _migrateBurner_v2_to_v3(
-        address _oldBurner,
-        address[] _contractsWithBurnerAllowances
-    ) internal {
-        require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
-        address burner = _burner();
-        require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
+    // function _migrateBurner_v2_to_v3(
+    //     address _oldBurner,
+    //     address[] _contractsWithBurnerAllowances
+    // ) internal {
+    //     require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
+    //     address burner = _burner();
+    //     require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
 
-        // migrate burner stETH balance
-        uint256 oldBurnerShares = _sharesOf(_oldBurner);
-        if (oldBurnerShares > 0) {
-            _transferShares(_oldBurner, burner, oldBurnerShares);
-            _emitTransferEvents(_oldBurner, burner, getPooledEthByShares(oldBurnerShares), oldBurnerShares);
-        }
+    //     // migrate burner stETH balance
+    //     uint256 oldBurnerShares = _sharesOf(_oldBurner);
+    //     if (oldBurnerShares > 0) {
+    //         _transferShares(_oldBurner, burner, oldBurnerShares);
+    //         _emitTransferEvents(_oldBurner, burner, getPooledEthByShares(oldBurnerShares), oldBurnerShares);
+    //     }
 
-        // initialize new burner with state from the old burner
-        IBurnerMigration(burner).migrate(_oldBurner);
+    //     // initialize new burner with state from the old burner
+    //     IBurnerMigration(burner).migrate(_oldBurner);
 
-        // migrating allowances
-        for (uint256 i = 0; i < _contractsWithBurnerAllowances.length; i++) {
-            uint256 oldAllowance = allowance(_contractsWithBurnerAllowances[i], _oldBurner);
-            _approve(_contractsWithBurnerAllowances[i], _oldBurner, 0);
-            _approve(_contractsWithBurnerAllowances[i], burner, oldAllowance);
-        }
-    }
+    //     // migrating allowances
+    //     for (uint256 i = 0; i < _contractsWithBurnerAllowances.length; i++) {
+    //         uint256 oldAllowance = allowance(_contractsWithBurnerAllowances[i], _oldBurner);
+    //         _approve(_contractsWithBurnerAllowances[i], _oldBurner, 0);
+    //         _approve(_contractsWithBurnerAllowances[i], burner, oldAllowance);
+    //     }
+    // }
 
     /**
      * @notice Stop accepting new ether to the protocol
@@ -637,6 +651,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return !_withdrawalQueue().isBunkerModeActive() && !isStopped();
     }
 
+    function _requireCanDeposit() internal view {
+        require(canDeposit(), "CAN_NOT_DEPOSIT");
+    }
+
     /**
      * @return the amount of ether in the buffer that can be deposited to the Consensus Layer
      * @dev Takes into account unfinalized stETH required by WithdrawalQueue
@@ -649,39 +667,110 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Invoke a deposit call to the Staking Router contract and update buffered counters
-     * @param _maxDepositsAmountPerBlock max deposits amount per block
+     * @param _maxDepositsCount max deposits count
      * @param _stakingModuleId id of the staking module to be deposited
      * @param _depositCalldata module calldata
      */
-    function deposit(uint256 _maxDepositsAmountPerBlock, uint256 _stakingModuleId, bytes _depositCalldata) external {
-        // TODO: get rid of _maxDepositsAmountPerBlock
+    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external {
         ILidoLocator locator = _getLidoLocator();
-
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
-        require(canDeposit(), "CAN_NOT_DEPOSIT");
-
+        _requireCanDeposit();
         IStakingRouter stakingRouter = _stakingRouter(locator);
-        (uint256 depositsAmount, uint256 depositsCount) = stakingRouter.getStakingModuleMaxInitialDepositsAmount(
-            _stakingModuleId,
-            Math256.min(_maxDepositsAmountPerBlock, getDepositableEther())
+        uint256 depositsCount = Math256.min(
+            _maxDepositsCount,
+            stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther())
         );
 
-        if (depositsAmount > 0) {
+        uint256 depositsValue;
+        if (depositsCount > 0) {
+            depositsValue = depositsCount.mul(DEPOSIT_SIZE);
             /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
             ///     even if the StakingRouter is a trusted contract.
-
-            (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
-            depositedValidators = depositedValidators.add(depositsCount);
-
-            _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsAmount), depositedValidators);
-            emit Unbuffered(depositsAmount);
-            emit DepositedValidatorsChanged(depositedValidators);
+            _updateBufferedEtherAndDepositedValidators(depositsValue, depositsCount);
         }
 
         /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether
         ///     sent to StakingRouter is counted as deposited. If StakingRouter can't deposit all
         ///     passed ether it MUST revert the whole transaction (never happens in normal circumstances)
-        stakingRouter.deposit.value(depositsAmount)(_stakingModuleId, _depositCalldata);
+        stakingRouter.deposit.value(depositsValue)(_stakingModuleId, _depositCalldata);
+    }
+
+    /// @notice Invoke a top up call to the Staking Router contract and update buffered counters.
+    ///         Phase 1: Queries StakingRouter.getTopUpDepositAmount to calculate the actual top up amount
+    ///         based on depositable ETH and provided limits. This also calls obtainDepositData on the module
+    ///         to get the final pubkeys and allocations.
+    ///         Phase 2: Updates local buffered ether state and forwards the pubkeys/allocations to StakingRouter.topUp.
+    /// @param _stakingModuleId Id of the staking module to be deposited
+    /// @param _keyIndices List of keys' indices
+    /// @param _operatorIds List of operators' indices
+    /// @param _pubkeysPacked Packed list of public keys
+    /// @param _topUpLimitsGwei List of top up values for validators in gwei
+    function topUp(
+        uint256 _stakingModuleId,
+        uint256[] _keyIndices,
+        uint256[] _operatorIds,
+        bytes _pubkeysPacked,
+        uint256[] _topUpLimitsGwei
+     )
+       external
+    {
+        ILidoLocator locator = _getLidoLocator();
+        require(msg.sender == locator.topUpGateway(), "APP_AUTH_FAILED");
+        _requireCanDeposit();
+
+        _topUp(
+            _stakingRouter(locator),
+            _stakingModuleId,
+            _keyIndices,
+            _operatorIds,
+            _pubkeysPacked,
+            _topUpLimitsGwei
+        );
+    }
+
+    function _topUp(
+        IStakingRouter _stakingRouter,
+        uint256 _stakingModuleId,
+        uint256[] _keyIndices,
+        uint256[] _operatorIds,
+        bytes _pubkeysPacked,
+        uint256[] _topUpLimitsGwei
+    ) internal {
+        // Phase 1: Get deposit amount and pubkeys/allocations from staking router
+        // The staking router calls obtainDepositData on the module during this call
+        (uint256 depositsAmount, bytes memory pubkeysPackedResult, uint256[] memory allocations) = _stakingRouter.getTopUpDepositAmount(
+            _stakingModuleId,
+            getDepositableEther(), // do we need Math256.min(_maxDepositsCountPerBlock * 32 ether, getDepositableEther()) ?
+            _keyIndices,
+            _operatorIds,
+            _pubkeysPacked,
+            _topUpLimitsGwei
+        );
+
+        if (depositsAmount > 0) {
+            /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
+            ///     even if the StakingRouter is a trusted contract.
+            _updateBufferedEtherAndDepositedValidators(depositsAmount, 0);
+        }
+
+        // Phase 2: Top up validators with the pubkeys and allocations returned from Phase 1
+        _stakingRouter.topUp.value(depositsAmount)(
+            _stakingModuleId,
+            pubkeysPackedResult,
+            allocations
+        );
+    }
+
+    function _updateBufferedEtherAndDepositedValidators(uint256 depositsAmount, uint256 depositsCount) internal {
+        (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
+        depositedValidators = depositedValidators.add(depositsCount);
+        _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsAmount), depositedValidators);
+
+        emit Unbuffered(depositsAmount);
+
+        if (depositsCount > 0) {
+            emit DepositedValidatorsChanged(depositedValidators);
+        }
     }
 
     /**

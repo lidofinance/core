@@ -2,7 +2,7 @@
 pragma solidity 0.8.25;
 
 import {SRStorage} from "./SRStorage.sol";
-import {StakingModuleType, Strategies, Metrics, ModuleState} from "./SRTypes.sol";
+import {Strategies, Metrics, ModuleState} from "./SRTypes.sol";
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 
@@ -29,7 +29,7 @@ library SRUtils {
     error StakingModuleAddressExists();
     error StakingModuleWrongName();
     error StakingModuleUnregistered();
-    error InvalidStakingModuleType();
+    error InvalidWithdrawalCredentialsType();
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
@@ -76,10 +76,12 @@ library SRUtils {
         }
     }
 
-    function _validateModuleType(uint256 _moduleType) internal pure {
-        /// @dev check module type
-        if (_moduleType != uint8(StakingModuleType.Legacy) && _moduleType != uint8(StakingModuleType.New)) {
-            revert InvalidStakingModuleType();
+    function _validateWithdrawalCredentialsType(uint256 _withdrawalCredentialsType) internal pure {
+        if (
+            _withdrawalCredentialsType != WC_TYPE_01
+                && _withdrawalCredentialsType != WC_TYPE_02
+        ) {
+            revert InvalidWithdrawalCredentialsType();
         }
     }
 
@@ -95,23 +97,13 @@ library SRUtils {
         }
     }
 
-    function _getModuleWCType(StakingModuleType moduleType) internal pure returns (uint8) {
-        if (moduleType == StakingModuleType.Legacy) {
-            return WC_TYPE_01;
-        } else if (moduleType == StakingModuleType.New) {
-            return WC_TYPE_02;
-        } else {
-            revert InvalidStakingModuleType();
-        }
-    }
-
-    function _getModuleMEB(StakingModuleType moduleType) internal pure returns (uint256) {
-        if (moduleType == StakingModuleType.Legacy) {
+    function _getModuleMEB(uint8 _withdrawalCredentialsType) internal pure returns (uint256) {
+        if (_withdrawalCredentialsType == WC_TYPE_01) {
             return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
-        } else if (moduleType == StakingModuleType.New) {
+        } else if (_withdrawalCredentialsType == WC_TYPE_02) {
             return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
         } else {
-            revert InvalidStakingModuleType();
+            revert InvalidWithdrawalCredentialsType();
         }
     }
 
@@ -157,12 +149,12 @@ library SRUtils {
     }
 
     ///  @dev calculate module capacity in ETH
-    function _getModuleCapacity(StakingModuleType moduleType, uint256 availableKeysCount)
+    function _getModuleCapacity(uint8 withdrawalCredentialsType, uint256 availableKeysCount)
         internal
         pure
         returns (uint256)
     {
-        return availableKeysCount * _getModuleMEB(moduleType);
+        return availableKeysCount * _getModuleMEB(withdrawalCredentialsType);
     }
 
     function _toGwei(uint256 amount) internal pure returns (uint96) {

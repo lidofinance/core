@@ -12,7 +12,7 @@ import {
 } from "typechain-types";
 import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
 
-import { ether, getNextBlock, StakingModuleStatus, StakingModuleType, WithdrawalCredentialsType } from "lib";
+import { ether, getNextBlock, StakingModuleStatus, WithdrawalCredentialsType } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -80,7 +80,7 @@ describe("StakingRouter.sol:module-sync", () => {
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-      moduleType: StakingModuleType.Legacy,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
     };
 
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
@@ -107,7 +107,6 @@ describe("StakingRouter.sol:module-sync", () => {
       bigint,
       bigint,
       bigint,
-      number,
       number,
     ];
 
@@ -151,7 +150,6 @@ describe("StakingRouter.sol:module-sync", () => {
         priorityExitShareThreshold,
         maxDepositsPerBlock,
         minDepositBlockDistance,
-        StakingModuleType.Legacy,
         WithdrawalCredentialsType.WC0x01,
       ];
 
@@ -920,13 +918,44 @@ describe("StakingRouter.sol:module-sync", () => {
       ).not.to.emit(depositContract, "Deposited__MockEvent");
     });
 
-    it("Doesnt Reverts if ether does correspond to the number of deposits", async () => {
+    it("Doesn't Reverts if ether does correspond to the number of deposits", async () => {
       const deposits = 2n;
       const depositValue = ether("32.0");
       const correctAmount = deposits * depositValue;
 
       await expect(
         stakingRouter.deposit(moduleId, "0x", {
+          value: correctAmount,
+        }),
+      ).to.emit(depositContract, "Deposited__MockEvent");
+    });
+
+    it("Doesn't Reverts if ether does correspond to the number of deposits for module type New", async () => {
+      const stakingRouterAsAdmin = stakingRouter.connect(admin);
+
+      const newStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
+      const newStakingModuleAddress = await newStakingModule.getAddress();
+
+      const stakingModuleConfigNew = {
+        stakeShareLimit,
+        priorityExitShareThreshold,
+        stakingModuleFee,
+        treasuryFee,
+        maxDepositsPerBlock,
+        minDepositBlockDistance,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      };
+
+      await stakingRouterAsAdmin.addStakingModule(`${name}-new`, newStakingModuleAddress, stakingModuleConfigNew);
+
+      const newModuleId = await stakingRouter.getStakingModulesCount();
+
+      const deposits = 2n;
+      const depositValue = ether("32.0");
+      const correctAmount = deposits * depositValue;
+
+      await expect(
+        stakingRouter.deposit(newModuleId, "0x", {
           value: correctAmount,
         }),
       ).to.emit(depositContract, "Deposited__MockEvent");

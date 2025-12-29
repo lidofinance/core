@@ -3,7 +3,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { DepositContract__MockForBeaconChainDepositor, SRLib, StakingRouter__Harness } from "typechain-types";
+import {
+  BeaconChainDepositor,
+  DepositContract__MockForBeaconChainDepositor,
+  SRLib,
+  StakingRouter__Harness,
+} from "typechain-types";
 
 import { GENESIS_TIME, proxify, SECONDS_PER_SLOT } from "lib";
 
@@ -29,20 +34,17 @@ export async function deployStakingRouter(
   stakingRouter: StakingRouter__Harness;
   impl: StakingRouter__Harness;
   stakingRouterWithLib: StakingRouterWithLib;
+  beaconChainDepositor: BeaconChainDepositor;
 }> {
   if (!depositContract) {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor");
   }
 
   const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-  const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-  // const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
   const srLib = await ethers.deployContract("SRLib", deployer);
   const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
     libraries: {
       ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-      ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-      // ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       ["contracts/0.8.25/sr/SRLib.sol:SRLib"]: await srLib.getAddress(),
     },
   });
@@ -57,5 +59,5 @@ export async function deployStakingRouter(
     stakingRouter.runner,
   ) as StakingRouterWithLib;
 
-  return { stakingRouter, depositContract, impl, stakingRouterWithLib };
+  return { stakingRouter, depositContract, impl, stakingRouterWithLib, beaconChainDepositor };
 }

@@ -147,13 +147,6 @@ export async function main() {
   // Deploy StakingRouter
   //
 
-  // deploy deposit tracker
-
-  // const depositsTracker = await deployWithoutProxy(Sk.depositsTracker, "DepositsTracker", deployer);
-
-  // deploy temporary storage
-  const depositsTempStorage = await deployWithoutProxy(Sk.depositsTempStorage, "DepositsTempStorage", deployer);
-
   // deploy beacon chain depositor
   const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
 
@@ -170,9 +163,7 @@ export async function main() {
     true,
     {
       libraries: {
-        // DepositsTracker: depositsTracker.address,
         BeaconChainDepositor: beaconChainDepositor.address,
-        DepositsTempStorage: depositsTempStorage.address,
         SRLib: srLib.address,
       },
     },
@@ -383,6 +374,25 @@ export async function main() {
     deployer,
     validatorExitDelayVerifierCtorArgs,
   );
+
+  //
+  // Deploy TopUpGateway
+  //
+
+  const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
+  await deployWithoutProxy(Sk.topUpGateway, "TopUpGateway", deployer, [
+    admin,
+    locator.address,
+    topUpGatewayParams.maxValidatorsPerTopUp,
+    topUpGatewayParams.minBlockDistance,
+    topUpGatewayParams.gIFirstValidatorPrev,
+    topUpGatewayParams.gIFirstValidatorCurr,
+    topUpGatewayParams.gIFirstBalancePrev,
+    topUpGatewayParams.gIFirstBalanceCurr,
+    topUpGatewayParams.gIFirstPendingPrev,
+    topUpGatewayParams.gIFirstPendingCurr,
+    topUpGatewayParams.pivotSlot,
+  ]);
 
   //
   // Deploy WithdrawalVault

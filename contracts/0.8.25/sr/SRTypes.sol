@@ -16,16 +16,6 @@ enum StakingModuleStatus {
     Active, // deposits and rewards allowed
     DepositsPaused, // deposits NOT allowed, rewards allowed
     Stopped // deposits and rewards NOT allowed
-
-}
-
-/// @dev Type identifier for modules
-///      For simplicity, only one deposit type is allowed per module.
-///      Legacy - keys count-based accounting, old IStakingModule, WC type 0x01
-///      New - balance-based accounting, new IStakingModuleV2, WC type 0x02
-enum StakingModuleType {
-    Legacy,
-    New
 }
 
 enum Strategies {
@@ -64,10 +54,8 @@ struct StakingModuleConfig {
     /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
     ///      Value must be > 0 and ≤ type(uint64).max.
     uint256 minDepositBlockDistance;
-    /// @notice The type of staking module (Legacy/Standard), defines the module interface and withdrawal credentials type.
-    /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
-    /// @dev See {StakingModuleType} enum.
-    uint256 moduleType;
+    /// @notice Withdrawal credentials type (0x01/0x02)
+    uint256 withdrawalCredentialsType;
 }
 
 /// @dev old data struct, kept for backward compatibility
@@ -106,11 +94,7 @@ struct StakingModule {
     /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
     /// See docs for the `OracleReportSanityChecker.setAppearedValidatorsPerDayLimit` function).
     uint64 minDepositBlockDistance;
-    /// @notice The type of staking module (Legacy/Standard), defines the module interface and withdrawal credentials type.
-    /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
-    /// @dev See {StakingModuleType} enum.
-    uint8 moduleType;
-    /// @notice The type of withdrawal credentials for creation of validators
+    /// @notice Withdrawal credentials type (0x01/0x02)
     uint8 withdrawalCredentialsType;
 }
 
@@ -129,8 +113,8 @@ struct ModuleStateConfig {
     /// @notice Staking module status if staking module can not accept the deposits or can
     ///         participate in further reward distribution.
     StakingModuleStatus status;
-    /// @notice Staking module type (Legacy/Standard)
-    StakingModuleType moduleType;
+    /// @notice Withdrawal credentials type (0x01/0x02)
+    uint8 withdrawalCredentialsType;
 }
 // /// @notice The type of withdrawal credentials for creation of validators
 // uint8 wcType;

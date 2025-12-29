@@ -196,7 +196,6 @@ contract BCDepositorHarness {
         BCDepositor.makeBeaconChainDeposits32ETH(
             DEPOSIT_CONTRACT,
             _keysCount,
-            INITIAL_DEPOSIT_SIZE,
             _withdrawalCredentials,
             _publicKeysBatch,
             _signaturesBatch

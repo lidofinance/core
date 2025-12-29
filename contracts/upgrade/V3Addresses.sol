@@ -26,7 +26,6 @@ interface IStakingRouter is IAccessControlEnumerableV5 {
         uint16 priorityExitShareThreshold;
         uint64 maxDepositsPerBlock;
         uint64 minDepositBlockDistance;
-        uint8 moduleType;
         uint8 withdrawalCredentialsType;
     }
 
