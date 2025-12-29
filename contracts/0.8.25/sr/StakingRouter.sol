@@ -35,6 +35,7 @@ import {
     ModuleStateAccounting
 } from "./SRTypes.sol";
 
+
 contract StakingRouter is AccessControlEnumerableUpgradeable {
     using STASCore for STASStorage;
     using WithdrawalCredentials for bytes32;
@@ -70,6 +71,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     ///      Top-ups are not supported for 0x01.
     uint256 public constant INITIAL_DEPOSIT_SIZE = SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
     uint64 internal constant PUBKEY_LENGTH = 48;
+    uint64 internal constant MIN_DEPOSIT_IN_GWEI = 1 ether / 1 gwei;
 
     /// @dev ACL roles
     bytes32 public constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
@@ -104,6 +106,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error WrongArrayLength();
     error EmptyKeysList();
     error WrongPubkeysLength();
+    error TopUpAmountTooLow();
 
     /// @dev compatibility getters for constants removed in favor of SRLib
     // function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
@@ -729,89 +732,182 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             Math256.min(depositableValidatorsCount, _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount));
     }
 
-    /// @notice Return how much can be topped up in moudle based on module target allocation
-    /// and top up amounts returned by TopUpGateway
+    /// @notice Calculates how much can be topped up for each key in the module,
+    /// based on the module's target allocation, the top-up limits from TopUpGateway,
+    /// and the amounts returned by the module's obtainDepositData.
     /// @param _stakingModuleId Id of staking module
     /// @param _depositableEth Amount that can be deposited in module
-    /// @param _topUpLimits Array of limits for top up on each keys based on CL data and TopUpGateway checks
-    /// @return amount Deposit amount to module
-    function getTopUpDepositAmount(uint256 _stakingModuleId, uint256 _depositableEth, uint256[] calldata _topUpLimits)
-        external
-        view
-        returns (uint256 amount)
-    {
-        // allowed top ups
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
-
-        /// @dev This method is only supported for new modules
-        if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
-            revert WrongWithdrawalCredentialsType();
-        }
-
-        // getAllocation
-        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
-        if (stakingModuleDepositableEthAmount == 0) return 0;
-
-        uint256 topUpAmountGwei;
-        unchecked {
-            for (uint256 i; i < _topUpLimits.length; i++) {
-                topUpAmountGwei += _topUpLimits[i];
-            }
-        }
-
-        uint256 topUpAmountWei = topUpAmountGwei * 1 gwei;
-
-        return Math256.min(topUpAmountWei, stakingModuleDepositableEthAmount);
-    }
-
-    /// @notice Calls `obtainDepositData` on the staking module to determine
-    /// which keys to top up and for what amounts, based on the
-    /// provided key indices, operator IDs, pubkeys, and top-up limits. Then top up validators based on this information.
-    /// @param _stakingModuleId Staking module id
-    /// @param _keyIndices Array of key indicies
-    /// @param _operatorIds Array of operator indicies
+    /// @param _keyIndices Array of key indices
+    /// @param _operatorIds Array of operator indices
     /// @param _pubkeysPacked Packed list of public keys
-    /// @param _topUpLimitsGwei Array of allowed top up in gwei on key
-    /// @dev Method allowed only for modules with 0x02 keys
-    function topUp(
+    /// @param _topUpLimitsGwei Array of per-key allowed top-up amounts, in gwei
+    /// @return amount Total deposit amount to the module
+    /// @return pubkeysPacked Packed pubkeys returned by module
+    /// @return allocations List of per-key top-up amounts
+    function getTopUpDepositAmount(
         uint256 _stakingModuleId,
+        uint256 _depositableEth,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
         bytes calldata _pubkeysPacked,
         uint256[] calldata _topUpLimitsGwei
-    ) external payable {
+    )
+        external
+        returns (
+            uint256 amount,
+            bytes memory pubkeysPacked,
+            uint256[] memory allocations
+        )
+    {
         if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
         _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimitsGwei, _pubkeysPacked);
+
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
-        // check top ups allowed for module
+        /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
             revert WrongWithdrawalCredentialsType();
         }
+
+        // Get allocation based on target share
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
+        // Call obtainDepositData on the staking module to determine which keys to top up
+        // and for what amounts. The module verifies keys belong to it and reverts if invalid.
+        // Even if stakingModuleDepositableEthAmount is 0, we still call the module
+        // to allow CSM queue cursor advancement.
+        bytes[] memory publicKeys;
+        (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress)
+            .obtainDepositData(stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei);
+        // TODO: maybe check result obtainDepositData in _pubkeysPacked
+
+        // Calculate total amount from allocations returned by module
+        uint256 totalAllocationsGwei;
+        unchecked {
+            for (uint256 i; i < allocations.length; ++i) {
+                if (allocations[i] != 0 && allocations[i] < MIN_DEPOSIT_IN_GWEI) {
+                  revert TopUpAmountTooLow();
+                }
+                totalAllocationsGwei += allocations[i];
+            }
+        }
+
+        amount = totalAllocationsGwei * 1 gwei;
+
+        // Verify sum of allocations does not exceed module's max deposit amount
+        if (amount > stakingModuleDepositableEthAmount) {
+            revert AllocationExceedsTarget();
+        }
+        // Pack public keys into bytes
+        pubkeysPacked = _packPubkeys(publicKeys);
+    }
+
+    function _packPubkeys(bytes[] memory _pubkeys) internal pure returns (bytes memory packed) {
+        if (_pubkeys.length == 0) return packed;
+        /// @solidity memory-safe-assembly
+        assembly {
+            let dest := mload(0x40)
+            packed := dest
+            let count := mload(_pubkeys)
+            mstore(dest, mul(count, 48))
+            dest := add(dest, 0x20)
+            for {let i := 0} lt(i, count) { i := add(i, 1) } {
+                let pubkeyPtr := add(add(_pubkeys, 0x20), mul(i, 0x20))
+                let pubkey := mload(pubkeyPtr)
+                let dataPtr := add(pubkey, 0x20)
+                // copy first 32 bytes
+                mstore(dest, mload(dataPtr))
+                // copy next 32 bytes, only 16 has pubkey data
+                mstore(add(dest, 0x20), mload(add(dataPtr, 0x20)))
+                // move pointer to 48 byte
+                dest := add(dest, 48)
+            }
+
+            // Update free memory pointer
+            mstore(0x40, dest)
+        }
+    }
+
+    /// @notice Top up validators with the provided public keys and amounts.
+    /// This method receives the pubkeys and allocations that were previously
+    /// determined by getTopUpDepositAmount (which calls obtainDepositData on the module).
+    /// @param _stakingModuleId Staking module id
+    /// @param _pubkeysPacked Packed validator public keys to top up
+    /// @param _topUpAmountsGwei Array of per-key top-up amounts in gwei
+    /// @dev Method allowed only for modules with 0x02 keys
+    function topUp(
+        uint256 _stakingModuleId,
+        bytes calldata _pubkeysPacked,
+        uint256[] calldata _topUpAmountsGwei
+    ) external payable {
+        if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
+
+        uint256 keysCount = _topUpAmountsGwei.length;
+        if (keysCount == 0) {
+            revert EmptyKeysList();
+        }
+        if (_pubkeysPacked.length != keysCount * PUBKEY_LENGTH) {
+            revert WrongPubkeysLength();
+        }
+
+        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+
+        // Check top ups allowed for module
+        if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
+            revert WrongWithdrawalCredentialsType();
+        }
+
         bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
         bytes memory wcBytes = abi.encodePacked(withdrawalCredentials);
 
         uint256 depositsValue = msg.value;
-        // Even if depositValue equals 0, obtainDepositData is still called.
-        // the CSM queue has a fixed size. Example: If all keys currently in the queue have exited,
-        // they must be popped to free up slots and new keys must be enqueued.
-        // This requires calling topUp with depositValue >= 0 and _topUpLimitsGwei = [0, ...].
 
-        uint256 etherBalanceBeforeDeposits = address(this).balance;
-        (bytes[] memory pubkeys, uint256[] memory topUpAmounts) = IStakingModuleV2(stateConfig.moduleAddress)
-            .obtainDepositData(depositsValue, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei);
-        // TODO: should we check pubkeys in _pubkeysPacked ?
+        if (depositsValue > 0) {
+            uint256 etherBalanceBeforeDeposits = address(this).balance;
 
-        // Skip tracking for zero deposits (CSM queue cursor advancement case)
-        if (msg.value > 0) {
-            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, pubkeys, topUpAmounts);
-            _trackDeposit(_stakingModuleId, msg.value);
+            // Unpack pubkeys for BeaconChainDepositor
+            bytes[] memory publicKeys = _unpackPubkeys(_pubkeysPacked, keysCount);
+            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, publicKeys, _topUpAmountsGwei);
+            _trackDeposit(_stakingModuleId, depositsValue);
+
+            uint256 etherBalanceAfterDeposits = address(this).balance;
+
+            /// @dev All sent ETH must be deposited and self balance stay the same.
+            assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == depositsValue);
         }
+    }
 
-        uint256 etherBalanceAfterDeposits = address(this).balance;
+    function _unpackPubkeys(bytes calldata _packedPubkeys, uint256 _count) internal pure returns (bytes[] memory pubkeys) {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            pubkeys := ptr
+            // length = _count
+            // pointer -> pubkeys[0]
+            // pointer -> pubkeys[1]
+            // ...
+            // pointer -> pubkeys[_count - 1]
+            mstore(ptr, _count)
+            // skip length, move to pointer of elements
+            let ptrStart := add(ptr, 0x20)
+            let dataStart := add(ptrStart, mul(_count, 0x20))
 
-        /// @dev All sent ETH must be deposited and self balance stay the same.
-        assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == depositsValue);
+            // store data
+            // pointer -> pubkeys[0] ->
+            //     length = 48
+            //     pubkeys[0] data
+            let dataPtr := dataStart
+            let calldataPtr := _packedPubkeys.offset
+
+            for {let i := 0} lt(i, _count) { i := add(i, 1) } {
+                mstore(add(ptrStart, mul(i, 0x20)), dataPtr)
+                mstore(dataPtr, 48)
+                calldatacopy(add(dataPtr, 0x20), calldataPtr, 48)
+
+                dataPtr := add(dataPtr, 0x60)
+                calldataPtr := add(calldataPtr, 48)
+            }
+
+            mstore(0x40, dataPtr)
+        }
     }
 
     function _validateTopUpInputs(

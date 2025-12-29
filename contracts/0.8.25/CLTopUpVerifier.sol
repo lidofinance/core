@@ -167,7 +167,7 @@ abstract contract CLTopUpVerifier {
     }
 
     /// @notice Signature Merkle root calcualtion
-    /// @dev Reverts if `signature` length is not 48
+    /// @dev Reverts if `signature` length is not 96
     function _signatureRoot(bytes calldata signature) internal view returns (bytes32 root) {
         if (signature.length != 96) revert InvalidSignLength();
 
@@ -185,7 +185,6 @@ abstract contract CLTopUpVerifier {
             // make SHA256  for  first 32 bytes
             // building root
             // L0 = sha256(chunk 0 || chunk 1)
-            // L1 = sha256(chunk 2 || chunk 3)
             // root = sha256(L0 || L1)
             // read 64 bytes from ptr..ptr+63
             // write 32 bytes to ptr+0x80
@@ -213,6 +212,7 @@ abstract contract CLTopUpVerifier {
             }
 
             root := mload(ptr)
+            // mstore(0x40, ptr)
             mstore(0x40, add(ptr, 0xC0))
         }
     }

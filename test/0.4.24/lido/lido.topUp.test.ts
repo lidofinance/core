@@ -116,12 +116,12 @@ describe("Lido.sol:topUp", () => {
   describe("buffer updates", () => {
     it("decreases buffered ether by deposit amount", async () => {
       const depositAmount = 10n * ETH;
-      await stakingRouter.mock__setTopUpDepositAmount(depositAmount);
-
       const keyIndices = [0n];
       const operatorIds = [1n];
       const pubkeysPacked = hexlify(randomBytes(48));
       const topUpLimitsGwei = [10n * GWEI];
+
+      await stakingRouter.mock__setTopUpAmount(depositAmount, pubkeysPacked, topUpLimitsGwei);
 
       const bufferedBefore = await lido.getBufferedEther();
 
@@ -134,12 +134,12 @@ describe("Lido.sol:topUp", () => {
 
     it("emits Unbuffered event when deposit amount > 0", async () => {
       const depositAmount = 10n * ETH;
-      await stakingRouter.mock__setTopUpDepositAmount(depositAmount);
-
       const keyIndices = [0n];
       const operatorIds = [1n];
       const pubkeysPacked = hexlify(randomBytes(48));
       const topUpLimitsGwei = [10n * GWEI];
+
+      await stakingRouter.mock__setTopUpAmount(depositAmount, pubkeysPacked, topUpLimitsGwei);
 
       await expect(lido.connect(topUpGateway).topUp(MODULE_ID, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei))
         .to.emit(lido, "Unbuffered")
@@ -147,12 +147,12 @@ describe("Lido.sol:topUp", () => {
     });
 
     it("does not emit Unbuffered event when deposit amount is 0", async () => {
-      await stakingRouter.mock__setTopUpDepositAmount(0n);
-
       const keyIndices = [0n];
       const operatorIds = [1n];
       const pubkeysPacked = hexlify(randomBytes(48));
       const topUpLimitsGwei = [0n]; // zero limit
+
+      await stakingRouter.mock__setTopUpAmount(0n, pubkeysPacked, topUpLimitsGwei);
 
       await expect(
         lido.connect(topUpGateway).topUp(MODULE_ID, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei),
@@ -163,27 +163,27 @@ describe("Lido.sol:topUp", () => {
   describe("integration with StakingRouter", () => {
     it("calls StakingRouter.topUp with correct parameters", async () => {
       const depositAmount = 10n * ETH;
-      await stakingRouter.mock__setTopUpDepositAmount(depositAmount);
-
       const keyIndices = [0n, 1n];
       const operatorIds = [1n, 2n];
       const pubkeysPacked = hexlify(randomBytes(96)); // 2 keys
       const topUpLimitsGwei = [5n * GWEI, 5n * GWEI];
 
+      await stakingRouter.mock__setTopUpAmount(depositAmount, pubkeysPacked, topUpLimitsGwei);
+
       await expect(lido.connect(topUpGateway).topUp(MODULE_ID, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei))
         .to.emit(stakingRouter, "Mock__TopUpCalled")
-        .withArgs(MODULE_ID, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei);
+        .withArgs(MODULE_ID, pubkeysPacked, topUpLimitsGwei);
 
       expect(await stakingRouter.topUpCalls()).to.equal(1n);
     });
 
     it("handles zero deposit amount (CSM cursor advancement case)", async () => {
-      await stakingRouter.mock__setTopUpDepositAmount(0n);
-
       const keyIndices = [0n];
       const operatorIds = [1n];
       const pubkeysPacked = hexlify(randomBytes(48));
       const topUpLimitsGwei = [0n];
+
+      await stakingRouter.mock__setTopUpAmount(0n, pubkeysPacked, topUpLimitsGwei);
 
       const bufferedBefore = await lido.getBufferedEther();
 
