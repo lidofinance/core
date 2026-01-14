@@ -355,7 +355,7 @@ describe("TopUpGateway.sol", () => {
       data.balanceWitness[0].balanceGwei = BALANCE_THRESHOLD_GWEI + 1n;
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
-        .to.emit(lido, "TopUpCalled")
+        .to.emit(stakingRouter, "TopUpCalled")
         .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
     });
 
@@ -369,18 +369,18 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
-    it("calls Lido.topUp and updates last slot", async () => {
+    it("calls StakingRouter.topUp and updates last slot", async () => {
       const data = await buildTopUpData();
       const expectedTopUp = MAX_EFFECTIVE_BALANCE_GWEI - data.balanceWitness[0].balanceGwei;
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
-        .to.emit(lido, "TopUpCalled")
+        .to.emit(stakingRouter, "TopUpCalled")
         .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp])
         .and.to.emit(topUpGateway, "LastTopUpChanged")
         .withArgs(data.beaconRootData.slot);
 
       expect(await topUpGateway.getLastTopUpSlot()).to.equal(data.beaconRootData.slot);
-      expect(await lido.topUpCalls()).to.equal(1n);
+      expect(await stakingRouter.topUpCalls()).to.equal(1n);
     });
 
     describe("pending deposits affect top-up limit", () => {
@@ -403,7 +403,7 @@ describe("TopUpGateway.sol", () => {
         const expectedTopUp = MAX_EFFECTIVE_BALANCE_GWEI - data.balanceWitness[0].balanceGwei - pendingAmount;
 
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
       });
 
@@ -443,7 +443,7 @@ describe("TopUpGateway.sol", () => {
         const expectedTopUp = MAX_EFFECTIVE_BALANCE_GWEI - data.balanceWitness[0].balanceGwei - totalPending;
 
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
       });
 
@@ -468,7 +468,7 @@ describe("TopUpGateway.sol", () => {
 
         // balance (2000) + pending (100) = 2100 > max (2048), so top-up should be 0
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
       });
 
@@ -492,7 +492,7 @@ describe("TopUpGateway.sol", () => {
 
         // balance (1948) + pending (100) = 2048 = max, so top-up should be 0
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
       });
 
@@ -503,7 +503,7 @@ describe("TopUpGateway.sol", () => {
         const expectedTopUp = MAX_EFFECTIVE_BALANCE_GWEI - data.balanceWitness[0].balanceGwei;
 
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
       });
 
@@ -513,7 +513,7 @@ describe("TopUpGateway.sol", () => {
         data.balanceWitness[0].balanceGwei = BALANCE_THRESHOLD_GWEI;
 
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [1n * 10n ** 9n]);
       });
 
@@ -540,7 +540,7 @@ describe("TopUpGateway.sol", () => {
         // Top-up = 2048 - 2046 = 2 ETH
         const expectedTopUp = 2n * 10n ** 9n;
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
       });
 
@@ -549,7 +549,7 @@ describe("TopUpGateway.sol", () => {
         data.validatorWitness[0].slashed = true;
 
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
       });
 
@@ -558,7 +558,7 @@ describe("TopUpGateway.sol", () => {
         data.validatorWitness[0].exitEpoch = 1000n; // not FAR_FUTURE_EPOCH
 
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
       });
 
@@ -567,7 +567,7 @@ describe("TopUpGateway.sol", () => {
         data.validatorWitness[0].withdrawableEpoch = 2000n; // not FAR_FUTURE_EPOCH
 
         await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(lido, "TopUpCalled")
+          .to.emit(stakingRouter, "TopUpCalled")
           .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
       });
     });

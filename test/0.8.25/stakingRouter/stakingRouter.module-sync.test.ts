@@ -44,6 +44,8 @@ describe("StakingRouter.sol:module-sync", () => {
   const minDepositBlockDistance = 25n;
 
   const withdrawalCredentials = hexlify(randomBytes(32));
+  const topUpGateway = "0x0000000000000000000000000000000000000001";
+  const depositSecurityModule = "0x0000000000000000000000000000000000000002";
 
   let originalState: string;
 
@@ -53,7 +55,7 @@ describe("StakingRouter.sol:module-sync", () => {
     ({ stakingRouter, stakingRouterWithLib, depositContract } = await deployStakingRouter({ deployer, admin }));
 
     // initialize staking router
-    await stakingRouter.initialize(admin, lido, withdrawalCredentials);
+    await stakingRouter.initialize(admin, lido, withdrawalCredentials, topUpGateway, depositSecurityModule);
 
     // grant roles
 

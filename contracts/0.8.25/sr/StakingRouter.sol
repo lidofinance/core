@@ -35,6 +35,10 @@ import {
     ModuleStateAccounting
 } from "./SRTypes.sol";
 
+interface ILido {
+    function getDepositableEther() external view returns (uint256);
+    function withdrawDepositableEther(uint256 _amount, uint256 _depositsCount) external;
+}
 
 contract StakingRouter is AccessControlEnumerableUpgradeable {
     using STASCore for STASStorage;
@@ -59,9 +63,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
     );
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
+    event TopUpGatewaySet(address topUpGateway, address setBy);
+    event DepositSecurityModuleSet(address depositSecurityModule, address setBy);
 
     /// Emitted when the StakingRouter received ETH
     event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
+
+    event DepositableEthReceived(uint256 amount);
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
 
@@ -91,10 +99,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     error ZeroAddressLido();
     error ZeroAddressAdmin();
+    error ZeroAddressTopUpGateway();
+    error ZeroAddressDepositSecurityModule();
     error StakingModuleNotActive();
     error EmptyWithdrawalsCredentials();
     error DirectETHTransfer();
     error AppAuthLidoFailed();
+    error AppAuthTopUpGatewayFailed();
     error InvalidChainConfig();
     error AllocationExceedsTarget();
     error DepositContractZeroAddress();
@@ -139,10 +150,20 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _admin Lido DAO Aragon agent contract address.
     /// @param _lido Lido address.
     /// @param _withdrawalCredentials 0x01 credentials to withdraw ETH on Consensus Layer side.
+    /// @param _topUpGateway Address of the TopUpGateway contract.
+    /// @param _depositSecurityModule Address of the DepositSecurityModule contract.
     /// @dev Proxy initialization method.
-    function initialize(address _admin, address _lido, bytes32 _withdrawalCredentials) external reinitializer(4) {
+    function initialize(
+        address _admin,
+        address _lido,
+        bytes32 _withdrawalCredentials,
+        address _topUpGateway,
+        address _depositSecurityModule
+    ) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddressAdmin();
         if (_lido == address(0)) revert ZeroAddressLido();
+        if (_topUpGateway == address(0)) revert ZeroAddressTopUpGateway();
+        if (_depositSecurityModule == address(0)) revert ZeroAddressDepositSecurityModule();
 
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -150,9 +171,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         _initializeSTAS();
 
         SRStorage.getRouterStorage().lido = _lido;
+        SRStorage.getRouterStorage().topUpGateway = _topUpGateway;
+        SRStorage.getRouterStorage().depositSecurityModule = _depositSecurityModule;
 
         // TODO: maybe store withdrawalVault
         _setWithdrawalCredentials(_withdrawalCredentials);
+
+        emit TopUpGatewaySet(_topUpGateway, _msgSender());
+        emit DepositSecurityModuleSet(_depositSecurityModule, _msgSender());
     }
 
     /// @dev Prohibit direct transfer to contract.
@@ -177,13 +203,24 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     // }
 
     /// @notice A function to migrade upgrade to v4 (from v3) and use Openzeppelin versioning.
-    function migrateUpgrade_v4() external reinitializer(4) {
+    /// @param _topUpGateway Address of the TopUpGateway contract.
+    /// @param _depositSecurityModule Address of the DepositSecurityModule contract.
+    function migrateUpgrade_v4(address _topUpGateway, address _depositSecurityModule) external reinitializer(4) {
+        if (_topUpGateway == address(0)) revert ZeroAddressTopUpGateway();
+        if (_depositSecurityModule == address(0)) revert ZeroAddressDepositSecurityModule();
+
         // TODO: here is problem, that last version of
         __AccessControlEnumerable_init();
 
         _initializeSTAS();
         // migrate current modules to new storage
         SRLib._migrateStorage();
+
+        SRStorage.getRouterStorage().topUpGateway = _topUpGateway;
+        SRStorage.getRouterStorage().depositSecurityModule = _depositSecurityModule;
+
+        emit TopUpGatewaySet(_topUpGateway, _msgSender());
+        emit DepositSecurityModuleSet(_depositSecurityModule, _msgSender());
     }
 
     /// @notice Returns Lido contract address.
@@ -732,34 +769,24 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             Math256.min(depositableValidatorsCount, _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount));
     }
 
-    /// @notice Calculates how much can be topped up for each key in the module,
-    /// based on the module's target allocation, the top-up limits from TopUpGateway,
-    /// and the amounts returned by the module's obtainDepositData.
-    /// @param _stakingModuleId Id of staking module
-    /// @param _depositableEth Amount that can be deposited in module
-    /// @param _keyIndices Array of key indices
-    /// @param _operatorIds Array of operator indices
-    /// @param _pubkeysPacked Packed list of public keys
-    /// @param _topUpLimitsGwei Array of per-key allowed top-up amounts, in gwei
-    /// @return amount Total deposit amount to the module
-    /// @return pubkeysPacked Packed pubkeys returned by module
-    /// @return allocations List of per-key top-up amounts
-    function getTopUpDepositAmount(
+    /**
+     * @notice A payable function for depositable eth acquisition. Can be called only by `Lido`
+     */
+    function receiveDepositableEther() external payable {
+        if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
+
+        emit DepositableEthReceived(msg.value);
+    }
+
+
+    function topUp(
         uint256 _stakingModuleId,
-        uint256 _depositableEth,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
         bytes calldata _pubkeysPacked,
         uint256[] calldata _topUpLimitsGwei
-    )
-        external
-        returns (
-            uint256 amount,
-            bytes memory pubkeysPacked,
-            uint256[] memory allocations
-        )
-    {
-        if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
+    ) external {
+        if (_msgSender() != _getTopUpGateway()) revert AppAuthTopUpGatewayFailed();
         _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimitsGwei, _pubkeysPacked);
 
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
@@ -770,15 +797,17 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
 
         // Get allocation based on target share
-        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
+        uint256 depositableEther = ILido(_getLido()).getDepositableEther();
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, depositableEther);
+
         // Call obtainDepositData on the staking module to determine which keys to top up
         // and for what amounts. The module verifies keys belong to it and reverts if invalid.
         // Even if stakingModuleDepositableEthAmount is 0, we still call the module
         // to allow CSM queue cursor advancement.
         bytes[] memory publicKeys;
+        uint256[] memory allocations;
         (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress)
             .obtainDepositData(stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei);
-        // TODO: maybe check result obtainDepositData in _pubkeysPacked
 
         // Calculate total amount from allocations returned by module
         uint256 totalAllocationsGwei;
@@ -791,122 +820,31 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             }
         }
 
-        amount = totalAllocationsGwei * 1 gwei;
+        // amount that will be requested from Lido
+        uint256 amount = totalAllocationsGwei * 1 gwei;
 
         // Verify sum of allocations does not exceed module's max deposit amount
         if (amount > stakingModuleDepositableEthAmount) {
             revert AllocationExceedsTarget();
         }
-        // Pack public keys into bytes
-        pubkeysPacked = _packPubkeys(publicKeys);
-    }
 
-    function _packPubkeys(bytes[] memory _pubkeys) internal pure returns (bytes memory packed) {
-        if (_pubkeys.length == 0) return packed;
-        /// @solidity memory-safe-assembly
-        assembly {
-            let dest := mload(0x40)
-            packed := dest
-            let count := mload(_pubkeys)
-            mstore(dest, mul(count, 48))
-            dest := add(dest, 0x20)
-            for {let i := 0} lt(i, count) { i := add(i, 1) } {
-                let pubkeyPtr := add(add(_pubkeys, 0x20), mul(i, 0x20))
-                let pubkey := mload(pubkeyPtr)
-                let dataPtr := add(pubkey, 0x20)
-                // copy first 32 bytes
-                mstore(dest, mload(dataPtr))
-                // copy next 32 bytes, only 16 has pubkey data
-                mstore(add(dest, 0x20), mload(add(dataPtr, 0x20)))
-                // move pointer to 48 byte
-                dest := add(dest, 48)
-            }
+        if (amount > 0) {
+            // Pull ETH from Lido
+            ILido(_getLido()).withdrawDepositableEther(amount, 0);
 
-            // Update free memory pointer
-            mstore(0x40, dest)
-        }
-    }
+            bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
+            bytes memory wcBytes = abi.encodePacked(withdrawalCredentials);
 
-    /// @notice Top up validators with the provided public keys and amounts.
-    /// This method receives the pubkeys and allocations that were previously
-    /// determined by getTopUpDepositAmount (which calls obtainDepositData on the module).
-    /// @param _stakingModuleId Staking module id
-    /// @param _pubkeysPacked Packed validator public keys to top up
-    /// @param _topUpAmountsGwei Array of per-key top-up amounts in gwei
-    /// @dev Method allowed only for modules with 0x02 keys
-    function topUp(
-        uint256 _stakingModuleId,
-        bytes calldata _pubkeysPacked,
-        uint256[] calldata _topUpAmountsGwei
-    ) external payable {
-        if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
-
-        uint256 keysCount = _topUpAmountsGwei.length;
-        if (keysCount == 0) {
-            revert EmptyKeysList();
-        }
-        if (_pubkeysPacked.length != keysCount * PUBKEY_LENGTH) {
-            revert WrongPubkeysLength();
-        }
-
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
-
-        // Check top ups allowed for module
-        if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
-            revert WrongWithdrawalCredentialsType();
-        }
-
-        bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
-        bytes memory wcBytes = abi.encodePacked(withdrawalCredentials);
-
-        uint256 depositsValue = msg.value;
-
-        if (depositsValue > 0) {
             uint256 etherBalanceBeforeDeposits = address(this).balance;
 
-            // Unpack pubkeys for BeaconChainDepositor
-            bytes[] memory publicKeys = _unpackPubkeys(_pubkeysPacked, keysCount);
-            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, publicKeys, _topUpAmountsGwei);
-            _trackDeposit(_stakingModuleId, depositsValue);
+            // Make beacon chain top-up deposits
+            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, publicKeys, allocations);
+            _trackDeposit(_stakingModuleId, amount);
 
             uint256 etherBalanceAfterDeposits = address(this).balance;
 
-            /// @dev All sent ETH must be deposited and self balance stay the same.
-            assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == depositsValue);
-        }
-    }
-
-    function _unpackPubkeys(bytes calldata _packedPubkeys, uint256 _count) internal pure returns (bytes[] memory pubkeys) {
-        assembly ("memory-safe") {
-            let ptr := mload(0x40)
-            pubkeys := ptr
-            // length = _count
-            // pointer -> pubkeys[0]
-            // pointer -> pubkeys[1]
-            // ...
-            // pointer -> pubkeys[_count - 1]
-            mstore(ptr, _count)
-            // skip length, move to pointer of elements
-            let ptrStart := add(ptr, 0x20)
-            let dataStart := add(ptrStart, mul(_count, 0x20))
-
-            // store data
-            // pointer -> pubkeys[0] ->
-            //     length = 48
-            //     pubkeys[0] data
-            let dataPtr := dataStart
-            let calldataPtr := _packedPubkeys.offset
-
-            for {let i := 0} lt(i, _count) { i := add(i, 1) } {
-                mstore(add(ptrStart, mul(i, 0x20)), dataPtr)
-                mstore(dataPtr, 48)
-                calldatacopy(add(dataPtr, 0x20), calldataPtr, 48)
-
-                dataPtr := add(dataPtr, 0x60)
-                calldataPtr := add(calldataPtr, 48)
-            }
-
-            mstore(0x40, dataPtr)
+            /// @dev All pulled ETH must be deposited and self balance stay the same.
+            assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == amount);
         }
     }
 
@@ -1150,6 +1088,27 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRStorage.getRouterStorage().withdrawalCredentials;
     }
 
+    /// @notice Set the TopUpGateway address.
+    /// @param _topUpGateway Address of the TopUpGateway contract.
+    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
+    function setTopUpGateway(address _topUpGateway) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
+        if (_topUpGateway == address(0)) revert ZeroAddressTopUpGateway();
+        SRStorage.getRouterStorage().topUpGateway = _topUpGateway;
+        emit TopUpGatewaySet(_topUpGateway, _msgSender());
+    }
+
+    /// @notice Returns the TopUpGateway address.
+    /// @return Address of the TopUpGateway contract.
+    function getTopUpGateway() external view returns (address) {
+        return _getTopUpGateway();
+    }
+
+    /// @notice Returns the DepositSecurityModule address.
+    /// @return Address of the DepositSecurityModule contract.
+    function getDepositSecurityModule() external view returns (address) {
+        return _getDepositSecurityModule();
+    }
+
     function _setWithdrawalCredentials(bytes32 wc) internal {
         if (wc == 0) revert EmptyWithdrawalsCredentials();
         SRStorage.getRouterStorage().withdrawalCredentials = wc;
@@ -1300,6 +1259,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     function _getLido() internal view returns (address) {
         return SRStorage.getRouterStorage().lido;
+    }
+
+    function _getTopUpGateway() internal view returns (address) {
+        return SRStorage.getRouterStorage().topUpGateway;
+    }
+
+    function _getDepositSecurityModule() internal view returns (address) {
+        return SRStorage.getRouterStorage().depositSecurityModule;
     }
 
     // Helpers

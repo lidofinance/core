@@ -39,24 +39,7 @@ interface IStakingRouter {
         view
         returns (uint16 modulesFee, uint16 treasuryFee);
 
-    function getTopUpDepositAmount(
-        uint256 _stakingModuleId,
-        uint256 _depositableEth,
-        uint256[] _keyIndices,
-        uint256[] _operatorIds,
-        bytes _pubkeysPacked,
-        uint256[] _topUpLimitsGwei
-    ) external returns (
-        uint256 amount,
-        bytes memory pubkeysPacked,
-        uint256[] memory allocations
-    );
-
-    function topUp(
-        uint256 _stakingModuleId,
-        bytes _pubkeysPacked,
-        uint256[] _topUpAmountsGwei
-    ) external payable;
+    function receiveDepositableEther() external payable;
 }
 
 interface IWithdrawalQueue {
@@ -666,6 +649,24 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
+     * @notice Withdraw `_amount` of buffer to Staking Router
+     * @dev Can be called only by the Staking Router contract
+     * @param _amount amount of ETH to withdraw
+     * @param _depositsCount amount of seed deposits. In case of top up this value will be equal to 0
+     */
+    function withdrawDepositableEther(uint256 _amount, uint256 _depositsCount) external {
+        ILidoLocator locator = _getLidoLocator();
+        IStakingRouter stakingRouter = _stakingRouter(locator);
+        require(msg.sender == address(stakingRouter), "NOT_STAKING_ROUTER");
+        require(_amount != 0, "ZERO_AMOUNT");
+        require(_amount <= getDepositableEther(), "NOT_ENOUGH_ETHER");
+
+        _updateBufferedEtherAndDepositedValidators(_amount, _depositsCount);
+
+        stakingRouter.receiveDepositableEther.value(_amount)();
+    }
+
+    /**
      * @notice Invoke a deposit call to the Staking Router contract and update buffered counters
      * @param _maxDepositsCount max deposits count
      * @param _stakingModuleId id of the staking module to be deposited
@@ -693,72 +694,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         ///     sent to StakingRouter is counted as deposited. If StakingRouter can't deposit all
         ///     passed ether it MUST revert the whole transaction (never happens in normal circumstances)
         stakingRouter.deposit.value(depositsValue)(_stakingModuleId, _depositCalldata);
-    }
-
-    /// @notice Invoke a top up call to the Staking Router contract and update buffered counters.
-    ///         Phase 1: Queries StakingRouter.getTopUpDepositAmount to calculate the actual top up amount
-    ///         based on depositable ETH and provided limits. This also calls obtainDepositData on the module
-    ///         to get the final pubkeys and allocations.
-    ///         Phase 2: Updates local buffered ether state and forwards the pubkeys/allocations to StakingRouter.topUp.
-    /// @param _stakingModuleId Id of the staking module to be deposited
-    /// @param _keyIndices List of keys' indices
-    /// @param _operatorIds List of operators' indices
-    /// @param _pubkeysPacked Packed list of public keys
-    /// @param _topUpLimitsGwei List of top up values for validators in gwei
-    function topUp(
-        uint256 _stakingModuleId,
-        uint256[] _keyIndices,
-        uint256[] _operatorIds,
-        bytes _pubkeysPacked,
-        uint256[] _topUpLimitsGwei
-     )
-       external
-    {
-        ILidoLocator locator = _getLidoLocator();
-        require(msg.sender == locator.topUpGateway(), "APP_AUTH_FAILED");
-        _requireCanDeposit();
-
-        _topUp(
-            _stakingRouter(locator),
-            _stakingModuleId,
-            _keyIndices,
-            _operatorIds,
-            _pubkeysPacked,
-            _topUpLimitsGwei
-        );
-    }
-
-    function _topUp(
-        IStakingRouter _stakingRouter,
-        uint256 _stakingModuleId,
-        uint256[] _keyIndices,
-        uint256[] _operatorIds,
-        bytes _pubkeysPacked,
-        uint256[] _topUpLimitsGwei
-    ) internal {
-        // Phase 1: Get deposit amount and pubkeys/allocations from staking router
-        // The staking router calls obtainDepositData on the module during this call
-        (uint256 depositsAmount, bytes memory pubkeysPackedResult, uint256[] memory allocations) = _stakingRouter.getTopUpDepositAmount(
-            _stakingModuleId,
-            getDepositableEther(), // do we need Math256.min(_maxDepositsCountPerBlock * 32 ether, getDepositableEther()) ?
-            _keyIndices,
-            _operatorIds,
-            _pubkeysPacked,
-            _topUpLimitsGwei
-        );
-
-        if (depositsAmount > 0) {
-            /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
-            ///     even if the StakingRouter is a trusted contract.
-            _updateBufferedEtherAndDepositedValidators(depositsAmount, 0);
-        }
-
-        // Phase 2: Top up validators with the pubkeys and allocations returned from Phase 1
-        _stakingRouter.topUp.value(depositsAmount)(
-            _stakingModuleId,
-            pubkeysPackedResult,
-            allocations
-        );
     }
 
     function _updateBufferedEtherAndDepositedValidators(uint256 depositsAmount, uint256 depositsCount) internal {
