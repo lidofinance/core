@@ -219,7 +219,7 @@ describe("Scenario: Protocol Happy Path", () => {
     depositCount = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
-      const depositTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, module.id, ZERO_HASH);
+      const depositTx = await stakingRouter.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, module.id, ZERO_HASH);
       const depositReceipt = (await depositTx.wait()) as ContractTransactionReceipt;
       const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];
       const unbufferedAmount = unbufferedEvent?.args[0] || 0n;

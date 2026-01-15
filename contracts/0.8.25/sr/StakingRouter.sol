@@ -106,6 +106,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error DirectETHTransfer();
     error AppAuthLidoFailed();
     error AppAuthTopUpGatewayFailed();
+    error AppAuthDSMFailed();
     error InvalidChainConfig();
     error AllocationExceedsTarget();
     error DepositContractZeroAddress();
@@ -778,7 +779,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         emit DepositableEthReceived(msg.value);
     }
 
-
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
@@ -806,15 +806,16 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // to allow CSM queue cursor advancement.
         bytes[] memory publicKeys;
         uint256[] memory allocations;
-        (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress)
-            .obtainDepositData(stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei);
+        (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress).obtainDepositData(
+            stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei
+        );
 
         // Calculate total amount from allocations returned by module
         uint256 totalAllocationsGwei;
         unchecked {
             for (uint256 i; i < allocations.length; ++i) {
                 if (allocations[i] != 0 && allocations[i] < MIN_DEPOSIT_IN_GWEI) {
-                  revert TopUpAmountTooLow();
+                    revert TopUpAmountTooLow();
                 }
                 totalAllocationsGwei += allocations[i];
             }
@@ -1025,49 +1026,57 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
+    /// @param _maxDepositsCount Max number of deposits to make.
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @param _depositCalldata Staking module calldata.
-    /// @dev Only the Lido contract is allowed to call this method.
-    function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external payable {
-        if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
+    /// @dev Only the DepositSecurityModule is allowed to call this method.
+    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external {
+        if (_msgSender() != _getDepositSecurityModule()) revert AppAuthDSMFailed();
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
         if (stateConfig.status != StakingModuleStatus.Active) revert StakingModuleNotActive();
 
         bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
-
-        uint256 depositsValue = msg.value;
         address stakingModuleAddress = stateConfig.moduleAddress;
+
+        // Get depositable ether from Lido (similar to topUp)
+        uint256 depositableEther = ILido(_getLido()).getDepositableEther();
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, depositableEther);
+
+        // Calculate deposits count (capped by max and module capacity)
+        (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
+        uint256 depositsCount = Math256.min(
+            Math256.min(_maxDepositsCount, depositableValidatorsCount),
+            _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount)
+        );
+
+        // Calculate deposit value
+        uint256 depositsValue = _getInitialDepositAmountByCount(depositsCount);
 
         /// @dev Firstly update the local state of the contract to prevent a reentrancy attack
         /// even though the staking modules are trusted contracts.
         _updateModuleLastDepositState(_stakingModuleId, depositsValue);
 
-        if (depositsValue == 0) return;
+        if (depositsCount == 0) return;
 
-        // on previous step should calc exact amount of eth
-        if (depositsValue % INITIAL_DEPOSIT_SIZE != 0) revert DepositValueNotMultipleOfInitialDeposit();
+        // Pull ETH from Lido (like in topUp)
+        ILido(_getLido()).withdrawDepositableEther(depositsValue, depositsCount);
 
         uint256 etherBalanceBeforeDeposits = address(this).balance;
 
-        uint256 depositsCount = _getInitialDepositCountByAmount(depositsValue);
-
         (bytes memory publicKeysBatch, bytes memory signaturesBatch) =
             IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, _depositCalldata);
-
-        // TODO: maybe some checks of  module's answer
 
         BeaconChainDepositor.makeBeaconChainDeposits32ETH(
             DEPOSIT_CONTRACT, depositsCount, abi.encodePacked(withdrawalCredentials), publicKeysBatch, signaturesBatch
         );
 
         // update counters for deposits that are not visible before ao report
-        // TODO: here depositsValue  in wei, check type
         _trackDeposit(_stakingModuleId, depositsValue);
 
         uint256 etherBalanceAfterDeposits = address(this).balance;
 
-        /// @dev All sent ETH must be deposited and self balance stay the same.
+        /// @dev All pulled ETH must be deposited and self balance stay the same.
         assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == depositsValue);
     }
 

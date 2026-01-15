@@ -31,7 +31,7 @@ describe.skip("Integration: Second opinion", () => {
 
     snapshot = await Snapshot.take();
 
-    const { lido, depositSecurityModule, oracleReportSanityChecker } = ctx.contracts;
+    const { lido, depositSecurityModule, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
 
     const { chainId } = await ethers.provider.getNetwork();
     // Sepolia-specific initialization
@@ -49,7 +49,7 @@ describe.skip("Integration: Second opinion", () => {
     }
 
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, CURATED_MODULE_ID, ZERO_HASH);
+    await stakingRouter.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, CURATED_MODULE_ID, ZERO_HASH);
 
     secondOpinion = await ethers.deployContract("SecondOpinionOracle__Mock", []);
     const soAddress = await secondOpinion.getAddress();

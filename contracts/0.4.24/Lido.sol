@@ -12,7 +12,6 @@ import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {StETHPermit} from "./StETHPermit.sol";
 import {Versioned} from "./utils/Versioned.sol";
 
-import {Math256} from "../common/lib/Math256.sol";
 import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
 import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
 
@@ -664,36 +663,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _updateBufferedEtherAndDepositedValidators(_amount, _depositsCount);
 
         stakingRouter.receiveDepositableEther.value(_amount)();
-    }
-
-    /**
-     * @notice Invoke a deposit call to the Staking Router contract and update buffered counters
-     * @param _maxDepositsCount max deposits count
-     * @param _stakingModuleId id of the staking module to be deposited
-     * @param _depositCalldata module calldata
-     */
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external {
-        ILidoLocator locator = _getLidoLocator();
-        require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
-        _requireCanDeposit();
-        IStakingRouter stakingRouter = _stakingRouter(locator);
-        uint256 depositsCount = Math256.min(
-            _maxDepositsCount,
-            stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther())
-        );
-
-        uint256 depositsValue;
-        if (depositsCount > 0) {
-            depositsValue = depositsCount.mul(DEPOSIT_SIZE);
-            /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
-            ///     even if the StakingRouter is a trusted contract.
-            _updateBufferedEtherAndDepositedValidators(depositsValue, depositsCount);
-        }
-
-        /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether
-        ///     sent to StakingRouter is counted as deposited. If StakingRouter can't deposit all
-        ///     passed ether it MUST revert the whole transaction (never happens in normal circumstances)
-        stakingRouter.deposit.value(depositsValue)(_stakingModuleId, _depositCalldata);
     }
 
     function _updateBufferedEtherAndDepositedValidators(uint256 depositsAmount, uint256 depositsCount) internal {

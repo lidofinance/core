@@ -53,6 +53,10 @@ contract StakingRouter__MockForLidoMisc {
         emit Mock__DepositCalled();
     }
 
+    function receiveDepositableEther() external payable {
+        // Mock function to receive ETH from Lido.withdrawDepositableEther
+    }
+
     function mock__getStakingModuleMaxDepositsCount(uint256 newValue) external {
         stakingModuleMaxDepositsCount = newValue;
         stakingModuleMaxInitialDepositsAmount = newValue * INITIAL_DEPOSIT_SIZE;

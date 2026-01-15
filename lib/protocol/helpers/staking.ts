@@ -154,8 +154,8 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
 
   const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
 
-  // Deposit validators
-  await lido.connect(dsmSigner).deposit(depositsCount, moduleId, ZERO_HASH);
+  // Deposit validators via StakingRouter (DSM calls SR which pulls ETH from Lido)
+  await stakingRouter.connect(dsmSigner).deposit(depositsCount, moduleId, ZERO_HASH);
 
   const numDepositedAfter = (await lido.getBeaconStat()).depositedValidators;
 

@@ -7,7 +7,6 @@ pragma solidity 0.8.9;
 import {ECDSA} from "../common/lib/ECDSA.sol";
 
 interface ILido {
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
     function canDeposit() external view returns (bool);
 }
 
@@ -27,6 +26,11 @@ interface IStakingRouter {
         uint256 _stakingModuleId,
         bytes calldata _nodeOperatorIds,
         bytes calldata _vettedSigningKeysCounts
+    ) external;
+    function deposit(
+        uint256 _maxDepositsCount,
+        uint256 _stakingModuleId,
+        bytes calldata _depositCalldata
     ) external;
 }
 
@@ -518,7 +522,8 @@ contract DepositSecurityModule {
 
         uint256 maxDepositsCount = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
 
-        LIDO.deposit(maxDepositsCount, stakingModuleId, depositCalldata);
+        // Call StakingRouter instead of Lido - SR will pull ETH from Lido
+        STAKING_ROUTER.deposit(maxDepositsCount, stakingModuleId, depositCalldata);
 
         _setLastDepositBlock(block.number);
     }

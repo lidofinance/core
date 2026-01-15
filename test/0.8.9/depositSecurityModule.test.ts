@@ -4,7 +4,6 @@ import {
   ContractTransactionResponse,
   encodeBytes32String,
   keccak256,
-  parseEther,
   solidityPacked,
   Wallet,
   ZeroAddress,
@@ -1179,7 +1178,7 @@ describe("DepositSecurityModule.sol", () => {
         const tx = await deposit([guardian1], { depositCalldata });
 
         await expect(tx)
-          .to.emit(lido, "StakingModuleDeposited")
+          .to.emit(stakingRouter, "StakingModuleDeposited")
           .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
       });
     });
@@ -1246,7 +1245,7 @@ describe("DepositSecurityModule.sol", () => {
         const tx = await deposit([guardian1, guardian2, guardian3], { depositCalldata });
 
         await expect(tx)
-          .to.emit(lido, "StakingModuleDeposited")
+          .to.emit(stakingRouter, "StakingModuleDeposited")
           .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
       });
 
@@ -1260,7 +1259,7 @@ describe("DepositSecurityModule.sol", () => {
         const tx = await deposit([guardian1, guardian2], { depositCalldata });
 
         await expect(tx)
-          .to.emit(lido, "StakingModuleDeposited")
+          .to.emit(stakingRouter, "StakingModuleDeposited")
           .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
       });
 
@@ -1274,7 +1273,7 @@ describe("DepositSecurityModule.sol", () => {
         const tx = await deposit([guardian1, guardian3], { depositCalldata });
 
         await expect(tx)
-          .to.emit(lido, "StakingModuleDeposited")
+          .to.emit(stakingRouter, "StakingModuleDeposited")
           .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
       });
 
@@ -1288,7 +1287,7 @@ describe("DepositSecurityModule.sol", () => {
         const tx = await deposit([guardian2, guardian3], { depositCalldata });
 
         await expect(tx)
-          .to.emit(lido, "StakingModuleDeposited")
+          .to.emit(stakingRouter, "StakingModuleDeposited")
           .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
       });
     });
