@@ -1177,9 +1177,7 @@ describe("DepositSecurityModule.sol", () => {
         const depositCalldata = encodeBytes32String("");
         const tx = await deposit([guardian1], { depositCalldata });
 
-        await expect(tx)
-          .to.emit(stakingRouter, "StakingModuleDeposited")
-          .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
       });
     });
 
@@ -1244,9 +1242,7 @@ describe("DepositSecurityModule.sol", () => {
         const depositCalldata = encodeBytes32String("");
         const tx = await deposit([guardian1, guardian2, guardian3], { depositCalldata });
 
-        await expect(tx)
-          .to.emit(stakingRouter, "StakingModuleDeposited")
-          .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
       });
 
       it("Allow deposit if deposit with guardian's sigs (0,1)", async () => {
@@ -1258,9 +1254,7 @@ describe("DepositSecurityModule.sol", () => {
         const depositCalldata = encodeBytes32String("");
         const tx = await deposit([guardian1, guardian2], { depositCalldata });
 
-        await expect(tx)
-          .to.emit(stakingRouter, "StakingModuleDeposited")
-          .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
       });
 
       it("Allow deposit if deposit with guardian's sigs (0,2)", async () => {
@@ -1272,9 +1266,7 @@ describe("DepositSecurityModule.sol", () => {
         const depositCalldata = encodeBytes32String("");
         const tx = await deposit([guardian1, guardian3], { depositCalldata });
 
-        await expect(tx)
-          .to.emit(stakingRouter, "StakingModuleDeposited")
-          .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
       });
 
       it("Allow deposit if deposit with guardian's sigs (1,2)", async () => {
@@ -1286,9 +1278,7 @@ describe("DepositSecurityModule.sol", () => {
         const depositCalldata = encodeBytes32String("");
         const tx = await deposit([guardian2, guardian3], { depositCalldata });
 
-        await expect(tx)
-          .to.emit(stakingRouter, "StakingModuleDeposited")
-          .withArgs(MAX_DEPOSITS_PER_BLOCK, STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
       });
     });
   });

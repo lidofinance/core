@@ -720,8 +720,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module.
     /// @return Max deposits count per block for the staking module.
     function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
-        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
-        return state.getStateDeposits().maxDepositsPerBlock;
+        return _getStakingModuleMaxDepositsPerBlock(_stakingModuleId);
     }
 
     /// @notice Returns active validators count for the staking module.
@@ -1026,11 +1025,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
-    /// @param _maxDepositsCount Max number of deposits to make.
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @param _depositCalldata Staking module calldata.
     /// @dev Only the DepositSecurityModule is allowed to call this method.
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external {
+    function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external {
         if (_msgSender() != _getDepositSecurityModule()) revert AppAuthDSMFailed();
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
@@ -1043,32 +1041,40 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 depositableEther = ILido(_getLido()).getDepositableEther();
         uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, depositableEther);
 
-        // Calculate deposits count (capped by max and module capacity)
+        // Calculate max deposits count (capped by max and module capacity)
         (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
-        uint256 depositsCount = Math256.min(
+        uint256 _maxDepositsCount = _getStakingModuleMaxDepositsPerBlock(_stakingModuleId);
+        uint256 maxDepositsCount = Math256.min(
             Math256.min(_maxDepositsCount, depositableValidatorsCount),
             _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount)
         );
 
-        // Calculate deposit value
-        uint256 depositsValue = _getInitialDepositAmountByCount(depositsCount);
+        if (maxDepositsCount == 0) return;
 
-        /// @dev Firstly update the local state of the contract to prevent a reentrancy attack
+        // Get deposit data from module first - it may return fewer keys than requested
+        (bytes memory publicKeysBatch, bytes memory signaturesBatch) =
+            IStakingModule(stakingModuleAddress).obtainDepositData(maxDepositsCount, _depositCalldata);
+
+        // Calculate actual deposits count from returned keys
+        if (publicKeysBatch.length % PUBKEY_LENGTH != 0) revert WrongPubkeysLength();
+        uint256 actualDepositsCount = publicKeysBatch.length / PUBKEY_LENGTH;
+
+        // Calculate actual deposit value based on keys returned
+        uint256 depositsValue = _getInitialDepositAmountByCount(actualDepositsCount);
+
+        /// @dev Update the local state of the contract to prevent a reentrancy attack
         /// even though the staking modules are trusted contracts.
         _updateModuleLastDepositState(_stakingModuleId, depositsValue);
 
-        if (depositsCount == 0) return;
+        if (actualDepositsCount == 0) return;
 
-        // Pull ETH from Lido (like in topUp)
-        ILido(_getLido()).withdrawDepositableEther(depositsValue, depositsCount);
+        // Pull ETH from Lido based on actual keys returned
+        ILido(_getLido()).withdrawDepositableEther(depositsValue, actualDepositsCount);
 
         uint256 etherBalanceBeforeDeposits = address(this).balance;
 
-        (bytes memory publicKeysBatch, bytes memory signaturesBatch) =
-            IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, _depositCalldata);
-
         BeaconChainDepositor.makeBeaconChainDeposits32ETH(
-            DEPOSIT_CONTRACT, depositsCount, abi.encodePacked(withdrawalCredentials), publicKeysBatch, signaturesBatch
+            DEPOSIT_CONTRACT, actualDepositsCount, abi.encodePacked(withdrawalCredentials), publicKeysBatch, signaturesBatch
         );
 
         // update counters for deposits that are not visible before ao report
@@ -1116,6 +1122,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return Address of the DepositSecurityModule contract.
     function getDepositSecurityModule() external view returns (address) {
         return _getDepositSecurityModule();
+    }
+
+    function _getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) internal view returns (uint256) {
+        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        return state.getStateDeposits().maxDepositsPerBlock;
     }
 
     function _setWithdrawalCredentials(bytes32 wc) internal {

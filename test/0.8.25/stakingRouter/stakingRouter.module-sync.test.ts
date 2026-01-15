@@ -891,8 +891,6 @@ describe("StakingRouter.sol:module-sync", () => {
   });
 
   context("deposit", () => {
-    const maxDepositsCount = 10n;
-
     beforeEach(async () => {
       // Set up Lido mock with depositable ether and fund it
       const depositableAmount = ether("320.0"); // Enough for 10 deposits
@@ -904,7 +902,7 @@ describe("StakingRouter.sol:module-sync", () => {
     });
 
     it("Reverts if the caller is not DSM", async () => {
-      await expect(stakingRouter.connect(user).deposit(maxDepositsCount, moduleId, "0x")).to.be.revertedWithCustomError(
+      await expect(stakingRouter.connect(user).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "AppAuthDSMFailed",
       );
@@ -913,15 +911,9 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Reverts if the staking module is not active", async () => {
       await stakingRouter.connect(admin).setStakingModuleStatus(moduleId, StakingModuleStatus.DepositsPaused);
 
-      await expect(
-        stakingRouter.connect(dsmSigner).deposit(maxDepositsCount, moduleId, "0x"),
-      ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleNotActive");
-    });
-
-    it("Does not submit 0 deposits when max deposits is 0", async () => {
-      await expect(stakingRouter.connect(dsmSigner).deposit(0n, moduleId, "0x")).not.to.emit(
-        depositContract,
-        "Deposited__MockEvent",
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
+        stakingRouter,
+        "StakingModuleNotActive",
       );
     });
 
@@ -929,14 +921,14 @@ describe("StakingRouter.sol:module-sync", () => {
       // Set depositable ether to 0
       await lidoMock.setDepositableEther(0n);
 
-      await expect(stakingRouter.connect(dsmSigner).deposit(maxDepositsCount, moduleId, "0x")).not.to.emit(
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).not.to.emit(
         depositContract,
         "Deposited__MockEvent",
       );
     });
 
     it("Successfully deposits when depositable ether is available", async () => {
-      await expect(stakingRouter.connect(dsmSigner).deposit(maxDepositsCount, moduleId, "0x")).to.emit(
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.emit(
         depositContract,
         "Deposited__MockEvent",
       );
@@ -965,9 +957,22 @@ describe("StakingRouter.sol:module-sync", () => {
       // Set up the new module with depositable validators
       await newStakingModule.mock__getStakingModuleSummary(0n, 100n, 10n); // 10 depositable validators
 
-      await expect(stakingRouter.connect(dsmSigner).deposit(maxDepositsCount, newModuleId, "0x")).to.emit(
+      await expect(stakingRouter.connect(dsmSigner).deposit(newModuleId, "0x")).to.emit(
         depositContract,
         "Deposited__MockEvent",
+      );
+    });
+
+    it("Reverts if module returns pubkeys with invalid length (not divisible by 48)", async () => {
+      // Mock the module to return pubkeys with invalid length (47 bytes instead of 48)
+      const invalidPubkeys = hexlify(randomBytes(47)); // Not divisible by PUBKEY_LENGTH (48)
+      const signatures = hexlify(randomBytes(96)); // Valid signature length
+
+      await stakingModule.mock__obtainDepositData(invalidPubkeys, signatures);
+
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
+        stakingRouter,
+        "WrongPubkeysLength",
       );
     });
   });

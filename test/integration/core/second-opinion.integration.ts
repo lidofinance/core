@@ -6,7 +6,7 @@ import { SecondOpinionOracle__Mock } from "typechain-types";
 import { ether, impersonate, log, ONE_GWEI } from "lib";
 import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
 
-import { bailOnFailure, MAX_DEPOSIT_AMOUNT, Snapshot, ZERO_HASH } from "test/suite";
+import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
 
 const AMOUNT = ether("100");
 const CURATED_MODULE_ID = 1n;
@@ -49,7 +49,7 @@ describe.skip("Integration: Second opinion", () => {
     }
 
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-    await stakingRouter.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, CURATED_MODULE_ID, ZERO_HASH);
+    await stakingRouter.connect(dsmSigner).deposit(CURATED_MODULE_ID, ZERO_HASH);
 
     secondOpinion = await ethers.deployContract("SecondOpinionOracle__Mock", []);
     const soAddress = await secondOpinion.getAddress();

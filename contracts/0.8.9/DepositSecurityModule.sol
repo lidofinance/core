@@ -17,7 +17,6 @@ interface IDepositContract {
 interface IStakingRouter {
 
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
-    function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
     function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
@@ -28,7 +27,6 @@ interface IStakingRouter {
         bytes calldata _vettedSigningKeysCounts
     ) external;
     function deposit(
-        uint256 _maxDepositsCount,
         uint256 _stakingModuleId,
         bytes calldata _depositCalldata
     ) external;
@@ -520,10 +518,8 @@ contract DepositSecurityModule {
 
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
-        uint256 maxDepositsCount = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
-
         // Call StakingRouter instead of Lido - SR will pull ETH from Lido
-        STAKING_ROUTER.deposit(maxDepositsCount, stakingModuleId, depositCalldata);
+        STAKING_ROUTER.deposit(stakingModuleId, depositCalldata);
 
         _setLastDepositBlock(block.number);
     }

@@ -19,7 +19,7 @@ interface IStakingRouter {
         bytes calldata _nodeOperatorIds,
         bytes calldata _vettedSigningKeysCounts
     ) external;
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
+    function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
 }
 
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
@@ -30,7 +30,7 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         bytes nodeOperatorIds,
         bytes vettedSigningKeysCounts
     );
-    event StakingModuleDeposited(uint256 maxDepositsCount, uint24 stakingModuleId, bytes depositCalldata);
+    event StakingModuleDeposited(uint24 stakingModuleId, bytes depositCalldata);
     event StakingModuleStatusSet(uint24 indexed stakingModuleId, StakingModuleStatus status, address setBy);
 
     StakingModuleStatus private status;
@@ -46,11 +46,10 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     }
 
     function deposit(
-        uint256 maxDepositsCount,
         uint256 stakingModuleId,
         bytes calldata depositCalldata
     ) external whenModuleIsRegistered(stakingModuleId) {
-        emit StakingModuleDeposited(maxDepositsCount, uint24(stakingModuleId), depositCalldata);
+        emit StakingModuleDeposited(uint24(stakingModuleId), depositCalldata);
     }
 
     function decreaseStakingModuleVettedKeysCountByNodeOperator(
@@ -132,10 +131,6 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     function setStakingModuleMaxDepositsPerBlock(uint256 value) external {
         stakingModuleMaxDepositsPerBlock = value;
     }
-
-    // function setStakingModuleMaxDepositsAmountPerBlock(uint256 value) external {
-    //     stakingModuleMaxDepositsAmountPerBlock = value;
-    // }
 
     function getStakingModuleMinDepositBlockDistance(
         uint256 stakingModuleId

@@ -152,12 +152,48 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     throw new Error(`Not enough max deposits count for staking module ${moduleId}`);
   }
 
+  // Save original maxDepositsPerBlock and temporarily set it to depositsCount
+  // This is needed because the new deposit() signature calculates deposit count internally
+  // based on maxDepositsPerBlock from module config
+  const module = await stakingRouter.getStakingModule(moduleId);
+  const originalMaxDepositsPerBlock = module.maxDepositsPerBlock;
+
+  // Temporarily limit maxDepositsPerBlock to expected depositsCount
+  if (originalMaxDepositsPerBlock > depositsCount) {
+    await stakingRouter
+      .connect(managerSigner)
+      .updateStakingModule(
+        moduleId,
+        module.stakeShareLimit,
+        module.priorityExitShareThreshold,
+        module.stakingModuleFee,
+        module.treasuryFee,
+        depositsCount,
+        module.minDepositBlockDistance,
+      );
+  }
+
   const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
 
   // Deposit validators via StakingRouter (DSM calls SR which pulls ETH from Lido)
-  await stakingRouter.connect(dsmSigner).deposit(depositsCount, moduleId, ZERO_HASH);
+  await stakingRouter.connect(dsmSigner).deposit(moduleId, ZERO_HASH);
 
   const numDepositedAfter = (await lido.getBeaconStat()).depositedValidators;
+
+  // Restore original maxDepositsPerBlock
+  if (originalMaxDepositsPerBlock > depositsCount) {
+    await stakingRouter
+      .connect(managerSigner)
+      .updateStakingModule(
+        moduleId,
+        module.stakeShareLimit,
+        module.priorityExitShareThreshold,
+        module.stakingModuleFee,
+        module.treasuryFee,
+        originalMaxDepositsPerBlock,
+        module.minDepositBlockDistance,
+      );
+  }
 
   if (numDepositedAfter !== numDepositedBefore + depositsCount) {
     throw new Error(`Deposited ${numDepositedAfter} validators, expected ${numDepositedBefore + depositsCount}`);

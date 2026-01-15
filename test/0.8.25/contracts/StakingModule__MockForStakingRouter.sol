@@ -5,7 +5,6 @@ pragma solidity 0.8.25;
 
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 
-
 contract StakingModule__MockForStakingRouter is IStakingModule {
     event Mock__TargetValidatorsLimitsUpdated(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit);
     event Mock__RefundedValidatorsCountUpdated(uint256 _nodeOperatorId, uint256 _refundedValidatorsCount);
@@ -206,12 +205,31 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount);
     }
 
+    bytes private obtainDepositData_publicKeys__mocked;
+    bytes private obtainDepositData_signatures__mocked;
+    bool private obtainDepositData_useCustom__mocked;
+
     function obtainDepositData(
         uint256 _depositsCount,
         bytes calldata
     ) external returns (bytes memory publicKeys, bytes memory signatures) {
-        publicKeys = new bytes(48 * _depositsCount);
-        signatures = new bytes(96 * _depositsCount);
+        if (obtainDepositData_useCustom__mocked) {
+            publicKeys = obtainDepositData_publicKeys__mocked;
+            signatures = obtainDepositData_signatures__mocked;
+        } else {
+            publicKeys = new bytes(48 * _depositsCount);
+            signatures = new bytes(96 * _depositsCount);
+        }
+    }
+
+    function mock__obtainDepositData(bytes calldata publicKeys, bytes calldata signatures) external {
+        obtainDepositData_publicKeys__mocked = publicKeys;
+        obtainDepositData_signatures__mocked = signatures;
+        obtainDepositData_useCustom__mocked = true;
+    }
+
+    function mock__obtainDepositDataReset() external {
+        obtainDepositData_useCustom__mocked = false;
     }
 
     event Mock__onExitedAndStuckValidatorsCountsUpdated();
