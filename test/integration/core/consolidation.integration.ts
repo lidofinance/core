@@ -52,7 +52,7 @@ describe("Integration: Consolidation requests", () => {
     await expect(
       consolidationGateway
         .connect(stranger)
-        .triggerConsolidation(sourcePubkeys, targetPubkeys, stranger.address, { value: 1n }),
+        .addConsolidationRequests(sourcePubkeys, targetPubkeys, stranger.address, { value: 1n }),
     ).to.be.revertedWithOZAccessControlError(stranger.address, role);
   });
 
@@ -74,7 +74,7 @@ describe("Integration: Consolidation requests", () => {
 
     const tx = await consolidationGateway
       .connect(requestor)
-      .triggerConsolidation(sourcePubkeys, targetPubkeys, requestor.address, {
+      .addConsolidationRequests(sourcePubkeys, targetPubkeys, requestor.address, {
         value: totalFee,
       });
 
