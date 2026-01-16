@@ -20,9 +20,7 @@ contract DepositCallerWrapper__MockForStakingRouter {
 
     /// @notice Store temp values as operators and number of deposits per operator + deposit
     /// No refund logic; requires exact msg.value.
-    function deposit(
-        uint256 stakingModuleId
-    ) external payable {
+    function deposit(uint256 stakingModuleId) external payable {
         stakingRouter.deposit{value: msg.value}(stakingModuleId, bytes(""));
     }
 }
