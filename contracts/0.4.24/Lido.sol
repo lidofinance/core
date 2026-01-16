@@ -633,10 +633,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return !_withdrawalQueue().isBunkerModeActive() && !isStopped();
     }
 
-    function _requireCanDeposit() internal view {
-        require(canDeposit(), "CAN_NOT_DEPOSIT");
-    }
-
     /**
      * @return the amount of ether in the buffer that can be deposited to the Consensus Layer
      * @dev Takes into account unfinalized stETH required by WithdrawalQueue
@@ -654,6 +650,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _depositsCount amount of seed deposits. In case of top up this value will be equal to 0
      */
     function withdrawDepositableEther(uint256 _amount, uint256 _depositsCount) external {
+        require(canDeposit(), "CAN_NOT_DEPOSIT");
         ILidoLocator locator = _getLidoLocator();
         IStakingRouter stakingRouter = _stakingRouter(locator);
         require(msg.sender == address(stakingRouter), "NOT_STAKING_ROUTER");
