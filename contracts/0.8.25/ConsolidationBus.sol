@@ -94,9 +94,9 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     /**
      * @notice Emitted when consolidation requests are added
      * @param publisher Address of the publisher who added the requests
-     * @param batchHash Hash of the batch data
+     * @param batchData Encoded batch data (abi.encode(sourcePubkeys, targetPubkeys))
      */
-    event RequestsAdded(address indexed publisher, bytes32 indexed batchHash);
+    event RequestsAdded(address indexed publisher, bytes batchData);
 
     /**
      * @notice Emitted when consolidation requests are executed
@@ -270,7 +270,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
             executed: false
         });
 
-        emit RequestsAdded(msg.sender, batchHash);
+        emit RequestsAdded(msg.sender, abi.encode(sourcePubkeys, targetPubkeys));
     }
 
     // ==============

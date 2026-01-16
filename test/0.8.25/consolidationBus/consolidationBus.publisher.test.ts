@@ -54,13 +54,15 @@ describe("ConsolidationBus.sol: publisher", () => {
       const sourcePubkeys = [PUBKEYS[0]];
       const targetPubkeys = [PUBKEYS[1]];
 
-      const batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [sourcePubkeys, targetPubkeys]),
+      const batchData = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["bytes[]", "bytes[]"],
+        [sourcePubkeys, targetPubkeys],
       );
+      const batchHash = ethers.keccak256(batchData);
 
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys))
         .to.emit(consolidationBus, "RequestsAdded")
-        .withArgs(publisher.address, batchHash);
+        .withArgs(publisher.address, batchData);
 
       expect(await consolidationBus.isBatchAdded(batchHash)).to.be.true;
       expect(await consolidationBus.addedBy(batchHash)).to.equal(publisher.address);
@@ -70,13 +72,15 @@ describe("ConsolidationBus.sol: publisher", () => {
       const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1]];
       const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
 
-      const batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [sourcePubkeys, targetPubkeys]),
+      const batchData = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["bytes[]", "bytes[]"],
+        [sourcePubkeys, targetPubkeys],
       );
+      const batchHash = ethers.keccak256(batchData);
 
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys))
         .to.emit(consolidationBus, "RequestsAdded")
-        .withArgs(publisher.address, batchHash);
+        .withArgs(publisher.address, batchData);
 
       expect(await consolidationBus.isBatchAdded(batchHash)).to.be.true;
     });

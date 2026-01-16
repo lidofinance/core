@@ -32,8 +32,8 @@ describe("ConsolidationMigrator.sol: deployment", () => {
     expect(await migrator.hasRole(adminRole, admin.address)).to.be.true;
     expect(await migrator.getStakingRouter()).to.equal(stakingRouterAddr);
     expect(await migrator.getConsolidationBus()).to.equal(consolidationBusAddr);
-    expect(await migrator.getSourceModuleId()).to.equal(1);
-    expect(await migrator.getTargetModuleId()).to.equal(2);
+    expect(await migrator.sourceModuleId()).to.equal(1);
+    expect(await migrator.targetModuleId()).to.equal(2);
   });
 
   it("should revert if admin is zero address", async () => {

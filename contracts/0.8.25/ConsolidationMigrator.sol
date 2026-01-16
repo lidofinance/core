@@ -258,18 +258,18 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     }
 
     /**
-     * @notice Returns the source module ID
+     * @notice Returns the source module ID this migrator is bound to
      * @return Source module ID
      */
-    function getSourceModuleId() external view returns (uint256) {
+    function sourceModuleId() external view returns (uint256) {
         return SOURCE_MODULE_ID;
     }
 
     /**
-     * @notice Returns the target module ID
+     * @notice Returns the target module ID this migrator is bound to
      * @return Target module ID
      */
-    function getTargetModuleId() external view returns (uint256) {
+    function targetModuleId() external view returns (uint256) {
         return TARGET_MODULE_ID;
     }
 
