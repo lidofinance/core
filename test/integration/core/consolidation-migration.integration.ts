@@ -133,7 +133,31 @@ describe("Integration: Consolidation Migration Flow", () => {
   afterEach(async () => await Snapshot.restore(testSnapshot));
 
   context("Full consolidation flow", () => {
-    it("Should successfully complete the full consolidation flow", async () => {
+    it("Should successfully complete the full consolidation flow with single validator", async () => {
+      const { withdrawalVault } = ctx.contracts;
+
+      // Single validator consolidation
+      const sourceIndices = [0n];
+      const targetIndices = [0n];
+
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices);
+
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+
+      const tx = await consolidationBus
+        .connect(executor)
+        .executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: fee });
+
+      const receipt = await tx.wait();
+      const consolidationEvents = findEventsWithInterfaces(receipt!, "ConsolidationRequestAdded", [
+        withdrawalVault.interface,
+      ]);
+      expect(consolidationEvents?.length).to.equal(1);
+    });
+
+    it("Should successfully complete the full consolidation flow with multiple validators", async () => {
       const { withdrawalVault } = ctx.contracts;
 
       // Step 1: Operator submits consolidation batch via ConsolidationMigrator
@@ -317,6 +341,235 @@ describe("Integration: Consolidation Migration Flow", () => {
       await expect(
         consolidationBus.connect(executor).executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: fee }),
       ).to.not.be.reverted;
+    });
+
+    it("Should allow one source operator to consolidate to multiple targets", async () => {
+      const { withdrawalVault } = ctx.contracts;
+
+      // Set up a second target operator
+      const TARGET_OPERATOR_ID_2 = 3n;
+      const TARGET_PUBKEY_3 = "0x" + "ee".repeat(48);
+      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID_2, 0, [TARGET_PUBKEY_3]);
+
+      // Allow second pair
+      await consolidationMigrator.connect(allowPairManager).allowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID_2);
+
+      // Submit batch to first target
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+
+      // Submit batch to second target
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID_2, [1n], [0n]);
+
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+
+      // Execute both batches
+      await consolidationBus
+        .connect(executor)
+        .executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: fee });
+
+      await consolidationBus
+        .connect(executor)
+        .executeConsolidation([SOURCE_PUBKEY_2], [TARGET_PUBKEY_3], { value: fee });
+    });
+  });
+
+  context("Key validation in E2E", () => {
+    it("Should revert submitConsolidationBatch if source key is NOT used", async () => {
+      // Set up an unused source key
+      const UNUSED_SOURCE_PUBKEY = "0x" + "11".repeat(48);
+      await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 2, UNUSED_SOURCE_PUBKEY, false); // NOT used
+
+      await expect(
+        consolidationMigrator
+          .connect(operatorRewardAddress)
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2n], [0n]),
+      )
+        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotUsed")
+        .withArgs(SOURCE_OPERATOR_ID, 2n);
+    });
+
+    it("Should revert submitConsolidationBatch if target key is already deposited", async () => {
+      // Set target operator with deposited keys (totalDepositedValidators = 1)
+      const TARGET_OP_WITH_DEPOSITS = 4n;
+      const DEPOSITED_TARGET_PUBKEY = "0x" + "22".repeat(48);
+      await targetModule.mock__setOperatorData(TARGET_OP_WITH_DEPOSITS, 1, [DEPOSITED_TARGET_PUBKEY]); // 1 deposited
+
+      // Allow the pair
+      await consolidationMigrator.connect(allowPairManager).allowPair(SOURCE_OPERATOR_ID, TARGET_OP_WITH_DEPOSITS);
+
+      // Try to consolidate to already deposited key (index 0 < totalDepositedValidators 1)
+      await expect(
+        consolidationMigrator
+          .connect(operatorRewardAddress)
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OP_WITH_DEPOSITS, [0n], [0n]),
+      )
+        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyAlreadyDeposited")
+        .withArgs(TARGET_OP_WITH_DEPOSITS, 0n, 1n);
+    });
+  });
+
+  context("ConsolidationGateway integration", () => {
+    it("Should revert executeConsolidation when ConsolidationGateway is paused", async () => {
+      const { withdrawalVault } = ctx.contracts;
+
+      // Submit batch first
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+
+      // Grant PAUSE_ROLE to agent and pause the gateway
+      const agentSigner = await ctx.getSigner("agent");
+      const PAUSE_ROLE = await consolidationGateway.PAUSE_ROLE();
+      await consolidationGateway.connect(agentSigner).grantRole(PAUSE_ROLE, agentSigner.address);
+      await consolidationGateway.connect(agentSigner).pauseFor(3600); // 1 hour
+
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+
+      // Try to execute - should revert because gateway is paused
+      await expect(
+        consolidationBus.connect(executor).executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: fee }),
+      ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
+    });
+
+    it("Should revert executeConsolidation when rate limit is exhausted", async () => {
+      const { withdrawalVault } = ctx.contracts;
+
+      // Grant EXIT_LIMIT_MANAGER_ROLE to agent and set a small limit
+      const agentSigner = await ctx.getSigner("agent");
+      const EXIT_LIMIT_MANAGER_ROLE = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
+      await consolidationGateway.connect(agentSigner).grantRole(EXIT_LIMIT_MANAGER_ROLE, agentSigner.address);
+      await consolidationGateway.connect(agentSigner).setConsolidationRequestLimit(1, 1, 86400);
+
+      // Submit first batch
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+
+      // Execute first batch - this should consume the limit
+      await consolidationBus
+        .connect(executor)
+        .executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: fee });
+
+      // Submit second batch
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [1n], [1n]);
+
+      // Execute second batch - should fail due to rate limit
+      await expect(
+        consolidationBus.connect(executor).executeConsolidation([SOURCE_PUBKEY_2], [TARGET_PUBKEY_2], { value: fee }),
+      ).to.be.revertedWithCustomError(consolidationGateway, "ConsolidationRequestsLimitExceeded");
+    });
+
+    it("Should refund excess ETH to executor", async () => {
+      const { withdrawalVault } = ctx.contracts;
+
+      // Submit batch
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+      const excessFee = fee * 10n; // Send 10x the required fee
+
+      const executorBalanceBefore = await ethers.provider.getBalance(executor.address);
+
+      const tx = await consolidationBus
+        .connect(executor)
+        .executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: excessFee });
+
+      const receipt = await tx.wait();
+      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+      const executorBalanceAfter = await ethers.provider.getBalance(executor.address);
+
+      // Executor should only pay fee + gas, not excessFee
+      // Balance after = Balance before - fee - gas
+      const expectedBalance = executorBalanceBefore - fee - gasUsed;
+      expect(executorBalanceAfter).to.equal(expectedBalance);
+    });
+  });
+
+  context("Batch management extended", () => {
+    it("Should execute multiple batches sequentially", async () => {
+      const { withdrawalVault } = ctx.contracts;
+
+      // Submit first batch
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+
+      // Submit second batch
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [1n], [1n]);
+
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+
+      // Execute first batch
+      await consolidationBus
+        .connect(executor)
+        .executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: fee });
+
+      // Verify first batch is executed
+      const batchHash1 = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_1], [TARGET_PUBKEY_1]]),
+      );
+      expect(await consolidationBus.isBatchAdded(batchHash1)).to.be.false;
+
+      // Execute second batch
+      await consolidationBus
+        .connect(executor)
+        .executeConsolidation([SOURCE_PUBKEY_2], [TARGET_PUBKEY_2], { value: fee });
+
+      // Verify second batch is executed
+      const batchHash2 = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_2], [TARGET_PUBKEY_2]]),
+      );
+      expect(await consolidationBus.isBatchAdded(batchHash2)).to.be.false;
+    });
+
+    it("Should revert executeConsolidation if batch was removed", async () => {
+      const { withdrawalVault } = ctx.contracts;
+
+      // Submit batch
+      await consolidationMigrator
+        .connect(operatorRewardAddress)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+
+      const batchHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_1], [TARGET_PUBKEY_1]]),
+      );
+
+      // Remove batch
+      await consolidationBus.connect(admin).removeBatches([batchHash]);
+
+      const fee = await withdrawalVault.getConsolidationRequestFee();
+
+      // Try to execute removed batch
+      await expect(
+        consolidationBus.connect(executor).executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: fee }),
+      ).to.be.revertedWithCustomError(consolidationBus, "BatchNotFound");
+    });
+
+    it("Should revert addConsolidationRequests if batch size exceeds limit", async () => {
+      // Set a very small batch size limit on ConsolidationBus
+      await consolidationBus.connect(admin).setBatchSize(1);
+
+      // Try to submit batch with 2 validators (exceeds limit of 1)
+      await expect(
+        consolidationMigrator
+          .connect(operatorRewardAddress)
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n, 1n], [0n, 1n]),
+      )
+        .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
+        .withArgs(2, 1);
     });
   });
 });
