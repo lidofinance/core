@@ -3,13 +3,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ConsolidationGateway, WithdrawalVault__MockForCG } from "typechain-types";
+import { ConsolidationGateway, WithdrawalVault__MockForConsolidationGateway } from "typechain-types";
 
-import { advanceChainTime } from "lib/time";
+import { advanceChainTime } from "lib";
 
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -63,7 +62,7 @@ const expectLimitData = async (
 
 describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
   let consolidationGateway: ConsolidationGateway;
-  let withdrawalVault: WithdrawalVault__MockForCG;
+  let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
   let admin: HardhatEthersSigner;
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -76,7 +75,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     const locator = await deployLidoLocator();
     const locatorAddr = await locator.getAddress();
 
-    withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForCG");
+    withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForConsolidationGateway");
 
     await updateLidoLocatorImplementation(locatorAddr, {
       withdrawalVault: await withdrawalVault.getAddress(),
@@ -104,7 +103,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       consolidationGateway
         .connect(stranger)
         .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
-    ).to.be.revertedWithOZAccessControlError(stranger.address, role);
+    )
+      .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")
+      .withArgs(stranger.address, role);
   });
 
   it("should revert with ZeroArgument error if msg.value == 0", async () => {
@@ -150,9 +151,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
   it("should not allow to set limit without EXIT_LIMIT_MANAGER_ROLE", async () => {
     const limitManagerRole = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
 
-    await expect(
-      consolidationGateway.connect(stranger).setConsolidationRequestLimit(4, 1, 48),
-    ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), limitManagerRole);
+    await expect(consolidationGateway.connect(stranger).setConsolidationRequestLimit(4, 1, 48))
+      .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")
+      .withArgs(await stranger.getAddress(), limitManagerRole);
   });
 
   it("should set consolidation limit", async () => {

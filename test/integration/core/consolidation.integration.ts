@@ -53,7 +53,9 @@ describe("Integration: Consolidation requests", () => {
       consolidationGateway
         .connect(stranger)
         .addConsolidationRequests(sourcePubkeys, targetPubkeys, stranger.address, { value: 1n }),
-    ).to.be.revertedWithOZAccessControlError(stranger.address, role);
+    )
+      .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")
+      .withArgs(stranger.address, role);
   });
 
   it("Should successfully trigger consolidation requests", async () => {
