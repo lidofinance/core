@@ -39,19 +39,6 @@ interface ISourceModule {
         uint256 _nodeOperatorId,
         uint256 _index
     ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
-
-    function getNodeOperator(
-        uint256 _nodeOperatorId,
-        bool _fullInfo
-    ) external view returns (
-        bool active,
-        string memory name,
-        address rewardAddress,
-        uint64 totalVettedValidators,
-        uint64 totalExitedValidators,
-        uint64 totalAddedValidators,
-        uint64 totalDepositedValidators
-    );
 }
 
 /**
@@ -109,19 +96,18 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     error ZeroArgument(string name);
     error AdminCannotBeZero();
     error PairNotAllowed(uint256 sourceOperatorId, uint256 targetOperatorId);
-    error PairAlreadyAllowed(uint256 sourceOperatorId, uint256 targetOperatorId);
     error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
     error ArraysLengthMismatch(uint256 sourceLength, uint256 targetLength);
     error EmptyBatch();
     error SourceKeyNotUsed(uint256 sourceOperatorId, uint256 keyIndex);
     error TargetKeyAlreadyDeposited(uint256 targetOperatorId, uint256 keyIndex, uint256 totalDeposited);
-    error NotAuthorized(address caller, uint256 sourceOperatorId);
+    error NotAuthorized(address caller, uint256 sourceOperatorId, uint256 targetOperatorId);
 
     // ==========
     //  Events
     // ==========
 
-    event ConsolidationPairAllowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId);
+    event ConsolidationPairAllowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId, address indexed submitter);
     event ConsolidationPairDisallowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId);
     event ConsolidationSubmitted(
         uint256 indexed sourceOperatorId,
@@ -154,6 +140,9 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     /// @dev mapping(sourceOperatorId => set of allowed targetOperatorIds)
     mapping(uint256 => EnumerableSet.UintSet) internal _allowedPairs;
 
+    /// @dev mapping(sourceOperatorId => mapping(targetOperatorId => submitter address))
+    mapping(uint256 => mapping(uint256 => address)) internal _submitters;
+
     // ==========
     //  Constructor
     // ==========
@@ -184,23 +173,28 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     // ======================
 
     /**
-     * @notice Allows a consolidation pair (source operator -> target operator)
+     * @notice Allows a consolidation pair (source operator -> target operator) with a designated submitter
      * @param sourceOperatorId ID of the source operator in source module
      * @param targetOperatorId ID of the target operator in target module
-     * @dev Reverts if caller does not have ALLOW_PAIR_ROLE
+     * @param submitter Address authorized to submit consolidation batches for this pair
+     * @dev Can be called multiple times to update the submitter for an existing pair
+     * @dev Reverts if caller does not have ALLOW_PAIR_ROLE or if submitter is zero address
      */
     function allowPair(
         uint256 sourceOperatorId,
-        uint256 targetOperatorId
+        uint256 targetOperatorId,
+        address submitter
     ) external onlyRole(ALLOW_PAIR_ROLE) {
-        bool added = _allowedPairs[sourceOperatorId].add(targetOperatorId);
-        if (!added) revert PairAlreadyAllowed(sourceOperatorId, targetOperatorId);
+        if (submitter == address(0)) revert ZeroArgument("submitter");
 
-        emit ConsolidationPairAllowed(sourceOperatorId, targetOperatorId);
+        _allowedPairs[sourceOperatorId].add(targetOperatorId);
+        _submitters[sourceOperatorId][targetOperatorId] = submitter;
+
+        emit ConsolidationPairAllowed(sourceOperatorId, targetOperatorId, submitter);
     }
 
     /**
-     * @notice Disallows a consolidation pair
+     * @notice Disallows a consolidation pair and removes the submitter
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
      * @dev Reverts if caller does not have ALLOW_PAIR_ROLE
@@ -211,6 +205,8 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     ) external onlyRole(ALLOW_PAIR_ROLE) {
         bool removed = _allowedPairs[sourceOperatorId].remove(targetOperatorId);
         if (!removed) revert PairNotInAllowlist(sourceOperatorId, targetOperatorId);
+
+        delete _submitters[sourceOperatorId][targetOperatorId];
 
         emit ConsolidationPairDisallowed(sourceOperatorId, targetOperatorId);
     }
@@ -239,6 +235,19 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
      */
     function getAllowedTargets(uint256 sourceOperatorId) external view returns (uint256[] memory) {
         return _allowedPairs[sourceOperatorId].values();
+    }
+
+    /**
+     * @notice Returns the submitter address for a consolidation pair
+     * @param sourceOperatorId ID of the source operator
+     * @param targetOperatorId ID of the target operator
+     * @return Address authorized to submit consolidation batches, or address(0) if pair not allowed
+     */
+    function getSubmitter(
+        uint256 sourceOperatorId,
+        uint256 targetOperatorId
+    ) external view returns (address) {
+        return _submitters[sourceOperatorId][targetOperatorId];
     }
 
     /**
@@ -300,7 +309,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
      * @param targetOperatorId ID of the target operator
      * @param sourceValidatorIndices Indices of source validators (must be deposited/used)
      * @param targetValidatorIndices Indices of target validators (must NOT be deposited yet)
-     * @dev Caller must be the reward address of the source operator
+     * @dev Caller must be the designated submitter for this pair (set via allowPair)
      * @dev Forwards the validated batch to ConsolidationBus
      */
     function submitConsolidationBatch(
@@ -309,11 +318,10 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
         uint256[] calldata sourceValidatorIndices,
         uint256[] calldata targetValidatorIndices
     ) external {
-        // Check authorization: caller must be the reward address of source operator
-        ISourceModule sourceModule = _getSourceModule();
-        (,, address rewardAddress,,,,) = sourceModule.getNodeOperator(sourceOperatorId, false);
-        if (msg.sender != rewardAddress) {
-            revert NotAuthorized(msg.sender, sourceOperatorId);
+        // Check authorization: caller must be the designated submitter for this pair
+        address submitter = _submitters[sourceOperatorId][targetOperatorId];
+        if (msg.sender != submitter) {
+            revert NotAuthorized(msg.sender, sourceOperatorId, targetOperatorId);
         }
 
         // Validate the batch and get pubkeys

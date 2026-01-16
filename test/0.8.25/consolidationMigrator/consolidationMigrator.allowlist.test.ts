@@ -17,6 +17,7 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
   let consolidationBus: ConsolidationBus__MockForConsolidationMigrator;
   let admin: HardhatEthersSigner;
   let allowPairManager: HardhatEthersSigner;
+  let submitter: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let ALLOW_PAIR_ROLE: string;
@@ -24,7 +25,7 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
   let originalState: string;
 
   before(async () => {
-    [admin, allowPairManager, stranger] = await ethers.getSigners();
+    [admin, allowPairManager, submitter, stranger] = await ethers.getSigners();
 
     stakingRouter = await ethers.deployContract("StakingRouter__MockForConsolidationMigrator");
     consolidationBus = await ethers.deployContract("ConsolidationBus__MockForConsolidationMigrator");
@@ -48,47 +49,64 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("allowPair", () => {
-    it("should allow a pair", async () => {
+    it("should allow a pair with submitter", async () => {
       const sourceOpId = 1;
       const targetOpId = 10;
 
-      await expect(consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId))
+      await expect(consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId, submitter.address))
         .to.emit(consolidationMigrator, "ConsolidationPairAllowed")
-        .withArgs(sourceOpId, targetOpId);
+        .withArgs(sourceOpId, targetOpId, submitter.address);
 
       expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId)).to.be.true;
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(submitter.address);
     });
 
     it("should revert if caller does not have ALLOW_PAIR_ROLE", async () => {
-      await expect(consolidationMigrator.connect(stranger).allowPair(1, 10))
+      await expect(consolidationMigrator.connect(stranger).allowPair(1, 10, submitter.address))
         .to.be.revertedWithCustomError(consolidationMigrator, "AccessControlUnauthorizedAccount")
         .withArgs(stranger.address, ALLOW_PAIR_ROLE);
     });
 
-    it("should revert if pair already allowed", async () => {
+    it("should revert if submitter is zero address", async () => {
+      await expect(consolidationMigrator.connect(allowPairManager).allowPair(1, 10, ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(consolidationMigrator, "ZeroArgument")
+        .withArgs("submitter");
+    });
+
+    it("should allow updating submitter for existing pair (idempotent)", async () => {
       const sourceOpId = 1;
       const targetOpId = 10;
 
-      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId);
+      // First allow with submitter
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId, submitter.address);
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(submitter.address);
 
-      await expect(consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId))
-        .to.be.revertedWithCustomError(consolidationMigrator, "PairAlreadyAllowed")
-        .withArgs(sourceOpId, targetOpId);
+      // Update submitter to stranger
+      await expect(consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId, stranger.address))
+        .to.emit(consolidationMigrator, "ConsolidationPairAllowed")
+        .withArgs(sourceOpId, targetOpId, stranger.address);
+
+      expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId)).to.be.true;
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(stranger.address);
     });
 
-    it("should allow multiple targets for same source", async () => {
+    it("should allow multiple targets for same source with different submitters", async () => {
       const sourceOpId = 1;
       const targetOpId1 = 10;
       const targetOpId2 = 20;
       const targetOpId3 = 30;
 
-      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId1);
-      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId2);
-      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId3);
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId1, submitter.address);
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId2, stranger.address);
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId3, admin.address);
 
       expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId1)).to.be.true;
       expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId2)).to.be.true;
       expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId3)).to.be.true;
+
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId1)).to.equal(submitter.address);
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId2)).to.equal(stranger.address);
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId3)).to.equal(admin.address);
 
       const targets = await consolidationMigrator.getAllowedTargets(sourceOpId);
       expect(targets.length).to.equal(3);
@@ -100,18 +118,22 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
 
   context("disallowPair", () => {
     beforeEach(async () => {
-      await consolidationMigrator.connect(allowPairManager).allowPair(1, 10);
+      await consolidationMigrator.connect(allowPairManager).allowPair(1, 10, submitter.address);
     });
 
-    it("should disallow a pair", async () => {
+    it("should disallow a pair and clear submitter", async () => {
       const sourceOpId = 1;
       const targetOpId = 10;
+
+      // Verify submitter is set before disallow
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(submitter.address);
 
       await expect(consolidationMigrator.connect(allowPairManager).disallowPair(sourceOpId, targetOpId))
         .to.emit(consolidationMigrator, "ConsolidationPairDisallowed")
         .withArgs(sourceOpId, targetOpId);
 
       expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId)).to.be.false;
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(ethers.ZeroAddress);
     });
 
     it("should revert if caller does not have ALLOW_PAIR_ROLE", async () => {
@@ -140,12 +162,16 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
       expect(targets.length).to.equal(0);
     });
 
+    it("getSubmitter should return zero address for non-existent pair", async () => {
+      expect(await consolidationMigrator.getSubmitter(999, 888)).to.equal(ethers.ZeroAddress);
+    });
+
     it("getAllowedTargets should return correct list after adding and removing", async () => {
       const sourceOpId = 1;
 
-      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, 10);
-      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, 20);
-      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, 30);
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, 10, submitter.address);
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, 20, stranger.address);
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, 30, admin.address);
 
       let targets = await consolidationMigrator.getAllowedTargets(sourceOpId);
       expect(targets.length).to.equal(3);
@@ -157,6 +183,12 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
       expect(targets).to.include(BigInt(10));
       expect(targets).to.include(BigInt(30));
       expect(targets).to.not.include(BigInt(20));
+
+      // Verify submitter was cleared for removed pair
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, 20)).to.equal(ethers.ZeroAddress);
+      // Verify remaining submitters are intact
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, 10)).to.equal(submitter.address);
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, 30)).to.equal(admin.address);
     });
   });
 });

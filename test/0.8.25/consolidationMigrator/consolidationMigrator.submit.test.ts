@@ -29,7 +29,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
   let consolidationBus: ConsolidationBus__MockForConsolidationMigrator;
   let admin: HardhatEthersSigner;
   let allowPairManager: HardhatEthersSigner;
-  let rewardAddress: HardhatEthersSigner;
+  let submitter: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   const SOURCE_MODULE_ID = 1;
@@ -40,7 +40,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
   let originalState: string;
 
   before(async () => {
-    [admin, allowPairManager, rewardAddress, stranger] = await ethers.getSigners();
+    [admin, allowPairManager, submitter, stranger] = await ethers.getSigners();
 
     // Deploy mocks
     stakingRouter = await ethers.deployContract("StakingRouter__MockForConsolidationMigrator");
@@ -51,9 +51,6 @@ describe("ConsolidationMigrator.sol: submit", () => {
     // Set up staking router to return module addresses
     await stakingRouter.mock__setStakingModule(SOURCE_MODULE_ID, await sourceModule.getAddress());
     await stakingRouter.mock__setStakingModule(TARGET_MODULE_ID, await targetModule.getAddress());
-
-    // Set up source module: operator with reward address
-    await sourceModule.mock__setNodeOperator(SOURCE_OPERATOR_ID, rewardAddress.address, true);
 
     // Deploy ConsolidationMigrator
     consolidationMigrator = await ethers.deployContract("ConsolidationMigrator", [
@@ -67,8 +64,10 @@ describe("ConsolidationMigrator.sol: submit", () => {
     const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
     await consolidationMigrator.connect(admin).grantRole(ALLOW_PAIR_ROLE, allowPairManager.address);
 
-    // Allow the test pair
-    await consolidationMigrator.connect(allowPairManager).allowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
+    // Allow the test pair with submitter
+    await consolidationMigrator
+      .connect(allowPairManager)
+      .allowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, submitter.address);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -85,13 +84,13 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 0, [PUBKEYS[2], PUBKEYS[3]]);
     });
 
-    it("should submit consolidation batch from reward address", async () => {
+    it("should submit consolidation batch from designated submitter", async () => {
       const sourceIndices = [0, 1];
       const targetIndices = [0, 1];
 
       await expect(
         consolidationMigrator
-          .connect(rewardAddress)
+          .connect(submitter)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices),
       )
         .to.emit(consolidationMigrator, "ConsolidationSubmitted")
@@ -108,7 +107,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
       const targetIndices = [0];
 
       await consolidationMigrator
-        .connect(rewardAddress)
+        .connect(submitter)
         .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices);
 
       // Verify the pubkeys
@@ -119,32 +118,34 @@ describe("ConsolidationMigrator.sol: submit", () => {
       expect(targetPubkey.toLowerCase()).to.equal(PUBKEYS[2].toLowerCase());
     });
 
-    it("should revert if caller is not reward address", async () => {
+    it("should revert if caller is not the designated submitter", async () => {
       await expect(
         consolidationMigrator
           .connect(stranger)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [0]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
-        .withArgs(stranger.address, SOURCE_OPERATOR_ID);
+        .withArgs(stranger.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
     });
 
-    it("should revert if pair is not allowed", async () => {
+    it("should revert if pair is not allowed (no submitter set)", async () => {
       const unknownTargetOpId = 999;
 
+      // When pair is not allowed, there's no submitter set (address(0))
+      // So caller will fail authorization check first
       await expect(
         consolidationMigrator
-          .connect(rewardAddress)
+          .connect(submitter)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, unknownTargetOpId, [0], [0]),
       )
-        .to.be.revertedWithCustomError(consolidationMigrator, "PairNotAllowed")
-        .withArgs(SOURCE_OPERATOR_ID, unknownTargetOpId);
+        .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
+        .withArgs(submitter.address, SOURCE_OPERATOR_ID, unknownTargetOpId);
     });
 
     it("should revert if batch is empty", async () => {
       await expect(
         consolidationMigrator
-          .connect(rewardAddress)
+          .connect(submitter)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [], []),
       ).to.be.revertedWithCustomError(consolidationMigrator, "EmptyBatch");
     });
@@ -152,7 +153,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
     it("should revert if arrays have different lengths", async () => {
       await expect(
         consolidationMigrator
-          .connect(rewardAddress)
+          .connect(submitter)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0, 1], [0]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "ArraysLengthMismatch")
@@ -166,7 +167,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
 
       await expect(
         consolidationMigrator
-          .connect(rewardAddress)
+          .connect(submitter)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2], [2]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotUsed")
@@ -179,7 +180,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
 
       await expect(
         consolidationMigrator
-          .connect(rewardAddress)
+          .connect(submitter)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [0]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyAlreadyDeposited")
@@ -189,7 +190,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
     it("should emit ConsolidationBus event", async () => {
       await expect(
         consolidationMigrator
-          .connect(rewardAddress)
+          .connect(submitter)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [0]),
       ).to.emit(consolidationBus, "AddConsolidationRequestsCalled");
     });
@@ -199,7 +200,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
       const targetIndices = [0, 1];
 
       await consolidationMigrator
-        .connect(rewardAddress)
+        .connect(submitter)
         .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices);
 
       expect(await consolidationBus.getLastBatchSize()).to.equal(2);

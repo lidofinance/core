@@ -29,6 +29,7 @@ describe("ConsolidationMigrator.sol: validation", () => {
   let consolidationBus: ConsolidationBus__MockForConsolidationMigrator;
   let admin: HardhatEthersSigner;
   let allowPairManager: HardhatEthersSigner;
+  let submitter: HardhatEthersSigner;
 
   const SOURCE_MODULE_ID = 1;
   const TARGET_MODULE_ID = 2;
@@ -38,7 +39,7 @@ describe("ConsolidationMigrator.sol: validation", () => {
   let originalState: string;
 
   before(async () => {
-    [admin, allowPairManager] = await ethers.getSigners();
+    [admin, allowPairManager, submitter] = await ethers.getSigners();
 
     // Deploy mocks
     stakingRouter = await ethers.deployContract("StakingRouter__MockForConsolidationMigrator");
@@ -62,8 +63,10 @@ describe("ConsolidationMigrator.sol: validation", () => {
     const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
     await consolidationMigrator.connect(admin).grantRole(ALLOW_PAIR_ROLE, allowPairManager.address);
 
-    // Allow the test pair
-    await consolidationMigrator.connect(allowPairManager).allowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
+    // Allow the test pair with submitter
+    await consolidationMigrator
+      .connect(allowPairManager)
+      .allowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, submitter.address);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
