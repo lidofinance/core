@@ -13,7 +13,7 @@ import {BeaconRootData, ValidatorWitness, BalanceWitness, PendingWitness} from "
  * @author Lido
  * @notice
  *
- * Smart contract verifying CL data for top up of 0x02 validators
+ * Smart contract verifying CL data of validators, balances, pending deposits
  */
 abstract contract CLTopUpVerifier {
     // BeaconBlockHeader: state_root field gindex
@@ -94,11 +94,8 @@ abstract contract CLTopUpVerifier {
         for (uint256 i; i < pendingCount; ++i) {
             PendingWitness calldata w = pw[i];
 
-            // gindex pending_deposits[w.index] с учётом pre/post fork layout
             GIndex gIndexPending = concat(GI_STATE_ROOT, _getPendingDepositGI(w.index, beaconRootData.slot));
-
             bytes32 pendingLeaf = _pendingDepositHashTreeRoot(w, vw.pubkey, expectedWithdrawalCredentials);
-
             SSZ.verifyProof({proof: w.proof, root: parentBlockRoot, leaf: pendingLeaf, gI: gIndexPending});
         }
     }

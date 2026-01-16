@@ -1074,7 +1074,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 etherBalanceBeforeDeposits = address(this).balance;
 
         BeaconChainDepositor.makeBeaconChainDeposits32ETH(
-            DEPOSIT_CONTRACT, actualDepositsCount, abi.encodePacked(withdrawalCredentials), publicKeysBatch, signaturesBatch
+            DEPOSIT_CONTRACT,
+            actualDepositsCount,
+            abi.encodePacked(withdrawalCredentials),
+            publicKeysBatch,
+            signaturesBatch
         );
 
         // update counters for deposits that are not visible before ao report
