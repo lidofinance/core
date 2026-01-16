@@ -1,0 +1,436 @@
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
+// SPDX-License-Identifier: GPL-3.0
+
+/* See contracts/COMPILERS.md */
+pragma solidity 0.8.25;
+
+import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+
+/**
+ * @dev Minimal interface for StakingRouter to get module addresses
+ */
+interface IStakingRouter {
+    struct StakingModule {
+        uint24 id;
+        address stakingModuleAddress;
+        uint16 stakingModuleFee;
+        uint16 treasuryFee;
+        uint16 stakeShareLimit;
+        uint8 status;
+        string name;
+        uint64 lastDepositAt;
+        uint256 lastDepositBlock;
+        uint256 exitedValidatorsCount;
+        uint16 priorityExitShareThreshold;
+        uint64 maxDepositsPerBlock;
+        uint64 minDepositBlockDistance;
+        uint8 withdrawalCredentialsType;
+    }
+
+    function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
+}
+
+/**
+ * @dev Interface for source staking module (CMv1/NOR) to get individual signing keys
+ */
+interface ISourceModule {
+    function getSigningKey(
+        uint256 _nodeOperatorId,
+        uint256 _index
+    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
+
+    function getNodeOperator(
+        uint256 _nodeOperatorId,
+        bool _fullInfo
+    ) external view returns (
+        bool active,
+        string memory name,
+        address rewardAddress,
+        uint64 totalVettedValidators,
+        uint64 totalExitedValidators,
+        uint64 totalAddedValidators,
+        uint64 totalDepositedValidators
+    );
+}
+
+/**
+ * @dev Interface for target staking module (CMv2/NOR) to get signing keys in batches
+ */
+interface ITargetModule {
+    function getSigningKeys(
+        uint256 _nodeOperatorId,
+        uint256 _offset,
+        uint256 _limit
+    ) external view returns (bytes memory pubkeys, bytes memory signatures, bool[] memory used);
+
+    function getNodeOperatorSummary(
+        uint256 _nodeOperatorId
+    ) external view returns (
+        uint256 targetLimitMode,
+        uint256 targetValidatorsCount,
+        uint256 stuckValidatorsCount,
+        uint256 refundedValidatorsCount,
+        uint256 stuckPenaltyEndTimestamp,
+        uint256 totalExitedValidators,
+        uint256 totalDepositedValidators,
+        uint256 depositableValidatorsCount
+    );
+}
+
+/**
+ * @dev Interface for ConsolidationBus to submit consolidation requests
+ */
+interface IConsolidationBus {
+    function addConsolidationRequests(
+        bytes[] calldata sourcePubkeys,
+        bytes[] calldata targetPubkeys
+    ) external;
+}
+
+/**
+ * @title ConsolidationMigrator
+ * @notice Validates and submits consolidation requests from source module to target module.
+ *
+ * The workflow:
+ * 1. Governance (or EOA with ALLOW_PAIR_ROLE) allows specific operator pairs
+ * 2. Authorized operators (reward address) submit consolidation batches
+ * 3. Contract validates keys and forwards to ConsolidationBus
+ */
+contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
+    using EnumerableSet for EnumerableSet.UintSet;
+
+    uint256 public constant PUBKEY_LENGTH = 48;
+
+    // ==========
+    //  Errors
+    // ==========
+
+    error ZeroArgument(string name);
+    error AdminCannotBeZero();
+    error PairNotAllowed(uint256 sourceOperatorId, uint256 targetOperatorId);
+    error PairAlreadyAllowed(uint256 sourceOperatorId, uint256 targetOperatorId);
+    error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
+    error ArraysLengthMismatch(uint256 sourceLength, uint256 targetLength);
+    error EmptyBatch();
+    error SourceKeyNotUsed(uint256 sourceOperatorId, uint256 keyIndex);
+    error TargetKeyAlreadyDeposited(uint256 targetOperatorId, uint256 keyIndex, uint256 totalDeposited);
+    error NotAuthorized(address caller, uint256 sourceOperatorId);
+
+    // ==========
+    //  Events
+    // ==========
+
+    event ConsolidationPairAllowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId);
+    event ConsolidationPairDisallowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId);
+    event ConsolidationSubmitted(
+        uint256 indexed sourceOperatorId,
+        uint256 indexed targetOperatorId,
+        uint256[] sourceValidatorIndices,
+        uint256[] targetValidatorIndices
+    );
+
+    // ==========
+    //  Roles
+    // ==========
+
+    bytes32 public constant ALLOW_PAIR_ROLE = keccak256("ALLOW_PAIR_ROLE");
+
+    // ==========
+    //  Immutables
+    // ==========
+
+    uint256 public constant VERSION = 1;
+
+    IStakingRouter internal immutable STAKING_ROUTER;
+    IConsolidationBus internal immutable CONSOLIDATION_BUS;
+    uint256 internal immutable SOURCE_MODULE_ID;
+    uint256 internal immutable TARGET_MODULE_ID;
+
+    // ==========
+    //  Storage
+    // ==========
+
+    /// @dev mapping(sourceOperatorId => set of allowed targetOperatorIds)
+    mapping(uint256 => EnumerableSet.UintSet) internal _allowedPairs;
+
+    // ==========
+    //  Constructor
+    // ==========
+
+    constructor(
+        address admin,
+        address stakingRouter,
+        address consolidationBus,
+        uint256 sourceModuleId,
+        uint256 targetModuleId
+    ) {
+        if (admin == address(0)) revert AdminCannotBeZero();
+        if (stakingRouter == address(0)) revert ZeroArgument("stakingRouter");
+        if (consolidationBus == address(0)) revert ZeroArgument("consolidationBus");
+        if (sourceModuleId == 0) revert ZeroArgument("sourceModuleId");
+        if (targetModuleId == 0) revert ZeroArgument("targetModuleId");
+
+        STAKING_ROUTER = IStakingRouter(stakingRouter);
+        CONSOLIDATION_BUS = IConsolidationBus(consolidationBus);
+        SOURCE_MODULE_ID = sourceModuleId;
+        TARGET_MODULE_ID = targetModuleId;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+    }
+
+    // ======================
+    //  Allowlist Management
+    // ======================
+
+    /**
+     * @notice Allows a consolidation pair (source operator -> target operator)
+     * @param sourceOperatorId ID of the source operator in source module
+     * @param targetOperatorId ID of the target operator in target module
+     * @dev Reverts if caller does not have ALLOW_PAIR_ROLE
+     */
+    function allowPair(
+        uint256 sourceOperatorId,
+        uint256 targetOperatorId
+    ) external onlyRole(ALLOW_PAIR_ROLE) {
+        bool added = _allowedPairs[sourceOperatorId].add(targetOperatorId);
+        if (!added) revert PairAlreadyAllowed(sourceOperatorId, targetOperatorId);
+
+        emit ConsolidationPairAllowed(sourceOperatorId, targetOperatorId);
+    }
+
+    /**
+     * @notice Disallows a consolidation pair
+     * @param sourceOperatorId ID of the source operator
+     * @param targetOperatorId ID of the target operator
+     * @dev Reverts if caller does not have ALLOW_PAIR_ROLE
+     */
+    function disallowPair(
+        uint256 sourceOperatorId,
+        uint256 targetOperatorId
+    ) external onlyRole(ALLOW_PAIR_ROLE) {
+        bool removed = _allowedPairs[sourceOperatorId].remove(targetOperatorId);
+        if (!removed) revert PairNotInAllowlist(sourceOperatorId, targetOperatorId);
+
+        emit ConsolidationPairDisallowed(sourceOperatorId, targetOperatorId);
+    }
+
+    // ==============
+    //  View Methods
+    // ==============
+
+    /**
+     * @notice Checks if a consolidation pair is allowed
+     * @param sourceOperatorId ID of the source operator
+     * @param targetOperatorId ID of the target operator
+     * @return True if the pair is allowed
+     */
+    function isPairAllowed(
+        uint256 sourceOperatorId,
+        uint256 targetOperatorId
+    ) external view returns (bool) {
+        return _allowedPairs[sourceOperatorId].contains(targetOperatorId);
+    }
+
+    /**
+     * @notice Returns all allowed target operators for a given source operator
+     * @param sourceOperatorId ID of the source operator
+     * @return Array of allowed target operator IDs
+     */
+    function getAllowedTargets(uint256 sourceOperatorId) external view returns (uint256[] memory) {
+        return _allowedPairs[sourceOperatorId].values();
+    }
+
+    /**
+     * @notice Returns the StakingRouter address
+     * @return Address of the StakingRouter
+     */
+    function getStakingRouter() external view returns (address) {
+        return address(STAKING_ROUTER);
+    }
+
+    /**
+     * @notice Returns the ConsolidationBus address
+     * @return Address of the ConsolidationBus
+     */
+    function getConsolidationBus() external view returns (address) {
+        return address(CONSOLIDATION_BUS);
+    }
+
+    /**
+     * @notice Returns the source module ID
+     * @return Source module ID
+     */
+    function getSourceModuleId() external view returns (uint256) {
+        return SOURCE_MODULE_ID;
+    }
+
+    /**
+     * @notice Returns the target module ID
+     * @return Target module ID
+     */
+    function getTargetModuleId() external view returns (uint256) {
+        return TARGET_MODULE_ID;
+    }
+
+    // =========================
+    //  Validation and Submit
+    // =========================
+
+    /**
+     * @notice Validates a consolidation batch without modifying state
+     * @param sourceOperatorId ID of the source operator
+     * @param targetOperatorId ID of the target operator
+     * @param sourceValidatorIndices Indices of source validators (must be deposited/used)
+     * @param targetValidatorIndices Indices of target validators (must NOT be deposited yet)
+     * @dev Reverts with specific error if validation fails
+     */
+    function validateConsolidationBatch(
+        uint256 sourceOperatorId,
+        uint256 targetOperatorId,
+        uint256[] calldata sourceValidatorIndices,
+        uint256[] calldata targetValidatorIndices
+    ) external view {
+        _validateBatch(sourceOperatorId, targetOperatorId, sourceValidatorIndices, targetValidatorIndices);
+    }
+
+    /**
+     * @notice Submits a consolidation batch after validation
+     * @param sourceOperatorId ID of the source operator
+     * @param targetOperatorId ID of the target operator
+     * @param sourceValidatorIndices Indices of source validators (must be deposited/used)
+     * @param targetValidatorIndices Indices of target validators (must NOT be deposited yet)
+     * @dev Caller must be the reward address of the source operator
+     * @dev Forwards the validated batch to ConsolidationBus
+     */
+    function submitConsolidationBatch(
+        uint256 sourceOperatorId,
+        uint256 targetOperatorId,
+        uint256[] calldata sourceValidatorIndices,
+        uint256[] calldata targetValidatorIndices
+    ) external {
+        // Check authorization: caller must be the reward address of source operator
+        ISourceModule sourceModule = _getSourceModule();
+        (,, address rewardAddress,,,,) = sourceModule.getNodeOperator(sourceOperatorId, false);
+        if (msg.sender != rewardAddress) {
+            revert NotAuthorized(msg.sender, sourceOperatorId);
+        }
+
+        // Validate the batch and get pubkeys
+        (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) = _validateBatch(
+            sourceOperatorId,
+            targetOperatorId,
+            sourceValidatorIndices,
+            targetValidatorIndices
+        );
+
+        // Submit to ConsolidationBus
+        CONSOLIDATION_BUS.addConsolidationRequests(sourcePubkeys, targetPubkeys);
+
+        emit ConsolidationSubmitted(
+            sourceOperatorId,
+            targetOperatorId,
+            sourceValidatorIndices,
+            targetValidatorIndices
+        );
+    }
+
+    // ==================
+    //  Internal Methods
+    // ==================
+
+    /**
+     * @dev Validates a consolidation batch and returns the extracted pubkeys
+     */
+    function _validateBatch(
+        uint256 sourceOperatorId,
+        uint256 targetOperatorId,
+        uint256[] calldata sourceValidatorIndices,
+        uint256[] calldata targetValidatorIndices
+    ) internal view returns (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) {
+        // Check array lengths
+        uint256 count = sourceValidatorIndices.length;
+        if (count == 0) revert EmptyBatch();
+        if (count != targetValidatorIndices.length) {
+            revert ArraysLengthMismatch(count, targetValidatorIndices.length);
+        }
+
+        // Check if pair is allowed
+        if (!_allowedPairs[sourceOperatorId].contains(targetOperatorId)) {
+            revert PairNotAllowed(sourceOperatorId, targetOperatorId);
+        }
+
+        // Get module interfaces
+        ISourceModule sourceModule = _getSourceModule();
+        ITargetModule targetModule = _getTargetModule();
+
+        // Get totalDepositedValidators for target operator
+        (,,,,,, uint256 totalDepositedValidators,) = targetModule.getNodeOperatorSummary(targetOperatorId);
+
+        // Allocate arrays
+        sourcePubkeys = new bytes[](count);
+        targetPubkeys = new bytes[](count);
+
+        // Validate source keys (must be used/deposited)
+        for (uint256 i = 0; i < count; ++i) {
+            uint256 srcIndex = sourceValidatorIndices[i];
+            (bytes memory key,, bool used) = sourceModule.getSigningKey(sourceOperatorId, srcIndex);
+
+            if (!used) {
+                revert SourceKeyNotUsed(sourceOperatorId, srcIndex);
+            }
+            sourcePubkeys[i] = key;
+        }
+
+        // Validate target keys (must NOT be deposited yet)
+        for (uint256 i = 0; i < count; ++i) {
+            uint256 tgtIndex = targetValidatorIndices[i];
+
+            // Key is deposited if index < totalDepositedValidators
+            if (tgtIndex < totalDepositedValidators) {
+                revert TargetKeyAlreadyDeposited(targetOperatorId, tgtIndex, totalDepositedValidators);
+            }
+
+            // Get the target key using getSigningKeys with offset=tgtIndex, limit=1
+            (bytes memory pubkeys,,) = targetModule.getSigningKeys(targetOperatorId, tgtIndex, 1);
+
+            // pubkeys is concatenated, extract the single 48-byte key
+            targetPubkeys[i] = _extractPubkey(pubkeys, 0);
+        }
+
+        return (sourcePubkeys, targetPubkeys);
+    }
+
+    /**
+     * @dev Returns the source module interface from StakingRouter
+     */
+    function _getSourceModule() internal view returns (ISourceModule) {
+        IStakingRouter.StakingModule memory module = STAKING_ROUTER.getStakingModule(SOURCE_MODULE_ID);
+        return ISourceModule(module.stakingModuleAddress);
+    }
+
+    /**
+     * @dev Returns the target module interface from StakingRouter
+     */
+    function _getTargetModule() internal view returns (ITargetModule) {
+        IStakingRouter.StakingModule memory module = STAKING_ROUTER.getStakingModule(TARGET_MODULE_ID);
+        return ITargetModule(module.stakingModuleAddress);
+    }
+
+    /**
+     * @dev Extracts a single 48-byte pubkey from concatenated pubkeys
+     * @param pubkeys Concatenated pubkeys (48 bytes each)
+     * @param index Index of the key to extract (0-based)
+     * @return The extracted 48-byte pubkey
+     */
+    function _extractPubkey(bytes memory pubkeys, uint256 index) internal pure returns (bytes memory) {
+        bytes memory key = new bytes(PUBKEY_LENGTH);
+        uint256 offset = index * PUBKEY_LENGTH;
+
+        for (uint256 i = 0; i < PUBKEY_LENGTH; ++i) {
+            key[i] = pubkeys[offset + i];
+        }
+
+        return key;
+    }
+}
