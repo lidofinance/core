@@ -156,6 +156,24 @@ describe("ConsolidationBus.sol: publisher", () => {
         .withArgs(batchHash);
     });
 
+    it("should revert if source equals target pubkey", async () => {
+      const samePubkey = PUBKEYS[0];
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests([samePubkey], [samePubkey]))
+        .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
+        .withArgs(0);
+    });
+
+    it("should revert if source equals target pubkey at any index", async () => {
+      // First pair is valid, second pair has source == target
+      const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1]];
+      const targetPubkeys = [PUBKEYS[2], PUBKEYS[1]]; // PUBKEYS[1] == PUBKEYS[1] at index 1
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys))
+        .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
+        .withArgs(1);
+    });
+
     it("should allow different publishers to add different batches", async () => {
       // Register another publisher
       const [, , , , publisher2] = await ethers.getSigners();

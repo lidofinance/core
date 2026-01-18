@@ -74,6 +74,12 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     error BatchAlreadyExecuted(bytes32 batchHash);
 
     /**
+     * @notice Thrown when source and target pubkeys are the same
+     * @param index Index of the invalid pair in the batch
+     */
+    error SourceEqualsTarget(uint256 index);
+
+    /**
      * @notice Emitted when a publisher is registered
      * @param publisher Address of the registered publisher
      */
@@ -248,6 +254,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
      *      - Arrays have different lengths
      *      - Batch is empty
      *      - Batch size exceeds limit (when limit > 0)
+     *      - Any source pubkey equals its corresponding target pubkey
      *      - Batch already exists
      */
     function addConsolidationRequests(
@@ -260,6 +267,12 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
         uint256 limit = _batchSize;
         if (limit > 0 && count > limit) revert BatchTooLarge(count, limit);
+
+        for (uint256 i = 0; i < count; ++i) {
+            if (keccak256(sourcePubkeys[i]) == keccak256(targetPubkeys[i])) {
+                revert SourceEqualsTarget(i);
+            }
+        }
 
         bytes32 batchHash = _computeBatchHash(sourcePubkeys, targetPubkeys);
 
