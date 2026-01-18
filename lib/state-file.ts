@@ -96,6 +96,8 @@ export enum Sk {
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
   consolidationGateway = "consolidationGateway",
+  consolidationBus = "consolidationBus",
+  consolidationMigrator = "consolidationMigrator",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
@@ -177,6 +179,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
     case Sk.consolidationGateway:
+    case Sk.consolidationBus:
+    case Sk.consolidationMigrator:
     case Sk.topUpGateway:
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:

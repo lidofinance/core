@@ -127,6 +127,8 @@ const getCoreContracts = async (
             "ConsolidationGateway",
             config.get("consolidationGateway") || (await locator.consolidationGateway()),
           ),
+          consolidationBus: loadContract("ConsolidationBus", config.get("consolidationBus")),
+          consolidationMigrator: loadContract("ConsolidationMigrator", config.get("consolidationMigrator")),
           accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
         }),
   })) as CoreContracts;
@@ -248,6 +250,8 @@ export async function discover(skipV3Contracts: boolean) {
     "wstETH": contracts.wstETH.address,
     "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway?.address,
     "Consolidation Gateway": contracts.consolidationGateway?.address,
+    "Consolidation Bus": contracts.consolidationBus?.address,
+    "Consolidation Migrator": contracts.consolidationMigrator?.address,
     // Vaults
     "Staking Vault Factory": contracts.stakingVaultFactory?.address,
     "Staking Vault Beacon": contracts.stakingVaultBeacon?.address,

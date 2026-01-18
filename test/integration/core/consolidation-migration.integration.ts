@@ -3,21 +3,23 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  ConsolidationBus,
-  ConsolidationGateway,
-  ConsolidationMigrator,
-  SourceModule__MockForConsolidationMigrator,
-  TargetModule__MockForConsolidationMigrator,
-} from "typechain-types";
+import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
 
-import { findEventsWithInterfaces } from "lib";
+import { certainAddress, findEventsWithInterfaces } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import {
+  depositAndReportValidators,
+  norSdvtAddNodeOperator,
+  norSdvtAddOperatorKeys,
+  norSdvtSetOperatorStakingLimit,
+} from "lib/protocol/helpers";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
+import { LoadedContract } from "lib/protocol/types";
 
 import { Snapshot } from "test/suite";
 
 /**
- * Integration test for the full consolidation migration flow.
+ * Integration test for the full consolidation migration flow using real NOR modules.
  *
  * The flow tested:
  * 1. ConsolidationMigrator validates source/target keys and submits to ConsolidationBus
@@ -26,101 +28,132 @@ import { Snapshot } from "test/suite";
  * 4. ConsolidationBus forwards to ConsolidationGateway
  * 5. ConsolidationGateway forwards to WithdrawalVault
  * 6. WithdrawalVault processes EIP-7251 consolidation requests
- *
- * TODO: Rewrite this test to use real NOR modules once tests in master branch are fixed.
- * Currently uses mocked staking modules for source/target key validation.
  */
-describe("Integration: Consolidation Migration Flow", () => {
+describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
   let ctx: ProtocolContext;
+  let nor: LoadedContract<NodeOperatorsRegistry>;
   let consolidationGateway: ConsolidationGateway;
   let consolidationBus: ConsolidationBus;
   let consolidationMigrator: ConsolidationMigrator;
-  let sourceModule: SourceModule__MockForConsolidationMigrator;
-  let targetModule: TargetModule__MockForConsolidationMigrator;
 
-  let admin: HardhatEthersSigner;
-  let allowPairManager: HardhatEthersSigner;
   let executor: HardhatEthersSigner;
   let submitter: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  // Test pubkeys (48 bytes each)
-  const SOURCE_PUBKEY_1 = "0x" + "aa".repeat(48);
-  const SOURCE_PUBKEY_2 = "0x" + "bb".repeat(48);
-  const TARGET_PUBKEY_1 = "0x" + "cc".repeat(48);
-  const TARGET_PUBKEY_2 = "0x" + "dd".repeat(48);
+  // Operator IDs will be assigned during setup
+  let sourceOperatorId: bigint;
+  let targetOperatorId: bigint;
 
-  // Module and operator IDs
-  const SOURCE_MODULE_ID = 100n;
-  const TARGET_MODULE_ID = 200n;
-  const SOURCE_OPERATOR_ID = 1n;
-  const TARGET_OPERATOR_ID = 2n;
+  // Pubkeys will be retrieved from real NOR
+  let SOURCE_PUBKEY_1: string;
+  let SOURCE_PUBKEY_2: string;
+  let TARGET_PUBKEY_1: string;
+  let TARGET_PUBKEY_2: string;
 
   let globalSnapshot: string;
   let testSnapshot: string;
 
   before(async () => {
     ctx = await getProtocolContext();
-    [admin, allowPairManager, executor, submitter, stranger] = await ethers.getSigners();
+    [, executor, submitter, stranger] = await ethers.getSigners();
 
+    // Get real contracts from protocol context
+    nor = ctx.contracts.nor;
     consolidationGateway = ctx.contracts.consolidationGateway;
+    consolidationBus = ctx.contracts.consolidationBus;
+    consolidationMigrator = ctx.contracts.consolidationMigrator;
 
-    // Deploy mock staking modules
-    sourceModule = await ethers.deployContract("SourceModule__MockForConsolidationMigrator");
-    targetModule = await ethers.deployContract("TargetModule__MockForConsolidationMigrator");
-
-    // Deploy a mock StakingRouter that returns our mock modules
-    const stakingRouterMock = await ethers.deployContract("StakingRouter__MockForConsolidationMigrator");
-    await stakingRouterMock.mock__setStakingModule(SOURCE_MODULE_ID, await sourceModule.getAddress());
-    await stakingRouterMock.mock__setStakingModule(TARGET_MODULE_ID, await targetModule.getAddress());
-
-    // Deploy ConsolidationBus
-    consolidationBus = await ethers.deployContract("ConsolidationBus", [
-      admin.address,
-      await consolidationGateway.getAddress(),
-      100, // batch size limit
-    ]);
-
-    // Deploy ConsolidationMigrator
-    consolidationMigrator = await ethers.deployContract("ConsolidationMigrator", [
-      admin.address,
-      await stakingRouterMock.getAddress(),
-      await consolidationBus.getAddress(),
-      SOURCE_MODULE_ID,
-      TARGET_MODULE_ID,
-    ]);
-
-    // Set up roles on ConsolidationBus
-    const MANAGER_ROLE = await consolidationBus.MANAGER_ROLE();
-    const PUBLISHER_ROLE = await consolidationBus.PUBLISHER_ROLE();
-    const EXECUTER_ROLE = await consolidationBus.EXECUTER_ROLE();
-
-    await consolidationBus.connect(admin).grantRole(MANAGER_ROLE, admin.address);
-    await consolidationBus.connect(admin).grantRole(PUBLISHER_ROLE, await consolidationMigrator.getAddress());
-    await consolidationBus.connect(admin).grantRole(EXECUTER_ROLE, executor.address);
-
-    // Set up roles on ConsolidationMigrator
-    const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
-    await consolidationMigrator.connect(admin).grantRole(ALLOW_PAIR_ROLE, allowPairManager.address);
-
-    // Set up roles on ConsolidationGateway
     const agentSigner = await ctx.getSigner("agent");
-    const ADD_CONSOLIDATION_REQUEST_ROLE = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
-    await consolidationGateway
-      .connect(agentSigner)
-      .grantRole(ADD_CONSOLIDATION_REQUEST_ROLE, await consolidationBus.getAddress());
 
-    // Set up source module: operator with deposited (used) keys
-    await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 0, SOURCE_PUBKEY_1, true); // used
-    await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 1, SOURCE_PUBKEY_2, true); // used
+    // =========================================
+    // Setup source operator with deposited keys
+    // =========================================
 
-    // Set up target module: operator with undeposited keys
-    await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 0, [TARGET_PUBKEY_1, TARGET_PUBKEY_2]);
+    // Create source operator
+    sourceOperatorId = await norSdvtAddNodeOperator(ctx, nor, {
+      name: "consolidation_source_operator",
+      rewardAddress: certainAddress("consolidation:source:reward"),
+    });
+
+    // Add signing keys to source operator
+    await norSdvtAddOperatorKeys(ctx, nor, {
+      operatorId: sourceOperatorId,
+      keysToAdd: 5n,
+    });
+
+    // Set staking limit to vet the keys
+    await norSdvtSetOperatorStakingLimit(ctx, nor, {
+      operatorId: sourceOperatorId,
+      limit: 5n,
+    });
+
+    // Deposit validators to make keys "used"
+    await depositAndReportValidators(ctx, NOR_MODULE_ID, 2n);
+
+    // =========================================
+    // Setup target operator with undeposited keys
+    // =========================================
+
+    // Create target operator
+    targetOperatorId = await norSdvtAddNodeOperator(ctx, nor, {
+      name: "consolidation_target_operator",
+      rewardAddress: certainAddress("consolidation:target:reward"),
+    });
+
+    // Add signing keys to target operator (these will NOT be deposited)
+    await norSdvtAddOperatorKeys(ctx, nor, {
+      operatorId: targetOperatorId,
+      keysToAdd: 5n,
+    });
+
+    // Set staking limit but DO NOT deposit - keys remain undeposited
+    await norSdvtSetOperatorStakingLimit(ctx, nor, {
+      operatorId: targetOperatorId,
+      limit: 5n,
+    });
+
+    // =========================================
+    // Retrieve pubkeys from real NOR
+    // =========================================
+
+    // Get source pubkeys (these are deposited/used)
+    const sourceKey1 = await nor.getSigningKey(sourceOperatorId, 0);
+    const sourceKey2 = await nor.getSigningKey(sourceOperatorId, 1);
+    SOURCE_PUBKEY_1 = sourceKey1.key;
+    SOURCE_PUBKEY_2 = sourceKey2.key;
+
+    // Verify source keys are used (deposited)
+    expect(sourceKey1.used).to.be.true;
+    expect(sourceKey2.used).to.be.true;
+
+    // Get target pubkeys (these are not deposited)
+    const targetKey1 = await nor.getSigningKey(targetOperatorId, 0);
+    const targetKey2 = await nor.getSigningKey(targetOperatorId, 1);
+    TARGET_PUBKEY_1 = targetKey1.key;
+    TARGET_PUBKEY_2 = targetKey2.key;
+
+    // Verify target keys are NOT used (not deposited)
+    expect(targetKey1.used).to.be.false;
+    expect(targetKey2.used).to.be.false;
+
+    // =========================================
+    // Setup roles
+    // =========================================
+
+    // Grant EXECUTER_ROLE on ConsolidationBus to executor
+    const EXECUTER_ROLE = await consolidationBus.EXECUTER_ROLE();
+    await consolidationBus.connect(agentSigner).grantRole(EXECUTER_ROLE, executor.address);
+
+    // Grant MANAGER_ROLE on ConsolidationBus to agent (for batch management tests)
+    const MANAGER_ROLE = await consolidationBus.MANAGER_ROLE();
+    await consolidationBus.connect(agentSigner).grantRole(MANAGER_ROLE, agentSigner.address);
+
+    // Grant ALLOW_PAIR_ROLE on ConsolidationMigrator to agent
+    const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
+    await consolidationMigrator.connect(agentSigner).grantRole(ALLOW_PAIR_ROLE, agentSigner.address);
 
     // Allow the consolidation pair with submitter
-    await consolidationMigrator
-      .connect(allowPairManager)
-      .allowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, submitter.address);
+    await consolidationMigrator.connect(agentSigner).allowPair(sourceOperatorId, targetOperatorId, submitter.address);
 
     globalSnapshot = await Snapshot.take();
   });
@@ -133,7 +166,7 @@ describe("Integration: Consolidation Migration Flow", () => {
 
   afterEach(async () => await Snapshot.restore(testSnapshot));
 
-  context("Full consolidation flow", () => {
+  context("Full consolidation flow with real NOR", () => {
     it("Should successfully complete the full consolidation flow with single validator", async () => {
       const { withdrawalVault } = ctx.contracts;
 
@@ -143,7 +176,7 @@ describe("Integration: Consolidation Migration Flow", () => {
 
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, sourceIndices, targetIndices);
 
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
@@ -168,10 +201,10 @@ describe("Integration: Consolidation Migration Flow", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices),
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, sourceIndices, targetIndices),
       )
         .to.emit(consolidationMigrator, "ConsolidationSubmitted")
-        .withArgs(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices);
+        .withArgs(sourceOperatorId, targetOperatorId, sourceIndices, targetIndices);
 
       // Step 2: Verify batch is stored in ConsolidationBus
       const batchHash = ethers.keccak256(
@@ -221,10 +254,10 @@ describe("Integration: Consolidation Migration Flow", () => {
       await expect(
         consolidationMigrator
           .connect(stranger)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]),
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
-        .withArgs(stranger.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
+        .withArgs(stranger.address, sourceOperatorId, targetOperatorId);
     });
 
     it("Should revert submitConsolidationBatch if pair is not allowed (no submitter set)", async () => {
@@ -235,10 +268,10 @@ describe("Integration: Consolidation Migration Flow", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, unknownTargetOpId, [0n], [0n]),
+          .submitConsolidationBatch(sourceOperatorId, unknownTargetOpId, [0n], [0n]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
-        .withArgs(submitter.address, SOURCE_OPERATOR_ID, unknownTargetOpId);
+        .withArgs(submitter.address, sourceOperatorId, unknownTargetOpId);
     });
 
     it("Should revert executeConsolidation if batch not found", async () => {
@@ -253,7 +286,7 @@ describe("Integration: Consolidation Migration Flow", () => {
       // Submit batch first
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       // Try to execute with insufficient fee (0)
       await expect(
@@ -265,7 +298,7 @@ describe("Integration: Consolidation Migration Flow", () => {
       // Submit batch first
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       const EXECUTER_ROLE = await consolidationBus.EXECUTER_ROLE();
 
@@ -282,7 +315,7 @@ describe("Integration: Consolidation Migration Flow", () => {
       // Submit batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
@@ -300,10 +333,12 @@ describe("Integration: Consolidation Migration Flow", () => {
 
   context("Batch management", () => {
     it("Should allow manager to remove a pending batch", async () => {
+      const agentSigner = await ctx.getSigner("agent");
+
       // Submit batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       const batchHash = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_1], [TARGET_PUBKEY_1]]),
@@ -312,7 +347,7 @@ describe("Integration: Consolidation Migration Flow", () => {
       expect(await consolidationBus.isBatchAdded(batchHash)).to.be.true;
 
       // Manager removes the batch
-      await consolidationBus.connect(admin).removeBatches([batchHash]);
+      await consolidationBus.connect(agentSigner).removeBatches([batchHash]);
 
       expect(await consolidationBus.isBatchAdded(batchHash)).to.be.false;
     });
@@ -320,22 +355,24 @@ describe("Integration: Consolidation Migration Flow", () => {
 
   context("Allowlist management", () => {
     it("Should allow disallowing a pair after submission", async () => {
+      const agentSigner = await ctx.getSigner("agent");
+
       // Submit a batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       // Disallow the pair
-      await consolidationMigrator.connect(allowPairManager).disallowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
+      await consolidationMigrator.connect(agentSigner).disallowPair(sourceOperatorId, targetOperatorId);
 
       // Verify new submissions are blocked (submitter is cleared, so NotAuthorized is thrown)
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [1n], [1n]),
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [1n], [1n]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
-        .withArgs(submitter.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
+        .withArgs(submitter.address, sourceOperatorId, targetOperatorId);
 
       // But existing batch can still be executed
       const { withdrawalVault } = ctx.contracts;
@@ -348,26 +385,41 @@ describe("Integration: Consolidation Migration Flow", () => {
 
     it("Should allow one source operator to consolidate to multiple targets", async () => {
       const { withdrawalVault } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
 
       // Set up a second target operator
-      const TARGET_OPERATOR_ID_2 = 3n;
-      const TARGET_PUBKEY_3 = "0x" + "ee".repeat(48);
-      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID_2, 0, [TARGET_PUBKEY_3]);
+      const targetOperatorId2 = await norSdvtAddNodeOperator(ctx, nor, {
+        name: "consolidation_target_operator_2",
+        rewardAddress: certainAddress("consolidation:target2:reward"),
+      });
+
+      await norSdvtAddOperatorKeys(ctx, nor, {
+        operatorId: targetOperatorId2,
+        keysToAdd: 2n,
+      });
+
+      await norSdvtSetOperatorStakingLimit(ctx, nor, {
+        operatorId: targetOperatorId2,
+        limit: 2n,
+      });
+
+      const targetKey3 = await nor.getSigningKey(targetOperatorId2, 0);
+      const TARGET_PUBKEY_3 = targetKey3.key;
 
       // Allow second pair with the same submitter
       await consolidationMigrator
-        .connect(allowPairManager)
-        .allowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID_2, submitter.address);
+        .connect(agentSigner)
+        .allowPair(sourceOperatorId, targetOperatorId2, submitter.address);
 
       // Submit batch to first target
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       // Submit batch to second target
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID_2, [1n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId2, [1n], [0n]);
 
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
@@ -382,40 +434,67 @@ describe("Integration: Consolidation Migration Flow", () => {
     });
   });
 
-  context("Key validation in E2E", () => {
-    it("Should revert submitConsolidationBatch if source key is NOT used", async () => {
-      // Set up an unused source key
-      const UNUSED_SOURCE_PUBKEY = "0x" + "11".repeat(48);
-      await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 2, UNUSED_SOURCE_PUBKEY, false); // NOT used
+  context("Key validation with real NOR", () => {
+    it("Should revert submitConsolidationBatch if source key is NOT used (not deposited)", async () => {
+      const agentSigner = await ctx.getSigner("agent");
 
+      // Create a new source operator with keys that are NOT deposited
+      const unusedSourceOperatorId = await norSdvtAddNodeOperator(ctx, nor, {
+        name: "consolidation_unused_source",
+        rewardAddress: certainAddress("consolidation:unused:reward"),
+      });
+
+      await norSdvtAddOperatorKeys(ctx, nor, {
+        operatorId: unusedSourceOperatorId,
+        keysToAdd: 2n,
+      });
+
+      // Set staking limit but DO NOT deposit - keys remain unused
+      await norSdvtSetOperatorStakingLimit(ctx, nor, {
+        operatorId: unusedSourceOperatorId,
+        limit: 2n,
+      });
+
+      // Allow the pair
+      await consolidationMigrator
+        .connect(agentSigner)
+        .allowPair(unusedSourceOperatorId, targetOperatorId, submitter.address);
+
+      // Try to consolidate from unused key - should fail
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2n], [0n]),
+          .submitConsolidationBatch(unusedSourceOperatorId, targetOperatorId, [0n], [0n]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotUsed")
-        .withArgs(SOURCE_OPERATOR_ID, 2n);
+        .withArgs(unusedSourceOperatorId, 0n);
     });
 
     it("Should revert submitConsolidationBatch if target key is already deposited", async () => {
-      // Set target operator with deposited keys (totalDepositedValidators = 1)
-      const TARGET_OP_WITH_DEPOSITS = 4n;
-      const DEPOSITED_TARGET_PUBKEY = "0x" + "22".repeat(48);
-      await targetModule.mock__setOperatorData(TARGET_OP_WITH_DEPOSITS, 1, [DEPOSITED_TARGET_PUBKEY]); // 1 deposited
+      const agentSigner = await ctx.getSigner("agent");
 
-      // Allow the pair with submitter
-      await consolidationMigrator
-        .connect(allowPairManager)
-        .allowPair(SOURCE_OPERATOR_ID, TARGET_OP_WITH_DEPOSITS, submitter.address);
+      // Use sourceOperatorId as target - it already has deposited keys from setup
+      // We deposited 2 validators to sourceOperatorId in the before() hook
+      // So keys 0 and 1 are "used" (deposited)
 
-      // Try to consolidate to already deposited key (index 0 < totalDepositedValidators 1)
+      // Allow the pair: source -> source (same operator, for testing deposited target)
+      await consolidationMigrator.connect(agentSigner).allowPair(sourceOperatorId, sourceOperatorId, submitter.address);
+
+      // Get totalDepositedValidators for the source operator (used as target)
+      const summary = await nor.getNodeOperatorSummary(sourceOperatorId);
+      const totalDeposited = summary.totalDepositedValidators;
+
+      // Verify that keys are indeed deposited
+      expect(totalDeposited).to.be.gte(1n);
+
+      // Try to consolidate to already deposited key (index 0 < totalDepositedValidators)
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OP_WITH_DEPOSITS, [0n], [0n]),
+          .submitConsolidationBatch(sourceOperatorId, sourceOperatorId, [0n], [0n]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyAlreadyDeposited")
-        .withArgs(TARGET_OP_WITH_DEPOSITS, 0n, 1n);
+        .withArgs(sourceOperatorId, 0n, totalDeposited);
     });
   });
 
@@ -426,7 +505,7 @@ describe("Integration: Consolidation Migration Flow", () => {
       // Submit batch first
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       // Grant PAUSE_ROLE to agent and pause the gateway
       const agentSigner = await ctx.getSigner("agent");
@@ -454,7 +533,7 @@ describe("Integration: Consolidation Migration Flow", () => {
       // Submit first batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
@@ -466,7 +545,7 @@ describe("Integration: Consolidation Migration Flow", () => {
       // Submit second batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [1n], [1n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [1n], [1n]);
 
       // Execute second batch - should fail due to rate limit
       await expect(
@@ -480,7 +559,7 @@ describe("Integration: Consolidation Migration Flow", () => {
       // Submit batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       const fee = await withdrawalVault.getConsolidationRequestFee();
       const excessFee = fee * 10n; // Send 10x the required fee
@@ -510,12 +589,12 @@ describe("Integration: Consolidation Migration Flow", () => {
       // Submit first batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       // Submit second batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [1n], [1n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [1n], [1n]);
 
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
@@ -544,18 +623,19 @@ describe("Integration: Consolidation Migration Flow", () => {
 
     it("Should revert executeConsolidation if batch was removed", async () => {
       const { withdrawalVault } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
 
       // Submit batch
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n], [0n]);
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
       const batchHash = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_1], [TARGET_PUBKEY_1]]),
       );
 
       // Remove batch
-      await consolidationBus.connect(admin).removeBatches([batchHash]);
+      await consolidationBus.connect(agentSigner).removeBatches([batchHash]);
 
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
@@ -566,17 +646,65 @@ describe("Integration: Consolidation Migration Flow", () => {
     });
 
     it("Should revert addConsolidationRequests if batch size exceeds limit", async () => {
+      const agentSigner = await ctx.getSigner("agent");
+
       // Set a very small batch size limit on ConsolidationBus
-      await consolidationBus.connect(admin).setBatchSize(1);
+      await consolidationBus.connect(agentSigner).setBatchSize(1);
 
       // Try to submit batch with 2 validators (exceeds limit of 1)
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0n, 1n], [0n, 1n]),
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n, 1n], [0n, 1n]),
       )
         .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
         .withArgs(2, 1);
     });
+
+    it("Should revert addConsolidationRequests if batch already added (duplicate submission)", async () => {
+      // Submit batch first time
+      await consolidationMigrator
+        .connect(submitter)
+        .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
+
+      const batchHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_1], [TARGET_PUBKEY_1]]),
+      );
+
+      // Try to submit the same batch again
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]),
+      )
+        .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyAdded")
+        .withArgs(batchHash);
+    });
+  });
+
+  context("Input validation", () => {
+    it("Should revert submitConsolidationBatch with EmptyBatch if arrays are empty", async () => {
+      await expect(
+        consolidationMigrator.connect(submitter).submitConsolidationBatch(sourceOperatorId, targetOperatorId, [], []),
+      ).to.be.revertedWithCustomError(consolidationMigrator, "EmptyBatch");
+    });
+
+    it("Should revert submitConsolidationBatch with ArraysLengthMismatch if arrays have different lengths", async () => {
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n, 1n], [0n]),
+      )
+        .to.be.revertedWithCustomError(consolidationMigrator, "ArraysLengthMismatch")
+        .withArgs(2, 1);
+    });
+
+    // Note: ConsolidationBus.EmptyBatch and ArraysLengthMismatch are checked in addConsolidationRequests,
+    // not in executeConsolidation. When going through Migrator flow, Migrator validates first.
+    // These validations are covered by unit tests for direct Bus API.
+
+    // Note: ConsolidationBus.SourceEqualsTarget cannot occur in the Migrator flow because
+    // source and target operators are different, so their pubkeys are always different.
+    // This validation is covered by unit tests for direct Bus API.
   });
 });
