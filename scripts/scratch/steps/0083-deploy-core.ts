@@ -168,12 +168,7 @@ export async function main() {
       },
     },
   );
-  const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
-  const stakingRouterAdmin = deployer;
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
-  await makeTx(stakingRouter, "initialize", [stakingRouterAdmin, lidoAddress, withdrawalCredentials], {
-    from: deployer,
-  });
 
   //
   // Deploy or use predefined DepositSecurityModule
@@ -185,7 +180,7 @@ export async function main() {
       await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
         lidoAddress,
         depositContract,
-        stakingRouter.address,
+        stakingRouter_.address,
         depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,
         depositSecurityModuleParams.maxOperatorsPerUnvetting,
       ])
@@ -195,6 +190,38 @@ export async function main() {
       `NB: skipping deployment of DepositSecurityModule - using the predefined address ${depositSecurityModuleAddress} instead`,
     );
   }
+
+  //
+  // Deploy TopUpGateway (before StakingRouter initialization)
+  //
+
+  const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
+  const topUpGateway = await deployWithoutProxy(Sk.topUpGateway, "TopUpGateway", deployer, [
+    admin,
+    locator.address,
+    topUpGatewayParams.maxValidatorsPerTopUp,
+    topUpGatewayParams.minBlockDistance,
+    topUpGatewayParams.gIFirstValidatorPrev,
+    topUpGatewayParams.gIFirstValidatorCurr,
+    topUpGatewayParams.gIFirstBalancePrev,
+    topUpGatewayParams.gIFirstBalanceCurr,
+    topUpGatewayParams.gIFirstPendingPrev,
+    topUpGatewayParams.gIFirstPendingCurr,
+    topUpGatewayParams.pivotSlot,
+  ]);
+
+  //
+  // Initialize StakingRouter with all required parameters
+  //
+
+  const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
+  const stakingRouterAdmin = deployer;
+  await makeTx(
+    stakingRouter,
+    "initialize",
+    [stakingRouterAdmin, lidoAddress, withdrawalCredentials, topUpGateway.address, depositSecurityModuleAddress],
+    { from: deployer },
+  );
 
   //
   // Deploy Accounting
@@ -374,25 +401,6 @@ export async function main() {
     deployer,
     validatorExitDelayVerifierCtorArgs,
   );
-
-  //
-  // Deploy TopUpGateway
-  //
-
-  const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
-  await deployWithoutProxy(Sk.topUpGateway, "TopUpGateway", deployer, [
-    admin,
-    locator.address,
-    topUpGatewayParams.maxValidatorsPerTopUp,
-    topUpGatewayParams.minBlockDistance,
-    topUpGatewayParams.gIFirstValidatorPrev,
-    topUpGatewayParams.gIFirstValidatorCurr,
-    topUpGatewayParams.gIFirstBalancePrev,
-    topUpGatewayParams.gIFirstBalanceCurr,
-    topUpGatewayParams.gIFirstPendingPrev,
-    topUpGatewayParams.gIFirstPendingCurr,
-    topUpGatewayParams.pivotSlot,
-  ]);
 
   //
   // Deploy WithdrawalVault

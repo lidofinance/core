@@ -25,9 +25,6 @@ interface IStakingRouter {
     function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32);
     function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
     function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
-}
-
-interface ILido {
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
@@ -35,6 +32,9 @@ interface ILido {
         bytes calldata _pubkeysPacked,
         uint256[] calldata _topUpLimitsGwei
     ) external;
+}
+
+interface ILido {
     function canDeposit() external view returns (bool);
 }
 
@@ -205,8 +205,8 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
             }
         }
 
-        // Proceed to Lido
-        ILido(LOCATOR.lido()).topUp(topUps.moduleId, topUps.keyIndices, topUps.operatorIds, pubkeysPacked, topUpLimits);
+        // Proceed to StakingRouter
+        IStakingRouter(LOCATOR.stakingRouter()).topUp(topUps.moduleId, topUps.keyIndices, topUps.operatorIds, pubkeysPacked, topUpLimits);
 
         _setLastTopUpSlot(topUps.beaconRootData.slot);
     }

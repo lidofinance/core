@@ -34,6 +34,8 @@ describe("StakingRouter.sol:rewards", () => {
   const DEFAULT_MEB = getModuleMEB(DEFAULT_CONFIG.withdrawalCredentialsType);
 
   const withdrawalCredentials = hexlify(randomBytes(32));
+  const topUpGateway = certainAddress("test:staking-router:topUpGateway");
+  const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
@@ -45,6 +47,8 @@ describe("StakingRouter.sol:rewards", () => {
       admin,
       certainAddress("test:staking-router-modules:lido"), // mock lido address
       withdrawalCredentials,
+      topUpGateway,
+      depositSecurityModule,
     );
 
     // grant roles
@@ -549,8 +553,7 @@ describe("StakingRouter.sol:rewards", () => {
 
     await module.mock__getStakingModuleSummary(exited, deposited, depositable);
     if (effBalanceGwei == 0n && deposited > 0n) {
-      effBalanceGwei =
-        (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
+      effBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
     }
     await stakingRouter.testing_setStakingModuleAccounting(moduleId, effBalanceGwei, effBalanceGwei, exited);
 

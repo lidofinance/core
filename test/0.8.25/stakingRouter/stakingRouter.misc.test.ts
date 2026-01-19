@@ -24,6 +24,8 @@ describe("StakingRouter.sol:misc", () => {
   let originalState: string;
 
   const lido = certainAddress("test:staking-router:lido");
+  const topUpGateway = certainAddress("test:staking-router:topUpGateway");
+  const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
   const withdrawalCredentials = hexlify(randomBytes(32));
 
   const GENESIS_TIME = 1606824023n;
@@ -46,21 +48,52 @@ describe("StakingRouter.sol:misc", () => {
 
   context("initialize", () => {
     it("Reverts if admin is zero address", async () => {
-      await expect(stakingRouter.initialize(ZeroAddress, lido, withdrawalCredentials)).to.be.revertedWithCustomError(
-        stakingRouter,
-        "ZeroAddressAdmin",
-      );
+      await expect(
+        stakingRouter.initialize(ZeroAddress, lido, withdrawalCredentials, topUpGateway, depositSecurityModule),
+      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressAdmin");
     });
 
     it("Reverts if lido is zero address", async () => {
       await expect(
-        stakingRouter.initialize(stakingRouterAdmin.address, ZeroAddress, withdrawalCredentials),
+        stakingRouter.initialize(
+          stakingRouterAdmin.address,
+          ZeroAddress,
+          withdrawalCredentials,
+          topUpGateway,
+          depositSecurityModule,
+        ),
       ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressLido");
+    });
+
+    it("Reverts if topUpGateway is zero address", async () => {
+      await expect(
+        stakingRouter.initialize(
+          stakingRouterAdmin.address,
+          lido,
+          withdrawalCredentials,
+          ZeroAddress,
+          depositSecurityModule,
+        ),
+      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressTopUpGateway");
+    });
+
+    it("Reverts if depositSecurityModule is zero address", async () => {
+      await expect(
+        stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials, topUpGateway, ZeroAddress),
+      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressDepositSecurityModule");
     });
 
     it("Initializes the contract version, sets up roles and variables", async () => {
       // TODO: add version check
-      await expect(stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials))
+      await expect(
+        stakingRouter.initialize(
+          stakingRouterAdmin.address,
+          lido,
+          withdrawalCredentials,
+          topUpGateway,
+          depositSecurityModule,
+        ),
+      )
         .to.emit(stakingRouter, "Initialized")
         .withArgs(4)
         .and.to.emit(stakingRouter, "RoleGranted")
@@ -71,9 +104,14 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.getContractVersion()).to.equal(4);
       expect(await stakingRouter.getLido()).to.equal(lido);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
+      expect(await stakingRouter.getTopUpGateway()).to.equal(topUpGateway);
+      expect(await stakingRouter.getDepositSecurityModule()).to.equal(depositSecurityModule);
 
       // fails with InvalidInitialization error when called on deployed from scratch SRv3
-      await expect(stakingRouter.migrateUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
+      await expect(stakingRouter.migrateUpgrade_v4(topUpGateway, depositSecurityModule)).to.be.revertedWithCustomError(
+        impl,
+        "InvalidInitialization",
+      );
     });
   });
 
@@ -83,17 +121,38 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("fails with InvalidInitialization error when called on implementation", async () => {
-      await expect(impl.migrateUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
+      await expect(impl.migrateUpgrade_v4(topUpGateway, depositSecurityModule)).to.be.revertedWithCustomError(
+        impl,
+        "InvalidInitialization",
+      );
+    });
+
+    it("Reverts if topUpGateway is zero address", async () => {
+      await expect(stakingRouter.migrateUpgrade_v4(ZeroAddress, depositSecurityModule)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "ZeroAddressTopUpGateway",
+      );
+    });
+
+    it("Reverts if depositSecurityModule is zero address", async () => {
+      await expect(stakingRouter.migrateUpgrade_v4(topUpGateway, ZeroAddress)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "ZeroAddressDepositSecurityModule",
+      );
     });
 
     it("sets correct contract version and withdrawal credentials", async () => {
       // there are no version in this slot before
       expect(await stakingRouter.getContractVersion()).to.equal(0);
-      await expect(stakingRouter.migrateUpgrade_v4()).to.emit(stakingRouter, "Initialized").withArgs(4);
+      await expect(stakingRouter.migrateUpgrade_v4(topUpGateway, depositSecurityModule))
+        .to.emit(stakingRouter, "Initialized")
+        .withArgs(4);
       expect(await stakingRouter.getContractVersion()).to.be.equal(4);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(await stakingRouter.WC_01_MOCK());
       expect(await stakingRouter.getLido()).to.equal(await stakingRouter.getLido());
       expect(await stakingRouter.testing_getLastModuleId()).to.equal(await stakingRouter.LAST_STAKING_MODULE_ID_MOCK());
+      expect(await stakingRouter.getTopUpGateway()).to.equal(topUpGateway);
+      expect(await stakingRouter.getDepositSecurityModule()).to.equal(depositSecurityModule);
     });
   });
 
@@ -114,7 +173,13 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("Returns lido address after initialization", async () => {
-      await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials);
+      await stakingRouter.initialize(
+        stakingRouterAdmin.address,
+        lido,
+        withdrawalCredentials,
+        topUpGateway,
+        depositSecurityModule,
+      );
 
       expect(await stakingRouter.getLido()).to.equal(lido);
     });

@@ -248,7 +248,7 @@ contract SSZValidatorsAndBalancesMerkleTree is SSZBLSHelpers {
     }
 
     function getStateRoot() public view returns (bytes32) {
-        return nodes[1]; // корень глобального дерева
+        return nodes[1];
     }
 
     function getValidatorProof(uint256 leafIndex) public view returns (bytes32[] memory) {
@@ -257,7 +257,7 @@ contract SSZValidatorsAndBalancesMerkleTree is SSZBLSHelpers {
         return _getMerkleProof(gi);
     }
 
-    /// @notice Пруф для balances[leafIndex] относительно balances_root.
+    /// @notice Proof for balances[leafIndex] regarding balances_root.
     function getBalanceProof(uint256 leafIndex) public view returns (bytes32[] memory) {
         require(leafIndex < balancesLeafCount, "Invalid leaf index");
         uint256 gi = BALANCES_BASE_INDEX + leafIndex;

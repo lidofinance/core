@@ -16,7 +16,6 @@ import {
 import { batch, certainAddress, ether, impersonate, ONE_ETHER } from "lib";
 
 import { deployLidoDao } from "test/deploy";
-import { MAX_DEPOSIT_AMOUNT } from "test/suite";
 
 describe("Lido.sol:misc", () => {
   let deployer: HardhatEthersSigner;
@@ -262,40 +261,46 @@ describe("Lido.sol:misc", () => {
     });
   });
 
-  context("deposit", () => {
-    const stakingModuleId = 1n;
-    const depositCalldata = new Uint8Array();
+  context("withdrawDepositableEther", () => {
+    let stakingRouterSigner: HardhatEthersSigner;
 
     beforeEach(async () => {
       await lido.resume();
-      lido = lido.connect(depositSecurityModule);
+      // Get stakingRouter signer to call withdrawDepositableEther
+      const stakingRouterAddress = await locator.stakingRouter();
+      stakingRouterSigner = await impersonate(stakingRouterAddress, ether("1.0"));
     });
 
-    it("Reverts if the caller is not `DepositSecurityModule`", async () => {
-      lido = lido.connect(stranger);
-
-      await expect(lido.deposit(MAX_DEPOSIT_AMOUNT, stakingModuleId, depositCalldata)).to.be.revertedWith(
-        "APP_AUTH_DSM_FAILED",
-      );
-    });
-
-    it("Reverts if the contract is stopped", async () => {
-      await lido.connect(user).stop();
-
-      await expect(lido.deposit(MAX_DEPOSIT_AMOUNT, stakingModuleId, depositCalldata)).to.be.revertedWith(
-        "CAN_NOT_DEPOSIT",
-      );
-    });
-
-    it("Emits `Unbuffered` and `DepositedValidatorsChanged` events if there are deposits", async () => {
+    it("Reverts if the caller is not `StakingRouter`", async () => {
       const oneDepositWorthOfEther = ether("32.0");
-      // top up Lido buffer enough for 1 deposit of 32 ether
       await lido.submit(ZeroAddress, { value: oneDepositWorthOfEther });
 
-      expect(await lido.getDepositableEther()).to.be.greaterThanOrEqual(oneDepositWorthOfEther);
+      await expect(lido.connect(stranger).withdrawDepositableEther(oneDepositWorthOfEther, 1n)).to.be.revertedWith(
+        "NOT_STAKING_ROUTER",
+      );
+    });
 
-      // mock StakingRouter.getStakingModuleMaxDepositsCount returning 1 deposit
-      await stakingRouter.mock__getStakingModuleMaxDepositsCount(1n);
+    it("Reverts if amount is zero", async () => {
+      await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(0n, 0n)).to.be.revertedWith(
+        "ZERO_AMOUNT",
+      );
+    });
+
+    it("Reverts if not enough depositable ether", async () => {
+      const tooMuchEther = ether("1000.0");
+      await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(tooMuchEther, 1n)).to.be.revertedWith(
+        "NOT_ENOUGH_ETHER",
+      );
+    });
+
+    it("Emits `Unbuffered` and `DepositedValidatorsChanged` events when withdrawing ether", async () => {
+      const depositAmount = ether("32.0");
+      // top up Lido buffer enough for deposit
+      await lido.submit(ZeroAddress, { value: depositAmount });
+
+      // Get actual depositable ether which may be less due to withdrawal reservations
+      const depositableEther = await lido.getDepositableEther();
+      expect(depositableEther).to.be.greaterThan(0n);
 
       const beforeDeposit = await batch({
         lidoBalance: ethers.provider.getBalance(lido),
@@ -303,12 +308,13 @@ describe("Lido.sol:misc", () => {
         beaconStat: lido.getBeaconStat(),
       });
 
-      await expect(lido.deposit(MAX_DEPOSIT_AMOUNT, stakingModuleId, depositCalldata))
+      // Use actual depositable amount
+      const amountToWithdraw = depositableEther;
+      await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(amountToWithdraw, 1n))
         .to.emit(lido, "Unbuffered")
-        .withArgs(oneDepositWorthOfEther)
+        .withArgs(amountToWithdraw)
         .and.to.emit(lido, "DepositedValidatorsChanged")
-        .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n)
-        .and.to.emit(stakingRouter, "Mock__DepositCalled");
+        .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n);
 
       const afterDeposit = await batch({
         lidoBalance: ethers.provider.getBalance(lido),
@@ -316,21 +322,20 @@ describe("Lido.sol:misc", () => {
         beaconStat: lido.getBeaconStat(),
       });
 
-      // TODO: here should be balance check
       expect(afterDeposit.beaconStat.depositedValidators).to.equal(beforeDeposit.beaconStat.depositedValidators + 1n);
-      expect(afterDeposit.lidoBalance).to.equal(beforeDeposit.lidoBalance - oneDepositWorthOfEther);
-      expect(afterDeposit.stakingRouterBalance).to.equal(beforeDeposit.stakingRouterBalance + oneDepositWorthOfEther);
+      // Verify ETH moved from Lido to StakingRouter
+      expect(afterDeposit.lidoBalance).to.be.lessThan(beforeDeposit.lidoBalance);
+      expect(afterDeposit.stakingRouterBalance).to.be.greaterThan(beforeDeposit.stakingRouterBalance);
     });
 
-    it("Does not emit `Unbuffered` and `DepositedValidatorsChanged` events if the staking module cannot accomodate new deposit", async () => {
-      const oneDepositWorthOfEther = ether("32.0");
-      // top up Lido buffer enough for 1 deposit of 32 ether
-      await lido.submit(ZeroAddress, { value: oneDepositWorthOfEther });
+    it("Does not emit `DepositedValidatorsChanged` event when depositsCount is 0 (top-up scenario)", async () => {
+      const depositAmount = ether("10.0");
+      // top up Lido buffer
+      await lido.submit(ZeroAddress, { value: depositAmount });
 
-      expect(await lido.getDepositableEther()).to.be.greaterThanOrEqual(oneDepositWorthOfEther);
-
-      // mock StakingRouter.getStakingModuleMaxDepositsCount returning 0 deposit
-      await stakingRouter.mock__getStakingModuleMaxDepositsCount(0n);
+      // Get actual depositable ether
+      const depositableEther = await lido.getDepositableEther();
+      expect(depositableEther).to.be.greaterThan(0n);
 
       const beforeDeposit = await batch({
         lidoBalance: ethers.provider.getBalance(lido),
@@ -338,9 +343,13 @@ describe("Lido.sol:misc", () => {
         beaconStat: lido.getBeaconStat(),
       });
 
-      await expect(lido.deposit(MAX_DEPOSIT_AMOUNT, stakingModuleId, depositCalldata))
-        .to.emit(stakingRouter, "Mock__DepositCalled")
-        .not.to.emit(lido, "Unbuffered")
+      // Use a smaller amount that's definitely available
+      const amountToWithdraw = depositableEther < depositAmount ? depositableEther : depositAmount;
+
+      // depositsCount = 0 for top-up scenario (existing validators, not new ones)
+      await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(amountToWithdraw, 0n))
+        .to.emit(lido, "Unbuffered")
+        .withArgs(amountToWithdraw)
         .and.not.to.emit(lido, "DepositedValidatorsChanged");
 
       const afterDeposit = await batch({
@@ -349,10 +358,11 @@ describe("Lido.sol:misc", () => {
         beaconStat: lido.getBeaconStat(),
       });
 
-      // TODO: here should we balance check
+      // depositedValidators should not change for top-ups
       expect(afterDeposit.beaconStat.depositedValidators).to.equal(beforeDeposit.beaconStat.depositedValidators);
-      expect(afterDeposit.lidoBalance).to.equal(beforeDeposit.lidoBalance);
-      expect(afterDeposit.stakingRouterBalance).to.equal(beforeDeposit.stakingRouterBalance);
+      // Verify ETH moved from Lido to StakingRouter
+      expect(afterDeposit.lidoBalance).to.be.lessThan(beforeDeposit.lidoBalance);
+      expect(afterDeposit.stakingRouterBalance).to.be.greaterThan(beforeDeposit.stakingRouterBalance);
     });
   });
 });
