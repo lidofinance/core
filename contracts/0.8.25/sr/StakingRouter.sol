@@ -5,16 +5,16 @@
 pragma solidity 0.8.25;
 
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {AccessControlEnumerableUpgradeable} from
-    "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+
+import {
+    AccessControlEnumerableUpgradeable
+} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {BeaconChainDepositor, IDepositContract} from "contracts/0.8.25/lib/BeaconChainDepositor.sol";
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
-import {STASStorage} from "contracts/0.8.25/stas/STASTypes.sol";
-import {STASCore} from "contracts/0.8.25/stas/STASCore.sol";
 import {SRLib} from "./SRLib.sol";
 import {SRStorage} from "./SRStorage.sol";
 import {SRUtils} from "./SRUtils.sol";
@@ -35,9 +35,7 @@ import {
     ModuleStateAccounting
 } from "./SRTypes.sol";
 
-
 contract StakingRouter is AccessControlEnumerableUpgradeable {
-    using STASCore for STASStorage;
     using WithdrawalCredentials for bytes32;
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
@@ -147,8 +145,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
-        _initializeSTAS();
-
         SRStorage.getRouterStorage().lido = _lido;
 
         // TODO: maybe store withdrawalVault
@@ -181,7 +177,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // TODO: here is problem, that last version of
         __AccessControlEnumerable_init();
 
-        _initializeSTAS();
         // migrate current modules to new storage
         SRLib._migrateStorage();
     }
@@ -284,9 +279,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 _targetLimit
     ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
         SRUtils._validateModuleId(_stakingModuleId);
-        _stakingModuleId.getIStakingModule().updateTargetValidatorsLimits(
-            _nodeOperatorId, _targetLimitMode, _targetLimit
-        );
+        _stakingModuleId.getIStakingModule()
+            .updateTargetValidatorsLimits(_nodeOperatorId, _targetLimitMode, _targetLimit);
     }
 
     /// @dev See {SRLib._reportRewardsMinted}.
@@ -751,14 +745,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256[] calldata _operatorIds,
         bytes calldata _pubkeysPacked,
         uint256[] calldata _topUpLimitsGwei
-    )
-        external
-        returns (
-            uint256 amount,
-            bytes memory pubkeysPacked,
-            uint256[] memory allocations
-        )
-    {
+    ) external returns (uint256 amount, bytes memory pubkeysPacked, uint256[] memory allocations) {
         if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
         _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimitsGwei, _pubkeysPacked);
 
@@ -777,7 +764,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // to allow CSM queue cursor advancement.
         bytes[] memory publicKeys;
         (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress)
-            .obtainDepositData(stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei);
+            .obtainDepositData(
+                stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei
+            );
         // TODO: maybe check result obtainDepositData in _pubkeysPacked
 
         // Calculate total amount from allocations returned by module
@@ -785,7 +774,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         unchecked {
             for (uint256 i; i < allocations.length; ++i) {
                 if (allocations[i] != 0 && allocations[i] < MIN_DEPOSIT_IN_GWEI) {
-                  revert TopUpAmountTooLow();
+                    revert TopUpAmountTooLow();
                 }
                 totalAllocationsGwei += allocations[i];
             }
@@ -810,7 +799,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             let count := mload(_pubkeys)
             mstore(dest, mul(count, 48))
             dest := add(dest, 0x20)
-            for {let i := 0} lt(i, count) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, count) { i := add(i, 1) } {
                 let pubkeyPtr := add(add(_pubkeys, 0x20), mul(i, 0x20))
                 let pubkey := mload(pubkeyPtr)
                 let dataPtr := add(pubkey, 0x20)
@@ -834,11 +823,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _pubkeysPacked Packed validator public keys to top up
     /// @param _topUpAmountsGwei Array of per-key top-up amounts in gwei
     /// @dev Method allowed only for modules with 0x02 keys
-    function topUp(
-        uint256 _stakingModuleId,
-        bytes calldata _pubkeysPacked,
-        uint256[] calldata _topUpAmountsGwei
-    ) external payable {
+    function topUp(uint256 _stakingModuleId, bytes calldata _pubkeysPacked, uint256[] calldata _topUpAmountsGwei)
+        external
+        payable
+    {
         if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
 
         uint256 keysCount = _topUpAmountsGwei.length;
@@ -876,7 +864,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
     }
 
-    function _unpackPubkeys(bytes calldata _packedPubkeys, uint256 _count) internal pure returns (bytes[] memory pubkeys) {
+    function _unpackPubkeys(bytes calldata _packedPubkeys, uint256 _count)
+        internal
+        pure
+        returns (bytes[] memory pubkeys)
+    {
         assembly ("memory-safe") {
             let ptr := mload(0x40)
             pubkeys := ptr
@@ -897,7 +889,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             let dataPtr := dataStart
             let calldataPtr := _packedPubkeys.offset
 
-            for {let i := 0} lt(i, _count) { i := add(i, 1) } {
+            for { let i := 0 } lt(i, _count) { i := add(i, 1) } {
                 mstore(add(ptrStart, mul(i, 0x20)), dataPtr)
                 mstore(dataPtr, 48)
                 calldatacopy(add(dataPtr, 0x20), calldataPtr, 48)
@@ -1232,10 +1224,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         stateConfig = state.getStateConfig();
     }
 
-    function _initializeSTAS() internal {
-        SRLib._initializeSTAS();
-    }
-
     function _getModuleStateCompat(uint256 _moduleId) internal view returns (StakingModule memory moduleState) {
         moduleState.id = uint24(_moduleId);
 
@@ -1288,10 +1276,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     {
         (
             summary.targetLimitMode,
-            summary.targetValidatorsCount,
-            ,
-            ,
-            ,
+            summary.targetValidatorsCount,,,,
             summary.totalExitedValidators,
             summary.totalDepositedValidators,
             summary.depositableValidatorsCount

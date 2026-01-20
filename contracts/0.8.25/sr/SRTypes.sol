@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {STASStorage} from "contracts/0.8.25/stas/STASTypes.sol";
+import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 
 /**
  * @title StakingRouter shared types
@@ -16,17 +16,6 @@ enum StakingModuleStatus {
     Active, // deposits and rewards allowed
     DepositsPaused, // deposits NOT allowed, rewards allowed
     Stopped // deposits and rewards NOT allowed
-}
-
-enum Strategies {
-    Deposit,
-    Withdrawal,
-    Reward
-}
-
-enum Metrics {
-    DepositTargetShare,
-    WithdrawalProtectShare
 }
 
 /// @notice Configuration parameters for a staking module.
@@ -115,10 +104,9 @@ struct ModuleStateConfig {
     StakingModuleStatus status;
     /// @notice Withdrawal credentials type (0x01/0x02)
     uint8 withdrawalCredentialsType;
+    // uint8 _reserved1;
+    // uint8 _reserved2;
 }
-// /// @notice The type of withdrawal credentials for creation of validators
-// uint8 wcType;
-// uint8 _reserved;
 
 /// @dev 1 storage slot
 struct ModuleStateDeposits {
@@ -140,6 +128,7 @@ struct ModuleStateDeposits {
     uint64 minDepositBlockDistance;
 }
 
+/// @dev 1 storage slot
 struct ModuleStateAccounting {
     /// @notice Effective balance of the staking module, in Gwei.
     uint96 clBalanceGwei;
@@ -162,7 +151,7 @@ struct ModuleState {
 struct RouterStorage {
     // moduleId => ModuleState
     mapping(uint256 => ModuleState) moduleStates;
-    STASStorage stas;
+    EnumerableSet.UintSet moduleIds;
     uint96 totalClBalanceGwei;
     uint96 totalActiveBalanceGwei;
     bytes32 withdrawalCredentials;

@@ -10,8 +10,7 @@ import {
     ModuleStateConfig,
     ModuleStateDeposits,
     ModuleStateAccounting,
-    RouterStorage,
-    STASStorage
+    RouterStorage
 } from "./SRTypes.sol";
 
 library SRStorage {
@@ -22,11 +21,6 @@ library SRStorage {
     /// @dev RouterStorage storage position
     bytes32 internal constant ROUTER_STORAGE_POSITION = keccak256(
         abi.encode(uint256(keccak256(abi.encodePacked("lido.StakingRouter.routerStorage"))) - 1)
-    ) & ~bytes32(uint256(0xff));
-
-    /// @dev STASStorage storage position
-    bytes32 internal constant STAS_STORAGE_POSITION = keccak256(
-        abi.encode(uint256(keccak256(abi.encodePacked("lido.StakingRouter.stasStorage"))) - 1)
     ) & ~bytes32(uint256(0xff));
 
     /// @dev Module trackers will be derived from this position
@@ -100,27 +94,23 @@ library SRStorage {
     }
 
     function getModulesCount() internal view returns (uint256) {
-        return getSTASIds().length();
+        return getRouterStorage().moduleIds.length();
     }
 
     function getModuleIds() internal view returns (uint256[] memory) {
-        return getSTASIds().values();
+        return getRouterStorage().moduleIds.values();
     }
 
     function isModuleId(uint256 _moduleId) internal view returns (bool) {
-        return getSTASIds().contains(_moduleId);
+        return getRouterStorage().moduleIds.contains(_moduleId);
     }
 
-    function getSTASIds() internal view returns (EnumerableSet.UintSet storage) {
-        return getSTASStorage().entityIds;
+    function addModuleId(uint256 _moduleId) internal {
+        getRouterStorage().moduleIds.add(_moduleId);
     }
 
-    /// @dev get STASStorage storage reference
-    function getSTASStorage() internal pure returns (STASStorage storage $) {
-        bytes32 _position = STAS_STORAGE_POSITION;
-        assembly ("memory-safe") {
-            $.slot := _position
-        }
+    function removeModuleId(uint256 _moduleId) internal {
+        getRouterStorage().moduleIds.remove(_moduleId);
     }
 
     /// @dev Save the last deposit state for the staking module
