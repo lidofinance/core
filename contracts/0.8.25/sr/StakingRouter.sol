@@ -162,21 +162,17 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     ) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddressAdmin();
         if (_lido == address(0)) revert ZeroAddressLido();
-        if (_topUpGateway == address(0)) revert ZeroAddressTopUpGateway();
-        if (_depositSecurityModule == address(0)) revert ZeroAddressDepositSecurityModule();
 
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
         SRStorage.getRouterStorage().lido = _lido;
-        SRStorage.getRouterStorage().topUpGateway = _topUpGateway;
-        SRStorage.getRouterStorage().depositSecurityModule = _depositSecurityModule;
+
+        _setTopUpGateway(_topUpGateway);
+        _setDepositSecurityModule(_depositSecurityModule);
 
         // TODO: maybe store withdrawalVault
         _setWithdrawalCredentials(_withdrawalCredentials);
-
-        emit TopUpGatewaySet(_topUpGateway, _msgSender());
-        emit DepositSecurityModuleSet(_depositSecurityModule, _msgSender());
     }
 
     /// @dev Prohibit direct transfer to contract.
@@ -204,20 +200,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _topUpGateway Address of the TopUpGateway contract.
     /// @param _depositSecurityModule Address of the DepositSecurityModule contract.
     function migrateUpgrade_v4(address _topUpGateway, address _depositSecurityModule) external reinitializer(4) {
-        if (_topUpGateway == address(0)) revert ZeroAddressTopUpGateway();
-        if (_depositSecurityModule == address(0)) revert ZeroAddressDepositSecurityModule();
-
-        // TODO: here is problem, that last version of
         __AccessControlEnumerable_init();
 
         // migrate current modules to new storage
         SRLib._migrateStorage();
 
-        SRStorage.getRouterStorage().topUpGateway = _topUpGateway;
-        SRStorage.getRouterStorage().depositSecurityModule = _depositSecurityModule;
-
-        emit TopUpGatewaySet(_topUpGateway, _msgSender());
-        emit DepositSecurityModuleSet(_depositSecurityModule, _msgSender());
+        _setTopUpGateway(_topUpGateway);
+        _setDepositSecurityModule(_depositSecurityModule);
     }
 
     /// @notice Returns Lido contract address.
@@ -800,9 +789,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // to allow CSM queue cursor advancement.
         bytes[] memory publicKeys;
         uint256[] memory allocations;
-        (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress).obtainDepositData(
-            stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei
-        );
+        (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress)
+            .obtainDepositData(
+                stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei
+            );
 
         // Calculate total amount from allocations returned by module
         uint256 totalAllocationsGwei;
@@ -1106,9 +1096,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _topUpGateway Address of the TopUpGateway contract.
     /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
     function setTopUpGateway(address _topUpGateway) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
-        if (_topUpGateway == address(0)) revert ZeroAddressTopUpGateway();
-        SRStorage.getRouterStorage().topUpGateway = _topUpGateway;
-        emit TopUpGatewaySet(_topUpGateway, _msgSender());
+        _setTopUpGateway(_topUpGateway);
     }
 
     /// @notice Returns the TopUpGateway address.
@@ -1277,8 +1265,20 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRStorage.getRouterStorage().topUpGateway;
     }
 
+    function _setTopUpGateway(address gw) internal {
+        if (gw == address(0)) revert ZeroAddressTopUpGateway();
+        SRStorage.getRouterStorage().topUpGateway = gw;
+        emit TopUpGatewaySet(gw, _msgSender());
+    }
+
     function _getDepositSecurityModule() internal view returns (address) {
         return SRStorage.getRouterStorage().depositSecurityModule;
+    }
+
+    function _setDepositSecurityModule(address dsm) internal {
+        if (dsm == address(0)) revert ZeroAddressDepositSecurityModule();
+        SRStorage.getRouterStorage().depositSecurityModule = dsm;
+        emit DepositSecurityModuleSet(dsm, _msgSender());
     }
 
     // Helpers
