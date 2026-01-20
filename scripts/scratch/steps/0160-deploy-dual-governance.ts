@@ -227,6 +227,7 @@ async function getLatestDGDeployArtifactFilename(networkChainId: string) {
 }
 
 function getDGConfig(chainId: string, networkState: DeploymentState) {
+  const daoAgent = getAddress(Sk.appAgent, networkState);
   const daoVoting = getAddress(Sk.appVoting, networkState);
   const withdrawalQueue = getAddress(Sk.withdrawalQueueERC721, networkState);
   const stEth = getAddress(Sk.appLido, networkState);
@@ -270,12 +271,16 @@ function getDGConfig(chainId: string, networkState: DeploymentState) {
     },
     tiebreaker: {
       execution_delay: networkState[Sk.dualGovernanceConfig].tiebreaker.execution_delay,
-      committees_count: 1,
-      quorum: 1,
+      committees_count: 2,
+      quorum: 2,
       committees: [
         {
-          members: [daoVoting],
-          quorum: 1,
+          members: [daoVoting, daoAgent],
+          quorum: 2,
+        },
+        {
+          members: [daoAgent, daoVoting],
+          quorum: 2,
         },
       ],
     },
@@ -298,6 +303,7 @@ function getDGDotEnvFile(deployArtifactFilename: string, networkState: Deploymen
   const daoAgent = getAddress(Sk.appAgent, networkState);
   const daoVoting = getAddress(Sk.appVoting, networkState);
   const daoTokenManager = getAddress(Sk.appTokenManager, networkState);
+  const lidoLocator = getAddress(Sk.lidoLocator, networkState);
 
   return `MAINNET_RPC_URL=${rpcUrl}
 DEPLOY_ARTIFACT_FILE_NAME=${deployArtifactFilename}
@@ -316,6 +322,7 @@ DG_TESTS_LIDO_LDO_TOKEN=${ldo}
 DG_TESTS_LIDO_DAO_AGENT=${daoAgent}
 DG_TESTS_LIDO_DAO_VOTING=${daoVoting}
 DG_TESTS_LIDO_DAO_TOKEN_MANAGER=${daoTokenManager}
+DG_TESTS_LIDO_LOCATOR=${lidoLocator}
 DG_DISABLE_REGRESSION_TESTS_FOR_SCRATCH_DEPLOY=true
 `;
 }
