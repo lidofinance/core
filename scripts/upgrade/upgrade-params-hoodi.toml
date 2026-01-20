@@ -1,0 +1,9 @@
+# Lido Protocol Upgrade Parameters - Hoodi Configuration
+# This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum Hoodi testnet
+
+# Predeposit guarantee configuration for validator deposit guarantees
+[predepositGuarantee]
+genesisForkVersion = "0x10000910"     # Ethereum Hoodi testnet genesis fork version
+gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
+gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
+changeSlot = 0                        # Slot number when the change takes effect

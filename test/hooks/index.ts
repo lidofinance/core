@@ -2,6 +2,7 @@ import * as Mocha from "mocha";
 
 import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
+import "./assertion/equalStETH";
 import "./assertion/revertedWithOZAccessControlError";
 
 // Increase number of stack frames shown in error messages

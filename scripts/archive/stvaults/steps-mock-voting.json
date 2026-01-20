@@ -1,0 +1,3 @@
+{
+  "steps": ["upgrade/steps/0500-mock-v3-aragon-voting"]
+}

@@ -11,8 +11,8 @@ contract CLProofVerifier__Harness is CLProofVerifier {
     constructor(
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
-        uint64 _changeSlot
-    ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {}
+        uint64 _pivotSlot
+    ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _pivotSlot) {}
 
     function TEST_validatePubKeyWCProof(
         IPredepositGuarantee.ValidatorWitness calldata _witness,

@@ -60,4 +60,10 @@ contract StETHPermit__HarnessForDashboard is StETHPermit {
     function mock__setTotalShares(uint256 _totalShares) external {
         totalShares = _totalShares;
     }
+
+    function() external payable {
+        // protection against accidental submissions by calling non-existent function
+        require(msg.data.length == 0, "NON_EMPTY_DATA");
+        _mintShares(msg.sender, getSharesByPooledEth(msg.value));
+    }
 }

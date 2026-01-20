@@ -11,6 +11,6 @@ contract PredepositGuarantee__HarnessForFactory is PredepositGuarantee {
         bytes4 _genesisForkVersion,
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
-        uint64 _changeSlot
-    ) PredepositGuarantee(_genesisForkVersion, _gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {}
+        uint64 _pivotSlot
+    ) PredepositGuarantee(_genesisForkVersion, _gIFirstValidator, _gIFirstValidatorAfterChange, _pivotSlot) {}
 }

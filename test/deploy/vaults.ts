@@ -76,12 +76,12 @@ async function createMockStakingVaultAndConnect(
 
   await operatorGridMock.changeVaultTierParams(vault, { ...TIER_PARAMS, ...tierParams });
   await vault.connect(owner).transferOwnership(vaultHub);
-  await vaultHub.connect(deployer).connectVault(vault);
+  await vaultHub.connect(owner).connectVault(vault);
 
   return vault;
 }
 
-async function reportVault(
+export async function reportVault(
   lazyOracle: LazyOracle__MockForVaultHub,
   vaultHub: VaultHub,
   {

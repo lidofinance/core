@@ -1,5 +1,11 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
+import {
+  ContractMethodArgs,
+  ContractTransactionReceipt,
+  ContractTransactionResponse,
+  hexlify,
+  Interface,
+} from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -21,9 +27,9 @@ import {
   de0x,
   findEventsWithInterfaces,
   generatePredeposit,
-  generateTopUp,
   getCurrentBlockTimestamp,
   impersonate,
+  log,
   prepareLocalMerkleTree,
   TOTAL_BASIS_POINTS,
   Validator,
@@ -199,19 +205,20 @@ export async function autofillRoles(
  */
 export async function setupLidoForVaults(ctx: ProtocolContext) {
   const { lido, acl } = ctx.contracts;
-  const agentSigner = await ctx.getSigner("agent");
-  const role = await lido.STAKING_CONTROL_ROLE();
-  const agentAddress = await agentSigner.getAddress();
 
-  await acl.connect(agentSigner).grantPermission(agentAddress, lido.address, role);
-  await lido.connect(agentSigner).setMaxExternalRatioBP(20_00n);
-  await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
-
-  if (!ctx.isScratch) {
-    // we need a report to initialize LazyOracle timestamp after the upgrade
-    // if we are running tests in the mainnet fork environment
-    await report(ctx);
+  if ((await lido.getMaxExternalRatioBP()) < 20_00n) {
+    const agentSigner = await ctx.getSigner("agent");
+    const role = await lido.STAKING_CONTROL_ROLE();
+    const agentAddress = await agentSigner.getAddress();
+    await acl.connect(agentSigner).grantPermission(agentAddress, lido.address, role);
+    await lido.connect(agentSigner).setMaxExternalRatioBP(20_00n);
+    await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
+    log.success("Setting max external ratio to 20%");
   }
+
+  // we need a report to initialize LazyOracle timestamp after the upgrade
+  // if we are running tests in the mainnet fork environment
+  await report(ctx);
 }
 
 export type VaultReportItem = {
@@ -255,12 +262,14 @@ export async function reportVaultDataWithProof(
 ) {
   const { vaultHub, locator, lazyOracle, hashConsensus } = ctx.contracts;
 
+  const vaultRecord = await vaultHub.vaultRecord(stakingVault);
+
   const vaultReport: VaultReportItem = {
     vault: await stakingVault.getAddress(),
     totalValue: params.totalValue ?? (await vaultHub.totalValue(stakingVault)),
-    cumulativeLidoFees: params.cumulativeLidoFees ?? 0n,
+    cumulativeLidoFees: params.cumulativeLidoFees ?? vaultRecord.cumulativeLidoFees,
     liabilityShares: params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault)),
-    maxLiabilityShares: params.maxLiabilityShares ?? (await vaultHub.vaultRecord(stakingVault)).maxLiabilityShares,
+    maxLiabilityShares: params.maxLiabilityShares ?? vaultRecord.maxLiabilityShares,
     slashingReserve: params.slashingReserve ?? 0n,
   };
 
@@ -280,7 +289,7 @@ export async function reportVaultDataWithProof(
       .updateReportData(reportTimestampArg, reportRefSlotArg, reportTree.root, "");
   }
 
-  return await lazyOracle.updateVaultData(
+  return lazyOracle.updateVaultData(
     await stakingVault.getAddress(),
     vaultReport.totalValue,
     vaultReport.cumulativeLidoFees,
@@ -289,6 +298,89 @@ export async function reportVaultDataWithProof(
     vaultReport.slashingReserve,
     reportTree.getProof(0),
   );
+}
+
+/**
+ * Report data for multiple vaults in a single Merkle tree
+ * This is useful when you need to ensure all vaults have fresh reports at the same time
+ *
+ * @param ctx Protocol context
+ * @param stakingVaults Array of StakingVault contracts to report
+ * @param params Parameters for the report. If arrays are provided, they must match the length of stakingVaults
+ */
+export async function reportVaultsDataWithProof(
+  ctx: ProtocolContext,
+  stakingVaults: StakingVault[],
+  params: {
+    totalValue?: bigint | bigint[];
+    cumulativeLidoFees?: bigint | bigint[];
+    liabilityShares?: bigint | bigint[];
+    maxLiabilityShares?: bigint | bigint[];
+    slashingReserve?: bigint | bigint[];
+    reportTimestamp?: bigint;
+    reportRefSlot?: bigint;
+    updateReportData?: boolean;
+    waitForNextRefSlot?: boolean;
+  } = {},
+) {
+  const { vaultHub, locator, lazyOracle, hashConsensus } = ctx.contracts;
+
+  if (params.waitForNextRefSlot) {
+    await waitNextAvailableReportTime(ctx);
+  }
+
+  // Helper to get value from array or single value
+  const getValue = <T>(param: T | T[] | undefined, index: number, defaultValue: T): T => {
+    if (param === undefined) return defaultValue;
+    return Array.isArray(param) ? param[index] : param;
+  };
+
+  // Build vault reports for all vaults
+  const vaultReports: VaultReportItem[] = await Promise.all(
+    stakingVaults.map(async (vault, index) => {
+      const vaultRecord = await vaultHub.vaultRecord(vault);
+      return {
+        vault: await vault.getAddress(),
+        totalValue: getValue(params.totalValue, index, await vaultHub.totalValue(vault)),
+        cumulativeLidoFees: getValue(params.cumulativeLidoFees, index, vaultRecord.cumulativeLidoFees),
+        liabilityShares: getValue(params.liabilityShares, index, await vaultHub.liabilityShares(vault)),
+        maxLiabilityShares: getValue(params.maxLiabilityShares, index, vaultRecord.maxLiabilityShares),
+        slashingReserve: getValue(params.slashingReserve, index, 0n),
+      };
+    }),
+  );
+
+  // Create single Merkle tree for all vaults
+  const reportTree = createVaultsReportTree(vaultReports);
+
+  // Update report data once for all vaults
+  if (params.updateReportData ?? true) {
+    const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
+    const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
+
+    const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
+    await lazyOracle
+      .connect(accountingSigner)
+      .updateReportData(reportTimestampArg, reportRefSlotArg, reportTree.root, "");
+  }
+
+  // Update each vault data with its proof from the common tree
+  const txs = [];
+  for (let i = 0; i < stakingVaults.length; i++) {
+    const vaultReport = vaultReports[i];
+    const tx = await lazyOracle.updateVaultData(
+      vaultReport.vault,
+      vaultReport.totalValue,
+      vaultReport.cumulativeLidoFees,
+      vaultReport.liabilityShares,
+      vaultReport.maxLiabilityShares,
+      vaultReport.slashingReserve,
+      reportTree.getProof(i),
+    );
+    txs.push(tx);
+  }
+
+  return txs;
 }
 
 interface CreateVaultResponse {
@@ -303,10 +395,10 @@ export async function createVaultProxy(
   vaultFactory: VaultFactory,
   vaultOwner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
-  nodeOperatorManager: HardhatEthersSigner,
-  nodeOperatorFeeBP: bigint,
-  confirmExpiry: bigint,
-  roleAssignments: Permissions.RoleAssignmentStruct[],
+  nodeOperatorManager: HardhatEthersSigner = nodeOperator,
+  nodeOperatorFeeBP: bigint = 200n,
+  confirmExpiry: bigint = days(7n),
+  roleAssignments: Permissions.RoleAssignmentStruct[] = [],
 ): Promise<CreateVaultResponse> {
   const tx = await vaultFactory
     .connect(caller)
@@ -352,10 +444,10 @@ export async function createVaultProxyWithoutConnectingToVaultHub(
   vaultFactory: VaultFactory,
   vaultOwner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
-  nodeOperatorManager: HardhatEthersSigner,
-  nodeOperatorFeeBP: bigint,
-  confirmExpiry: bigint,
-  roleAssignments: Permissions.RoleAssignmentStruct[],
+  nodeOperatorManager: HardhatEthersSigner = nodeOperator,
+  nodeOperatorFeeBP: bigint = 200n,
+  confirmExpiry: bigint = days(7n),
+  roleAssignments: Permissions.RoleAssignmentStruct[] = [],
 ): Promise<CreateVaultResponse> {
   const tx = await vaultFactory
     .connect(caller)
@@ -393,6 +485,84 @@ export async function createVaultProxyWithoutConnectingToVaultHub(
     vault: stakingVault,
     dashboard,
   };
+}
+
+/**
+ * Sets up a staking vault with bad debt by slashing its total value below its liabilities
+ * @param ctx Protocol context
+ * @param vaultOwner Vault owner signer
+ * @param nodeOperator Node operator signer
+ * @param fundAmount Amount to fund the vault with
+ * @param slashTo Amount to slash the vault's total value to
+ * @returns Object containing the staking vault and the amount of bad debt shares
+ */
+export async function setupVaultWithBadDebt(
+  ctx: ProtocolContext,
+  vaultOwner: HardhatEthersSigner,
+  nodeOperator: HardhatEthersSigner,
+  fundAmount = ether("10"),
+  slashTo = ether("1"),
+): Promise<{ stakingVault: StakingVault; badDebtShares: bigint }> {
+  const { stakingVaultFactory, lido } = ctx.contracts;
+
+  // Create vault with dashboard
+  const { stakingVault, dashboard } = await createVaultWithDashboard(
+    ctx,
+    stakingVaultFactory,
+    vaultOwner,
+    nodeOperator,
+    nodeOperator,
+  );
+
+  // Fund and mint max shares
+  await dashboard.connect(vaultOwner).fund({ value: fundAmount });
+
+  const capacity = await dashboard.remainingMintingCapacityShares(0n);
+  await dashboard.connect(vaultOwner).mintShares(vaultOwner, capacity);
+
+  // Slash to create bad debt
+  await reportVaultDataWithProof(ctx, stakingVault, {
+    totalValue: slashTo,
+    slashingReserve: slashTo,
+    waitForNextRefSlot: true,
+  });
+
+  // Verify bad debt exists
+  const totalValue = await dashboard.totalValue();
+  const liabilityShares = await dashboard.liabilityShares();
+  const liabilityValue = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+  expect(totalValue).to.be.lessThan(liabilityValue, "Vault should have bad debt");
+
+  // Calculate bad debt amount
+  const badDebtShares = liabilityShares - (await lido.getSharesByPooledEth(totalValue));
+
+  return { stakingVault, badDebtShares };
+}
+
+/**
+ * Queue bad debt internalization for a staking vault
+ * @param ctx Protocol context
+ * @param stakingVault Staking vault to internalize bad debt for
+ * @param badDebtShares Amount of bad debt shares to internalize
+ */
+export async function queueBadDebtInternalization(
+  ctx: ProtocolContext,
+  stakingVault: StakingVault,
+  badDebtShares: bigint,
+): Promise<void> {
+  expect(badDebtShares).to.be.gt(0n, "Bad debt shares must be greater than zero");
+
+  // Grant BAD_DEBT_MASTER_ROLE to daoAgent
+  const { vaultHub } = ctx.contracts;
+  const aragonAgent = await ctx.getSigner("agent");
+  await vaultHub.connect(aragonAgent).grantRole(await vaultHub.BAD_DEBT_MASTER_ROLE(), aragonAgent);
+
+  // Queue bad debt for internalization
+  const badDebtToBefore = await vaultHub.badDebtToInternalize();
+  await vaultHub.connect(aragonAgent).internalizeBadDebt(stakingVault, badDebtShares);
+  const badDebtToAfter = await vaultHub.badDebtToInternalize();
+
+  expect(badDebtToAfter - badDebtToBefore).to.equal(badDebtShares, "Bad debt should be queued");
 }
 
 export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
@@ -434,12 +604,7 @@ export const generatePredepositData = async (
   });
 };
 
-export const getProofAndDepositData = async (
-  ctx: ProtocolContext,
-  validator: Validator,
-  withdrawalCredentials: string,
-  amount: bigint = ether("31"),
-) => {
+export const mockProof = async (ctx: ProtocolContext, validator: Validator) => {
   const { predepositGuarantee } = ctx.contracts;
 
   // Step 3: Prove and deposit the validator
@@ -452,20 +617,16 @@ export const getProofAndDepositData = async (
   );
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
-  const postdeposit = generateTopUp(validator.container, amount);
   const pubkey = hexlify(validator.container.pubkey);
 
-  const witnesses = [
-    {
-      proof,
-      pubkey,
-      validatorIndex,
-      childBlockTimestamp,
-      slot: beaconBlockHeader.slot,
-      proposerIndex: beaconBlockHeader.proposerIndex,
-    },
-  ];
-  return { witnesses, postdeposit };
+  return {
+    proof,
+    pubkey,
+    validatorIndex,
+    childBlockTimestamp,
+    slot: beaconBlockHeader.slot,
+    proposerIndex: beaconBlockHeader.proposerIndex,
+  };
 };
 
 export async function calculateLockedValue(
@@ -493,6 +654,39 @@ export async function calculateLockedValue(
   return liability + (reserve > minimalReserve ? reserve : minimalReserve);
 }
 
-function ceilDiv(a: bigint, b: bigint): bigint {
+export function ceilDiv(a: bigint, b: bigint): bigint {
   return (a + b - 1n) / b;
+}
+
+// Helper type to extract method names from a contract
+export type Methods<T> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
+}[keyof T];
+
+// Helper functions for testing access control
+export async function testMethod<
+  T extends unknown[],
+  C extends { connect: (signer: HardhatEthersSigner) => C; interface: Interface },
+>(
+  contract: C,
+  methodName: Methods<C> & string,
+  { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
+  argument: T,
+  requiredRole: string,
+  errorName = "AccessControlUnauthorizedAccount",
+) {
+  for (const user of failingUsers) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect((contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)))
+      .to.be.revertedWithCustomError(contract, errorName)
+      .withArgs(user, requiredRole);
+  }
+
+  for (const user of successUsers) {
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (contract.connect(user) as any)[methodName](...(argument as ContractMethodArgs<T>)),
+    ).to.not.be.revertedWithCustomError(contract, errorName);
+  }
 }

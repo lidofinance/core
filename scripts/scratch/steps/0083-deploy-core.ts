@@ -30,6 +30,7 @@ export async function main() {
 
   // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
+  const agentAddress = state[Sk.appAgent].proxy.address;
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
@@ -391,4 +392,10 @@ export async function main() {
     deployer,
     oracleReportSanityCheckerArgs,
   );
+
+  //
+  // Deploy new TokenRateNotifier
+  //
+
+  await deployWithoutProxy(Sk.tokenRebaseNotifier, "TokenRateNotifier", deployer, [agentAddress, accounting.address]);
 }

@@ -10,8 +10,8 @@ declare namespace NodeJS {
     /* Test execution mode: 'scratch' for fresh network, 'fork' for forked network */
     MODE?: "scratch" | "forking"; // default: "scratch"
 
-    /* URL of the network to fork from */
-    FORK_RPC_URL?: string; // default: "https://eth.drpc.org"
+    /* Block number to fork from. If not set, the fork will start from the latest block. */
+    FORKING_BLOCK_NUMBER?: number; // default: undefined
 
     /**
      * Flags for changing the behavior of the integration tests

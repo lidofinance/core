@@ -35,10 +35,10 @@ contract StakingModule__MockForTriggerableWithdrawals is IStakingModule {
     }
 
     function isValidatorExitDelayPenaltyApplicable(
-        uint256 _nodeOperatorId,
-        uint256 _proofSlotTimestamp,
-        bytes calldata _publicKey,
-        uint256 _eligibleToExitInSec
+        uint256,
+        uint256,
+        bytes calldata,
+        uint256
     ) external pure override returns (bool) {
         return false; // Default value for testing
     }
@@ -94,11 +94,11 @@ contract StakingModule__MockForTriggerableWithdrawals is IStakingModule {
         return (0, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    function getNodeOperatorsCount() external view override returns (uint256) {
+    function getNodeOperatorsCount() external pure override returns (uint256) {
         return 1;
     }
 
-    function getActiveNodeOperatorsCount() external view override returns (uint256) {
+    function getActiveNodeOperatorsCount() external pure override returns (uint256) {
         return 1;
     }
 

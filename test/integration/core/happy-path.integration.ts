@@ -11,7 +11,9 @@ import {
   norSdvtEnsureOperators,
   OracleReportParams,
   ProtocolContext,
+  removeStakingLimit,
   report,
+  setStakingLimit,
 } from "lib/protocol";
 
 import { bailOnFailure, MAX_DEPOSIT, Snapshot, ZERO_HASH } from "test/suite";
@@ -39,6 +41,9 @@ describe("Scenario: Protocol Happy Path", () => {
     await updateBalance(stEthHolder.address, ether("100000000"));
 
     snapshot = await Snapshot.take();
+
+    await removeStakingLimit(ctx);
+    await setStakingLimit(ctx, ether("200000"), ether("20"));
   });
 
   after(async () => await Snapshot.restore(snapshot));
@@ -247,7 +252,7 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should rebase correctly", async () => {
-    const { lido, withdrawalQueue, locator, burner, nor, sdvt } = ctx.contracts;
+    const { lido, withdrawalQueue, locator, burner, nor, sdvt, stakingRouter, csm, accounting } = ctx.contracts;
 
     const treasuryAddress = await locator.treasury();
     const strangerBalancesBeforeRebase = await getBalances(stranger);
@@ -317,25 +322,20 @@ describe("Scenario: Protocol Happy Path", () => {
     const transferEvents = ctx.getEvents(reportTxReceipt, "Transfer");
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
 
-    let toBurnerTransfer,
-      toNorTransfer,
-      toSdvtTransfer,
-      toTreasuryTransfer,
-      toTreasuryTransferShares: LogDescriptionExtended | undefined;
-    let numExpectedTransferEvents = 3;
+    let toBurnerTransfer, toNorTransfer, toSdvtTransfer: LogDescriptionExtended | undefined;
+    let numExpectedTransferEvents = Number(await stakingRouter.getStakingModulesCount()) + 2; // +1 for the treasury
     if (wereWithdrawalsFinalized) {
-      numExpectedTransferEvents += 1;
-      [toBurnerTransfer, toNorTransfer, toSdvtTransfer] = transferEvents;
+      numExpectedTransferEvents += 1; // +1 for the burner transfer
+      [toBurnerTransfer, , toNorTransfer, toSdvtTransfer] = transferEvents;
     } else {
-      [toNorTransfer, toSdvtTransfer] = transferEvents;
+      [, toNorTransfer, toSdvtTransfer] = transferEvents;
     }
-    if (ctx.flags.withCSM) {
-      toTreasuryTransfer = transferEvents[numExpectedTransferEvents];
-      toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents];
-      numExpectedTransferEvents += 2;
-    } else {
-      toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
-      toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents - 1];
+    const toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
+    const toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents - 1];
+
+    if (csm !== undefined) {
+      // +1 for the CSM internal transfer
+      numExpectedTransferEvents += 1;
     }
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
@@ -352,7 +352,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     expect(toNorTransfer?.args.toObject()).to.include(
       {
-        from: ZeroAddress,
+        from: accounting.address,
         to: nor.address,
       },
       "Transfer to NOR",
@@ -360,7 +360,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     expect(toSdvtTransfer?.args.toObject()).to.include(
       {
-        from: ZeroAddress,
+        from: accounting.address,
         to: sdvt.address,
       },
       "Transfer to SDVT",
@@ -368,14 +368,14 @@ describe("Scenario: Protocol Happy Path", () => {
 
     expect(toTreasuryTransfer?.args.toObject()).to.include(
       {
-        from: ZeroAddress,
+        from: accounting.address,
         to: treasuryAddress,
       },
       "Transfer to Treasury",
     );
     expect(toTreasuryTransferShares?.args.toObject()).to.include(
       {
-        from: ZeroAddress,
+        from: accounting.address,
         to: treasuryAddress,
       },
       "Transfer shares to Treasury",

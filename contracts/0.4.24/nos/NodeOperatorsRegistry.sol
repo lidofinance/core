@@ -276,11 +276,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _initialize_v4(_exitDeadlineThresholdInSeconds);
     }
 
-    /// @notice Overrides default AragonApp behaviour to disallow recovery
-    function transferToVault(address /* _token */) external {
-        revert("NOT_SUPPORTED");
-    }
-
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
     /// @param _name Human-readable name
     /// @param _rewardAddress Ethereum 1 address which receives stETH rewards for this operator

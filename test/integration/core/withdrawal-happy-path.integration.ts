@@ -22,6 +22,8 @@ describe("Integration: Withdrawal happy path", () => {
 
     [, holder] = await ethers.getSigners();
     await setBalance(holder.address, ether("1000000"));
+
+    await finalizeWQViaElVault(ctx);
   });
 
   after(async () => await Snapshot.restore(snapshot));
@@ -32,8 +34,6 @@ describe("Integration: Withdrawal happy path", () => {
     const REQUESTS_SUM = REQUEST_AMOUNT * REQUESTS_COUNT;
 
     const { withdrawalQueue: wq, lido, acl } = ctx.contracts;
-
-    await finalizeWQViaElVault(ctx);
 
     // Get initial stETH holder balance
     const agentSigner = await ctx.getSigner("agent");
@@ -64,7 +64,7 @@ describe("Integration: Withdrawal happy path", () => {
     const stethBalanceAfter = await lido.balanceOf(holder.address);
 
     // Verify request state
-    expect(stethBalanceBefore - stethBalanceAfter).to.be.closeTo(REQUESTS_SUM, 2n * REQUESTS_COUNT);
+    expect(stethBalanceBefore - stethBalanceAfter).to.be.closeTo(REQUESTS_SUM, 3n * REQUESTS_COUNT); // each transfer can have rounding up to 3 wei
 
     const sharesToBurn = (await lido.sharesOf(wq.target)) - uncountedStethShares;
 

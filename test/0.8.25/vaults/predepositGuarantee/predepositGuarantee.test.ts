@@ -264,7 +264,7 @@ describe("PredepositGuarantee.sol", () => {
 
         await expect(setGuarantorTx)
           .to.emit(pdg, "BalanceRefunded")
-          .withArgs(vaultOperator, vaultOperatorGuarantor)
+          .withArgs(vaultOperator, vaultOperator)
           .to.emit(pdg, "GuarantorRefundAdded")
           .withArgs(vaultOperator, vaultOperator, balance)
           .to.emit(pdg, "GuarantorSet")
@@ -296,7 +296,7 @@ describe("PredepositGuarantee.sol", () => {
         const returnTx = pdg.setNodeOperatorGuarantor(vaultOperator);
         await expect(returnTx)
           .to.emit(pdg, "BalanceRefunded")
-          .withArgs(vaultOperator, vaultOperator)
+          .withArgs(vaultOperator, vaultOperatorGuarantor)
           .to.emit(pdg, "GuarantorRefundAdded")
           .withArgs(vaultOperatorGuarantor, vaultOperator, balance)
           .to.emit(pdg, "GuarantorSet")
@@ -337,7 +337,7 @@ describe("PredepositGuarantee.sol", () => {
         const returnTx = pdg.setNodeOperatorGuarantor(vaultOperator);
         await expect(returnTx)
           .to.emit(pdg, "BalanceRefunded")
-          .withArgs(vaultOperator, vaultOperator)
+          .withArgs(vaultOperator, vaultOperatorGuarantor)
           .to.emit(pdg, "GuarantorRefundAdded")
           .withArgs(vaultOperatorGuarantor, vaultOperator, balance)
           .to.emit(pdg, "GuarantorSet")
@@ -694,6 +694,116 @@ describe("PredepositGuarantee.sol", () => {
 
         expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([totalBalance, totalBalance]);
         expect(await pdg.unlockedBalance(vaultOperator)).to.equal(0n);
+      });
+
+      it("reverts on incorrect compression flag during BLS check", async () => {
+        // Staking Vault is funded with enough ether to run validator
+        await stakingVault.fund({ value: ether("32") });
+
+        const balance = ether("1");
+
+        await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
+
+        const vaultWC = await stakingVault.withdrawalCredentials();
+
+        // we run multiple iterations to increase chance of catching random pubkey/signature patterns
+        for (let i = 0; i < 100; i++) {
+          const validator = generateValidator(vaultWC);
+
+          const predepositDataWrongCompressPubkey = await generatePredeposit(validator, { pubkeyFlipBitmask: 0b100 });
+          await expect(
+            pdg.predeposit(
+              stakingVault,
+              [predepositDataWrongCompressPubkey.deposit],
+              [predepositDataWrongCompressPubkey.depositY],
+              {
+                value: balance,
+              },
+            ),
+          )
+            .to.revertedWithCustomError(pdg, "InvalidCompressedComponent")
+            .withArgs(0);
+
+          const predepositDataWrongInfinityPubkey = await generatePredeposit(validator, {
+            pubkeyFlipBitmask: 0b010,
+          });
+          await expect(
+            pdg.predeposit(
+              stakingVault,
+              [predepositDataWrongInfinityPubkey.deposit],
+              [predepositDataWrongInfinityPubkey.depositY],
+              {
+                value: balance,
+              },
+            ),
+          )
+            .to.revertedWithCustomError(pdg, "InvalidCompressedComponent")
+            .withArgs(0);
+
+          const predepositDataWrongSignPubkey = await generatePredeposit(validator, {
+            pubkeyFlipBitmask: 0b001,
+          });
+          await expect(
+            pdg.predeposit(
+              stakingVault,
+              [predepositDataWrongSignPubkey.deposit],
+              [predepositDataWrongSignPubkey.depositY],
+              {
+                value: balance,
+              },
+            ),
+          )
+            .to.revertedWithCustomError(pdg, "InvalidCompressedComponentSignBit")
+            .withArgs(0);
+
+          const predepositDataWrongCompressSignature = await generatePredeposit(validator, {
+            signatureFlipBitmask: 0b100,
+          });
+          await expect(
+            pdg.predeposit(
+              stakingVault,
+              [predepositDataWrongCompressSignature.deposit],
+              [predepositDataWrongCompressSignature.depositY],
+              {
+                value: balance,
+              },
+            ),
+          )
+            .to.revertedWithCustomError(pdg, "InvalidCompressedComponent")
+            .withArgs(1);
+
+          const predepositDataWrongInfinitySignature = await generatePredeposit(validator, {
+            signatureFlipBitmask: 0b010,
+          });
+          await expect(
+            pdg.predeposit(
+              stakingVault,
+              [predepositDataWrongInfinitySignature.deposit],
+              [predepositDataWrongInfinitySignature.depositY],
+              {
+                value: balance,
+              },
+            ),
+          )
+            .to.revertedWithCustomError(pdg, "InvalidCompressedComponent")
+            .withArgs(1);
+
+          const predepositDataWrongSignSignature = await generatePredeposit(validator, {
+            signatureFlipBitmask: 0b001,
+          });
+          await expect(
+            pdg.predeposit(
+              stakingVault,
+              [predepositDataWrongSignSignature.deposit],
+              [predepositDataWrongSignSignature.depositY],
+              {
+                value: balance,
+              },
+            ),
+          )
+            .to.revertedWithCustomError(pdg, "InvalidCompressedComponentSignBit")
+            .withArgs(1);
+        }
       });
     });
 

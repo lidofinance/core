@@ -111,6 +111,7 @@ export async function main() {
     locatorAddress,
     beaconAddress,
     dashboardAddress,
+    ethers.ZeroAddress, // previous factory
   ]);
 
   // Deploy PredepositGuarantee

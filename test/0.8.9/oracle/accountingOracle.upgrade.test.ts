@@ -17,19 +17,19 @@ describe("AccountingOracle.sol:upgrade", () => {
       [admin] = await ethers.getSigners();
       const deployed = await deployAndConfigureAccountingOracle(admin.address);
       oracle = deployed.oracle;
-      await oracle.setContractVersion(2); // Set initial contract version to 2
+      await oracle.setContractVersion(3); // Set initial contract version to 3
     });
 
-    // TODO: test version increment because finalizeUpgrade_v3 should be called on a v2 contract
+    // TODO: test version increment because finalizeUpgrade_v4 should be called on a v2 contract
     it("successfully updates contract and consensus versions", async () => {
       // Get initial versions
       const initialContractVersion = await oracle.getContractVersion();
       const initialConsensusVersion = await oracle.getConsensusVersion();
 
-      await oracle.connect(admin).finalizeUpgrade_v3(NEW_CONSENSUS_VERSION);
+      await oracle.connect(admin).finalizeUpgrade_v4(NEW_CONSENSUS_VERSION);
 
       const newContractVersion = await oracle.getContractVersion();
-      expect(newContractVersion).to.equal(3);
+      expect(newContractVersion).to.equal(4);
       expect(newContractVersion).to.not.equal(initialContractVersion);
 
       // Verify consensus version updated to the provided value

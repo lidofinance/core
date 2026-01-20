@@ -93,6 +93,11 @@ contract StETH is IERC20, Pausable {
         0x6038150aecaa250d524370a0fdcdec13f2690e0723eaf277f41d7cae26b359e6;
 
     /**
+     * @dev Bitmask for high 128 bits of 256-bit slot
+     */
+    uint256 constant internal UINT128_HIGH_MASK = ~uint256(0) << 128;
+
+    /**
       * @notice An executed shares transfer from `sender` to `recipient`.
       *
       * @dev emitted in pair with an ERC20-defined `Transfer` event.
@@ -515,6 +520,8 @@ contract StETH is IERC20, Pausable {
         require(_recipient != address(this), "MINT_TO_STETH_CONTRACT");
 
         newTotalShares = _getTotalShares().add(_sharesAmount);
+        require(newTotalShares & UINT128_HIGH_MASK == 0, "SHARES_OVERFLOW");
+
         TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
 
         shares[_recipient] = shares[_recipient].add(_sharesAmount);

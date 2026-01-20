@@ -15,4 +15,5 @@ module.exports = {
     "testnet",
     "upgrade",
   ],
+  irMinimum: true,
 };

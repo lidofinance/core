@@ -107,26 +107,22 @@ describe("Integration: Dashboard ", () => {
       // reserve < minimalReserve
       await dashboard.fund({ value: ether("1") });
 
+      let locked = await calculateLockedValue(ctx, stakingVault, { liabilitySharesIncrease: ether("0.1") });
+
       await expect(dashboard.mintShares(owner, ether("0.1")))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(
-          stakingVault,
-          ether("0.1"),
-          await calculateLockedValue(ctx, stakingVault, { liabilitySharesIncrease: ether("0.1") }),
-        );
+        .withArgs(stakingVault, ether("0.1"), locked);
 
-      expect(await vaultHub.locked(stakingVault)).to.be.equal(await calculateLockedValue(ctx, stakingVault));
+      expect(await vaultHub.locked(stakingVault)).to.be.equal(locked);
 
       // reserve > minimalReserve
       await dashboard.fund({ value: ether("100") });
 
+      locked = await calculateLockedValue(ctx, stakingVault, { liabilitySharesIncrease: ether("10") });
+
       await expect(dashboard.mintShares(owner, ether("10")))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(
-          stakingVault,
-          ether("10"),
-          await calculateLockedValue(ctx, stakingVault, { liabilitySharesIncrease: ether("10") }),
-        );
+        .withArgs(stakingVault, ether("10"), locked);
     });
   });
 });

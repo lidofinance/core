@@ -36,13 +36,13 @@ contract OperatorGrid__MockForVaultHub {
         tierParams.reservationFeeBP = uint16(_tierParams.reservationFeeBP);
     }
 
-    function vaultInfo(
+    function vaultTierInfo(
         address _vault
     )
         external
         view
         returns (
-            uint256 groupId,
+            address nodeOperator,
             uint256 tierId,
             uint256 shareLimit,
             uint256 reserveRatioBP,
@@ -54,8 +54,8 @@ contract OperatorGrid__MockForVaultHub {
     {
         Tier memory tierParams = tiers[vaultTier[_vault]];
 
-        groupId = 0;
-        tierId = 0;
+        nodeOperator = tierParams.operator;
+        tierId = vaultTier[_vault];
         shareLimit = tierParams.shareLimit;
         reserveRatioBP = tierParams.reserveRatioBP;
         forcedRebalanceThresholdBP = tierParams.forcedRebalanceThresholdBP;

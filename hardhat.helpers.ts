@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
+import { HardhatNetworkForkingUserConfig } from "hardhat/types";
+
 export function getMode() {
   return process.env.MODE || "scratch";
 }
@@ -8,20 +10,31 @@ export function getMode() {
 export function getHardhatForkingConfig() {
   const mode = getMode();
 
-  switch (mode) {
-    case "scratch":
-      process.env.INTEGRATION_WITH_CSM = "off";
-      return undefined;
-
-    case "forking":
-      if (!process.env.RPC_URL) {
-        throw new Error("RPC_URL must be set when MODE=forking");
-      }
-      return { url: process.env.RPC_URL };
-
-    default:
-      throw new Error("MODE must be either 'scratch' or 'forking'");
+  if (mode === "scratch") {
+    process.env.INTEGRATION_WITH_CSM = "off";
+    return undefined;
   }
+
+  if (mode === "forking") {
+    const url = process.env.RPC_URL || "";
+    if (!url) {
+      throw new Error("RPC_URL must be set when MODE=forking");
+    }
+
+    const config: HardhatNetworkForkingUserConfig = { url };
+    const block = process.env.FORKING_BLOCK_NUMBER;
+
+    if (block) {
+      const blockNumber = Number(block);
+      if (!blockNumber || blockNumber <= 0) {
+        throw new Error(`Invalid FORKING_BLOCK_NUMBER: ${block}`);
+      }
+      config.blockNumber = blockNumber;
+    }
+    return config;
+  }
+
+  throw new Error("MODE must be either 'scratch' or 'forking'");
 }
 
 // TODO: this plaintext accounts.json private keys management is a subject

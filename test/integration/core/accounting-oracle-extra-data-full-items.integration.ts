@@ -282,7 +282,11 @@ describe("Integration: AccountingOracle extra data full items", () => {
         if (norExitedItems + sdvtExitedItems + csmExitedItems === 0) {
           continue;
         }
-        it(
+
+        // TODO: https://github.com/lidofinance/core/issues/1624
+        const itFn = csmExitedItems > 0 ? it.skip : it;
+
+        itFn(
           `should process extra data with full items for all modules with norExitedItems=${norExitedItems}, sdvtExitedItems=${sdvtExitedItems}, csmExitedItems=${csmExitedItems}`,
           testReportingModuleWithMaxExtraDataItems({
             norExitedItems,

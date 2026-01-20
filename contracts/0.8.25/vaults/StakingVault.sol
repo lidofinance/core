@@ -330,7 +330,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Performs deposits to the beacon chain using the staged and available ether.
      * @param _deposit struct
      * @param _additionalAmount amount of ether that should be taken from available balance for this deposit
-     * @dev NB! this deposit is not affected by pause if _additionalDeposit == 0
+     * @dev NB! this deposit is not affected by pause if _additionalAmount == 0
      */
     function depositFromStaged(Deposit calldata _deposit, uint256 _additionalAmount) external onlyDepositor {
         if (_additionalAmount > 0) {
@@ -472,7 +472,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /**
      * @notice Override the OwnableUpgradeable function to revert
      */
-    function renounceOwnership() public onlyOwner override(OwnableUpgradeable) {
+    function renounceOwnership() public view onlyOwner override(OwnableUpgradeable) {
         revert RenouncementNotAllowed();
     }
 
@@ -732,11 +732,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _required Amount of ether required to cover the fee
      */
     error InsufficientValidatorWithdrawalFee(uint256 _passed, uint256 _required);
-
-    /**
-     * @notice Thrown when the vault is already ossified
-     */
-    error VaultOssified();
 
     /**
      * @notice thrown when trying to recover ETH (via EIP-7528 address) using collectERC20

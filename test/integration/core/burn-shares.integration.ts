@@ -17,8 +17,8 @@ describe("Scenario: Burn Shares", () => {
 
   const amount = ether("1");
   let sharesToBurn: bigint;
-  let totalEth: bigint;
-  let totalShares: bigint;
+  let internalEth: bigint;
+  let internalShares: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -41,13 +41,13 @@ describe("Scenario: Burn Shares", () => {
     expect(stEthBefore).to.be.approximately(amount, 10n, "Incorrect stETH balance after submit");
 
     sharesToBurn = await lido.sharesOf(stranger.address);
-    totalEth = await lido.totalSupply();
-    totalShares = await lido.getTotalShares();
+    internalEth = (await lido.totalSupply()) - (await lido.getExternalEther());
+    internalShares = (await lido.getTotalShares()) - (await lido.getExternalShares());
 
     log.debug("Shares state before", {
       "Stranger shares": sharesToBurn,
-      "Total ETH": ethers.formatEther(totalEth),
-      "Total shares": totalShares,
+      "Total ETH": ethers.formatEther(internalEth),
+      "Total shares": internalShares,
     });
   });
 
@@ -79,17 +79,17 @@ describe("Scenario: Burn Shares", () => {
     });
 
     const sharesToBurnAfter = await lido.sharesOf(stranger.address);
-    const totalEthAfter = await lido.totalSupply();
-    const totalSharesAfter = await lido.getTotalShares();
+    const internalEthAfter = (await lido.totalSupply()) - (await lido.getExternalEther());
+    const internalSharesAfter = (await lido.getTotalShares()) - (await lido.getExternalShares());
 
     log.debug("Shares state after", {
       "Stranger shares": sharesToBurnAfter,
-      "Total ETH": ethers.formatEther(totalEthAfter),
-      "Total shares": totalSharesAfter,
+      "Total ETH": ethers.formatEther(internalEthAfter),
+      "Total shares": internalSharesAfter,
     });
 
     expect(sharesToBurnAfter).to.equal(0n, "Incorrect shares balance after burn");
-    expect(totalEthAfter).to.equal(totalEth, "Incorrect total ETH supply after burn");
-    expect(totalSharesAfter).to.equal(totalShares - sharesToBurn, "Incorrect total shares after burn");
+    expect(internalEthAfter).to.equal(internalEth, "Incorrect total ETH supply after burn");
+    expect(internalSharesAfter).to.equal(internalShares - sharesToBurn, "Incorrect total shares after burn");
   });
 });

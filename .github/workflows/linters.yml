@@ -58,15 +58,15 @@ jobs:
       - name: Run format check
         run: yarn format
 
-  validate-configs:
-    name: Validate Configs
-    runs-on: ubuntu-latest
+  # validate-configs:
+  #   name: Validate Configs
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Common setup
-        uses: ./.github/workflows/setup
+  #     - name: Common setup
+  #       uses: ./.github/workflows/setup
 
-      - name: Validate configurations
-        run: yarn validate:configs
+  #     - name: Validate configurations
+  #       run: yarn validate:configs

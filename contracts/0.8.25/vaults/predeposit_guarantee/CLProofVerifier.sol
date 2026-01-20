@@ -127,7 +127,7 @@ abstract contract CLProofVerifier {
      * @param _gIFirstValidatorPrev packed(general index | depth in Merkle tree, see GIndex.sol) GIndex of first validator in CL state tree
      * @param _gIFirstValidatorCurr packed GIndex of first validator after fork changes tree structure
      * @param _pivotSlot slot of the fork that alters first validator GIndex
-     * @dev if no fork changes are known,  _gIFirstValidatorPrev = _gIFirstValidatorCurr and _changeSlot = 0
+     * @dev if no fork changes are known,  _gIFirstValidatorPrev = _gIFirstValidatorCurr and _pivotSlot = 0
      */
     constructor(GIndex _gIFirstValidatorPrev, GIndex _gIFirstValidatorCurr, uint64 _pivotSlot) {
         GI_FIRST_VALIDATOR_PREV = _gIFirstValidatorPrev;
@@ -217,7 +217,6 @@ abstract contract CLProofVerifier {
         return abi.decode(data, (bytes32));
     }
 
-    error InvalidTimestamp();
     error InvalidSlot();
     error RootNotFound();
 }

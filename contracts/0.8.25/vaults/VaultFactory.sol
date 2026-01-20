@@ -13,16 +13,18 @@ import {VaultHub} from "./VaultHub.sol";
 import {Permissions} from "./dashboard/Permissions.sol";
 import {Dashboard} from "./dashboard/Dashboard.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IVaultFactory} from "./interfaces/IVaultFactory.sol";
 
 /**
  * @title VaultFactory
  * @author Lido
  * @notice The factory contract for StakingVaults
  */
-contract VaultFactory {
+contract VaultFactory is IVaultFactory {
     address public immutable LIDO_LOCATOR;
     address public immutable BEACON;
     address public immutable DASHBOARD_IMPL;
+    address public immutable PREVIOUS_FACTORY;
 
     /**
      * @notice mapping of vaults deployed by this factory
@@ -30,14 +32,20 @@ contract VaultFactory {
      *      This ensures that the vault storage has not been tampered with
      *      before connecting to VaultHub.
      */
-    mapping(address vault => bool) public deployedVaults;
+    mapping(address vault => bool) private deployedByThisFactory;
 
     /**
      * @param _lidoLocator The address of the LidoLocator contract
      * @param _beacon The address of the Beacon contract for StakingVaults
      * @param _dashboardImpl The address of the Dashboard implementation contract
+     * @param _previousFactory the address of the previous factory (can be zero address)
      */
-    constructor(address _lidoLocator, address _beacon, address _dashboardImpl) {
+    constructor(
+        address _lidoLocator,
+        address _beacon,
+        address _dashboardImpl,
+        address _previousFactory
+    ) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_dashboardImpl == address(0)) revert ZeroArgument("_dashboardImpl");
@@ -45,6 +53,16 @@ contract VaultFactory {
         LIDO_LOCATOR = _lidoLocator;
         BEACON = _beacon;
         DASHBOARD_IMPL = _dashboardImpl;
+        PREVIOUS_FACTORY = _previousFactory;
+    }
+
+    /**
+     * Returns true if the vault was deployed by this factory or PREVIOUS_FACTORY
+     * @param _vault address of the vault
+     */
+    function deployedVaults(address _vault) external view returns (bool) {
+        return deployedByThisFactory[_vault] ||
+            (PREVIOUS_FACTORY != address(0) && IVaultFactory(PREVIOUS_FACTORY).deployedVaults(_vault));
     }
 
     /**
@@ -54,7 +72,7 @@ contract VaultFactory {
      * @param _nodeOperatorManager The address of the node operator manager in the Dashboard
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
-     * @param _roleAssignments The optional role assignments to be made
+     * @param _roleAssignments The optional role assignments to be made (only _defaultAdmin sub-roles)
      */
     function createVaultWithDashboard(
         address _defaultAdmin,
@@ -79,17 +97,10 @@ contract VaultFactory {
         vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
-        dashboard.initialize(address(this), address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
-        // connection must be pre-approved by the node operator manager
-        dashboard.setApprovedToConnect(true);
         dashboard.connectToVaultHub{value: msg.value}();
 
-        dashboard.grantRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), _nodeOperatorManager);
-        dashboard.revokeRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), address(this));
-        
-        // _roleAssignments can only include DEFAULT_ADMIN_ROLE's subroles,
-        // which is why it's important to revoke the NODE_OPERATOR_MANAGER_ROLE BEFORE granting roles
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
@@ -106,7 +117,7 @@ contract VaultFactory {
      * @param _nodeOperatorManager The address of the node operator manager in the Dashboard
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
-     * @param _roleAssignments The optional role assignments to be made
+     * @param _roleAssignments The optional role assignments to be made (only _nodeOperatorManager sub-roles)
      * @notice Only Node Operator managed roles can be assigned
      */
     function createVaultWithDashboardWithoutConnectingToVaultHub(
@@ -143,7 +154,7 @@ contract VaultFactory {
 
     function _deployVault() internal returns (address vault) {
         vault = address(new PinnedBeaconProxy(BEACON, ""));
-        deployedVaults[vault] = true;
+        deployedByThisFactory[vault] = true;
     }
 
     /**
