@@ -7,12 +7,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForBeaconChainDepositor,
+  Lido__MockForStakingRouter,
   StakingModule__MockForStakingRouter,
   StakingRouter,
 } from "typechain-types";
-import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
+import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter.sol/StakingRouter";
 
-import { ether, getNextBlock, StakingModuleStatus, WithdrawalCredentialsType } from "lib";
+import { ether, getNextBlock, impersonate, StakingModuleStatus, WithdrawalCredentialsType } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -22,12 +23,13 @@ describe("StakingRouter.sol:module-sync", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
-  let lido: HardhatEthersSigner;
+  let dsmSigner: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter;
   let stakingRouterWithLib: StakingRouterWithLib;
   let stakingModule: StakingModule__MockForStakingRouter;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
+  let lidoMock: Lido__MockForStakingRouter;
 
   let moduleId: bigint;
   let stakingModuleAddress: string;
@@ -44,16 +46,28 @@ describe("StakingRouter.sol:module-sync", () => {
   const minDepositBlockDistance = 25n;
 
   const withdrawalCredentials = hexlify(randomBytes(32));
+  const topUpGateway = "0x0000000000000000000000000000000000000001";
+  const depositSecurityModule = "0x0000000000000000000000000000000000000002";
 
   let originalState: string;
 
   before(async () => {
-    [deployer, admin, user, lido] = await ethers.getSigners();
+    [deployer, admin, user] = await ethers.getSigners();
 
     ({ stakingRouter, stakingRouterWithLib, depositContract } = await deployStakingRouter({ deployer, admin }));
 
-    // initialize staking router
-    await stakingRouter.initialize(admin, lido, withdrawalCredentials);
+    // Deploy Lido mock
+    lidoMock = await ethers.deployContract("Lido__MockForStakingRouter", deployer);
+    const lidoMockAddress = await lidoMock.getAddress();
+
+    // initialize staking router with Lido mock
+    await stakingRouter.initialize(admin, lidoMockAddress, withdrawalCredentials, topUpGateway, depositSecurityModule);
+
+    // Set staking router address on Lido mock so it can send ETH
+    await lidoMock.setStakingRouter(await stakingRouter.getAddress());
+
+    // Get DSM signer for deposit tests
+    dsmSigner = await impersonate(depositSecurityModule, ether("10.0"));
 
     // grant roles
 
@@ -878,59 +892,49 @@ describe("StakingRouter.sol:module-sync", () => {
 
   context("deposit", () => {
     beforeEach(async () => {
-      stakingRouter = stakingRouter.connect(lido);
+      // Set up Lido mock with depositable ether and fund it
+      const depositableAmount = ether("320.0"); // Enough for 10 deposits
+      await lidoMock.setDepositableEther(depositableAmount);
+      await lidoMock.fund({ value: depositableAmount });
+
+      // Set up staking module with depositable validators
+      await stakingModule.mock__getStakingModuleSummary(0n, 100n, 10n); // 10 depositable validators
     });
 
-    it("Reverts if the caller is not Lido", async () => {
+    it("Reverts if the caller is not DSM", async () => {
       await expect(stakingRouter.connect(user).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
-        "AppAuthLidoFailed",
+        "AppAuthDSMFailed",
       );
     });
 
     it("Reverts if the staking module is not active", async () => {
       await stakingRouter.connect(admin).setStakingModuleStatus(moduleId, StakingModuleStatus.DepositsPaused);
 
-      await expect(stakingRouter.deposit(moduleId, "0x")).to.be.revertedWithCustomError(
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "StakingModuleNotActive",
       );
     });
 
-    it("Reverts if ether does correspond to the number of deposits", async () => {
-      const deposits = 2n;
-      const depositValue = ether("32.0");
-      const correctAmount = deposits * depositValue;
-      const etherToSend = correctAmount + 1n;
+    it("Does not submit 0 deposits when no depositable ether", async () => {
+      // Set depositable ether to 0
+      await lidoMock.setDepositableEther(0n);
 
-      await expect(
-        stakingRouter.deposit(moduleId, "0x", {
-          value: etherToSend,
-        }),
-      ).to.be.revertedWithCustomError(stakingRouter, "DepositValueNotMultipleOfInitialDeposit");
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).not.to.emit(
+        depositContract,
+        "Deposited__MockEvent",
+      );
     });
 
-    it("Does not submit 0 deposits", async () => {
-      await expect(
-        stakingRouter.deposit(moduleId, "0x", {
-          value: 0,
-        }),
-      ).not.to.emit(depositContract, "Deposited__MockEvent");
+    it("Successfully deposits when depositable ether is available", async () => {
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.emit(
+        depositContract,
+        "Deposited__MockEvent",
+      );
     });
 
-    it("Doesn't Reverts if ether does correspond to the number of deposits", async () => {
-      const deposits = 2n;
-      const depositValue = ether("32.0");
-      const correctAmount = deposits * depositValue;
-
-      await expect(
-        stakingRouter.deposit(moduleId, "0x", {
-          value: correctAmount,
-        }),
-      ).to.emit(depositContract, "Deposited__MockEvent");
-    });
-
-    it("Doesn't Reverts if ether does correspond to the number of deposits for module type New", async () => {
+    it("Successfully deposits for module type 0x02 (New)", async () => {
       const stakingRouterAsAdmin = stakingRouter.connect(admin);
 
       const newStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
@@ -950,15 +954,26 @@ describe("StakingRouter.sol:module-sync", () => {
 
       const newModuleId = await stakingRouter.getStakingModulesCount();
 
-      const deposits = 2n;
-      const depositValue = ether("32.0");
-      const correctAmount = deposits * depositValue;
+      // Set up the new module with depositable validators
+      await newStakingModule.mock__getStakingModuleSummary(0n, 100n, 10n); // 10 depositable validators
 
-      await expect(
-        stakingRouter.deposit(newModuleId, "0x", {
-          value: correctAmount,
-        }),
-      ).to.emit(depositContract, "Deposited__MockEvent");
+      await expect(stakingRouter.connect(dsmSigner).deposit(newModuleId, "0x")).to.emit(
+        depositContract,
+        "Deposited__MockEvent",
+      );
+    });
+
+    it("Reverts if module returns pubkeys with invalid length (not divisible by 48)", async () => {
+      // Mock the module to return pubkeys with invalid length (47 bytes instead of 48)
+      const invalidPubkeys = hexlify(randomBytes(47)); // Not divisible by PUBKEY_LENGTH (48)
+      const signatures = hexlify(randomBytes(96)); // Valid signature length
+
+      await stakingModule.mock__obtainDepositData(invalidPubkeys, signatures);
+
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
+        stakingRouter,
+        "WrongPubkeysLength",
+      );
     });
   });
 });

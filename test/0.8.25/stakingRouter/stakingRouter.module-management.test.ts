@@ -21,6 +21,8 @@ describe("StakingRouter.sol:module-management", () => {
   let stakingRouterWithLib: StakingRouterWithLib;
 
   const withdrawalCredentials = hexlify(randomBytes(32));
+  const topUpGateway = certainAddress("test:staking-router:topUpGateway");
+  const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
   beforeEach(async () => {
     [deployer, admin, user] = await ethers.getSigners();
@@ -32,6 +34,8 @@ describe("StakingRouter.sol:module-management", () => {
       admin,
       certainAddress("test:staking-router-modules:lido"), // mock lido address
       withdrawalCredentials,
+      topUpGateway,
+      depositSecurityModule,
     );
 
     // grant roles

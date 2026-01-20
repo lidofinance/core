@@ -6,6 +6,16 @@ contract StakingRouter__MockForTopUpGateway {
     mapping(uint256 => bool) internal moduleExists;
     mapping(uint256 => bool) internal moduleIsActive;
 
+    event TopUpCalled(
+        uint256 stakingModuleId,
+        uint256[] keyIndices,
+        uint256[] operatorIds,
+        bytes pubkeysPacked,
+        uint256[] topUpLimitsGwei
+    );
+
+    uint256 public topUpCalls;
+
     function setWithdrawalCredentials(uint256 moduleId, bytes32 wc) external {
         withdrawalCredentials[moduleId] = wc;
         moduleExists[moduleId] = true;
@@ -27,5 +37,19 @@ contract StakingRouter__MockForTopUpGateway {
 
     function getStakingModuleIsActive(uint256 moduleId) external view returns (bool) {
         return moduleIsActive[moduleId];
+    }
+
+    function topUp(
+        uint256 _stakingModuleId,
+        uint256[] calldata _keyIndices,
+        uint256[] calldata _operatorIds,
+        bytes calldata _pubkeysPacked,
+        uint256[] calldata _topUpLimitsGwei
+    ) external {
+        unchecked {
+            ++topUpCalls;
+        }
+
+        emit TopUpCalled(_stakingModuleId, _keyIndices, _operatorIds, _pubkeysPacked, _topUpLimitsGwei);
     }
 }
