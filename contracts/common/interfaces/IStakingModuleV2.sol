@@ -6,16 +6,19 @@ pragma solidity >=0.8.9 <0.9.0;
 
 interface IStakingModuleV2 {
     // Top ups
-
-    /// @notice Method to get from module public keys for top up and amount that should be topped up. Module also verify that keys belong to module and revert if got worng data
-    /// @param depositAmount Deposit amount for top up
-    /// @param packedPubkeys Packed list of pubkeys
-    /// @param keyIndices List of keys' indices
-    /// @param operatorIds List of operator indices
-    /// @param topUpLimits List of amount of Eth that can be deposited to key based on Cl data and SR logic
+    /// @notice Validates provided keys and calculates deposit allocations for top-up
+    /// @dev Reverts if any key doesn't belong to the module or data is invalid
+    /// @param depositAmount Total ether amount available for top-up (must be multiple of 1 gwei)
+    /// @param pubkeys List of validator public keys to top up
+    /// @param keyIndices Indices of keys within their respective operators
+    /// @param operatorIds Node operator IDs that own the keys
+    /// @param topUpLimits Maximum amount that can be deposited per key based on Consensus Layer data and  SR internal logic.
+    /// @return publicKeys Validated list of public keys eligible for top-up
+    /// @return allocations Amount to deposit to each corresponding key
+    /// @dev Values depositAmount, topUpLimits, allocations are denominated in wei
     function obtainDepositData(
         uint256 depositAmount,
-        bytes calldata packedPubkeys,
+        bytes[] calldata pubkeys,
         uint256[] calldata keyIndices,
         uint256[] calldata operatorIds,
         uint256[] calldata topUpLimits 
@@ -23,6 +26,7 @@ interface IStakingModuleV2 {
         bytes[] memory publicKeys, 
         uint256[] memory allocations
     );
+    
     
 
     /// @notice Updates the effective balances for node operators

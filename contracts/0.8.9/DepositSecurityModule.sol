@@ -75,6 +75,7 @@ contract DepositSecurityModule {
     error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
     error ZeroParameter(string parameter);
+    error LidoCanNotDeposit();
 
     /// @notice Represents the code version to help distinguish contract interfaces.
     uint256 public constant VERSION = 3;
@@ -512,6 +513,7 @@ contract DepositSecurityModule {
 
         if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
         if (!STAKING_ROUTER.getStakingModuleIsActive(stakingModuleId)) revert DepositInactiveModule();
+        if (!LIDO.canDeposit()) revert LidoCanNotDeposit();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();

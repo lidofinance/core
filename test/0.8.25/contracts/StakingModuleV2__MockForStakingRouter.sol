@@ -248,10 +248,10 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
     // *** TOP-UP (used by topUp()) ***
     function obtainDepositData(
         uint256 _depositsValue,
-        bytes calldata _packedPubkeys,
+        bytes[] calldata _pubkeys,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        uint256[] calldata _topUpLimitsGwei
+        uint256[] calldata _topUpLimits
     ) external returns (bytes[] memory pubkeys, uint256[] memory topUpAmounts) {
         require(!shouldRevert__mocked, "Mock: revert requested");
 
@@ -270,26 +270,20 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
 
         uint256 keysCount = _keyIndices.length;
         require(
-            keysCount > 0 && keysCount == _operatorIds.length && keysCount == _topUpLimitsGwei.length,
+            keysCount > 0 &&
+                keysCount == _operatorIds.length &&
+                keysCount == _topUpLimits.length &&
+                keysCount == _pubkeys.length,
             "mock: invalid top up inputs"
         );
-
-        uint256 expectedPackedLen = keysCount * 48;
-        require(_packedPubkeys.length == expectedPackedLen, "mock: invalid packed pubkeys length");
 
         pubkeys = new bytes[](keysCount);
         topUpAmounts = new uint256[](keysCount);
 
         for (uint256 i = 0; i < keysCount; ++i) {
-            bytes memory pk = new bytes(48);
-            uint256 offset = i * 48;
-
-            for (uint256 j = 0; j < 48; ++j) {
-                pk[j] = _packedPubkeys[offset + j];
-            }
-
-            pubkeys[i] = pk;
-            topUpAmounts[i] = _topUpLimitsGwei[i];
+            require(_pubkeys[i].length == 48, "mock: invalid pubkey length");
+            pubkeys[i] = _pubkeys[i];
+            topUpAmounts[i] = _topUpLimits[i];
         }
     }
 

@@ -119,6 +119,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error EmptyKeysList();
     error WrongPubkeysLength();
     error TopUpAmountTooLow();
+    error AmountNotAlignedToGwei();
 
     /// @dev compatibility getters for constants removed in favor of SRLib
     // function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
@@ -778,15 +779,23 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         emit DepositableEthReceived(msg.value);
     }
 
+    /// @notice Method performs top-up calls to the official Deposit contract. Determines how much Lido buffered ether can be deposited
+    /// to the staking module, obtains keys from the staking module with exact allocation for each key, pulls ether from Lido,
+    /// and performs the top-up call.
+    /// @param _stakingModuleId Id of the staking module to be deposited.
+    /// @param _keyIndices List of keys' indices
+    /// @param _operatorIds List of operator indices
+    /// @param _pubkeys List of validator public keys to top up
+    /// @param _topUpLimits Maximum amount (in wei) that can be deposited per key based on CL data and TopUpGateway logic
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        bytes calldata _pubkeysPacked,
-        uint256[] calldata _topUpLimitsGwei
+        bytes[] calldata _pubkeys,
+        uint256[] calldata _topUpLimits
     ) external {
         if (_msgSender() != _getTopUpGateway()) revert AppAuthTopUpGatewayFailed();
-        _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimitsGwei, _pubkeysPacked);
+        _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimits, _pubkeys);
 
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
@@ -805,23 +814,25 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // to allow CSM queue cursor advancement.
         bytes[] memory publicKeys;
         uint256[] memory allocations;
+        uint256 truncatedToGwei = stakingModuleDepositableEthAmount - (stakingModuleDepositableEthAmount % 1 gwei);
         (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress).obtainDepositData(
-            stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei
+            truncatedToGwei, _pubkeys, _keyIndices, _operatorIds, _topUpLimits
         );
 
-        // Calculate total amount from allocations returned by module
-        uint256 totalAllocationsGwei;
+        // Calculate total amount from allocations returned by module (in wei)
+        uint256 amount;
         unchecked {
             for (uint256 i; i < allocations.length; ++i) {
-                if (allocations[i] != 0 && allocations[i] < MIN_DEPOSIT_IN_GWEI) {
+                if (allocations[i] != 0 && allocations[i] < 1 ether) {
                     revert TopUpAmountTooLow();
                 }
-                totalAllocationsGwei += allocations[i];
+
+                if (amount % 1 gwei != 0) {
+                    revert AmountNotAlignedToGwei();
+                }
+                amount += allocations[i];
             }
         }
-
-        // amount that will be requested from Lido
-        uint256 amount = totalAllocationsGwei * 1 gwei;
 
         // Verify sum of allocations does not exceed module's max deposit amount
         if (amount > stakingModuleDepositableEthAmount) {
@@ -851,8 +862,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function _validateTopUpInputs(
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        uint256[] calldata _topUpLimitsGwei,
-        bytes calldata _pubkeysPacked
+        uint256[] calldata _topUpLimits,
+        bytes[] calldata _pubkeys
     ) internal pure {
         uint256 n = _keyIndices.length;
 
@@ -860,12 +871,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             revert EmptyKeysList();
         }
 
-        if (_operatorIds.length != n || _topUpLimitsGwei.length != n) {
+        if (_operatorIds.length != n || _topUpLimits.length != n || _pubkeys.length != n) {
             revert WrongArrayLength();
         }
 
-        if (_pubkeysPacked.length != n * PUBKEY_LENGTH) {
-            revert WrongPubkeysLength();
+        for (uint256 i; i < n; ++i) {
+            if (_pubkeys[i].length != PUBKEY_LENGTH) {
+                revert WrongPubkeysLength();
+            }
         }
     }
 

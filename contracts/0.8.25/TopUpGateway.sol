@@ -5,10 +5,9 @@
 pragma solidity 0.8.25;
 
 import {
+    TopUpData,
     BeaconRootData,
-    ValidatorWitness,
-    BalanceWitness,
-    PendingWitness
+    ValidatorWitness
 } from "contracts/common/interfaces/TopUpWitness.sol";
 import {CLTopUpVerifier} from "./CLTopUpVerifier.sol";
 import {AccessControlEnumerableUpgradeable} from
@@ -29,8 +28,8 @@ interface IStakingRouter {
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        bytes calldata _pubkeysPacked,
-        uint256[] calldata _topUpLimitsGwei
+        bytes[] calldata _pubkeys,
+        uint256[] calldata _topUpLimits
     ) external;
 }
 
@@ -52,56 +51,38 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         uint64 maxValidatorsPerTopUp; // 64
         uint32 lastTopUpSlot; // 32
         uint32 lastTopUpBlock; // 32
-        uint8 minBlockDistance; // 8
+        uint16 minBlockDistance; // 16
+        uint16 maxRootAge; // 16
     }
 
     /// @dev Storage slot: keccak256(abi.encode(uint256(keccak256("lido.TopUpGateway.storage")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 internal constant GATEWAY_STORAGE_POSITION =
         0x22e512057841e2bc1e6d80030c8bb8b4935377af2e64ba9bf8e6a3e88fb32200;
 
-    uint256 internal constant BALANCE_THRESHOLD_GWEI = 2047 ether / 1 gwei;
+    uint256 internal constant BALANCE_THRESHOLD_GWEI = 2045 ether / 1 gwei;
     uint256 internal constant MAX_EFFECTIVE_BALANCE_02_GWEI = 2048 ether / 1 gwei;
+    uint256 internal constant HYSTERESIS_GWEI = 1.25 ether / 1 gwei;
+    uint256 internal constant MAX_BALANCE_AFTER_TOP_UP_GWEI = MAX_EFFECTIVE_BALANCE_02_GWEI - HYSTERESIS_GWEI;
     uint256 internal constant PUBKEY_LENGTH = 48;
-    uint256 internal constant MAX_ROOT_AGE = 5 minutes;
     uint256 internal constant FAR_FUTURE_EPOCH = type(uint64).max;
+    uint256 internal constant SLOTS_PER_EPOCH = 32;
 
     bytes32 public constant TOP_UP_ROLE = keccak256("TOP_UP_GATEWAY_TOP_UP_ROLE");
     bytes32 public constant MANAGE_LIMITS_ROLE = keccak256("TOP_UP_GATEWAY_MANAGE_LIMITS_ROLE");
-
-    struct TopUpData {
-        uint256 moduleId;
-        // list of validators pubkeys
-        // bytes[] pubkeys;
-        // key indexes and operator ids needed to verify key belong to module
-        uint256[] keyIndices;
-        uint256[] operatorIds;
-        uint256[] validatorIndices;
-        BeaconRootData beaconRootData;
-        ValidatorWitness[] validatorWitness;
-        BalanceWitness[] balanceWitness;
-        PendingWitness[][] pendingWitness;
-    }
 
     constructor(
         address _admin,
         address _lidoLocator,
         uint256 _maxValidatorsPerTopUp,
         uint256 _minBlockDistance,
+        uint256 _maxRootAgeSec,
         GIndex _gIFirstValidatorPrev,
         GIndex _gIFirstValidatorCurr,
-        GIndex _gIFirstBalancePrev,
-        GIndex _gIFirstBalanceCurr,
-        GIndex _gIFirstPendingPrev,
-        GIndex _gIFirstPendingCurr,
         uint64 _pivotSlot
     )
         CLTopUpVerifier(
             _gIFirstValidatorPrev,
             _gIFirstValidatorCurr,
-            _gIFirstBalancePrev,
-            _gIFirstBalanceCurr,
-            _gIFirstPendingPrev,
-            _gIFirstPendingCurr,
             _pivotSlot
         )
         initializer
@@ -112,26 +93,26 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         LOCATOR = ILidoLocator(_lidoLocator);
         _setMaxValidatorsPerTopUp(_maxValidatorsPerTopUp);
         _setMinBlockDistance(_minBlockDistance);
+        _setMaxRootAge(_maxRootAgeSec);
     }
 
     /**
-     * @notice Method verifying Merkle proofs on validators, actual balances and pending deposits on validators, making check of age of slot's proof
-     * and proceeding to top up validators via Lido.topUp(stakingModuleId, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei)
-     * @param topUps TopUpData structure, containing validators' container fields, actual balances and pending deposits
+     * @notice Method verifying Merkle proofs on validators, making check of age of slot's proof
+     * and proceeding to top up validators via StakingRouter.topUp(stakingModuleId, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei)
+     * @param _topUps TopUpData structure, containing validators' container fields, actual balances and pending deposits
      *  and Merkle proofs on inclusion of each container in Beacon State tree
      * @dev Amount of validators limited by maxValidatorsPerTopUp; Between topUp calls should pass minBlockDistance.
      *      Only callable by accounts with TOP_UP_ROLE.
      */
-    function topUp(TopUpData calldata topUps) external onlyRole(TOP_UP_ROLE) {
+    function topUp(TopUpData calldata _topUps) external onlyRole(TOP_UP_ROLE) {
         Storage storage $ = _gatewayStorage();
 
-        uint256 validatorsCount = topUps.validatorIndices.length;
+        uint256 validatorsCount = _topUps.validatorIndices.length;
         if (validatorsCount == 0) revert WrongArrayLength();
 
         if (
-            topUps.keyIndices.length != validatorsCount || topUps.operatorIds.length != validatorsCount
-                || topUps.validatorWitness.length != validatorsCount || topUps.balanceWitness.length != validatorsCount
-                || topUps.pendingWitness.length != validatorsCount
+            _topUps.keyIndices.length != validatorsCount || _topUps.operatorIds.length != validatorsCount
+                || _topUps.validatorWitness.length != validatorsCount
         ) {
             revert WrongArrayLength();
         }
@@ -139,7 +120,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         // Check for duplicate validatorIndices (O(n^2) acceptable since bounded by maxValidatorsPerTopUp)
         for (uint256 i; i < validatorsCount; ++i) {
             for (uint256 j = i + 1; j < validatorsCount; ++j) {
-                if (topUps.validatorIndices[i] == topUps.validatorIndices[j]) {
+                if (_topUps.validatorIndices[i] == _topUps.validatorIndices[j]) {
                     revert DuplicateValidatorIndex();
                 }
             }
@@ -150,81 +131,54 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
             revert MaxValidatorsPerTopUpExceeded();
         }
 
-        if ($.lastTopUpBlock != 0 && block.number - $.lastTopUpBlock < $.minBlockDistance) {
-            revert MinBlockDistanceNotMet();
-        }
+        _requireBlockDistancePassed();
 
         // Data checks
         // 0. slot should not be older than X from current slot, or timestamp
         // also should be newer than previous slot on X
-        _verifyRootAge(topUps.beaconRootData);
+        _verifyRootAge(_topUps.beaconRootData);
 
-        // Find withdrawalCredentials 0x02
-        bytes32 withdrawalCredentials =
-            IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleWithdrawalCredentials(topUps.moduleId);
+        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        // check 0x02 type
-        if (withdrawalCredentials.getType() != 2) {
-            revert WrongWithdrawalCredentials();
-        }
+        // Find and validate withdrawalCredentials 0x02
+        bytes32 withdrawalCredentials = stakingRouter.getStakingModuleWithdrawalCredentials(_topUps.moduleId);
+        _requireWithdrawalCredentials02(withdrawalCredentials);
 
-        bytes memory pubkeysPacked = new bytes(validatorsCount * PUBKEY_LENGTH);
+        bytes[] memory pubkeys = new bytes[](validatorsCount);
 
         uint256[] memory topUpLimits = new uint256[](validatorsCount);
 
-        // 1. actual balance should not be bigger than 2047 ether
+        // 1. effective balance + pending deposits should not be bigger than BALANCE_THRESHOLD_GWEI
         // 2. Verify proof data through CLValidatorProofVerifier
         unchecked {
             for (uint256 i; i < validatorsCount; ++i) {
-                BalanceWitness calldata bw = topUps.balanceWitness[i];
-
                 // For each validator
-                ValidatorWitness calldata vw = topUps.validatorWitness[i];
-                bytes calldata pubkey = vw.pubkey;
+                ValidatorWitness calldata vw = _topUps.validatorWitness[i];
 
                 if (vw.pubkey.length != PUBKEY_LENGTH) {
                     revert InvalidTopUpPubkeyLength();
                 }
 
-                _verifyValidatorWCActiveAndBalance(
-                    topUps.beaconRootData,
+                _verifyValidatorWasActivated(_topUps.beaconRootData.slot, vw);
+
+                _verifyValidator(
+                    _topUps.beaconRootData,
                     vw,
-                    topUps.balanceWitness[i],
-                    topUps.pendingWitness[i],
-                    topUps.validatorIndices[i],
+                    _topUps.validatorIndices[i],
                     withdrawalCredentials
                 );
 
-                assembly {
-                    let dest := add(add(pubkeysPacked, 0x20), mul(i, PUBKEY_LENGTH))
-                    calldatacopy(dest, pubkey.offset, PUBKEY_LENGTH)
-                }
+                pubkeys[i] = vw.pubkey;
 
                 // calculate top up limit accounting for current balance and pending deposits
-                topUpLimits[i] = _evaluateToUpLimit(vw, bw, topUps.pendingWitness[i]);
+                topUpLimits[i] = _evaluateTopUpLimit(vw, _topUps.pendingBalanceGwei[i]) * 1 gwei;
             }
         }
 
         // Proceed to StakingRouter
-        IStakingRouter(LOCATOR.stakingRouter()).topUp(topUps.moduleId, topUps.keyIndices, topUps.operatorIds, pubkeysPacked, topUpLimits);
+        IStakingRouter(stakingRouter).topUp(_topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits);
 
-        _setLastTopUpSlot(topUps.beaconRootData.slot);
-    }
-
-    /**
-     * @notice Returns the slot number of the last top up
-     * @return lastTopUpSlot The slot number of the last top up.
-     */
-    function getLastTopUpSlot() external view returns (uint256) {
-        return _gatewayStorage().lastTopUpSlot;
-    }
-
-    function maxValidatorsPerTopUp() public view returns (uint256) {
-        return _gatewayStorage().maxValidatorsPerTopUp;
-    }
-
-    function minBlockDistance() public view returns (uint256) {
-        return _gatewayStorage().minBlockDistance;
+        _setLastTopUpSlot(_topUps.beaconRootData.slot);
     }
 
     /**
@@ -237,81 +191,132 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         if (!stakingRouter.hasStakingModule(_stakingModuleId)) return false;
+        if (!stakingRouter.getStakingModuleIsActive(_stakingModuleId)) return false;
+        if (!ILido(LOCATOR.lido()).canDeposit()) return false;
+        if (!_isBlockDistancePassed()) return false;
 
-        bool isModuleActive = stakingRouter.getStakingModuleIsActive(_stakingModuleId);
-
-        Storage storage $ = _gatewayStorage();
-        bool isBlockDistancePassed = $.lastTopUpBlock == 0 || block.number - $.lastTopUpBlock >= $.minBlockDistance;
-
-        bool isLidoCanDeposit = ILido(LOCATOR.lido()).canDeposit();
-
-        // Check 0x02 type
         bytes32 wc = stakingRouter.getStakingModuleWithdrawalCredentials(_stakingModuleId);
-        bool isWC02 = wc.getType() == 2;
+        if (!_isWithdrawalCredentials02(wc)) return false;
 
-        return isModuleActive && isBlockDistancePassed && isLidoCanDeposit && isWC02;
+        return true;
     }
 
-    function setMaxValidatorsPerTopUp(uint256 newValue) external onlyRole(MANAGE_LIMITS_ROLE) {
-        _setMaxValidatorsPerTopUp(newValue);
+    /**
+     * @notice Returns the slot number of the last top up
+     * @return lastTopUpSlot The slot number of the last top up.
+     */
+    function getLastTopUpSlot() external view returns (uint256) {
+        return _gatewayStorage().lastTopUpSlot;
     }
 
-    function setMinBlockDistance(uint256 newValue) external onlyRole(MANAGE_LIMITS_ROLE) {
-        _setMinBlockDistance(newValue);
+    function getMaxValidatorsPerTopUp() public view returns (uint256) {
+        return _gatewayStorage().maxValidatorsPerTopUp;
     }
 
-    function _setLastTopUpSlot(uint256 newValue) internal {
+    function getMinBlockDistance() public view returns (uint256) {
+        return _gatewayStorage().minBlockDistance;
+    }
+
+    function getMaxRootAge() public view returns (uint256) {
+        return _gatewayStorage().maxRootAge;
+    }
+
+    function setMaxValidatorsPerTopUp(uint256 _newValue) external onlyRole(MANAGE_LIMITS_ROLE) {
+        _setMaxValidatorsPerTopUp(_newValue);
+    }
+
+    function setMinBlockDistance(uint256 _newValue) external onlyRole(MANAGE_LIMITS_ROLE) {
+        _setMinBlockDistance(_newValue);
+    }
+
+    /// @notice Sets the maximum allowed age of beacon root relative to current block timestamp
+    /// @param _newValue Maximum age in seconds
+    function setMaxRootAge(uint256 _newValue) external onlyRole(MANAGE_LIMITS_ROLE) {
+        _setMaxRootAge(_newValue);
+    }
+
+    function _isBlockDistancePassed() internal view returns (bool) {
         Storage storage $ = _gatewayStorage();
-        $.lastTopUpSlot = uint32(newValue);
-        $.lastTopUpBlock = uint32(block.number);
-        emit LastTopUpChanged(newValue);
+        return $.lastTopUpBlock == 0 || block.number - $.lastTopUpBlock >= $.minBlockDistance;
     }
 
-    function _verifyRootAge(BeaconRootData calldata beaconRootData) internal view {
-        if (block.timestamp > beaconRootData.childBlockTimestamp + MAX_ROOT_AGE) {
+    function _requireBlockDistancePassed() internal view {
+        if (!_isBlockDistancePassed()) {
+            revert MinBlockDistanceNotMet();
+        }
+    }
+
+    function _isWithdrawalCredentials02(bytes32 _wc) internal pure returns (bool) {
+        return _wc.getType() == 2;
+    }
+
+    function _requireWithdrawalCredentials02(bytes32 _wc) internal pure {
+        if (!_isWithdrawalCredentials02(_wc)) {
+            revert WrongWithdrawalCredentials();
+        }
+    }
+
+    function _setLastTopUpSlot(uint256 _newValue) internal {
+        Storage storage $ = _gatewayStorage();
+        $.lastTopUpSlot = uint32(_newValue);
+        $.lastTopUpBlock = uint32(block.number);
+        emit LastTopUpChanged(_newValue);
+    }
+
+    function _setMaxRootAge(uint256 _newValue) internal {
+        if (_newValue == 0) revert ZeroValue();
+        if (_newValue > type(uint16).max) revert TooLargeValue();
+        _gatewayStorage().maxRootAge = uint16(_newValue);
+        emit MaxRootAgeChanged(_newValue);
+    }
+
+    function _verifyRootAge(BeaconRootData calldata _beaconRootData) internal view {
+        if (block.timestamp > _beaconRootData.childBlockTimestamp + _gatewayStorage().maxRootAge) {
             revert RootIsTooOld();
         }
 
-        if (beaconRootData.slot <= _gatewayStorage().lastTopUpSlot) revert SlotNotIncreasing();
+        if (_beaconRootData.slot <= _gatewayStorage().lastTopUpSlot) revert SlotNotIncreasing();
     }
 
-    function _evaluateToUpLimit(
-        ValidatorWitness calldata validator,
-        BalanceWitness calldata balance,
-        PendingWitness[] calldata pendingDeposits
-    ) internal pure returns (uint64) {
+    function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata _w) internal pure {
+        // header slot epoch
+        uint64 epoch = uint64(_slot / SLOTS_PER_EPOCH);
+        // Validator should be activated earlier than current epoch
+        if (_w.activationEpoch >= epoch) revert ValidatorIsNotActivated();
+    }
+
+    function _evaluateTopUpLimit(
+        ValidatorWitness calldata _validator,
+        uint256 _pendingBalanceGwei
+    ) internal pure returns (uint256) {
         if (
-            validator.exitEpoch != FAR_FUTURE_EPOCH || validator.slashed
-                || validator.withdrawableEpoch != FAR_FUTURE_EPOCH
+            _validator.exitEpoch != FAR_FUTURE_EPOCH || _validator.slashed
+                || _validator.withdrawableEpoch != FAR_FUTURE_EPOCH
         ) {
             return 0;
         }
 
-        // Sum all pending deposits for this validator
-        uint256 totalPendingGwei = 0;
-        for (uint256 i = 0; i < pendingDeposits.length; ++i) {
-            totalPendingGwei += pendingDeposits[i].amount;
-        }
-
         // Top-up limit = MAX_EFFECTIVE_BALANCE - current_balance - pending_deposits
-        uint256 currentTotal = balance.balanceGwei + totalPendingGwei;
+        uint256 currentTotal = _validator.effectiveBalance + _pendingBalanceGwei;
         if (currentTotal > BALANCE_THRESHOLD_GWEI) {
             return 0;
         }
 
-        return uint64(MAX_EFFECTIVE_BALANCE_02_GWEI - currentTotal);
+        return MAX_BALANCE_AFTER_TOP_UP_GWEI - currentTotal;
     }
 
-    function _setMaxValidatorsPerTopUp(uint256 newValue) internal {
-        if (newValue == 0) revert ZeroValue();
-        _gatewayStorage().maxValidatorsPerTopUp = uint64(newValue);
-        emit MaxValidatorsPerReportChanged(newValue);
+    function _setMaxValidatorsPerTopUp(uint256 _newValue) internal {
+        if (_newValue == 0) revert ZeroValue();
+        if (_newValue > type(uint64).max) revert TooLargeValue();
+        _gatewayStorage().maxValidatorsPerTopUp = uint64(_newValue);
+        emit MaxValidatorsPerTopUpChanged(_newValue);
     }
 
-    function _setMinBlockDistance(uint256 newValue) internal {
-        if (newValue == 0) revert ZeroValue();
-        _gatewayStorage().minBlockDistance = uint8(newValue);
-        emit MinBlockDistanceChanged(newValue);
+    function _setMinBlockDistance(uint256 _newValue) internal {
+        if (_newValue == 0) revert ZeroValue();
+        if (_newValue > type(uint16).max) revert TooLargeValue();
+        _gatewayStorage().minBlockDistance = uint16(_newValue);
+        emit MinBlockDistanceChanged(_newValue);
     }
 
     function _gatewayStorage() internal pure returns (Storage storage $) {
@@ -321,11 +326,13 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         }
     }
 
-    event MaxValidatorsPerReportChanged(uint256 newValue);
+    event MaxValidatorsPerTopUpChanged(uint256 newValue);
     event MinBlockDistanceChanged(uint256 newValue);
     event LastTopUpChanged(uint256 newValue);
+    event MaxRootAgeChanged(uint256 newValue);
 
     error ZeroValue();
+    error TooLargeValue();
     error RootIsTooOld();
     error SlotNotIncreasing();
     error WrongArrayLength();
@@ -334,4 +341,5 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     error InvalidTopUpPubkeyLength();
     error MinBlockDistanceNotMet();
     error DuplicateValidatorIndex();
+    error ValidatorIsNotActivated();
 }

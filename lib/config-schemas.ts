@@ -90,12 +90,9 @@ const ConsolidationGatewaySchema = z.object({
 const TopUpGatewaySchema = z.object({
   maxValidatorsPerTopUp: PositiveIntSchema,
   minBlockDistance: PositiveIntSchema,
+  maxRootAge: PositiveIntSchema,
   gIFirstValidatorPrev: HexStringSchema,
   gIFirstValidatorCurr: HexStringSchema,
-  gIFirstBalancePrev: HexStringSchema,
-  gIFirstBalanceCurr: HexStringSchema,
-  gIFirstPendingPrev: HexStringSchema,
-  gIFirstPendingCurr: HexStringSchema,
   pivotSlot: NonNegativeIntSchema,
 });
 // Easy track schema

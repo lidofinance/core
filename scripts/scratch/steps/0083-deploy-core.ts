@@ -201,12 +201,9 @@ export async function main() {
     locator.address,
     topUpGatewayParams.maxValidatorsPerTopUp,
     topUpGatewayParams.minBlockDistance,
+    topUpGatewayParams.maxRootAge,
     topUpGatewayParams.gIFirstValidatorPrev,
     topUpGatewayParams.gIFirstValidatorCurr,
-    topUpGatewayParams.gIFirstBalancePrev,
-    topUpGatewayParams.gIFirstBalanceCurr,
-    topUpGatewayParams.gIFirstPendingPrev,
-    topUpGatewayParams.gIFirstPendingCurr,
     topUpGatewayParams.pivotSlot,
   ]);
 

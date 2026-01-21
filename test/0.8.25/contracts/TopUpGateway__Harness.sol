@@ -3,12 +3,7 @@ pragma solidity 0.8.25;
 
 import {TopUpGateway} from "contracts/0.8.25/TopUpGateway.sol";
 import {GIndex} from "contracts/common/lib/GIndex.sol";
-import {
-    BeaconRootData,
-    ValidatorWitness,
-    BalanceWitness,
-    PendingWitness
-} from "contracts/common/interfaces/TopUpWitness.sol";
+import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
 
 contract TopUpGateway__Harness is TopUpGateway {
     constructor(
@@ -16,12 +11,9 @@ contract TopUpGateway__Harness is TopUpGateway {
         address _lidoLocator,
         uint256 _maxValidatorsPerTopUp,
         uint256 _minBlockDistance,
+        uint256 _maxRootAge,
         GIndex _gIFirstValidatorPrev,
         GIndex _gIFirstValidatorCurr,
-        GIndex _gIFirstBalancePrev,
-        GIndex _gIFirstBalanceCurr,
-        GIndex _gIFirstPendingPrev,
-        GIndex _gIFirstPendingCurr,
         uint64 _pivotSlot
     )
         TopUpGateway(
@@ -29,12 +21,9 @@ contract TopUpGateway__Harness is TopUpGateway {
             _lidoLocator,
             _maxValidatorsPerTopUp,
             _minBlockDistance,
+            _maxRootAge,
             _gIFirstValidatorPrev,
             _gIFirstValidatorCurr,
-            _gIFirstBalancePrev,
-            _gIFirstBalanceCurr,
-            _gIFirstPendingPrev,
-            _gIFirstPendingCurr,
             _pivotSlot
         )
     {}
@@ -52,22 +41,20 @@ contract TopUpGateway__Harness is TopUpGateway {
     }
 
     function harness_getMaxValidatorsPerTopUp() external view returns (uint256) {
-        return maxValidatorsPerTopUp();
+        return getMaxValidatorsPerTopUp();
     }
 
     function harness_getMinBlockDistance() external view returns (uint256) {
-        return minBlockDistance();
+        return getMinBlockDistance();
     }
 
     function harness_getLocator() external view returns (address) {
         return address(LOCATOR);
     }
 
-    function _verifyValidatorWCActiveAndBalance(
+    function _verifyValidator(
         BeaconRootData calldata,
         ValidatorWitness calldata,
-        BalanceWitness calldata,
-        PendingWitness[] calldata,
         uint256,
         bytes32
     ) internal view override {
