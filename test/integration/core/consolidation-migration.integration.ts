@@ -698,13 +698,5 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
         .to.be.revertedWithCustomError(consolidationMigrator, "ArraysLengthMismatch")
         .withArgs(2, 1);
     });
-
-    // Note: ConsolidationBus.EmptyBatch and ArraysLengthMismatch are checked in addConsolidationRequests,
-    // not in executeConsolidation. When going through Migrator flow, Migrator validates first.
-    // These validations are covered by unit tests for direct Bus API.
-
-    // Note: ConsolidationBus.SourceEqualsTarget cannot occur in the Migrator flow because
-    // source and target operators are different, so their pubkeys are always different.
-    // This validation is covered by unit tests for direct Bus API.
   });
 });
