@@ -26,6 +26,7 @@ contract SSZValidatorsAndBalancesMerkleTree is SSZBLSHelpers {
     uint256 public immutable PENDING_DEPOSITS_BASE_INDEX;
 
     mapping(uint256 => bytes32) public nodes;
+    mapping(uint256 => bytes32) public balanceChunks;
 
     struct PendingDeposit {
         bytes pubkey; // 0x00, offset(pubkey)
@@ -62,11 +63,37 @@ contract SSZValidatorsAndBalancesMerkleTree is SSZBLSHelpers {
     /// @param balanceGwei The leaf value
     function addBalancesLeaf(uint64 balanceGwei) public returns (uint256) {
         require(balancesLeafCount < (1 << VALIDATORS_BALANCES_DEPTH), "Balances tree is full");
-        bytes32 leaf = SSZ.toLittleEndian(balanceGwei);
 
-        uint256 gi = BALANCES_BASE_INDEX + balancesLeafCount;
-        nodes[gi] = leaf;
+        uint256 validatorIndex = balancesLeafCount;
+        uint256 chunkIndex;
+        uint256 positionInChunk;
+        bytes32 newChunk;
+        uint256 gi;
+        uint256 balanceBaseIndex = BALANCES_BASE_INDEX;
+
+        assembly {
+            chunkIndex := shr(2, validatorIndex)
+            positionInChunk := and(validatorIndex, 3)
+            let shift := shl(6, positionInChunk)
+            let mask := not(shl(shift, 0xFFFFFFFFFFFFFFFF))
+            let newValue := shl(shift, balanceGwei)
+
+            mstore(0x00, chunkIndex)
+            mstore(0x20, 1) // slot of balanceChunks
+
+            let storageSlot := keccak256(0x00, 0x40)
+            let currentChunk := sload(storageSlot)
+        
+            newChunk := or(and(currentChunk, mask), newValue)
+            sstore(storageSlot, newChunk)
+
+            gi := add(balanceBaseIndex, chunkIndex)
+        }
+
         balancesLeafCount++;
+
+        nodes[gi] = newChunk;
+        
         _updateTree(gi); // Update the Merkle tree structure
 
         return gi;

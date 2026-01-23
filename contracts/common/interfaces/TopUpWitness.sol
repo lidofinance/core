@@ -40,7 +40,14 @@ struct ValidatorWitness {
 struct BalanceWitness {
     // Merkle path: balances[i] → … → state_root → beacon_block_root
     bytes32[] proofBalance;
+    // leaf of balances merkalized object
+    // chunk_count(type)
+    // List[B, N] and Vector[B, N], where B is a basic type: (N * size_of(B) + 31) // 32 (dividing by chunk size, rounding up)
+    // example, number of validators = 8: (N * 8 + 31) // 32 -> (8 * 8 + 31 ) // 32 = 2. 2 - number of chunks
+    // 8 - number of elements, 4 elements per chunk 
+    bytes32 packedBalances;    
     // balances[i] value
+    // balanceGwei is a part of packedBalances leaf
     uint64 balanceGwei;
 }
 

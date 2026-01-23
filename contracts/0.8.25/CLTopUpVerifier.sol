@@ -19,6 +19,7 @@ abstract contract CLTopUpVerifier {
     // BeaconBlockHeader: state_root field gindex
     uint8 private constant STATE_ROOT_DEPTH = 3;
     uint256 private constant STATE_ROOT_POSITION = 3;
+    uint256 private constant BALANCES_PER_CHUNK = 4;
     GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, STATE_ROOT_DEPTH);
 
     // Position (from the end) of parent(slot, proposerIndex) node inside concatenated proof
@@ -46,6 +47,7 @@ abstract contract CLTopUpVerifier {
     error RootNotFound();
     error NotActiveValidator();
     error InvalidSignLength();
+    error BalanceMismatch();
 
     constructor(
         GIndex _gIFirstValidatorPrev,
@@ -86,9 +88,11 @@ abstract contract CLTopUpVerifier {
         SSZ.verifyProof({proof: vw.proofValidator, root: parentBlockRoot, leaf: validatorLeaf, gI: gIndexValidator});
 
         // balances[i] branch
-        GIndex gIndexBalance = concat(GI_STATE_ROOT, _getBalanceGI(validatorIndex, beaconRootData.slot));
-        bytes32 balanceLeaf = SSZ.toLittleEndian(bw.balanceGwei); // uint64 → 32B LE
-        SSZ.verifyProof({proof: bw.proofBalance, root: parentBlockRoot, leaf: balanceLeaf, gI: gIndexBalance});
+        _verifyBalance(parentBlockRoot, validatorIndex, bw, beaconRootData.slot);
+
+        // GIndex gIndexBalance = concat(GI_STATE_ROOT, _getBalanceGI(validatorIndex, beaconRootData.slot));
+        // bytes32 balanceLeaf = SSZ.toLittleEndian(bw.balanceGwei); // uint64 → 32B LE
+        // SSZ.verifyProof({proof: bw.proofBalance, root: parentBlockRoot, leaf: balanceLeaf, gI: gIndexBalance});
 
         uint256 pendingCount = pw.length;
         for (uint256 i; i < pendingCount; ++i) {
@@ -227,6 +231,33 @@ abstract contract CLTopUpVerifier {
         uint64 epoch = uint64(slot / SLOTS_PER_EPOCH);
         // Validator should be activated earlier than current epoch
         if (w.activationEpoch >= epoch) revert ValidatorIsNotActivated();
+    }
+
+    function _verifyBalance(bytes32 root, uint256 validatorIndex, BalanceWitness calldata bw, uint64 slot) internal view {
+        uint256 chunkIndex = validatorIndex / BALANCES_PER_CHUNK;
+        GIndex gIndexBalance = concat(GI_STATE_ROOT, _getBalanceGI(chunkIndex, slot));
+        SSZ.verifyProof({
+            proof: bw.proofBalance,
+            root: root,
+            leaf: bw.packedBalances,
+            gI: gIndexBalance
+        });
+
+        // need to check balance is part of bw.packedBalances
+        uint256 positionInChunk = validatorIndex % BALANCES_PER_CHUNK;
+        uint64 extractedBalance = _extractBalanceFromChunk(bw.packedBalances, positionInChunk);
+        
+        if (extractedBalance != bw.balanceGwei) {
+            revert BalanceMismatch();
+        }
+    }
+
+     function _extractBalanceFromChunk(
+        bytes32 chunk, 
+        uint256 position
+    ) internal pure returns (uint64) {
+        uint256 shift = position * 64;
+        return uint64(uint256(chunk) >> shift);
     }
 
     /// @dev GIndex for Validator[i] given slot (fork-aware).
