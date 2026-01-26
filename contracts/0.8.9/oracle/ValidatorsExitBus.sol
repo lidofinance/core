@@ -76,6 +76,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     error InvalidRequestsDataSortOrder();
 
     /**
+     * @notice Thrown when provided public key does not match the registered signing key
+     */
+    error InvalidPublicKey();
+
+    /**
      * Thrown when there are attempt to send exit events for request that was not submitted earlier by trusted entities
      */
     error ExitHashNotSubmitted();
@@ -238,11 +243,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    INodeOperatorsRegistry public immutable nodeOperatorsRegistry;
+    INodeOperatorsRegistry public immutable NODE_OPERATORS_REGISTRY;
 
     constructor(address lidoLocator, address _nodeOperatorsRegistry) {
         LOCATOR = ILidoLocator(lidoLocator);
-        nodeOperatorsRegistry = INodeOperatorsRegistry(_nodeOperatorsRegistry);
+        NODE_OPERATORS_REGISTRY = INodeOperatorsRegistry(_nodeOperatorsRegistry);
     }
 
     /**
@@ -837,12 +842,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             // Check key
             // Fetch the registered signing key for this operator and pubkey index 0
-            (bytes memory key, , ) = nodeOperatorsRegistry.getSigningKey(
+            (bytes memory key, , ) = NODE_OPERATORS_REGISTRY.getSigningKey(
                 nodeOpId,
                 0
             );
             // Compare the keccak256 hash of the provided public key with the keccak256 hash of the signing key
-            require(keccak256(key) == keccak256(pubkey), "Invalid pubkey");
+            if (keccak256(key) != keccak256(pubkey)) {
+                revert InvalidPublicKey();
+            }
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
@@ -907,12 +914,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             // Check key using the provided keyIndex
             // Fetch the registered signing key for this operator at the specified key index
-            (bytes memory key, , ) = nodeOperatorsRegistry.getSigningKey(
+            (bytes memory key, , ) = NODE_OPERATORS_REGISTRY.getSigningKey(
                 nodeOpId,
                 keyIndex
             );
             // Compare the keccak256 hash of the provided public key with the keccak256 hash of the signing key
-            require(keccak256(key) == keccak256(pubkey), "Invalid pubkey");
+            if (keccak256(key) != keccak256(pubkey)) {
+                revert InvalidPublicKey();
+            }
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
