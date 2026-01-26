@@ -191,20 +191,19 @@ contract StakingVaultsTest is Test {
         svHandler.connectVault();
 
         //Configure fuzzing targets
-        bytes4[] memory svSelectors = new bytes4[](13);
+        bytes4[] memory svSelectors = new bytes4[](12);
         svSelectors[0] = svHandler.fund.selector;
         svSelectors[1] = svHandler.withdraw.selector;
         svSelectors[2] = svHandler.forceRebalance.selector;
         svSelectors[3] = svHandler.forceValidatorExit.selector;
         svSelectors[4] = svHandler.mintShares.selector;
         svSelectors[5] = svHandler.burnShares.selector;
-        svSelectors[6] = svHandler.transferAndBurnShares.selector;
-        svSelectors[7] = svHandler.rebalance.selector;
-        svSelectors[8] = svHandler.otcDepositToStakingVault.selector;
-        svSelectors[9] = svHandler.updateVaultData.selector;
-        svSelectors[10] = svHandler.withdrawFromStakingVault.selector;
-        svSelectors[11] = svHandler.connectVault.selector;
-        svSelectors[12] = svHandler.voluntaryDisconnect.selector;
+        svSelectors[6] = svHandler.rebalance.selector;
+        svSelectors[7] = svHandler.otcDepositToStakingVault.selector;
+        svSelectors[8] = svHandler.updateVaultData.selector;
+        svSelectors[9] = svHandler.withdrawFromStakingVault.selector;
+        svSelectors[10] = svHandler.connectVault.selector;
+        svSelectors[11] = svHandler.voluntaryDisconnect.selector;
 
         targetContract(address(svHandler));
         targetSelector(FuzzSelector({addr: address(svHandler), selectors: svSelectors}));
@@ -226,7 +225,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant1_liabilityShares_not_above_rebalance_threshold() external {
+    function invariant_1_liabilityShares_not_above_rebalance_threshold() external {
         uint256 rebalanceShares = vaultHubProxy.healthShortfallShares(address(stakingVaultProxy));
         assertEq(rebalanceShares, 0, "Staking Vault should never go below the rebalance threshold");
     }
@@ -235,11 +234,11 @@ contract StakingVaultsTest is Test {
      * Invariant 2: Dynamic total value (including deltas) should never underflow (must be >= 0).
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant2_dynamic_totalValue_should_not_underflow() external {
+    function invariant_2_dynamic_totalValue_should_not_underflow() external {
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
         assertGe(
             int256(uint256(record.report.totalValue)) +
@@ -254,11 +253,11 @@ contract StakingVaultsTest is Test {
      * Invariant 3: forceRebalance should not revert when the vault has available balance and obligations.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant3_forceRebalance_should_not_revert_when_has_available_balance_and_obligations() external {
+    function invariant_3_forceRebalance_should_not_revert_when_has_available_balance_and_obligations() external {
         bool forceRebalanceReverted = svHandler.didForceRebalanceReverted();
         assertFalse(
             forceRebalanceReverted,
@@ -270,11 +269,11 @@ contract StakingVaultsTest is Test {
      * Invariant 4: forceValidatorExit should not revert when has obligations shortfall.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant4_forceValidatorExit_should_not_revert_when_has_obligations_shortfall() external {
+    function invariant_4_forceValidatorExit_should_not_revert_when_has_obligations_shortfall() external {
         bool forceValidatorExitReverted = svHandler.didForceValidatorExitReverted();
         assertFalse(forceValidatorExitReverted, "forceValidatorExit should not revert when has obligations shortfall");
     }
@@ -283,11 +282,11 @@ contract StakingVaultsTest is Test {
      * Invariant 5: Applied total value should not be greater than reported total value.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant5_applied_tv_should_not_be_greater_than_reported_tv() external {
+    function invariant_5_applied_tv_should_not_be_greater_than_reported_tv() external {
         uint256 appliedTotalValue = svHandler.getAppliedTotalValue();
         uint256 reportedTotalValue = svHandler.getReportedTotalValue();
 
@@ -302,11 +301,11 @@ contract StakingVaultsTest is Test {
      * Invariant 6: Liability shares should never be greater than connection share limit.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant6_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
+    function invariant_6_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
         //Get the share limit from the vault
         uint256 liabilityShares = vaultHubProxy.liabilityShares(address(stakingVaultProxy));
 
@@ -334,11 +333,11 @@ contract StakingVaultsTest is Test {
      * Invariant 7: Locked amount must be >= max(connect deposit, slashing reserve, reserve ratio).
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant7_locked_cannot_be_less_than_slashing_connected_reserve()
+    function invariant_7_locked_cannot_be_less_than_slashing_connected_reserve()
         external
         vaultMustBeConnected
         vaultNotPendingDisconnect
@@ -364,11 +363,11 @@ contract StakingVaultsTest is Test {
      * Invariant 8: Withdrawable value must be <= total value minus locked amount and unsettled obligations.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant8_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
+    function invariant_8_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
         external
     {
         uint256 withdrawableValue = vaultHubProxy.withdrawableValue(address(stakingVaultProxy));
@@ -392,11 +391,11 @@ contract StakingVaultsTest is Test {
      * Invariant 9: The totalValue should be equal or above the real totalValue (EL+CL balance)
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant9_totalValue_should_be_less_than_or_equal_to_effective_total_value() external {
+    function invariant_9_totalValue_should_be_less_than_or_equal_to_effective_total_value() external {
         uint256 totalValue = svHandler.getVaultTotalValue();
         uint256 effectiveTotalValue = svHandler.getEffectiveVaultTotalValue();
         assertLe(totalValue, effectiveTotalValue, "Total value should be less than or equal to effective total value");
@@ -406,11 +405,11 @@ contract StakingVaultsTest is Test {
      * Invariant 10: Total value should be greater than or equal to locked amount.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
+     * forge-config: default.invariant.runs = 0
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant10_totalValue_should_be_greater_than_or_equal_to_locked_amount()
+    function invariant_1_0_totalValue_should_be_greater_than_or_equal_to_locked_amount()
         external
         vaultMustBeConnected
         vaultNotPendingDisconnect

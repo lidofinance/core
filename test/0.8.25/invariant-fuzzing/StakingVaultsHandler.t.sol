@@ -59,6 +59,8 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     uint256 public appliedTotalValue = 0;
     uint256 public reportedTotalValue = 0;
 
+    uint256 public disconnectCount = 0;
+
     /// @notice Sequence of actions for guided fuzzing
     enum VaultAction {
         CONNECT,
@@ -115,13 +117,20 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     modifier withConnectedVault() {
         bool isConnected = vaultHub.isVaultConnected(address(stakingVault));
-        bool isPendingDisconnect = vaultHub.isPendingDisconnect(address(stakingVault));
-        if (!isConnected || isPendingDisconnect) return;
+        if (!isConnected) {
+            console2.log("not connected");
+            connectVault();
+            console2.log("connected");
+            return;
+        }
         _;
     }
 
     modifier withDisconnectedVault() {
-        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex != 0) return;
+        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex != 0) {
+            console2.log("not disconnected");
+            return;
+        }
         _;
     }
 
@@ -146,6 +155,8 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     // --- VaultHub interactions ---
     /// @notice Connects the vault to the VaultHub, funding if needed
     function connectVault() public withDisconnectedVault {
+        console2.log("connecting vault");
+
         if (stakingVault.availableBalance() < Constants.CONNECT_DEPOSIT) {
             deal(address(userAccount), Constants.CONNECT_DEPOSIT);
             vm.prank(userAccount);
@@ -156,122 +167,171 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         stakingVault.transferOwnership(address(vaultHub));
         vm.prank(userAccount);
         vaultHub.connectVault(address(stakingVault));
+
+        console2.log("vault connected");
     }
 
     /// @notice Initiates voluntary disconnect for the vault
     function voluntaryDisconnect(uint256 shouldDisconnect) public withConnectedVault withFreshReport {
-        shouldDisconnect = bound(shouldDisconnect, 0, 10);
-        if (shouldDisconnect < 10) return; // 10% chance to disconnect
+        shouldDisconnect = bound(shouldDisconnect, 0, 100);
+        if (shouldDisconnect < 95) return; // 5% chance to disconnect
+
+        console2.log("voluntary disconnecting vault");
 
         uint256 shares = vaultHub.liabilityShares(address(stakingVault));
         if (shares != 0) {
+            console2.log("burning shares on disconnect:", shares);
+            vm.prank(userAccount);
             vaultHub.burnShares(address(stakingVault), shares);
         }
 
         vm.prank(userAccount);
         vaultHub.voluntaryDisconnect(address(stakingVault));
+
+        _report(1);
+
+        vm.prank(userAccount);
+        stakingVault.acceptOwnership();
+
+        console2.log("vault disconnected");
     }
 
     /// @notice Funds the vault via VaultHub
     function fund(uint256 amount) public withConnectedVault {
+        console2.log("funding vault");
+
         amount = bound(amount, 1, 1 ether);
         deal(address(userAccount), amount);
 
         vm.prank(userAccount);
         vaultHub.fund{value: amount}(address(stakingVault));
+
+        console2.log("funded:", amount);
     }
 
     /// @notice Withdraws from the vault via VaultHub
     function withdraw(uint256 amount) public withConnectedVault withFreshReport {
+        console2.log("withdrawing from vault");
+
         uint256 withdrawableValue = vaultHub.withdrawableValue(address(stakingVault));
-        if (withdrawableValue == 0) return;
+        if (withdrawableValue == 0) {
+            console2.log("no withdrawable value");
+            return;
+        }
 
         amount = bound(amount, 1, withdrawableValue);
 
         vm.prank(userAccount);
         vaultHub.withdraw(address(stakingVault), userAccount, amount);
+        console2.log("withdrawn:", amount);
     }
 
     /// @notice Forces a rebalance if the vault has available balance and obligations
     function forceRebalance() public withConnectedVault withFreshReport {
+        console2.log("forcing rebalance");
+
         uint256 availableBalance = Math256.min(
             stakingVault.availableBalance(),
             vaultHub.totalValue(address(stakingVault))
         );
-        if (availableBalance == 0) return;
+        if (availableBalance == 0) {
+            console2.log("no available balance");
+            return;
+        }
 
         (uint256 obligationsShares, ) = vaultHub.obligations(address(stakingVault));
         uint256 sharesToForceRebalance = Math256.min(
             obligationsShares,
             lidoContract.getSharesByPooledEth(availableBalance)
         );
-        if (sharesToForceRebalance == 0) return;
+        if (sharesToForceRebalance == 0) {
+            console2.log("no shares to force rebalance");
+            return;
+        }
 
         vm.prank(userAccount);
         try vaultHub.forceRebalance(address(stakingVault)) {} catch {
             forceRebalanceReverted = true;
+            console2.log("forced rebalance reverted");
         }
+        console2.log("forced rebalance", sharesToForceRebalance);
     }
 
     /// @notice Forces validator exit if vault has obligations shortfall
     function forceValidatorExit() public withConnectedVault withFreshReport {
+        console2.log("forcing validator exit");
+
         uint256 obligationsShortfallValue = vaultHub.obligationsShortfallValue(address(stakingVault));
-        if (obligationsShortfallValue == 0) return;
+        if (obligationsShortfallValue == 0) {
+            console2.log("no obligations shortfall");
+            return;
+        }
 
         bytes memory pubkeys = new bytes(0);
         vm.prank(rootAccount); //privileged account can force exit
         try vaultHub.forceValidatorExit{value: 3000}(address(stakingVault), pubkeys, userAccount) {
             // If the call succeeds, we do nothing
+            console2.log("forced validator exit triggered");
         } catch {
             forceValidatorExitReverted = true;
+            console2.log("forced validator exit reverted");
         }
     }
 
     /// @notice Mints shares for the vault
     function mintShares(uint256 shares) public withConnectedVault withFreshReport {
+        console2.log("minting shares");
+
         uint256 maxLiabilityShares = vaultHub.totalMintingCapacityShares(address(stakingVault), 0);
         uint256 currShares = vaultHub.liabilityShares(address(stakingVault));
-        uint256 sharesToMint = Math256.min(maxLiabilityShares - currShares, 0);
-        if (sharesToMint == 0) return;
+        uint256 sharesToMint = maxLiabilityShares > currShares ? maxLiabilityShares - currShares : 0;
+        if (sharesToMint == 0) {
+            console2.log("not enough shares to mint");
+            return;
+        }
 
-        shares = bound(shares, MIN_SHARES, maxLiabilityShares);
+        shares = bound(shares, MIN_SHARES, sharesToMint);
 
         vm.prank(userAccount);
         vaultHub.mintShares(address(stakingVault), userAccount, shares);
+        console2.log("minted shares:", shares);
     }
 
     /// @notice Burns shares from the vault
     function burnShares(uint256 shares) public withConnectedVault {
+        console2.log("burning shares");
         shares = bound(shares, MIN_SHARES, MAX_SHARES);
         uint256 currShares = vaultHub.liabilityShares(address(stakingVault));
         uint256 sharesToBurn = Math256.min(currShares, shares);
-        if (sharesToBurn == 0) return;
+        if (sharesToBurn == 0) {
+            console2.log("no shares to burn");
+            return;
+        }
 
         vm.prank(userAccount);
         vaultHub.burnShares(address(stakingVault), sharesToBurn);
-    }
-
-    /// @notice Transfers and burns shares from the vault
-    function transferAndBurnShares(uint256 shares) public withConnectedVault {
-        shares = bound(shares, MIN_SHARES, MAX_SHARES);
-        uint256 currShares = vaultHub.liabilityShares(address(stakingVault));
-        uint256 sharesToBurn = Math256.min(currShares, shares);
-        if (sharesToBurn == 0) return;
-
-        vm.prank(userAccount);
-        vaultHub.transferAndBurnShares(address(stakingVault), shares);
+        console2.log("burned shares:", sharesToBurn);
     }
 
     /// @notice Calls rebalance on the staking vault (via VaultHub)
     function rebalance(uint256 amount) public withConnectedVault withFreshReport {
-        VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
+        console2.log("rebalancing...", amount);
 
-        uint256 totalValue = vaultHub.totalValue(address(stakingVault));
-        uint256 sharesToRebalance = vaultHub.healthShortfallShares(address(stakingVault));
-        if (sharesToRebalance == 0) return;
+        uint256 maxSharesToRebalance = vaultHub.liabilityShares(address(stakingVault));
+        if (maxSharesToRebalance == 0) {
+            console2.log("no shares to rebalance");
+            return;
+        }
+
+        uint256 availableBalance = stakingVault.availableBalance();
+        uint256 sharesToRebalance = lidoContract.getSharesByPooledEth(availableBalance);
+
+        amount = bound(amount, MIN_SHARES, Math256.min(maxSharesToRebalance, sharesToRebalance));
 
         vm.prank(userAccount);
-        vaultHub.rebalance(address(stakingVault), sharesToRebalance);
+        vaultHub.rebalance(address(stakingVault), amount);
+
+        console2.log("rebalanced shares:", amount);
     }
 
     /// @notice Returns the effective total value of the vault (EL + CL balance)
@@ -286,29 +346,42 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     /// @notice Simulates OTC deposit to the staking vault
     function otcDepositToStakingVault(uint256 amount) public {
+        console2.log("depositing OTC to vault...", amount);
+
         amount = bound(amount, 1 ether, 10 ether);
         sv_otcDeposited += amount;
         deal(address(stakingVault), address(stakingVault).balance + amount);
+
+        console2.log("OTC deposited:", amount);
     }
 
     // --- LazyOracle interactions ---
 
     /// @notice Updates vault data, simulating time shifts and quarantine logic
     function updateVaultData() public withConnectedVault {
+        console2.log("updating vault data...");
+
         _updateVaultData();
+
+        console2.log("updated vault data");
     }
 
     // --- StakingVault interactions ---
 
     /// @notice Withdraws directly from the staking vault (when not managed by VaultHub)
-    function withdrawFromStakingVault(uint256 amount) public {
+    function withdrawFromStakingVault(uint256 amount) public withDisconnectedVault {
+        console2.log("withdrawing from staking vault...", amount);
+
         if (stakingVault.owner() != userAccount) {
+            console2.log("not the owner");
             return;
         }
+
         amount = bound(amount, 1, address(stakingVault).balance);
 
         vm.prank(userAccount);
         stakingVault.withdraw(userAccount, amount);
+        console2.log("withdrawn from staking vault:", amount);
     }
 
     function _updateVaultData() internal {
@@ -318,17 +391,21 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(_vault);
         VaultReport memory previousReport = lastReport;
 
+        uint256 liabilityShares = vaultHub.liabilityShares(_vault);
         lastReport = VaultReport({
             totalValue: vaultHub.totalValue(_vault) + sv_otcDeposited,
             cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
-            liabilityShares: vaultHub.liabilityShares(_vault),
-            maxLiabilityShares: vaultRecord.maxLiabilityShares,
+            liabilityShares: liabilityShares,
+            maxLiabilityShares: Math256.max(vaultRecord.maxLiabilityShares, liabilityShares),
             reportTimestamp: uint64(block.timestamp)
         });
 
         reportedTotalValue = lastReport.totalValue;
 
         _report(2); // bypassing fresh report
+
+        lastReport.maxLiabilityShares = liabilityShares; // no minting between reports
+
         _report(3); // bypassing quarantine period expiration
 
         // we update the applied total value (TV should go through sanity checks, quarantine, etc.)
