@@ -35,11 +35,7 @@ abstract contract CLTopUpVerifier {
     error RootNotFound();
     error InvalidSignLength();
 
-    constructor(
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
-        uint64 _pivotSlot
-    ) {
+    constructor(GIndex _gIFirstValidatorPrev, GIndex _gIFirstValidatorCurr, uint64 _pivotSlot) {
         GI_FIRST_VALIDATOR_PREV = _gIFirstValidatorPrev;
         GI_FIRST_VALIDATOR_CURR = _gIFirstValidatorCurr;
         PIVOT_SLOT = _pivotSlot;

@@ -4,11 +4,7 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.25;
 
-import {
-    TopUpData,
-    BeaconRootData,
-    ValidatorWitness
-} from "contracts/common/interfaces/TopUpWitness.sol";
+import {TopUpData, BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
 import {CLTopUpVerifier} from "./CLTopUpVerifier.sol";
 import {AccessControlEnumerableUpgradeable} from
     "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
@@ -79,14 +75,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         GIndex _gIFirstValidatorPrev,
         GIndex _gIFirstValidatorCurr,
         uint64 _pivotSlot
-    )
-        CLTopUpVerifier(
-            _gIFirstValidatorPrev,
-            _gIFirstValidatorCurr,
-            _pivotSlot
-        )
-        initializer
-    {
+    ) CLTopUpVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) initializer {
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
@@ -161,12 +150,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
 
                 _verifyValidatorWasActivated(_topUps.beaconRootData.slot, vw);
 
-                _verifyValidator(
-                    _topUps.beaconRootData,
-                    vw,
-                    _topUps.validatorIndices[i],
-                    withdrawalCredentials
-                );
+                _verifyValidator(_topUps.beaconRootData, vw, _topUps.validatorIndices[i], withdrawalCredentials);
 
                 pubkeys[i] = vw.pubkey;
 
@@ -176,7 +160,9 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         }
 
         // Proceed to StakingRouter
-        IStakingRouter(stakingRouter).topUp(_topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits);
+        IStakingRouter(stakingRouter).topUp(
+            _topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits
+        );
 
         _setLastTopUpSlot(_topUps.beaconRootData.slot);
     }
@@ -285,10 +271,11 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         if (_w.activationEpoch >= epoch) revert ValidatorIsNotActivated();
     }
 
-    function _evaluateTopUpLimit(
-        ValidatorWitness calldata _validator,
-        uint256 _pendingBalanceGwei
-    ) internal pure returns (uint256) {
+    function _evaluateTopUpLimit(ValidatorWitness calldata _validator, uint256 _pendingBalanceGwei)
+        internal
+        pure
+        returns (uint256)
+    {
         if (
             _validator.exitEpoch != FAR_FUTURE_EPOCH || _validator.slashed
                 || _validator.withdrawableEpoch != FAR_FUTURE_EPOCH

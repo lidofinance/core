@@ -21,22 +21,14 @@ interface IStakingModuleV2 {
         bytes[] calldata pubkeys,
         uint256[] calldata keyIndices,
         uint256[] calldata operatorIds,
-        uint256[] calldata topUpLimits 
-    ) external returns (
-        bytes[] memory publicKeys, 
-        uint256[] memory allocations
-    );
-    
-    
+        uint256[] calldata topUpLimits
+    ) external returns (bytes[] memory publicKeys, uint256[] memory allocations);
 
     /// @notice Updates the effective balances for node operators
     /// @param operatorIds Encoded operator IDs
     /// @param effectiveBalances Encoded effective balances for the operators
     /// @dev TODO: in document there are three paramaters, third one is a refSlot
-    function updateOperatorBalances(
-        bytes calldata operatorIds,
-        bytes calldata effectiveBalances
-    ) external;
+    function updateOperatorBalances(bytes calldata operatorIds, bytes calldata effectiveBalances) external;
 
     // TODO: uncomment after devnet-0 and first v2 module implementation
     // /// @notice Returns the staking module summary with balance information

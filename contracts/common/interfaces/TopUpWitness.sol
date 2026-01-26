@@ -25,11 +25,9 @@ struct ValidatorWitness {
     bytes32[] proofValidator;
     // Full Validator container fields (minus WC)
     bytes pubkey;
-
     uint64 effectiveBalance;
     uint64 activationEligibilityEpoch;
     uint64 activationEpoch;
-
     uint64 exitEpoch;
     uint64 withdrawableEpoch;
     bool slashed;
