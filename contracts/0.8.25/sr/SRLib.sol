@@ -290,70 +290,102 @@ library SRLib {
     ///      The allocation algorithm prioritizes modules with lower validator (WC 0x01 equivalent) counts (MinFirst strategy).
     /// @dev Method uses ugly conversion from/to Ether amounts due to MinFirstAllocationStrategy working with unit values.
     ///      NB: new allocation library was ready, but at the last minute some strong-opinion folks chickened out, so we had to roll it back :)
-    /// @param _moduleIds - IDs of staking modules
     /// @param _allocateAmount - Eth amount that should be allocated into modules
     /// @return allocated - amount actually allocated
     /// @return allocations - Array of allocation amounts for each module
-    function _getDepositAllocations(uint256[] memory _moduleIds, uint256 _allocateAmount)
+    function _getDepositAllocations(uint256 _allocateAmount, bool _isTopUp)
         public
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        uint256 modulesCount = _moduleIds.length;
-        allocations = new uint256[](modulesCount);
-
+        uint256 modulesCount = SRStorage.getModulesCount();
         if (modulesCount == 0) {
-            return (0, allocations);
+            return (0, new uint256[](0));
         }
 
-        uint256 totalActiveValidators = 0;
-        for (uint256 i = 0; i < modulesCount; ++i) {
-            uint256 moduleId = _moduleIds[i];
-            // Calculate equivalent active WC01 validators count: ceil(balance / MAX_EFFECTIVE_BALANCE_WC_TYPE_01)
-            uint256 activeValidatorsCount =
-                Math256.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
-
-            // Set initial allocations to current active validators count
-            allocations[i] = activeValidatorsCount;
-            totalActiveValidators += activeValidatorsCount;
-        }
-
+        uint256[] memory capacities;
         uint256 depositsToAllocate = _allocateAmount / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+        (allocations, capacities) = _getModulesAllocationAndCapacity(depositsToAllocate, _isTopUp);
+
         // If no deposits to allocate, return current state
-        if (depositsToAllocate == 0) {
-            return (0, allocations);
+        if (depositsToAllocate > 0) {
+            // Use MinFirstAllocationStrategy to allocate deposits
+            (allocated, allocations) = MinFirstAllocationStrategy.allocate(allocations, capacities, depositsToAllocate);
         }
-        // new total including deposits
-        totalActiveValidators += depositsToAllocate;
-
-        // Calculate target validators for each module based on stake share limits
-        uint256[] memory capacities = new uint256[](modulesCount);
-        for (uint256 i = 0; i < modulesCount; ++i) {
-            uint256 moduleId = _moduleIds[i];
-            ModuleStateConfig memory stateConfig = moduleId.getModuleState().getStateConfig();
-            // module capacity is at least current active validators count
-            uint256 validatorsCapacity = allocations[i];
-            // add to capacity the depositable validators count
-            if (stateConfig.status == StakingModuleStatus.Active) {
-                (,, uint256 depositableValidatorsCount) = moduleId.getIStakingModule().getStakingModuleSummary();
-                validatorsCapacity += depositableValidatorsCount;
-            }
-
-            // Target validators = (stakeShareLimit * totalValidators) / TOTAL_BASIS_POINTS
-            uint256 targetValidators =
-                (stateConfig.depositTargetShare * totalActiveValidators) / SRUtils.TOTAL_BASIS_POINTS;
-
-            // Module capacity is limited by available validators and target share
-            capacities[i] = Math256.min(targetValidators, validatorsCapacity);
-        }
-
-        // Use MinFirstAllocationStrategy to allocate deposits
-        (allocated, allocations) = MinFirstAllocationStrategy.allocate(allocations, capacities, depositsToAllocate);
 
         // Convert allocated validators and allocations per module back to Ether amounts
         allocated *= SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
         for (uint256 i = 0; i < modulesCount; ++i) {
             allocations[i] *= SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+        }
+    }
+
+    function _getModuleDepositAllocation(uint256 _moduleId, uint256 _allocateAmount, bool _isTopUp)
+        public
+        view
+        returns (uint256 allocation)
+    {
+        (, uint256[] memory allocations) = _getDepositAllocations(_allocateAmount, _isTopUp);
+        uint256 moduleIdx = SRUtils._getModuleIndexById(_moduleId);
+        allocation = allocations[moduleIdx];
+    }
+
+    function _getModulesAllocationAndCapacity(uint256 depositsToAllocate, bool _isTopUp)
+        internal
+        view
+        returns (uint256[] memory _allocations, uint256[] memory _capacities)
+    {
+        uint256[] memory moduleIds = SRStorage.getModuleIds();
+        uint256 modulesCount = moduleIds.length;
+        uint256 totalValidators;
+        _allocations = new uint256[](modulesCount);
+
+        for (uint256 i = 0; i < modulesCount; ++i) {
+            uint256 moduleId = moduleIds[i];
+            // Calculate equivalent of active WC01 validators count: ceil(balance / MAX_EFFECTIVE_BALANCE_WC_TYPE_01)
+            uint256 validatorsCount =
+                Math256.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
+            _allocations[i] = validatorsCount;
+            totalValidators += validatorsCount;
+        }
+        // new total validators count after allocation
+        totalValidators += depositsToAllocate;
+
+        ModuleState storage moduleState;
+        _capacities = new uint256[](modulesCount);
+
+        for (uint256 i = 0; i < modulesCount; ++i) {
+            uint256 moduleId = moduleIds[i];
+            moduleState = moduleId.getModuleState();
+            ModuleStateConfig memory stateConfig = moduleState.getStateConfig();
+
+            uint256 validatorsCapacity = _allocations[i];
+
+            if (stateConfig.status == StakingModuleStatus.Active) {
+                (uint256 exitedValidators, uint256 depositedValidators, uint256 depositableValidatorsCount) =
+                    moduleId.getIStakingModule().getStakingModuleSummary();
+
+                if (_isTopUp) {
+                    // The module might not receive all exited validators data yet => we need to replacing
+                    // the exitedValidatorsCount with the one that the staking router is aware of.
+                    uint256 activeValidators = depositedValidators
+                        - Math256.max(exitedValidators, moduleState.getStateAccounting().exitedValidatorsCount);
+                    // max eth capacity of active validators = n * 2048ETH,
+                    // so capacity in validators equivalent = n * 2048 / 32 = n * 64
+                    validatorsCapacity = activeValidators * 64;
+                } else {
+                    validatorsCapacity = _allocations[i] + depositableValidatorsCount;
+                }
+                // Calculate target validators for each module based on stake share limits
+                // Target validators = (stakeShareLimit * totalValidators) / TOTAL_BASIS_POINTS
+                uint256 targetValidators =
+                    (stateConfig.depositTargetShare * totalValidators) / SRUtils.TOTAL_BASIS_POINTS;
+
+                // Module capacity is limited by available validators and target share
+                validatorsCapacity = Math256.min(targetValidators, validatorsCapacity);
+            }
+
+            _capacities[i] = validatorsCapacity;
         }
     }
 

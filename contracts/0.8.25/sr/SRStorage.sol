@@ -5,13 +5,7 @@ import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/Enumerab
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
 import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
-import {
-    ModuleState,
-    ModuleStateConfig,
-    ModuleStateDeposits,
-    ModuleStateAccounting,
-    RouterStorage
-} from "./SRTypes.sol";
+import {ModuleState, ModuleStateConfig, ModuleStateDeposits, ModuleStateAccounting, RouterStorage} from "./SRTypes.sol";
 
 library SRStorage {
     using EnumerableSet for EnumerableSet.UintSet;
@@ -25,7 +19,6 @@ library SRStorage {
 
     /// @dev Module trackers will be derived from this position
     bytes32 internal constant DEPOSITS_TRACKER = keccak256("lido.StakingRouter.depositTracker");
-
 
     function getIStakingModule(uint256 _moduleId) internal view returns (IStakingModule) {
         return _moduleId.getModuleState().getIStakingModule();
@@ -80,11 +73,11 @@ library SRStorage {
     }
 
     function getStakingModuleTrackerStorage(uint256 stakingModuleId) internal pure returns (DepositedState storage $) {
-      return _getDepositTrackerStorage(keccak256(abi.encode(stakingModuleId, DEPOSITS_TRACKER)));
+        return _getDepositTrackerStorage(keccak256(abi.encode(stakingModuleId, DEPOSITS_TRACKER)));
     }
-    
+
     function getLidoDepositTrackerStorage() internal pure returns (DepositedState storage $) {
-      return _getDepositTrackerStorage(DEPOSITS_TRACKER);
+        return _getDepositTrackerStorage(DEPOSITS_TRACKER);
     }
 
     function _getDepositTrackerStorage(bytes32 _position) private pure returns (DepositedState storage $) {
@@ -103,6 +96,11 @@ library SRStorage {
 
     function isModuleId(uint256 _moduleId) internal view returns (bool) {
         return getRouterStorage().moduleIds.contains(_moduleId);
+    }
+
+    function getModuleInternalPositionById(uint256 _moduleId) internal view returns (uint256) {
+        // get the internal position (1-based index) of the module ID in the enumerable set
+        return getRouterStorage().moduleIds._inner._positions[bytes32(_moduleId)];
     }
 
     function addModuleId(uint256 _moduleId) internal {

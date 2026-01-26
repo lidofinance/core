@@ -744,7 +744,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // If module is not active, then it capacity is 0, so stakingModuleDepositableEthAmount will be 0.
         // Module capacity is calculated based on the depositableValidatorsCount (from getStakingModuleSummary), so
         // stakingModuleDepositableEthAmount is already capped by the module capacity and represents the max ETH amount possible to deposit.
-        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _maxDepositsValue);
+        uint256 stakingModuleDepositableEthAmount =
+            _getModuleDepositAllocation(_stakingModuleId, _maxDepositsValue, false);
         if (stakingModuleDepositableEthAmount == 0) return 0;
 
         (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
@@ -781,7 +782,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         // Get allocation based on target share
         uint256 depositableEther = ILido(_getLido()).getDepositableEther();
-        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, depositableEther);
+        uint256 stakingModuleDepositableEthAmount =
+            _getModuleDepositAllocation(_stakingModuleId, depositableEther, true);
 
         // Call obtainDepositData on the staking module to determine which keys to top up
         // and for what amounts. The module verifies keys belong to it and reverts if invalid.
@@ -1006,7 +1008,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        return _getTargetDepositAllocations(SRStorage.getModuleIds(), _depositAmount);
+        return _getDepositAllocations(_depositAmount, false);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
@@ -1024,7 +1026,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         // Get depositable ether from Lido (similar to topUp)
         uint256 depositableEther = ILido(_getLido()).getDepositableEther();
-        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, depositableEther);
+        uint256 stakingModuleDepositableEthAmount =
+            _getModuleDepositAllocation(_stakingModuleId, depositableEther, false);
 
         // Calculate max deposits count (capped by max and module capacity)
         (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
@@ -1140,25 +1143,27 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @notice Allocation for single module based on target share
     /// @param moduleId Id of staking module
     /// @param amountToAllocate Eth amount that can be deposited in module
+    /// @param isTopUp Whether the allocation is for top-up deposits
     /// @return allocation Eth amount that can be deposited in module with id `moduleId` (can be less than `amountToAllocate`)
-    function _getTargetDepositAllocation(uint256 moduleId, uint256 amountToAllocate)
+    function _getModuleDepositAllocation(uint256 moduleId, uint256 amountToAllocate, bool isTopUp)
         internal
         view
         returns (uint256 allocation)
     {
-        uint256[] memory moduleIds = new uint256[](1);
-        moduleIds[0] = moduleId;
-        // here we can ignore second return value, as allocate to single module and
-        // `allocated` amount always equal to 1st element of `operatorAllocations` array
-        (allocation,) = _getTargetDepositAllocations(moduleIds, amountToAllocate);
+        return SRLib._getModuleDepositAllocation(moduleId, amountToAllocate, isTopUp);
     }
 
-    function _getTargetDepositAllocations(uint256[] memory moduleIds, uint256 amountToAllocate)
+    /// @notice Returns new deposits allocation among staking modules
+    /// @param amountToAllocate The maximum ETH amount of deposits to be allocated.
+    /// @param isTopUp Whether the allocation is for top-up deposits
+    /// @return allocated Number of deposits allocated to the staking modules.
+    /// @return allocations Array of new deposits allocation to the staking modules.
+    function _getDepositAllocations(uint256 amountToAllocate, bool isTopUp)
         internal
         view
-        returns (uint256 allocated, uint256[] memory operatorAllocations)
+        returns (uint256 allocated, uint256[] memory allocations)
     {
-        return SRLib._getDepositAllocations(moduleIds, amountToAllocate);
+        return SRLib._getDepositAllocations(amountToAllocate, isTopUp);
     }
 
     /// module wrapper

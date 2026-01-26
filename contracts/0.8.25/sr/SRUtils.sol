@@ -108,11 +108,24 @@ library SRUtils {
         return uint16((_value * TOTAL_BASIS_POINTS) / _precision);
     }
 
-    ///  @dev get current balance of the module in ETH
+    ///  @dev get current balance of the module in ETH (wei)
     function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
         uint256 clBalance = _fromGwei(moduleId.getModuleState().getStateAccounting().clBalanceGwei);
+        // todo: add pending balances from report
+        // todo: check wei/gwei conversion
         uint256 pendingDeposits = SRStorage.getStakingModuleTrackerStorage(moduleId).getDepositedEthUpToLastSlot();
         return clBalance + pendingDeposits;
+    }
+
+    function _getModuleIndexById(uint256 moduleId) internal view returns (uint256 idx) {
+        idx = SRStorage.getModuleInternalPositionById(moduleId);
+        if (idx == 0) {
+            revert StakingModuleUnregistered();
+        }
+        unchecked {
+            // Adjust for 1-based indexing
+            --idx;
+        }
     }
 
     function _getModuleActiveBalance(uint256 moduleId) internal view returns (uint256) {
