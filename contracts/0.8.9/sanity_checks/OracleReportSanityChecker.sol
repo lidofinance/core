@@ -916,7 +916,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
         if (_oldLimitsList.maxBalanceExitRequestedPerReportInGwei != _newLimitsList.maxBalanceExitRequestedPerReportInGwei) {
             _checkLimitValue(_newLimitsList.maxBalanceExitRequestedPerReportInGwei, 0, type(uint64).max);
-            emit maxBalanceExitRequestedPerReportInGweiSet(_newLimitsList.maxBalanceExitRequestedPerReportInGwei);
+            emit MaxBalanceExitRequestedPerReportInGweiSet(_newLimitsList.maxBalanceExitRequestedPerReportInGwei);
         }
         if (_oldLimitsList.maxItemsPerExtraDataTransaction != _newLimitsList.maxItemsPerExtraDataTransaction) {
             _checkLimitValue(_newLimitsList.maxItemsPerExtraDataTransaction, 0, type(uint16).max);
@@ -961,7 +961,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
-    event maxBalanceExitRequestedPerReportInGweiSet(uint256 maxBalanceExitRequestedPerReportInGwei);
+    event MaxBalanceExitRequestedPerReportInGweiSet(uint256 maxBalanceExitRequestedPerReportInGwei);
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
     event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
