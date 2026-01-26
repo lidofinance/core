@@ -24,6 +24,12 @@ library SRUtils {
     uint8 public constant WC_TYPE_01 = 0x01;
     uint8 public constant WC_TYPE_02 = 0x02;
 
+    /// @notice Initial deposit amount made for validator creation
+    /// @dev Identical for both 0x01 and 0x02 types.
+    ///      For 0x02, the validator may later be topped up.
+    ///      Top-ups are not supported for 0x01.
+    uint256 public constant INITIAL_DEPOSIT_SIZE = MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+
     error ZeroAddressStakingModule();
     error StakingModulesLimitExceeded();
     error StakingModuleAddressExists();
@@ -160,5 +166,13 @@ library SRUtils {
 
     function _fromGwei(uint256 amount) internal pure returns (uint256) {
         return amount * 1 gwei;
+    }
+
+    function _getInitialDepositAmountByCount(uint256 depositsCount) internal pure returns (uint256) {
+        return depositsCount * INITIAL_DEPOSIT_SIZE;
+    }
+
+    function _getInitialDepositCountByAmount(uint256 depositsAmount) internal pure returns (uint256) {
+        return depositsAmount / INITIAL_DEPOSIT_SIZE;
     }
 }

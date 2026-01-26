@@ -181,12 +181,12 @@ library SRLib {
         returns (uint96)
     {
         IStakingModule stakingModule = IStakingModule(moduleAddress);
-        (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) = stakingModule.getStakingModuleSummary();
+        (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) = _getStakingModuleSummary(stakingModule);
         // The module might not receive all exited validators data yet => we need to replacing
         // the exitedValidatorsCount with the one that the staking router is aware of.
         uint256 activeCount = depositedValidatorsCount - Math.max(routerExitedValidatorsCount, exitedValidatorsCount);
 
-        return SRUtils._toGwei(activeCount * SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
+        return SRUtils._toGwei(SRUtils._getInitialDepositAmountByCount(activeCount));
     }
 
     /// @notice Registers a new staking module.
@@ -280,6 +280,15 @@ library SRLib {
         }
     }
 
+    /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.
+    function _getStakingModuleSummary(IStakingModule module)
+        internal
+        view
+        returns (uint256 exitedValidators, uint256 depositedValidators, uint256 depositableValidators)
+    {
+        return module.getStakingModuleSummary();
+    }
+
     /// @dev mimic OpenZeppelin ContextUpgradeable._msgSender()
     function _msgSender() internal view returns (address) {
         return msg.sender;
@@ -291,32 +300,36 @@ library SRLib {
     /// @dev Method uses ugly conversion from/to Ether amounts due to MinFirstAllocationStrategy working with unit values.
     ///      NB: new allocation library was ready, but at the last minute some strong-opinion folks chickened out, so we had to roll it back :)
     /// @param _allocateAmount - Eth amount that should be allocated into modules
-    /// @return allocated - amount actually allocated
-    /// @return allocations - Array of allocation amounts for each module
+    /// @return totalAllocated - amount actually allocated
+    /// @return allocated - Array of newly allocated amounts for each module
+    /// @return newAllocations - Array of new allocation amounts for each module
     function _getDepositAllocations(uint256 _allocateAmount, bool _isTopUp)
         public
         view
-        returns (uint256 allocated, uint256[] memory allocations)
+        returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
     {
         uint256 modulesCount = SRStorage.getModulesCount();
         if (modulesCount == 0) {
-            return (0, new uint256[](0));
+            return (0, new uint256[](0), new uint256[](0));
         }
 
-        uint256[] memory capacities;
-        uint256 depositsToAllocate = _allocateAmount / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
-        (allocations, capacities) = _getModulesAllocationAndCapacity(depositsToAllocate, _isTopUp);
+        uint256 depositsToAllocate = SRUtils._getInitialDepositCountByAmount(_allocateAmount);
+        // get current allocations and capacities in validators equivalent
+        (uint256[] memory allocations, uint256[] memory capacities) =
+            _getModulesAllocationAndCapacity(depositsToAllocate, _isTopUp);
 
         // If no deposits to allocate, return current state
         if (depositsToAllocate > 0) {
             // Use MinFirstAllocationStrategy to allocate deposits
-            (allocated, allocations) = MinFirstAllocationStrategy.allocate(allocations, capacities, depositsToAllocate);
+            (totalAllocated, newAllocations) =
+                MinFirstAllocationStrategy.allocate(allocations, capacities, depositsToAllocate);
         }
 
         // Convert allocated validators and allocations per module back to Ether amounts
-        allocated *= SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+        totalAllocated = SRUtils._getInitialDepositAmountByCount(totalAllocated);
         for (uint256 i = 0; i < modulesCount; ++i) {
-            allocations[i] *= SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+            allocated[i] = SRUtils._getInitialDepositAmountByCount(allocations[i] - newAllocations[i]);
+            newAllocations[i] = SRUtils._getInitialDepositAmountByCount(newAllocations[i]);
         }
     }
 
@@ -325,9 +338,9 @@ library SRLib {
         view
         returns (uint256 allocation)
     {
-        (, uint256[] memory allocations) = _getDepositAllocations(_allocateAmount, _isTopUp);
+        (, uint256[] memory allocated,) = _getDepositAllocations(_allocateAmount, _isTopUp);
         uint256 moduleIdx = SRUtils._getModuleIndexById(_moduleId);
-        allocation = allocations[moduleIdx];
+        allocation = allocated[moduleIdx];
     }
 
     function _getModulesAllocationAndCapacity(uint256 depositsToAllocate, bool _isTopUp)
@@ -342,9 +355,9 @@ library SRLib {
 
         for (uint256 i = 0; i < modulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
-            // Calculate equivalent of active WC01 validators count: ceil(balance / MAX_EFFECTIVE_BALANCE_WC_TYPE_01)
+            // Calculate equivalent of active WC01 validators count rounded up: ceil(balance / INITIAL_DEPOSIT_SIZE)
             uint256 validatorsCount =
-                Math256.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
+                Math256.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.INITIAL_DEPOSIT_SIZE);
             _allocations[i] = validatorsCount;
             totalValidators += validatorsCount;
         }
@@ -363,7 +376,7 @@ library SRLib {
 
             if (stateConfig.status == StakingModuleStatus.Active) {
                 (uint256 exitedValidators, uint256 depositedValidators, uint256 depositableValidatorsCount) =
-                    moduleId.getIStakingModule().getStakingModuleSummary();
+                    _getStakingModuleSummary(moduleId.getIStakingModule());
 
                 if (_isTopUp) {
                     // The module might not receive all exited validators data yet => we need to replacing
@@ -505,7 +518,7 @@ library SRLib {
             ModuleState storage state = moduleId.getModuleState();
             IStakingModule stakingModule = state.getIStakingModule();
 
-            (uint256 exitedValidatorsCount,,) = stakingModule.getStakingModuleSummary();
+            (uint256 exitedValidatorsCount,,) = _getStakingModuleSummary(stakingModule);
             if (exitedValidatorsCount != state.getStateAccounting().exitedValidatorsCount) continue;
 
             // oracle finished updating exited validators for all node ops
@@ -614,7 +627,7 @@ library SRLib {
             }
 
             (uint256 totalExitedValidators, uint256 totalDepositedValidators,) =
-                state.getIStakingModule().getStakingModuleSummary();
+                _getStakingModuleSummary(state.getIStakingModule());
 
             if (newReportedExitedValidatorsCount > totalDepositedValidators) {
                 revert ReportedExitedValidatorsExceedDeposited(
@@ -683,7 +696,7 @@ library SRLib {
         stakingModule.unsafeUpdateValidatorsCount(_nodeOperatorId, _correction.newNodeOperatorExitedValidatorsCount);
 
         (uint256 moduleTotalExitedValidators, uint256 moduleTotalDepositedValidators,) =
-            stakingModule.getStakingModuleSummary();
+            _getStakingModuleSummary(stakingModule);
 
         if (_correction.newModuleExitedValidatorsCount > moduleTotalDepositedValidators) {
             revert ReportedExitedValidatorsExceedDeposited(

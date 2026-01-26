@@ -72,11 +72,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
 
-    /// @notice Initial deposit amount made for validator creation
-    /// @dev Identical for both 0x01 and 0x02 types.
-    ///      For 0x02, the validator may later be topped up.
-    ///      Top-ups are not supported for 0x01.
-    uint256 public constant INITIAL_DEPOSIT_SIZE = SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
     uint64 internal constant PUBKEY_LENGTH = 48;
     uint64 internal constant MIN_DEPOSIT_IN_GWEI = 1 ether / 1 gwei;
 
@@ -120,9 +115,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error TopUpAmountTooLow();
 
     /// @dev compatibility getters for constants removed in favor of SRLib
-    // function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
-    //     return SRUtils.INITIAL_DEPOSIT_SIZE;
-    // }
+    function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
+        return SRUtils.INITIAL_DEPOSIT_SIZE;
+    }
+
     function TOTAL_BASIS_POINTS() external pure returns (uint256) {
         return SRUtils.TOTAL_BASIS_POINTS;
     }
@@ -744,14 +740,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // If module is not active, then it capacity is 0, so stakingModuleDepositableEthAmount will be 0.
         // Module capacity is calculated based on the depositableValidatorsCount (from getStakingModuleSummary), so
         // stakingModuleDepositableEthAmount is already capped by the module capacity and represents the max ETH amount possible to deposit.
-        uint256 stakingModuleDepositableEthAmount =
-            _getModuleDepositAllocation(_stakingModuleId, _maxDepositsValue, false);
-        if (stakingModuleDepositableEthAmount == 0) return 0;
-
-        (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
-
-        return
-            Math256.min(depositableValidatorsCount, _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount));
+        return SRUtils._getInitialDepositCountByAmount(
+            _getModuleDepositAllocation(_stakingModuleId, _maxDepositsValue, false)
+        );
     }
 
     /**
@@ -1008,7 +999,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        return _getDepositAllocations(_depositAmount, false);
+        (allocated,, allocations) = SRLib._getDepositAllocations(_depositAmount, false);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
@@ -1034,7 +1025,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 _maxDepositsCount = _getStakingModuleMaxDepositsPerBlock(_stakingModuleId);
         uint256 maxDepositsCount = Math256.min(
             Math256.min(_maxDepositsCount, depositableValidatorsCount),
-            _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount)
+            SRUtils._getInitialDepositCountByAmount(stakingModuleDepositableEthAmount)
         );
 
         if (maxDepositsCount == 0) return;
@@ -1048,7 +1039,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 actualDepositsCount = publicKeysBatch.length / PUBKEY_LENGTH;
 
         // Calculate actual deposit value based on keys returned
-        uint256 depositsValue = _getInitialDepositAmountByCount(actualDepositsCount);
+        uint256 depositsValue = SRUtils._getInitialDepositAmountByCount(actualDepositsCount);
 
         /// @dev Update the local state of the contract to prevent a reentrancy attack
         /// even though the staking modules are trusted contracts.
@@ -1151,19 +1142,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         returns (uint256 allocation)
     {
         return SRLib._getModuleDepositAllocation(moduleId, amountToAllocate, isTopUp);
-    }
-
-    /// @notice Returns new deposits allocation among staking modules
-    /// @param amountToAllocate The maximum ETH amount of deposits to be allocated.
-    /// @param isTopUp Whether the allocation is for top-up deposits
-    /// @return allocated Number of deposits allocated to the staking modules.
-    /// @return allocations Array of new deposits allocation to the staking modules.
-    function _getDepositAllocations(uint256 amountToAllocate, bool isTopUp)
-        internal
-        view
-        returns (uint256 allocated, uint256[] memory allocations)
-    {
-        return SRLib._getDepositAllocations(amountToAllocate, isTopUp);
     }
 
     /// module wrapper
@@ -1317,13 +1295,5 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // track deposited amount for module
         DepositedState storage moduleState = SRStorage.getStakingModuleTrackerStorage(_stakingModuleId);
         moduleState.insertSlotDeposit(slot, _depositsValue);
-    }
-
-    function _getInitialDepositAmountByCount(uint256 depositsCount) internal pure returns (uint256) {
-        return depositsCount * INITIAL_DEPOSIT_SIZE;
-    }
-
-    function _getInitialDepositCountByAmount(uint256 depositsAmount) internal pure returns (uint256) {
-        return depositsAmount / INITIAL_DEPOSIT_SIZE;
     }
 }
