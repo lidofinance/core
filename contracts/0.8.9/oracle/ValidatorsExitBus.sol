@@ -171,6 +171,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 nodeOpId;
         uint256 moduleId;
         uint256 valIndex;
+        uint256 keyIndex;  // NEW - will be 0 for format 1, actual value for format 2
         bytes pubkey;
     }
 
@@ -191,6 +192,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
+    uint256 internal constant PACKED_REQUEST_LENGTH_V2 = 72;
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
@@ -211,6 +213,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /// key: (moduleId, nodeOpId, validatorIndex).
     ///
     uint256 public constant DATA_FORMAT_LIST = 1;
+    uint256 public constant DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
 
     ILidoLocator internal immutable LOCATOR;
 
@@ -285,7 +288,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _checkExitRequestData(request.data, request.dataFormat);
         _checkContractVersion(requestStatus.contractVersion);
 
-        uint256 requestsCount = request.data.length / PACKED_REQUEST_LENGTH;
+        uint256 requestsCount = request.data.length / _getPackedRequestLength(request.dataFormat);
         uint256 maxRequestsPerReport = _getMaxValidatorsPerReport();
 
         if (requestsCount > maxRequestsPerReport) {
@@ -294,7 +297,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
         _consumeLimit(requestsCount);
 
-        _processExitRequestsList(request.data);
+        _processExitRequestsList(request.data, request.dataFormat);
 
         TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
             TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + requestsCount
@@ -345,7 +348,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](exitDataIndexes.length);
 
         uint256 lastExitDataIndex = type(uint256).max;
-        uint256 requestsCount = exitsData.data.length / PACKED_REQUEST_LENGTH;
+        uint256 requestsCount = exitsData.data.length / _getPackedRequestLength(exitsData.dataFormat);
 
         for (uint256 i = 0; i < exitDataIndexes.length; i++) {
             if (exitDataIndexes[i] >= requestsCount) {
@@ -358,7 +361,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             lastExitDataIndex = exitDataIndexes[i];
 
-            ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitDataIndexes[i]);
+            ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitsData.dataFormat, exitDataIndexes[i]);
 
             if (validatorData.moduleId == 0) revert InvalidModuleId();
 
@@ -462,26 +465,29 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @return nodeOpId ID of the node operator.
      * @return moduleId ID of the staking module.
      * @return valIndex Index of the validator.
+     * @return keyIndex Index of the signing key (0 for format 1, actual value for format 2).
      */
     function unpackExitRequest(
         bytes calldata exitRequests,
         uint256 dataFormat,
         uint256 index
-    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex, uint256 keyIndex) {
         _checkExitRequestData(exitRequests, dataFormat);
 
-        if (index >= exitRequests.length / PACKED_REQUEST_LENGTH) {
-            revert ExitDataIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
+        uint256 requestsCount = exitRequests.length / _getPackedRequestLength(dataFormat);
+        if (index >= requestsCount) {
+            revert ExitDataIndexOutOfRange(index, requestsCount);
         }
 
-        ValidatorData memory validatorData = _getValidatorData(exitRequests, index);
+        ValidatorData memory validatorData = _getValidatorData(exitRequests, dataFormat, index);
 
         valIndex = validatorData.valIndex;
         nodeOpId = validatorData.nodeOpId;
         moduleId = validatorData.moduleId;
         pubkey = validatorData.pubkey;
+        keyIndex = validatorData.keyIndex;
 
-        return (pubkey, nodeOpId, moduleId, valIndex);
+        return (pubkey, nodeOpId, moduleId, valIndex, keyIndex);
     }
 
     /// @notice Resume accepting validator exit requests
@@ -520,14 +526,23 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();
     }
 
+    /// @dev Returns the packed request length for a given data format
+    function _getPackedRequestLength(uint256 dataFormat) internal pure returns (uint256) {
+        if (dataFormat == DATA_FORMAT_LIST) {
+            return PACKED_REQUEST_LENGTH; // 64
+        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            return PACKED_REQUEST_LENGTH_V2; // 72
+        } else {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+    }
+
     /// Internal functions
 
     function _checkExitRequestData(bytes calldata requests, uint256 dataFormat) internal pure {
-        if (dataFormat != DATA_FORMAT_LIST) {
-            revert UnsupportedRequestsDataFormat(dataFormat);
-        }
+        uint256 packedLength = _getPackedRequestLength(dataFormat); // validates format
 
-        if (requests.length == 0 || requests.length % PACKED_REQUEST_LENGTH != 0) {
+        if (requests.length == 0 || requests.length % packedLength != 0) {
             revert InvalidRequestsDataLength();
         }
     }
@@ -647,13 +662,35 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /// Methods for reading data from tightly packed validator exit requests
     /// Format DATA_FORMAT_LIST = 1;
 
-    /**
-     * @notice Method for reading node operator id, module id and validator index from validator exit request data
-     * @param exitRequestData Validator exit requests data. DATA_FORMAT = 1
-     * @param index index of request in array above
-     * @return validatorData Validator data including node operator id, module id, validator index
-     */
+   /**
+    * @notice Method for reading node operator id, module id, validator index, and optionally key index
+    * from validator exit request data
+    * @param exitRequestData Validator exit requests data
+    * @param dataFormat Format of the data (1 or 2)
+    * @param index index of request in array above
+    * @return validatorData Validator data including node operator id, module id, validator index, and key index
+    */
     function _getValidatorData(
+        bytes calldata exitRequestData,
+        uint256 dataFormat,
+        uint256 index
+    ) internal pure returns (ValidatorData memory validatorData) {
+        if (dataFormat == DATA_FORMAT_LIST) {
+            return _getValidatorDataV1(exitRequestData, index);
+        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            return _getValidatorDataV2(exitRequestData, index);
+        } else {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+    }
+
+    /**
+    * @notice Extracts validator data from format 1 (64 bytes per request, no keyIndex)
+    * @param exitRequestData Validator exit requests data
+    * @param index index of request in array
+    * @return validatorData Validator data with keyIndex = 0
+    */
+    function _getValidatorDataV1(
         bytes calldata exitRequestData,
         uint256 index
     ) internal pure returns (ValidatorData memory validatorData) {
@@ -676,6 +713,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         validatorData.valIndex = uint64(dataWithoutPubkey);
         validatorData.nodeOpId = uint40(dataWithoutPubkey >> 64);
         validatorData.moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+        validatorData.keyIndex = 0; // Format 1 always uses keyIndex 0
 
         bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
         assembly {
@@ -689,10 +727,68 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-     * This method read report data (DATA_FORMAT=1) within a range
-     * Check dataWithoutPubkey <= lastDataWithoutPubkey needs to prevent duplicates
-     */
-    function _processExitRequestsList(bytes calldata data) internal {
+    * @notice Extracts validator data from format 2 (72 bytes per request, includes keyIndex)
+    * @param exitRequestData Validator exit requests data
+    * @param index index of request in array
+    * @return validatorData Validator data with extracted keyIndex
+    */
+    function _getValidatorDataV2(
+        bytes calldata exitRequestData,
+        uint256 index
+    ) internal pure returns (ValidatorData memory validatorData) {
+        uint256 itemOffset;
+        uint256 dataWithoutPubkey;
+
+        assembly {
+            // Compute the start of this packed request (item)
+            itemOffset := add(exitRequestData.offset, mul(PACKED_REQUEST_LENGTH_V2, index))
+
+            // Load the first 24 bytes which contain moduleId (24 bits),
+            // nodeOpId (40 bits), valIndex (64 bits), and keyIndex (64 bits).
+            dataWithoutPubkey := shr(64, calldataload(itemOffset))
+        }
+
+        // dataWithoutPubkey format (192 bits total):
+        // MSB <--------------------------------- 192 bits ----------------------------------> LSB
+        // | 64 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | 64 bits: keyIndex |
+
+        validatorData.keyIndex = uint64(dataWithoutPubkey);
+        validatorData.valIndex = uint64(dataWithoutPubkey >> 64);
+        validatorData.nodeOpId = uint40(dataWithoutPubkey >> (64 + 64));
+        validatorData.moduleId = uint24(dataWithoutPubkey >> (64 + 64 + 40));
+
+        bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
+        assembly {
+            itemOffset := add(exitRequestData.offset, mul(PACKED_REQUEST_LENGTH_V2, index))
+            let pubkeyCalldataOffset := add(itemOffset, 24)
+            let pubkeyMemPtr := add(pubkey, 32)
+            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+        }
+
+        validatorData.pubkey = pubkey;
+    }
+
+    /**
+    * @notice Dispatcher that processes exit requests based on data format
+    * @param data Packed exit requests data
+    * @param dataFormat Format of the data (1 or 2)
+    */
+    function _processExitRequestsList(bytes calldata data, uint256 dataFormat) internal {
+        if (dataFormat == DATA_FORMAT_LIST) {
+            _processExitRequestsListV1(data);
+        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            _processExitRequestsListV2(data);
+        } else {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+    }
+
+    /**
+    * @notice Process exit requests for format 1 (64 bytes per request, no keyIndex)
+    * @dev Check dataWithoutPubkey <= lastDataWithoutPubkey prevents duplicates and ensures sorting
+    * @param data Packed exit requests data (DATA_FORMAT=1)
+    */
+    function _processExitRequestsListV1(bytes calldata data) internal {
         uint256 offset;
         uint256 offsetPastEnd;
         uint256 lastDataWithoutPubkey = 0;
@@ -731,7 +827,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             //                              dataWithoutPubkey
             // MSB <---------------------------------------------------------------------- LSB
-            // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | key index |
+            // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
             if (dataWithoutPubkey <= lastDataWithoutPubkey) {
                 revert InvalidRequestsDataSortOrder();
             }
@@ -740,14 +836,83 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             nodeOpId = uint40(dataWithoutPubkey >> 64);
 
             // Check key
-            // Fetch the registered signing key for this operator and pubkey index
+            // Fetch the registered signing key for this operator and pubkey index 0
             (bytes memory key, , ) = nodeOperatorsRegistry.getSigningKey(
                 nodeOpId,
                 0
             );
-            // Duplicate check: linear scan over hashes so far
             // Compare the keccak256 hash of the provided public key with the keccak256 hash of the signing key
-            require(keccak256(key) == keccak256(pubkey))
+            require(keccak256(key) == keccak256(pubkey), "Invalid pubkey");
+
+            lastDataWithoutPubkey = dataWithoutPubkey;
+            emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
+        }
+    }
+
+    /**
+    * @notice Process exit requests for format 2 (72 bytes per request, includes keyIndex)
+    * @dev Check dataWithoutPubkey <= lastDataWithoutPubkey prevents duplicates and ensures sorting
+    * @param data Packed exit requests data (DATA_FORMAT=2)
+    */
+    function _processExitRequestsListV2(bytes calldata data) internal {
+        uint256 offset;
+        uint256 offsetPastEnd;
+        uint256 lastDataWithoutPubkey = 0;
+        uint256 timestamp = _getTimestamp();
+
+        assembly {
+            offset := data.offset
+            offsetPastEnd := add(offset, data.length)
+        }
+
+        bytes calldata pubkey;
+        uint256 dataWithoutPubkey;
+        uint256 moduleId;
+        uint256 nodeOpId;
+        uint64 valIndex;
+        uint64 keyIndex;
+
+        assembly {
+            pubkey.length := 48
+        }
+
+        while (offset < offsetPastEnd) {
+            assembly {
+                // 24 most significant bytes are taken by module id, node op id, val index, and key index
+                dataWithoutPubkey := shr(64, calldataload(offset))
+                // the next 48 bytes are taken by the pubkey
+                pubkey.offset := add(offset, 24)
+                // totalling to 72 bytes
+                offset := add(offset, 72)
+            }
+
+            moduleId = uint24(dataWithoutPubkey >> (64 + 64 + 40));
+
+            if (moduleId == 0) {
+                revert InvalidModuleId();
+            }
+
+            //                              dataWithoutPubkey (192 bits)
+            // MSB <--------------------------------------------------------------------------------------- LSB
+            // | 64 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | 64 bits: keyIndex |
+            //
+            // Sorting compound key: (moduleId, nodeOpId, valIndex, keyIndex)
+            if (dataWithoutPubkey <= lastDataWithoutPubkey) {
+                revert InvalidRequestsDataSortOrder();
+            }
+
+            keyIndex = uint64(dataWithoutPubkey);
+            valIndex = uint64(dataWithoutPubkey >> 64);
+            nodeOpId = uint40(dataWithoutPubkey >> (64 + 64));
+
+            // Check key using the provided keyIndex
+            // Fetch the registered signing key for this operator at the specified key index
+            (bytes memory key, , ) = nodeOperatorsRegistry.getSigningKey(
+                nodeOpId,
+                keyIndex
+            );
+            // Compare the keccak256 hash of the provided public key with the keccak256 hash of the signing key
+            require(keccak256(key) == keccak256(pubkey), "Invalid pubkey");
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
