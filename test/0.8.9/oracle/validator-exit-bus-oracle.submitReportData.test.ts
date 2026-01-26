@@ -247,14 +247,14 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     context("invokes sanity check", () => {
       before(async () => {
         await oracleReportSanityChecker.grantRole(
-          await oracleReportSanityChecker.MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE(),
+          await oracleReportSanityChecker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(),
           admin.address,
         );
       });
 
       it("reverts if request limit is reached", async () => {
         const exitRequestsLimit = 1;
-        await oracleReportSanityChecker.connect(admin).setMaxExitRequestsPerOracleReport(exitRequestsLimit);
+        await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(exitRequestsLimit);
         const { reportData } = await prepareReportAndSubmitHash([
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2] },
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3] },
@@ -265,7 +265,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       });
       it("pass if requests amount equals to limit", async () => {
         const exitRequestsLimit = 1;
-        await oracleReportSanityChecker.connect(admin).setMaxExitRequestsPerOracleReport(exitRequestsLimit);
+        await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(exitRequestsLimit);
         const { reportData } = await prepareReportAndSubmitHash([
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2] },
         ]);

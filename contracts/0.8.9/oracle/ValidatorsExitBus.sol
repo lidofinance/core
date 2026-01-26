@@ -22,6 +22,16 @@ interface ITriggerableWithdrawalsGateway {
     ) external payable;
 }
 
+interface INodeOperatorsRegistry {
+    function getNodeOperatorsCount() external view returns (uint256);
+
+    function getSigningKey(
+        uint256 _nodeOperatorId,
+        uint256 _index
+    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
+}
+
+
 interface ILidoLocator {
     function validatorExitDelayVerifier() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
@@ -225,8 +235,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    constructor(address lidoLocator) {
+    INodeOperatorsRegistry public immutable nodeOperatorsRegistry;
+
+    constructor(address lidoLocator, address _nodeOperatorsRegistry) {
         LOCATOR = ILidoLocator(lidoLocator);
+        nodeOperatorsRegistry = INodeOperatorsRegistry(_nodeOperatorsRegistry);
     }
 
     /**
@@ -718,13 +731,23 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             //                              dataWithoutPubkey
             // MSB <---------------------------------------------------------------------- LSB
-            // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+            // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | key index |
             if (dataWithoutPubkey <= lastDataWithoutPubkey) {
                 revert InvalidRequestsDataSortOrder();
             }
 
             valIndex = uint64(dataWithoutPubkey);
             nodeOpId = uint40(dataWithoutPubkey >> 64);
+
+            // Check key
+            // Fetch the registered signing key for this operator and pubkey index
+            (bytes memory key, , ) = nodeOperatorsRegistry.getSigningKey(
+                nodeOpId,
+                0
+            );
+            // Duplicate check: linear scan over hashes so far
+            // Compare the keccak256 hash of the provided public key with the keccak256 hash of the signing key
+            require(keccak256(key) == keccak256(pubkey))
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);

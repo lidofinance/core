@@ -10,7 +10,7 @@ import {BaseOracle} from "./BaseOracle.sol";
 import {ValidatorsExitBus} from "./ValidatorsExitBus.sol";
 
 interface IOracleReportSanityChecker {
-    function checkExitBusOracleReport(uint256 _exitRequestsCount) external view;
+    function checkExitBusOracleReport(uint256 _maxBalanceExitRequestedPerReportInGwei) external view;
 }
 
 contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
@@ -48,8 +48,9 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     constructor(
         uint256 secondsPerSlot,
         uint256 genesisTime,
-        address lidoLocator
-    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator) {}
+        address lidoLocator,
+        address noaddress
+    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator, noaddress) {}
 
     function initialize(
         address admin,
@@ -238,7 +239,11 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             revert UnexpectedRequestsDataLength();
         }
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(data.requestsCount);
+        // Get validator balance count
+        uint256 validatorBalance = 0;
+        // Get staking modules type from staking router
+
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(validatorBalance);
 
         _processExitRequestsList(data.data);
 
