@@ -12,7 +12,7 @@ import {
   StakingModule__MockForStakingRouter,
   StakingRouter__Harness,
 } from "typechain-types";
-import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
+import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter.sol/StakingRouter";
 
 import { ether, getModuleMEB, getNextBlock, impersonate, StakingModuleStatus, WithdrawalCredentialsType } from "lib";
 

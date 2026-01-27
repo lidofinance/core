@@ -14,7 +14,10 @@ export async function main() {
   await deployImplementation(Sk.appVoting, "Voting", deployer);
 
   // Deploy Lido-specific app implementations
-  await deployImplementation(Sk.appLido, "Lido", deployer);
+  const FastLaneStorage = await deployWithoutProxy(Sk.fastLaneStorage, "FastLaneStorage", deployer);
+  await deployImplementation(Sk.appLido, "Lido", deployer, [], {
+    libraries: { FastLaneStorage: FastLaneStorage.address },
+  });
 
   const minFirstAllocationStrategy = await deployWithoutProxy(
     Sk.minFirstAllocationStrategy,
