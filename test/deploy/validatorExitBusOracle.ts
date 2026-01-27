@@ -40,6 +40,7 @@ async function deployOracleReportSanityCheckerForExitBus(
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
       maxValidatorExitRequestsPerReport: 2000,
+      maxBalanceExitRequestedPerReportInGwei: 1000000n,
       maxItemsPerExtraDataTransaction: 0n,
       maxNodeOperatorsPerExtraDataItem: 0n,
       requestTimestampMargin: 0n,
@@ -68,7 +69,15 @@ export async function deployVEBO(
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
 
-  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [secondsPerSlot, genesisTime, locatorAddr]);
+  const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
+  const nodeOperatorsRegistryAddr = await nodeOperatorsRegistry.getAddress();
+
+  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
+    secondsPerSlot,
+    genesisTime,
+    locatorAddr,
+    nodeOperatorsRegistryAddr,
+  ]);
 
   const { consensus } = await deployHashConsensus(admin, {
     reportProcessor: oracle as unknown as ReportProcessor__Mock,
@@ -111,6 +120,7 @@ export async function deployVEBO(
     consensus,
     oracleReportSanityChecker,
     triggerableWithdrawalsGateway,
+    nodeOperatorsRegistry,
   };
 }
 
