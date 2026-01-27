@@ -72,6 +72,21 @@ export async function deployVEBO(
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
   const nodeOperatorsRegistryAddr = await nodeOperatorsRegistry.getAddress();
 
+  // Configure mock with commonly used test pubkeys
+  const testPubkeys = [
+    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  ];
+  // Set up keys for multiple node operators and key indices
+  for (let nodeOpId = 0; nodeOpId < 100; nodeOpId++) {
+    for (let keyIdx = 0; keyIdx < testPubkeys.length; keyIdx++) {
+      await nodeOperatorsRegistry.setSigningKey(nodeOpId, keyIdx, testPubkeys[keyIdx]);
+    }
+  }
+
   const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
     secondsPerSlot,
     genesisTime,

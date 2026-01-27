@@ -19,7 +19,13 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
   before(async () => {
     locator = await deployLidoLocator();
     [admin] = await ethers.getSigners();
-    oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [12n, 100n, await locator.getAddress()]);
+    const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
+    oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
+      12n,
+      100n,
+      await locator.getAddress(),
+      await nodeOperatorsRegistry.getAddress(),
+    ]);
 
     const consensus = await ethers.deployContract("HashConsensus__Harness", [
       SLOTS_PER_EPOCH,
