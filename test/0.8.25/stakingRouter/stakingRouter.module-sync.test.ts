@@ -6,13 +6,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  AccountingOracle__MockForLidoFastLane,
   DepositContract__MockForBeaconChainDepositor,
   Lido__MockForStakingRouter,
   LidoLocator,
   StakingModule__MockForStakingRouter,
   StakingRouter__Harness,
 } from "typechain-types";
-import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter.sol/StakingRouter";
+import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
 
 import { ether, getModuleMEB, getNextBlock, impersonate, StakingModuleStatus, WithdrawalCredentialsType } from "lib";
 
@@ -29,6 +30,7 @@ describe("StakingRouter.sol:module-sync", () => {
   let stakingRouterWithLib: StakingRouterWithLib;
   let stakingModule: StakingModule__MockForStakingRouter;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
+  let accountingOracle: AccountingOracle__MockForLidoFastLane;
 
   let locator: LidoLocator;
   let lidoMock: Lido__MockForStakingRouter;
@@ -59,15 +61,19 @@ describe("StakingRouter.sol:module-sync", () => {
     // Deploy Lido mock
     lidoMock = await ethers.deployContract("Lido__MockForStakingRouter", deployer);
 
+    // deploy oracle
+    accountingOracle = await ethers.deployContract("AccountingOracle__MockForLidoFastLane", deployer);
+
     locator = await deployLidoLocator({
       lido: lidoMock,
       topUpGateway,
       depositSecurityModule,
+      accountingOracle,
     });
 
     ({ stakingRouter, stakingRouterWithLib, depositContract } = await deployStakingRouter(
       { deployer, admin },
-      { lidoLocator: locator },
+      { lidoLocator: locator, lido: lidoMock },
     ));
 
     // initialize staking router with Lido mock
@@ -78,6 +84,9 @@ describe("StakingRouter.sol:module-sync", () => {
 
     // Get DSM signer for deposit tests
     dsmSigner = await impersonate(depositSecurityModule, ether("10.0"));
+
+    // simulate finished Oracle report to allow deposits
+    await accountingOracle.mock_setProcessingState(1, true, true);
 
     // grant roles
 
@@ -945,7 +954,7 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Reverts if the caller is not DSM", async () => {
       await expect(stakingRouter.connect(user).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
-        "AppAuthDSMFailed",
+        "AppAuthFailed",
       );
     });
 
@@ -954,7 +963,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
       await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
-        "StakingModuleNotActive",
+        "CannotDeposit",
       );
     });
 

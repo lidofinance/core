@@ -166,11 +166,24 @@ struct ModuleStateDeposits {
 
 /// @dev 1 storage slot
 struct ModuleStateAccounting {
-    /// @notice Effective balance of the staking module, in Gwei.
-    uint96 clBalanceGwei;
-    uint96 activeBalanceGwei;
-    /// @notice Number of exited validators for Legacy modules
+    /// @notice total actual balance of validators for module in Gwei.
+    uint64 activeBalanceGwei;
+    /// @notice total pending balance of validators for module in Gwei.
+    uint64 pendingBalanceGwei;
+    /// @notice Cumulative number of exited validators for module
     uint64 exitedValidatorsCount;
+    /// @notice total deposited balance since last report for module in Gwei.
+    // uint64 depositedBalanceGwei;
+}
+
+struct RouterStateAccounting {
+    /// @notice total actual balance of validators in Gwei.
+    uint64 activeBalanceGwei;
+    /// @notice total pending balance of validators in Gwei.
+    uint64 pendingBalanceGwei;
+    /// @notice total deposited balance since last report in Gwei.
+    // uint64 depositedBalanceGwei;
+    // uint64 reserved1;
 }
 
 struct ModuleState {
@@ -184,16 +197,12 @@ struct ModuleState {
     string name; // slot 3
 }
 
-struct RouterStorage {
+struct RouterState {
     // moduleId => ModuleState
-    mapping(uint256 => ModuleState) moduleStates;
-    EnumerableSet.UintSet moduleIds;
-    uint96 totalClBalanceGwei;
-    uint96 totalActiveBalanceGwei;
-    bytes32 withdrawalCredentials;
-    // address lido;
-    // address topUpGateway;
-    // address depositSecurityModule;
+    mapping(uint256 => ModuleState) moduleStates; // slot 0
+    EnumerableSet.UintSet moduleIds; // slot 1
+    RouterStateAccounting accounting; // slot 2
+    bytes32 withdrawalCredentials; // slot 3
     uint24 lastModuleId;
 }
 

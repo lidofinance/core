@@ -3,13 +3,10 @@ pragma solidity 0.8.25;
 
 import {SRStorage} from "./SRStorage.sol";
 import {ModuleState} from "./SRTypes.sol";
-import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
-import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 
 library SRUtils {
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
-    using DepositsTracker for DepositedState;
 
     uint256 public constant TOTAL_BASIS_POINTS = 10000;
     // uint256 internal constant TOTAL_METRICS_COUNT = 2;
@@ -23,6 +20,9 @@ library SRUtils {
     // Withdrawal Credentials types
     uint8 public constant WC_TYPE_01 = 0x01;
     uint8 public constant WC_TYPE_02 = 0x02;
+
+    /// @dev Large enough to fit all existing Ether per entity, yet overflow-safe when aggregating a reasonable number of entities
+    uint256 internal constant MAX_VALUE_GWEI = 1_000_000_000 ether / 1 gwei; // i.e. 1B ETH
 
     /// @notice Initial deposit amount made for validator creation
     /// @dev Identical for both 0x01 and 0x02 types.
@@ -86,10 +86,11 @@ library SRUtils {
         if (_maxDepositsPerBlock > type(uint64).max) revert InvalidMaxDepositPerBlockValue();
     }
 
-    function _validateAmountGwei(uint256 _amountGwei) internal pure {
-        if (_amountGwei > type(uint96).max) {
+    function _validateAmountGwei(uint256 _amountGwei) internal pure returns (uint64) {
+        if (_amountGwei > MAX_VALUE_GWEI) {
             revert InvalidAmountGwei();
         }
+        return uint64(_amountGwei);
     }
 
     function _validateWithdrawalCredentialsType(uint256 _withdrawalCredentialsType) internal pure {
@@ -124,15 +125,6 @@ library SRUtils {
         return uint16((_value * TOTAL_BASIS_POINTS) / _precision);
     }
 
-    ///  @dev get current balance of the module in ETH (wei)
-    function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
-        uint256 clBalance = _fromGwei(moduleId.getModuleState().getStateAccounting().clBalanceGwei);
-        // todo: add pending balances from report
-        // todo: check wei/gwei conversion
-        uint256 pendingDeposits = SRStorage.getStakingModuleTrackerStorage(moduleId).getDepositedEthUpToLastSlot();
-        return clBalance + pendingDeposits;
-    }
-
     function _getModuleIndexById(uint256 moduleId) internal view returns (uint256 idx) {
         idx = SRStorage.getModuleInternalPositionById(moduleId);
         if (idx == 0) {
@@ -144,19 +136,22 @@ library SRUtils {
         }
     }
 
+    ///  @dev get current balance of the module in ETH (wei)
     function _getModuleActiveBalance(uint256 moduleId) internal view returns (uint256) {
-        return _fromGwei(moduleId.getModuleState().getStateAccounting().activeBalanceGwei);
+        return _fromGwei(moduleId.getModuleState().accounting.activeBalanceGwei);
     }
 
-    ///  @dev get total balance of all modules + deposit tracker in ETH
-    function _getTotalModulesBalance() internal view returns (uint256) {
-        uint256 totalClBalance = _fromGwei(SRStorage.getRouterStorage().totalClBalanceGwei);
-        uint256 pendingDeposits = SRStorage.getLidoDepositTrackerStorage().getDepositedEthUpToLastSlot();
-        return totalClBalance + pendingDeposits;
+    function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
+        return _getModuleActiveBalance(moduleId) + _fromGwei(moduleId.getModuleState().accounting.pendingBalanceGwei);
     }
 
+    ///  @dev get total balance of all modules (active + pending) in ETH
     function _getTotalModulesActiveBalance() internal view returns (uint256) {
-        return _fromGwei(SRStorage.getRouterStorage().totalActiveBalanceGwei);
+        return _fromGwei(SRStorage.getRouterState().accounting.activeBalanceGwei);
+    }
+
+    function _getTotalModulesBalance() internal view returns (uint256) {
+        return _getTotalModulesActiveBalance() + _fromGwei(SRStorage.getRouterState().accounting.pendingBalanceGwei);
     }
 
     ///  @dev calculate module capacity in ETH
@@ -168,10 +163,10 @@ library SRUtils {
         return availableKeysCount * _getModuleMEB(withdrawalCredentialsType);
     }
 
-    function _toGwei(uint256 amount) internal pure returns (uint96) {
+    function _toGwei(uint256 amount) internal pure returns (uint64) {
         amount /= 1 gwei;
         _validateAmountGwei(amount);
-        return uint96(amount);
+        return uint64(amount);
     }
 
     function _fromGwei(uint256 amount) internal pure returns (uint256) {

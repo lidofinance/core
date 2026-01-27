@@ -20,6 +20,7 @@ interface IStakingRouter {
         bytes calldata _vettedSigningKeysCounts
     ) external;
     function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
+    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
 }
 
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
@@ -43,6 +44,10 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
 
     constructor(uint256 stakingModuleId) {
         registeredStakingModuleId = stakingModuleId;
+    }
+
+    function receiveDepositableEther() external payable {
+        // Mock function to receive ETH from Lido.withdrawDepositableEther
     }
 
     function deposit(
@@ -88,6 +93,10 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
         return status == StakingModuleStatus.DepositsPaused;
+    }
+
+    function canDeposit(uint256 _stakingModuleId) external view returns (bool) {
+        return hasStakingModule(_stakingModuleId) && status == StakingModuleStatus.Active;
     }
 
     function getStakingModuleIsActive(

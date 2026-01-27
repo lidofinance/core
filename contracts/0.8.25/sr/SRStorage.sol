@@ -4,21 +4,17 @@ pragma solidity 0.8.25;
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
-import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
-import {ModuleState, ModuleStateConfig, ModuleStateDeposits, ModuleStateAccounting, RouterStorage} from "./SRTypes.sol";
+import {ModuleState, RouterState} from "./SRTypes.sol";
 
 library SRStorage {
     using EnumerableSet for EnumerableSet.UintSet;
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
 
-    /// @dev RouterStorage storage position
+    /// @dev RouterState storage position
     bytes32 internal constant ROUTER_STORAGE_POSITION = keccak256(
         abi.encode(uint256(keccak256(abi.encodePacked("lido.StakingRouter.routerStorage"))) - 1)
     ) & ~bytes32(uint256(0xff));
-
-    /// @dev Module trackers will be derived from this position
-    bytes32 internal constant DEPOSITS_TRACKER = keccak256("lido.StakingRouter.depositTracker");
 
     function getIStakingModule(uint256 _moduleId) internal view returns (IStakingModule) {
         return _moduleId.getModuleState().getIStakingModule();
@@ -29,94 +25,104 @@ library SRStorage {
     }
 
     function getIStakingModule(ModuleState storage $) internal view returns (IStakingModule) {
-        return IStakingModule($.getStateConfig().moduleAddress);
+        return IStakingModule($.config.moduleAddress);
     }
 
     function getIStakingModuleV2(ModuleState storage $) internal view returns (IStakingModuleV2) {
-        return IStakingModuleV2($.getStateConfig().moduleAddress);
+        return IStakingModuleV2($.config.moduleAddress);
     }
 
-    function getStateConfig(ModuleState storage $) internal view returns (ModuleStateConfig storage) {
-        return $.config;
-    }
+    // function loadStateAccounting(ModuleState storage $) internal view returns (uint64 a, uint64 b, uint64 c, uint64 d) {
+    //     (a, b, c, d) = _unpack(_loadModuleState($, 2));
+    // }
 
-    function setStateConfig(ModuleState storage $, ModuleStateConfig memory _config) internal {
-        $.config = _config;
-    }
-
-    function getStateDeposits(ModuleState storage $) internal view returns (ModuleStateDeposits storage) {
-        return $.deposits;
-    }
-
-    function setStateDeposits(ModuleState storage $, ModuleStateDeposits memory _deposits) internal {
-        $.deposits = _deposits;
-    }
-
-    function getStateAccounting(ModuleState storage $) internal view returns (ModuleStateAccounting storage) {
-        return $.accounting;
-    }
-
-    function setStateAccounting(ModuleState storage $, ModuleStateAccounting memory _accounting) internal {
-        $.accounting = _accounting;
-    }
+    // function saveStateAccounting(ModuleState storage $, uint64 a, uint64 b, uint64 c, uint64 d) internal {
+    //     _saveModuleState($, 2, _pack(a, b, c, d));
+    // }
 
     function getModuleState(uint256 _moduleId) internal view returns (ModuleState storage) {
-        return getRouterStorage().moduleStates[_moduleId];
+        return getRouterState().moduleStates[_moduleId];
     }
 
-    /// @dev get RouterStorage storage reference
-    function getRouterStorage() internal pure returns (RouterStorage storage $) {
+    /// @dev get RouterState storage reference
+    function getRouterState() internal pure returns (RouterState storage $) {
         bytes32 _position = ROUTER_STORAGE_POSITION;
         assembly ("memory-safe") {
             $.slot := _position
         }
     }
 
-    function getStakingModuleTrackerStorage(uint256 stakingModuleId) internal pure returns (DepositedState storage $) {
-        return _getDepositTrackerStorage(keccak256(abi.encode(stakingModuleId, DEPOSITS_TRACKER)));
-    }
+    // function loadStateAccounting(RouterState storage $) internal view returns (uint64 a, uint64 b, uint64 c) {
+    //     (a, b, c,) = _unpack(_loadRouterState($, 2));
+    // }
 
-    function getLidoDepositTrackerStorage() internal pure returns (DepositedState storage $) {
-        return _getDepositTrackerStorage(DEPOSITS_TRACKER);
-    }
-
-    function _getDepositTrackerStorage(bytes32 _position) private pure returns (DepositedState storage $) {
-        assembly {
-            $.slot := _position
-        }
-    }
+    // function saveStateAccounting(RouterState storage $, uint64 a, uint64 b, uint64 c) internal {
+    //     _saveRouterState($, 2, _pack(a, b, c, 0));
+    // }
 
     function getModulesCount() internal view returns (uint256) {
-        return getRouterStorage().moduleIds.length();
+        return getRouterState().moduleIds.length();
     }
 
     function getModuleIds() internal view returns (uint256[] memory) {
-        return getRouterStorage().moduleIds.values();
+        return getRouterState().moduleIds.values();
     }
 
     function isModuleId(uint256 _moduleId) internal view returns (bool) {
-        return getRouterStorage().moduleIds.contains(_moduleId);
+        return getRouterState().moduleIds.contains(_moduleId);
     }
 
     function getModuleInternalPositionById(uint256 _moduleId) internal view returns (uint256) {
         // get the internal position (1-based index) of the module ID in the enumerable set
-        return getRouterStorage().moduleIds._inner._positions[bytes32(_moduleId)];
+        return getRouterState().moduleIds._inner._positions[bytes32(_moduleId)];
     }
 
     function addModuleId(uint256 _moduleId) internal {
-        getRouterStorage().moduleIds.add(_moduleId);
+        getRouterState().moduleIds.add(_moduleId);
     }
 
     function removeModuleId(uint256 _moduleId) internal {
-        getRouterStorage().moduleIds.remove(_moduleId);
+        getRouterState().moduleIds.remove(_moduleId);
     }
 
-    /// @dev Save the last deposit state for the staking module
-    /// @param _moduleId id of the staking module to be deposited
-    function setModuleLastDepositState(uint256 _moduleId) internal {
-        ModuleStateDeposits memory stateDeposits = _moduleId.getModuleState().getStateDeposits();
-        stateDeposits.lastDepositAt = uint64(block.timestamp);
-        stateDeposits.lastDepositBlock = uint64(block.number);
-        _moduleId.getModuleState().setStateDeposits(stateDeposits);
-    }
+    // // optimized load/save of packed state as uint256 rather than struct
+
+    // /// @dev Load/save RouterState at slot offset
+    // function _loadRouterState(RouterState storage $, uint256 o) private view returns (uint256 v) {
+    //     assembly ("memory-safe") {
+    //         v := sload(add($.slot, o))
+    //     }
+    // }
+
+    // function _saveRouterState(RouterState storage $, uint256 o, uint256 v) private {
+    //     assembly ("memory-safe") {
+    //         sstore(add($.slot, o), v)
+    //     }
+    // }
+
+    // /// @dev Load/save ModuleState at slot offset
+    // function _loadModuleState(ModuleState storage $, uint256 o) private view returns (uint256 v) {
+    //     assembly ("memory-safe") {
+    //         v := sload(add($.slot, o))
+    //     }
+    // }
+
+    // function _saveModuleState(ModuleState storage $, uint256 o, uint256 v) private {
+    //     assembly ("memory-safe") {
+    //         sstore(add($.slot, o), v)
+    //     }
+    // }
+
+    // /// optimized helpers
+
+    // function _pack(uint64 a, uint64 b, uint64 c, uint64 d) private pure returns (uint256 x) {
+    //     x = uint256(a) | (uint256(b) << 64) | (uint256(c) << 128) | (uint256(d) << 192);
+    // }
+
+    // function _unpack(uint256 x) private pure returns (uint64 a, uint64 b, uint64 c, uint64 d) {
+    //     a = uint64(x);
+    //     b = uint64(x >> 64);
+    //     c = uint64(x >> 128);
+    //     d = uint64(x >> 192);
+    // }
 }

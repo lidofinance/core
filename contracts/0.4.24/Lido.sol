@@ -183,6 +183,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // Emitted when CL balances are updated by the oracle
     event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clActiveBalance, uint256 clPendingBalance);
+    // Emitted when CL pending balance is updated during deposits to CL
+    event CLPendingBalancesUpdated(uint256 clPendingBalance);
 
     // Emitted when depositedValidators value is changed
     event DepositedValidatorsChanged(uint256 depositedValidators);
@@ -705,6 +707,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         }
 
         stakingRouter.receiveDepositableEther.value(_amount)();
+
+        /// @dev the requested withdrawal will be sent to DepositContract, so we adjust the clPendingBalance counter
+        ///      so that the value of _getInternalEther corresponds to reality
+        uint256 newClPendingBalance = CL_PENDING_BALANCE_POSITION.getStorageUint256().add(_amount);
+        CL_PENDING_BALANCE_POSITION.setStorageUint256(newClPendingBalance);
+        emit CLPendingBalancesUpdated(newClPendingBalance);
     }
 
     function _getRefSlotDepositableEther(uint256 buffered)

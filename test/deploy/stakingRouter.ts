@@ -6,13 +6,14 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   BeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor,
+  Lido__MockForStakingRouter,
   LidoLocator,
   MinFirstAllocationStrategy,
   SRLib,
   StakingRouter__Harness,
 } from "typechain-types";
 
-import { GENESIS_TIME, proxify, SECONDS_PER_SLOT } from "lib";
+import { proxify } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 
@@ -26,19 +27,13 @@ export interface DeployStakingRouterSigners {
 
 export interface DeployStakingRouterParams {
   depositContract?: DepositContract__MockForBeaconChainDepositor;
-  secondsPerSlot?: bigint | undefined;
-  genesisTime?: bigint | undefined;
+  lido?: Lido__MockForStakingRouter;
   lidoLocator?: LidoLocator;
 }
 
 export async function deployStakingRouter(
   { deployer, admin, user }: DeployStakingRouterSigners,
-  {
-    depositContract,
-    secondsPerSlot = SECONDS_PER_SLOT,
-    genesisTime = GENESIS_TIME,
-    lidoLocator,
-  }: DeployStakingRouterParams = {},
+  { depositContract, lido, lidoLocator }: DeployStakingRouterParams = {},
 ): Promise<{
   depositContract: DepositContract__MockForBeaconChainDepositor;
   stakingRouter: StakingRouter__Harness;
@@ -49,8 +44,13 @@ export async function deployStakingRouter(
   if (!depositContract) {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor");
   }
+
+  if (!lido) {
+    lido = await ethers.deployContract("Lido__MockForStakingRouter", deployer);
+  }
+
   if (!lidoLocator) {
-    lidoLocator = await deployLidoLocator();
+    lidoLocator = await deployLidoLocator({ lido });
   }
 
   const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
@@ -69,9 +69,7 @@ export async function deployStakingRouter(
     },
   });
 
-  const impl = await stakingRouterFactory
-    .connect(deployer)
-    .deploy(depositContract, secondsPerSlot, genesisTime, lidoLocator);
+  const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, lido, lidoLocator);
   const [stakingRouter] = await proxify({ impl, admin, caller: user });
 
   const combinedIface = new ethers.Interface([...stakingRouter.interface.fragments, ...srLib.interface.fragments]);

@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, SECONDS_PER_SLOT } from "lib";
+import { certainAddress, ether } from "lib";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -29,8 +29,6 @@ describe("StakingRouter.sol:misc", () => {
   const accountingOracle = certainAddress("test:staking-router:accountingOracle");
   const withdrawalCredentials = hexlify(randomBytes(32));
 
-  const GENESIS_TIME = 1606824023n;
-
   before(async () => {
     [deployer, admin, stakingRouterAdmin, user] = await ethers.getSigners();
 
@@ -44,8 +42,6 @@ describe("StakingRouter.sol:misc", () => {
     ({ stakingRouter, impl } = await deployStakingRouter(
       { deployer, admin, user },
       {
-        secondsPerSlot: SECONDS_PER_SLOT,
-        genesisTime: GENESIS_TIME,
         lidoLocator: locator,
       },
     ));
