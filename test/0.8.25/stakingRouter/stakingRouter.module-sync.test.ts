@@ -8,16 +8,16 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForBeaconChainDepositor,
   Lido__MockForStakingRouter,
+  LidoLocator,
   StakingModule__MockForStakingRouter,
-  StakingRouter,
+  StakingRouter__Harness,
 } from "typechain-types";
-import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter.sol/StakingRouter";
+import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
 
-import { ether, getNextBlock, impersonate, StakingModuleStatus, WithdrawalCredentialsType } from "lib";
+import { ether, getModuleMEB, getNextBlock, impersonate, StakingModuleStatus, WithdrawalCredentialsType } from "lib";
 
+import { deployLidoLocator, deployStakingRouter, StakingRouterWithLib } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
 
 describe("StakingRouter.sol:module-sync", () => {
   let deployer: HardhatEthersSigner;
@@ -25,10 +25,12 @@ describe("StakingRouter.sol:module-sync", () => {
   let user: HardhatEthersSigner;
   let dsmSigner: HardhatEthersSigner;
 
-  let stakingRouter: StakingRouter;
+  let stakingRouter: StakingRouter__Harness;
   let stakingRouterWithLib: StakingRouterWithLib;
   let stakingModule: StakingModule__MockForStakingRouter;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
+
+  let locator: LidoLocator;
   let lidoMock: Lido__MockForStakingRouter;
 
   let moduleId: bigint;
@@ -40,8 +42,8 @@ describe("StakingRouter.sol:module-sync", () => {
   const name = "myStakingModule";
   const stakingModuleFee = 5_00n;
   const treasuryFee = 5_00n;
-  const stakeShareLimit = 1_00n;
-  const priorityExitShareThreshold = 2_00n;
+  const stakeShareLimit = 100_00n;
+  const priorityExitShareThreshold = 100_00n;
   const maxDepositsPerBlock = 150n;
   const minDepositBlockDistance = 25n;
 
@@ -54,14 +56,22 @@ describe("StakingRouter.sol:module-sync", () => {
   before(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
-    ({ stakingRouter, stakingRouterWithLib, depositContract } = await deployStakingRouter({ deployer, admin }));
-
     // Deploy Lido mock
     lidoMock = await ethers.deployContract("Lido__MockForStakingRouter", deployer);
-    const lidoMockAddress = await lidoMock.getAddress();
+
+    locator = await deployLidoLocator({
+      lido: lidoMock,
+      topUpGateway,
+      depositSecurityModule,
+    });
+
+    ({ stakingRouter, stakingRouterWithLib, depositContract } = await deployStakingRouter(
+      { deployer, admin },
+      { lidoLocator: locator },
+    ));
 
     // initialize staking router with Lido mock
-    await stakingRouter.initialize(admin, lidoMockAddress, withdrawalCredentials, topUpGateway, depositSecurityModule);
+    await stakingRouter.initialize(admin, withdrawalCredentials);
 
     // Set staking router address on Lido mock so it can send ETH
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());
@@ -125,21 +135,35 @@ describe("StakingRouter.sol:module-sync", () => {
     ];
 
     // module mock state
+    const exitedValidators = 100n;
+    const depositedValidators = 1000n;
+    const depositableValidators = 200n;
     const stakingModuleSummary: Parameters<StakingModule__MockForStakingRouter["mock__getStakingModuleSummary"]> = [
-      100n, // exitedValidators
-      1000, // depositedValidators
-      200, // depositableValidators
+      exitedValidators, // exitedValidators
+      depositedValidators, // depositedValidators
+      depositableValidators, // depositableValidators
+    ];
+
+    const balance = _getBalanceByValidatorsCount(
+      WithdrawalCredentialsType.WC0x01,
+      depositedValidators - exitedValidators,
+    );
+    const stakingModuleAccounting: Parameters<StakingRouter__Harness["testing_setStakingModuleAccounting"]> = [
+      0n, // moduleId
+      balance, // effectiveBalanceGwei
+      balance, // pendingBalanceGwei
+      exitedValidators, // exitedValidators
     ];
 
     const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
-      1, // targetLimitMode
-      100n, // targetValidatorsCount
+      0, // targetLimitMode
+      0n, // targetValidatorsCount
       0n, // stuckValidatorsCount
       0n, // refundedValidatorsCount
       0n, // stuckPenaltyEndTimestamp
-      50, // totalExitedValidators
-      1000n, // totalDepositedValidators
-      200n, // depositableValidatorsCount
+      exitedValidators, // totalExitedValidators
+      depositedValidators, // totalDepositedValidators
+      depositableValidators, // depositableValidatorsCount
     ];
 
     const nodeOperatorsCounts: Parameters<StakingModule__MockForStakingRouter["mock__nodeOperatorsCount"]> = [
@@ -160,7 +184,7 @@ describe("StakingRouter.sol:module-sync", () => {
         name,
         lastDepositAt,
         lastDepositBlock,
-        0n, // exitedValidatorsCount,
+        exitedValidators,
         priorityExitShareThreshold,
         maxDepositsPerBlock,
         minDepositBlockDistance,
@@ -169,6 +193,8 @@ describe("StakingRouter.sol:module-sync", () => {
 
       // mocking module state
       await stakingModule.mock__getStakingModuleSummary(...stakingModuleSummary);
+      stakingModuleAccounting[0] = moduleId;
+      await stakingRouter.testing_setStakingModuleAccounting(...stakingModuleAccounting);
       await stakingModule.mock__getNodeOperatorSummary(...nodeOperatorSummary);
       await stakingModule.mock__nodeOperatorsCount(...nodeOperatorsCounts);
       await stakingModule.mock__getNodeOperatorIds(nodeOperatorsIds);
@@ -298,10 +324,10 @@ describe("StakingRouter.sol:module-sync", () => {
 
     context("getStakingModuleActiveValidatorsCount", () => {
       it("Returns the number of active validators in the module", async () => {
-        const [exitedValidators, depositedValidators] = stakingModuleSummary;
+        const [exited, deposited] = stakingModuleSummary;
 
         expect(await stakingRouter.getStakingModuleActiveValidatorsCount(moduleId)).to.equal(
-          Number(depositedValidators) - Number(exitedValidators),
+          Number(deposited) - Number(exited),
         );
       });
     });
@@ -638,8 +664,8 @@ describe("StakingRouter.sol:module-sync", () => {
     };
 
     const operatorSummary = {
-      targetLimitMode: 1,
-      targetValidatorsCount: 100n,
+      targetLimitMode: 0,
+      targetValidatorsCount: 0n,
       stuckValidatorsCount: 0n,
       refundedValidatorsCount: 0n,
       stuckPenaltyEndTimestamp: 0n,
@@ -660,6 +686,16 @@ describe("StakingRouter.sol:module-sync", () => {
         moduleSummary.totalExitedValidators,
         moduleSummary.totalDepositedValidators,
         moduleSummary.depositableValidatorsCount,
+      );
+      const balance = _getBalanceByValidatorsCount(
+        WithdrawalCredentialsType.WC0x01,
+        moduleSummary.totalDepositedValidators - moduleSummary.totalExitedValidators,
+      );
+      await stakingRouter.testing_setStakingModuleAccounting(
+        moduleId,
+        balance,
+        balance,
+        moduleSummary.totalExitedValidators,
       );
 
       const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
@@ -899,6 +935,11 @@ describe("StakingRouter.sol:module-sync", () => {
 
       // Set up staking module with depositable validators
       await stakingModule.mock__getStakingModuleSummary(0n, 100n, 10n); // 10 depositable validators
+      const balance = _getBalanceByValidatorsCount(
+        WithdrawalCredentialsType.WC0x01,
+        100n, // active validators
+      );
+      await stakingRouter.testing_setStakingModuleAccounting(moduleId, balance, balance, 0);
     });
 
     it("Reverts if the caller is not DSM", async () => {
@@ -920,7 +961,6 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Does not submit 0 deposits when no depositable ether", async () => {
       // Set depositable ether to 0
       await lidoMock.setDepositableEther(0n);
-
       await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).not.to.emit(
         depositContract,
         "Deposited__MockEvent",
@@ -939,7 +979,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
       const newStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
       const newStakingModuleAddress = await newStakingModule.getAddress();
-
+      const withdrawalCredentialsType = WithdrawalCredentialsType.WC0x02;
       const stakingModuleConfigNew = {
         stakeShareLimit,
         priorityExitShareThreshold,
@@ -947,7 +987,7 @@ describe("StakingRouter.sol:module-sync", () => {
         treasuryFee,
         maxDepositsPerBlock,
         minDepositBlockDistance,
-        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        withdrawalCredentialsType,
       };
 
       await stakingRouterAsAdmin.addStakingModule(`${name}-new`, newStakingModuleAddress, stakingModuleConfigNew);
@@ -955,7 +995,21 @@ describe("StakingRouter.sol:module-sync", () => {
       const newModuleId = await stakingRouter.getStakingModulesCount();
 
       // Set up the new module with depositable validators
-      await newStakingModule.mock__getStakingModuleSummary(0n, 100n, 10n); // 10 depositable validators
+      const exitedValidators = 0n;
+      const depositedValidators = 0n;
+      const depositableValidators = 10n;
+      await newStakingModule.mock__getStakingModuleSummary(
+        exitedValidators,
+        depositedValidators,
+        depositableValidators,
+      ); // 10 depositable validators
+      const effBalanceGwei = _getBalanceByValidatorsCount(withdrawalCredentialsType, depositedValidators);
+      await stakingRouter.testing_setStakingModuleAccounting(
+        newModuleId,
+        effBalanceGwei,
+        effBalanceGwei,
+        exitedValidators,
+      );
 
       await expect(stakingRouter.connect(dsmSigner).deposit(newModuleId, "0x")).to.emit(
         depositContract,
@@ -977,3 +1031,7 @@ describe("StakingRouter.sol:module-sync", () => {
     });
   });
 });
+
+function _getBalanceByValidatorsCount(wcType: WithdrawalCredentialsType, validatorsCount: bigint): bigint {
+  return (validatorsCount * getModuleMEB(wcType)) / 1_000_000_000n; // in gwei
+}

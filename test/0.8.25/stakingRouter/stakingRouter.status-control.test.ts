@@ -5,10 +5,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingRouter__Harness } from "typechain-types";
+import { LidoLocator, StakingRouter__Harness } from "typechain-types";
 
 import { certainAddress, WithdrawalCredentialsType } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
@@ -23,6 +24,7 @@ context("StakingRouter.sol:status-control", () => {
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
+  let locator: LidoLocator;
   let stakingRouter: StakingRouter__Harness;
   let stakingRouterWithLib: StakingRouterWithLib;
   let moduleId: bigint;
@@ -37,16 +39,19 @@ context("StakingRouter.sol:status-control", () => {
   before(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
-    // deploy staking router
-    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin }));
-
-    await stakingRouter.initialize(
-      admin,
-      lido, // mock lido address
-      withdrawalCredentials,
+    locator = await deployLidoLocator({
+      lido,
       topUpGateway,
       depositSecurityModule,
-    );
+    });
+
+    // deploy staking router
+    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter(
+      { deployer, admin },
+      { lidoLocator: locator },
+    ));
+
+    await stakingRouter.initialize(admin, withdrawalCredentials);
 
     // give the necessary role to the admin
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);

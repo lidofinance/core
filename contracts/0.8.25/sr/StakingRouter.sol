@@ -10,6 +10,7 @@ import {
     AccessControlEnumerableUpgradeable
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {BeaconChainDepositor, IDepositContract} from "contracts/0.8.25/lib/BeaconChainDepositor.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
@@ -32,13 +33,9 @@ import {
     NodeOperatorDigest,
     ModuleStateConfig,
     ModuleStateDeposits,
-    ModuleStateAccounting
+    ModuleStateAccounting,
+    ILido
 } from "./SRTypes.sol";
-
-interface ILido {
-    function getDepositableEther() external view returns (uint256);
-    function withdrawDepositableEther(uint256 _amount, uint256 _depositsCount) external;
-}
 
 contract StakingRouter is AccessControlEnumerableUpgradeable {
     using WithdrawalCredentials for bytes32;
@@ -62,8 +59,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
     );
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
-    event TopUpGatewaySet(address topUpGateway, address setBy);
-    event DepositSecurityModuleSet(address depositSecurityModule, address setBy);
 
     /// Emitted when the StakingRouter received ETH
     event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
@@ -90,20 +85,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     uint64 internal immutable SECONDS_PER_SLOT;
     uint64 internal immutable GENESIS_TIME;
     IDepositContract public immutable DEPOSIT_CONTRACT;
+    ILidoLocator public immutable LIDO_LOCATOR;
 
-    error ZeroAddressLido();
-    error ZeroAddressAdmin();
-    error ZeroAddressTopUpGateway();
-    error ZeroAddressDepositSecurityModule();
     error StakingModuleNotActive();
     error EmptyWithdrawalsCredentials();
     error DirectETHTransfer();
-    error AppAuthLidoFailed();
-    error AppAuthTopUpGatewayFailed();
     error AppAuthDSMFailed();
     error InvalidChainConfig();
     error AllocationExceedsTarget();
-    error DepositContractZeroAddress();
     error DepositValueNotMultipleOfInitialDeposit();
     error StakingModuleStatusTheSame();
     error WrongWithdrawalCredentialsType();
@@ -131,8 +120,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRUtils.MAX_STAKING_MODULE_NAME_LENGTH;
     }
 
-    constructor(address _depositContract, uint64 secondsPerSlot, uint64 genesisTime) {
-        if (_depositContract == address(0)) revert DepositContractZeroAddress();
+    constructor(address _depositContract, uint64 secondsPerSlot, uint64 genesisTime, address _lidoLocator) {
+        SRUtils._validateZeroAddress(_depositContract);
         if (secondsPerSlot == 0) revert InvalidChainConfig();
 
         _disableInitializers();
@@ -140,32 +129,18 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SECONDS_PER_SLOT = secondsPerSlot;
         GENESIS_TIME = genesisTime;
         DEPOSIT_CONTRACT = IDepositContract(_depositContract);
+        LIDO_LOCATOR = ILidoLocator(_lidoLocator);
     }
 
     /// @notice Initializes the contract.
     /// @param _admin Lido DAO Aragon agent contract address.
-    /// @param _lido Lido address.
     /// @param _withdrawalCredentials 0x01 credentials to withdraw ETH on Consensus Layer side.
-    /// @param _topUpGateway Address of the TopUpGateway contract.
-    /// @param _depositSecurityModule Address of the DepositSecurityModule contract.
     /// @dev Proxy initialization method.
-    function initialize(
-        address _admin,
-        address _lido,
-        bytes32 _withdrawalCredentials,
-        address _topUpGateway,
-        address _depositSecurityModule
-    ) external reinitializer(4) {
-        if (_admin == address(0)) revert ZeroAddressAdmin();
-        if (_lido == address(0)) revert ZeroAddressLido();
+    function initialize(address _admin, bytes32 _withdrawalCredentials) external reinitializer(4) {
+        SRUtils._validateZeroAddress(_admin);
 
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-
-        SRStorage.getRouterStorage().lido = _lido;
-
-        _setTopUpGateway(_topUpGateway);
-        _setDepositSecurityModule(_depositSecurityModule);
 
         // TODO: maybe store withdrawalVault
         _setWithdrawalCredentials(_withdrawalCredentials);
@@ -193,22 +168,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     // }
 
     /// @notice A function to migrade upgrade to v4 (from v3) and use Openzeppelin versioning.
-    /// @param _topUpGateway Address of the TopUpGateway contract.
-    /// @param _depositSecurityModule Address of the DepositSecurityModule contract.
-    function migrateUpgrade_v4(address _topUpGateway, address _depositSecurityModule) external reinitializer(4) {
+    function migrateUpgrade_v4() external reinitializer(4) {
         __AccessControlEnumerable_init();
 
         // migrate current modules to new storage
         SRLib._migrateStorage();
-
-        _setTopUpGateway(_topUpGateway);
-        _setDepositSecurityModule(_depositSecurityModule);
-    }
-
-    /// @notice Returns Lido contract address.
-    /// @return Lido contract address.
-    function getLido() external view returns (address) {
-        return _getLido();
     }
 
     /// @notice Registers a new staking module.
@@ -745,11 +709,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         );
     }
 
+    function canDeposit(uint256 _stakingModuleId) external view returns (bool) {
+        return SRLib._canDeposit(_stakingModuleId, address(LIDO_LOCATOR));
+    }
+
     /**
      * @notice A payable function for depositable eth acquisition. Can be called only by `Lido`
      */
     function receiveDepositableEther() external payable {
-        if (_msgSender() != _getLido()) revert AppAuthLidoFailed();
+        SRUtils._validateAuth(address(_getLido()));
 
         emit DepositableEthReceived(msg.value);
     }
@@ -761,7 +729,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _pubkeysPacked,
         uint256[] calldata _topUpLimitsGwei
     ) external {
-        if (_msgSender() != _getTopUpGateway()) revert AppAuthTopUpGatewayFailed();
+        SRUtils._validateAuth(_getTopUpGateway());
         _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimitsGwei, _pubkeysPacked);
 
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
@@ -1017,6 +985,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         // Get depositable ether from Lido (similar to topUp)
         uint256 depositableEther = ILido(_getLido()).getDepositableEther();
+
         uint256 stakingModuleDepositableEthAmount =
             _getModuleDepositAllocation(_stakingModuleId, depositableEther, false);
 
@@ -1084,25 +1053,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return Withdrawal credentials.
     function getWithdrawalCredentials() public view returns (bytes32) {
         return SRStorage.getRouterStorage().withdrawalCredentials;
-    }
-
-    /// @notice Set the TopUpGateway address.
-    /// @param _topUpGateway Address of the TopUpGateway contract.
-    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
-    function setTopUpGateway(address _topUpGateway) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
-        _setTopUpGateway(_topUpGateway);
-    }
-
-    /// @notice Returns the TopUpGateway address.
-    /// @return Address of the TopUpGateway contract.
-    function getTopUpGateway() external view returns (address) {
-        return _getTopUpGateway();
-    }
-
-    /// @notice Returns the DepositSecurityModule address.
-    /// @return Address of the DepositSecurityModule contract.
-    function getDepositSecurityModule() external view returns (address) {
-        return _getDepositSecurityModule();
     }
 
     function _getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) internal view returns (uint256) {
@@ -1240,32 +1190,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         ) = _stakingModule.getNodeOperatorSummary(_nodeOperatorId);
     }
 
-    function _getLido() internal view returns (address) {
-        return SRStorage.getRouterStorage().lido;
-    }
-
-    function _getTopUpGateway() internal view returns (address) {
-        return SRStorage.getRouterStorage().topUpGateway;
-    }
-
-    function _setTopUpGateway(address gw) internal {
-        if (gw == address(0)) revert ZeroAddressTopUpGateway();
-        SRStorage.getRouterStorage().topUpGateway = gw;
-        emit TopUpGatewaySet(gw, _msgSender());
-    }
-
-    function _getDepositSecurityModule() internal view returns (address) {
-        return SRStorage.getRouterStorage().depositSecurityModule;
-    }
-
-    function _setDepositSecurityModule(address dsm) internal {
-        if (dsm == address(0)) revert ZeroAddressDepositSecurityModule();
-        SRStorage.getRouterStorage().depositSecurityModule = dsm;
-        emit DepositSecurityModuleSet(dsm, _msgSender());
-    }
-
-    // Helpers
-
     function _getCurrentSlot() internal view returns (uint256) {
         return (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
     }
@@ -1295,5 +1219,17 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // track deposited amount for module
         DepositedState storage moduleState = SRStorage.getStakingModuleTrackerStorage(_stakingModuleId);
         moduleState.insertSlotDeposit(slot, _depositsValue);
+    }
+
+    function _getLido() internal view returns (ILido) {
+        return ILido(LIDO_LOCATOR.lido());
+    }
+
+    function _getTopUpGateway() internal view returns (address) {
+        return LIDO_LOCATOR.topUpGateway();
+    }
+
+    function _getDepositSecurityModule() internal view returns (address) {
+        return LIDO_LOCATOR.depositSecurityModule();
     }
 }

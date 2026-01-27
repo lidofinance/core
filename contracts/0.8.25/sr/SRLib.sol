@@ -7,6 +7,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {SRStorage} from "./SRStorage.sol";
 import {SRUtils} from "./SRUtils.sol";
 import {
@@ -18,7 +19,8 @@ import {
     ModuleStateDeposits,
     ModuleStateAccounting,
     ValidatorExitData,
-    ValidatorsCountsCorrection
+    ValidatorsCountsCorrection,
+    IAccountingOracle
 } from "./SRTypes.sol";
 
 library SRLib {
@@ -93,8 +95,6 @@ library SRLib {
             // revert WrongInitialMigrationState();
         }
 
-        // migrate Lido address
-        SRStorage.getRouterStorage().lido = LIDO_POSITION.getAddressSlot().value;
         // cleanup old storage slot fully as bytes32
         delete LIDO_POSITION.getBytes32Slot().value;
 
@@ -198,7 +198,7 @@ library SRLib {
         public
         returns (uint256 newModuleId)
     {
-        SRUtils._validateModuleAddress(_moduleAddress);
+        SRUtils._validateZeroAddress(_moduleAddress);
         SRUtils._validateModuleName(_moduleName);
         SRUtils._validateModulesCount();
         SRUtils._validateWithdrawalCredentialsType(_moduleConfig.withdrawalCredentialsType);
@@ -276,7 +276,7 @@ library SRLib {
         isChanged = stateConfig.status != _status;
         if (isChanged) {
             stateConfig.status = _status;
-            emit StakingModuleStatusSet(_moduleId, _status, _msgSender());
+            emit StakingModuleStatusSet(_moduleId, _status, SRUtils._msgSender());
         }
     }
 
@@ -287,11 +287,6 @@ library SRLib {
         returns (uint256 exitedValidators, uint256 depositedValidators, uint256 depositableValidators)
     {
         return module.getStakingModuleSummary();
-    }
-
-    /// @dev mimic OpenZeppelin ContextUpgradeable._msgSender()
-    function _msgSender() internal view returns (address) {
-        return msg.sender;
     }
 
     /// @notice Deposit allocation for modules
@@ -315,21 +310,27 @@ library SRLib {
 
         uint256 depositsToAllocate = SRUtils._getInitialDepositCountByAmount(_allocateAmount);
         // get current allocations and capacities in validators equivalent
-        (uint256[] memory allocations, uint256[] memory capacities) =
-            _getModulesAllocationAndCapacity(depositsToAllocate, _isTopUp);
+        uint256[] memory capacities;
+        // @dev using output parameter as temporary storage for current allocations
+        (allocated, capacities) = _getModulesAllocationAndCapacity(depositsToAllocate, _isTopUp);
 
         // If no deposits to allocate, return current state
         if (depositsToAllocate > 0) {
             // Use MinFirstAllocationStrategy to allocate deposits
             (totalAllocated, newAllocations) =
-                MinFirstAllocationStrategy.allocate(allocations, capacities, depositsToAllocate);
-        }
-
-        // Convert allocated validators and allocations per module back to Ether amounts
-        totalAllocated = SRUtils._getInitialDepositAmountByCount(totalAllocated);
-        for (uint256 i = 0; i < modulesCount; ++i) {
-            allocated[i] = SRUtils._getInitialDepositAmountByCount(allocations[i] - newAllocations[i]);
-            newAllocations[i] = SRUtils._getInitialDepositAmountByCount(newAllocations[i]);
+                MinFirstAllocationStrategy.allocate(allocated, capacities, depositsToAllocate);
+            // Convert allocated validators and allocations per module back to Ether amounts
+            totalAllocated = SRUtils._getInitialDepositAmountByCount(totalAllocated);
+            for (uint256 i = 0; i < modulesCount; ++i) {
+                allocated[i] = SRUtils._getInitialDepositAmountByCount(newAllocations[i] - allocated[i]);
+                newAllocations[i] = SRUtils._getInitialDepositAmountByCount(newAllocations[i]);
+            }
+        } else {
+            newAllocations = new uint256[](modulesCount);
+            for (uint256 i = 0; i < modulesCount; ++i) {
+                newAllocations[i] = SRUtils._getInitialDepositAmountByCount(allocated[i]);
+                allocated[i] = 0;
+            }
         }
     }
 
@@ -356,8 +357,8 @@ library SRLib {
         for (uint256 i = 0; i < modulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
             // Calculate equivalent of active WC01 validators count rounded up: ceil(balance / INITIAL_DEPOSIT_SIZE)
-            uint256 validatorsCount =
-                Math256.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.INITIAL_DEPOSIT_SIZE);
+            uint256 validatorsCount = Math256.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.INITIAL_DEPOSIT_SIZE);
+
             _allocations[i] = validatorsCount;
             totalValidators += validatorsCount;
         }
@@ -373,11 +374,9 @@ library SRLib {
             ModuleStateConfig memory stateConfig = moduleState.getStateConfig();
 
             uint256 validatorsCapacity = _allocations[i];
-
             if (stateConfig.status == StakingModuleStatus.Active) {
                 (uint256 exitedValidators, uint256 depositedValidators, uint256 depositableValidatorsCount) =
                     _getStakingModuleSummary(moduleId.getIStakingModule());
-
                 if (_isTopUp) {
                     // The module might not receive all exited validators data yet => we need to replacing
                     // the exitedValidatorsCount with the one that the staking router is aware of.
@@ -393,7 +392,6 @@ library SRLib {
                 // Target validators = (stakeShareLimit * totalValidators) / TOTAL_BASIS_POINTS
                 uint256 targetValidators =
                     (stateConfig.depositTargetShare * totalValidators) / SRUtils.TOTAL_BASIS_POINTS;
-
                 // Module capacity is limited by available validators and target share
                 validatorsCapacity = Math256.min(targetValidators, validatorsCapacity);
             }
@@ -774,6 +772,20 @@ library SRLib {
         if (nodeOperatorsCount == 0) {
             revert InvalidReportData(1);
         }
+    }
+
+    function _canDeposit(uint256 _moduleId, address _locator) public view returns (bool) {
+        if (!SRStorage.isModuleId(_moduleId)) return false;
+
+        ModuleStateConfig memory stateConfig = _moduleId.getModuleState().getStateConfig();
+        if (stateConfig.status != StakingModuleStatus.Active) return false;
+
+        IAccountingOracle accountingOracle = IAccountingOracle(ILidoLocator(_locator).accountingOracle());
+        // (uint256 currentFrameRefSlot,,, bool mainDataSubmitted,,, bool extraDataSubmitted,,) =
+        //     accountingOracle.getProcessingState();
+        (,,,,,, bool extraDataSubmitted,,) = accountingOracle.getProcessingState();
+
+        return extraDataSubmitted;
     }
 
     function _validateEqualArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength) internal pure {

@@ -6,13 +6,17 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   BeaconChainDepositor,
   DepositContract__MockForBeaconChainDepositor,
+  LidoLocator,
+  MinFirstAllocationStrategy,
   SRLib,
   StakingRouter__Harness,
 } from "typechain-types";
 
 import { GENESIS_TIME, proxify, SECONDS_PER_SLOT } from "lib";
 
-export type StakingRouterWithLib = Contract & SRLib;
+import { deployLidoLocator } from "test/deploy";
+
+export type StakingRouterWithLib = Contract & SRLib & MinFirstAllocationStrategy;
 
 export interface DeployStakingRouterSigners {
   deployer: HardhatEthersSigner;
@@ -24,11 +28,17 @@ export interface DeployStakingRouterParams {
   depositContract?: DepositContract__MockForBeaconChainDepositor;
   secondsPerSlot?: bigint | undefined;
   genesisTime?: bigint | undefined;
+  lidoLocator?: LidoLocator;
 }
 
 export async function deployStakingRouter(
   { deployer, admin, user }: DeployStakingRouterSigners,
-  { depositContract, secondsPerSlot = SECONDS_PER_SLOT, genesisTime = GENESIS_TIME }: DeployStakingRouterParams = {},
+  {
+    depositContract,
+    secondsPerSlot = SECONDS_PER_SLOT,
+    genesisTime = GENESIS_TIME,
+    lidoLocator,
+  }: DeployStakingRouterParams = {},
 ): Promise<{
   depositContract: DepositContract__MockForBeaconChainDepositor;
   stakingRouter: StakingRouter__Harness;
@@ -39,17 +49,29 @@ export async function deployStakingRouter(
   if (!depositContract) {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor");
   }
+  if (!lidoLocator) {
+    lidoLocator = await deployLidoLocator();
+  }
 
   const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-  const srLib = await ethers.deployContract("SRLib", deployer);
+  const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+  const srLib = await ethers.deployContract("SRLib", {
+    signer: deployer,
+    libraries: {
+      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+    },
+  });
   const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
+    signer: deployer,
     libraries: {
       ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
       ["contracts/0.8.25/sr/SRLib.sol:SRLib"]: await srLib.getAddress(),
     },
   });
 
-  const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, secondsPerSlot, genesisTime);
+  const impl = await stakingRouterFactory
+    .connect(deployer)
+    .deploy(depositContract, secondsPerSlot, genesisTime, lidoLocator);
   const [stakingRouter] = await proxify({ impl, admin, caller: user });
 
   const combinedIface = new ethers.Interface([...stakingRouter.interface.fragments, ...srLib.interface.fragments]);

@@ -4,9 +4,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingRouter } from "typechain-types";
+import { LidoLocator, StakingRouter } from "typechain-types";
 
 import { certainAddress, getNextBlock, randomString, WithdrawalCredentialsType } from "lib";
+
+import { deployLidoLocator } from "test/deploy";
 
 import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
 
@@ -17,26 +19,31 @@ describe("StakingRouter.sol:module-management", () => {
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
+  let locator: LidoLocator;
   let stakingRouter: StakingRouter;
   let stakingRouterWithLib: StakingRouterWithLib;
 
   const withdrawalCredentials = hexlify(randomBytes(32));
+  const lido = certainAddress("test:staking-router-modules:lido"); // mock lido address
   const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
   beforeEach(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
-    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin }));
-
-    // initialize staking router
-    await stakingRouter.initialize(
-      admin,
-      certainAddress("test:staking-router-modules:lido"), // mock lido address
-      withdrawalCredentials,
+    locator = await deployLidoLocator({
+      lido,
       topUpGateway,
       depositSecurityModule,
-    );
+    });
+
+    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter(
+      { deployer, admin },
+      { lidoLocator: locator },
+    ));
+
+    // initialize staking router
+    await stakingRouter.initialize(admin, withdrawalCredentials);
 
     // grant roles
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);
@@ -119,7 +126,7 @@ describe("StakingRouter.sol:module-management", () => {
     it("Reverts if the staking module address is zero address", async () => {
       await expect(
         stakingRouter.addStakingModule(NAME, ZeroAddress, stakingModuleConfig),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "ZeroAddressStakingModule");
+      ).to.be.revertedWithCustomError(stakingRouterWithLib, "ZeroAddress");
     });
 
     it("Reverts if the staking module name is empty string", async () => {

@@ -29,8 +29,9 @@ contract StakingRouter__Harness is StakingRouter {
     constructor(
         address _depositContract,
         uint64 _secondsPerSlot,
-        uint64 _genesisTime
-    ) StakingRouter(_depositContract, _secondsPerSlot, _genesisTime) {}
+        uint64 _genesisTime,
+        address _lidoLocator
+    ) StakingRouter(_depositContract, _secondsPerSlot, _genesisTime, _lidoLocator) {}
 
     /// @notice method for testing migrateUpgrade_v4
     /// as version in new version will be stored in another slot, no need to set here old version

@@ -11,8 +11,9 @@ import {
     PendingWitness
 } from "contracts/common/interfaces/TopUpWitness.sol";
 import {CLTopUpVerifier} from "./CLTopUpVerifier.sol";
-import {AccessControlEnumerableUpgradeable} from
-    "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {
+    AccessControlEnumerableUpgradeable
+} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 
@@ -23,8 +24,7 @@ interface ILidoLocator {
 
 interface IStakingRouter {
     function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32);
-    function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
-    function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
+    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
@@ -206,7 +206,8 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         }
 
         // Proceed to StakingRouter
-        IStakingRouter(LOCATOR.stakingRouter()).topUp(topUps.moduleId, topUps.keyIndices, topUps.operatorIds, pubkeysPacked, topUpLimits);
+        IStakingRouter(LOCATOR.stakingRouter())
+            .topUp(topUps.moduleId, topUps.keyIndices, topUps.operatorIds, pubkeysPacked, topUpLimits);
 
         _setLastTopUpSlot(topUps.beaconRootData.slot);
     }
@@ -236,9 +237,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     function canTopUp(uint256 _stakingModuleId) external view returns (bool) {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        if (!stakingRouter.hasStakingModule(_stakingModuleId)) return false;
-
-        bool isModuleActive = stakingRouter.getStakingModuleIsActive(_stakingModuleId);
+        if (!stakingRouter.canDeposit(_stakingModuleId)) return false;
 
         Storage storage $ = _gatewayStorage();
         bool isBlockDistancePassed = $.lastTopUpBlock == 0 || block.number - $.lastTopUpBlock >= $.minBlockDistance;
@@ -249,7 +248,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         bytes32 wc = stakingRouter.getStakingModuleWithdrawalCredentials(_stakingModuleId);
         bool isWC02 = wc.getType() == 2;
 
-        return isModuleActive && isBlockDistancePassed && isLidoCanDeposit && isWC02;
+        return isBlockDistancePassed && isLidoCanDeposit && isWC02;
     }
 
     function setMaxValidatorsPerTopUp(uint256 newValue) external onlyRole(MANAGE_LIMITS_ROLE) {

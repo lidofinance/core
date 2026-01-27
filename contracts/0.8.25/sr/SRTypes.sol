@@ -8,6 +8,42 @@ import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/Enumerab
  * @author KRogLA
  */
 
+interface ILido {
+    function getDepositableEther() external view returns (uint256);
+    function withdrawDepositableEther(uint256 _amount, uint256 _depositsCount) external;
+}
+
+interface IAccountingOracle {
+    // struct ProcessingState {
+    //     uint256 currentFrameRefSlot;
+    //     uint256 processingDeadlineTime;
+    //     bytes32 mainDataHash;
+    //     bool mainDataSubmitted;
+    //     bytes32 extraDataHash;
+    //     uint256 extraDataFormat;
+    //     bool extraDataSubmitted;
+    //     uint256 extraDataItemsCount;
+    //     uint256 extraDataItemsSubmitted;
+    // }
+    // function getProcessingState() external view returns (ProcessingState memory result);
+
+    // replace return struct with multiple return values to avoid memory struct allocation
+    function getProcessingState()
+        external
+        view
+        returns (
+            uint256 currentFrameRefSlot,
+            uint256 processingDeadlineTime,
+            bytes32 mainDataHash,
+            bool mainDataSubmitted,
+            bytes32 extraDataHash,
+            uint256 extraDataFormat,
+            bool extraDataSubmitted,
+            uint256 extraDataItemsCount,
+            uint256 extraDataItemsSubmitted
+        );
+}
+
 /// @dev Since `enum` is `uint8` by nature, so the `status` is stored as `uint8` to avoid
 ///      possible problems when upgrading. But for human readability, we use `enum` as
 ///      function parameter type. More about conversion in the docs:
@@ -155,9 +191,9 @@ struct RouterStorage {
     uint96 totalClBalanceGwei;
     uint96 totalActiveBalanceGwei;
     bytes32 withdrawalCredentials;
-    address lido;
-    address topUpGateway;
-    address depositSecurityModule;
+    // address lido;
+    // address topUpGateway;
+    // address depositSecurityModule;
     uint24 lastModuleId;
 }
 

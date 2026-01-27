@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   DepositContract__MockForBeaconChainDepositor,
   Lido__MockForStakingRouter,
+  LidoLocator,
   StakingModuleV2__MockForStakingRouter,
   StakingRouter__Harness,
 } from "typechain-types";
@@ -14,6 +15,7 @@ import {
 import { findEventsWithInterfaces } from "lib";
 import { getModuleMEB, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter";
@@ -24,6 +26,7 @@ describe("StakingRouter.sol:topUp", () => {
   let topUpGatewaySigner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
+  let locator: LidoLocator;
   let stakingRouter: StakingRouter__Harness;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
   let lidoMock: Lido__MockForStakingRouter;
@@ -48,20 +51,22 @@ describe("StakingRouter.sol:topUp", () => {
 
   before(async () => {
     [deployer, admin, topUpGatewaySigner, stranger] = await ethers.getSigners();
-    ({ stakingRouter, depositContract } = await deployStakingRouter({ deployer, admin }));
-
     // Deploy Lido mock
     lidoMock = await ethers.deployContract("Lido__MockForStakingRouter", deployer);
+
+    locator = await deployLidoLocator({
+      lido: lidoMock,
+      topUpGateway: await topUpGatewaySigner.getAddress(),
+      depositSecurityModule,
+    });
+
+    // deploy staking router
+    ({ stakingRouter, depositContract } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
+
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());
 
     // initialize staking router with the mock lido and topUpGateway as a signer
-    await stakingRouter.initialize(
-      admin,
-      await lidoMock.getAddress(),
-      withdrawalCredentials,
-      topUpGatewaySigner.address,
-      depositSecurityModule,
-    );
+    await stakingRouter.initialize(admin, withdrawalCredentials);
 
     // grant roles
     await Promise.all([stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin)]);
@@ -100,7 +105,7 @@ describe("StakingRouter.sol:topUp", () => {
 
       await expect(
         stakingRouter.connect(stranger).topUp(id, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei),
-      ).to.be.revertedWithCustomError(stakingRouter, "AppAuthTopUpGatewayFailed");
+      ).to.be.revertedWithCustomError(stakingRouter, "AppAuthFailed");
     });
 
     it("Reverts if the module does not exist", async () => {

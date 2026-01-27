@@ -30,7 +30,6 @@ library SRUtils {
     ///      Top-ups are not supported for 0x01.
     uint256 public constant INITIAL_DEPOSIT_SIZE = MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
 
-    error ZeroAddressStakingModule();
     error StakingModulesLimitExceeded();
     error StakingModuleAddressExists();
     error StakingModuleWrongName();
@@ -42,16 +41,27 @@ library SRUtils {
     error InvalidAmountGwei();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
+    error AppAuthFailed();
+    error ZeroAddress();
+
+    /// @dev mimic OpenZeppelin ContextUpgradeable._msgSender()
+    function _msgSender() internal view returns (address) {
+        return msg.sender;
+    }
+
+    function _validateAuth(address app) internal view {
+        if (_msgSender() != app) revert AppAuthFailed();
+    }
+
+    function _validateZeroAddress(address target) internal pure {
+        if (target == address(0)) revert ZeroAddress();
+    }
 
     /// @notice Returns true if the string length is within the allowed limit
     function _validateModuleName(string memory name) internal pure {
         if (bytes(name).length == 0 || bytes(name).length > MAX_STAKING_MODULE_NAME_LENGTH) {
             revert StakingModuleWrongName();
         }
-    }
-
-    function _validateModuleAddress(address _moduleAddress) internal pure {
-        if (_moduleAddress == address(0)) revert ZeroAddressStakingModule();
     }
 
     function _validateModuleShare(uint256 _stakeShareLimit, uint256 _priorityExitShareThreshold) internal pure {

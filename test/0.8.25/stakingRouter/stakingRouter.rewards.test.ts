@@ -4,11 +4,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingModule__MockForStakingRouter, StakingRouter__Harness } from "typechain-types";
+import { LidoLocator, StakingModule__MockForStakingRouter, StakingRouter__Harness } from "typechain-types";
 
 import { certainAddress, ether } from "lib";
 import { getModuleMEB, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter";
@@ -17,6 +18,7 @@ describe("StakingRouter.sol:rewards", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
 
+  let locator: LidoLocator;
   let stakingRouter: StakingRouter__Harness;
 
   let originalState: string;
@@ -34,22 +36,24 @@ describe("StakingRouter.sol:rewards", () => {
   const DEFAULT_MEB = getModuleMEB(DEFAULT_CONFIG.withdrawalCredentialsType);
 
   const withdrawalCredentials = hexlify(randomBytes(32));
+  const lido = certainAddress("test:staking-router-modules:lido"); // mock lido address
+
   const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
 
-    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }));
-
-    // initialize staking router
-    await stakingRouter.initialize(
-      admin,
-      certainAddress("test:staking-router-modules:lido"), // mock lido address
-      withdrawalCredentials,
+    locator = await deployLidoLocator({
+      lido,
       topUpGateway,
       depositSecurityModule,
-    );
+    });
+
+    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
+
+    // initialize staking router
+    await stakingRouter.initialize(admin, withdrawalCredentials);
 
     // grant roles
 
