@@ -808,14 +808,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 depositableEther = ILido(_getLido()).getDepositableEther();
         uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, depositableEther);
 
-        // Call obtainDepositData on the staking module to determine which keys to top up
-        // and for what amounts. The module verifies keys belong to it and reverts if invalid.
+        // Call allocateDeposits on the staking module to determine for what amount deposit each key
+        // The module verifies keys belong to it and reverts if invalid.
         // Even if stakingModuleDepositableEthAmount is 0, we still call the module
         // to allow CSM queue cursor advancement.
-        bytes[] memory publicKeys;
         uint256[] memory allocations;
         uint256 truncatedToGwei = stakingModuleDepositableEthAmount - (stakingModuleDepositableEthAmount % 1 gwei);
-        (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress).obtainDepositData(
+        allocations = IStakingModuleV2(stateConfig.moduleAddress).allocateDeposits(
             truncatedToGwei, _pubkeys, _keyIndices, _operatorIds, _topUpLimits
         );
 
@@ -849,7 +848,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             uint256 etherBalanceBeforeDeposits = address(this).balance;
 
             // Make beacon chain top-up deposits
-            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, publicKeys, allocations);
+            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, _pubkeys, allocations);
             _trackDeposit(_stakingModuleId, amount);
 
             uint256 etherBalanceAfterDeposits = address(this).balance;

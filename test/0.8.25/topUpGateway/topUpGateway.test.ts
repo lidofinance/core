@@ -371,7 +371,7 @@ describe("TopUpGateway.sol", () => {
     it("returns zero top-up limit when balance + pending > 2045", async () => {
       const data = await buildTopUpData();
       // Set balance close to max
-      data.validatorWitness[0].effectiveBalance = 2045n * 10n ** 9n; // 2000 Gwei
+      data.validatorWitness[0].effectiveBalance = 204575n * 10n ** 7n; // 2045.75 ether
 
       // Add pending that would push total over max
       const pendingAmount = 100n; // 100 Gwei

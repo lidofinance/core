@@ -13,16 +13,17 @@ interface IStakingModuleV2 {
     /// @param keyIndices Indices of keys within their respective operators
     /// @param operatorIds Node operator IDs that own the keys
     /// @param topUpLimits Maximum amount that can be deposited per key based on Consensus Layer data and  SR internal logic.
-    /// @return publicKeys Validated list of public keys eligible for top-up
     /// @return allocations Amount to deposit to each corresponding key
+    /// @dev allocations list can contain zero values
+    /// @dev sum of allocations can be less or equal to maxDepositAmount
     /// @dev Values depositAmount, topUpLimits, allocations are denominated in wei
-    function obtainDepositData(
+    function allocateDeposits(
         uint256 depositAmount,
         bytes[] calldata pubkeys,
         uint256[] calldata keyIndices,
         uint256[] calldata operatorIds,
         uint256[] calldata topUpLimits
-    ) external returns (bytes[] memory publicKeys, uint256[] memory allocations);
+    ) external returns (uint256[] memory allocations);
 
     /// @notice Updates the effective balances for node operators
     /// @param operatorIds Encoded operator IDs

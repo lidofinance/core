@@ -55,10 +55,10 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     bytes32 internal constant GATEWAY_STORAGE_POSITION =
         0x22e512057841e2bc1e6d80030c8bb8b4935377af2e64ba9bf8e6a3e88fb32200;
 
-    uint256 internal constant BALANCE_THRESHOLD_GWEI = 2045 ether / 1 gwei;
+    uint256 internal constant BALANCE_THRESHOLD_GWEI = 2045750 ether / 1000 gwei; // effective_balance + pending_balance
     uint256 internal constant MAX_EFFECTIVE_BALANCE_02_GWEI = 2048 ether / 1 gwei;
-    uint256 internal constant HYSTERESIS_GWEI = 1.25 ether / 1 gwei;
-    uint256 internal constant MAX_BALANCE_AFTER_TOP_UP_GWEI = MAX_EFFECTIVE_BALANCE_02_GWEI - HYSTERESIS_GWEI;
+    uint256 internal constant TOP_UP_SAFETY_MARGIN = 1.25 ether / 1 gwei;
+    
     uint256 internal constant PUBKEY_LENGTH = 48;
     uint256 internal constant FAR_FUTURE_EPOCH = type(uint64).max;
     uint256 internal constant SLOTS_PER_EPOCH = 32;
@@ -283,13 +283,13 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
             return 0;
         }
 
-        // Top-up limit = MAX_EFFECTIVE_BALANCE - current_balance - pending_deposits
+        // Top-up limit = MAX_BALANCE_AFTER_TOP_UP_GWEI - current_balance - pending_deposits
         uint256 currentTotal = _validator.effectiveBalance + _pendingBalanceGwei;
         if (currentTotal > BALANCE_THRESHOLD_GWEI) {
             return 0;
         }
 
-        return MAX_BALANCE_AFTER_TOP_UP_GWEI - currentTotal;
+        return MAX_EFFECTIVE_BALANCE_02_GWEI - TOP_UP_SAFETY_MARGIN - currentTotal;
     }
 
     function _setMaxValidatorsPerTopUp(uint256 _newValue) internal {
