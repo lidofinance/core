@@ -119,6 +119,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error EmptyKeysList();
     error WrongPubkeysLength();
     error TopUpAmountTooLow();
+    error AmountNotAlignedToGwei();
 
     /// @dev compatibility getters for constants removed in favor of SRLib
     // function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
@@ -778,15 +779,23 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         emit DepositableEthReceived(msg.value);
     }
 
+    /// @notice Method performs top-up calls to the official Deposit contract. Determines how much Lido buffered ether can be deposited
+    /// to the staking module, obtains keys from the staking module with exact allocation for each key, pulls ether from Lido,
+    /// and performs the top-up call.
+    /// @param _stakingModuleId Id of the staking module to be deposited.
+    /// @param _keyIndices List of keys' indices
+    /// @param _operatorIds List of operator indices
+    /// @param _pubkeys List of validator public keys to top up
+    /// @param _topUpLimits Maximum amount (in wei) that can be deposited per key based on CL data and TopUpGateway logic
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        bytes calldata _pubkeysPacked,
-        uint256[] calldata _topUpLimitsGwei
+        bytes[] calldata _pubkeys,
+        uint256[] calldata _topUpLimits
     ) external {
         if (_msgSender() != _getTopUpGateway()) revert AppAuthTopUpGatewayFailed();
-        _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimitsGwei, _pubkeysPacked);
+        _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimits, _pubkeys);
 
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
@@ -799,29 +808,30 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 depositableEther = ILido(_getLido()).getDepositableEther();
         uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, depositableEther);
 
-        // Call obtainDepositData on the staking module to determine which keys to top up
-        // and for what amounts. The module verifies keys belong to it and reverts if invalid.
+        // Call allocateDeposits on the staking module to determine for what amount deposit each key
+        // The module verifies keys belong to it and reverts if invalid.
         // Even if stakingModuleDepositableEthAmount is 0, we still call the module
         // to allow CSM queue cursor advancement.
-        bytes[] memory publicKeys;
         uint256[] memory allocations;
-        (publicKeys, allocations) = IStakingModuleV2(stateConfig.moduleAddress).obtainDepositData(
-            stakingModuleDepositableEthAmount, _pubkeysPacked, _keyIndices, _operatorIds, _topUpLimitsGwei
+        uint256 truncatedToGwei = stakingModuleDepositableEthAmount - (stakingModuleDepositableEthAmount % 1 gwei);
+        allocations = IStakingModuleV2(stateConfig.moduleAddress).allocateDeposits(
+            truncatedToGwei, _pubkeys, _keyIndices, _operatorIds, _topUpLimits
         );
 
-        // Calculate total amount from allocations returned by module
-        uint256 totalAllocationsGwei;
+        // Calculate total amount from allocations returned by module (in wei)
+        uint256 amount;
         unchecked {
             for (uint256 i; i < allocations.length; ++i) {
-                if (allocations[i] != 0 && allocations[i] < MIN_DEPOSIT_IN_GWEI) {
+                if (allocations[i] != 0 && allocations[i] < 1 ether) {
                     revert TopUpAmountTooLow();
                 }
-                totalAllocationsGwei += allocations[i];
+
+                if (amount % 1 gwei != 0) {
+                    revert AmountNotAlignedToGwei();
+                }
+                amount += allocations[i];
             }
         }
-
-        // amount that will be requested from Lido
-        uint256 amount = totalAllocationsGwei * 1 gwei;
 
         // Verify sum of allocations does not exceed module's max deposit amount
         if (amount > stakingModuleDepositableEthAmount) {
@@ -838,7 +848,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             uint256 etherBalanceBeforeDeposits = address(this).balance;
 
             // Make beacon chain top-up deposits
-            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, publicKeys, allocations);
+            BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, _pubkeys, allocations);
             _trackDeposit(_stakingModuleId, amount);
 
             uint256 etherBalanceAfterDeposits = address(this).balance;
@@ -851,8 +861,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function _validateTopUpInputs(
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        uint256[] calldata _topUpLimitsGwei,
-        bytes calldata _pubkeysPacked
+        uint256[] calldata _topUpLimits,
+        bytes[] calldata _pubkeys
     ) internal pure {
         uint256 n = _keyIndices.length;
 
@@ -860,12 +870,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             revert EmptyKeysList();
         }
 
-        if (_operatorIds.length != n || _topUpLimitsGwei.length != n) {
+        if (_operatorIds.length != n || _topUpLimits.length != n || _pubkeys.length != n) {
             revert WrongArrayLength();
         }
 
-        if (_pubkeysPacked.length != n * PUBKEY_LENGTH) {
-            revert WrongPubkeysLength();
+        for (uint256 i; i < n; ++i) {
+            if (_pubkeys[i].length != PUBKEY_LENGTH) {
+                revert WrongPubkeysLength();
+            }
         }
     }
 

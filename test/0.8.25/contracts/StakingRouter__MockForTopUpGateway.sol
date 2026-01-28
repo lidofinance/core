@@ -10,8 +10,8 @@ contract StakingRouter__MockForTopUpGateway {
         uint256 stakingModuleId,
         uint256[] keyIndices,
         uint256[] operatorIds,
-        bytes pubkeysPacked,
-        uint256[] topUpLimitsGwei
+        bytes[] pubkeys,
+        uint256[] topUpLimits
     );
 
     uint256 public topUpCalls;
@@ -43,13 +43,13 @@ contract StakingRouter__MockForTopUpGateway {
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
         uint256[] calldata _operatorIds,
-        bytes calldata _pubkeysPacked,
-        uint256[] calldata _topUpLimitsGwei
+        bytes[] calldata _pubkeys,
+        uint256[] calldata _topUpLimits
     ) external {
         unchecked {
             ++topUpCalls;
         }
 
-        emit TopUpCalled(_stakingModuleId, _keyIndices, _operatorIds, _pubkeysPacked, _topUpLimitsGwei);
+        emit TopUpCalled(_stakingModuleId, _keyIndices, _operatorIds, _pubkeys, _topUpLimits);
     }
 }
