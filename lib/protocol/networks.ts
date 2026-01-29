@@ -75,6 +75,9 @@ const defaultEnv = {
   stakingVaultFactory: "STAKING_VAULT_FACTORY_ADDRESS",
   stakingVaultBeacon: "STAKING_VAULT_BEACON_ADDRESS",
   validatorConsolidationRequests: "VALIDATOR_CONSOLIDATION_REQUESTS_ADDRESS",
+  // consolidation
+  consolidationBus: "CONSOLIDATION_BUS_ADDRESS",
+  consolidationMigrator: "CONSOLIDATION_MIGRATOR_ADDRESS",
 } as ProtocolNetworkItems;
 
 const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
@@ -95,6 +98,8 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     stakingVaultBeacon: config[Sk.stakingVaultBeacon].address,
     operatorGrid: config[Sk.operatorGrid].proxy.address,
     validatorConsolidationRequests: config[Sk.validatorConsolidationRequests].address,
+    consolidationBus: config[Sk.consolidationBus].address,
+    consolidationMigrator: config[Sk.consolidationMigrator].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }
@@ -136,6 +141,7 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
   switch (network) {
     case "hardhat":
+    case "localhost":
       if (getMode() === "scratch") {
         return getLocalNetworkConfig(network, "scratch");
       }

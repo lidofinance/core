@@ -1,6 +1,12 @@
 import { ethers } from "hardhat";
 
-import { ConsolidationGateway, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
+import {
+  ConsolidationBus,
+  ConsolidationGateway,
+  ConsolidationMigrator,
+  StakingRouter,
+  TriggerableWithdrawalsGateway,
+} from "typechain-types";
 
 import { getContractPath, loadContract } from "lib/contract";
 import {
@@ -360,14 +366,69 @@ export async function main() {
     consolidationGateway_.address,
   );
 
-  // ToDo: Grant ADD_CONSOLIDATION_REQUEST_ROLE to MessageBus address instead of deployer
-  // ADD_CONSOLIDATION_REQUEST_ROLE granted to deployer for testing convenience
+  //
+  // Deploy Consolidation Bus
+  //
+
+  const consolidationBus_ = await deployWithoutProxy(Sk.consolidationBus, "ConsolidationBus", deployer, [
+    admin,
+    consolidationGateway_.address,
+    200, // initialBatchSize
+  ]);
+
+  const consolidationBus = await loadContract<ConsolidationBus>("ConsolidationBus", consolidationBus_.address);
+
+  // Grant MANAGER_ROLE to deployer for testing
+  await makeTx(consolidationBus, "grantRole", [await consolidationBus.MANAGER_ROLE(), deployer], { from: deployer });
+
+  // Grant EXECUTER_ROLE to deployer for testing
+  await makeTx(consolidationBus, "grantRole", [await consolidationBus.EXECUTER_ROLE(), deployer], { from: deployer });
+
+  // Grant ADD_CONSOLIDATION_REQUEST_ROLE on Gateway to Bus
+  await makeTx(
+    consolidationGateway,
+    "grantRole",
+    [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), consolidationBus_.address],
+    { from: deployer },
+  );
+
+  // Also grant ADD_CONSOLIDATION_REQUEST_ROLE to deployer for direct testing
   await makeTx(
     consolidationGateway,
     "grantRole",
     [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), deployer],
     { from: deployer },
   );
+
+  //
+  // Deploy Consolidation Migrator
+  //
+  // Note: Uses NOR module ID (1) for both source and target for testing purposes.
+  // The actual module IDs will be set after StakingRouter has modules registered (step 0140).
+  // For scratch deploy testing, we use moduleId=1 which corresponds to NOR.
+
+  const NOR_MODULE_ID = 1;
+
+  const consolidationMigrator_ = await deployWithoutProxy(Sk.consolidationMigrator, "ConsolidationMigrator", deployer, [
+    admin,
+    stakingRouter_.address,
+    consolidationBus_.address,
+    NOR_MODULE_ID, // sourceModuleId
+    NOR_MODULE_ID, // targetModuleId (same module for testing)
+  ]);
+
+  const consolidationMigrator = await loadContract<ConsolidationMigrator>(
+    "ConsolidationMigrator",
+    consolidationMigrator_.address,
+  );
+
+  // Grant ALLOW_PAIR_ROLE to deployer for testing
+  await makeTx(consolidationMigrator, "grantRole", [await consolidationMigrator.ALLOW_PAIR_ROLE(), deployer], {
+    from: deployer,
+  });
+
+  // Register ConsolidationMigrator as publisher on ConsolidationBus
+  await makeTx(consolidationBus, "registerPublisher", [consolidationMigrator_.address], { from: deployer });
 
   //
   // Deploy ValidatorExitDelayVerifier

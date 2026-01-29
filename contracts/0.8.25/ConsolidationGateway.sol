@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.9;
+
+/* See contracts/COMPILERS.md */
+pragma solidity 0.8.25;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-
-import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
-import {LimitData, RateLimitStorage, RateLimit} from "../common/lib/RateLimit.sol";
-import {PausableUntil} from "./utils/PausableUntil.sol";
+import {LimitData, RateLimitStorage, RateLimit} from "contracts/common/lib/RateLimit.sol";
+import {PausableUntilWithRoles} from "./utils/PausableUntilWithRoles.sol";
 
 interface IWithdrawalVault {
     function addConsolidationRequests(
@@ -22,7 +22,7 @@ interface IWithdrawalVault {
  * @notice ConsolidationGateway contract is one entrypoint for all consolidation requests in protocol.
  * This contract is responsible for limiting consolidation requests, checking ADD_CONSOLIDATION_REQUEST_ROLE role before it gets to Withdrawal Vault.
  */
-contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
+contract ConsolidationGateway is PausableUntilWithRoles {
     using RateLimitStorage for bytes32;
     using RateLimit for LimitData;
 
@@ -56,7 +56,9 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
      */
     error ConsolidationRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
-    
+    /**
+     * @notice Thrown when source and target arrays have different lengths
+     */
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
 
     /**
@@ -67,10 +69,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
      */
     event ConsolidationRequestsLimitSet(uint256 maxConsolidationRequestsLimit, uint256 consolidationsPerFrame, uint256 frameDurationInSec);
 
-    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
-    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
-    bytes32 public constant CONSOLIDATION_LIMIT_MANAGER_ROLE = keccak256("CONSOLIDATION_LIMIT_MANAGER_ROLE");
+    bytes32 public constant EXIT_LIMIT_MANAGER_ROLE = keccak256("EXIT_LIMIT_MANAGER_ROLE");
 
     bytes32 public constant CONSOLIDATION_LIMIT_POSITION = keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
 
@@ -78,7 +78,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
 
     ILidoLocator internal immutable LOCATOR;
 
-    /// @dev Ensures the contract’s ETH balance is unchanged.
+    /// @dev Ensures the contract's ETH balance is unchanged.
     modifier preservesEthBalance() {
         uint256 balanceBeforeCall = address(this).balance - msg.value;
         _;
@@ -95,42 +95,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
         if (admin == address(0)) revert AdminCannotBeZero();
         LOCATOR = ILidoLocator(lidoLocator);
 
-        _setupRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _setConsolidationRequestLimit(maxConsolidationRequestsLimit, consolidationsPerFrame, frameDurationInSec);
-    }
-
-    /**
-     * @dev Resumes the consolidation requests.
-     * @notice Reverts if:
-     *         - The contract is not paused.
-     *         - The sender does not have the `RESUME_ROLE`.
-     */
-    function resume() external onlyRole(RESUME_ROLE) {
-        _resume();
-    }
-
-    /**
-     * @notice Pauses the consolidation requests placement for a specified duration.
-     * @param _duration The pause duration in seconds (use `PAUSE_INFINITELY` for unlimited).
-     * @dev Reverts if:
-     *         - The contract is already paused.
-     *         - The sender does not have the `PAUSE_ROLE`.
-     *         - A zero duration is passed.
-     */
-    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
-        _pauseFor(_duration);
-    }
-
-    /**
-     * @notice Pauses the consolidation requests placement until a specified timestamp.
-     * @param _pauseUntilInclusive The last second to pause until (inclusive).
-     * @dev Reverts if:
-     *         - The timestamp is in the past.
-     *         - The sender does not have the `PAUSE_ROLE`.
-     *         - The contract is already paused.
-     */
-    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
-        _pauseUntil(_pauseUntilInclusive);
     }
 
     /**
@@ -145,7 +111,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
      *     - The total fee value sent is insufficient to cover all provided consolidation requests.
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
-    function triggerConsolidation(
+    function addConsolidationRequests(
         bytes[] calldata sourcePubkeys,
         bytes[] calldata targetPubkeys,
         address refundRecipient
@@ -178,7 +144,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
         uint256 maxConsolidationRequestsLimit,
         uint256 consolidationsPerFrame,
         uint256 frameDurationInSec
-    ) external onlyRole(CONSOLIDATION_LIMIT_MANAGER_ROLE) {
+    ) external onlyRole(EXIT_LIMIT_MANAGER_ROLE) {
         _setConsolidationRequestLimit(maxConsolidationRequestsLimit, consolidationsPerFrame, frameDurationInSec);
     }
 
@@ -214,7 +180,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
 
     /// Internal functions
 
-    function _checkFee(uint256 fee) internal returns (uint256 refund) {
+    function _checkFee(uint256 fee) internal view returns (uint256 refund) {
         if (msg.value < fee) {
             revert InsufficientFee(fee, msg.value);
         }

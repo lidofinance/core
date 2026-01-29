@@ -3,16 +3,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ConsolidationGateway, WithdrawalVault__MockForCG } from "typechain-types";
+import { ConsolidationGateway, WithdrawalVault__MockForConsolidationGateway } from "typechain-types";
 
-import { advanceChainTime, getCurrentBlockTimestamp, streccak } from "lib";
+import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
 
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
-
-const PAUSE_ROLE = streccak("PAUSE_ROLE");
-const RESUME_ROLE = streccak("RESUME_ROLE");
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -24,10 +20,13 @@ const ZERO_ADDRESS = ethers.ZeroAddress;
 
 describe("ConsolidationGateway.sol: pausable", () => {
   let consolidationGateway: ConsolidationGateway;
-  let withdrawalVault: WithdrawalVault__MockForCG;
+  let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
   let admin: HardhatEthersSigner;
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+
+  let PAUSE_ROLE: string;
+  let RESUME_ROLE: string;
 
   let originalState: string;
 
@@ -37,7 +36,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
     const locator = await deployLidoLocator();
     const locatorAddr = await locator.getAddress();
 
-    withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForCG");
+    withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForConsolidationGateway");
 
     await updateLidoLocatorImplementation(locatorAddr, {
       withdrawalVault: await withdrawalVault.getAddress(),
@@ -47,6 +46,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
     await consolidationGateway.grantRole(role, authorizedEntity);
+
+    PAUSE_ROLE = await consolidationGateway.PAUSE_ROLE();
+    RESUME_ROLE = await consolidationGateway.RESUME_ROLE();
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -66,10 +68,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await consolidationGateway.connect(admin).pauseFor(1000n);
 
         // Try to resume without the RESUME_ROLE
-        await expect(consolidationGateway.connect(stranger).resume()).to.be.revertedWithOZAccessControlError(
-          stranger.address,
-          RESUME_ROLE,
-        );
+        await expect(consolidationGateway.connect(stranger).resume())
+          .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger.address, RESUME_ROLE);
       });
 
       it("should revert if the contract is not paused", async () => {
@@ -100,16 +101,15 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should be able to add consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .triggerConsolidation([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
     });
 
     context("pauseFor", () => {
       it("should revert if the sender does not have the PAUSE_ROLE", async () => {
-        await expect(consolidationGateway.connect(stranger).pauseFor(1000n)).to.be.revertedWithOZAccessControlError(
-          stranger.address,
-          PAUSE_ROLE,
-        );
+        await expect(consolidationGateway.connect(stranger).pauseFor(1000n))
+          .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger.address, PAUSE_ROLE);
       });
 
       it("should revert if the contract is already paused", async () => {
@@ -172,9 +172,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
     context("pauseUntil", () => {
       it("should revert if the sender does not have the PAUSE_ROLE", async () => {
         const timestamp = await getCurrentBlockTimestamp();
-        await expect(
-          consolidationGateway.connect(stranger).pauseUntil(timestamp + 1000n),
-        ).to.be.revertedWithOZAccessControlError(stranger.address, PAUSE_ROLE);
+        await expect(consolidationGateway.connect(stranger).pauseUntil(timestamp + 1000n))
+          .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger.address, PAUSE_ROLE);
       });
 
       it("should revert if the contract is already paused", async () => {
@@ -244,7 +244,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
       });
     });
 
-    context("Interaction with triggerConsolidation", () => {
+    context("Interaction with addConsolidationRequests", () => {
       it("pauseFor: should prevent consolidation requests immediately after pausing", async () => {
         // Pause the contract
         await consolidationGateway.connect(admin).pauseFor(1000n);
@@ -253,7 +253,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .triggerConsolidation([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -267,7 +267,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .triggerConsolidation([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -279,7 +279,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .triggerConsolidation([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseUntil: should allow consolidation requests immediately after resuming", async () => {
@@ -292,7 +292,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .triggerConsolidation([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseFor: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -305,7 +305,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .triggerConsolidation([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseUntil: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -320,7 +320,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .triggerConsolidation([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
     });
   });

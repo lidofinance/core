@@ -1,18 +1,18 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { WithdrawalVault__MockForCG } from "typechain-types";
+import { WithdrawalVault__MockForConsolidationGateway } from "typechain-types";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 
 describe("ConsolidationGateway.sol: deployment", () => {
-  let withdrawalVault: WithdrawalVault__MockForCG;
+  let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
 
   before(async () => {
     const locator = await deployLidoLocator();
     const locatorAddr = await locator.getAddress();
 
-    withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForCG");
+    withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForConsolidationGateway");
 
     await updateLidoLocatorImplementation(locatorAddr, {
       withdrawalVault: await withdrawalVault.getAddress(),

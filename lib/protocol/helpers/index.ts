@@ -18,7 +18,12 @@ export {
 } from "./accounting";
 
 export { ensureDsmGuardians } from "./dsm";
-export { norSdvtEnsureOperators } from "./nor-sdvt";
+export {
+  norSdvtEnsureOperators,
+  norSdvtAddNodeOperator,
+  norSdvtAddOperatorKeys,
+  norSdvtSetOperatorStakingLimit,
+} from "./nor-sdvt";
 export { calcNodeOperatorRewards } from "./staking-module";
 
 export * from "./vaults";

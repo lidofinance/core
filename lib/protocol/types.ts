@@ -7,7 +7,9 @@ import {
   AccountingOracle,
   ACL,
   Burner,
+  ConsolidationBus,
   ConsolidationGateway,
+  ConsolidationMigrator,
   DepositSecurityModule,
   HashConsensus,
   ICSModule,
@@ -58,6 +60,8 @@ export type ProtocolNetworkItems = {
   validatorsExitBusOracle: string;
   triggerableWithdrawalsGateway: string;
   consolidationGateway: string;
+  consolidationBus: string;
+  consolidationMigrator: string;
   withdrawalQueue: string;
   withdrawalVault: string;
   oracleDaemonConfig: string;
@@ -105,6 +109,8 @@ export interface ContractTypes {
   WstETH: WstETH;
   TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
   ConsolidationGateway: ConsolidationGateway;
+  ConsolidationBus: ConsolidationBus;
+  ConsolidationMigrator: ConsolidationMigrator;
   VaultFactory: VaultFactory;
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
@@ -140,6 +146,8 @@ export type CoreContracts = {
   wstETH: LoadedContract<WstETH>;
   triggerableWithdrawalsGateway: LoadedContract<TriggerableWithdrawalsGateway>;
   consolidationGateway: LoadedContract<ConsolidationGateway>;
+  consolidationBus: LoadedContract<ConsolidationBus>;
+  consolidationMigrator: LoadedContract<ConsolidationMigrator>;
 };
 
 export type AragonContracts = {
