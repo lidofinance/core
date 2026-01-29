@@ -4,10 +4,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
+import { LidoLocator, StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
 
 import { certainAddress, ether, randomString, WithdrawalCredentialsType } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
@@ -19,6 +20,7 @@ describe("StakingRouter.sol:exit", () => {
   let user: HardhatEthersSigner;
   let reporter: HardhatEthersSigner;
 
+  let locator: LidoLocator;
   let stakingRouter: StakingRouter__Harness;
   let stakingRouterWithLib: StakingRouterWithLib;
   let stakingModule: StakingModule__MockForTriggerableWithdrawals;
@@ -41,16 +43,20 @@ describe("StakingRouter.sol:exit", () => {
   before(async () => {
     [deployer, admin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
 
-    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin, user }));
-
-    // Initialize StakingRouter
-    await stakingRouter.initialize(
-      stakingRouterAdmin.address,
+    locator = await deployLidoLocator({
       lido,
-      withdrawalCredentials,
       topUpGateway,
       depositSecurityModule,
-    );
+    });
+
+    // deploy staking router
+    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter(
+      { deployer, admin },
+      { lidoLocator: locator },
+    ));
+
+    // Initialize StakingRouter
+    await stakingRouter.initialize(stakingRouterAdmin.address, withdrawalCredentials);
 
     // Deploy mock staking module
     stakingModule = await ethers.deployContract("StakingModule__MockForTriggerableWithdrawals", deployer);

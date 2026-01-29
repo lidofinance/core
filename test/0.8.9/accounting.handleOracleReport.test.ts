@@ -77,9 +77,7 @@ describe("Accounting.sol:report", () => {
       deployer,
     );
 
-    const genesisTime = 1606824023n; // Ethereum 2.0 genesis time
-    const secondsPerSlot = 12n; // 12 seconds per slot
-    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido, secondsPerSlot, genesisTime]);
+    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido]);
 
     const accountingProxy = await ethers.deployContract(
       "OssifiableProxy",

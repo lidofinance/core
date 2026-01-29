@@ -62,7 +62,13 @@ export async function addAragonApp({ dao, name, impl, rootAccount }: CreateAddAp
 export async function deployLidoDao({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
   const { dao, acl } = await createAragonDao(rootAccount);
 
-  const impl = await ethers.deployContract("Lido", rootAccount);
+  const fastLaneLib = await ethers.deployContract("FastLaneStorage", rootAccount);
+  const impl = await ethers.deployContract("Lido", {
+    signer: rootAccount,
+    libraries: {
+      ["contracts/0.4.24/lib/FastLaneStorage.sol:FastLaneStorage"]: await fastLaneLib.getAddress(),
+    },
+  });
 
   const lidoProxyAddress = await addAragonApp({
     dao,
@@ -85,7 +91,14 @@ export async function deployLidoDao({ rootAccount, initialized, locatorConfig = 
 export async function deployLidoDaoForNor({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
   const { dao, acl } = await createAragonDao(rootAccount);
 
-  const impl = await ethers.deployContract("Lido__HarnessForDistributeReward", rootAccount);
+  const fastLaneLib = await ethers.deployContract("FastLaneStorage", rootAccount);
+
+  const impl = await ethers.deployContract("Lido__HarnessForDistributeReward", {
+    signer: rootAccount,
+    libraries: {
+      ["contracts/0.4.24/lib/FastLaneStorage.sol:FastLaneStorage"]: await fastLaneLib.getAddress(),
+    },
+  });
 
   const lidoProxyAddress = await addAragonApp({
     dao,

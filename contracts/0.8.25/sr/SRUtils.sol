@@ -2,14 +2,11 @@
 pragma solidity 0.8.25;
 
 import {SRStorage} from "./SRStorage.sol";
-import {Strategies, Metrics, ModuleState} from "./SRTypes.sol";
-import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
-import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
+import {ModuleState} from "./SRTypes.sol";
 
 library SRUtils {
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
-    using DepositsTracker for DepositedState;
 
     uint256 public constant TOTAL_BASIS_POINTS = 10000;
     // uint256 internal constant TOTAL_METRICS_COUNT = 2;
@@ -24,7 +21,15 @@ library SRUtils {
     uint8 public constant WC_TYPE_01 = 0x01;
     uint8 public constant WC_TYPE_02 = 0x02;
 
-    error ZeroAddressStakingModule();
+    /// @dev Large enough to fit all existing Ether per entity, yet overflow-safe when aggregating a reasonable number of entities
+    uint256 internal constant MAX_VALUE_GWEI = 1_000_000_000 ether / 1 gwei; // i.e. 1B ETH
+
+    /// @notice Initial deposit amount made for validator creation
+    /// @dev Identical for both 0x01 and 0x02 types.
+    ///      For 0x02, the validator may later be topped up.
+    ///      Top-ups are not supported for 0x01.
+    uint256 public constant INITIAL_DEPOSIT_SIZE = MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+
     error StakingModulesLimitExceeded();
     error StakingModuleAddressExists();
     error StakingModuleWrongName();
@@ -36,16 +41,27 @@ library SRUtils {
     error InvalidAmountGwei();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
+    error AppAuthFailed();
+    error ZeroAddress();
+
+    /// @dev mimic OpenZeppelin ContextUpgradeable._msgSender()
+    function _msgSender() internal view returns (address) {
+        return msg.sender;
+    }
+
+    function _validateAuth(address app) internal view {
+        if (_msgSender() != app) revert AppAuthFailed();
+    }
+
+    function _validateZeroAddress(address target) internal pure {
+        if (target == address(0)) revert ZeroAddress();
+    }
 
     /// @notice Returns true if the string length is within the allowed limit
     function _validateModuleName(string memory name) internal pure {
         if (bytes(name).length == 0 || bytes(name).length > MAX_STAKING_MODULE_NAME_LENGTH) {
             revert StakingModuleWrongName();
         }
-    }
-
-    function _validateModuleAddress(address _moduleAddress) internal pure {
-        if (_moduleAddress == address(0)) revert ZeroAddressStakingModule();
     }
 
     function _validateModuleShare(uint256 _stakeShareLimit, uint256 _priorityExitShareThreshold) internal pure {
@@ -70,17 +86,15 @@ library SRUtils {
         if (_maxDepositsPerBlock > type(uint64).max) revert InvalidMaxDepositPerBlockValue();
     }
 
-    function _validateAmountGwei(uint256 _amountGwei) internal pure {
-        if (_amountGwei > type(uint96).max) {
+    function _validateAmountGwei(uint256 _amountGwei) internal pure returns (uint64) {
+        if (_amountGwei > MAX_VALUE_GWEI) {
             revert InvalidAmountGwei();
         }
+        return uint64(_amountGwei);
     }
 
     function _validateWithdrawalCredentialsType(uint256 _withdrawalCredentialsType) internal pure {
-        if (
-            _withdrawalCredentialsType != WC_TYPE_01
-                && _withdrawalCredentialsType != WC_TYPE_02
-        ) {
+        if (_withdrawalCredentialsType != WC_TYPE_01 && _withdrawalCredentialsType != WC_TYPE_02) {
             revert InvalidWithdrawalCredentialsType();
         }
     }
@@ -111,41 +125,33 @@ library SRUtils {
         return uint16((_value * TOTAL_BASIS_POINTS) / _precision);
     }
 
-    ///  @dev define metric IDs
-    function _getMetricIds() internal pure returns (uint8[] memory metricIds) {
-        metricIds = new uint8[](2);
-        metricIds[0] = uint8(Metrics.DepositTargetShare);
-        metricIds[1] = uint8(Metrics.WithdrawalProtectShare);
+    function _getModuleIndexById(uint256 moduleId) internal view returns (uint256 idx) {
+        idx = SRStorage.getModuleInternalPositionById(moduleId);
+        if (idx == 0) {
+            revert StakingModuleUnregistered();
+        }
+        unchecked {
+            // Adjust for 1-based indexing
+            --idx;
+        }
     }
 
-    ///  @dev define strategy IDs
-    function _getStrategyIds() internal pure returns (uint8[] memory strategyIds) {
-        strategyIds = new uint8[](2);
-        strategyIds[0] = uint8(Strategies.Deposit);
-        strategyIds[1] = uint8(Strategies.Withdrawal);
-        // strategyIds[2] = uint8(Strategies.Reward);
-    }
-
-    ///  @dev get current balance of the module in ETH
-    function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
-        uint256 clBalance = _fromGwei(moduleId.getModuleState().getStateAccounting().clBalanceGwei);
-        uint256 pendingDeposits = SRStorage.getStakingModuleTrackerStorage(moduleId).getDepositedEthUpToLastSlot();
-        return clBalance + pendingDeposits;
-    }
-
+    ///  @dev get current balance of the module in ETH (wei)
     function _getModuleActiveBalance(uint256 moduleId) internal view returns (uint256) {
-        return _fromGwei(moduleId.getModuleState().getStateAccounting().activeBalanceGwei);
+        return _fromGwei(moduleId.getModuleState().accounting.activeBalanceGwei);
     }
 
-    ///  @dev get total balance of all modules + deposit tracker in ETH
-    function _getTotalModulesBalance() internal view returns (uint256) {
-        uint256 totalClBalance = _fromGwei(SRStorage.getRouterStorage().totalClBalanceGwei);
-        uint256 pendingDeposits = SRStorage.getLidoDepositTrackerStorage().getDepositedEthUpToLastSlot();
-        return totalClBalance + pendingDeposits;
+    function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
+        return _getModuleActiveBalance(moduleId) + _fromGwei(moduleId.getModuleState().accounting.pendingBalanceGwei);
     }
 
+    ///  @dev get total balance of all modules (active + pending) in ETH
     function _getTotalModulesActiveBalance() internal view returns (uint256) {
-        return _fromGwei(SRStorage.getRouterStorage().totalActiveBalanceGwei);
+        return _fromGwei(SRStorage.getRouterState().accounting.activeBalanceGwei);
+    }
+
+    function _getTotalModulesBalance() internal view returns (uint256) {
+        return _getTotalModulesActiveBalance() + _fromGwei(SRStorage.getRouterState().accounting.pendingBalanceGwei);
     }
 
     ///  @dev calculate module capacity in ETH
@@ -157,13 +163,21 @@ library SRUtils {
         return availableKeysCount * _getModuleMEB(withdrawalCredentialsType);
     }
 
-    function _toGwei(uint256 amount) internal pure returns (uint96) {
+    function _toGwei(uint256 amount) internal pure returns (uint64) {
         amount /= 1 gwei;
         _validateAmountGwei(amount);
-        return uint96(amount);
+        return uint64(amount);
     }
 
     function _fromGwei(uint256 amount) internal pure returns (uint256) {
         return amount * 1 gwei;
+    }
+
+    function _getInitialDepositAmountByCount(uint256 depositsCount) internal pure returns (uint256) {
+        return depositsCount * INITIAL_DEPOSIT_SIZE;
+    }
+
+    function _getInitialDepositCountByAmount(uint256 depositsAmount) internal pure returns (uint256) {
+        return depositsAmount / INITIAL_DEPOSIT_SIZE;
     }
 }

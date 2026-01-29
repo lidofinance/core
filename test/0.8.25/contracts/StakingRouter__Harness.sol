@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 import {StakingRouter} from "contracts/0.8.25/sr/StakingRouter.sol";
 import {SRLib} from "contracts/0.8.25/sr/SRLib.sol";
 import {SRStorage} from "contracts/0.8.25/sr/SRStorage.sol";
-import {StakingModuleStatus, ModuleStateAccounting} from "contracts/0.8.25/sr/SRTypes.sol";
+import {StakingModuleStatus, ModuleStateAccounting, RouterStateAccounting} from "contracts/0.8.25/sr/SRTypes.sol";
 import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 
 contract StakingRouter__Harness is StakingRouter {
@@ -28,9 +28,9 @@ contract StakingRouter__Harness is StakingRouter {
 
     constructor(
         address _depositContract,
-        uint64 _secondsPerSlot,
-        uint64 _genesisTime
-    ) StakingRouter(_depositContract, _secondsPerSlot, _genesisTime) {}
+        address _lido,
+        address _lidoLocator
+    ) StakingRouter(_depositContract, _lido, _lidoLocator) {}
 
     /// @notice method for testing migrateUpgrade_v4
     /// as version in new version will be stored in another slot, no need to set here old version
@@ -43,7 +43,7 @@ contract StakingRouter__Harness is StakingRouter {
     }
 
     function testing_getLastModuleId() public view returns (uint256) {
-        return SRStorage.getRouterStorage().lastModuleId;
+        return SRStorage.getRouterState().lastModuleId;
     }
 
     function testing_setVersion(uint256 version) public {
@@ -56,26 +56,35 @@ contract StakingRouter__Harness is StakingRouter {
 
     function testing_setStakingModuleAccounting(
         uint256 _stakingModuleId,
-        uint96 clBalanceGwei,
-        uint96 activeBalanceGwei,
+        uint64 activeBalanceGwei,
+        uint64 pendingBalanceGwei,
         uint64 exitedValidatorsCount
     ) external {
-        ModuleStateAccounting storage stateAcc = SRStorage.getStateAccounting(
-            SRStorage.getModuleState(_stakingModuleId)
-        );
+        ModuleStateAccounting storage moduleAcc = SRStorage.getModuleState(_stakingModuleId).accounting;
+        RouterStateAccounting storage routerAcc = SRStorage.getRouterState().accounting;
 
-        uint96 totalClBalanceGwei = SRStorage.getRouterStorage().totalClBalanceGwei;
-        SRStorage.getRouterStorage().totalClBalanceGwei = totalClBalanceGwei - stateAcc.clBalanceGwei + clBalanceGwei;
+        uint64 totalActiveBalanceGwei = routerAcc.activeBalanceGwei;
+        uint64 totalPendingBalanceGwei = routerAcc.pendingBalanceGwei;
 
-        uint96 totalActiveBalanceGwei = SRStorage.getRouterStorage().totalActiveBalanceGwei;
-        SRStorage.getRouterStorage().totalActiveBalanceGwei =
-            totalActiveBalanceGwei -
-            stateAcc.activeBalanceGwei +
-            activeBalanceGwei;
+        // update totals incrementally as we iterate through the part of modules in general case
+        // 1. subtract old values
+        unchecked {
+            totalActiveBalanceGwei -= moduleAcc.activeBalanceGwei;
+            totalPendingBalanceGwei -= moduleAcc.pendingBalanceGwei;
+        }
+        // 2. validate and add new values
 
-        stateAcc.clBalanceGwei = clBalanceGwei;
-        stateAcc.activeBalanceGwei = activeBalanceGwei;
-        stateAcc.exitedValidatorsCount = exitedValidatorsCount;
+        unchecked {
+            totalActiveBalanceGwei += activeBalanceGwei;
+            totalPendingBalanceGwei += pendingBalanceGwei;
+        }
+
+        routerAcc.activeBalanceGwei = totalActiveBalanceGwei;
+        routerAcc.pendingBalanceGwei = totalPendingBalanceGwei;
+
+        moduleAcc.activeBalanceGwei = activeBalanceGwei;
+        moduleAcc.pendingBalanceGwei = pendingBalanceGwei;
+        moduleAcc.exitedValidatorsCount = exitedValidatorsCount;
     }
 
     function _getInitializableStorage_Mock() private pure returns (InitializableStorage storage $) {

@@ -1,12 +1,48 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {STASStorage} from "contracts/0.8.25/stas/STASTypes.sol";
+import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 
 /**
  * @title StakingRouter shared types
  * @author KRogLA
  */
+
+interface ILido {
+    function getDepositableEther() external view returns (uint256);
+    function withdrawDepositableEther(uint256 _amount, uint256 _depositsCount) external;
+}
+
+interface IAccountingOracle {
+    // struct ProcessingState {
+    //     uint256 currentFrameRefSlot;
+    //     uint256 processingDeadlineTime;
+    //     bytes32 mainDataHash;
+    //     bool mainDataSubmitted;
+    //     bytes32 extraDataHash;
+    //     uint256 extraDataFormat;
+    //     bool extraDataSubmitted;
+    //     uint256 extraDataItemsCount;
+    //     uint256 extraDataItemsSubmitted;
+    // }
+    // function getProcessingState() external view returns (ProcessingState memory result);
+
+    // replace return struct with multiple return values to avoid memory struct allocation
+    function getProcessingState()
+        external
+        view
+        returns (
+            uint256 currentFrameRefSlot,
+            uint256 processingDeadlineTime,
+            bytes32 mainDataHash,
+            bool mainDataSubmitted,
+            bytes32 extraDataHash,
+            uint256 extraDataFormat,
+            bool extraDataSubmitted,
+            uint256 extraDataItemsCount,
+            uint256 extraDataItemsSubmitted
+        );
+}
 
 /// @dev Since `enum` is `uint8` by nature, so the `status` is stored as `uint8` to avoid
 ///      possible problems when upgrading. But for human readability, we use `enum` as
@@ -16,17 +52,6 @@ enum StakingModuleStatus {
     Active, // deposits and rewards allowed
     DepositsPaused, // deposits NOT allowed, rewards allowed
     Stopped // deposits and rewards NOT allowed
-}
-
-enum Strategies {
-    Deposit,
-    Withdrawal,
-    Reward
-}
-
-enum Metrics {
-    DepositTargetShare,
-    WithdrawalProtectShare
 }
 
 /// @notice Configuration parameters for a staking module.
@@ -115,10 +140,9 @@ struct ModuleStateConfig {
     StakingModuleStatus status;
     /// @notice Withdrawal credentials type (0x01/0x02)
     uint8 withdrawalCredentialsType;
+    // uint8 _reserved1;
+    // uint8 _reserved2;
 }
-// /// @notice The type of withdrawal credentials for creation of validators
-// uint8 wcType;
-// uint8 _reserved;
 
 /// @dev 1 storage slot
 struct ModuleStateDeposits {
@@ -140,12 +164,26 @@ struct ModuleStateDeposits {
     uint64 minDepositBlockDistance;
 }
 
+/// @dev 1 storage slot
 struct ModuleStateAccounting {
-    /// @notice Effective balance of the staking module, in Gwei.
-    uint96 clBalanceGwei;
-    uint96 activeBalanceGwei;
-    /// @notice Number of exited validators for Legacy modules
+    /// @notice total actual balance of validators for module in Gwei.
+    uint64 activeBalanceGwei;
+    /// @notice total pending balance of validators for module in Gwei.
+    uint64 pendingBalanceGwei;
+    /// @notice Cumulative number of exited validators for module
     uint64 exitedValidatorsCount;
+    /// @notice total deposited balance since last report for module in Gwei.
+    // uint64 depositedBalanceGwei;
+}
+
+struct RouterStateAccounting {
+    /// @notice total actual balance of validators in Gwei.
+    uint64 activeBalanceGwei;
+    /// @notice total pending balance of validators in Gwei.
+    uint64 pendingBalanceGwei;
+    /// @notice total deposited balance since last report in Gwei.
+    // uint64 depositedBalanceGwei;
+    // uint64 reserved1;
 }
 
 struct ModuleState {
@@ -159,16 +197,12 @@ struct ModuleState {
     string name; // slot 3
 }
 
-struct RouterStorage {
+struct RouterState {
     // moduleId => ModuleState
-    mapping(uint256 => ModuleState) moduleStates;
-    STASStorage stas;
-    uint96 totalClBalanceGwei;
-    uint96 totalActiveBalanceGwei;
-    bytes32 withdrawalCredentials;
-    address lido;
-    address topUpGateway;
-    address depositSecurityModule;
+    mapping(uint256 => ModuleState) moduleStates; // slot 0
+    EnumerableSet.UintSet moduleIds; // slot 1
+    RouterStateAccounting accounting; // slot 2
+    bytes32 withdrawalCredentials; // slot 3
     uint24 lastModuleId;
 }
 

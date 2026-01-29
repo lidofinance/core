@@ -6,8 +6,9 @@ pragma solidity 0.8.25;
 
 import {TopUpData, BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
 import {CLTopUpVerifier} from "./CLTopUpVerifier.sol";
-import {AccessControlEnumerableUpgradeable} from
-    "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {
+    AccessControlEnumerableUpgradeable
+} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 
@@ -18,8 +19,7 @@ interface ILidoLocator {
 
 interface IStakingRouter {
     function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32);
-    function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
-    function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
+    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
@@ -58,7 +58,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     uint256 internal constant BALANCE_THRESHOLD_GWEI = 2045750 ether / 1000 gwei; // effective_balance + pending_balance
     uint256 internal constant MAX_EFFECTIVE_BALANCE_02_GWEI = 2048 ether / 1 gwei;
     uint256 internal constant TOP_UP_SAFETY_MARGIN = 1.25 ether / 1 gwei;
-    
+
     uint256 internal constant PUBKEY_LENGTH = 48;
     uint256 internal constant FAR_FUTURE_EPOCH = type(uint64).max;
     uint256 internal constant SLOTS_PER_EPOCH = 32;
@@ -176,8 +176,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     function canTopUp(uint256 _stakingModuleId) external view returns (bool) {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        if (!stakingRouter.hasStakingModule(_stakingModuleId)) return false;
-        if (!stakingRouter.getStakingModuleIsActive(_stakingModuleId)) return false;
+        if (!stakingRouter.canDeposit(_stakingModuleId)) return false;
         if (!ILido(LOCATOR.lido()).canDeposit()) return false;
         if (!_isBlockDistancePassed()) return false;
 
