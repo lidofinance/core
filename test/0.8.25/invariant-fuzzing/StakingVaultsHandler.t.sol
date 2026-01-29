@@ -18,8 +18,6 @@ import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {Constants} from "./StakingVaultConstants.sol";
 import {LidoLocatorMock, ConsensusContractMock} from "./mocks/CommonMocks.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 /// @title StakingVaultsHandler
 /// @notice Handler contract for invariant fuzzing of a single staking vault in the Lido protocol.
 /// @dev Used by fuzzing contracts to simulate user and protocol actions, track state, and expose relevant variables for invariant checks.
@@ -50,6 +48,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     uint256 constant MIN_SHARES = 1;
     uint256 constant MAX_SHARES = 1000;
+    uint256 constant QUARANTINE_PERIOD = 3; // days
 
     uint256 public sv_otcDeposited = 0;
 
@@ -115,8 +114,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     modifier withConnectedVault() {
         bool isConnected = vaultHub.isVaultConnected(address(stakingVault));
-        bool isPendingDisconnect = vaultHub.isPendingDisconnect(address(stakingVault));
-        if (!isConnected || isPendingDisconnect) return;
+        if (!isConnected) {
+            connectVault();
+            return;
+        }
         _;
     }
 
@@ -160,16 +161,31 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     /// @notice Initiates voluntary disconnect for the vault
     function voluntaryDisconnect(uint256 shouldDisconnect) public withConnectedVault withFreshReport {
-        shouldDisconnect = bound(shouldDisconnect, 0, 10);
-        if (shouldDisconnect < 10) return; // 10% chance to disconnect
+        shouldDisconnect = bound(shouldDisconnect, 0, 100);
+        if (shouldDisconnect < 95) return; // 5% chance to disconnect
+
+        (, uint256 unsettledFees) = vaultHub.obligations(address(stakingVault));
+        uint256 availableBalance = Math256.min(
+            stakingVault.availableBalance(),
+            vaultHub.totalValue(address(stakingVault)) // TODO is there any CL balance in this test?
+        );
+        if (availableBalance < unsettledFees) {
+            return;
+        }
 
         uint256 shares = vaultHub.liabilityShares(address(stakingVault));
         if (shares != 0) {
+            vm.prank(userAccount);
             vaultHub.burnShares(address(stakingVault), shares);
         }
 
         vm.prank(userAccount);
         vaultHub.voluntaryDisconnect(address(stakingVault));
+
+        _report(1);
+
+        vm.prank(userAccount);
+        stakingVault.acceptOwnership();
     }
 
     /// @notice Funds the vault via VaultHub
@@ -231,10 +247,12 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     function mintShares(uint256 shares) public withConnectedVault withFreshReport {
         uint256 maxLiabilityShares = vaultHub.totalMintingCapacityShares(address(stakingVault), 0);
         uint256 currShares = vaultHub.liabilityShares(address(stakingVault));
-        uint256 sharesToMint = Math256.min(maxLiabilityShares - currShares, 0);
-        if (sharesToMint == 0) return;
+        uint256 sharesToMint = maxLiabilityShares > currShares ? maxLiabilityShares - currShares : 0;
+        if (sharesToMint == 0) {
+            return;
+        }
 
-        shares = bound(shares, MIN_SHARES, maxLiabilityShares);
+        shares = bound(shares, MIN_SHARES, sharesToMint);
 
         vm.prank(userAccount);
         vaultHub.mintShares(address(stakingVault), userAccount, shares);
@@ -251,27 +269,24 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         vaultHub.burnShares(address(stakingVault), sharesToBurn);
     }
 
-    /// @notice Transfers and burns shares from the vault
-    function transferAndBurnShares(uint256 shares) public withConnectedVault {
-        shares = bound(shares, MIN_SHARES, MAX_SHARES);
-        uint256 currShares = vaultHub.liabilityShares(address(stakingVault));
-        uint256 sharesToBurn = Math256.min(currShares, shares);
-        if (sharesToBurn == 0) return;
-
-        vm.prank(userAccount);
-        vaultHub.transferAndBurnShares(address(stakingVault), shares);
-    }
-
     /// @notice Calls rebalance on the staking vault (via VaultHub)
     function rebalance(uint256 amount) public withConnectedVault withFreshReport {
-        VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
+        uint256 maxSharesToRebalance = vaultHub.liabilityShares(address(stakingVault));
+        if (maxSharesToRebalance == 0) {
+            return;
+        }
 
-        uint256 totalValue = vaultHub.totalValue(address(stakingVault));
-        uint256 sharesToRebalance = vaultHub.healthShortfallShares(address(stakingVault));
-        if (sharesToRebalance == 0) return;
+        uint256 availableBalance = stakingVault.availableBalance();
+        uint256 sharesToRebalance = lidoContract.getSharesByPooledEth(availableBalance);
+        uint256 maxRebalanceShares = Math256.min(maxSharesToRebalance, sharesToRebalance);
+        if (maxRebalanceShares < MIN_SHARES) {
+            return;
+        }
+
+        amount = bound(amount, MIN_SHARES, maxRebalanceShares);
 
         vm.prank(userAccount);
-        vaultHub.rebalance(address(stakingVault), sharesToRebalance);
+        vaultHub.rebalance(address(stakingVault), amount);
     }
 
     /// @notice Returns the effective total value of the vault (EL + CL balance)
@@ -301,10 +316,15 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     // --- StakingVault interactions ---
 
     /// @notice Withdraws directly from the staking vault (when not managed by VaultHub)
-    function withdrawFromStakingVault(uint256 amount) public {
+    function withdrawFromStakingVault(uint256 amount) public withDisconnectedVault {
         if (stakingVault.owner() != userAccount) {
             return;
         }
+
+        if (address(stakingVault).balance == 0) {
+            return;
+        }
+
         amount = bound(amount, 1, address(stakingVault).balance);
 
         vm.prank(userAccount);
@@ -318,18 +338,23 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(_vault);
         VaultReport memory previousReport = lastReport;
 
+        uint256 liabilityShares = vaultHub.liabilityShares(_vault);
         lastReport = VaultReport({
-            totalValue: vaultHub.totalValue(_vault) + sv_otcDeposited,
+            // Use the actual vault balance for the report to avoid double-counting inOutDelta.
+            totalValue: address(stakingVault).balance, // TODO - vaultHub.totalValue(_vault) + sv_otcDeposited,
             cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
-            liabilityShares: vaultHub.liabilityShares(_vault),
-            maxLiabilityShares: vaultRecord.maxLiabilityShares,
+            liabilityShares: liabilityShares,
+            maxLiabilityShares: Math256.max(vaultRecord.maxLiabilityShares, liabilityShares),
             reportTimestamp: uint64(block.timestamp)
         });
 
         reportedTotalValue = lastReport.totalValue;
 
         _report(2); // bypassing fresh report
-        _report(3); // bypassing quarantine period expiration
+
+        lastReport.maxLiabilityShares = liabilityShares; // no minting between reports
+
+        _report(QUARANTINE_PERIOD); // bypassing quarantine period expiration
 
         // we update the applied total value (TV should go through sanity checks, quarantine, etc.)
         appliedTotalValue = vaultHub.vaultRecord(_vault).report.totalValue;

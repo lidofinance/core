@@ -188,14 +188,15 @@ contract LidoMock {
         return (externalShares * _internalEther) / (totalShares - externalShares);
     }
 
-    function rebalanceExternalEtherToInternal() external payable {
-        uint256 shares = getSharesByPooledEth(msg.value);
-        if (shares > externalShares) revert("not enough external shares");
-        externalShares -= shares;
+    function rebalanceExternalEtherToInternal(uint256 _amountOfShares) external payable {
+        if (_amountOfShares > externalShares) revert("not enough external shares");
+        if (msg.value != getPooledEthBySharesRoundUp(_amountOfShares)) revert("value shares mismatch");
+
+        externalShares -= _amountOfShares;
         totalPooledEther += msg.value;
     }
 
-    function getPooledEthBySharesRoundUp(uint256 _sharesAmount) external view returns (uint256) {
+    function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256) {
         uint256 etherAmount = (_sharesAmount * totalPooledEther) / totalShares;
         if (_sharesAmount * totalPooledEther != etherAmount * totalShares) {
             ++etherAmount;
