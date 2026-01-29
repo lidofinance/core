@@ -77,9 +77,6 @@ describe("StakingRouter.sol:topUp", () => {
     // initialize staking router with the mock lido and topUpGateway as a signer
     await stakingRouter.initialize(admin, withdrawalCredentials);
 
-    // simulate finished Oracle report to allow deposits
-    await accountingOracle.mock_setProcessingState(1, true, true);
-
     // grant roles
     await Promise.all([stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin)]);
   });
@@ -205,7 +202,8 @@ describe("StakingRouter.sol:topUp", () => {
     it("Performs top-up for a New module for all keys", async () => {
       const [stakingModule, id] = await setupModule({
         ...DEFAULT_CONFIG,
-        depositable: 100n,
+        deposited: 100n,
+        activeBalanceGwei: 100n * 32n * 10n ** 9n, //100 x 32 eth / 1 gwei
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       });
 
@@ -368,7 +366,8 @@ describe("StakingRouter.sol:topUp", () => {
     depositable = 0n,
     status = StakingModuleStatus.Active,
     withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
-    effBalanceGwei = 0n,
+    activeBalanceGwei = 0n,
+    pendingBalanceGwei = 0n,
   }: ModuleConfig): Promise<[StakingModuleV2__MockForStakingRouter, bigint]> {
     const modulesCount = await stakingRouter.getStakingModulesCount();
     const module = await ethers.deployContract("StakingModuleV2__MockForStakingRouter", deployer);
@@ -391,10 +390,10 @@ describe("StakingRouter.sol:topUp", () => {
     expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
 
     await module.mock__getStakingModuleSummary(exited, deposited, depositable);
-    if (effBalanceGwei == 0n && deposited > 0n) {
-      effBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
+    if (activeBalanceGwei == 0n && deposited > 0n) {
+      activeBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
     }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, effBalanceGwei, effBalanceGwei, exited);
+    await stakingRouter.testing_setStakingModuleAccounting(moduleId, activeBalanceGwei, pendingBalanceGwei, exited);
 
     if (status != StakingModuleStatus.Active) {
       await stakingRouter.setStakingModuleStatus(moduleId, status);
@@ -416,5 +415,6 @@ interface ModuleConfig {
   deposited?: bigint;
   depositable?: bigint;
   status?: StakingModuleStatus;
-  effBalanceGwei?: bigint;
+  activeBalanceGwei?: bigint;
+  pendingBalanceGwei?: bigint;
 }

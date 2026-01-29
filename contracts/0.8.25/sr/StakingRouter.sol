@@ -695,9 +695,19 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     // }
 
     function _canDeposit(uint256 _moduleId) internal view returns (bool) {
-        if (_moduleId.getModuleState().config.status != StakingModuleStatus.Active) return false;
-        (,,,,,, bool extraDataSubmitted,,) = IAccountingOracle(_getAccountingOracle()).getProcessingState();
-        return extraDataSubmitted;
+        if (_moduleId.getModuleState().config.status == StakingModuleStatus.Active) {
+            IAccountingOracle oracle = IAccountingOracle(_getAccountingOracle());
+            (,,,,,, bool extraDataSubmitted,,) = oracle.getProcessingState();
+            if (!extraDataSubmitted) {
+                /// @dev allow deposits in case of initial deploy
+                ///      this flow will not be triggered onchain in most cases, so
+                ///      no worry about gas consumption on 2nd call
+                uint256 lastProcessingRefSlot = oracle.getLastProcessingRefSlot();
+                return lastProcessingRefSlot == 0;
+            }
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -747,9 +757,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // to allow CSM queue cursor advancement.
         uint256[] memory allocations;
         uint256 truncatedToGwei = stakingModuleDepositableEthAmount - (stakingModuleDepositableEthAmount % 1 gwei);
-        allocations = IStakingModuleV2(stateConfig.moduleAddress).allocateDeposits(
-            truncatedToGwei, _pubkeys, _keyIndices, _operatorIds, _topUpLimits
-        );
+        allocations = IStakingModuleV2(stateConfig.moduleAddress)
+            .allocateDeposits(truncatedToGwei, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
 
         // Calculate total amount from allocations returned by module (in wei)
         uint256 amount;
@@ -967,6 +976,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         returns (uint256 allocated, uint256[] memory allocations)
     {
         (allocated,, allocations) = SRLib._getDepositAllocations(_depositAmount, false);
+    }
+
+    function getTopUpAllocation(uint256 _depositAmount)
+        external
+        view
+        returns (uint256 allocated, uint256[] memory allocations)
+    {
+        (allocated,, allocations) = SRLib._getDepositAllocations(_depositAmount, true);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.

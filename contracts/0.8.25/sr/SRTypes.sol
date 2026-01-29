@@ -42,6 +42,7 @@ interface IAccountingOracle {
             uint256 extraDataItemsCount,
             uint256 extraDataItemsSubmitted
         );
+        function getLastProcessingRefSlot() external view returns (uint256);
 }
 
 /// @dev Since `enum` is `uint8` by nature, so the `status` is stored as `uint8` to avoid

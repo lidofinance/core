@@ -85,9 +85,6 @@ describe("StakingRouter.sol:module-sync", () => {
     // Get DSM signer for deposit tests
     dsmSigner = await impersonate(depositSecurityModule, ether("10.0"));
 
-    // simulate finished Oracle report to allow deposits
-    await accountingOracle.mock_setProcessingState(1, true, true);
-
     // grant roles
 
     await Promise.all([
@@ -1012,13 +1009,8 @@ describe("StakingRouter.sol:module-sync", () => {
         depositedValidators,
         depositableValidators,
       ); // 10 depositable validators
-      const effBalanceGwei = _getBalanceByValidatorsCount(withdrawalCredentialsType, depositedValidators);
-      await stakingRouter.testing_setStakingModuleAccounting(
-        newModuleId,
-        effBalanceGwei,
-        effBalanceGwei,
-        exitedValidators,
-      );
+      const activeBalanceGwei = _getBalanceByValidatorsCount(withdrawalCredentialsType, depositedValidators);
+      await stakingRouter.testing_setStakingModuleAccounting(newModuleId, activeBalanceGwei, 0n, exitedValidators);
 
       await expect(stakingRouter.connect(dsmSigner).deposit(newModuleId, "0x")).to.emit(
         depositContract,

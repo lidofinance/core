@@ -157,14 +157,24 @@ export async function main() {
   const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
 
   // deploy SRLib
-  const srLib = await deployWithoutProxy(Sk.srLib, "SRLib", deployer);
+  const minFirstAllocationStrategy = await deployWithoutProxy(
+    Sk.minFirstAllocationStrategy,
+    "MinFirstAllocationStrategy",
+    deployer,
+  );
+
+  const srLib = await deployWithoutProxy(Sk.srLib, "SRLib", deployer, [], "address", true, {
+    libraries: {
+      MinFirstAllocationStrategy: minFirstAllocationStrategy.address,
+    },
+  });
 
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
     "StakingRouter",
     proxyContractsOwner,
     deployer,
-    [depositContract, chainSpec.secondsPerSlot, chainSpec.genesisTime],
+    [depositContract, lidoAddress, locator],
     null,
     true,
     {
@@ -202,7 +212,7 @@ export async function main() {
   //
 
   const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
-  const topUpGateway = await deployWithoutProxy(Sk.topUpGateway, "TopUpGateway", deployer, [
+  await deployWithoutProxy(Sk.topUpGateway, "TopUpGateway", deployer, [
     admin,
     locator.address,
     topUpGatewayParams.maxValidatorsPerTopUp,
@@ -219,12 +229,7 @@ export async function main() {
 
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
   const stakingRouterAdmin = deployer;
-  await makeTx(
-    stakingRouter,
-    "initialize",
-    [stakingRouterAdmin, lidoAddress, withdrawalCredentials, topUpGateway.address, depositSecurityModuleAddress],
-    { from: deployer },
-  );
+  await makeTx(stakingRouter, "initialize", [stakingRouterAdmin, withdrawalCredentials], { from: deployer });
 
   //
   // Deploy Accounting
@@ -235,7 +240,7 @@ export async function main() {
     "Accounting",
     proxyContractsOwner,
     deployer,
-    [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
+    [locator.address, lidoAddress],
     null,
     true,
   );

@@ -5,6 +5,7 @@ pragma solidity 0.8.9;
 
 contract AccountingOracle__MockForLidoFastLane {
     uint256 currentFrameRefSlot;
+    uint256 lastProcessingRefSlot;
     bool mainDataSubmitted;
     bool extraDataSubmitted;
 
@@ -32,8 +33,13 @@ contract AccountingOracle__MockForLidoFastLane {
         result.extraDataSubmitted = extraDataSubmitted;
     }
 
+    function getLastProcessingRefSlot() external view returns (uint256) {
+        return lastProcessingRefSlot;
+    }
+
     function mock_setProcessingState(uint256 _refSlot, bool _mainDataSubmitted, bool _extraDataSubmitted) external {
         currentFrameRefSlot = _refSlot;
+        lastProcessingRefSlot = _refSlot;
         mainDataSubmitted = _mainDataSubmitted;
         extraDataSubmitted = _extraDataSubmitted;
     }

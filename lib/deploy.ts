@@ -115,11 +115,12 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
   withStateFile = true,
+  signerOrOptions?: Signer | FactoryOptions,
   fields: Record<string, unknown> = {},
 ): Promise<DeployedContract> {
   logWithConstructorArgs(`Deploying: ${yl(artifactName)} (without proxy)`, constructorArgs);
 
-  const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile);
+  const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
 
   if (withStateFile) {
     const contractPath = await getContractPath(artifactName);

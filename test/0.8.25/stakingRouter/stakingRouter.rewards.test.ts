@@ -533,7 +533,8 @@ describe("StakingRouter.sol:rewards", () => {
     depositable = 0n,
     status = StakingModuleStatus.Active,
     withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
-    effBalanceGwei = 0n,
+    activeBalanceGwei = 0n,
+    pendingBalanceGwei = 0n,
   }: ModuleConfig): Promise<[StakingModule__MockForStakingRouter, bigint]> {
     const modulesCount = await stakingRouter.getStakingModulesCount();
     const module = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
@@ -556,10 +557,10 @@ describe("StakingRouter.sol:rewards", () => {
     expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
 
     await module.mock__getStakingModuleSummary(exited, deposited, depositable);
-    if (effBalanceGwei == 0n && deposited > 0n) {
-      effBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
+    if (activeBalanceGwei == 0n && deposited > 0n) {
+      activeBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
     }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, effBalanceGwei, effBalanceGwei, exited);
+    await stakingRouter.testing_setStakingModuleAccounting(moduleId, activeBalanceGwei, pendingBalanceGwei, exited);
 
     if (status != StakingModuleStatus.Active) {
       await stakingRouter.setStakingModuleStatus(moduleId, status);
@@ -581,5 +582,6 @@ interface ModuleConfig {
   deposited?: bigint;
   depositable?: bigint;
   status?: StakingModuleStatus;
-  effBalanceGwei?: bigint;
+  activeBalanceGwei?: bigint;
+  pendingBalanceGwei?: bigint;
 }
