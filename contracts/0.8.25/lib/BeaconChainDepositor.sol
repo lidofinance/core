@@ -26,7 +26,6 @@ library BeaconChainDepositor {
 
     /// @dev Minimum deposit amount required by the Ethereum Deposit Contract
     uint256 internal constant MIN_DEPOSIT = 1 ether;
-    uint64 internal constant MIN_DEPOSIT_IN_GWEI = 1 ether / 1 gwei;
 
     /// @dev Invokes a deposit call to the official Beacon Deposit contract
     /// @param _depositContract - IDepositContract deposit contract
@@ -55,7 +54,7 @@ library BeaconChainDepositor {
             MemUtils.copyBytes(_publicKeysBatch, publicKey, i * PUBLIC_KEY_LENGTH, 0, PUBLIC_KEY_LENGTH);
             MemUtils.copyBytes(_signaturesBatch, signature, i * SIGNATURE_LENGTH, 0, SIGNATURE_LENGTH);
 
-            _depositContract.deposit{value:  DEPOSIT_SIZE}(
+            _depositContract.deposit{value: DEPOSIT_SIZE}(
                 publicKey,
                 _withdrawalCredentials,
                 signature,
@@ -68,11 +67,11 @@ library BeaconChainDepositor {
         IDepositContract _depositContract,
         bytes memory _withdrawalCredentials,
         bytes[] memory _publicKeys,
-        uint256[] memory _amountGwei
+        uint256[] memory _amount
     ) external {
         uint256 len = _publicKeys.length;
         if (len == 0) return;
-        if (len != _amountGwei.length) revert ArrayLengthMismatch();
+        if (len != _amount.length) revert ArrayLengthMismatch();
 
         bytes memory dummySignature = new bytes(SIGNATURE_LENGTH);
 
@@ -83,38 +82,28 @@ library BeaconChainDepositor {
                 revert InvalidPublicKeysBatchLength(pk.length, PUBLIC_KEY_LENGTH);
             }
 
-            uint256 amountGwei256 = _amountGwei[i];
-            if (amountGwei256 > type(uint64).max) {
-                revert AmountTooLarge();
-            }
+            uint256 amount = _amount[i];
 
             // obtainDepositData can return 0 amount for some keys
-            if (amountGwei256 == 0) continue;
+            if (amount == 0) continue;
 
             // Amounts below minimum deposit (1 ETH) would fail at deposit contract
-            if (amountGwei256 < MIN_DEPOSIT_IN_GWEI) {
+            if (amount < MIN_DEPOSIT) {
                 revert DepositAmountTooLow();
             }
 
-            uint64 amountGwei64 = uint64(amountGwei256);
-            uint256 amountWei = uint256(amountGwei64) * 1 gwei;
+            uint256 amountGwei = amount / 1 gwei;
+            if (amountGwei > type(uint64).max) {
+                revert AmountTooLarge();
+            }
+            uint64 amountGwei64 = uint64(amountGwei);
 
             // full DepositData root with custom amount
-            bytes32 depositDataRoot =  _computeDepositDataRootWithAmount(
-                _withdrawalCredentials,
-                pk,
-                dummySignature,
-                amountGwei64
-            );
+            bytes32 depositDataRoot =
+                _computeDepositDataRootWithAmount(_withdrawalCredentials, pk, dummySignature, amountGwei64);
 
-            _depositContract.deposit{value: amountWei}(
-                pk,
-                _withdrawalCredentials,
-                dummySignature,
-                depositDataRoot
-            );
+            _depositContract.deposit{value: amount}(pk, _withdrawalCredentials, dummySignature, depositDataRoot);
         }
-
     }
 
     function _computeDepositDataRootWithAmount(
@@ -135,27 +124,21 @@ library BeaconChainDepositor {
         );
     }
 
-    function _computeSignatureRoot(
-        bytes memory _signature
-    ) private pure returns (bytes32) {
+    function _computeSignatureRoot(bytes memory _signature) private pure returns (bytes32) {
         bytes memory sigPart1 = MemUtils.unsafeAllocateBytes(64);
         bytes memory sigPart2 = MemUtils.unsafeAllocateBytes(SIGNATURE_LENGTH - 64);
 
         MemUtils.copyBytes(_signature, sigPart1, 0, 0, 64);
         MemUtils.copyBytes(_signature, sigPart2, 64, 0, SIGNATURE_LENGTH - 64);
 
-        return sha256(
-            abi.encodePacked(
-                sha256(abi.encodePacked(sigPart1)),
-                sha256(abi.encodePacked(sigPart2, bytes32(0)))
-            )
-        );
+        return
+            sha256(abi.encodePacked(sha256(abi.encodePacked(sigPart1)), sha256(abi.encodePacked(sigPart2, bytes32(0)))));
     }
 
-    function _toLittleEndian64(uint64 value) private pure returns (bytes8 ret) { 
+    function _toLittleEndian64(uint64 value) private pure returns (bytes8 ret) {
         ret = bytes8(0);
         for (uint256 i = 0; i < 8; ++i) {
-            ret |= bytes8(bytes1(uint8(value >> (8 * i)))) >> (8 * i); 
+            ret |= bytes8(bytes1(uint8(value >> (8 * i)))) >> (8 * i);
         }
     }
 

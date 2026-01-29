@@ -15,7 +15,6 @@ describe("TopUpGateway.sol", () => {
   let topUpOperator: HardhatEthersSigner;
   let limitsManager: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-
   let lido: Lido__MockForTopUpGateway;
   let locator: LidoLocator;
   let stakingRouter: StakingRouter__MockForTopUpGateway;
@@ -26,24 +25,18 @@ describe("TopUpGateway.sol", () => {
   let manageLimitsRole: string;
 
   const MODULE_ID = 1n;
-  const MAX_EFFECTIVE_BALANCE_GWEI = 2048n * 10n ** 9n;
-  const BALANCE_THRESHOLD_GWEI = 2047n * 10n ** 9n; // Threshold per TopUpDocs.md
   const FAR_FUTURE_EPOCH = (1n << 64n) - 1n;
   const SAMPLE_PUBKEY = `0x${"11".repeat(48)}`;
   const DEFAULT_MAX_VALIDATORS = 5n;
   const DEFAULT_MIN_BLOCK_DISTANCE = 1n;
+  const DEFAULT_MaX_ROOT_AGE = 300n;
   const G_INDEX = ethers.zeroPadValue("0x01", 32);
   const ZERO_BYTES_31 = "00".repeat(31);
   const WC_TYPE_02 = `0x02${ZERO_BYTES_31}`;
   const WC_TYPE_01 = `0x01${ZERO_BYTES_31}`;
-
-  type PendingWitness = {
-    proof: string[];
-    amount: bigint;
-    signature: string;
-    slot: bigint;
-    index: bigint;
-  };
+  const MAX_EFFECTIVE_BALANCE_02_GWEI = 2048n * 10n ** 9n;
+  const HYSTERESIS_GWEI = 125n * 10n ** 7n;
+  const MAX_BALANCE_AFTER_TOP_UP_GWEI = MAX_EFFECTIVE_BALANCE_02_GWEI - HYSTERESIS_GWEI;
 
   type TopUpData = {
     moduleId: bigint;
@@ -65,19 +58,14 @@ describe("TopUpGateway.sol", () => {
       exitEpoch: bigint;
       withdrawableEpoch: bigint;
     }>;
-    balanceWitness: Array<{
-      proofBalance: string[];
-      balanceGwei: bigint;
-    }>;
-    pendingWitness: PendingWitness[][];
+    pendingBalanceGwei: bigint[];
   };
 
   beforeEach(async () => {
     [admin, topUpOperator, limitsManager, stranger] = await ethers.getSigners();
     snapshot = await Snapshot.take();
-
-    stakingRouter = await ethers.deployContract("StakingRouter__MockForTopUpGateway");
     lido = await ethers.deployContract("Lido__MockForTopUpGateway");
+    stakingRouter = await ethers.deployContract("StakingRouter__MockForTopUpGateway");
     locator = await deployLidoLocator({
       stakingRouter: await stakingRouter.getAddress(),
       lido: await lido.getAddress(),
@@ -88,10 +76,7 @@ describe("TopUpGateway.sol", () => {
       await locator.getAddress(),
       DEFAULT_MAX_VALIDATORS,
       DEFAULT_MIN_BLOCK_DISTANCE,
-      G_INDEX,
-      G_INDEX,
-      G_INDEX,
-      G_INDEX,
+      DEFAULT_MaX_ROOT_AGE,
       G_INDEX,
       G_INDEX,
       0,
@@ -133,13 +118,7 @@ describe("TopUpGateway.sol", () => {
           withdrawableEpoch: FAR_FUTURE_EPOCH,
         },
       ],
-      balanceWitness: [
-        {
-          proofBalance: [],
-          balanceGwei: 1_000_000_000_000n,
-        },
-      ],
-      pendingWitness: [[]],
+      pendingBalanceGwei: [0n],
     };
   };
 
@@ -161,10 +140,7 @@ describe("TopUpGateway.sol", () => {
           await locator.getAddress(),
           0n,
           DEFAULT_MIN_BLOCK_DISTANCE,
-          G_INDEX,
-          G_INDEX,
-          G_INDEX,
-          G_INDEX,
+          DEFAULT_MaX_ROOT_AGE,
           G_INDEX,
           G_INDEX,
           0,
@@ -180,10 +156,7 @@ describe("TopUpGateway.sol", () => {
           await locator.getAddress(),
           DEFAULT_MAX_VALIDATORS,
           0n,
-          G_INDEX,
-          G_INDEX,
-          G_INDEX,
-          G_INDEX,
+          DEFAULT_MaX_ROOT_AGE,
           G_INDEX,
           G_INDEX,
           0,
@@ -196,9 +169,9 @@ describe("TopUpGateway.sol", () => {
     it("allows manage limits role to set the max validators per top up", async () => {
       const newLimit = DEFAULT_MAX_VALIDATORS + 1n;
       await expect(topUpGateway.connect(limitsManager).setMaxValidatorsPerTopUp(newLimit))
-        .to.emit(topUpGateway, "MaxValidatorsPerReportChanged")
+        .to.emit(topUpGateway, "MaxValidatorsPerTopUpChanged")
         .withArgs(newLimit);
-      expect(await topUpGateway.maxValidatorsPerTopUp()).to.equal(newLimit);
+      expect(await topUpGateway.getMaxValidatorsPerTopUp()).to.equal(newLimit);
     });
 
     it("reverts when non-manager tries to set the max validators per top up", async () => {
@@ -212,7 +185,7 @@ describe("TopUpGateway.sol", () => {
       await expect(topUpGateway.connect(limitsManager).setMinBlockDistance(newDistance))
         .to.emit(topUpGateway, "MinBlockDistanceChanged")
         .withArgs(newDistance);
-      expect(await topUpGateway.minBlockDistance()).to.equal(newDistance);
+      expect(await topUpGateway.getMinBlockDistance()).to.equal(newDistance);
     });
 
     it("reverts when non-manager tries to set the min block distance", async () => {
@@ -236,8 +209,6 @@ describe("TopUpGateway.sol", () => {
       data.keyIndices = [];
       data.operatorIds = [];
       data.validatorWitness = [];
-      data.balanceWitness = [];
-      data.pendingWitness = [];
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
@@ -268,8 +239,6 @@ describe("TopUpGateway.sol", () => {
           pubkey: secondPubkey,
         },
       ];
-      data.balanceWitness = [data.balanceWitness[0], data.balanceWitness[0]];
-      data.pendingWitness = [[], []];
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
@@ -289,8 +258,6 @@ describe("TopUpGateway.sol", () => {
           pubkey: secondPubkey,
         },
       ];
-      data.balanceWitness = [data.balanceWitness[0], data.balanceWitness[0]];
-      data.pendingWitness = [[], []];
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
@@ -351,12 +318,12 @@ describe("TopUpGateway.sol", () => {
 
     it("returns zero top-up limit when balance exceeds the threshold", async () => {
       const data = await buildTopUpData();
-      // Balance > 2047 ETH threshold means top-up limit should be 0 (per TopUpDocs.md)
-      data.balanceWitness[0].balanceGwei = BALANCE_THRESHOLD_GWEI + 1n;
+      data.validatorWitness[0].effectiveBalance = 2046n * 10n ** 9n;
+      data.pendingBalanceGwei = [0n];
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
         .to.emit(stakingRouter, "TopUpCalled")
-        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
     });
 
     it("reverts when pubkey length is invalid", async () => {
@@ -371,11 +338,14 @@ describe("TopUpGateway.sol", () => {
 
     it("calls StakingRouter.topUp and updates last slot", async () => {
       const data = await buildTopUpData();
-      const expectedTopUp = MAX_EFFECTIVE_BALANCE_GWEI - data.balanceWitness[0].balanceGwei;
+      data.pendingBalanceGwei = [0n];
+      const expectedTopUpGwei = MAX_BALANCE_AFTER_TOP_UP_GWEI - data.validatorWitness[0].effectiveBalance;
+      // topUpLimits are now in wei
+      const expectedTopUpWei = expectedTopUpGwei * 1_000_000_000n;
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
         .to.emit(stakingRouter, "TopUpCalled")
-        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp])
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [expectedTopUpWei])
         .and.to.emit(topUpGateway, "LastTopUpChanged")
         .withArgs(data.beaconRootData.slot);
 
@@ -383,193 +353,98 @@ describe("TopUpGateway.sol", () => {
       expect(await stakingRouter.topUpCalls()).to.equal(1n);
     });
 
-    describe("pending deposits affect top-up limit", () => {
-      it("reduces top-up limit by pending deposit amount", async () => {
-        const data = await buildTopUpData();
-        const pendingAmount = 100n * 10n ** 9n; // 100 Gwei
+    it("reduces top-up limit by pending deposit amount", async () => {
+      const data = await buildTopUpData();
+      const pendingAmount = 100n * 10n ** 9n;
+      data.pendingBalanceGwei = [pendingAmount]; // 100 Gwei
 
-        data.pendingWitness = [
-          [
-            {
-              proof: [],
-              amount: pendingAmount,
-              signature: `0x${"00".repeat(96)}`,
-              slot: 100n,
-              index: 0n,
-            },
-          ],
-        ];
+      const expectedTopUpGwei =
+        MAX_BALANCE_AFTER_TOP_UP_GWEI - data.validatorWitness[0].effectiveBalance - pendingAmount;
+      // topUpLimits are now in wei
+      const expectedTopUpWei = expectedTopUpGwei * 1_000_000_000n;
 
-        const expectedTopUp = MAX_EFFECTIVE_BALANCE_GWEI - data.balanceWitness[0].balanceGwei - pendingAmount;
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [expectedTopUpWei]);
+    });
 
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
-      });
+    it("returns zero top-up limit when balance + pending > 2045", async () => {
+      const data = await buildTopUpData();
+      // Set balance close to max
+      data.validatorWitness[0].effectiveBalance = 204575n * 10n ** 7n; // 2045.75 ether
 
-      it("reduces top-up limit by multiple pending deposits", async () => {
-        const data = await buildTopUpData();
-        const pendingAmount1 = 50n * 10n ** 9n;
-        const pendingAmount2 = 30n * 10n ** 9n;
-        const pendingAmount3 = 20n * 10n ** 9n;
+      // Add pending that would push total over max
+      const pendingAmount = 100n; // 100 Gwei
+      data.pendingBalanceGwei = [pendingAmount];
 
-        data.pendingWitness = [
-          [
-            {
-              proof: [],
-              amount: pendingAmount1,
-              signature: `0x${"00".repeat(96)}`,
-              slot: 100n,
-              index: 0n,
-            },
-            {
-              proof: [],
-              amount: pendingAmount2,
-              signature: `0x${"00".repeat(96)}`,
-              slot: 101n,
-              index: 1n,
-            },
-            {
-              proof: [],
-              amount: pendingAmount3,
-              signature: `0x${"00".repeat(96)}`,
-              slot: 102n,
-              index: 2n,
-            },
-          ],
-        ];
+      // balance (2000) + pending (100) = 2100 > max (2048), so top-up should be 0
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
+    });
 
-        const totalPending = pendingAmount1 + pendingAmount2 + pendingAmount3;
-        const expectedTopUp = MAX_EFFECTIVE_BALANCE_GWEI - data.balanceWitness[0].balanceGwei - totalPending;
+    it("returns zero top-up limit when balance + pending exactly equals max effective balance", async () => {
+      const data = await buildTopUpData();
+      // Set balance so that balance + pending = max exactly
+      data.validatorWitness[0].effectiveBalance = 2045n * 10n ** 9n; // 1948 Gwei
 
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
-      });
+      const pendingAmount = MAX_BALANCE_AFTER_TOP_UP_GWEI - data.validatorWitness[0].effectiveBalance; // 100 Gwei
+      data.pendingBalanceGwei[0] = pendingAmount;
 
-      it("returns zero top-up limit when balance + pending >= max effective balance", async () => {
-        const data = await buildTopUpData();
-        // Set balance close to max
-        data.balanceWitness[0].balanceGwei = 2000n * 10n ** 9n; // 2000 Gwei
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
+    });
 
-        // Add pending that would push total over max
-        const pendingAmount = 100n * 10n ** 9n; // 100 Gwei
-        data.pendingWitness = [
-          [
-            {
-              proof: [],
-              amount: pendingAmount,
-              signature: `0x${"00".repeat(96)}`,
-              slot: 100n,
-              index: 0n,
-            },
-          ],
-        ];
+    it("returns minimum top-up ether when balance is at threshold", async () => {
+      const data = await buildTopUpData();
+      data.validatorWitness[0].effectiveBalance = 2045n * 10n ** 9n;
+      data.pendingBalanceGwei = [0n];
 
-        // balance (2000) + pending (100) = 2100 > max (2048), so top-up should be 0
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
-      });
+      // topUpLimits are now in wei: 1.75 ETH = 175n * 10n ** 7n gwei * 10n ** 9n (wei/gwei) = 175n * 10n ** 16n wei
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [175n * 10n ** 16n]); // 1.75 ether in wei
+    });
 
-      it("returns zero top-up limit when balance + pending exactly equals max effective balance", async () => {
-        const data = await buildTopUpData();
-        // Set balance so that balance + pending = max exactly
-        data.balanceWitness[0].balanceGwei = 1948n * 10n ** 9n; // 1948 Gwei
+    it("returns zero when validator is slashed", async () => {
+      const data = await buildTopUpData();
+      data.validatorWitness[0].slashed = true;
 
-        const pendingAmount = 100n * 10n ** 9n; // 100 Gwei
-        data.pendingWitness = [
-          [
-            {
-              proof: [],
-              amount: pendingAmount,
-              signature: `0x${"00".repeat(96)}`,
-              slot: 100n,
-              index: 0n,
-            },
-          ],
-        ];
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
+    });
 
-        // balance (1948) + pending (100) = 2048 = max, so top-up should be 0
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
-      });
+    it("returns zero when validator has exitEpoch set", async () => {
+      const data = await buildTopUpData();
+      data.validatorWitness[0].exitEpoch = 1000n; // not FAR_FUTURE_EPOCH
 
-      it("handles empty pending deposits array (no pending)", async () => {
-        const data = await buildTopUpData();
-        data.pendingWitness = [[]]; // explicitly empty
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
+    });
 
-        const expectedTopUp = MAX_EFFECTIVE_BALANCE_GWEI - data.balanceWitness[0].balanceGwei;
+    it("returns zero when validator has withdrawableEpoch set", async () => {
+      const data = await buildTopUpData();
+      data.validatorWitness[0].withdrawableEpoch = 2000n; // not FAR_FUTURE_EPOCH
 
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
-      });
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
+    });
 
-      it("returns minimum top-up of 1 ether when balance is at threshold", async () => {
-        const data = await buildTopUpData();
-        // Balance = 2047 ETH (threshold), so top-up = 2048 - 2047 = 1 ETH
-        data.balanceWitness[0].balanceGwei = BALANCE_THRESHOLD_GWEI;
+    it("revert if validator is not active", async () => {
+      const data = await buildTopUpData();
+      const SLOTS_PER_EPOCH = 32n;
+      const epoch = data.beaconRootData.slot / SLOTS_PER_EPOCH;
+      // Validator should be activated earlier than current epoch
+      data.validatorWitness[0].activationEpoch = epoch + 1n;
 
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [1n * 10n ** 9n]);
-      });
-
-      it("returns correct top-up for balance just under threshold with small pending", async () => {
-        const data = await buildTopUpData();
-        // Balance = 2045 ETH (2 ETH below threshold)
-        data.balanceWitness[0].balanceGwei = 2045n * 10n ** 9n;
-        // Pending = 1 ETH
-        const pendingAmount = 1n * 10n ** 9n;
-        data.pendingWitness = [
-          [
-            {
-              proof: [],
-              amount: pendingAmount,
-              signature: `0x${"00".repeat(96)}`,
-              slot: 100n,
-              index: 0n,
-            },
-          ],
-        ];
-
-        // Balance = 2045 ETH, Pending = 1 ETH
-        // Total = 2046 ETH <= 2047 ETH threshold
-        // Top-up = 2048 - 2046 = 2 ETH
-        const expectedTopUp = 2n * 10n ** 9n;
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [expectedTopUp]);
-      });
-
-      it("returns zero when validator is slashed", async () => {
-        const data = await buildTopUpData();
-        data.validatorWitness[0].slashed = true;
-
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
-      });
-
-      it("returns zero when validator has exitEpoch set", async () => {
-        const data = await buildTopUpData();
-        data.validatorWitness[0].exitEpoch = 1000n; // not FAR_FUTURE_EPOCH
-
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
-      });
-
-      it("returns zero when validator has withdrawableEpoch set", async () => {
-        const data = await buildTopUpData();
-        data.validatorWitness[0].withdrawableEpoch = 2000n; // not FAR_FUTURE_EPOCH
-
-        await expect(topUpGateway.connect(topUpOperator).topUp(data))
-          .to.emit(stakingRouter, "TopUpCalled")
-          .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, SAMPLE_PUBKEY, [0n]);
-      });
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "ValidatorIsNotActivated",
+      );
     });
   });
 
