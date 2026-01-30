@@ -174,7 +174,7 @@ export async function main() {
     "StakingRouter",
     proxyContractsOwner,
     deployer,
-    [depositContract, lidoAddress, locator],
+    [depositContract, lidoAddress, locator.address],
     null,
     true,
     {
