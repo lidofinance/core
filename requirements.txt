@@ -1,0 +1,11 @@
+# SSZ + Merkle tree library
+remerkleable>=0.1.27
+
+# HTTP requests для Beacon API
+requests>=2.28.0
+
+# Web3 for Ethereum transaction sending
+web3>=6.0.0
+
+# Environment variable loading
+python-dotenv>=1.0.0
