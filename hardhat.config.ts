@@ -148,7 +148,9 @@ const config: HardhatUserConfig = {
         },
       },
     ],
-    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL ? "local-devnet" : process.env.ETHERSCAN_API_KEY || "",
+    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL
+      ? { "local-devnet": "local-devnet" }
+      : process.env.ETHERSCAN_API_KEY || "",
   },
   solidity: {
     compilers: [
