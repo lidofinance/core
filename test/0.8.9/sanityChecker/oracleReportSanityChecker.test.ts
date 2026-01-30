@@ -42,6 +42,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
     appearedValidatorsPerDayLimit: 100n,
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
     simulatedShareRateDeviationBPLimit: 2_50n, // 2.5%
+    maxBalanceExitRequestedPerReportInGwei: 1000000n,
     maxValidatorExitRequestsPerReport: 2000n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,

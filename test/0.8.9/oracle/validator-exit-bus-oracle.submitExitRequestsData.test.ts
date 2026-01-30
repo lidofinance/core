@@ -172,7 +172,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Should revert if wrong DATA_FORMAT", async () => {
       const exitRequestWrongDataFormat: ExitRequestData = {
-        dataFormat: 2,
+        dataFormat: 3,
         data: encodeExitRequestsDataList(exitRequests),
       };
       const hash = hashExitRequest(exitRequestWrongDataFormat);
@@ -182,7 +182,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await expect(oracle.submitExitRequestsData(exitRequestWrongDataFormat))
         .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
-        .withArgs(2);
+        .withArgs(3);
     });
 
     it("Should revert if contains duplicates", async () => {

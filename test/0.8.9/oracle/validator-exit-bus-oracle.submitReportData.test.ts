@@ -260,7 +260,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3] },
         ]);
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-          .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectNumberOfExitRequestsPerReport")
+          .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSumOfExitBalancePerReport")
           .withArgs(exitRequestsLimit);
       });
       it("pass if requests amount equals to limit", async () => {

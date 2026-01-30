@@ -168,7 +168,7 @@ describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
       const structSizeInBits = functionABI.outputs[0].components
         .map((x: { type: string }) => x.type)
         .reduce((acc: number, x: string) => acc + sizeOfCalc(x), 0);
-      expect(structSizeInBits).to.lessThanOrEqual(256);
+      expect(structSizeInBits).to.lessThanOrEqual(512);
     });
 
     it("second opinion can be changed or removed", async () => {
