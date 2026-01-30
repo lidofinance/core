@@ -195,7 +195,7 @@ describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
         await accountingOracle.getAddress(),
         await accounting.getAddress(),
         deployer.address,
-        Object.values(defaultLimitsList),
+        defaultLimitsList,
       ]);
     }
 

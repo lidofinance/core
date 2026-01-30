@@ -239,11 +239,11 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             revert UnexpectedRequestsDataLength();
         }
 
-        // Get validator balance count
-        uint256 validatorBalance = 0;
-        // Get staking modules type from staking router
+        // Calculate sum of validator exit requests (each validator has 32 ETH max effective balance)
+        // The parameter name suggests Gwei but based on the contract comment it's counting validators
+        uint256 requestsCount = data.data.length / _getPackedRequestLength(data.dataFormat);
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(validatorBalance);
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(requestsCount);
 
         _processExitRequestsList(data.data, data.dataFormat);
 
