@@ -43,7 +43,6 @@ describe.skip("OracleReportSanityChecker.sol", () => {
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
     simulatedShareRateDeviationBPLimit: 2_50n, // 2.5%
     maxBalanceExitRequestedPerReportInGwei: 1000000n,
-    maxValidatorExitRequestsPerReport: 2000n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,
@@ -163,7 +162,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       expect(limits.exitedValidatorsPerDayLimit).to.equal(defaultLimits.exitedValidatorsPerDayLimit);
       expect(limits.appearedValidatorsPerDayLimit).to.equal(defaultLimits.appearedValidatorsPerDayLimit);
       expect(limits.annualBalanceIncreaseBPLimit).to.equal(defaultLimits.annualBalanceIncreaseBPLimit);
-      expect(limits.maxValidatorExitRequestsPerReport).to.equal(defaultLimits.maxValidatorExitRequestsPerReport);
+      expect(limits.maxBalanceExitRequestedPerReportInGwei).to.equal(defaultLimits.maxBalanceExitRequestedPerReportInGwei);
       expect(limits.maxItemsPerExtraDataTransaction).to.equal(defaultLimits.maxItemsPerExtraDataTransaction);
       expect(limits.maxNodeOperatorsPerExtraDataItem).to.equal(defaultLimits.maxNodeOperatorsPerExtraDataItem);
       expect(limits.requestTimestampMargin).to.equal(defaultLimits.requestTimestampMargin);
@@ -186,7 +185,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       appearedValidatorsPerDayLimit: 75,
       annualBalanceIncreaseBPLimit: 15_00,
       simulatedShareRateDeviationBPLimit: 1_50, // 1.5%
-      maxValidatorExitRequestsPerReport: 3000,
+      maxBalanceExitRequestedPerReportInGwei: 2000000,
       maxItemsPerExtraDataTransaction: 15 + 1,
       maxNodeOperatorsPerExtraDataItem: 16 + 1,
       requestTimestampMargin: 2048,
@@ -215,7 +214,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       expect(before.exitedValidatorsPerDayLimit).to.not.equal(newLimits.exitedValidatorsPerDayLimit);
       expect(before.appearedValidatorsPerDayLimit).to.not.equal(newLimits.appearedValidatorsPerDayLimit);
       expect(before.annualBalanceIncreaseBPLimit).to.not.equal(newLimits.annualBalanceIncreaseBPLimit);
-      expect(before.maxValidatorExitRequestsPerReport).to.not.equal(newLimits.maxValidatorExitRequestsPerReport);
+      expect(before.maxBalanceExitRequestedPerReportInGwei).to.not.equal(newLimits.maxBalanceExitRequestedPerReportInGwei);
       expect(before.maxItemsPerExtraDataTransaction).to.not.equal(newLimits.maxItemsPerExtraDataTransaction);
       expect(before.maxNodeOperatorsPerExtraDataItem).to.not.equal(newLimits.maxNodeOperatorsPerExtraDataItem);
       expect(before.requestTimestampMargin).to.not.equal(newLimits.requestTimestampMargin);
@@ -230,7 +229,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       expect(after.exitedValidatorsPerDayLimit).to.equal(newLimits.exitedValidatorsPerDayLimit);
       expect(after.appearedValidatorsPerDayLimit).to.equal(newLimits.appearedValidatorsPerDayLimit);
       expect(after.annualBalanceIncreaseBPLimit).to.equal(newLimits.annualBalanceIncreaseBPLimit);
-      expect(after.maxValidatorExitRequestsPerReport).to.equal(newLimits.maxValidatorExitRequestsPerReport);
+      expect(after.maxBalanceExitRequestedPerReportInGwei).to.equal(newLimits.maxBalanceExitRequestedPerReportInGwei);
       expect(after.maxItemsPerExtraDataTransaction).to.equal(newLimits.maxItemsPerExtraDataTransaction);
       expect(after.maxNodeOperatorsPerExtraDataItem).to.equal(newLimits.maxNodeOperatorsPerExtraDataItem);
       expect(after.requestTimestampMargin).to.equal(newLimits.requestTimestampMargin);
@@ -361,43 +360,6 @@ describe.skip("OracleReportSanityChecker.sol", () => {
 
       const after = await checker.getOracleReportLimits();
       expect(after.annualBalanceIncreaseBPLimit).to.equal(100n);
-    });
-  });
-
-  context("setMaxExitRequestsPerOracleReport", () => {
-    before(async () => {
-      await checker.connect(admin).grantRole(await checker.MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE(), manager);
-    });
-
-    after(async () => {
-      await checker.connect(admin).revokeRole(await checker.MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE(), manager);
-    });
-
-    it("reverts if called by non-manager", async () => {
-      await expect(
-        checker.connect(stranger).setMaxExitRequestsPerOracleReport(100n),
-      ).to.be.revertedWithOZAccessControlError(
-        stranger.address,
-        await checker.MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE(),
-      );
-    });
-
-    it("reverts if limit is greater than max", async () => {
-      await expect(
-        checker.connect(manager).setMaxExitRequestsPerOracleReport(MAX_UINT16),
-      ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
-    });
-
-    it("sets limit correctly and emits `MaxValidatorExitRequestsPerReportSet` event", async () => {
-      const before = await checker.getOracleReportLimits();
-      expect(before.maxValidatorExitRequestsPerReport).to.not.equal(100n);
-
-      await expect(checker.connect(manager).setMaxExitRequestsPerOracleReport(100n))
-        .to.emit(checker, "MaxValidatorExitRequestsPerReportSet")
-        .withArgs(100n);
-
-      const after = await checker.getOracleReportLimits();
-      expect(after.maxValidatorExitRequestsPerReport).to.equal(100n);
     });
   });
 
@@ -1323,12 +1285,12 @@ describe.skip("OracleReportSanityChecker.sol", () => {
     let maxExitRequests: bigint;
 
     before(async () => {
-      maxExitRequests = (await checker.getOracleReportLimits()).maxValidatorExitRequestsPerReport;
+      maxExitRequests = (await checker.getOracleReportLimits()).maxBalanceExitRequestedPerReportInGwei;
     });
 
     it("reverts on too many exit requests", async () => {
       await expect(checker.checkExitBusOracleReport(maxExitRequests + 1n))
-        .to.be.revertedWithCustomError(checker, "IncorrectNumberOfExitRequestsPerReport")
+        .to.be.revertedWithCustomError(checker, "IncorrectSumOfExitBalancePerReport")
         .withArgs(maxExitRequests);
     });
 
