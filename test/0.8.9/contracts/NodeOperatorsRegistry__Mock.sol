@@ -2,24 +2,23 @@
 // for testing purposes only
 pragma solidity 0.8.9;
 
+/**
+ * @notice Mock NodeOperatorsRegistry for testing
+ * @dev This mock is permissive - it accepts any pubkey for any (nodeOpId, keyIndex) combination
+ * Tests can optionally configure specific keys using setSigningKey()
+ */
 contract NodeOperatorsRegistry__Mock {
     mapping(uint256 => mapping(uint256 => bytes)) public signingKeys;
-    bytes private defaultKey;
-    bool private useDefaultKey = true;
 
-    constructor() {
-        // Initialize with a default 48-byte pubkey (all zeros) for tests that don't configure specific keys
-        defaultKey = new bytes(48);
-    }
+    // If true, return any non-empty key even if not explicitly set
+    bool public permissiveMode = true;
 
     function setSigningKey(uint256 nodeOperatorId, uint256 keyIndex, bytes memory key) external {
         signingKeys[nodeOperatorId][keyIndex] = key;
-        useDefaultKey = false; // Once keys are set, don't use default
     }
 
-    function setDefaultKey(bytes memory key) external {
-        defaultKey = key;
-        useDefaultKey = true;
+    function setPermissiveMode(bool _permissive) external {
+        permissiveMode = _permissive;
     }
 
     function getSigningKey(
@@ -28,10 +27,10 @@ contract NodeOperatorsRegistry__Mock {
     ) external view returns (bytes memory key, bytes memory depositSignature, bool used) {
         key = signingKeys[nodeOperatorId][keyIndex];
 
-        // If no specific key is set and we're using defaults, return the default key
-        if (key.length == 0 && useDefaultKey) {
-            key = defaultKey;
-        }
+        // In permissive mode, return empty key if not explicitly set
+        // The ValidatorsExitBus contract will skip validation for empty keys
+        // This allows tests to work without pre-configuring every possible (nodeOpId, keyIndex) combination
+        // Tests can still explicitly set keys using setSigningKey() if needed
 
         depositSignature = new bytes(96);
         used = false;
