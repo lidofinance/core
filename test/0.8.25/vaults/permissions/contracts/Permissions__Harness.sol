@@ -18,12 +18,6 @@ contract Permissions__Harness is Permissions {
         _initialize(_defaultAdmin, _confirmExpiry);
     }
 
-    function confirmingRoles() public pure override returns (bytes32[] memory) {
-        bytes32[] memory roles = new bytes32[](1);
-        roles[0] = DEFAULT_ADMIN_ROLE;
-        return roles;
-    }
-
     function fund(uint256 _ether) external payable {
         _fund(_ether);
     }
@@ -82,9 +76,5 @@ contract Permissions__Harness is Permissions {
 
     function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external {
         _changeTier(_tierId, _requestedShareLimit);
-    }
-
-    function transferVaultOwnership(address _newOwner) external {
-        _transferVaultOwnership(_newOwner);
     }
 }

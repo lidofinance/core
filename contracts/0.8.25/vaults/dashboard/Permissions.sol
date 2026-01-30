@@ -5,6 +5,8 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
+import {AccessControl} from "@openzeppelin/contracts-v5.2/access/AccessControl.sol";
+import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
@@ -177,10 +179,11 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Returns an array of roles that need to confirm the calls that require confirmations
-     * @return The roles that need to confirm the call.
+     * @notice Role renouncement is disabled to avoid accidental access loss.
      */
-    function confirmingRoles() public pure virtual returns (bytes32[] memory);
+    function renounceRole(bytes32, address) public pure override(AccessControl, IAccessControl) {
+        revert RoleRenouncementDisabled();
+    }
 
     /**
      * @dev A custom modifier that checks if the caller has a role or the admin role for a given role.
@@ -207,7 +210,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _ether The amount of ether to withdraw from the StakingVault.
      */
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRoleMemberOrAdmin(WITHDRAW_ROLE) {
-        VAULT_HUB.withdraw(address(_stakingVault()), _recipient, _ether);
+        _doWithdraw(_recipient, _ether);
     }
 
     /**
@@ -298,16 +301,6 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the confirming roles and transfer the ownership of the vault without disconnecting it from the hub
-     * @param _newOwner The address to set the owner to.
-     */
-    function _transferVaultOwnership(address _newOwner) internal returns (bool) {
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
-        VAULT_HUB.transferVaultOwnership(address(_stakingVault()), _newOwner);
-        return true;
-    }
-
-    /**
      * @dev Checks the VAULT_CONFIGURATION_ROLE and requests a change of the tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
@@ -350,6 +343,11 @@ abstract contract Permissions is AccessControlConfirmable {
         return IStakingVault(stakingVaultAddress);
     }
 
+    /// @dev internal withdraw function just to save the bytecode for external call method
+    function _doWithdraw(address _recipient, uint256 _ether) internal {
+        VAULT_HUB.withdraw(address(_stakingVault()), _recipient, _ether);
+    }
+
     function _operatorGrid() internal view returns (OperatorGrid) {
         return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
@@ -381,4 +379,9 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Error thrown for when a given address cannot be zero
      */
     error ZeroAddress();
+
+    /**
+     * @notice Error thrown when attempting to renounce a role.
+     */
+    error RoleRenouncementDisabled();
 }

@@ -69,6 +69,12 @@ contract Dashboard is NodeOperatorFee {
     PDGPolicy public pdgPolicy = PDGPolicy.STRICT;
 
     /**
+     * @notice the amount of node operator fees accrued on the moment of disconnection and secured to be recovered to
+     *         the `feeRecipient` address using `recoverFeeLeftover` method
+     */
+    uint128 public feeLeftover;
+
+    /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
      * and passes the address of the vault hub up the inheritance chain.
      * @param _stETH Address of the stETH token contract.
@@ -243,32 +249,60 @@ contract Dashboard is NodeOperatorFee {
      *         without disconnecting it from the hub
      * @param _newOwner Address of the new owner.
      * @return bool True if the ownership transfer was executed, false if pending for confirmation
+     * @dev after invoking this method node operator fee accrual is effectively disabled
+     *      to reenable it (after disconnect fail or reconnect) the related parties must agree on `settledGrowth`
+     *      using `correctSettledGrowth()` method
      */
     function transferVaultOwnership(address _newOwner) external returns (bool) {
-        return _transferVaultOwnership(_newOwner);
+        if (_newOwner == address(this)) revert DashboardNotAllowed();
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
+
+        disburseFee();
+        _stopFeeAccrual();
+
+        VAULT_HUB.transferVaultOwnership(address(_stakingVault()), _newOwner);
+        return true;
     }
 
     /**
-     * @notice Disconnects the underlying StakingVault from the hub and passing its ownership to Dashboard.
-     *         After receiving the final report, one can call reconnectToVaultHub() to reconnect to the hub
-     *         or abandonDashboard() to transfer the ownership to a new owner.
+     * @notice Initiates the disconnection of the underlying StakingVault from the hub and passing its ownership
+     *         to Dashboard contract. Disconnection is finalized by applying the next oracle report for this vault,
+     *         after which one can call reconnectToVaultHub() to reconnect the vault
+     *         or abandonDashboard() to transfer the ownership further to a new owner.
+     * @dev reverts if there is not enough ether on the vault balance to pay the accrued node operator fees
+     * @dev node operator fees accrued on the moment of disconnection are collected to Dashboard address as `feeLeftover`
+     *      and can be recovered later to the fee recipient address
+     * @dev after invoking this method node operator fee accrual is effectively disabled
+     *      to reenable it (after disconnect fail or reconnect) the related parties must agree on `settledGrowth`
+     *      using `correctSettledGrowth()` method
      */
     function voluntaryDisconnect() external {
-        disburseFee();
+        // fee are not disbursed to the feeRecipient address to avoid reverts blocking the disconnection
+        _collectFeeLeftover();
+        _stopFeeAccrual();
+
         _voluntaryDisconnect();
+    }
+
+    /**
+     * @notice Recovers the previously collected fees to the feeRecipient address
+     */
+    function recoverFeeLeftover() external {
+        uint256 feeToTransfer = feeLeftover;
+        feeLeftover = 0;
+
+        RecoverTokens._recoverEth(feeRecipient, feeToTransfer);
     }
 
     /**
      * @notice Accepts the ownership over the disconnected StakingVault transferred from VaultHub
      *         and immediately passes it to a new pending owner. This new owner will have to accept the ownership
      *         on the StakingVault contract.
-     *         Resets the settled growth to 0 to encourage correction before reconnection.
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function abandonDashboard(address _newOwner) external {
         if (VAULT_HUB.isVaultConnected(address(_stakingVault()))) revert ConnectedToVaultHub();
         if (_newOwner == address(this)) revert DashboardNotAllowed();
-        if (settledGrowth != 0) _setSettledGrowth(0);
 
         _acceptOwnership();
         _transferOwnership(_newOwner);
@@ -277,21 +311,22 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
-     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
+     * @dev reverts if settledGrowth is not corrected after the vault is disconnected
      */
-    function reconnectToVaultHub(uint256 _currentSettledGrowth) external {
+    function reconnectToVaultHub() external {
         _acceptOwnership();
-        connectToVaultHub(_currentSettledGrowth);
+        connectToVaultHub();
     }
 
     /**
      * @notice Connects to VaultHub, transferring underlying StakingVault ownership to VaultHub.
-     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
+     * @dev reverts if settledGrowth is not corrected after the vault is disconnected
      */
-    function connectToVaultHub(uint256 _currentSettledGrowth) public payable {
-        if (settledGrowth != int256(_currentSettledGrowth)) {
-            revert SettledGrowthMismatch();
+    function connectToVaultHub() public payable {
+        if (settledGrowth >= MAX_SANE_SETTLED_GROWTH && feeRate != 0) {
+            revert SettleGrowthIsNotSet();
         }
+
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
@@ -301,10 +336,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Changes the tier of the vault and connects to VaultHub
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
-     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
+     * @dev reverts if settledGrowth is not corrected after the vault is disconnected
      */
-    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit, uint256 _currentSettledGrowth) external payable {
-        connectToVaultHub(_currentSettledGrowth);
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
+        connectToVaultHub();
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
         }
@@ -425,13 +460,17 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
-     *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
-     *          clearing them for future deposits via `PDG.topUpValidators`
+     *         allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG` clearing them for future
+     *         deposits via `PDG.topUpValidators`. Requires the node operator and vault owner have mutual trust.
      * @param _deposits array of IStakingVault.Deposit structs containing deposit data
      * @return totalAmount total amount of ether deposited to beacon chain
      * @dev requires the PDG policy set to `ALLOW_DEPOSIT_AND_PROVE`
      * @dev requires the caller to have the `NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE`
      * @dev Warning! vulnerable to deposit frontrunning and requires putting trust on the node operator
+     * @dev Warning! Prevents node operator fee disbursement till the moment the deposited amount is reported as the part
+     *      of the vault total value (depends on the length of the Ethereum entrance queue). Fee may never be disbursed
+     *      if the vault is disconnected before the deposit arrives. Recommended to disburse all available fees
+     *      before depositing via this method.
      */
     function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
@@ -501,6 +540,7 @@ contract Dashboard is NodeOperatorFee {
         _requireNotZero(_amount);
 
         if (_token == RecoverTokens.ETH) {
+            if (_amount > address(this).balance - feeLeftover) revert InsufficientBalance();
             RecoverTokens._recoverEth(_recipient, _amount);
         } else {
             RecoverTokens._recoverERC20(_token, _recipient, _amount);
@@ -710,6 +750,19 @@ contract Dashboard is NodeOperatorFee {
         }
     }
 
+    function _collectFeeLeftover() internal {
+        (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
+        if (fee > abnormallyHighFeeThreshold) revert AbnormallyHighFee();
+
+        if (fee > 0) {
+            feeLeftover += uint128(fee);
+
+            _disableFundOnReceive();
+            _disburseFee(fee, growth, address(this));
+            _enableFundOnReceive();
+        }
+    }
+
     // ==================== Events ====================
 
     /**
@@ -764,4 +817,11 @@ contract Dashboard is NodeOperatorFee {
      * by the current active PDG policy.
      */
     error ForbiddenByPDGPolicy();
+
+    error InsufficientBalance();
+
+    /**
+     * @dev Error emitted when connection is reverted because node operator's fee is stopped
+     */
+    error SettleGrowthIsNotSet();
 }

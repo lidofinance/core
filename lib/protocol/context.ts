@@ -5,6 +5,7 @@ import { getMode } from "hardhat.helpers";
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
 import { discover } from "./discover";
+import { MAINNET_LOCATOR_ADDRESS } from "./mainnet";
 import { provision } from "./provision";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
@@ -23,17 +24,24 @@ export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
 
   const agent = await ctx.getSigner("agent");
 
+  // Grant REGISTRY_ROLE to agent if not granted (needed for alterTiers)
+  const registryRole = await operatorGrid.REGISTRY_ROLE();
+  const hasRegistryRole = await operatorGrid.hasRole(registryRole, agent);
+  if (!hasRegistryRole) {
+    await operatorGrid.connect(agent).grantRole(registryRole, agent);
+  }
+
   const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
 
   const defaultTierParams = await operatorGrid.tier(defaultTierId);
 
-  if (defaultTierParams.shareLimit === 0n) {
+  if (defaultTierParams.shareLimit === 0n || defaultTierParams.reserveRatioBP !== 50_00n) {
     await operatorGrid.connect(agent).alterTiers(
       [defaultTierId],
       [
         {
           shareLimit: ether("250"),
-          reserveRatioBP: defaultTierParams.reserveRatioBP,
+          reserveRatioBP: 50_00n,
           forcedRebalanceThresholdBP: defaultTierParams.forcedRebalanceThresholdBP,
           infraFeeBP: defaultTierParams.infraFeeBP,
           liquidityFeeBP: defaultTierParams.liquidityFeeBP,
@@ -71,6 +79,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
     interfaces,
     flags,
     isScratch,
+    isMainnet: contracts.locator.address.toLowerCase() === MAINNET_LOCATOR_ADDRESS.toLowerCase(),
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
     getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),

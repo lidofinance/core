@@ -12,8 +12,7 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
-// TODO: update upon TW integrations arrive
-describe.skip("TriggerFullWithdrawals Integration", () => {
+describe("Scenario: TriggerFullWithdrawals", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -117,8 +116,6 @@ describe.skip("TriggerFullWithdrawals Integration", () => {
     // Setup TW_EXIT_LIMIT_MANAGER_ROLE
     const TW_EXIT_LIMIT_MANAGER_ROLE = await triggerableWithdrawalsGateway.TW_EXIT_LIMIT_MANAGER_ROLE();
     const agent = await ctx.getSigner("agent", ether("1"));
-
-    console.log("Agent address:", agent.address);
 
     // Grant roles if needed
     const ADD_FULL_WITHDRAWAL_REQUEST_ROLE = await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();

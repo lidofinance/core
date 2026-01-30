@@ -1,3 +1,4 @@
+import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import { time } from "@nomicfoundation/hardhat-network-helpers";
@@ -48,8 +49,14 @@ export async function getNextBlock() {
 }
 
 export async function advanceChainTime(seconds: bigint) {
-  await ethers.provider.send("evm_increaseTime", [Number(seconds)]);
+  const currentTimestamp = await getCurrentBlockTimestamp();
+  await ethers.provider.send("evm_setNextBlockTimestamp", [Number(currentTimestamp + seconds)]);
   await ethers.provider.send("evm_mine");
+
+  expect(await getCurrentBlockTimestamp()).to.be.equal(
+    currentTimestamp + seconds,
+    "Chain time was not advanced correctly",
+  );
 }
 
 export function formatTimeInterval(sec: number | bigint) {

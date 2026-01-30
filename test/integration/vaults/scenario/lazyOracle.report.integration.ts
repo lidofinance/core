@@ -5,6 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
+import { MAX_SANE_SETTLED_GROWTH } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -55,7 +56,10 @@ describe("Scenario: Lazy Oracle prevents overwriting freshly reconnected vault r
     expect(await lazyOracle.latestReportTimestamp()).to.be.greaterThan(0);
     expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
 
-    await dashboard.connect(owner).reconnectToVaultHub(0n);
+    await dashboard.connect(owner).correctSettledGrowth(0, MAX_SANE_SETTLED_GROWTH);
+    await dashboard.connect(nodeOperator).correctSettledGrowth(0, MAX_SANE_SETTLED_GROWTH);
+
+    await dashboard.connect(owner).reconnectToVaultHub();
 
     await expect(
       reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),

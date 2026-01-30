@@ -7,6 +7,12 @@ import { readNetworkState, Sk } from "lib/state-file";
 
 import { getMode } from "../../hardhat.helpers";
 
+import {
+  MAINNET_AGENT_ADDRESS,
+  MAINNET_EASY_TRACK_EXECUTOR_ADDRESS,
+  MAINNET_LOCATOR_ADDRESS,
+  MAINNET_VOTING_ADDRESS,
+} from "./mainnet";
 import { ProtocolNetworkItems } from "./types";
 
 export function isNonForkingHardhatNetwork() {
@@ -109,10 +115,10 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
 
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
-    locator: "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
-    agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
-    votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
-    easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
+    locator: MAINNET_LOCATOR_ADDRESS,
+    agentAddress: MAINNET_AGENT_ADDRESS,
+    votingAddress: MAINNET_VOTING_ADDRESS,
+    easyTrackAddress: MAINNET_EASY_TRACK_EXECUTOR_ADDRESS,
     stakingVaultFactory: state[Sk.stakingVaultFactory].address,
     stakingVaultBeacon: state[Sk.stakingVaultBeacon].address,
     operatorGrid: state[Sk.operatorGrid].proxy.address,
@@ -129,13 +135,17 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
     locator: state[Sk.lidoLocator].proxy.address,
     agentAddress: state[Sk.appAgent].proxy.address,
     votingAddress: state[Sk.appVoting].proxy.address,
-    easyTrackAddress: state["easyTrackEVMScriptExecutor"].address,
+    easyTrackAddress: state[Sk.easyTrackEVMScriptExecutor]?.address,
     stakingVaultFactory: state[Sk.stakingVaultFactory]?.address,
     stakingVaultBeacon: state[Sk.stakingVaultBeacon]?.address,
     operatorGrid: state[Sk.operatorGrid]?.proxy.address,
     validatorConsolidationRequests: state[Sk.validatorConsolidationRequests]?.address,
   };
-  return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "state-network-config");
+
+  const chainId = state[Sk.chainId];
+  const prefix = chainId === 1 ? "MAINNET" : chainId === 560048 ? "HOODI" : "";
+
+  return new ProtocolNetworkConfig(getPrefixedEnv(prefix, defaultEnv), defaults, "state-network-config");
 }
 
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
@@ -150,8 +160,6 @@ export async function getNetworkConfig(network: string): Promise<ProtocolNetwork
       return getLocalNetworkConfig(network, "fork");
     case "mainnet-fork":
       return getMainnetForkNetworkConfig();
-    case "holesky-vaults-devnet-0":
-      return getLocalNetworkConfig(network, "fork");
     case "custom":
       console.log("Using custom network configuration");
       return getMainnetForkNetworkConfig();

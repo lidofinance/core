@@ -24,6 +24,11 @@ contract NodeOperatorFee is Permissions {
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
 
     /**
+     * @dev arbitrary number that is big enough to be infinite settled growth
+     */
+    int256 internal constant MAX_SANE_SETTLED_GROWTH = type(int104).max;
+
+    /**
      * @notice Parent role representing the node operator of the underlying StakingVault.
      * The members may not include the node operator address recorded in the underlying StakingVault
      * but it is assumed that the members of this role act in the interest of that node operator.
@@ -152,7 +157,7 @@ contract NodeOperatorFee is Permissions {
      * @notice The roles that must confirm critical parameter changes in the contract.
      * @return roles is an array of roles that form the confirming roles.
      */
-    function confirmingRoles() public pure override returns (bytes32[] memory roles) {
+    function confirmingRoles() public pure returns (bytes32[] memory roles) {
         roles = new bytes32[](2);
         roles[0] = DEFAULT_ADMIN_ROLE;
         roles[1] = NODE_OPERATOR_MANAGER_ROLE;
@@ -192,10 +197,10 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseFee() public {
-        (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
+        (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
         if (fee > abnormallyHighFeeThreshold) revert AbnormallyHighFee();
 
-       _disburseFee(fee, growth);
+        _disburseFee(fee, growth, feeRecipient);
     }
 
     /**
@@ -204,8 +209,8 @@ contract NodeOperatorFee is Permissions {
      * and the settled growth (used as baseline for fee) is set correctly.
      */
     function disburseAbnormallyHighFee() external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
-        (uint256 fee, int128 growth,) = _calculateFee();
-        _disburseFee(fee, growth);
+        (uint256 fee, int256 growth,) = _calculateFee();
+        _disburseFee(fee, growth, feeRecipient);
     }
 
     /**
@@ -221,9 +226,6 @@ contract NodeOperatorFee is Permissions {
         // Latest fee exemption must be earlier than the latest fresh report timestamp
         if (latestCorrectionTimestamp >= _lazyOracle().latestReportTimestamp()) revert CorrectionAfterReport();
 
-        // If the vault is quarantined, the total value is reduced and may not reflect the exemption
-        if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
-
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
@@ -237,13 +239,17 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Manually corrects the settled growth value with dual confirmation.
-     * Used to correct fee calculation.
+     * Used to correct fee calculation and enable fee accrual after reconnection
+     *
+     * So, in the simplest case the value of settledGrowth before the vault is connected to VaultHub should be set to:
+     *
+     * sum(validator.balance) + stagedBalance
      *
      * @param _newSettledGrowth The corrected settled growth value
      * @param _expectedSettledGrowth The expected current settled growth
      * @return bool True if correction was applied, false if awaiting confirmations
      */
-    function correctSettledGrowth(int256 _newSettledGrowth, int256 _expectedSettledGrowth) public returns (bool) {
+    function correctSettledGrowth(int256 _newSettledGrowth, int256 _expectedSettledGrowth) external returns (bool) {
         if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
@@ -292,24 +298,27 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
-    function _disburseFee(uint256 fee, int128 growth) internal {
-        // it's important not to revert here so as not to block disconnect
-        if (fee == 0) return;
+    function _disburseFee(uint256 fee, int256 growth, address _recipient) internal {
+        if (fee == 0) {
+            // we still need to update the settledGrowth event if the fee is zero
+            // to avoid the retroactive fees
+            if (growth > settledGrowth) _setSettledGrowth(growth);
+            return;
+        }
 
         _setSettledGrowth(growth);
+        _doWithdraw(_recipient, fee);
 
-        VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
-        emit FeeDisbursed(msg.sender, fee);
+        emit FeeDisbursed(msg.sender, fee, _recipient);
     }
 
     function _setSettledGrowth(int256 _newSettledGrowth) internal {
-        int128 oldSettledGrowth = settledGrowth;
+        int256 oldSettledGrowth = settledGrowth;
         if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
 
-        int128 newSettledGrowth = _newSettledGrowth.toInt128();
-        settledGrowth = newSettledGrowth;
+        settledGrowth = _newSettledGrowth.toInt128();
 
-        emit SettledGrowthSet(oldSettledGrowth, newSettledGrowth);
+        emit SettledGrowthSet(oldSettledGrowth, _newSettledGrowth);
     }
 
     /**
@@ -330,21 +339,29 @@ contract NodeOperatorFee is Permissions {
      * @dev fee exemption can only be positive
      */
     function _addFeeExemption(uint256 _amount) internal {
-        if (_amount > type(uint104).max) revert UnexpectedFeeExemptionAmount();
+        if (_amount > uint256(MAX_SANE_SETTLED_GROWTH)) revert UnexpectedFeeExemptionAmount();
 
         _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
-    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) {
+    function _calculateFee() internal view returns (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) {
         VaultHub.Report memory report = latestReport();
-        growth = int128(uint128(report.totalValue)) - int128(report.inOutDelta);
+        // we include quarantined value for fees as well
+        uint256 quarantineValue = _lazyOracle().quarantineValue(address(_stakingVault()));
+        uint256 totalValueAndQuarantine = uint256(report.totalValue) + quarantineValue;
+        growth = int256(totalValueAndQuarantine) - report.inOutDelta;
         int256 unsettledGrowth = growth - settledGrowth;
 
         if (unsettledGrowth > 0) {
             fee = (uint256(unsettledGrowth) * feeRate) / TOTAL_BASIS_POINTS;
         }
 
-        abnormallyHighFeeThreshold = (report.totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
+        abnormallyHighFeeThreshold = (totalValueAndQuarantine * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
+    }
+
+    function _stopFeeAccrual() internal {
+        // effectively stopping fee accrual by setting over the top settledGrowth
+        if (settledGrowth < MAX_SANE_SETTLED_GROWTH) _setSettledGrowth(MAX_SANE_SETTLED_GROWTH);
     }
 
     function _setFeeRate(uint256 _newFeeRate) internal {
@@ -381,8 +398,9 @@ contract NodeOperatorFee is Permissions {
      * @dev Emitted when the node operator fee is disbursed.
      * @param sender the address of the sender
      * @param fee the amount of disbursed fee.
+     * @param recipient the address of recipient
      */
-    event FeeDisbursed(address indexed sender, uint256 fee);
+    event FeeDisbursed(address indexed sender, uint256 fee, address recipient);
 
     /**
      * @dev Emitted when the node operator fee recipient is set.
@@ -397,7 +415,7 @@ contract NodeOperatorFee is Permissions {
      * @param oldSettledGrowth the old settled growth
      * @param newSettledGrowth the new settled growth
      */
-    event SettledGrowthSet(int128 oldSettledGrowth, int128 newSettledGrowth);
+    event SettledGrowthSet(int256 oldSettledGrowth, int256 newSettledGrowth);
 
     /**
      * @dev Emitted when the settled growth is corrected.
@@ -428,11 +446,6 @@ contract NodeOperatorFee is Permissions {
     error SameSettledGrowth();
 
     /**
-     * @dev Error emitted when the settled growth does not match the expected value during connection.
-     */
-    error SettledGrowthMismatch();
-
-    /**
      * @dev Error emitted when the report is stale.
      */
     error ReportStale();
@@ -451,9 +464,4 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the fee exemption amount does not match the expected value
      */
     error UnexpectedFeeExemptionAmount();
-
-    /**
-     * @dev Error emitted when the vault is quarantined.
-     */
-    error VaultQuarantined();
 }

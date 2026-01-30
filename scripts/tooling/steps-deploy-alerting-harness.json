@@ -1,0 +1,3 @@
+{
+  "steps": ["tooling/steps/0000-check-env", "tooling/steps/0100-deploy-alerting-harness"]
+}

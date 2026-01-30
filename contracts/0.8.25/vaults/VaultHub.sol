@@ -162,6 +162,10 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _consensusContract Hash consensus contract
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(ILidoLocator _locator, ILido _lido, IHashConsensus _consensusContract, uint256 _maxRelativeShareLimitBP) {
+        _requireNotZero(address(_locator));
+        _requireNotZero(address(_lido));
+        _requireNotZero(address(_consensusContract));
+
         _requireNotZero(_maxRelativeShareLimitBP);
         if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS) revert InvalidBasisPoints(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
 
@@ -172,6 +176,7 @@ contract VaultHub is PausableUntilWithRoles {
         CONSENSUS_CONTRACT = _consensusContract;
 
         _disableInitializers();
+        _pauseUntil(PAUSE_INFINITELY);
     }
 
     /// @dev used to perform rebalance operations
@@ -249,7 +254,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return the amount of ether that can be locked in the vault given the current total value
     /// @dev returns 0 if the vault is not connected
     function maxLockableValue(address _vault) external view returns (uint256) {
-        return _maxLockableValue(_vaultRecord(_vault));
+        return _maxLockableValue(_vaultRecord(_vault), 0);
     }
 
     /// @notice Calculates the total number of shares that is possible to mint on the vault
@@ -352,9 +357,12 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice amount of bad debt to be internalized to become the protocol loss
-    /// @return the number of shares to internalize as bad debt during the oracle report
-    /// @dev the value is lagging increases that was done after the current refSlot to the next one
     function badDebtToInternalize() external view returns (uint256) {
+        return _storage().badDebtToInternalize.value;
+    }
+
+    /// @notice amount of bad debt to be internalized to become the protocol loss (that was actual on the last refSlot)
+    function badDebtToInternalizeForLastRefSlot() external view returns (uint256) {
         return _storage().badDebtToInternalize.getValueForLastRefSlot(CONSENSUS_CONTRACT);
     }
 
@@ -427,7 +435,6 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice updates the vault's connection parameters
-    /// @dev Reverts if the vault is not healthy as of latest report
     /// @param _vault vault address
     /// @param _shareLimit new share limit
     /// @param _reserveRatioBP new reserve ratio
@@ -435,6 +442,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _infraFeeBP new infra fee
     /// @param _liquidityFeeBP new liquidity fee
     /// @param _reservationFeeBP new reservation fee
+    /// @dev reverts if the vault's minting capacity will be exceeded with new reserve parameters
     /// @dev requires the fresh report
     function updateConnection(
         address _vault,
@@ -448,16 +456,22 @@ contract VaultHub is PausableUntilWithRoles {
         _requireSender(address(_operatorGrid()));
         _requireSaneShareLimit(_shareLimit);
 
-        VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _vaultRecord(_vault);
+        VaultConnection storage connection = _vaultConnection(_vault);
+        _requireConnected(connection, _vault);
 
+        VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 totalValue_ = _totalValue(record);
-        uint256 liabilityShares_ = record.liabilityShares;
+        if (
+            _reserveRatioBP != connection.reserveRatioBP ||
+            _forcedRebalanceThresholdBP != connection.forcedRebalanceThresholdBP
+        ) {
+            uint256 totalValue_ = _totalValue(record);
+            uint256 liabilityShares_ = record.liabilityShares;
 
-        if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP)) {
-            revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
+            if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP)) {
+                revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
+            }
         }
 
         // special event for the Oracle to track fee calculation
@@ -774,7 +788,7 @@ contract VaultHub is PausableUntilWithRoles {
             _record: record,
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
-            _lockableValueLimit: _maxLockableValue(record),
+            _lockableValueLimit: _maxLockableValue(record, 0),
             _shareLimit: connection.shareLimit,
             _overrideOperatorLimits: false
         });
@@ -1222,11 +1236,15 @@ contract VaultHub is PausableUntilWithRoles {
             return type(uint256).max;
         }
 
+        // if not healthy and low in debt, please rebalance the whole amount
+        if (liabilityShares_ <= 100) return liabilityShares_;
+
         // Solve the equation for X:
         // L - liability, TV - totalValue
         // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
-        // X - amount of shares that should be withdrawn (TV - X) and used to repay the debt (LS - X)
-        // to reduce the L/TV ratio back to MR
+        // X - amount of ether that should be withdrawn (TV - X) and used to repay the debt (L - X) to reduce the
+        // L/TV ratio back to MR
+
         // (L - X) / (TV - X) = MR / 100
         // (L - X) * 100 = (TV - X) * MR
         // L * 100 - X * 100 = TV * MR - X * MR
@@ -1236,10 +1254,11 @@ contract VaultHub is PausableUntilWithRoles {
         // X = (L * 100 - TV * MR) / (100 - MR)
         // RR = 100 - MR
         // X = (L * 100 - TV * MR) / RR
-        uint256 shortfallEth = (liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
+        uint256 shortfallEth = Math256.ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio,
+            reserveRatioBP);
 
-        // Add 10 extra shares to avoid dealing with rounding/precision issues
-        uint256 shortfallShares = _getSharesByPooledEth(shortfallEth) + 10;
+        // Add 100 extra shares to avoid dealing with rounding/precision issues
+        uint256 shortfallShares = _getSharesByPooledEth(shortfallEth) + 100;
 
         return Math256.min(shortfallShares, liabilityShares_);
     }
@@ -1467,10 +1486,18 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Calculates the max lockable value of the vault
     /// @param _record The record of the vault
+    /// @param _deltaValue The delta value to apply to the total value of the vault (may be negative)
     /// @return the max lockable value of the vault
-    function _maxLockableValue(VaultRecord storage _record) internal view returns (uint256) {
+    function _maxLockableValue(VaultRecord storage _record, int256 _deltaValue) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
         uint256 unsettledLidoFees_ = _unsettledLidoFeesValue(_record);
+        if (_deltaValue < 0) {
+            uint256 absDeltaValue = uint256(-_deltaValue);
+            totalValue_ = totalValue_ > absDeltaValue ? totalValue_ - absDeltaValue : 0;
+        } else {
+            totalValue_ += uint256(_deltaValue);
+        }
+
         return totalValue_ > unsettledLidoFees_ ? totalValue_ - unsettledLidoFees_ : 0;
     }
 
@@ -1484,15 +1511,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         VaultConnection storage connection = _vaultConnection(_vault);
 
-        uint256 maxLockableValue_ = _maxLockableValue(record);
-        if (_deltaValue >= 0) {
-            maxLockableValue_ += uint256(_deltaValue);
-        } else {
-            uint256 negDeltaValue = uint256(-_deltaValue);
-            if (maxLockableValue_ < negDeltaValue) return 0;
-            maxLockableValue_ -= negDeltaValue;
-        }
-
+        uint256 maxLockableValue_ = _maxLockableValue(record, _deltaValue);
         uint256 minimalReserve_ = record.minimalReserve;
         if (maxLockableValue_ <= minimalReserve_) return 0;
 

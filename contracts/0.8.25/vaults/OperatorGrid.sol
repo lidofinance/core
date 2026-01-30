@@ -186,7 +186,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         $.tiers.push(
             Tier({
                 operator: DEFAULT_TIER_OPERATOR,
-                shareLimit: uint96(_defaultTierParams.shareLimit),
+                shareLimit: SafeCast.toUint96(_defaultTierParams.shareLimit),
                 reserveRatioBP: uint16(_defaultTierParams.reserveRatioBP),
                 forcedRebalanceThresholdBP: uint16(_defaultTierParams.forcedRebalanceThresholdBP),
                 infraFeeBP: uint16(_defaultTierParams.infraFeeBP),
@@ -200,7 +200,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @notice Sets the confirmation expiry period
     /// @param _newConfirmExpiry The new confirmation expiry period in seconds
     function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyRole(REGISTRY_ROLE) {
-        _validateConfirmExpiry(_newConfirmExpiry);
         _setConfirmExpiry(_newConfirmExpiry);
     }
 
@@ -288,7 +287,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
             Tier memory tier_ = Tier({
                 operator: _nodeOperator,
-                shareLimit: uint96(_tiers[i].shareLimit),
+                shareLimit: SafeCast.toUint96(_tiers[i].shareLimit),
                 reserveRatioBP: uint16(_tiers[i].reserveRatioBP),
                 forcedRebalanceThresholdBP: uint16(_tiers[i].forcedRebalanceThresholdBP),
                 infraFeeBP: uint16(_tiers[i].infraFeeBP),
@@ -302,12 +301,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             emit TierAdded(
                 _nodeOperator,
                 tierId,
-                uint96(tier_.shareLimit),
-                uint16(tier_.reserveRatioBP),
-                uint16(tier_.forcedRebalanceThresholdBP),
-                uint16(tier_.infraFeeBP),
-                uint16(tier_.liquidityFeeBP),
-                uint16(tier_.reservationFeeBP)
+                tier_.shareLimit,
+                tier_.reserveRatioBP,
+                tier_.forcedRebalanceThresholdBP,
+                tier_.infraFeeBP,
+                tier_.liquidityFeeBP,
+                tier_.reservationFeeBP
             );
 
             tierId++;
@@ -357,7 +356,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
             Tier storage tier_ = $.tiers[_tierIds[i]];
 
-            tier_.shareLimit = uint96(_tierParams[i].shareLimit);
+            tier_.shareLimit = SafeCast.toUint96(_tierParams[i].shareLimit);
             tier_.reserveRatioBP = uint16(_tierParams[i].reserveRatioBP);
             tier_.forcedRebalanceThresholdBP = uint16(_tierParams[i].forcedRebalanceThresholdBP);
             tier_.infraFeeBP = uint16(_tierParams[i].infraFeeBP);
@@ -426,7 +425,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the tier change was executed.
-    /// @dev Requires vault to be connected to VaultHub to finalize tier change.
+    /// @dev Node operator confirmation can be collected even if the vault is disconnected
+    /// @dev Requires vault to be connected to VaultHub to finalize tier change from the vault owner side.
     /// @dev Both vault owner (via Dashboard) and node operator confirmations are required.
     function changeTier(
         address _vault,
@@ -440,16 +440,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         VaultHub vaultHub = _vaultHub();
-        bool isVaultConnected = vaultHub.isVaultConnected(_vault);
-
-        address vaultOwner = isVaultConnected
-            ? vaultHub.vaultConnection(_vault).owner
-            : IStakingVault(_vault).owner();
-
-        address nodeOperator = IStakingVault(_vault).nodeOperator();
 
         uint256 vaultTierId = $.vaultTier[_vault];
         if (vaultTierId == _requestedTierId) revert TierAlreadySet();
+
+        address nodeOperator = IStakingVault(_vault).nodeOperator();
+        // we allow node operator to pre-approve not connected vaults
+        if (msg.sender != nodeOperator && !vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
 
         Tier storage requestedTier = $.tiers[_requestedTierId];
         if (nodeOperator != requestedTier.operator) revert TierNotInOperatorGroup();
@@ -457,9 +454,15 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
         }
 
+        uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
+
+        if (_requestedShareLimit < vaultLiabilityShares) {
+            revert RequestedShareLimitTooLow(_requestedShareLimit, vaultLiabilityShares);
+        }
+
+        address vaultOwner = vaultHub.vaultConnection(_vault).owner;
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
-        uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
         // check if tier limit is exceeded
         if (requestedTier.liabilityShares + vaultLiabilityShares > requestedTier.shareLimit) revert TierLimitExceeded();
@@ -548,6 +551,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         if (_requestedShareLimit > tierShareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, tierShareLimit);
         if (_requestedShareLimit == vaultConnection.shareLimit) revert ShareLimitAlreadySet();
+
+        uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
+
+        if (_requestedShareLimit < vaultLiabilityShares) {
+            revert RequestedShareLimitTooLow(_requestedShareLimit, vaultLiabilityShares);
+        }
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
@@ -788,8 +797,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, MAX_RESERVE_RATIO_BP);
 
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
-        if (_forcedRebalanceThresholdBP > _reserveRatioBP)
+        if (_forcedRebalanceThresholdBP + 10 >= _reserveRatioBP) {
             revert ForcedRebalanceThresholdTooHigh(_tierId, _forcedRebalanceThresholdBP, _reserveRatioBP);
+        }
 
         if (_infraFeeBP > MAX_FEE_BP)
             revert InfraFeeTooHigh(_tierId, _infraFeeBP, MAX_FEE_BP);
@@ -886,6 +896,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error ReservationFeeTooHigh(uint256 tierId, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
     error ArrayLengthMismatch();
     error RequestedShareLimitTooHigh(uint256 requestedShareLimit, uint256 tierShareLimit);
+    error RequestedShareLimitTooLow(uint256 requestedSHareLimit, uint256 vaultShares);
     error VaultNotConnected();
     error VaultAlreadySyncedWithTier();
     error ShareLimitAlreadySet();

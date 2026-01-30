@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { Interface } from "ethers";
 import { task } from "hardhat/config";
 
 const SKIP_NAMES_REGEX = /(^@|Mock|Harness|deposit_contract|build-info|^test)/;
@@ -10,6 +9,7 @@ const PAIRS_TO_SKIP: {
   interfaceFqn: string;
   contractFqn: string;
   reason: string;
+  skipInterfaceSignatures?: string[];
 }[] = [
   {
     interfaceFqn: "contracts/0.4.24/Lido.sol:IOracleReportSanityChecker",
@@ -39,17 +39,19 @@ const PAIRS_TO_SKIP: {
   {
     interfaceFqn: "contracts/0.8.25/vaults/dashboard/Dashboard.sol:IWstETH",
     contractFqn: "contracts/0.6.12/WstETH.sol:WstETH",
-    reason: "TODO: Temp solution",
+    reason: "Cannot redeploy WstETH",
   },
   {
     interfaceFqn: "contracts/0.8.9/Burner.sol:ILido",
     contractFqn: "contracts/0.4.24/Lido.sol:Lido",
-    reason: "TODO: Temp solution",
-  },
-  {
-    interfaceFqn: "contracts/0.8.25/utils/V3TemporaryAdmin.sol:IPausableUntil",
-    contractFqn: "contracts/0.8.9/utils/PausableUntil.sol:PausableUntil",
-    reason: "TODO: Temp solution",
+    reason: "Parameter name mismatches - fixing requires Burner redeploy",
+    skipInterfaceSignatures: [
+      "function allowance(address owner, address spender) returns (uint256)",
+      "function approve(address spender, uint256 amount) returns (bool)",
+      "function balanceOf(address account) returns (uint256)",
+      "function transfer(address recipient, uint256 amount) returns (bool)",
+      "function transferFrom(address sender, address recipient, uint256 amount) returns (bool)",
+    ],
   },
   {
     interfaceFqn: "contracts/0.4.24/Lido.sol:IStakingRouter",
@@ -65,6 +67,7 @@ task("check-interfaces").setAction(async (_, hre) => {
     missingInContract: string[];
     missingInInterface: string[];
     isFullMatchExpected: boolean;
+    parameterNameMismatches: string[];
   }[] = [];
 
   console.log("Checking interfaces defined within contracts...");
@@ -222,7 +225,7 @@ task("check-interfaces").setAction(async (_, hre) => {
           (pair.interfaceFqn === interfaceFqn && pair.contractFqn === correspondingContractFqn) ||
           (pair.interfaceFqn === correspondingContractFqn && pair.contractFqn === interfaceFqn),
       );
-      if (skipPair) {
+      if (skipPair && !skipPair.skipInterfaceSignatures) {
         console.log(`ℹ️  skipping '${interfaceFqn}' and '${correspondingContractFqn}' (${skipPair.reason})`);
         continue;
       }
@@ -232,23 +235,124 @@ task("check-interfaces").setAction(async (_, hre) => {
         const interfaceAbi = (await hre.artifacts.readArtifact(interfaceFqn)).abi;
         const contractAbi = (await hre.artifacts.readArtifact(correspondingContractFqn)).abi;
 
-        const interfaceSignatures = new Interface(interfaceAbi)
-          .format()
-          .filter((entry) => !entry.startsWith("constructor("))
-          .sort();
+        // Helper function to get function signatures with parameter names for strict comparison
+        function getFunctionSignaturesWithNames(
+          abi: Array<{
+            type: string;
+            name: string;
+            inputs: Array<{ type: string; name: string }>;
+            outputs?: Array<{ type: string }>;
+          }>,
+        ): string[] {
+          return abi
+            .filter((item) => item.type === "function")
+            .map((func) => {
+              const inputs = func.inputs.map((input) => `${input.type} ${input.name}`).join(", ");
+              const outputs = func.outputs ? ` returns (${func.outputs.map((output) => output.type).join(", ")})` : "";
+              return `function ${func.name}(${inputs})${outputs}`;
+            })
+            .sort();
+        }
 
-        const contractSignatures = new Interface(contractAbi)
-          .format()
-          .filter((entry) => !entry.startsWith("constructor("))
-          .sort();
+        // Helper function to get function signatures without parameter names for basic compatibility check
+        function getFunctionSignaturesWithoutNames(
+          abi: Array<{
+            type: string;
+            name: string;
+            inputs: Array<{ type: string }>;
+            outputs?: Array<{ type: string }>;
+          }>,
+        ): string[] {
+          return abi
+            .filter((item) => item.type === "function")
+            .map((func) => {
+              const inputs = func.inputs.map((input) => input.type).join(",");
+              const outputs = func.outputs ? ` returns (${func.outputs.map((output) => output.type).join(",")})` : "";
+              return `function ${func.name}(${inputs})${outputs}`;
+            })
+            .sort();
+        }
 
-        // Find entries in interface ABI that are missing from contract ABI
-        const missingInContract = interfaceSignatures.filter((ifaceEntry) => !contractSignatures.includes(ifaceEntry));
+        const interfaceSignaturesWithNames = getFunctionSignaturesWithNames(interfaceAbi);
+        const contractSignaturesWithNames = getFunctionSignaturesWithNames(contractAbi);
+        const interfaceSignaturesWithoutNames = getFunctionSignaturesWithoutNames(interfaceAbi);
+        const contractSignaturesWithoutNames = getFunctionSignaturesWithoutNames(contractAbi);
 
-        // Find entries in contract ABI that are missing from interface ABI
-        const missingInInterface = contractSignatures.filter(
-          (contractEntry) => !interfaceSignatures.includes(contractEntry),
+        // Validate that skipped signatures actually exist in the interface
+        if (skipPair?.skipInterfaceSignatures && skipPair.skipInterfaceSignatures.length > 0) {
+          const invalidSignatures = skipPair.skipInterfaceSignatures.filter(
+            (sig) => !interfaceSignaturesWithNames.includes(sig),
+          );
+          if (invalidSignatures.length > 0) {
+            console.error(
+              `❌ Invalid signatures in skipInterfaceSignatures for '${interfaceFqn}' and '${correspondingContractFqn}':`,
+            );
+            invalidSignatures.forEach((sig) => {
+              console.error(`   ${sig}`);
+            });
+            console.error(`Available signatures in interface:`);
+            interfaceSignaturesWithNames.forEach((sig) => {
+              console.error(`   ${sig}`);
+            });
+            console.error();
+            process.exit(1);
+          }
+        }
+
+        // Find entries in interface ABI that are missing from contract ABI (by signature only)
+        const missingInContractBySignature = interfaceSignaturesWithoutNames.filter(
+          (ifaceEntry) => !contractSignaturesWithoutNames.includes(ifaceEntry),
         );
+
+        // Find entries in contract ABI that are missing from interface ABI (by signature only)
+        const missingInInterfaceBySignature = contractSignaturesWithoutNames.filter(
+          (contractEntry) => !interfaceSignaturesWithoutNames.includes(contractEntry),
+        );
+
+        // Find parameter name mismatches (functions that exist in both but have different parameter names)
+        const parameterNameMismatches: string[] = [];
+        for (const ifaceSig of interfaceSignaturesWithNames) {
+          // Check if this signature should be skipped
+          if (skipPair?.skipInterfaceSignatures?.includes(ifaceSig)) {
+            continue;
+          }
+
+          // Extract function signature without parameter names for matching
+          const ifaceSigWithoutNames = ifaceSig.replace(/\(([^)]+)\)/, (match, params) => {
+            const paramList = params
+              .split(", ")
+              .map((param: string) => {
+                const parts = param.trim().split(" ");
+                return parts[0]; // Keep only the type part
+              })
+              .join(", ");
+            return `(${paramList})`;
+          });
+
+          const matchingContractSig = contractSignaturesWithNames.find((contractSig) => {
+            const contractSigWithoutNames = contractSig.replace(/\(([^)]+)\)/, (match, params) => {
+              const paramList = params
+                .split(", ")
+                .map((param: string) => {
+                  const parts = param.trim().split(" ");
+                  return parts[0]; // Keep only the type part
+                })
+                .join(", ");
+              return `(${paramList})`;
+            });
+            return contractSigWithoutNames === ifaceSigWithoutNames;
+          });
+
+          if (matchingContractSig && ifaceSig !== matchingContractSig) {
+            parameterNameMismatches.push(`Interface: ${ifaceSig}`);
+            parameterNameMismatches.push(`Contract:  ${matchingContractSig}`);
+            parameterNameMismatches.push(""); // Empty line for readability
+          }
+        }
+
+        // Use the signature-based comparison for basic compatibility
+        const missingInContract = missingInContractBySignature;
+        const missingInInterface = missingInInterfaceBySignature;
 
         // // Determine if full match is expected (interface name matches contract name)
         // const [, contractFileName, contractName] = correspondingContractFqn.match(/([^/]+)\.sol:(.+)$/) || [];
@@ -256,8 +360,15 @@ task("check-interfaces").setAction(async (_, hre) => {
         const isFullMatchExpected = false;
         // TODO: full match mode is yet disabled
 
-        // const hasMismatch = (isFullMatchExpected && missingInContract.length > 0) || missingInInterface.length > 0;
-        const hasMismatch = missingInContract.length > 0;
+        // Check for any type of mismatch: missing functions or parameter name mismatches
+        const hasMismatch = missingInContract.length > 0 || parameterNameMismatches.length > 0;
+
+        // Log info about skipped signatures if any
+        if (skipPair?.skipInterfaceSignatures && skipPair.skipInterfaceSignatures.length > 0) {
+          console.log(
+            `ℹ️  skipping ${skipPair.skipInterfaceSignatures.length} signature(s) for '${interfaceFqn}' and '${correspondingContractFqn}' (${skipPair.reason})`,
+          );
+        }
 
         if (hasMismatch) {
           mismatchedInterfaces.push({
@@ -266,6 +377,7 @@ task("check-interfaces").setAction(async (_, hre) => {
             missingInContract,
             missingInInterface,
             isFullMatchExpected,
+            parameterNameMismatches,
           });
         } else {
           const matchType = isFullMatchExpected ? "fully matches" : "is sub-interface of";
@@ -283,7 +395,14 @@ task("check-interfaces").setAction(async (_, hre) => {
   }
 
   for (const mismatch of mismatchedInterfaces) {
-    const { interfaceFqn, contractFqn, missingInContract, missingInInterface, isFullMatchExpected } = mismatch;
+    const {
+      interfaceFqn,
+      contractFqn,
+      missingInContract,
+      missingInInterface,
+      isFullMatchExpected,
+      parameterNameMismatches,
+    } = mismatch;
 
     console.error(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`);
     console.error();
@@ -301,6 +420,14 @@ task("check-interfaces").setAction(async (_, hre) => {
       console.error(`📋 This interface used ${usingContracts.length} times in the following contracts:`);
       [...new Set(usingContracts)].forEach((contract) => {
         console.error(`   ${contract}`);
+      });
+      console.error();
+    }
+
+    if (parameterNameMismatches.length > 0) {
+      console.error(`📋 Parameter name mismatches (${parameterNameMismatches.length / 3} functions):`);
+      parameterNameMismatches.forEach((entry) => {
+        console.error(`   ${entry}`);
       });
       console.error();
     }

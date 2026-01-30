@@ -1,6 +1,8 @@
 import chalk from "chalk";
 import path from "path";
 
+import { getTxLink } from "./explorer";
+
 // @ts-expect-error TS2339: Property 'toJSON' does not exist on type 'BigInt'.
 BigInt.prototype.toJSON = function () {
   return this.toString();
@@ -87,7 +89,6 @@ const _title = (title: string) => {
 };
 
 const _record = (label: string, value: ConvertibleToString) => {
-  if (!shouldLog("debug")) return;
   log(`${chalk.grey(label)}: ${yl(value.toString())}`);
 };
 
@@ -178,4 +179,21 @@ log.debug = (title: string, records: Record<string, ConvertibleToString> = {}) =
   _title(title);
   Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
   log.emptyLine();
+};
+
+log.info = (title: string, records: Record<string, ConvertibleToString> = {}) => {
+  if (!shouldLog("info")) return;
+
+  _title(title);
+  Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
+  log.emptyLine();
+};
+
+log.txLink = async (txHash: string) => {
+  const link = await getTxLink(txHash);
+  if (link) {
+    log.info("🔗 Transaction", {
+      Link: link,
+    });
+  }
 };

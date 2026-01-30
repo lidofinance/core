@@ -15,9 +15,9 @@ import {
 import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
 import { Snapshot } from "test/suite";
 
-// TODO: update upon TW integrations arrive
-describe.skip("Report Validator Exit Delay", () => {
+describe("Integration: Report Validator Exit Delay", () => {
   let ctx: ProtocolContext;
+  let rootSnapshot: string;
   let beforeEachSnapshot: string;
 
   let vebReportSubmitter: HardhatEthersSigner;
@@ -26,6 +26,7 @@ describe.skip("Report Validator Exit Delay", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
+    rootSnapshot = await Snapshot.take();
 
     [vebReportSubmitter] = await ethers.getSigners();
 
@@ -56,6 +57,8 @@ describe.skip("Report Validator Exit Delay", () => {
     // Ensure that nor is a first module in staking router
     expect((await stakingRouter.getStakingModule(moduleId)).stakingModuleAddress).to.equal(nor.address);
   });
+
+  after(async () => await Snapshot.restore(rootSnapshot));
 
   beforeEach(async () => (beforeEachSnapshot = await Snapshot.take()));
 
@@ -129,9 +132,11 @@ describe.skip("Report Validator Exit Delay", () => {
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
-  it("Should report validator exit delay historically", async () => {
-    const { nor, validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
+  it("Should report validator exit delay historically", async function () {
+    // Skip if not mainnet
+    if (!ctx.isMainnet) this.skip();
 
+    const { nor, validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
     const nodeOpId = 2;
     const exitRequests = [
       {
@@ -176,9 +181,8 @@ describe.skip("Report Validator Exit Delay", () => {
         encodedExitRequests,
       ),
     )
-      .and.to.emit(nor, "ValidatorExitStatusUpdated")
+      .to.emit(nor, "ValidatorExitStatusUpdated")
       .withArgs(nodeOpId, ACTIVE_VALIDATOR_PROOF.validator.pubkey, eligibleToExitInSec, proofSlotTimestamp);
-
     expect(
       await nor.isValidatorExitDelayPenaltyApplicable(
         nodeOpId,
@@ -199,7 +203,10 @@ describe.skip("Report Validator Exit Delay", () => {
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
-  it("Should revert when validator reported multiple times in a single transaction", async () => {
+  it("Should revert when validator reported multiple times in a single transaction", async function () {
+    // Skip if not mainnet
+    if (!ctx.isMainnet) this.skip();
+
     const { validatorsExitBusOracle, validatorExitDelayVerifier, nor } = ctx.contracts;
 
     // Setup multiple exit requests with the same pubkey
@@ -248,7 +255,10 @@ describe.skip("Report Validator Exit Delay", () => {
     await expect(tx2).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
-  it("Should revert when exit request hash is not submitted", async () => {
+  it("Should revert when exit request hash is not submitted", async function () {
+    // Skip if not mainnet
+    if (!ctx.isMainnet) this.skip();
+
     const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
 
     const exitRequests = [
@@ -272,7 +282,7 @@ describe.skip("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "ExitHashNotSubmitted");
+    ).to.be.revertedWithCustomError(validatorsExitBusOracle, "ExitHashNotSubmitted");
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -283,10 +293,13 @@ describe.skip("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "ExitHashNotSubmitted");
+    ).to.be.revertedWithCustomError(validatorsExitBusOracle, "ExitHashNotSubmitted");
   });
 
-  it("Should revert when exit request was not unpacked", async () => {
+  it("Should revert when exit request was not unpacked", async function () {
+    // Skip if not mainnet
+    if (!ctx.isMainnet) this.skip();
+
     const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
 
     const exitRequests = [
@@ -311,7 +324,7 @@ describe.skip("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "RequestsNotDelivered");
+    ).to.be.revertedWithCustomError(validatorsExitBusOracle, "RequestsNotDelivered");
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -322,7 +335,7 @@ describe.skip("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "RequestsNotDelivered");
+    ).to.be.revertedWithCustomError(validatorsExitBusOracle, "RequestsNotDelivered");
   });
 
   it("Should revert when submitting validator exit delay with invalid beacon block root", async () => {
