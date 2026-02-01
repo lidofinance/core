@@ -162,7 +162,9 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       expect(limits.exitedValidatorsPerDayLimit).to.equal(defaultLimits.exitedValidatorsPerDayLimit);
       expect(limits.appearedValidatorsPerDayLimit).to.equal(defaultLimits.appearedValidatorsPerDayLimit);
       expect(limits.annualBalanceIncreaseBPLimit).to.equal(defaultLimits.annualBalanceIncreaseBPLimit);
-      expect(limits.maxBalanceExitRequestedPerReportInGwei).to.equal(defaultLimits.maxBalanceExitRequestedPerReportInGwei);
+      expect(limits.maxBalanceExitRequestedPerReportInGwei).to.equal(
+        defaultLimits.maxBalanceExitRequestedPerReportInGwei,
+      );
       expect(limits.maxItemsPerExtraDataTransaction).to.equal(defaultLimits.maxItemsPerExtraDataTransaction);
       expect(limits.maxNodeOperatorsPerExtraDataItem).to.equal(defaultLimits.maxNodeOperatorsPerExtraDataItem);
       expect(limits.requestTimestampMargin).to.equal(defaultLimits.requestTimestampMargin);
@@ -214,7 +216,9 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       expect(before.exitedValidatorsPerDayLimit).to.not.equal(newLimits.exitedValidatorsPerDayLimit);
       expect(before.appearedValidatorsPerDayLimit).to.not.equal(newLimits.appearedValidatorsPerDayLimit);
       expect(before.annualBalanceIncreaseBPLimit).to.not.equal(newLimits.annualBalanceIncreaseBPLimit);
-      expect(before.maxBalanceExitRequestedPerReportInGwei).to.not.equal(newLimits.maxBalanceExitRequestedPerReportInGwei);
+      expect(before.maxBalanceExitRequestedPerReportInGwei).to.not.equal(
+        newLimits.maxBalanceExitRequestedPerReportInGwei,
+      );
       expect(before.maxItemsPerExtraDataTransaction).to.not.equal(newLimits.maxItemsPerExtraDataTransaction);
       expect(before.maxNodeOperatorsPerExtraDataItem).to.not.equal(newLimits.maxNodeOperatorsPerExtraDataItem);
       expect(before.requestTimestampMargin).to.not.equal(newLimits.requestTimestampMargin);
