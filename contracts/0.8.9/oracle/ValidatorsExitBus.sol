@@ -840,18 +840,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             valIndex = uint64(dataWithoutPubkey);
             nodeOpId = uint40(dataWithoutPubkey >> 64);
 
-            // Check key
-            // Fetch the registered signing key for this operator and pubkey index 0
-            (bytes memory key, , ) = NODE_OPERATORS_REGISTRY.getSigningKey(
-                nodeOpId,
-                0
-            );
-            // Compare the keccak256 hash of the provided public key with the keccak256 hash of the signing key
-            // Skip validation if registry returns empty key (test/permissive mode)
-            if (key.length > 0 && keccak256(key) != keccak256(pubkey)) {
-                revert InvalidPublicKey();
-            }
-
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
         }

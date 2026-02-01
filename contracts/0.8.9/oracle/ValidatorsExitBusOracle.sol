@@ -49,8 +49,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 secondsPerSlot,
         uint256 genesisTime,
         address lidoLocator,
-        address noaddress
-    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator, noaddress) {}
+        address nodeOperatorsRegistry
+    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator, nodeOperatorsRegistry) {}
 
     function initialize(
         address admin,
