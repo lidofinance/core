@@ -227,23 +227,24 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     }
 
     function _handleConsensusReportData(ReportData calldata data) internal {
-        if (data.dataFormat != DATA_FORMAT_LIST) {
+        if (data.dataFormat != DATA_FORMAT_LIST && data.dataFormat != DATA_FORMAT_LIST_WITH_KEY_INDEX) {
             revert UnsupportedRequestsDataFormat(data.dataFormat);
         }
 
-        if (data.data.length % PACKED_REQUEST_LENGTH != 0) {
+        uint256 packedLength = _getPackedRequestLength(data.dataFormat);
+        if (data.data.length % packedLength != 0) {
             revert InvalidRequestsDataLength();
         }
 
-        if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
+        if (data.data.length / packedLength != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
-        // Calculate sum of validator exit requests (each validator has 32 ETH max effective balance)
-        // The parameter name suggests Gwei but based on the contract comment it's counting validators
-        uint256 requestsCount = data.data.length / _getPackedRequestLength(data.dataFormat);
+        // Calculate total balance of validators being exited in Gwei
+        // Module 1 (curated) uses 32 ETH, other modules use 2048 ETH per validator
+        uint256 totalExitBalanceGwei = _calculateTotalExitBalanceGwei(data.data, data.dataFormat);
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(requestsCount);
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(totalExitBalanceGwei);
 
         _processExitRequestsList(data.data, data.dataFormat);
 
@@ -251,7 +252,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             refSlot: data.refSlot.toUint64(),
             requestsCount: data.requestsCount.toUint64(),
             requestsProcessed: data.requestsCount.toUint64(),
-            dataFormat: uint16(DATA_FORMAT_LIST)
+            dataFormat: uint16(data.dataFormat)
         });
 
         if (data.requestsCount == 0) {

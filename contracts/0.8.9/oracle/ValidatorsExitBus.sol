@@ -77,8 +77,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Thrown when provided public key does not match the registered signing key
+     * @param index Index of the validator in the exit request list
      */
-    error InvalidPublicKey();
+    error InvalidPublicKey(uint256 index);
 
     /**
      * Thrown when there are attempt to send exit events for request that was not submitted earlier by trusted entities
@@ -219,6 +220,20 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     ///
     uint256 public constant DATA_FORMAT_LIST = 1;
     uint256 public constant DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
+
+    /// @notice Module ID for the curated staking module (NodeOperatorsRegistry)
+    /// @dev This module was deployed before the MaxEB (EIP-7251) fork and uses 32 ETH validators.
+    ///      This is a protocol constant that cannot change for existing validators.
+    uint256 public constant CURATED_MODULE_ID = 1;
+
+    /// @notice Max effective balance for curated module validators (in Gwei)
+    /// @dev 32 ETH = 32_000_000_000 Gwei (pre-MaxEB validators)
+    uint256 public constant CURATED_MODULE_MAX_BALANCE_GWEI = 32_000_000_000;
+
+    /// @notice Max effective balance for MaxEB-enabled module validators (in Gwei)
+    /// @dev 2048 ETH = 2_048_000_000_000 Gwei (post-MaxEB validators: CSM, SimpleDVT, etc.)
+    ///      All modules deployed after EIP-7251 activation use this max effective balance.
+    uint256 public constant MAXEB_MODULE_MAX_BALANCE_GWEI = 2_048_000_000_000;
 
     ILidoLocator internal immutable LOCATOR;
 
@@ -774,6 +789,54 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
+    * @notice Calculates the total balance in Gwei for all validators in the exit requests
+    * @dev This function determines the max effective balance based on module ID:
+    *      - Module 1 (Curated/NOR): 32 ETH per validator (pre-MaxEB)
+    *      - Other modules (CSM, SimpleDVT, etc.): 2048 ETH per validator (post-MaxEB/EIP-7251)
+    *
+    *      This distinction is based on protocol constants, not runtime configuration:
+    *      The curated module was deployed before EIP-7251 (MaxEB) activation and its validators
+    *      are forever capped at 32 ETH. All modules deployed after EIP-7251 use 2048 ETH max.
+    *
+    * @param data Packed exit requests data
+    * @param dataFormat Format of the data (1 or 2)
+    * @return totalBalanceGwei Total balance of all validators being exited in Gwei
+    */
+    function _calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) internal pure returns (uint256 totalBalanceGwei) {
+        uint256 requestsCount = data.length / _getPackedRequestLength(dataFormat);
+
+        for (uint256 i = 0; i < requestsCount; ++i) {
+            uint256 moduleId;
+            uint256 itemOffset;
+
+            if (dataFormat == DATA_FORMAT_LIST) {
+                // For format 1: extract moduleId from the first 24 bits
+                assembly {
+                    itemOffset := add(data.offset, mul(PACKED_REQUEST_LENGTH, i))
+                    let dataWithoutPubkey := shr(128, calldataload(itemOffset))
+                    moduleId := shr(104, dataWithoutPubkey) // Extract top 24 bits
+                }
+            } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+                // For format 2: extract moduleId from the first 24 bits
+                assembly {
+                    itemOffset := add(data.offset, mul(PACKED_REQUEST_LENGTH_V2, i))
+                    let dataWithoutPubkey := shr(64, calldataload(itemOffset))
+                    moduleId := shr(168, dataWithoutPubkey) // Extract top 24 bits
+                }
+            } else {
+                revert UnsupportedRequestsDataFormat(dataFormat);
+            }
+
+            // Add balance based on module type
+            if (moduleId == CURATED_MODULE_ID) {
+                totalBalanceGwei += CURATED_MODULE_MAX_BALANCE_GWEI;
+            } else {
+                totalBalanceGwei += MAXEB_MODULE_MAX_BALANCE_GWEI;
+            }
+        }
+    }
+
+    /**
     * @notice Dispatcher that processes exit requests based on data format
     * @param data Packed exit requests data
     * @param dataFormat Format of the data (1 or 2)
@@ -855,6 +918,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 offsetPastEnd;
         uint256 lastDataWithoutPubkey = 0;
         uint256 timestamp = _getTimestamp();
+        uint256 index = 0; // Track validator index for error reporting
 
         assembly {
             offset := data.offset
@@ -910,11 +974,15 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             // Compare the keccak256 hash of the provided public key with the keccak256 hash of the signing key
             // Skip validation if registry returns empty key (test/permissive mode)
             if (key.length > 0 && keccak256(key) != keccak256(pubkey)) {
-                revert InvalidPublicKey();
+                revert InvalidPublicKey(index);
             }
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
+
+            unchecked {
+                ++index; // Increment index for next iteration
+            }
         }
     }
 
