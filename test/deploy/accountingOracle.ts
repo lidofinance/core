@@ -158,7 +158,7 @@ async function deployOracleReportSanityCheckerForAccounting(
       appearedValidatorsPerDayLimit,
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
-      maxBalanceExitRequestedPerReportInGwei: 1000000n,
+      maxBalanceExitRequestedPerReportInGwei: 10_000_000_000_000_000n, // 10M ETH in Gwei
       maxItemsPerExtraDataTransaction: 15n,
       maxNodeOperatorsPerExtraDataItem: 16n,
       requestTimestampMargin: 0n,

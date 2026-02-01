@@ -918,7 +918,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 offsetPastEnd;
         uint256 lastDataWithoutPubkey = 0;
         uint256 timestamp = _getTimestamp();
-        uint256 index = 0; // Track validator index for error reporting
+        uint256 index = 0;
 
         assembly {
             offset := data.offset
@@ -981,7 +981,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
 
             unchecked {
-                ++index; // Increment index for next iteration
+                ++index;
             }
         }
     }

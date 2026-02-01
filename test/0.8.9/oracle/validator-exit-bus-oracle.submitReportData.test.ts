@@ -184,8 +184,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
           .withArgs(dataFormatUnsupported);
       });
 
-      it("dataFormat = 2 reverts", async () => {
-        const dataFormatUnsupported = 2;
+      it("dataFormat = 3 reverts", async () => {
+        const dataFormatUnsupported = 3;
         const { reportData } = await prepareReportAndSubmitHash(
           [{ moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] }],
           { reportFields: { dataFormat: dataFormatUnsupported } },
@@ -253,7 +253,9 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       });
 
       it("reverts if request limit is reached", async () => {
-        const exitRequestsLimit = 1;
+        // Module 5 (not curated) = 2048 ETH per validator = 2_048_000_000_000 Gwei
+        // Set limit to 1 validator worth
+        const exitRequestsLimit = 2_048_000_000_000n; // 2048 ETH in Gwei
         await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(exitRequestsLimit);
         const { reportData } = await prepareReportAndSubmitHash([
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2] },
@@ -264,7 +266,9 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
           .withArgs(exitRequestsLimit);
       });
       it("pass if requests amount equals to limit", async () => {
-        const exitRequestsLimit = 1;
+        // Module 5 (not curated) = 2048 ETH per validator = 2_048_000_000_000 Gwei
+        // Set limit to exactly 1 validator worth
+        const exitRequestsLimit = 2_048_000_000_000n; // 2048 ETH in Gwei
         await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(exitRequestsLimit);
         const { reportData } = await prepareReportAndSubmitHash([
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2] },
