@@ -172,7 +172,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
           .connect(submitter)
           .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2], [2]),
       )
-        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotUsed")
+        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotDeposited")
         .withArgs(SOURCE_OPERATOR_ID, 2);
     });
 

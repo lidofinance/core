@@ -473,7 +473,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           .connect(submitter)
           .submitConsolidationBatch(unusedSourceOperatorId, targetOperatorId, [0n], [0n]),
       )
-        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotUsed")
+        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotDeposited")
         .withArgs(unusedSourceOperatorId, 0n);
     });
 

@@ -99,7 +99,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
     error ArraysLengthMismatch(uint256 sourceLength, uint256 targetLength);
     error EmptyBatch();
-    error SourceKeyNotUsed(uint256 sourceOperatorId, uint256 keyIndex);
+    error SourceKeyNotDeposited(uint256 sourceOperatorId, uint256 keyIndex);
     error TargetKeyNotDeposited(uint256 targetOperatorId, uint256 keyIndex, uint256 totalDeposited);
     error NotAuthorized(address caller, uint256 sourceOperatorId, uint256 targetOperatorId);
 
@@ -385,7 +385,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
             (bytes memory key,, bool used) = sourceModule.getSigningKey(sourceOperatorId, srcIndex);
 
             if (!used) {
-                revert SourceKeyNotUsed(sourceOperatorId, srcIndex);
+                revert SourceKeyNotDeposited(sourceOperatorId, srcIndex);
             }
             sourcePubkeys[i] = key;
         }

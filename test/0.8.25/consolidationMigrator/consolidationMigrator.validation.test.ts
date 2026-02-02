@@ -127,7 +127,7 @@ describe("ConsolidationMigrator.sol: validation", () => {
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 3, [PUBKEYS[2], PUBKEYS[3], PUBKEYS[0]]);
 
       await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2], [2]))
-        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotUsed")
+        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotDeposited")
         .withArgs(SOURCE_OPERATOR_ID, 2);
     });
 
