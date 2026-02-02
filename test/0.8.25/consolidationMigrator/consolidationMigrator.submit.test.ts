@@ -80,8 +80,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 0, PUBKEYS[0], true);
       await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 1, PUBKEYS[1], true);
 
-      // Set up target module with keys not yet deposited
-      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 0, [PUBKEYS[2], PUBKEYS[3]]);
+      // Set up target module with deposited keys (active validators)
+      // totalDepositedValidators = 2, so keys at index 0,1 are deposited
+      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 2, [PUBKEYS[2], PUBKEYS[3]]);
     });
 
     it("should submit consolidation batch from designated submitter", async () => {
@@ -163,7 +164,8 @@ describe("ConsolidationMigrator.sol: submit", () => {
     it("should revert if source key is not used", async () => {
       // Set key at index 2 as NOT used
       await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 2, PUBKEYS[2], false);
-      await targetModule.mock__addPubkey(TARGET_OPERATOR_ID, PUBKEYS[0]);
+      // Add more target keys and make index 2 deposited
+      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 3, [PUBKEYS[2], PUBKEYS[3], PUBKEYS[0]]);
 
       await expect(
         consolidationMigrator
@@ -174,17 +176,17 @@ describe("ConsolidationMigrator.sol: submit", () => {
         .withArgs(SOURCE_OPERATOR_ID, 2);
     });
 
-    it("should revert if target key is already deposited", async () => {
-      // Set totalDepositedValidators = 1
+    it("should revert if target key is not deposited", async () => {
+      // totalDepositedValidators = 1, so key at index 0 is deposited, but index 1 is NOT
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 1, [PUBKEYS[2], PUBKEYS[3]]);
 
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [1]),
       )
-        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyAlreadyDeposited")
-        .withArgs(TARGET_OPERATOR_ID, 0, 1);
+        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyNotDeposited")
+        .withArgs(TARGET_OPERATOR_ID, 1, 1);
     });
 
     it("should emit ConsolidationBus event", async () => {

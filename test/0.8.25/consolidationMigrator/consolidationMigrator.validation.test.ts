@@ -79,16 +79,16 @@ describe("ConsolidationMigrator.sol: validation", () => {
       await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 0, PUBKEYS[0], true);
       await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 1, PUBKEYS[1], true);
 
-      // Set up target module with keys not yet deposited
-      // totalDepositedValidators = 0, so keys at index 0,1 are available
-      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 0, [PUBKEYS[2], PUBKEYS[3]]);
+      // Set up target module with deposited keys (active validators)
+      // totalDepositedValidators = 2, so keys at index 0,1 are deposited (active)
+      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 2, [PUBKEYS[2], PUBKEYS[3]]);
     });
 
     it("should validate a correct batch", async () => {
       const sourceIndices = [0, 1];
       const targetIndices = [0, 1];
 
-      // Should not revert
+      // Should not revert - both source and target are deposited
       await consolidationMigrator.validateConsolidationBatch(
         SOURCE_OPERATOR_ID,
         TARGET_OPERATOR_ID,
@@ -123,28 +123,36 @@ describe("ConsolidationMigrator.sol: validation", () => {
     it("should revert if source key is not used", async () => {
       // Set key at index 2 as NOT used
       await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 2, PUBKEYS[2], false);
-      await targetModule.mock__addPubkey(TARGET_OPERATOR_ID, PUBKEYS[0]); // Add more keys to target
+      // Add more target keys and make index 2 deposited
+      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 3, [PUBKEYS[2], PUBKEYS[3], PUBKEYS[0]]);
 
       await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2], [2]))
         .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotUsed")
         .withArgs(SOURCE_OPERATOR_ID, 2);
     });
 
-    it("should revert if target key is already deposited", async () => {
-      // Set totalDepositedValidators = 1, so key at index 0 is already deposited
+    it("should revert if target key is not deposited", async () => {
+      // totalDepositedValidators = 1, so key at index 0 is deposited, but index 1 is NOT
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 1, [PUBKEYS[2], PUBKEYS[3]]);
 
-      await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [0]))
-        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyAlreadyDeposited")
-        .withArgs(TARGET_OPERATOR_ID, 0, 1);
+      await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [1]))
+        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyNotDeposited")
+        .withArgs(TARGET_OPERATOR_ID, 1, 1);
     });
 
-    it("should validate when target key is exactly at totalDepositedValidators boundary", async () => {
-      // totalDepositedValidators = 1 means keys 0 is deposited, key 1 is not
-      await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 1, [PUBKEYS[2], PUBKEYS[3]]);
+    it("should allow multiple source validators to consolidate to the same target index", async () => {
+      // This is a valid scenario - multiple source validators can consolidate to same target
+      // The contract does not check for target uniqueness (by design, per spec)
+      const sourceIndices = [0, 1];
+      const targetIndices = [0, 0]; // Same target for both sources (both deposited)
 
-      // Key at index 1 should be valid (not deposited)
-      await consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [1]);
+      // Should not revert
+      await consolidationMigrator.validateConsolidationBatch(
+        SOURCE_OPERATOR_ID,
+        TARGET_OPERATOR_ID,
+        sourceIndices,
+        targetIndices,
+      );
     });
   });
 });
