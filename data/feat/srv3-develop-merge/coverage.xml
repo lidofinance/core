@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="5624"  lines-covered="5167"  line-rate="0.9187000000000001"  branches-valid="2628"  branches-covered="2296"  branch-rate="0.8737"  timestamp="1769797726994" complexity="0" version="0.1">
+<coverage lines-valid="5624"  lines-covered="5167"  line-rate="0.9187000000000001"  branches-valid="2628"  branches-covered="2296"  branch-rate="0.8737"  timestamp="1770111045593" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2155,8 +2155,8 @@
 			<method name="_getTargetModule"  hits="10"  signature="()V" >
 				<lines><line number="423"  hits="10" /></lines>
 			</method>
-			<method name="_extractPubkey"  hits="9"  signature="()V" >
-				<lines><line number="434"  hits="9" /></lines>
+			<method name="_extractPubkey"  hits="10"  signature="()V" >
+				<lines><line number="434"  hits="10" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2204,27 +2204,27 @@
 			<line number="379"  hits="10"  branch="false" />
 			<line number="380"  hits="10"  branch="false" />
 			<line number="383"  hits="10"  branch="false" />
-			<line number="384"  hits="13"  branch="false" />
-			<line number="385"  hits="13"  branch="false" />
-			<line number="387"  hits="13"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="384"  hits="14"  branch="false" />
+			<line number="385"  hits="14"  branch="false" />
+			<line number="387"  hits="14"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="388"  hits="2"  branch="false" />
-			<line number="390"  hits="11"  branch="false" />
+			<line number="390"  hits="12"  branch="false" />
 			<line number="394"  hits="8"  branch="false" />
-			<line number="395"  hits="11"  branch="false" />
-			<line number="398"  hits="11"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="395"  hits="12"  branch="false" />
+			<line number="398"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="399"  hits="2"  branch="false" />
-			<line number="403"  hits="9"  branch="false" />
-			<line number="406"  hits="9"  branch="false" />
+			<line number="403"  hits="10"  branch="false" />
+			<line number="406"  hits="10"  branch="false" />
 			<line number="409"  hits="6"  branch="false" />
 			<line number="416"  hits="10"  branch="false" />
 			<line number="417"  hits="10"  branch="false" />
 			<line number="424"  hits="10"  branch="false" />
 			<line number="425"  hits="10"  branch="false" />
-			<line number="435"  hits="9"  branch="false" />
-			<line number="436"  hits="9"  branch="false" />
-			<line number="438"  hits="9"  branch="false" />
-			<line number="439"  hits="9"  branch="false" />
-			<line number="442"  hits="9"  branch="false" />
+			<line number="435"  hits="10"  branch="false" />
+			<line number="436"  hits="10"  branch="false" />
+			<line number="438"  hits="10"  branch="false" />
+			<line number="439"  hits="10"  branch="false" />
+			<line number="442"  hits="10"  branch="false" />
 		</lines>
 		</class>
 		<class name="TopUpGateway.sol"  filename="contracts/0.8.25/TopUpGateway.sol"  line-rate="0.9765"  branch-rate="0.8548" >
@@ -4536,10 +4536,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="48"  branch="false" />
-			<line number="173"  hits="48"  branch="false" />
-			<line number="175"  hits="48"  branch="false" />
-			<line number="176"  hits="48"  branch="false" />
+			<line number="172"  hits="46"  branch="false" />
+			<line number="173"  hits="46"  branch="false" />
+			<line number="175"  hits="46"  branch="false" />
+			<line number="176"  hits="46"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
