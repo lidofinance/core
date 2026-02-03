@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="5624"  lines-covered="5167"  line-rate="0.9187000000000001"  branches-valid="2628"  branches-covered="2296"  branch-rate="0.8737"  timestamp="1770111045593" complexity="0" version="0.1">
+<coverage lines-valid="5623"  lines-covered="5167"  line-rate="0.9189"  branches-valid="2628"  branches-covered="2296"  branch-rate="0.8737"  timestamp="1770119017544" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4536,10 +4536,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="46"  branch="false" />
-			<line number="173"  hits="46"  branch="false" />
-			<line number="175"  hits="46"  branch="false" />
-			<line number="176"  hits="46"  branch="false" />
+			<line number="172"  hits="23"  branch="false" />
+			<line number="173"  hits="23"  branch="false" />
+			<line number="175"  hits="23"  branch="false" />
+			<line number="176"  hits="23"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -9594,9 +9594,9 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.sanity_checks"  line-rate="0.3689"  branch-rate="0.2963" >
+	<package name="0.8.9.sanity_checks"  line-rate="0.3705"  branch-rate="0.2963" >
 	<classes>
-		<class name="OracleReportSanityChecker.sol"  filename="contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol"  line-rate="0.3689"  branch-rate="0.2963" >
+		<class name="OracleReportSanityChecker.sol"  filename="contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol"  line-rate="0.3705"  branch-rate="0.2963" >
 		<methods>
 			<method name="constructor"  hits="32"  signature="()V" >
 				<lines><line number="220"  hits="32" /></lines>
@@ -9794,7 +9794,6 @@
 			<line number="526"  hits="0"  branch="false" />
 			<line number="528"  hits="0"  branch="false" />
 			<line number="531"  hits="0"  branch="false" />
-			<line number="545"  hits="0"  branch="false" />
 			<line number="557"  hits="29"  branch="false" />
 			<line number="558"  hits="29"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="559"  hits="1"  branch="false" />
