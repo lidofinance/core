@@ -303,11 +303,23 @@ def extract_proof_from_tree(backing: Node, gindex: int) -> List[bytes]:
     """
     Returns sibling hashes from leaf -> root (bottom-up),
     aligned with gindex bits LSB-first in verification.
+    gindex 6 - "0b110"
+    gindex[3:] = 10  
+         
+             root (H1)  
+           /           \\ 
+        2 (H2)        3 (H3)
+        /  \\         /  \\
+    4(H4)   5(H5)  6(H6)  7(H7)
+     
+     
+    path to 6 from root [H3 (1), H6 (0)]
+    proofs: [H2, H7]
     """
     if gindex <= 1:
         return []
 
-    # Path bits from root to leaf, excluding leading 1.
+    # Path bits from root to leaf, excluding leading 1 (root).
     # Example: gindex bits "1xyz..." => path bits [x, y, z, ...]
     path_bits = [int(b) for b in bin(gindex)[3:]]
 
@@ -519,17 +531,17 @@ def build_top_up_data(el_url: str, cl_url: str, validator_indices: List[int]) ->
         print(f"  Validator proof verified OK", file=sys.stderr)
 
         # Verification: walk from state_root to beacon_block_root
-        header_state_root = bytes(header.state_root)
+        # header_state_root = bytes(header.state_root)
         print(
             f"  Verifying header proof (state_root -> beacon_block_root)...",
             file=sys.stderr,
         )
         if not verify_merkle_proof(
-            header_state_root, header_proof, state_root_gindex, beacon_block_root
+            state_root, header_proof, state_root_gindex, beacon_block_root
         ):
             raise ValueError(
                 f"Header proof verification FAILED!\n"
-                f"  leaf (state_root):        0x{header_state_root.hex()}\n"
+                f"  leaf (state_root):        0x{state_root.hex()}\n"
                 f"  expected beacon_block_root: 0x{beacon_block_root.hex()}"
             )
         print(f"  Header proof verified OK", file=sys.stderr)
@@ -648,8 +660,17 @@ def cmd_prove(args):
         sys.exit(1)
 
 
-def cmd_top_up(args):
-    """Read witness file and send topUp transaction to TopUpGateway."""
+def send_top_up_tx(
+    witness_data: dict,
+    validator_indices: List[int],
+    key_indices: List[int],
+    operator_ids: List[int],
+    module_id: int,
+    el_url: str,
+    gateway_address: str,
+    gas_limit: int,
+):
+    """Shared logic: build and send a topUp transaction from witness data."""
     load_dotenv()
 
     private_key = os.environ.get("PRIVATE_KEY")
@@ -657,14 +678,14 @@ def cmd_top_up(args):
         print("ERROR: PRIVATE_KEY not found in .env file", file=sys.stderr)
         sys.exit(1)
 
-    # Read witness data
-    input_file = args.input
-    print(f"Reading witness data from {input_file}...", file=sys.stderr)
-    with open(input_file, "r") as f:
-        witness_data = json.load(f)
+    if len(validator_indices) != len(key_indices) or len(validator_indices) != len(operator_ids):
+        print(
+            "ERROR: --validator-index, --key-index, and --operator-id must have the same count",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-    # Connect to EL
-    w3 = Web3(Web3.HTTPProvider(args.el_url))
+    w3 = Web3(Web3.HTTPProvider(el_url))
     if not w3.is_connected():
         print("ERROR: Cannot connect to EL node", file=sys.stderr)
         sys.exit(1)
@@ -672,81 +693,60 @@ def cmd_top_up(args):
     account = w3.eth.account.from_key(private_key)
     print(f"Sender: {account.address}", file=sys.stderr)
 
-    # Build TopUpData struct
     beacon_root_data = witness_data["beaconRootData"]
     validators = witness_data["validatorWitnesses"]
 
-    # Match validator indices with provided arguments
-    # args provides parallel arrays: validatorIndex, keyIndex, operatorId
-    if len(args.validator_index) != len(args.key_index) or len(
-        args.validator_index
-    ) != len(args.operator_id):
-        print(
-            "ERROR: --validator-index, --key-index, and --operator-id must have the same count",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    # Filter and order witnesses to match requested validator indices
     witness_by_index = {v["validatorIndex"]: v for v in validators}
     ordered_witnesses = []
-    for vi in args.validator_index:
+    for vi in validator_indices:
         if vi not in witness_by_index:
-            print(
-                f"ERROR: Validator index {vi} not found in witness file",
-                file=sys.stderr,
-            )
+            print(f"ERROR: Validator index {vi} not found in witness data", file=sys.stderr)
             sys.exit(1)
         ordered_witnesses.append(witness_by_index[vi])
 
-    # Build contract call data
-    validator_witnesses_tuples = []
-    for vw in ordered_witnesses:
-        validator_witnesses_tuples.append(
-            (
-                [bytes.fromhex(p[2:]) for p in vw["proofs"]],  # proofValidator
-                bytes.fromhex(vw["pubkey"][2:]),  # pubkey
-                vw["effectiveBalance"],  # effectiveBalance
-                vw["activationEligibilityEpoch"],  # activationEligibilityEpoch
-                vw["activationEpoch"],  # activationEpoch
-                vw["exitEpoch"],  # exitEpoch
-                vw["withdrawableEpoch"],  # withdrawableEpoch
-                vw["slashed"],  # slashed
-            )
+    validator_witnesses_tuples = [
+        (
+            [bytes.fromhex(p[2:]) for p in vw["proofs"]],
+            bytes.fromhex(vw["pubkey"][2:]),
+            vw["effectiveBalance"],
+            vw["activationEligibilityEpoch"],
+            vw["activationEpoch"],
+            vw["exitEpoch"],
+            vw["withdrawableEpoch"],
+            vw["slashed"],
         )
+        for vw in ordered_witnesses
+    ]
 
-    # pendingBalanceGwei defaults to 0 for each validator
-    pending_balances = [0] * len(args.validator_index)
+    pending_balances = [0] * len(validator_indices)
 
     top_up_data = (
-        args.module_id,  # moduleId
-        list(args.key_index),  # keyIndices
-        list(args.operator_id),  # operatorIds
-        list(args.validator_index),  # validatorIndices
-        (  # beaconRootData
+        module_id,
+        list(key_indices),
+        list(operator_ids),
+        list(validator_indices),
+        (
             beacon_root_data["childBlockTimestamp"],
             beacon_root_data["slot"],
             beacon_root_data["proposerIndex"],
         ),
-        validator_witnesses_tuples,  # validatorWitness
-        pending_balances,  # pendingBalanceGwei
+        validator_witnesses_tuples,
+        pending_balances,
     )
 
     contract = w3.eth.contract(
-        address=Web3.to_checksum_address(args.gateway_address),
+        address=Web3.to_checksum_address(gateway_address),
         abi=TOP_UP_GATEWAY_ABI,
     )
 
     print("Building transaction...", file=sys.stderr)
-    tx = contract.functions.topUp(top_up_data).build_transaction(
-        {
-            "from": account.address,
-            "nonce": w3.eth.get_transaction_count(account.address),
-            "gas": args.gas_limit,
-            "maxFeePerGas": w3.eth.gas_price * 2,
-            "maxPriorityFeePerGas": w3.to_wei(1, "gwei"),
-        }
-    )
+    tx = contract.functions.topUp(top_up_data).build_transaction({
+        "from": account.address,
+        "nonce": w3.eth.get_transaction_count(account.address),
+        "gas": gas_limit,
+        "maxFeePerGas": w3.eth.gas_price * 2,
+        "maxPriorityFeePerGas": w3.to_wei(1, "gwei"),
+    })
 
     print("Signing and sending transaction...", file=sys.stderr)
     signed_tx = w3.eth.account.sign_transaction(tx, private_key)
@@ -756,13 +756,54 @@ def cmd_top_up(args):
     print("Waiting for receipt...", file=sys.stderr)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300)
     if receipt["status"] == 1:
-        print(
-            f"Transaction confirmed in block {receipt['blockNumber']}", file=sys.stderr
-        )
+        print(f"Transaction confirmed in block {receipt['blockNumber']}", file=sys.stderr)
     else:
-        print(
-            f"Transaction REVERTED in block {receipt['blockNumber']}", file=sys.stderr
+        print(f"Transaction REVERTED in block {receipt['blockNumber']}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_top_up(args):
+    """Read witness file and send topUp transaction to TopUpGateway."""
+    input_file = args.input
+    print(f"Reading witness data from {input_file}...", file=sys.stderr)
+    with open(input_file, "r") as f:
+        witness_data = json.load(f)
+
+    send_top_up_tx(
+        witness_data=witness_data,
+        validator_indices=args.validator_index,
+        key_indices=args.key_index,
+        operator_ids=args.operator_id,
+        module_id=args.module_id,
+        el_url=args.el_url,
+        gateway_address=args.gateway_address,
+        gas_limit=args.gas_limit,
+    )
+
+
+def cmd_top_up_prove(args):
+    """Build proofs and immediately send topUp transaction to TopUpGateway."""
+    try:
+        witness_data = build_top_up_data(
+            el_url=args.el_url,
+            cl_url=args.cl_url,
+            validator_indices=args.validator_indices,
         )
+
+        send_top_up_tx(
+            witness_data=witness_data,
+            validator_indices=args.validator_indices,
+            key_indices=args.key_index,
+            operator_ids=args.operator_id,
+            module_id=args.module_id,
+            el_url=args.el_url,
+            gateway_address=args.gateway_address,
+            gas_limit=args.gas_limit,
+        )
+    except Exception as e:
+        print(f"ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
 
@@ -871,12 +912,56 @@ def main():
         help="Gas limit for transaction (default: 1000000)",
     )
 
+    # ---- top-up-prove command ----
+    topup_prove_parser = subparsers.add_parser(
+        "top-up-prove",
+        help="Build proofs and immediately send topUp transaction",
+    )
+    topup_prove_parser.add_argument(
+        "--el-url", "-e", required=True,
+        help="EL RPC endpoint, e.g. http://localhost:8545",
+    )
+    topup_prove_parser.add_argument(
+        "--cl-url", "-c", required=True,
+        help="CL API endpoint, e.g. http://localhost:5052",
+    )
+    topup_prove_parser.add_argument(
+        "--gateway-address", "-g", required=True,
+        help="TopUpGateway contract address",
+    )
+    topup_prove_parser.add_argument(
+        "--validator-index", "-v", type=int, action="append",
+        required=True, dest="validator_indices",
+        help="Validator index (can be specified multiple times)",
+    )
+    topup_prove_parser.add_argument(
+        "--key-index", "-k", type=int, action="append",
+        required=True, dest="key_index",
+        help="Key index for each validator (same order as -v)",
+    )
+    topup_prove_parser.add_argument(
+        "--operator-id", type=int, action="append",
+        required=True, dest="operator_id",
+        help="Operator ID for each validator (same order as -v)",
+    )
+    topup_prove_parser.add_argument(
+        "--module-id", "-m", type=int, required=True,
+        dest="module_id",
+        help="Staking module ID",
+    )
+    topup_prove_parser.add_argument(
+        "--gas-limit", type=int, default=1_000_000,
+        help="Gas limit for transaction (default: 1000000)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "prove":
         cmd_prove(args)
     elif args.command == "top-up":
         cmd_top_up(args)
+    elif args.command == "top-up-prove":
+        cmd_top_up_prove(args)
 
 
 if __name__ == "__main__":
