@@ -21,7 +21,15 @@ Usage examples:
     -v 12345 -k 0 --operator-id 1 \                                                                                                                   
     -v 67890 -k 1 --operator-id 1 \                                                                                                                   
     -m 1
-    
+
+  # Build proofs and send top-up in one step (reads PRIVATE_KEY from .env)
+  python validator_proof_builder.py top-up-prove \
+    -e http://localhost:8545 -c http://localhost:5052 \
+    -g 0xYourGatewayAddress \
+    -v 12345 -k 0 --operator-id 1 \
+    -v 67890 -k 1 --operator-id 1 \
+    -m 1
+
 Output:
     JSON to stdout matching TopUpData struct for on-chain verification.
 
@@ -44,6 +52,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass
 from typing import List
 
@@ -251,7 +260,8 @@ class BeaconState(Container):
         PendingPartialWithdrawal, PENDING_PARTIAL_WITHDRAWALS_LIMIT
     ]
     pending_consolidations: SSZList[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
-    proposer_lookahead: Vector[uint64, PROPOSER_LOOKAHEAD_SIZE]
+    # Fulu (not active yet)
+    # proposer_lookahead: Vector[uint64, PROPOSER_LOOKAHEAD_SIZE]
 
 
 # Generalized Index Calculation
@@ -263,7 +273,7 @@ def compute_gindex_for_validator(validator_index: int) -> int:
     Compute generalized index for validator[index] in BeaconState.
     Proves the entire Validator object (hash_tree_root).
     """
-    STATE_TREE_DEPTH = 6  # 37 fields (Electra) -> pad to 64
+    STATE_TREE_DEPTH = 6  # 36 fields (Electra) -> pad to 64
     VALIDATORS_FIELD_INDEX = 11
     VALIDATORS_LIST_DEPTH = 40
 
@@ -748,6 +758,15 @@ def send_top_up_tx(
         "maxPriorityFeePerGas": w3.to_wei(1, "gwei"),
     })
 
+    # Dry-run via eth_call to get revert reason before sending
+    print("Simulating transaction (eth_call)...", file=sys.stderr)
+    try:
+        contract.functions.topUp(top_up_data).call({"from": account.address})
+        print("Simulation OK", file=sys.stderr)
+    except Exception as sim_err:
+        print(f"Simulation REVERTED: {sim_err}", file=sys.stderr)
+        print("Sending anyway to get on-chain receipt...", file=sys.stderr)
+
     print("Signing and sending transaction...", file=sys.stderr)
     signed_tx = w3.eth.account.sign_transaction(tx, private_key)
     tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
@@ -759,6 +778,16 @@ def send_top_up_tx(
         print(f"Transaction confirmed in block {receipt['blockNumber']}", file=sys.stderr)
     else:
         print(f"Transaction REVERTED in block {receipt['blockNumber']}", file=sys.stderr)
+        print(f"  gasUsed: {receipt['gasUsed']}", file=sys.stderr)
+        print(f"  tx hash: 0x{tx_hash.hex()}", file=sys.stderr)
+        # Try to extract revert reason via debug_traceTransaction or replay
+        try:
+            w3.eth.call(
+                {"to": receipt["to"], "from": receipt["from"], "data": tx["data"]},
+                receipt["blockNumber"],
+            )
+        except Exception as revert_err:
+            print(f"  revert reason: {revert_err}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -784,11 +813,16 @@ def cmd_top_up(args):
 def cmd_top_up_prove(args):
     """Build proofs and immediately send topUp transaction to TopUpGateway."""
     try:
+        t0 = time.time()
+
         witness_data = build_top_up_data(
             el_url=args.el_url,
             cl_url=args.cl_url,
             validator_indices=args.validator_indices,
         )
+
+        proof_elapsed = time.time() - t0
+        print(f"Proofs built in {proof_elapsed:.2f}s, sending tx to TopUpGateway...")
 
         send_top_up_tx(
             witness_data=witness_data,
@@ -800,6 +834,9 @@ def cmd_top_up_prove(args):
             gateway_address=args.gateway_address,
             gas_limit=args.gas_limit,
         )
+
+        total_elapsed = time.time() - t0
+        print(f"Total time: {total_elapsed:.2f}s (proof: {proof_elapsed:.2f}s, tx: {total_elapsed - proof_elapsed:.2f}s)")
     except Exception as e:
         print(f"ERROR: {type(e).__name__}: {e}", file=sys.stderr)
         import traceback

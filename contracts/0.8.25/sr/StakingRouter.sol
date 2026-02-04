@@ -166,6 +166,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function migrateUpgrade_v4() external reinitializer(4) {
         __AccessControlEnumerable_init();
 
+        // check admin role
+
         // migrate current modules to new storage
         SRLib._migrateStorage();
     }
