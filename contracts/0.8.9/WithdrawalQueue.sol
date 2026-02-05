@@ -72,6 +72,7 @@ abstract contract WithdrawalQueue is AccessControlEnumerable, PausableUntil, Wit
     error RequestIdsNotSorted();
     error ZeroRecipient();
     error ArraysLengthMismatch(uint256 _firstArrayLength, uint256 _secondArrayLength);
+    error AmountTooLarge(uint256 _amount);
 
     /// @param _wstETH address of WstETH contract
     constructor(IWstETH _wstETH) {
@@ -374,6 +375,8 @@ abstract contract WithdrawalQueue is AccessControlEnumerable, PausableUntil, Wit
         STETH.transferFrom(msg.sender, address(this), _amountOfStETH);
 
         uint256 amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
+        if (_amountOfStETH > type(uint128).max) revert AmountTooLarge(_amountOfStETH);
+        if (amountOfShares > type(uint128).max) revert AmountTooLarge(amountOfShares);
 
         requestId = _enqueue(uint128(_amountOfStETH), uint128(amountOfShares), _owner);
 
@@ -386,6 +389,8 @@ abstract contract WithdrawalQueue is AccessControlEnumerable, PausableUntil, Wit
         _checkWithdrawalRequestAmount(amountOfStETH);
 
         uint256 amountOfShares = STETH.getSharesByPooledEth(amountOfStETH);
+        if (amountOfStETH > type(uint128).max) revert AmountTooLarge(amountOfStETH);
+        if (amountOfShares > type(uint128).max) revert AmountTooLarge(amountOfShares);
 
         requestId = _enqueue(uint128(amountOfStETH), uint128(amountOfShares), _owner);
 
