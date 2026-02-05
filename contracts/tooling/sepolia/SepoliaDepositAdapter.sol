@@ -55,7 +55,7 @@ contract SepoliaDepositAdapter is IDepositContract, Ownable, Versioned {
         ORIGINAL_CONTRACT = ISepoliaDepositContract(_deposit_contract);
     }
 
-    function initialize(address _owner) external {
+    function initialize(address _owner) external onlyOwner {
         if (_owner == address(0)) revert ZeroAddress("_owner");
 
         _initializeContractVersionTo(1);
