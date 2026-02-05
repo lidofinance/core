@@ -802,6 +802,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     function _topUpNodeOperatorBalance(address _nodeOperator) internal onlyGuarantorOf(_nodeOperator) {
+        if (msg.value > type(uint128).max) revert ValueTooLarge(msg.value);
         uint128 amount = uint128(msg.value);
 
         // _nodeOperator != address(0) is enforced by onlyGuarantorOf()
@@ -951,4 +952,5 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // general
     error ZeroArgument(string argument);
     error ArrayLengthsNotMatch();
+    error ValueTooLarge(uint256 value);
 }
