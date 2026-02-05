@@ -306,7 +306,9 @@ abstract contract WithdrawalQueue is AccessControlEnumerable, PausableUntil, Wit
         for (uint256 i = 0; i < _requestIds.length; ++i) {
             if (_requestIds[i] < prevRequestId) revert RequestIdsNotSorted();
             hintIds[i] = _findCheckpointHint(_requestIds[i], _firstIndex, _lastIndex);
-            _firstIndex = hintIds[i];
+            if (hintIds[i] != 0) {
+                _firstIndex = hintIds[i];
+            }
             prevRequestId = _requestIds[i];
         }
     }
