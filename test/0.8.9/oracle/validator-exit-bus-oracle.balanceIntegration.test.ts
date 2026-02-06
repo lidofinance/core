@@ -32,7 +32,7 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
 
-  let snapshot: Snapshot;
+  let snapshot: string;
   let oracleVersion: bigint;
 
   interface ExitRequest {
@@ -308,7 +308,10 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
 
       // Both should pass - same validators, same balance calculation
       const { reportData: reportDataV1 } = await prepareReportAndSubmitHash(requestsV1, DATA_FORMAT_LIST);
-      const { reportData: reportDataV2 } = await prepareReportAndSubmitHash(requestsV2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      const { reportData: reportDataV2 } = await prepareReportAndSubmitHash(
+        requestsV2,
+        DATA_FORMAT_LIST_WITH_KEY_INDEX,
+      );
 
       await expect(oracle.connect(member1).submitReportData(reportDataV1, oracleVersion)).not.to.be.reverted;
 

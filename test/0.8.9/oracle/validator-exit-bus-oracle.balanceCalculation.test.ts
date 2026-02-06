@@ -79,9 +79,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
       });
 
       it("should calculate balance for single non-curated validator (2048 ETH)", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: 3, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        ];
+        const requests: ExitRequest[] = [{ moduleId: 3, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
         const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
@@ -256,9 +254,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
       });
 
       it("should handle module ID 0 (treated as non-curated)", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: 0, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        ];
+        const requests: ExitRequest[] = [{ moduleId: 0, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
         const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
@@ -268,9 +264,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
       });
 
       it("should handle very large module IDs (treated as non-curated)", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: 999, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        ];
+        const requests: ExitRequest[] = [{ moduleId: 999, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
         const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
