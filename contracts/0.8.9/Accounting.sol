@@ -50,6 +50,7 @@ contract Accounting {
     struct PreReportState {
         uint256 clActiveBalance;
         uint256 clPendingBalance;
+        uint256 depositedBalance;
         uint256 totalPooledEther;
         uint256 totalShares;
         uint256 depositedValidators;
@@ -148,7 +149,7 @@ contract Accounting {
 
     /// @dev reads the current state of the protocol to the memory
     function _snapshotPreReportState(Contracts memory _contracts, bool isSimulation) internal view returns (PreReportState memory pre) {
-        (pre.depositedValidators, pre.clActiveBalance, pre.clPendingBalance) = LIDO.getBeaconStat();
+        (pre.clActiveBalance, pre.clPendingBalance, pre.depositedBalance) = LIDO.getBalanceStats();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
@@ -179,7 +180,7 @@ contract Accounting {
         );
 
         // Principal CL balance is sum of previous balances and new deposits
-        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance;
+        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault

@@ -45,8 +45,8 @@ describe("Integration: Accounting Roles and Access Control", () => {
       const report = {
         timestamp: 0n,
         timeElapsed: 0n,
-        clValidators: 0n,
-        clBalance: 0n,
+        clActiveBalance: 0n,
+        clPendingBalance: 0n,
         withdrawalVaultBalance: 0n,
         elRewardsVaultBalance: 0n,
         sharesRequestedToBurn: 0n,

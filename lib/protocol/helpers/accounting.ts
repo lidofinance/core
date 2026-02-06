@@ -105,8 +105,9 @@ export const report = async (
   refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
   // TODO: Update to use balance-based accounting (clActiveBalance + clPendingBalance)
-  const { depositedValidators: beaconValidators, clActiveBalance, clPendingBalance } = await lido.getBeaconStat();
-  const beaconBalance = clActiveBalance + clPendingBalance;
+  // note: beaconBalance = (clActiveBalance + clPendingBalance) at last report
+  const { depositedValidators: beaconValidators, beaconBalance } = await lido.getBeaconStat();
+
   const postCLBalance = beaconBalance + clDiff;
   const postBeaconValidators = beaconValidators + clAppearedValidators;
 
@@ -581,7 +582,6 @@ const getFinalizationBatches = async (
 export type OracleReportSubmitParams = {
   refSlot: bigint;
   clBalance: bigint;
-  // TODO: Remove numValidators, replace with clActiveBalance + clPendingBalance approach
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   sharesRequestedToBurn: bigint;
@@ -615,7 +615,6 @@ const submitReport = async (
   {
     refSlot,
     clBalance,
-    // TODO: Remove numValidators from params
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
@@ -795,7 +794,6 @@ const reachConsensus = async (
 export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.consensusVersion,
   data.refSlot,
-  // TODO: Update to use clActiveBalanceGwei + clPendingBalanceGwei instead of numValidators + clBalanceGwei
   data.clActiveBalanceGwei,
   data.clPendingBalanceGwei,
   data.stakingModuleIdsWithNewlyExitedValidators,
@@ -882,7 +880,9 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
     log(`Adding oracle committee member ${count}`);
 
     const address = getOracleCommitteeMemberAddress(count);
-    await hashConsensus.connect(agentSigner).addMember(address, quorum);
+    if (!(await hashConsensus.getIsMember(address))) {
+      await hashConsensus.connect(agentSigner).addMember(address, quorum);
+    }
 
     addresses.push(address);
 

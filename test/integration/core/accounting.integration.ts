@@ -284,8 +284,7 @@ describe("Integration: Accounting", () => {
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
     // TODO: Update to use balance-based accounting
-    const { clActiveBalance, clPendingBalance } = await lido.getBeaconStat();
-    const beaconBalance = clActiveBalance + clPendingBalance;
+    const { beaconBalance } = await lido.getBeaconStat();
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 

@@ -9,6 +9,7 @@ contract Lido__MockForAccounting {
     uint256 public reportClBalance;
     uint256 public reportClActiveBalance;
     uint256 public reportClPendingBalance;
+    uint256 public depositedBalance;
 
     // Emitted when validators number delivered by the oracle
     // @deprecated This event is deprecated. Use CLBalancesUpdated instead for balance-based accounting
@@ -45,14 +46,32 @@ contract Lido__MockForAccounting {
         reportClPendingBalance = _amount;
     }
 
+    function mock__setDepositedBalance(uint256 _amount) external {
+        depositedBalance = _amount;
+    }
+
     function getBeaconStat()
         external
         view
-        returns (uint256 depositedValidators, uint256 clActiveBalance, uint256 clPendingBalance)
+        returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance)
     {
         depositedValidators = depositedValidatorsValue;
-        clActiveBalance = reportClActiveBalance;
-        clPendingBalance = reportClPendingBalance;
+        beaconValidators = depositedValidators;
+        beaconBalance = reportClActiveBalance + reportClPendingBalance;
+    }
+
+    function getBalanceStats()
+        external
+        view
+        returns (
+            uint256 clActiveBalanceAtLastReport,
+            uint256 clPendingBalanceAtLastReport,
+            uint256 depositedSinceLastReport
+        )
+    {
+        clActiveBalanceAtLastReport = reportClActiveBalance;
+        clPendingBalanceAtLastReport = reportClPendingBalance;
+        depositedSinceLastReport = depositedBalance;
     }
 
     function getTotalPooledEther() external pure returns (uint256) {

@@ -41,6 +41,15 @@ interface ILido is IERC20, IVersioned {
         view
         returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance);
 
+    function getBalanceStats()
+        external
+        view
+        returns (
+            uint256 clActiveBalanceAtLastReport,
+            uint256 clPendingBalanceAtLastReport,
+            uint256 depositedSinceLastReport
+        );
+
     function processClStateUpdateV2(
         uint256 _reportTimestamp,
         uint256 _clActiveBalance,

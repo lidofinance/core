@@ -179,24 +179,6 @@ describe("Lido.sol:misc", () => {
     });
   });
 
-  context("unsafeChangeDepositedValidators", () => {
-    it("Sets the number of deposited validators", async () => {
-      const { depositedValidators } = await lido.getBeaconStat();
-
-      const updatedDepositedValidators = depositedValidators + 50n;
-
-      await expect(lido.unsafeChangeDepositedValidators(updatedDepositedValidators))
-        .to.emit(lido, "DepositedValidatorsChanged")
-        .withArgs(updatedDepositedValidators);
-
-      expect((await lido.getBeaconStat()).depositedValidators).to.equal(updatedDepositedValidators);
-    });
-
-    it("Reverts if the caller is unauthorized", async () => {
-      await expect(lido.connect(stranger).unsafeChangeDepositedValidators(100n)).to.be.revertedWith("APP_AUTH_FAILED");
-    });
-  });
-
   context("getWithdrawalCredentials", () => {
     it("Returns the 0x01 Lido withdrawal credentials", async () => {
       expect(await lido.getWithdrawalCredentials()).to.equal(await stakingRouter.getWithdrawalCredentials());
@@ -569,7 +551,7 @@ describe("Lido.sol:misc", () => {
       );
     });
 
-    it("Emits `Unbuffered` and `DepositedValidatorsChanged` events when withdrawing ether", async () => {
+    it("Emits `Unbuffered`, `DepositedValidatorsChanged` and `DepositedBalancesUpdated` events when withdrawing ether", async () => {
       const depositAmount = ether("32.0");
       // top up Lido buffer enough for deposit
       await lido.submit(ZeroAddress, { value: depositAmount });
@@ -582,6 +564,7 @@ describe("Lido.sol:misc", () => {
         lidoBalance: ethers.provider.getBalance(lido),
         stakingRouterBalance: ethers.provider.getBalance(stakingRouter),
         beaconStat: lido.getBeaconStat(),
+        balanceStats: lido.getBalanceStats(),
       });
 
       // Use actual depositable amount
@@ -590,7 +573,9 @@ describe("Lido.sol:misc", () => {
         .to.emit(lido, "Unbuffered")
         .withArgs(amountToWithdraw)
         .and.to.emit(lido, "DepositedValidatorsChanged")
-        .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n);
+        .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n)
+        .and.to.emit(lido, "DepositedBalancesUpdated")
+        .withArgs(beforeDeposit.balanceStats.depositedSinceLastReport + amountToWithdraw);
 
       const afterDeposit = await batch({
         lidoBalance: ethers.provider.getBalance(lido),

@@ -39,7 +39,7 @@ describe("Lido.sol:initialize", () => {
 
   context("initialize", () => {
     const initialValue = 1n;
-    const contractVersion = 3n;
+    const contractVersion = 4n;
 
     let withdrawalQueueAddress: string;
     let burnerAddress: string;

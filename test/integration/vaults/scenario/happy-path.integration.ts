@@ -89,9 +89,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   beforeEach(bailOnFailure);
 
   async function calculateReportParams() {
-    // TODO: Update to use balance-based accounting
-    const { clActiveBalance, clPendingBalance } = await ctx.contracts.lido.getBeaconStat();
-    const beaconBalance = clActiveBalance + clPendingBalance;
+    const { beaconBalance } = await ctx.contracts.lido.getBeaconStat();
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
     log.debug("Report time elapsed", { timeElapsed });
