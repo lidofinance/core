@@ -8,6 +8,7 @@ pragma solidity >=0.5.0;
 
 interface IVaultHub {
     function badDebtToInternalize() external view returns (uint256);
+    function badDebtToInternalizeForLastRefSlot() external view returns (uint256);
 
     function decreaseInternalizedBadDebt(uint256 _amountOfShares) external;
 }

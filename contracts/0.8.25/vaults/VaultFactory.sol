@@ -72,7 +72,7 @@ contract VaultFactory is IVaultFactory {
      * @param _nodeOperatorManager The address of the node operator manager in the Dashboard
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
-     * @param _roleAssignments The optional role assignments to be made
+     * @param _roleAssignments The optional role assignments to be made (only _defaultAdmin sub-roles)
      */
     function createVaultWithDashboard(
         address _defaultAdmin,
@@ -99,10 +99,8 @@ contract VaultFactory is IVaultFactory {
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
         dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
-        dashboard.connectToVaultHub{value: msg.value}(0);
+        dashboard.connectToVaultHub{value: msg.value}();
 
-        // _roleAssignments can only include DEFAULT_ADMIN_ROLE's sub-roles,
-        // which is why it's important to revoke the NODE_OPERATOR_MANAGER_ROLE BEFORE granting roles
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
@@ -119,7 +117,7 @@ contract VaultFactory is IVaultFactory {
      * @param _nodeOperatorManager The address of the node operator manager in the Dashboard
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
-     * @param _roleAssignments The optional role assignments to be made
+     * @param _roleAssignments The optional role assignments to be made (only _nodeOperatorManager sub-roles)
      * @notice Only Node Operator managed roles can be assigned
      */
     function createVaultWithDashboardWithoutConnectingToVaultHub(

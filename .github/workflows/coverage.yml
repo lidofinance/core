@@ -7,7 +7,7 @@ on:
 
 jobs:
   coverage:
-    name: Hardhat
+    name: Hardhat / Unit Tests
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --max_old_space_size=6400
@@ -31,8 +31,7 @@ jobs:
         with:
           path: ./coverage/cobertura-coverage.xml
           publish: true
-          # TODO: restore to 95% before release
-          threshold: 80
+          threshold: 95
           diff: true
           diff-branch: master
           diff-storage: _core_coverage_reports

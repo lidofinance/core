@@ -99,8 +99,8 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
     error ArraysLengthMismatch(uint256 sourceLength, uint256 targetLength);
     error EmptyBatch();
-    error SourceKeyNotUsed(uint256 sourceOperatorId, uint256 keyIndex);
-    error TargetKeyAlreadyDeposited(uint256 targetOperatorId, uint256 keyIndex, uint256 totalDeposited);
+    error SourceKeyNotDeposited(uint256 sourceOperatorId, uint256 keyIndex);
+    error TargetKeyNotDeposited(uint256 targetOperatorId, uint256 keyIndex, uint256 totalDeposited);
     error NotAuthorized(address caller, uint256 sourceOperatorId, uint256 targetOperatorId);
 
     // ==========
@@ -291,7 +291,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
      * @param sourceValidatorIndices Indices of source validators (must be deposited/used)
-     * @param targetValidatorIndices Indices of target validators (must NOT be deposited yet)
+     * @param targetValidatorIndices Indices of target validators (must be deposited - active validators)
      * @dev Reverts with specific error if validation fails
      */
     function validateConsolidationBatch(
@@ -308,7 +308,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
      * @param sourceValidatorIndices Indices of source validators (must be deposited/used)
-     * @param targetValidatorIndices Indices of target validators (must NOT be deposited yet)
+     * @param targetValidatorIndices Indices of target validators (must be deposited - active validators)
      * @dev Caller must be the designated submitter for this pair (set via allowPair)
      * @dev Forwards the validated batch to ConsolidationBus
      */
@@ -385,18 +385,18 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
             (bytes memory key,, bool used) = sourceModule.getSigningKey(sourceOperatorId, srcIndex);
 
             if (!used) {
-                revert SourceKeyNotUsed(sourceOperatorId, srcIndex);
+                revert SourceKeyNotDeposited(sourceOperatorId, srcIndex);
             }
             sourcePubkeys[i] = key;
         }
 
-        // Validate target keys (must NOT be deposited yet)
+        // Validate target keys (must be deposited - active validators)
         for (uint256 i = 0; i < count; ++i) {
             uint256 tgtIndex = targetValidatorIndices[i];
 
             // Key is deposited if index < totalDepositedValidators
-            if (tgtIndex < totalDepositedValidators) {
-                revert TargetKeyAlreadyDeposited(targetOperatorId, tgtIndex, totalDepositedValidators);
+            if (tgtIndex >= totalDepositedValidators) {
+                revert TargetKeyNotDeposited(targetOperatorId, tgtIndex, totalDepositedValidators);
             }
 
             // Get the target key using getSigningKeys with offset=tgtIndex, limit=1

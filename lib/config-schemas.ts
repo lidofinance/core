@@ -72,7 +72,7 @@ const BurnerSchema = z.object({
   totalNonCoverSharesBurnt: BigIntStringSchema.optional(),
 });
 
-// Triggerable withdrawals gateway schema
+// Triggerable withdrawals gateway schema (used in scratch configs)
 const TriggerableWithdrawalsGatewaySchema = z.object({
   maxExitRequestsLimit: PositiveIntSchema,
   exitsPerFrame: PositiveIntSchema,
@@ -97,15 +97,31 @@ const TopUpGatewaySchema = z.object({
 });
 // Easy track schema
 const EasyTrackSchema = z.object({
-  trustedCaller: EthereumAddressSchema,
-  initialValidatorExitFeeLimit: BigIntStringSchema,
-  maxGroupShareLimit: BigIntStringSchema,
-  maxDefaultTierShareLimit: NonNegativeIntSchema,
+  VaultsAdapter: EthereumAddressSchema,
+  newFactories: z.object({
+    AlterTiersInOperatorGrid: EthereumAddressSchema,
+    RegisterGroupsInOperatorGrid: EthereumAddressSchema,
+    RegisterTiersInOperatorGrid: EthereumAddressSchema,
+    SetJailStatusInOperatorGrid: EthereumAddressSchema,
+    SocializeBadDebtInVaultHub: EthereumAddressSchema,
+    ForceValidatorExitsInVaultHub: EthereumAddressSchema,
+    UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
+    UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
+  }),
 });
 
 // Oracle versions schema
 const OracleVersionsSchema = z.object({
   ao_consensus_version: PositiveIntSchema,
+});
+
+// V3 vote script params
+const V3VoteScriptSchema = z.object({
+  expiryTimestamp: NonNegativeIntSchema,
+  initialMaxExternalRatioBP: BasisPointsSchema,
+  timeConstraintsContract: EthereumAddressSchema,
+  odcSlashingReserveWeRightShiftEpochs: NonNegativeIntSchema,
+  odcSlashingReserveWeLeftShiftEpochs: NonNegativeIntSchema,
 });
 
 // Aragon app versions schema
@@ -119,7 +135,6 @@ export const UpgradeParametersSchema = z.object({
   chainSpec: ChainSpecSchema.extend({
     genesisTime: z.number().int(),
     depositContract: EthereumAddressSchema,
-    isHoodi: z.boolean(),
   }),
   gateSealForVaults: z.object({
     sealDuration: PositiveIntSchema,
@@ -136,6 +151,7 @@ export const UpgradeParametersSchema = z.object({
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
   consolidationGateway: ConsolidationGatewaySchema,
+  v3VoteScript: V3VoteScriptSchema,
 });
 
 // Gate seal schema (for scratch deployment)

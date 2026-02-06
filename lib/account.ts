@@ -24,7 +24,11 @@ export async function impersonate(address: string | Addressable, balance?: bigin
   return ethers.getSigner(address);
 }
 
-export async function updateBalance(address: string, balance: bigint): Promise<void> {
+export async function updateBalance(address: string | Addressable, balance: bigint): Promise<void> {
+  if (typeof address !== "string") {
+    address = await address.getAddress();
+  }
+
   const networkName = await getNetworkName();
 
   await ethers.provider.send(`${networkName}_setBalance`, [address, "0x" + bigintToHex(balance)]);

@@ -91,7 +91,8 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     await depositAndReportValidators(ctx, NOR_MODULE_ID, 2n);
 
     // =========================================
-    // Setup target operator with undeposited keys
+    // Setup target operator with deposited keys (active validators)
+    // Per EIP-7251, consolidation can only happen TO active validators
     // =========================================
 
     // Create target operator
@@ -100,17 +101,20 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       rewardAddress: certainAddress("consolidation:target:reward"),
     });
 
-    // Add signing keys to target operator (these will NOT be deposited)
+    // Add signing keys to target operator
     await norSdvtAddOperatorKeys(ctx, nor, {
       operatorId: targetOperatorId,
       keysToAdd: 5n,
     });
 
-    // Set staking limit but DO NOT deposit - keys remain undeposited
+    // Set staking limit to vet the keys
     await norSdvtSetOperatorStakingLimit(ctx, nor, {
       operatorId: targetOperatorId,
       limit: 5n,
     });
+
+    // Deposit validators to make target keys "used" (active validators)
+    await depositAndReportValidators(ctx, NOR_MODULE_ID, 2n);
 
     // =========================================
     // Retrieve pubkeys from real NOR
@@ -126,15 +130,15 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     expect(sourceKey1.used).to.be.true;
     expect(sourceKey2.used).to.be.true;
 
-    // Get target pubkeys (these are not deposited)
+    // Get target pubkeys (these are deposited - active validators)
     const targetKey1 = await nor.getSigningKey(targetOperatorId, 0);
     const targetKey2 = await nor.getSigningKey(targetOperatorId, 1);
     TARGET_PUBKEY_1 = targetKey1.key;
     TARGET_PUBKEY_2 = targetKey2.key;
 
-    // Verify target keys are NOT used (not deposited)
-    expect(targetKey1.used).to.be.false;
-    expect(targetKey2.used).to.be.false;
+    // Verify target keys ARE used (deposited - active validators)
+    expect(targetKey1.used).to.be.true;
+    expect(targetKey2.used).to.be.true;
 
     // =========================================
     // Setup roles
@@ -387,7 +391,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const { withdrawalVault } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
 
-      // Set up a second target operator
+      // Set up a second target operator with deposited validators
       const targetOperatorId2 = await norSdvtAddNodeOperator(ctx, nor, {
         name: "consolidation_target_operator_2",
         rewardAddress: certainAddress("consolidation:target2:reward"),
@@ -402,6 +406,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
         operatorId: targetOperatorId2,
         limit: 2n,
       });
+
+      // Deposit validators to make target2 keys active
+      await depositAndReportValidators(ctx, NOR_MODULE_ID, 1n);
 
       const targetKey3 = await nor.getSigningKey(targetOperatorId2, 0);
       const TARGET_PUBKEY_3 = targetKey3.key;
@@ -466,35 +473,51 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           .connect(submitter)
           .submitConsolidationBatch(unusedSourceOperatorId, targetOperatorId, [0n], [0n]),
       )
-        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotUsed")
+        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotDeposited")
         .withArgs(unusedSourceOperatorId, 0n);
     });
 
-    it("Should revert submitConsolidationBatch if target key is already deposited", async () => {
+    it("Should revert submitConsolidationBatch if target key is NOT deposited (not active validator)", async () => {
       const agentSigner = await ctx.getSigner("agent");
 
-      // Use sourceOperatorId as target - it already has deposited keys from setup
-      // We deposited 2 validators to sourceOperatorId in the before() hook
-      // So keys 0 and 1 are "used" (deposited)
+      // Create a new target operator with keys that are NOT deposited
+      const undepositedTargetOperatorId = await norSdvtAddNodeOperator(ctx, nor, {
+        name: "consolidation_undeposited_target",
+        rewardAddress: certainAddress("consolidation:undeposited:reward"),
+      });
 
-      // Allow the pair: source -> source (same operator, for testing deposited target)
-      await consolidationMigrator.connect(agentSigner).allowPair(sourceOperatorId, sourceOperatorId, submitter.address);
+      await norSdvtAddOperatorKeys(ctx, nor, {
+        operatorId: undepositedTargetOperatorId,
+        keysToAdd: 2n,
+      });
 
-      // Get totalDepositedValidators for the source operator (used as target)
-      const summary = await nor.getNodeOperatorSummary(sourceOperatorId);
-      const totalDeposited = summary.totalDepositedValidators;
+      // Set staking limit but DO NOT deposit - keys remain undeposited (not active)
+      await norSdvtSetOperatorStakingLimit(ctx, nor, {
+        operatorId: undepositedTargetOperatorId,
+        limit: 2n,
+      });
 
-      // Verify that keys are indeed deposited
-      expect(totalDeposited).to.be.gte(1n);
+      // Verify target keys are NOT used (not deposited)
+      const targetKey = await nor.getSigningKey(undepositedTargetOperatorId, 0);
+      expect(targetKey.used).to.be.false;
 
-      // Try to consolidate to already deposited key (index 0 < totalDepositedValidators)
+      // Allow the pair
+      await consolidationMigrator
+        .connect(agentSigner)
+        .allowPair(sourceOperatorId, undepositedTargetOperatorId, submitter.address);
+
+      // Get totalDepositedValidators for the undeposited target operator (should be 0)
+      const summary = await nor.getNodeOperatorSummary(undepositedTargetOperatorId);
+
+      // Try to consolidate to undeposited target key - should fail
+      // Per EIP-7251, consolidation can only happen TO active (deposited) validators
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(sourceOperatorId, sourceOperatorId, [0n], [0n]),
+          .submitConsolidationBatch(sourceOperatorId, undepositedTargetOperatorId, [0n], [0n]),
       )
-        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyAlreadyDeposited")
-        .withArgs(sourceOperatorId, 0n, totalDeposited);
+        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyNotDeposited")
+        .withArgs(undepositedTargetOperatorId, 0n, summary.totalDepositedValidators);
     });
   });
 

@@ -48,6 +48,7 @@ export type OracleReportParams = {
   pendingBalancesGweiByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
+  reportBurner?: boolean;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
   silent?: boolean;
@@ -90,6 +91,7 @@ export const report = async (
     pendingBalancesGweiByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
+    reportBurner = true,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
   }: OracleReportParams = {},
@@ -103,8 +105,9 @@ export const report = async (
   refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
   // TODO: Update to use balance-based accounting (clActiveBalance + clPendingBalance)
-  const { depositedValidators: beaconValidators, clActiveBalance, clPendingBalance } = await lido.getBeaconStat();
-  const beaconBalance = clActiveBalance + clPendingBalance;
+  // note: beaconBalance = (clActiveBalance + clPendingBalance) at last report
+  const { depositedValidators: beaconValidators, beaconBalance } = await lido.getBeaconStat();
+
   const postCLBalance = beaconBalance + clDiff;
   const postBeaconValidators = beaconValidators + clAppearedValidators;
 
@@ -132,13 +135,13 @@ export const report = async (
   withdrawalVaultBalance = reportWithdrawalsVault ? withdrawalVaultBalance : 0n;
   elRewardsVaultBalance = reportElVault ? elRewardsVaultBalance : 0n;
 
-  if (sharesRequestedToBurn === null) {
+  if (sharesRequestedToBurn === null && reportBurner) {
     const [coverShares, nonCoverShares] = await burner.getSharesRequestedToBurn();
     sharesRequestedToBurn = coverShares + nonCoverShares;
   }
 
   log.debug("Burner", {
-    "Shares Requested To Burn": sharesRequestedToBurn,
+    "Shares Requested To Burn": sharesRequestedToBurn ?? "0",
     "Withdrawal vault": formatEther(withdrawalVaultBalance),
     "ElRewards vault": formatEther(elRewardsVaultBalance),
   });
@@ -218,7 +221,7 @@ export const report = async (
     pendingBalancesGweiByStakingModule,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    sharesRequestedToBurn,
+    sharesRequestedToBurn: sharesRequestedToBurn ?? 0n,
     withdrawalFinalizationBatches,
     simulatedShareRate,
     isBunkerMode,
@@ -378,7 +381,7 @@ type SimulateReportResult = {
 /**
  * Simulate oracle report to get the expected result.
  */
-const simulateReport = async (
+export const simulateReport = async (
   ctx: ProtocolContext,
   { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
@@ -397,8 +400,8 @@ const simulateReport = async (
 
   const reportValues: ReportValuesStruct = {
     timestamp: reportTimestamp,
-    timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
-    // TODO: Split clBalance into clActiveBalance + clPendingBalance
+    // timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
+    timeElapsed: /* 1 day */ 86_400n,
     clActiveBalance: clBalance,
     clPendingBalance: 0n,
     withdrawalVaultBalance,
@@ -579,7 +582,6 @@ const getFinalizationBatches = async (
 export type OracleReportSubmitParams = {
   refSlot: bigint;
   clBalance: bigint;
-  // TODO: Remove numValidators, replace with clActiveBalance + clPendingBalance approach
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   sharesRequestedToBurn: bigint;
@@ -613,7 +615,6 @@ const submitReport = async (
   {
     refSlot,
     clBalance,
-    // TODO: Remove numValidators from params
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
@@ -793,7 +794,6 @@ const reachConsensus = async (
 export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.consensusVersion,
   data.refSlot,
-  // TODO: Update to use clActiveBalanceGwei + clPendingBalanceGwei instead of numValidators + clBalanceGwei
   data.clActiveBalanceGwei,
   data.clPendingBalanceGwei,
   data.stakingModuleIdsWithNewlyExitedValidators,
@@ -880,7 +880,9 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
     log(`Adding oracle committee member ${count}`);
 
     const address = getOracleCommitteeMemberAddress(count);
-    await hashConsensus.connect(agentSigner).addMember(address, quorum);
+    if (!(await hashConsensus.getIsMember(address))) {
+      await hashConsensus.connect(agentSigner).addMember(address, quorum);
+    }
 
     addresses.push(address);
 

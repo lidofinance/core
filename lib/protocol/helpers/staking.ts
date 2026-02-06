@@ -113,6 +113,17 @@ export const setStakingLimit = async (
   await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
 };
 
+export const ensureCanDeposit = async (ctx: ProtocolContext) => {
+  const { accountingOracle } = ctx.contracts;
+  const { extraDataSubmitted } = await accountingOracle.getProcessingState();
+  const getLastProcessingRefSlot = await accountingOracle.getLastProcessingRefSlot();
+
+  if (!extraDataSubmitted && getLastProcessingRefSlot != 0n) {
+    // send dummy report to shift last processing ref slot and unlock deposits
+    await report(ctx, { skipWithdrawals: true });
+  }
+};
+
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
   const { lido, depositSecurityModule, withdrawalQueue, stakingRouter } = ctx.contracts;
 
@@ -175,6 +186,8 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
 
   const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
 
+  await ensureCanDeposit(ctx);
+
   // Deposit validators via StakingRouter (DSM calls SR which pulls ETH from Lido)
   await stakingRouter.connect(dsmSigner).deposit(moduleId, ZERO_HASH);
 
@@ -206,13 +219,13 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     await stakingRouter.connect(managerSigner).setStakingModuleStatus(mId, originalStatus);
   }
 
-  const before = await lido.getBeaconStat();
+  const before = await lido.getBalanceStats();
 
   log.debug("Validators on beacon chain before provisioning", {
     "Module ID to deposit": moduleId,
-    "Deposited": before.depositedValidators,
-    "Total": before.clActiveBalance,
-    "Balance": before.clPendingBalance,
+    "Deposited": before.depositedSinceLastReport,
+    "Active": before.clActiveBalanceAtLastReport,
+    "Pending": before.clPendingBalanceAtLastReport,
   });
 
   // Add new validators to beacon chain
@@ -222,12 +235,12 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     skipWithdrawals: true,
   });
 
-  const after = await lido.getBeaconStat();
+  const after = await lido.getBalanceStats();
 
   log.debug("Validators on beacon chain after depositing", {
     "Module ID deposited": moduleId,
-    "Deposited": after.depositedValidators,
-    "Total": after.clActiveBalance,
-    "Balance": after.clPendingBalance,
+    "Deposited": after.depositedSinceLastReport,
+    "Active": after.clActiveBalanceAtLastReport,
+    "Pending": after.clPendingBalanceAtLastReport,
   });
 };

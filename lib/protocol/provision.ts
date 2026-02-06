@@ -14,6 +14,7 @@ import {
   norSdvtEnsureOperators,
   unpauseStaking,
   unpauseWithdrawalQueue,
+  upDefaultTierShareLimit,
 } from "./helpers";
 import { ProtocolContext } from "./types";
 
@@ -61,6 +62,8 @@ export const provision = async (ctx: ProtocolContext) => {
   if (ctx.isScratch) {
     await ensureSomeOddShareRate(ctx);
   }
+
+  await upDefaultTierShareLimit(ctx, ether("250"));
 
   alreadyProvisioned = true;
 

@@ -24,6 +24,7 @@ export {
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
 } from "./nor-sdvt";
+export { ensurePredepositGuaranteeUnpaused } from "./pdg";
 export { calcNodeOperatorRewards } from "./staking-module";
 
 export * from "./vaults";

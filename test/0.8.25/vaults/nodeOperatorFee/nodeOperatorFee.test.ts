@@ -24,6 +24,7 @@ import {
   findEvents,
   getCurrentBlockTimestamp,
   getNextBlockTimestamp,
+  MAX_UINT256,
   TOTAL_BASIS_POINTS,
 } from "lib";
 
@@ -441,7 +442,7 @@ describe("NodeOperatorFee.sol", () => {
 
     it("reverts if the amount is too large", async () => {
       await expect(
-        nodeOperatorFee.connect(nodeOperatorFeeExempter).addFeeExemption(2n ** 104n + 1n),
+        nodeOperatorFee.connect(nodeOperatorFeeExempter).addFeeExemption(MAX_UINT256),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "UnexpectedFeeExemptionAmount");
     });
 
@@ -511,7 +512,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(nodeOperatorFee.connect(stranger).disburseFee())
         .to.emit(nodeOperatorFee, "FeeDisbursed")
-        .withArgs(stranger, adjustedFee)
+        .withArgs(stranger, adjustedFee, await nodeOperatorFee.feeRecipient())
         .and.to.emit(nodeOperatorFee, "SettledGrowthSet");
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
@@ -715,7 +716,7 @@ describe("NodeOperatorFee.sol", () => {
       );
     });
 
-    it("reverts if the vault is quarantined", async () => {
+    it("works if the vault is quarantined", async () => {
       // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
       // to simplify the test
       await nodeOperatorFee
@@ -724,12 +725,12 @@ describe("NodeOperatorFee.sol", () => {
 
       const noFeeRate = await nodeOperatorFee.feeRate();
 
-      const rewards = ether("1");
+      const rewards = ether("0.01");
 
       await hub.setReport(
         {
-          totalValue: rewards,
-          inOutDelta: 0n,
+          totalValue: ether("1") + rewards,
+          inOutDelta: ether("1"),
           timestamp: await getCurrentBlockTimestamp(),
         },
         true,
@@ -739,20 +740,18 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(expectedFee);
 
-      await lazyOracle.mock__setQuarantineInfo({
-        isActive: true,
-        pendingTotalValueIncrease: 0,
-        startTimestamp: 0,
-        endTimestamp: 0,
-      });
+      await lazyOracle.mock__setQuarantineValue(1n);
 
-      await expect(nodeOperatorFee.connect(vaultOwner).setFeeRate(100n)).to.be.revertedWithCustomError(
-        nodeOperatorFee,
-        "VaultQuarantined",
-      );
+      await expect(nodeOperatorFee.connect(vaultOwner).setFeeRate(100n))
+        .to.emit(nodeOperatorFee, "FeeRateSet")
+        .withArgs(vaultOwner, noFeeRate, 100n)
+        .to.emit(nodeOperatorFee, "FeeDisbursed")
+        .withArgs(vaultOwner, expectedFee, await nodeOperatorFee.feeRecipient());
+
+      expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
     });
 
-    it("disburses any pending node operator fee", async () => {
+    it("works and disburses any pending node operator fee", async () => {
       // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
       // to simplify the test
       await nodeOperatorFee
@@ -780,9 +779,40 @@ describe("NodeOperatorFee.sol", () => {
       const newOperatorFeeRate = 5_00n; // 5%
       await expect(nodeOperatorFee.connect(vaultOwner).setFeeRate(newOperatorFeeRate))
         .to.emit(nodeOperatorFee, "FeeDisbursed")
-        .withArgs(vaultOwner, expectedFee);
+        .withArgs(vaultOwner, expectedFee, await nodeOperatorFee.feeRecipient());
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(0);
+    });
+
+    it("settles growth event if fee rate is 0", async () => {
+      const report1 = {
+        totalValue: ether("100"),
+        inOutDelta: ether("100"),
+        timestamp: await getCurrentBlockTimestamp(),
+      };
+      await hub.setReport(report1, true); //fresh report to set fees
+
+      await nodeOperatorFee.connect(nodeOperatorManager).setFeeRate(0n);
+      await nodeOperatorFee.connect(vaultOwner).setFeeRate(0n);
+
+      // deposited 100 ETH, earned 1 ETH, fee is 0
+      const report2 = {
+        totalValue: ether("101"),
+        inOutDelta: ether("100"),
+        timestamp: await getCurrentBlockTimestamp(),
+      };
+      await hub.setReport(report2, true);
+
+      expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
+      expect(await nodeOperatorFee.settledGrowth()).to.equal(0n);
+
+      await expect(nodeOperatorFee.disburseFee())
+        .to.emit(nodeOperatorFee, "SettledGrowthSet")
+        .withArgs(0n, ether("1"))
+        .not.to.emit(hub, "Mock__Withdrawn")
+        .not.to.emit(nodeOperatorFee, "FeeDisbursed");
+
+      expect(await nodeOperatorFee.settledGrowth()).to.equal(ether("1"));
     });
   });
 

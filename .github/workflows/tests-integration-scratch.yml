@@ -1,4 +1,4 @@
-name: Integration Tests
+name: Integration Tests Scratch
 
 on: [push]
 

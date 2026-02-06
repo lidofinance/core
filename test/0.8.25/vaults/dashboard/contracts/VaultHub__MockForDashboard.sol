@@ -205,7 +205,11 @@ contract VaultHub__MockForDashboard {
     }
 
     function withdraw(address _vault, address _recipient, uint256 _amount) external {
-        if (sendWithdraw) payable(_recipient).call{value: _amount}("");
+        if (sendWithdraw) {
+            (bool success, ) = payable(_recipient).call{value: _amount}("");
+
+            if (!success) revert("FAIL");
+        }
         emit Mock__Withdrawn(_vault, _recipient, _amount);
     }
 
@@ -231,6 +235,10 @@ contract VaultHub__MockForDashboard {
 
     function isVaultConnected(address _vault) public view returns (bool) {
         return vaultConnections[_vault].vaultIndex != 0;
+    }
+
+    function isReportFresh(address) external pure returns (bool) {
+        return true;
     }
 
     function collectERC20FromVault(address _vault, address _token, address _recipient, uint256 _amount) external {
