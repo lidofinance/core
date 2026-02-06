@@ -59,4 +59,9 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     function getRequestStatus(bytes32 exitRequestHash) external view returns (RequestStatus memory requestStatus) {
         requestStatus = _storageRequestStatus()[exitRequestHash];
     }
+
+    // Expose internal function for unit testing
+    function calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) external pure returns (uint256) {
+        return _calculateTotalExitBalanceGwei(data, dataFormat);
+    }
 }

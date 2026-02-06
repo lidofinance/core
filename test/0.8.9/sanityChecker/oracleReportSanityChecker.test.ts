@@ -1286,20 +1286,72 @@ describe.skip("OracleReportSanityChecker.sol", () => {
   });
 
   context("checkExitBusOracleReport", () => {
-    let maxExitRequests: bigint;
+    let maxBalanceLimit: bigint;
+
+    // Constants for validator balances
+    const CURATED_VALIDATOR_BALANCE_GWEI = 32_000_000_000n; // 32 ETH
+    const MAXEB_VALIDATOR_BALANCE_GWEI = 2_048_000_000_000n; // 2048 ETH
 
     before(async () => {
-      maxExitRequests = (await checker.getOracleReportLimits()).maxBalanceExitRequestedPerReportInGwei;
+      maxBalanceLimit = (await checker.getOracleReportLimits()).maxBalanceExitRequestedPerReportInGwei;
     });
 
-    it("reverts on too many exit requests", async () => {
-      await expect(checker.checkExitBusOracleReport(maxExitRequests + 1n))
+    it("reverts when balance exceeds limit", async () => {
+      await expect(checker.checkExitBusOracleReport(maxBalanceLimit + 1n))
         .to.be.revertedWithCustomError(checker, "IncorrectSumOfExitBalancePerReport")
-        .withArgs(maxExitRequests);
+        .withArgs(maxBalanceLimit);
     });
 
-    it("works with correct validators count", async () => {
-      await expect(checker.checkExitBusOracleReport(maxExitRequests)).not.to.be.reverted;
+    it("works when balance equals limit", async () => {
+      await expect(checker.checkExitBusOracleReport(maxBalanceLimit)).not.to.be.reverted;
+    });
+
+    it("works when balance is below limit", async () => {
+      await expect(checker.checkExitBusOracleReport(maxBalanceLimit - 1n)).not.to.be.reverted;
+    });
+
+    it("works with zero balance", async () => {
+      await expect(checker.checkExitBusOracleReport(0n)).not.to.be.reverted;
+    });
+
+    it("works with single curated validator balance (32 ETH)", async () => {
+      await expect(checker.checkExitBusOracleReport(CURATED_VALIDATOR_BALANCE_GWEI)).not.to.be.reverted;
+    });
+
+    it("works with single MaxEB validator balance (2048 ETH)", async () => {
+      await expect(checker.checkExitBusOracleReport(MAXEB_VALIDATOR_BALANCE_GWEI)).not.to.be.reverted;
+    });
+
+    it("works with multiple curated validators", async () => {
+      const balance = CURATED_VALIDATOR_BALANCE_GWEI * 10n; // 10 curated validators = 320 ETH
+      if (balance <= maxBalanceLimit) {
+        await expect(checker.checkExitBusOracleReport(balance)).not.to.be.reverted;
+      }
+    });
+
+    it("works with multiple MaxEB validators", async () => {
+      const balance = MAXEB_VALIDATOR_BALANCE_GWEI * 5n; // 5 MaxEB validators = 10240 ETH
+      if (balance <= maxBalanceLimit) {
+        await expect(checker.checkExitBusOracleReport(balance)).not.to.be.reverted;
+      }
+    });
+
+    it("works with mixed validator types", async () => {
+      const balance =
+        CURATED_VALIDATOR_BALANCE_GWEI * 10n + // 10 curated = 320 ETH
+        MAXEB_VALIDATOR_BALANCE_GWEI * 2n; // 2 MaxEB = 4096 ETH
+      // Total = 4416 ETH
+      if (balance <= maxBalanceLimit) {
+        await expect(checker.checkExitBusOracleReport(balance)).not.to.be.reverted;
+      }
+    });
+
+    it("reverts when mixed validator types exceed limit", async () => {
+      // Create a balance that exceeds the limit
+      const excessiveBalance = maxBalanceLimit + CURATED_VALIDATOR_BALANCE_GWEI;
+      await expect(checker.checkExitBusOracleReport(excessiveBalance))
+        .to.be.revertedWithCustomError(checker, "IncorrectSumOfExitBalancePerReport")
+        .withArgs(maxBalanceLimit);
     });
   });
 

@@ -16,6 +16,7 @@ import { deployHashConsensus } from "./hashConsensus";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 
 export const DATA_FORMAT_LIST = 1;
+export const DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
 
 async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, genesisTime = GENESIS_TIME) {
   const lido = await ethers.deployContract("Accounting__MockForAccountingOracle");
