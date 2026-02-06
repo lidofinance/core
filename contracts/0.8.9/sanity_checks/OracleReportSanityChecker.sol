@@ -504,9 +504,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _preCLValidators Lido-participating validators on the CL side before the current oracle report
     /// @param _postCLValidators Lido-participating validators on the CL side after the current oracle report
     function checkAccountingOracleReport(
-        uint256 _timeElapsed, // solhint-disable-line no-unused-vars
-        uint256 _preCLBalance, // solhint-disable-line no-unused-vars
-        uint256 _postCLBalance, // solhint-disable-line no-unused-vars
+        uint256 _timeElapsed,
+        uint256 _preCLBalance,
+        uint256 _postCLBalance,
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
@@ -516,7 +516,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (msg.sender != ACCOUNTING_ADDRESS) {
             revert CalledNotFromAccounting();
         }
-        LimitsList memory limitsList = _limits.unpack(); // solhint-disable-line no-unused-vars
+        LimitsList memory limitsList = _limits.unpack();
         uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot(); // solhint-disable-line no-unused-vars
 
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
@@ -542,7 +542,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // );
 
         // 5. Consensus Layer annual balances increase
-        // _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
+        _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
 
         // 6. Appeared validators increase
         // TODO: MaxEB - validator count-based checks not relevant for balance-based accounting
