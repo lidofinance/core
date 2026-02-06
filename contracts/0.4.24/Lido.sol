@@ -840,14 +840,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _burnShares(msg.sender, _amountOfShares);
 
         uint256 stethAmount = getPooledEthByShares(_amountOfShares);
-        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
-
-        /// NB: burning external shares must be allowed even when staking is paused to allow external ether withdrawals
-        if (stakeLimitData.isStakingLimitSet() && !stakeLimitData.isStakingPaused()) {
-            uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + stethAmount;
-
-            STAKING_STATE_POSITION.setStorageStakeLimitStruct(stakeLimitData.updatePrevStakeLimit(newStakeLimit));
-        }
+        _increaseStakingLimit(stethAmount);
 
         // Historically, Lido contract does not emit Transfer to zero address events
         // for burning but emits SharesBurnt instead, so it's kept here for compatibility
@@ -1240,6 +1233,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             STAKING_STATE_POSITION.setStorageStakeLimitStruct(
                 stakeLimitData.updatePrevStakeLimit(currentStakeLimit - _amount)
             );
+        }
+    }
+
+    function _increaseStakingLimit(uint256 _amount) internal {
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+        /// NB: burning external shares must be allowed even when staking is paused to allow external ether withdrawals
+        if (stakeLimitData.isStakingLimitSet() && !stakeLimitData.isStakingPaused()) {
+            uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + _amount;
+
+            STAKING_STATE_POSITION.setStorageStakeLimitStruct(stakeLimitData.updatePrevStakeLimit(newStakeLimit));
         }
     }
 

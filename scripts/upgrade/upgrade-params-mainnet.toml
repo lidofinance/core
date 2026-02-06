@@ -8,24 +8,6 @@ gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  #
 gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028" # Required for hardfork upgrades, the same for now
 changeSlot = 0                        # Slot number when the change takes effect
 
-# Operator grid configuration for managing staking operators
-[operatorGrid]
-# Default tier parameters for operator classification and fee structure
-[operatorGrid.defaultTierParams]
-shareLimitInEther = "250"             # Share limit per tier in ETH
-reserveRatioBP = 2000                 # Reserve ratio in basis points (20%)
-forcedRebalanceThresholdBP = 1800     # Threshold for forced rebalancing in basis points (18%)
-infraFeeBP = 500                      # Infrastructure fee in basis points (5%)
-liquidityFeeBP = 400                  # Liquidity provision fee in basis points (4%)
-reservationFeeBP = 100                # Reservation fee in basis points (1%)
-
-[burner]
-isMigrationAllowed = true             # Must be on for the upgrade to work (for scratch is it false)
-
-# Oracle and consensus version configuration
-[oracleVersions]
-ao_consensus_version = 4              # Accounting Oracle consensus version
-
 [consolidationGateway]
 maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame

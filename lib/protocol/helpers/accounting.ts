@@ -400,8 +400,8 @@ export const simulateReport = async (
 
   const reportValues: ReportValuesStruct = {
     timestamp: reportTimestamp,
-    timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
-    // TODO: Split clBalance into clActiveBalance + clPendingBalance
+    // timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
+    timeElapsed: /* 1 day */ 86_400n,
     clActiveBalance: clBalance,
     clPendingBalance: 0n,
     withdrawalVaultBalance,

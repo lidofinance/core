@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 120
     env:
       STATE_MATE_BRANCH: "main"
-      MAINNET_REMOTE_RPC_URL: "https://eth.drpc.org"
+      REMOTE_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
 
     steps:
       - name: Checkout state-mate
@@ -69,7 +69,7 @@ jobs:
         run: yarn install
 
       - name: Run state-mate (V3 Mainnet)
-        run: yarn start configs/lidov3/mainnet/lidov3-core-post-vote.yaml
+        run: yarn start configs/lidov3/mainnet/lidov3-core-post-phase-2.yaml
 
       - name: Run state-mate (V3 Mainnet Easy Track)
-        run: yarn start configs/lidov3/mainnet/lidov3-et-post-vote.yml
+        run: yarn start configs/lidov3/mainnet/lidov3-et-post-vote-phase-2.yml
