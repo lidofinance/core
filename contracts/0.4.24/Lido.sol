@@ -751,20 +751,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 reserved = unfinalized < buffered ? unfinalized : buffered;
         bool mainDataSubmitted;
         (refSlot,,, mainDataSubmitted,,,,,) = _accountingOracle().getProcessingState();
-        if (reserved == 0) return (refSlot, buffered);
-
         depositable = buffered - reserved;
-        /// @dev means that the withdrawal finalization report has been arrived for the current oracle frame
-        /// otherwise can't allow fastlane deposits being a subject of the expecting withdrawal finalization round
-        if (!mainDataSubmitted) return (refSlot, depositable);
 
-        uint256 consumable = FASTLANE_DATA_POSITION.getConsumableAmount(refSlot);
-        if (consumable >= buffered) return (refSlot, buffered);
-
-        // @dev if the remain consumable limit is already covered by depositable amount, FastLane is not applied
-        if (consumable <= depositable) return (refSlot, depositable);
-        /// @dev apply fastlane only if there are not enough depositable
-        return (refSlot, consumable);
+        // FastLane is irrelevant when nothing is reserved, or main report is not submitted yet.
+        if (reserved > 0 && mainDataSubmitted) {
+            uint256 consumable = FASTLANE_DATA_POSITION.getConsumableAmount(refSlot);
+            if (consumable > depositable) {
+                depositable = consumable < buffered ? consumable : buffered;
+            }
+        }
     }
 
     /**
