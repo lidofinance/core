@@ -151,6 +151,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant DEPOSITED_BALANCE_AND_DEPOSITED_VALIDATORS_POSITION =
         0x1ed9e505be656ce4e75d5b17c90f212b2ec37550868f26cac818f7304515aa23;
 
+    /// @dev total amount of ether on Consensus Layer (sum of all the balances of Lido validators)
+    // "beacon" in the `keccak256()` parameter is staying here for compatibility reason
+    /// Since version 3, high 128 bits are used for the CL validators count
+    /// |----- 128 bit -----|------ 128 bit -------|
+    /// |   CL validators   |     CL balance       |
+    /// keccak256("lido.Lido.clBalanceAndClValidators");
+    // bytes32 internal constant CL_BALANCE_AND_CL_VALIDATORS_POSITION =
+    //     0xc36804a03ec742b57b141e4e5d8d3bd1ddb08451fd0f9983af8aaab357a78e2f;
+
     /// @dev storage slot position of the staking rate limit structure
     /// keccak256("lido.Lido.stakeLimit");
     bytes32 internal constant STAKING_STATE_POSITION =
@@ -272,6 +281,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         initialized();
     }
 
+    // TODO remove
     /**
      * @notice A function to finalize upgrade to v3 (from v2). Can be called only once
      *
@@ -280,81 +290,80 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
      * @param _initialMaxExternalRatioBP Initial maximum external ratio in basis points
      */
-    function finalizeUpgrade_v3(
-        address _oldBurner,
-        address[] _contractsWithBurnerAllowances,
-        uint256 _initialMaxExternalRatioBP
-    ) external {
-        require(hasInitialized(), "NOT_INITIALIZED");
-        _checkContractVersion(2);
-        _setContractVersion(3);
+    // function finalizeUpgrade_v3(
+    //     address _oldBurner,
+    //     address[] _contractsWithBurnerAllowances,
+    //     uint256 _initialMaxExternalRatioBP
+    // ) external {
+    //     require(hasInitialized(), "NOT_INITIALIZED");
+    //     _checkContractVersion(2);
+    //     _setContractVersion(3);
 
-        _migrateStorage_v2_to_v3();
+    //     _migrateStorage_v2_to_v3();
 
-        _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
+    //     _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
 
-        _setMaxExternalRatioBP(_initialMaxExternalRatioBP);
-    }
+    //     _setMaxExternalRatioBP(_initialMaxExternalRatioBP);
+    // }
 
-    function _migrateStorage_v2_to_v3() internal {
-        // migrate storage to packed representation
-        bytes32 LIDO_LOCATOR_POSITION = keccak256("lido.Lido.lidoLocator");
-        address locator = LIDO_LOCATOR_POSITION.getStorageAddress();
-        assert(locator != address(0)); // sanity check
+    // function _migrateStorage_v2_to_v3() internal {
+    //     // migrate storage to packed representation
+    //     bytes32 LIDO_LOCATOR_POSITION = keccak256("lido.Lido.lidoLocator");
+    //     address locator = LIDO_LOCATOR_POSITION.getStorageAddress();
+    //     assert(locator != address(0)); // sanity check
 
-        _setLidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
-        LIDO_LOCATOR_POSITION.setStorageUint256(0);
+    //     _setLidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
+    //     LIDO_LOCATOR_POSITION.setStorageUint256(0);
 
-        bytes32 BUFFERED_ETHER_POSITION = keccak256("lido.Lido.bufferedEther");
-        _setBufferedEther(BUFFERED_ETHER_POSITION.getStorageUint256());
-        BUFFERED_ETHER_POSITION.setStorageUint256(0);
+    //     bytes32 BUFFERED_ETHER_POSITION = keccak256("lido.Lido.bufferedEther");
+    //     _setBufferedEther(BUFFERED_ETHER_POSITION.getStorageUint256());
+    //     BUFFERED_ETHER_POSITION.setStorageUint256(0);
 
-        bytes32 DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.depositedValidators");
-        _setDepositedValidators(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
-        DEPOSITED_VALIDATORS_POSITION.setStorageUint256(0);
+    //     bytes32 DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.depositedValidators");
+    //     _setDepositedValidators(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
+    //     DEPOSITED_VALIDATORS_POSITION.setStorageUint256(0);
 
-        bytes32 CL_VALIDATORS_POSITION = keccak256("lido.Lido.beaconValidators");
-        bytes32 CL_BALANCE_POSITION = keccak256("lido.Lido.beaconBalance");
-        bytes32 CL_BALANCE_AND_CL_VALIDATORS_POSITION = keccak256("lido.Lido.clBalanceAndClValidators");
-        CL_BALANCE_AND_CL_VALIDATORS_POSITION.setLowAndHighUint128(
-            CL_BALANCE_POSITION.getStorageUint256(),
-            CL_VALIDATORS_POSITION.getStorageUint256()
-        );
-        CL_BALANCE_POSITION.setStorageUint256(0);
-        CL_VALIDATORS_POSITION.setStorageUint256(0);
+    //     bytes32 CL_VALIDATORS_POSITION = keccak256("lido.Lido.beaconValidators");
+    //     bytes32 CL_BALANCE_POSITION = keccak256("lido.Lido.beaconBalance");
+    //     _setClBalanceAndClValidators(
+    //         CL_BALANCE_POSITION.getStorageUint256(),
+    //         CL_VALIDATORS_POSITION.getStorageUint256()
+    //     );
+    //     CL_BALANCE_POSITION.setStorageUint256(0);
+    //     CL_VALIDATORS_POSITION.setStorageUint256(0);
 
-        bytes32 TOTAL_SHARES_POSITION = keccak256("lido.StETH.totalShares");
-        uint256 totalShares = TOTAL_SHARES_POSITION.getStorageUint256();
-        assert(totalShares > 0); // sanity check
-        TOTAL_AND_EXTERNAL_SHARES_POSITION.setLowUint128(totalShares);
-        TOTAL_SHARES_POSITION.setStorageUint256(0);
-    }
+    //     bytes32 TOTAL_SHARES_POSITION = keccak256("lido.StETH.totalShares");
+    //     uint256 totalShares = TOTAL_SHARES_POSITION.getStorageUint256();
+    //     assert(totalShares > 0); // sanity check
+    //     TOTAL_AND_EXTERNAL_SHARES_POSITION.setLowUint128(totalShares);
+    //     TOTAL_SHARES_POSITION.setStorageUint256(0);
+    // }
 
-    function _migrateBurner_v2_to_v3(
-        address _oldBurner,
-        address[] _contractsWithBurnerAllowances
-    ) internal {
-        require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
-        address burner = _burner();
-        require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
+    // function _migrateBurner_v2_to_v3(
+    //     address _oldBurner,
+    //     address[] _contractsWithBurnerAllowances
+    // ) internal {
+    //     require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
+    //     address burner = _burner();
+    //     require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
 
-        // migrate burner stETH balance
-        uint256 oldBurnerShares = _sharesOf(_oldBurner);
-        if (oldBurnerShares > 0) {
-            _transferShares(_oldBurner, burner, oldBurnerShares);
-            _emitTransferEvents(_oldBurner, burner, getPooledEthByShares(oldBurnerShares), oldBurnerShares);
-        }
+    //     // migrate burner stETH balance
+    //     uint256 oldBurnerShares = _sharesOf(_oldBurner);
+    //     if (oldBurnerShares > 0) {
+    //         _transferShares(_oldBurner, burner, oldBurnerShares);
+    //         _emitTransferEvents(_oldBurner, burner, getPooledEthByShares(oldBurnerShares), oldBurnerShares);
+    //     }
 
-        // initialize new burner with state from the old burner
-        IBurnerMigration(burner).migrate(_oldBurner);
+    //     // initialize new burner with state from the old burner
+    //     IBurnerMigration(burner).migrate(_oldBurner);
 
-        // migrating allowances
-        for (uint256 i = 0; i < _contractsWithBurnerAllowances.length; i++) {
-            uint256 oldAllowance = allowance(_contractsWithBurnerAllowances[i], _oldBurner);
-            _approve(_contractsWithBurnerAllowances[i], _oldBurner, 0);
-            _approve(_contractsWithBurnerAllowances[i], burner, oldAllowance);
-        }
-    }
+    //     // migrating allowances
+    //     for (uint256 i = 0; i < _contractsWithBurnerAllowances.length; i++) {
+    //         uint256 oldAllowance = allowance(_contractsWithBurnerAllowances[i], _oldBurner);
+    //         _approve(_contractsWithBurnerAllowances[i], _oldBurner, 0);
+    //         _approve(_contractsWithBurnerAllowances[i], burner, oldAllowance);
+    //     }
+    // }
 
     /**
      * @notice A function to finalize upgrade to v4 (from v3). Can be called only once
@@ -367,17 +376,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     function _migrateStorage_v3_to_v4() internal {
-        // move deposited validators from the old storage position to the new one
-        // bytes32 BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.bufferedEtherAndDepositedValidators");
-        uint256 depositedValidators = BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.getHighUint128();
-        _setDepositedValidators(depositedValidators);
-        BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.setHighUint128(0);
-
-        // move cl Balance from the old storage position to the new one
         bytes32 CL_BALANCE_AND_CL_VALIDATORS_POSITION = keccak256("lido.Lido.clBalanceAndClValidators");
         uint256 clActiveBalance = CL_BALANCE_AND_CL_VALIDATORS_POSITION.getLowUint128();
+        uint256 clValidators = CL_BALANCE_AND_CL_VALIDATORS_POSITION.getHighUint128();
         _setClActiveBalance(clActiveBalance);
+        // wipe out the slot
         CL_BALANCE_AND_CL_VALIDATORS_POSITION.setStorageUint256(0);
+
+        // bytes32 BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.bufferedEtherAndDepositedValidators");
+        uint256 depositedValidators = BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.getHighUint128();
+        // amount submitted to the official Deposit contract but not yet observed by Oracle
+        // (aka transientBalance before upgrade)
+        uint256 depositedBalance = (depositedValidators - clValidators) * DEPOSIT_SIZE;
+        _setDepositedBalanceAndDepositedValidators(depositedBalance, depositedValidators);
+        // keep the buffered ether amount only
+        BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.setHighUint128(0);
     }
 
     /**
@@ -751,20 +764,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 reserved = unfinalized < buffered ? unfinalized : buffered;
         bool mainDataSubmitted;
         (refSlot,,, mainDataSubmitted,,,,,) = _accountingOracle().getProcessingState();
-        if (reserved == 0) return (refSlot, buffered);
-
         depositable = buffered - reserved;
-        /// @dev means that the withdrawal finalization report has been arrived for the current oracle frame
-        /// otherwise can't allow fastlane deposits being a subject of the expecting withdrawal finalization round
-        if (!mainDataSubmitted) return (refSlot, depositable);
 
-        uint256 consumable = FASTLANE_DATA_POSITION.getConsumableAmount(refSlot);
-        if (consumable >= buffered) return (refSlot, buffered);
-
-        // @dev if the remain consumable limit is already covered by depositable amount, FastLane is not applied
-        if (consumable <= depositable) return (refSlot, depositable);
-        /// @dev apply fastlane only if there are not enough depositable
-        return (refSlot, consumable);
+        // FastLane is irrelevant when nothing is reserved, or main report is not submitted yet.
+        if (reserved > 0 && mainDataSubmitted) {
+            uint256 consumable = FASTLANE_DATA_POSITION.getConsumableAmount(refSlot);
+            if (consumable > depositable) {
+                depositable = consumable < buffered ? consumable : buffered;
+            }
+        }
     }
 
     /**
@@ -1366,9 +1374,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return DEPOSITED_BALANCE_AND_DEPOSITED_VALIDATORS_POSITION.getHighUint128();
     }
 
-    function _setDepositedValidators(uint256 _newDepositedValidators) internal {
-        DEPOSITED_BALANCE_AND_DEPOSITED_VALIDATORS_POSITION.setHighUint128(_newDepositedValidators);
-    }
+    // function _setDepositedValidators(uint256 _newDepositedValidators) internal {
+    //     DEPOSITED_BALANCE_AND_DEPOSITED_VALIDATORS_POSITION.setHighUint128(_newDepositedValidators);
+    // }
 
     function _getDepositedBalanceAndDepositedValidators() internal view returns (uint256, uint256) {
         return DEPOSITED_BALANCE_AND_DEPOSITED_VALIDATORS_POSITION.getLowAndHighUint128();
