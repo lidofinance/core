@@ -63,6 +63,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     event DepositableEthReceived(uint256 amount);
 
+    /// @dev Debug event for top-up flow
+    event DebugTopUp(
+        uint256 indexed stakingModuleId,
+        uint256 allocationAmount,       // sum from deposit allocation (stakingModuleDepositableEthAmount)
+        uint256 moduleAllocatedAmount,   // sum returned by module's allocateDeposits
+        uint256[] topUpLimits,           // limits from TopUpGateway (per-validator CL-based limits)
+        uint256[] moduleAllocations      // per-validator allocations returned by module
+    );
+
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
 
     uint64 internal constant PUBKEY_LENGTH = 48;
@@ -774,6 +783,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
                 amount += allocations[i];
             }
         }
+
+        // TODO: temp event, devnet only
+        emit DebugTopUp(_stakingModuleId, stakingModuleDepositableEthAmount, amount, _topUpLimits, allocations);
 
         // Verify sum of allocations does not exceed module's max deposit amount
         if (amount > stakingModuleDepositableEthAmount) {
