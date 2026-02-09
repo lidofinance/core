@@ -261,7 +261,7 @@ class BeaconState(Container):
     ]
     pending_consolidations: SSZList[PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT]
     # Fulu (not active yet)
-    # proposer_lookahead: Vector[uint64, PROPOSER_LOOKAHEAD_SIZE]
+    proposer_lookahead: Vector[uint64, PROPOSER_LOOKAHEAD_SIZE]
 
 
 # Generalized Index Calculation
@@ -273,7 +273,7 @@ def compute_gindex_for_validator(validator_index: int) -> int:
     Compute generalized index for validator[index] in BeaconState.
     Proves the entire Validator object (hash_tree_root).
     """
-    STATE_TREE_DEPTH = 6  # 36 fields (Electra) -> pad to 64
+    STATE_TREE_DEPTH = 6  # 37 fields (Electra) -> pad to 64
     VALIDATORS_FIELD_INDEX = 11
     VALIDATORS_LIST_DEPTH = 40
 
@@ -688,7 +688,9 @@ def send_top_up_tx(
         print("ERROR: PRIVATE_KEY not found in .env file", file=sys.stderr)
         sys.exit(1)
 
-    if len(validator_indices) != len(key_indices) or len(validator_indices) != len(operator_ids):
+    if len(validator_indices) != len(key_indices) or len(validator_indices) != len(
+        operator_ids
+    ):
         print(
             "ERROR: --validator-index, --key-index, and --operator-id must have the same count",
             file=sys.stderr,
@@ -710,7 +712,10 @@ def send_top_up_tx(
     ordered_witnesses = []
     for vi in validator_indices:
         if vi not in witness_by_index:
-            print(f"ERROR: Validator index {vi} not found in witness data", file=sys.stderr)
+            print(
+                f"ERROR: Validator index {vi} not found in witness data",
+                file=sys.stderr,
+            )
             sys.exit(1)
         ordered_witnesses.append(witness_by_index[vi])
 
@@ -750,13 +755,15 @@ def send_top_up_tx(
     )
 
     print("Building transaction...", file=sys.stderr)
-    tx = contract.functions.topUp(top_up_data).build_transaction({
-        "from": account.address,
-        "nonce": w3.eth.get_transaction_count(account.address),
-        "gas": gas_limit,
-        "maxFeePerGas": w3.eth.gas_price * 2,
-        "maxPriorityFeePerGas": w3.to_wei(1, "gwei"),
-    })
+    tx = contract.functions.topUp(top_up_data).build_transaction(
+        {
+            "from": account.address,
+            "nonce": w3.eth.get_transaction_count(account.address),
+            "gas": gas_limit,
+            "maxFeePerGas": w3.eth.gas_price * 2,
+            "maxPriorityFeePerGas": w3.to_wei(1, "gwei"),
+        }
+    )
 
     # Dry-run via eth_call to get revert reason before sending
     print("Simulating transaction (eth_call)...", file=sys.stderr)
@@ -775,9 +782,13 @@ def send_top_up_tx(
     print("Waiting for receipt...", file=sys.stderr)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300)
     if receipt["status"] == 1:
-        print(f"Transaction confirmed in block {receipt['blockNumber']}", file=sys.stderr)
+        print(
+            f"Transaction confirmed in block {receipt['blockNumber']}", file=sys.stderr
+        )
     else:
-        print(f"Transaction REVERTED in block {receipt['blockNumber']}", file=sys.stderr)
+        print(
+            f"Transaction REVERTED in block {receipt['blockNumber']}", file=sys.stderr
+        )
         print(f"  gasUsed: {receipt['gasUsed']}", file=sys.stderr)
         print(f"  tx hash: 0x{tx_hash.hex()}", file=sys.stderr)
         # Try to extract revert reason via debug_traceTransaction or replay
@@ -836,10 +847,13 @@ def cmd_top_up_prove(args):
         )
 
         total_elapsed = time.time() - t0
-        print(f"Total time: {total_elapsed:.2f}s (proof: {proof_elapsed:.2f}s, tx: {total_elapsed - proof_elapsed:.2f}s)")
+        print(
+            f"Total time: {total_elapsed:.2f}s (proof: {proof_elapsed:.2f}s, tx: {total_elapsed - proof_elapsed:.2f}s)"
+        )
     except Exception as e:
         print(f"ERROR: {type(e).__name__}: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
@@ -955,39 +969,61 @@ def main():
         help="Build proofs and immediately send topUp transaction",
     )
     topup_prove_parser.add_argument(
-        "--el-url", "-e", required=True,
+        "--el-url",
+        "-e",
+        required=True,
         help="EL RPC endpoint, e.g. http://localhost:8545",
     )
     topup_prove_parser.add_argument(
-        "--cl-url", "-c", required=True,
+        "--cl-url",
+        "-c",
+        required=True,
         help="CL API endpoint, e.g. http://localhost:5052",
     )
     topup_prove_parser.add_argument(
-        "--gateway-address", "-g", required=True,
+        "--gateway-address",
+        "-g",
+        required=True,
         help="TopUpGateway contract address",
     )
     topup_prove_parser.add_argument(
-        "--validator-index", "-v", type=int, action="append",
-        required=True, dest="validator_indices",
+        "--validator-index",
+        "-v",
+        type=int,
+        action="append",
+        required=True,
+        dest="validator_indices",
         help="Validator index (can be specified multiple times)",
     )
     topup_prove_parser.add_argument(
-        "--key-index", "-k", type=int, action="append",
-        required=True, dest="key_index",
+        "--key-index",
+        "-k",
+        type=int,
+        action="append",
+        required=True,
+        dest="key_index",
         help="Key index for each validator (same order as -v)",
     )
     topup_prove_parser.add_argument(
-        "--operator-id", type=int, action="append",
-        required=True, dest="operator_id",
+        "--operator-id",
+        type=int,
+        action="append",
+        required=True,
+        dest="operator_id",
         help="Operator ID for each validator (same order as -v)",
     )
     topup_prove_parser.add_argument(
-        "--module-id", "-m", type=int, required=True,
+        "--module-id",
+        "-m",
+        type=int,
+        required=True,
         dest="module_id",
         help="Staking module ID",
     )
     topup_prove_parser.add_argument(
-        "--gas-limit", type=int, default=1_000_000,
+        "--gas-limit",
+        type=int,
+        default=1_000_000,
         help="Gas limit for transaction (default: 1000000)",
     )
 
