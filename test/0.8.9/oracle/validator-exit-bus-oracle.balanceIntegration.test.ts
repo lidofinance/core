@@ -321,6 +321,9 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       const { reportData: reportDataV1 } = await prepareReportAndSubmitHash(requestsV1, DATA_FORMAT_LIST);
       await expect(oracle.connect(member1).submitReportData(reportDataV1, oracleVersion)).not.to.be.reverted;
 
+      // Advance to next frame to allow second report submission
+      await consensus.advanceTimeToNextFrameStart();
+
       // Format 2 should also pass with the same limit
       const { reportData: reportDataV2 } = await prepareReportAndSubmitHash(requestsV2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
       await expect(oracle.connect(member1).submitReportData(reportDataV2, oracleVersion)).not.to.be.reverted;
