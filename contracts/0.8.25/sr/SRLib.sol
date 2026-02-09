@@ -310,16 +310,19 @@ library SRLib {
         // If no deposits to allocate, return current state
         if (depositsToAllocate > 0) {
             // Use MinFirstAllocationStrategy to allocate deposits
+            /// @dev due to library is external, the `allocated` array is not modified
             (totalAllocated, newAllocations) =
                 MinFirstAllocationStrategy.allocate(allocated, capacities, depositsToAllocate);
             // Convert allocated validators and allocations per module back to Ether amounts
             totalAllocated = SRUtils._getInitialDepositAmountByCount(totalAllocated);
             for (uint256 i = 0; i < modulesCount; ++i) {
+                // get allocation delta only: new - current
                 allocated[i] = SRUtils._getInitialDepositAmountByCount(newAllocations[i] - allocated[i]);
                 newAllocations[i] = SRUtils._getInitialDepositAmountByCount(newAllocations[i]);
             }
         } else {
             newAllocations = new uint256[](modulesCount);
+            // Convert allocations per module back to Ether amounts
             for (uint256 i = 0; i < modulesCount; ++i) {
                 newAllocations[i] = SRUtils._getInitialDepositAmountByCount(allocated[i]);
                 allocated[i] = 0;
@@ -366,11 +369,12 @@ library SRLib {
             moduleState = moduleId.getModuleState();
             ModuleStateConfig memory stateConfig = moduleState.config;
 
+            // module initial capacity = current allocation
             uint256 validatorsCapacity = _allocations[i];
             if (stateConfig.status == StakingModuleStatus.Active) {
                 (uint256 exitedValidators, uint256 depositedValidators, uint256 depositableValidatorsCount) =
                     _getStakingModuleSummary(moduleId.getIStakingModule());
-                if (_isTopUp) {
+                if (_isTopUp && stateConfig.withdrawalCredentialsType == SRUtils.WC_TYPE_02) {
                     // The module might not receive all exited validators data yet => we need to replacing
                     // the exitedValidatorsCount with the one that the staking router is aware of.
                     uint256 activeValidators = depositedValidators
