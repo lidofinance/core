@@ -377,7 +377,13 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
 
         bytes memory pubkeys = new bytes(0);
         vm.prank(rootAccount);
-        try vaultHub.forceValidatorExit(address(stakingVaults[id]), pubkeys, userAccount[id]) {} catch {
+        try
+            vaultHub.forceValidatorExit{value: Constants.WITHDRAWAL_FEE}(
+                address(stakingVaults[id]),
+                pubkeys,
+                userAccount[id]
+            )
+        {} catch {
             forceValidatorExitReverted = true;
         }
     }

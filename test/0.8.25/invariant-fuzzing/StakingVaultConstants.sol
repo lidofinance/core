@@ -24,6 +24,7 @@ library Constants {
     uint256 public constant EXTERNAL_SHARES_MAINNET = 0;
 
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
+    uint256 public constant WITHDRAWAL_FEE = 3000;
 
     //LazyOracle params
     uint64 public constant QUARANTINE_PERIOD = 3 days;

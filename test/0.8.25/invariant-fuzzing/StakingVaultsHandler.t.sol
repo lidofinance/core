@@ -210,10 +210,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         if (obligationsShortfallValue == 0) return;
 
         bytes memory pubkeys = new bytes(0);
-        vm.prank(rootAccount); //privileged account can force exit
-        try vaultHub.forceValidatorExit{value: 3000}(address(stakingVault), pubkeys, userAccount) {
-            // If the call succeeds, we do nothing
-        } catch {
+        vm.prank(rootAccount);
+        try
+            vaultHub.forceValidatorExit{value: Constants.WITHDRAWAL_FEE}(address(stakingVault), pubkeys, userAccount)
+        {} catch {
             forceValidatorExitReverted = true;
         }
     }

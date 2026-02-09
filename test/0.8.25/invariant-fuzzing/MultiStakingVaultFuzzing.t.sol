@@ -83,9 +83,9 @@ contract MultiStakingVaultsTest is Test {
         //Deploy ConsensusContractMock
         deployCodeTo("CommonMocks.sol:ConsensusContractMock", abi.encode(1, 0), consensusContract_addr);
 
-        deployCodeTo("CommonMocks.sol:VaultFactoryMock", abi.encode(vaultFactory_addr), vaultFactory_addr);
+        deployCodeTo("CommonMocks.sol:VaultFactoryMock", "", vaultFactory_addr);
 
-        deployCodeTo("CommonMocks.sol:PredepositGuaranteeMock", abi.encode(pdg_addr), pdg_addr);
+        deployCodeTo("CommonMocks.sol:PredepositGuaranteeMock", "", pdg_addr);
 
         //Deploy LidoLocatorMock
         deployCodeTo(

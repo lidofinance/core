@@ -81,10 +81,10 @@ contract StakingVaultsTest is Test {
         deployCodeTo("CommonMocks.sol:ConsensusContractMock", abi.encode(1, 0), consensusContract_addr);
 
         //Deploy VaultFactoryMock
-        deployCodeTo("CommonMocks.sol:VaultFactoryMock", abi.encode(vaultFactory_addr), vaultFactory_addr);
+        deployCodeTo("CommonMocks.sol:VaultFactoryMock", "", vaultFactory_addr);
 
         //Deploy PredepositGuaranteeMock
-        deployCodeTo("CommonMocks.sol:PredepositGuaranteeMock", abi.encode(pdg_addr), pdg_addr);
+        deployCodeTo("CommonMocks.sol:PredepositGuaranteeMock", "", pdg_addr);
 
         //Deploy LidoLocatorMock
         deployCodeTo(
@@ -382,7 +382,7 @@ contract StakingVaultsTest is Test {
     }
 
     /**
-     * Invariant 9: The totalValue should be equal or above the real totalValue (EL+CL balance)
+     * Invariant 9: The reported totalValue should not exceed the effective totalValue (EL+CL balance)
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
      * forge-config: default.invariant.runs = 256
