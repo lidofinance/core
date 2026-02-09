@@ -77,80 +77,187 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
 
     // ========== Internal Helpers ==========
 
-    /// @dev Submits a single oracle report for a specific vault, advancing time by daysShift days.
-    ///      Computes a proper merkle leaf from vaultReports[id] and sets it as the tree root,
-    ///      then calls updateVaultData with an empty proof (leaf == root).
-    function _reportForVault(uint256 id, uint256 daysShift) internal {
-        address _vault = address(stakingVaults[id]);
-        VaultReport storage report = vaultReports[id];
+    /// @dev Sorts two hashes and hashes them together (matches OpenZeppelin's commutativeKeccak256).
+    function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
+        return a < b ? keccak256(abi.encodePacked(a, b)) : keccak256(abi.encodePacked(b, a));
+    }
 
-        bytes32 leaf = keccak256(
-            bytes.concat(
-                keccak256(
-                    abi.encode(
-                        _vault,
-                        report.totalValue,
-                        report.cumulativeLidoFees,
-                        report.liabilityShares,
-                        report.maxLiabilityShares,
-                        uint256(0) // slashingReserve
+    /// @dev Computes the double-hashed merkle leaf for a vault from its report data.
+    function _computeLeaf(uint256 id) internal view returns (bytes32) {
+        VaultReport storage report = vaultReports[id];
+        return
+            keccak256(
+                bytes.concat(
+                    keccak256(
+                        abi.encode(
+                            address(stakingVaults[id]),
+                            report.totalValue,
+                            report.cumulativeLidoFees,
+                            report.liabilityShares,
+                            report.maxLiabilityShares,
+                            uint256(0)
+                        )
                     )
                 )
-            )
-        );
+            );
+    }
 
+    /// @dev Builds a complete binary merkle tree from leaves and returns (root, per-leaf proofs).
+    ///      Uses 1-indexed flat array: tree[1] = root, leaves at tree[P..2P-1].
+    ///      Pads to power-of-2 with bytes32(0).
+    function _buildMerkleTree(bytes32[] memory leaves) internal pure returns (bytes32 root, bytes32[][] memory proofs) {
+        uint256 n = leaves.length;
+        if (n == 0) return (bytes32(0), new bytes32[][](0));
+        if (n == 1) {
+            proofs = new bytes32[][](1);
+            proofs[0] = new bytes32[](0);
+            return (leaves[0], proofs);
+        }
+
+        // Round up to next power of 2
+        uint256 p = 1;
+        while (p < n) p <<= 1;
+
+        // Flat 1-indexed tree: indices [1..2p-1], leaves at [p..2p-1]
+        bytes32[] memory tree = new bytes32[](2 * p);
+        for (uint256 i = 0; i < n; i++) {
+            tree[p + i] = leaves[i];
+        }
+        // Padding slots are already bytes32(0)
+
+        // Build tree bottom-up
+        for (uint256 i = p - 1; i >= 1; i--) {
+            tree[i] = _hashPair(tree[2 * i], tree[2 * i + 1]);
+        }
+        root = tree[1];
+
+        // Extract proofs for each original leaf
+        proofs = new bytes32[][](n);
+        uint256 depth = 0;
+        {
+            uint256 tmp = p;
+            while (tmp > 1) {
+                depth++;
+                tmp >>= 1;
+            }
+        }
+
+        for (uint256 i = 0; i < n; i++) {
+            proofs[i] = new bytes32[](depth);
+            uint256 idx = p + i;
+            for (uint256 d = 0; d < depth; d++) {
+                // Sibling is idx ^ 1
+                proofs[i][d] = tree[idx ^ 1];
+                idx >>= 1;
+            }
+        }
+    }
+
+    /// @dev Returns array of vault indices that are currently connected to VaultHub
+    ///      (including pending-disconnect vaults, since they still need oracle reports).
+    function _getConnectedVaultIds() internal view returns (uint256[] memory) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < stakingVaults.length; i++) {
+            if (vaultHub.isVaultConnected(address(stakingVaults[i]))) {
+                count++;
+            }
+        }
+        uint256[] memory ids = new uint256[](count);
+        uint256 idx = 0;
+        for (uint256 i = 0; i < stakingVaults.length; i++) {
+            if (vaultHub.isVaultConnected(address(stakingVaults[i]))) {
+                ids[idx++] = i;
+            }
+        }
+        return ids;
+    }
+
+    /// @dev Submits one oracle report covering all given vault IDs with a proper merkle tree.
+    function _batchReport(uint256[] memory ids, uint256 daysShift) internal {
+        uint256 n = ids.length;
+        if (n == 0) return;
+
+        // 1. Compute leaves
+        bytes32[] memory leaves = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) {
+            leaves[i] = _computeLeaf(ids[i]);
+        }
+
+        // 2. Build merkle tree
+        (bytes32 root, bytes32[][] memory proofs) = _buildMerkleTree(leaves);
+
+        // 3. Advance time and update consensus frame
         (uint256 refSlot, ) = consensusContract.getCurrentFrame();
         uint256 nextRefSlot = refSlot + daysShift;
         consensusContract.setCurrentFrame(nextRefSlot);
-
         vm.warp(block.timestamp + daysShift * 1 days);
 
+        // 4. Submit report data
         vm.prank(accountingOracle);
-        lazyOracle.updateReportData(uint256(block.timestamp), nextRefSlot, leaf, "test");
+        lazyOracle.updateReportData(uint256(block.timestamp), nextRefSlot, root, "test");
 
-        lazyOracle.updateVaultData(
-            _vault,
-            report.totalValue,
-            report.cumulativeLidoFees,
-            report.liabilityShares,
-            report.maxLiabilityShares,
-            0,
-            new bytes32[](0) // empty proof: leaf == root
-        );
+        // 5. Update each vault's data with its proof
+        for (uint256 i = 0; i < n; i++) {
+            VaultReport storage report = vaultReports[ids[i]];
+            lazyOracle.updateVaultData(
+                address(stakingVaults[ids[i]]),
+                report.totalValue,
+                report.cumulativeLidoFees,
+                report.liabilityShares,
+                report.maxLiabilityShares,
+                0,
+                proofs[i]
+            );
+        }
     }
 
-    /// @dev Performs a full vault data update with 2 reports:
-    ///      1st bypasses the fresh report check, 2nd bypasses quarantine expiration.
-    function _updateVaultDataForId(uint256 id) internal {
-        address _vault = address(stakingVaults[id]);
-        VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(_vault);
+    /// @dev Performs a full batch update for ALL connected vaults with the two-report pattern:
+    ///      1st report bypasses fresh check, 2nd bypasses quarantine.
+    function _batchUpdateAllVaults() internal {
+        uint256[] memory ids = _getConnectedVaultIds();
+        if (ids.length == 0) return;
 
-        uint256 liabilityShares = vaultHub.liabilityShares(_vault);
+        // 1. Prepare report data for each vault
+        for (uint256 i = 0; i < ids.length; i++) {
+            uint256 id = ids[i];
+            address _vault = address(stakingVaults[id]);
+            VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(_vault);
+            uint256 liabilityShares = vaultHub.liabilityShares(_vault);
 
-        vaultReports[id] = VaultReport({
-            totalValue: address(stakingVaults[id]).balance,
-            cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
-            liabilityShares: liabilityShares,
-            maxLiabilityShares: Math256.max(vaultRecord.maxLiabilityShares, liabilityShares),
-            reportTimestamp: uint64(block.timestamp)
-        });
+            vaultReports[id] = VaultReport({
+                totalValue: _vault.balance,
+                cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
+                liabilityShares: liabilityShares,
+                maxLiabilityShares: Math256.max(vaultRecord.maxLiabilityShares, liabilityShares),
+                reportTimestamp: uint64(block.timestamp)
+            });
+        }
 
-        _reportForVault(id, 2); // bypass fresh report
+        // 2. First batch report (bypass fresh check)
+        _batchReport(ids, 2);
 
-        vaultReports[id].maxLiabilityShares = liabilityShares; // no minting between reports
+        // 3. Update maxLiabilityShares for each vault (no minting between reports)
+        for (uint256 i = 0; i < ids.length; i++) {
+            uint256 id = ids[i];
+            vaultReports[id].maxLiabilityShares = vaultHub.liabilityShares(address(stakingVaults[id]));
+        }
 
-        _reportForVault(id, QUARANTINE_DAYS); // bypass quarantine period
+        // 4. Second batch report (bypass quarantine)
+        _batchReport(ids, QUARANTINE_DAYS);
 
-        sv_otcDeposited[id] = 0;
+        // 5. Reset otcDeposited for each vault
+        for (uint256 i = 0; i < ids.length; i++) {
+            sv_otcDeposited[ids[i]] = 0;
+        }
     }
 
-    /// @dev Ensures the vault has a fresh oracle report. Skips if already fresh.
+    /// @dev Ensures the vault has a fresh oracle report. If stale, updates ALL connected vaults in one batch.
     function _ensureFreshReport(uint256 id) internal {
         uint256 latestReportTs = lazyOracle.latestReportTimestamp();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(address(stakingVaults[id]));
         bool isFresh = uint48(latestReportTs) <= record.report.timestamp && block.timestamp - latestReportTs < 2 days;
         if (!isFresh) {
-            _updateVaultDataForId(id);
+            _batchUpdateAllVaults();
         }
     }
 
@@ -205,8 +312,10 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
 
         vm.prank(userAccount[id]);
         try vaultHub.voluntaryDisconnect(address(stakingVaults[id])) {
-            // Complete disconnect by submitting one more report
-            _reportForVault(id, 1);
+            // Complete disconnect by submitting one more report (single vault)
+            uint256[] memory singleId = new uint256[](1);
+            singleId[0] = id;
+            _batchReport(singleId, 1);
 
             if (stakingVaults[id].pendingOwner() == userAccount[id]) {
                 vm.prank(userAccount[id]);
@@ -351,12 +460,12 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         deal(address(vaultHub), address(vaultHub).balance + amount);
     }
 
-    /// @notice Updates vault data, simulating time shifts and quarantine logic
+    /// @notice Updates vault data for all connected vaults in a single batch report
     function updateVaultData(uint256 id, uint256 /* daysShift */) public {
         id = bound(id, 0, userAccount.length - 1);
         if (!_isConnectedAndActive(id)) return;
 
-        _updateVaultDataForId(id);
+        _batchUpdateAllVaults();
     }
 
     // --- StakingVault interactions ---
