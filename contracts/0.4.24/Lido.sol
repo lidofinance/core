@@ -376,17 +376,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     function _migrateStorage_v3_to_v4() internal {
-        // move deposited validators from the old storage position to the new one
-        // bytes32 BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.bufferedEtherAndDepositedValidators");
-        uint256 depositedValidators = BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.getHighUint128();
-        _setDepositedValidators(depositedValidators);
-        BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.setHighUint128(0);
-
-        // move cl Balance from the old storage position to the new one
         bytes32 CL_BALANCE_AND_CL_VALIDATORS_POSITION = keccak256("lido.Lido.clBalanceAndClValidators");
         uint256 clActiveBalance = CL_BALANCE_AND_CL_VALIDATORS_POSITION.getLowUint128();
+        uint256 clValidators = CL_BALANCE_AND_CL_VALIDATORS_POSITION.getHighUint128();
         _setClActiveBalance(clActiveBalance);
+        // wipe out the slot
         CL_BALANCE_AND_CL_VALIDATORS_POSITION.setStorageUint256(0);
+
+        // bytes32 BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.bufferedEtherAndDepositedValidators");
+        uint256 depositedValidators = BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.getHighUint128();
+        // amount submitted to the official Deposit contract but not yet observed by Oracle
+        // (aka transientBalance before upgrade)
+        uint256 depositedBalance = (depositedValidators - clValidators) * DEPOSIT_SIZE;
+        _setDepositedBalanceAndDepositedValidators(depositedBalance, depositedValidators);
+        // keep the buffered ether amount only
+        BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.setHighUint128(0);
     }
 
     /**
