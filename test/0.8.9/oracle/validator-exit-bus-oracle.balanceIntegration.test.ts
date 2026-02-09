@@ -325,7 +325,10 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       await consensus.advanceTimeToNextFrameStart();
 
       // Format 2 should also pass with the same limit
-      const { reportData: reportDataV2 } = await prepareReportAndSubmitHash(requestsV2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      const { reportData: reportDataV2 } = await prepareReportAndSubmitHash(
+        requestsV2,
+        DATA_FORMAT_LIST_WITH_KEY_INDEX,
+      );
       await expect(oracle.connect(member1).submitReportData(reportDataV2, oracleVersion)).not.to.be.reverted;
     });
   });
