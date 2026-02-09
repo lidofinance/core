@@ -1288,10 +1288,6 @@ describe.skip("OracleReportSanityChecker.sol", () => {
   context("checkExitBusOracleReport", () => {
     let maxBalanceLimit: bigint;
 
-    // Constants for validator balances
-    const CURATED_VALIDATOR_BALANCE_GWEI = 32_000_000_000n; // 32 ETH
-    const MAXEB_VALIDATOR_BALANCE_GWEI = 2_048_000_000_000n; // 2048 ETH
-
     before(async () => {
       maxBalanceLimit = (await checker.getOracleReportLimits()).maxBalanceExitRequestedPerReportInGwei;
     });
@@ -1323,8 +1319,8 @@ describe.skip("OracleReportSanityChecker.sol", () => {
     const HIGH_LIMIT_GWEI = 250_000_000_000_000n; // 250,000 ETH in Gwei
 
     before(async () => {
-      // Grant the role to admin for setting limits
-      await checker.grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(), admin.address);
+      // Grant the role to admin for setting limits (admin is the deployer, so has DEFAULT_ADMIN_ROLE)
+      await checker.connect(admin).grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(), admin.address);
       // Set a high limit for these tests
       await checker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(HIGH_LIMIT_GWEI);
     });

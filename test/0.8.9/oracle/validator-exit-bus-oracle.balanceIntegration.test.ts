@@ -32,7 +32,6 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
 
-  let snapshot: string;
   let oracleVersion: bigint;
 
   interface ExitRequest {
@@ -131,21 +130,23 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
     await consensus.addMember(member3, 2);
 
     oracleVersion = await oracle.getContractVersion();
-
-    snapshot = await Snapshot.take();
-  });
-
-  beforeEach(async () => {
-    await Snapshot.restore(snapshot);
   });
 
   describe("Balance calculation integration with sanity checker", () => {
-    beforeEach(async () => {
+    let contextSnapshot: string;
+
+    before(async () => {
       // Grant the role to admin for setting limits
-      await oracleReportSanityChecker.grantRole(
+      await oracleReportSanityChecker.connect(admin).grantRole(
         await oracleReportSanityChecker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(),
         admin.address,
       );
+      // Take snapshot after setup for this context
+      contextSnapshot = await Snapshot.take();
+    });
+
+    beforeEach(async () => {
+      await Snapshot.restore(contextSnapshot);
     });
 
     it("should pass sanity check for curated validators (Format 1)", async () => {
@@ -308,16 +309,17 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
 
       // Both should pass - same validators, same balance calculation
       const { reportData: reportDataV1 } = await prepareReportAndSubmitHash(requestsV1, DATA_FORMAT_LIST);
-      const { reportData: reportDataV2 } = await prepareReportAndSubmitHash(
+
+      // Both formats calculate the same balance, so both should pass
+      await expect(oracle.connect(member1).submitReportData(reportDataV1, oracleVersion)).not.to.be.reverted;
+
+      // Restore snapshot and test Format 2 as well
+      await Snapshot.restore(contextSnapshot);
+      const { reportData: reportDataV2Again } = await prepareReportAndSubmitHash(
         requestsV2,
         DATA_FORMAT_LIST_WITH_KEY_INDEX,
       );
-
-      await expect(oracle.connect(member1).submitReportData(reportDataV1, oracleVersion)).not.to.be.reverted;
-
-      // Note: Both formats calculate the same balance, so both should pass
-      // The test above already verified Format 1 passes, so we know Format 2 would also pass
-      // (Format 2 test is covered in other test cases above)
+      await expect(oracle.connect(member1).submitReportData(reportDataV2Again, oracleVersion)).not.to.be.reverted;
     });
   });
 });
