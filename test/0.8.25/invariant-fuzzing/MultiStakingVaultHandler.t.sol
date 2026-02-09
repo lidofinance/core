@@ -226,7 +226,7 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
 
             vaultReports[id] = VaultReport({
                 totalValue: _vault.balance,
-                cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
+                cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1, // +1 to ensure non-zero fee delta even when settledLidoFees is 0
                 liabilityShares: liabilityShares,
                 maxLiabilityShares: Math256.max(vaultRecord.maxLiabilityShares, liabilityShares),
                 reportTimestamp: uint64(block.timestamp)

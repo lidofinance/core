@@ -424,9 +424,4 @@ contract StakingVaultsTest is Test {
 
         assertGe(totalValue, minHealthyTotalValue, "Total value should satisfy forced rebalance threshold");
     }
-
-    // For testing purposes only (guiding the fuzzing)
-    // function invariant_state() external {
-    //     assertEq(svHandler.actionIndex() != 11, true, "callpath reached");
-    // }
 }

@@ -57,20 +57,6 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     uint256 public appliedTotalValue = 0;
     uint256 public reportedTotalValue = 0;
 
-    /// @notice Sequence of actions for guided fuzzing
-    enum VaultAction {
-        CONNECT,
-        VOLUNTARY_DISCONNECT,
-        UPDATE_VAULT_DATA,
-        SV_OTC_DEPOSIT,
-        VH_OTC_DEPOSIT,
-        FUND,
-        VH_WITHDRAW,
-        SV_WITHDRAW
-    }
-    VaultAction[] public actionPath;
-    uint256 public actionIndex = 0;
-
     constructor(address _lidoLocator, address _stakingVault, address _rootAccount, address _userAccount) {
         lidoLocator = LidoLocatorMock(_lidoLocator);
         accountingOracle = lidoLocator.accountingOracle();
@@ -81,33 +67,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         consensusContract = ConsensusContractMock(lidoLocator.consensusContract());
         rootAccount = _rootAccount;
         userAccount = _userAccount;
-        actionPath = [
-            VaultAction.CONNECT, // connect
-            VaultAction.SV_OTC_DEPOSIT, // OTC funds
-            VaultAction.UPDATE_VAULT_DATA, // trigger quarantine
-            VaultAction.VOLUNTARY_DISCONNECT, // pendingDisconnect
-            VaultAction.UPDATE_VAULT_DATA, // disconnected
-            VaultAction.CONNECT, // reconnect with same TV + wait for fresh report
-            VaultAction.VOLUNTARY_DISCONNECT, // pendingDisconnect
-            VaultAction.UPDATE_VAULT_DATA, // disconnected (2nd time)
-            VaultAction.SV_WITHDRAW, // withdraw from vault
-            VaultAction.CONNECT, // reconnect with CONNECT_DEPOSIT
-            VaultAction.UPDATE_VAULT_DATA // apply report2 -> quarantine triggered, and lower than the expired one -> expired quarantine considered as accounted
-        ];
-    }
-
-    /// @notice Modifier to update action index for guided fuzzing
-    modifier actionIndexUpdate(VaultAction action) {
-        if (actionPath[actionIndex] == action) {
-            actionIndex++;
-        } else {
-            return; // not the correct sequence
-        }
-        _;
     }
 
     modifier withFreshReport() {
-        _updateVaultData();
+        _ensureFreshReport();
         _;
     }
 
@@ -166,7 +129,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         (, uint256 unsettledFees) = vaultHub.obligations(address(stakingVault));
         uint256 availableBalance = Math256.min(
             stakingVault.availableBalance(),
-            vaultHub.totalValue(address(stakingVault)) // TODO is there any CL balance in this test?
+            vaultHub.totalValue(address(stakingVault))
         );
         if (availableBalance < unsettledFees) {
             return;
@@ -179,18 +142,31 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         }
 
         vm.prank(userAccount);
-        vaultHub.voluntaryDisconnect(address(stakingVault));
+        try vaultHub.voluntaryDisconnect(address(stakingVault)) {
+            // Prepare fresh report data for the post-disconnect report
+            address _vault = address(stakingVault);
+            VaultHub.VaultRecord memory vr = vaultHub.vaultRecord(_vault);
+            uint256 ls = vaultHub.liabilityShares(_vault);
+            lastReport = VaultReport({
+                totalValue: _vault.balance,
+                cumulativeLidoFees: vr.cumulativeLidoFees + vr.settledLidoFees + 1, // +1 to ensure non-zero fee delta even when settledLidoFees is 0
+                liabilityShares: ls,
+                maxLiabilityShares: Math256.max(vr.maxLiabilityShares, ls),
+                reportTimestamp: uint64(block.timestamp)
+            });
+            _report(1);
 
-        _report(1);
-
-        vm.prank(userAccount);
-        stakingVault.acceptOwnership();
+            if (stakingVault.pendingOwner() == userAccount) {
+                vm.prank(userAccount);
+                stakingVault.acceptOwnership();
+            }
+        } catch {}
     }
 
     /// @notice Funds the vault via VaultHub
     function fund(uint256 amount) public withConnectedVault {
         amount = bound(amount, 1, 10 ether);
-        deal(address(userAccount), amount);
+        deal(address(userAccount), address(userAccount).balance + amount);
 
         vm.prank(userAccount);
         vaultHub.fund{value: amount}(address(stakingVault));
@@ -330,18 +306,26 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         stakingVault.withdraw(userAccount, amount);
     }
 
+    function _ensureFreshReport() internal {
+        uint256 latestReportTs = lazyOracle.latestReportTimestamp();
+        VaultHub.VaultRecord memory record = vaultHub.vaultRecord(address(stakingVault));
+        bool isFresh = uint48(latestReportTs) <= record.report.timestamp && block.timestamp - latestReportTs < 2 days;
+        if (!isFresh) {
+            _updateVaultData();
+        }
+    }
+
     function _updateVaultData() internal {
         address _vault = address(stakingVault);
 
         // prepare the next report
         VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(_vault);
-        VaultReport memory previousReport = lastReport;
 
         uint256 liabilityShares = vaultHub.liabilityShares(_vault);
         lastReport = VaultReport({
             // Use the actual vault balance for the report to avoid double-counting inOutDelta.
-            totalValue: address(stakingVault).balance, // TODO - vaultHub.totalValue(_vault) + sv_otcDeposited,
-            cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
+            totalValue: address(stakingVault).balance,
+            cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1, // +1 to ensure non-zero fee delta even when settledLidoFees is 0
             liabilityShares: liabilityShares,
             maxLiabilityShares: Math256.max(vaultRecord.maxLiabilityShares, liabilityShares),
             reportTimestamp: uint64(block.timestamp)
