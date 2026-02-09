@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, ether, GENESIS_TIME_MAINNET, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "lib";
+import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import {
@@ -133,12 +133,10 @@ describe("Integration: Report Validator Exit Delay", () => {
   });
 
   it("Should report validator exit delay historically", async function () {
-    const { nor, validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
-    if ((await validatorExitDelayVerifier.GENESIS_TIME()) != GENESIS_TIME_MAINNET) {
-      console.log("Skipping test because it's not mainnet");
-      this.skip();
-    }
+    // Skip if not mainnet
+    if (!ctx.isMainnet) this.skip();
 
+    const { nor, validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
     const nodeOpId = 2;
     const exitRequests = [
       {
@@ -206,12 +204,10 @@ describe("Integration: Report Validator Exit Delay", () => {
   });
 
   it("Should revert when validator reported multiple times in a single transaction", async function () {
-    const { validatorsExitBusOracle, validatorExitDelayVerifier, nor } = ctx.contracts;
+    // Skip if not mainnet
+    if (!ctx.isMainnet) this.skip();
 
-    if ((await validatorExitDelayVerifier.GENESIS_TIME()) != GENESIS_TIME_MAINNET) {
-      console.log("Skipping test because it's not mainnet");
-      this.skip();
-    }
+    const { validatorsExitBusOracle, validatorExitDelayVerifier, nor } = ctx.contracts;
 
     // Setup multiple exit requests with the same pubkey
     const nodeOpIds = [1, 2];
@@ -260,11 +256,10 @@ describe("Integration: Report Validator Exit Delay", () => {
   });
 
   it("Should revert when exit request hash is not submitted", async function () {
+    // Skip if not mainnet
+    if (!ctx.isMainnet) this.skip();
+
     const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
-    if ((await validatorExitDelayVerifier.GENESIS_TIME()) != GENESIS_TIME_MAINNET) {
-      console.log("Skipping test because it's not mainnet");
-      this.skip();
-    }
 
     const exitRequests = [
       {
@@ -302,12 +297,10 @@ describe("Integration: Report Validator Exit Delay", () => {
   });
 
   it("Should revert when exit request was not unpacked", async function () {
-    const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
+    // Skip if not mainnet
+    if (!ctx.isMainnet) this.skip();
 
-    if ((await validatorExitDelayVerifier.GENESIS_TIME()) != GENESIS_TIME_MAINNET) {
-      console.log("Skipping test because it's not mainnet");
-      this.skip();
-    }
+    const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
 
     const exitRequests = [
       {

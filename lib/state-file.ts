@@ -116,8 +116,10 @@ export enum Sk {
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
   // Easy Track
   easyTrack = "easyTrack",
-  vaultsAdapter = "vaultsAdapter",
   easyTrackEVMScriptExecutor = "easyTrackEVMScriptExecutor",
+  vaultsAdapter = "vaultsAdapter",
+  // Harnesses
+  alertingHarness = "alertingHarness",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

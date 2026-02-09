@@ -35,6 +35,13 @@
       "constructorArgs": ["0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb", 12, 1606824023]
     }
   },
+  "alertingHarness": {
+    "implementation": {
+      "contract": "contracts/harness/AlertingHarness.sol",
+      "address": "0xe3f9D755b3240AF7C988B05588A38461D40Bd558",
+      "constructorArgs": ["0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"]
+    }
+  },
   "apmRegistryFactoryAddress": "0xa0BC4B67F5FacDE4E50EAFF48691Cfc43F4E280A",
   "app:aragon-agent": {
     "implementation": {
@@ -531,6 +538,11 @@
       "maxPositiveTokenRebase": 750000
     }
   },
+  "pinnedBeaconProxy": {
+    "contract": "contracts/0.8.25/vaults/PinnedBeaconProxy.sol",
+    "address": "0x62e0D92cf7B8752b5292B9BCbbacE4cFa1633428",
+    "constructorArgs": ["0x5FbE8cEf9CCc56ad245736D3C5bAf82ad54Ca789", "0x"]
+  },
   "predepositGuarantee": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
@@ -543,7 +555,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol",
-      "address": "0xCC08C36BD5bb78FDcB10F35B404ada6Ffc71a023",
+      "address": "0xE78717192C45736DF0E4be55c0219Ee7f9aDdd0D",
       "constructorArgs": [
         "0x00000000",
         "0x0000000000000000000000000000000000000000000000000096000000000028",
@@ -555,7 +567,7 @@
   "resealManager": {
     "address": "0x7914b5a1539b97Bd0bbd155757F25FD79A522d24"
   },
-  "scratchDeployGasUsed": "60748388",
+  "scratchDeployGasUsed": "65129226",
   "stakingRouter": {
     "proxy": {
       "address": "0xFdDf38947aFB03C621C71b06C9C70bce73f12999",

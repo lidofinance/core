@@ -1,11 +1,5 @@
-## Disclaimer!
-
-This is the core repository of the Lido on Ethereum protocol. The entire codebase, excluding contracts, has undergone significant refactoring and tooling modernization. For historical context or legacy information, refer to the [last legacy commit](https://github.com/lidofinance/lido-dao/tree/de9e895879126b482effedd8fa1f2af3f7dc2dd4).
-
----
-
 <div>
-    <img alt="Lido" src="https://img.shields.io/badge/v2.1-version?label=lido&labelColor=rgb(91%2C%20162%2C%20252)&color=white"/>
+    <img alt="Lido" src="https://img.shields.io/badge/v3.0.1-version?label=lido&labelColor=rgb(91%2C%20162%2C%20252)&color=white"/>
     <img alt="GitHub license" src="https://img.shields.io/github/license/lidofinance/lido-dao?labelColor=orange&color=white"/>
     <img alt="Solidity" src="https://img.shields.io/badge/multiver-s?style=flat&label=solidity&labelColor=rgb(86%2C%2085%2C%20212)&color=white"/>
     <img alt="Aragon OS" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Flidofinance%2Fcore%2Fmaster%2Fpackage.json&query=%24.dependencies%5B'%40aragon%2Fos'%5D&style=flat&label=aragon%2Fos&labelColor=rgb(70%2C%20100%2C%20246)&color=white"/>
@@ -62,6 +56,10 @@ Please refer to the [Lido Contribution Guide](/CONTRIBUTING.md).
 ## Code of Conduct
 
 Please refer to the [Lido Contributor Code of Conduct](/CODE_OF_CONDUCT.md).
+
+## Disclaimer
+
+This is the core repository of the Lido on Ethereum protocol. The codebase (excluding contracts) has undergone significant refactoring and tooling modernization, so older guides and references may not match the current layout. For historical context or legacy information, see the [last legacy commit](https://github.com/lidofinance/lido-dao/tree/de9e895879126b482effedd8fa1f2af3f7dc2dd4).
 
 ## License
 

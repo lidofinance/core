@@ -265,6 +265,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _withdrawalCredentials withdrawal credentials of the deposit message to verify
      * @dev reverts with `InvalidSignature` if the signature is invalid
      * @dev reverts with `InputHasInfinityPoints` if the input contains infinity points(zero values)
+     * @dev reverts with `InvalidDepositAmount` if `_deposit.amount` is not gwei-aligned
      */
     function verifyDepositMessage(
         IStakingVault.Deposit calldata _deposit,

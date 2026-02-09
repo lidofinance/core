@@ -5,6 +5,7 @@ import { getMode } from "hardhat.helpers";
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
 import { discover } from "./discover";
+import { MAINNET_LOCATOR_ADDRESS } from "./mainnet";
 import { provision } from "./provision";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
@@ -78,6 +79,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
     interfaces,
     flags,
     isScratch,
+    isMainnet: contracts.locator.address.toLowerCase() === MAINNET_LOCATOR_ADDRESS.toLowerCase(),
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
     getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),

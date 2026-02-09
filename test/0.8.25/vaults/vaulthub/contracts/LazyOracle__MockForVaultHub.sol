@@ -4,7 +4,7 @@
 pragma solidity 0.8.25;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-
+import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import "hardhat/console.sol";
 
 contract LazyOracle__MockForVaultHub {
@@ -49,5 +49,16 @@ contract LazyOracle__MockForVaultHub {
             _reportMaxLiabilityShares,
             _reportSlashingReserve
         );
+    }
+
+    function vaultQuarantine(address _vault) external view returns (LazyOracle.QuarantineInfo memory) {
+        return
+            LazyOracle.QuarantineInfo({
+                isActive: isVaultQuarantined[_vault],
+                pendingTotalValueIncrease: 0,
+                startTimestamp: 0,
+                endTimestamp: 0,
+                totalValueRemainder: 0
+            });
     }
 }

@@ -1,7 +1,7 @@
 import { hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "ethers";
 import { ethers } from "hardhat";
 
-import { SecretKey } from "@chainsafe/blst";
+import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
 
 import { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types";
 import {
@@ -20,7 +20,9 @@ export const randomInt = (max: number): number => Math.floor(Math.random() * max
 const ikm = Uint8Array.from(Buffer.from("test test test test test test test", "utf-8"));
 const masterSecret = SecretKey.deriveMasterEip2333(ikm);
 const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
-let secretIndex = 0;
+// Start from a pseudo-random child index so that every test run exercises a different
+// sequence of BLS keys, while still being deterministic within a single process.
+let secretIndex = randomInt(1_000_000);
 
 export const addressToWC = (address: string, version = 2) =>
   `${hexlify(new Uint8Array([version]))}${"00".repeat(11)}${de0x(address.toLowerCase())}`;
@@ -46,18 +48,43 @@ export const generateValidator = (customWC?: string, fresh: boolean = false): Va
 type GeneratePredepositOptions = {
   overrideAmount?: bigint;
   depositDomain?: string;
+  pubkeyFlipBitmask?: number;
+  signatureFlipBitmask?: number;
 };
+
+function overrideLeftmost3Bits(nibble: number, flipBitmask: number): number {
+  // Ensure the input is a single hexadecimal nibble (0-15)
+  if (nibble < 0 || nibble > 15 || !Number.isInteger(nibble)) {
+    throw new Error("Nibble must be an integer between 0 and 15.");
+  }
+
+  // Shift the flipped bits left by 1 bit
+  const shiftedFlipBitmask = (flipBitmask & 0b0111) << 1;
+
+  // Apply the flipped bit mask to the original nibble
+  return nibble ^ shiftedFlipBitmask;
+}
 
 export const generatePredeposit = async (
   validator: Validator,
   options = {} as GeneratePredepositOptions,
 ): Promise<{ deposit: IStakingVault.DepositStruct; depositY: BLS12_381.DepositYStruct }> => {
-  const { overrideAmount = ether("1"), depositDomain } = options;
+  const { overrideAmount = ether("1"), depositDomain, pubkeyFlipBitmask, signatureFlipBitmask } = options;
   const amount = overrideAmount;
   const pubkey = validator.blsPrivateKey.toPublicKey();
 
+  const canonPubkey = pubkey.toHex(true);
+  let flippedPubkey = canonPubkey;
+  if (typeof pubkeyFlipBitmask === "number") {
+    const nibToFlip = Number.parseInt(canonPubkey.slice(2, 3), 16);
+    const flippedNib = overrideLeftmost3Bits(nibToFlip, pubkeyFlipBitmask);
+    const hexNib = flippedNib.toString(16);
+    if (hexNib.length > 1) throw new Error("invariant");
+    flippedPubkey = `0x${hexNib}${canonPubkey.slice(3)}`;
+  }
+
   const messageRoot = await computeDepositMessageRoot(
-    pubkey.toHex(true),
+    flippedPubkey,
     hexlify(validator.container.withdrawalCredentials),
     amount,
     depositDomain,
@@ -72,6 +99,15 @@ export const generatePredeposit = async (
 
   const signatureY = signature.toBytes(false).slice(96);
 
+  let flippedSignature = signature.toHex(true);
+  if (typeof signatureFlipBitmask === "number") {
+    const nibToFlip = Number.parseInt(flippedSignature.slice(2, 3), 16);
+    const flippedNib = overrideLeftmost3Bits(nibToFlip, signatureFlipBitmask);
+    const hexNib = flippedNib.toString(16);
+    if (hexNib.length > 1) throw new Error("invariant");
+    flippedSignature = `0x${hexNib}${flippedSignature.slice(3)}`;
+  }
+
   // first Fp of Y coordinate is last 48 bytes of signature
   const sigY_c0 = signatureY.slice(48);
   const sigY_c0_a = zeroPadValue(sigY_c0.slice(0, 16), 32);
@@ -81,15 +117,37 @@ export const generatePredeposit = async (
   const sigY_c1_a = zeroPadValue(sigY_c1.slice(0, 16), 32);
   const sigY_c1_b = zeroPadValue(sigY_c1.slice(16), 32);
 
+  let offChainVerification;
+  try {
+    offChainVerification = verify(
+      messageRoot,
+      PublicKey.fromHex(flippedPubkey, false),
+      Signature.fromHex(flippedSignature, false),
+      true,
+      true,
+    );
+  } catch {
+    offChainVerification = false;
+  }
+
+  if (typeof signatureFlipBitmask === "number" || typeof pubkeyFlipBitmask === "number") {
+    if (offChainVerification)
+      throw new Error(
+        `invariant: off-chain verification should fail with flipped bits pk:${flippedPubkey},sig:${flippedSignature}`,
+      );
+  } else if (!offChainVerification) {
+    throw new Error(`invariant: off-chain verification failed pk:${flippedPubkey},sig:${flippedSignature}`);
+  }
+
   return {
     deposit: {
-      pubkey: validator.container.pubkey,
+      pubkey: flippedPubkey,
       amount,
-      signature: signature.toBytes(true),
+      signature: flippedSignature,
       depositDataRoot: computeDepositDataRoot(
         hexlify(validator.container.withdrawalCredentials),
-        validator.container.pubkey,
-        signature.toBytes(true),
+        flippedPubkey,
+        flippedSignature,
         amount,
       ),
     },
