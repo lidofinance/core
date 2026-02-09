@@ -1320,7 +1320,9 @@ describe.skip("OracleReportSanityChecker.sol", () => {
 
     before(async () => {
       // Grant the role to admin for setting limits (admin is the deployer, so has DEFAULT_ADMIN_ROLE)
-      await checker.connect(admin).grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(), admin.address);
+      await checker
+        .connect(admin)
+        .grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(), admin.address);
       // Set a high limit for these tests
       await checker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(HIGH_LIMIT_GWEI);
     });

@@ -133,20 +133,21 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
   });
 
   describe("Balance calculation integration with sanity checker", () => {
-    let contextSnapshot: string;
+    let originalState: string;
 
     before(async () => {
       // Grant the role to admin for setting limits
-      await oracleReportSanityChecker.connect(admin).grantRole(
-        await oracleReportSanityChecker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(),
-        admin.address,
-      );
-      // Take snapshot after setup for this context
-      contextSnapshot = await Snapshot.take();
+      await oracleReportSanityChecker
+        .connect(admin)
+        .grantRole(await oracleReportSanityChecker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(), admin.address);
     });
 
     beforeEach(async () => {
-      await Snapshot.restore(contextSnapshot);
+      originalState = await Snapshot.take();
+    });
+
+    afterEach(async () => {
+      await Snapshot.restore(originalState);
     });
 
     it("should pass sanity check for curated validators (Format 1)", async () => {
@@ -314,7 +315,7 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       await expect(oracle.connect(member1).submitReportData(reportDataV1, oracleVersion)).not.to.be.reverted;
 
       // Restore snapshot and test Format 2 as well
-      await Snapshot.restore(contextSnapshot);
+      await Snapshot.restore(originalState);
       const { reportData: reportDataV2Again } = await prepareReportAndSubmitHash(
         requestsV2,
         DATA_FORMAT_LIST_WITH_KEY_INDEX,
