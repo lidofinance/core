@@ -47,7 +47,6 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     address public rootAccount;
 
     uint256 constant MIN_SHARES = 1;
-    uint256 constant MAX_SHARES = 1000;
     uint256 constant QUARANTINE_PERIOD = 3; // days
 
     uint256 public sv_otcDeposited = 0;
@@ -162,7 +161,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     /// @notice Initiates voluntary disconnect for the vault
     function voluntaryDisconnect(uint256 shouldDisconnect) public withConnectedVault withFreshReport {
         shouldDisconnect = bound(shouldDisconnect, 0, 100);
-        if (shouldDisconnect < 95) return; // 5% chance to disconnect
+        if (shouldDisconnect < 90) return; // 10% chance to disconnect
 
         (, uint256 unsettledFees) = vaultHub.obligations(address(stakingVault));
         uint256 availableBalance = Math256.min(
@@ -190,7 +189,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     /// @notice Funds the vault via VaultHub
     function fund(uint256 amount) public withConnectedVault {
-        amount = bound(amount, 1, 1 ether);
+        amount = bound(amount, 1, 10 ether);
         deal(address(userAccount), amount);
 
         vm.prank(userAccount);
@@ -260,10 +259,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     /// @notice Burns shares from the vault
     function burnShares(uint256 shares) public withConnectedVault {
-        shares = bound(shares, MIN_SHARES, MAX_SHARES);
         uint256 currShares = vaultHub.liabilityShares(address(stakingVault));
-        uint256 sharesToBurn = Math256.min(currShares, shares);
-        if (sharesToBurn == 0) return;
+        if (currShares == 0) return;
+
+        uint256 sharesToBurn = currShares <= MIN_SHARES ? currShares : bound(shares, MIN_SHARES, currShares);
 
         vm.prank(userAccount);
         vaultHub.burnShares(address(stakingVault), sharesToBurn);

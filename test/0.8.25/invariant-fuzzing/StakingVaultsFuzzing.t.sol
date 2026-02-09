@@ -219,7 +219,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_1_liabilityShares_not_above_rebalance_threshold() external {
+    function invariant_01_liabilityShares_not_above_rebalance_threshold() external {
         uint256 rebalanceShares = vaultHubProxy.healthShortfallShares(address(stakingVaultProxy));
         assertEq(rebalanceShares, 0, "Staking Vault should never go below the rebalance threshold");
     }
@@ -232,7 +232,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_2_dynamic_totalValue_should_not_underflow() external {
+    function invariant_02_dynamic_totalValue_should_not_underflow() external {
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
         assertGe(
             int256(uint256(record.report.totalValue)) +
@@ -251,7 +251,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_3_forceRebalance_should_not_revert_when_has_available_balance_and_obligations() external {
+    function invariant_03_forceRebalance_should_not_revert_when_has_available_balance_and_obligations() external {
         bool forceRebalanceReverted = svHandler.didForceRebalanceReverted();
         assertFalse(
             forceRebalanceReverted,
@@ -267,7 +267,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_4_forceValidatorExit_should_not_revert_when_has_obligations_shortfall() external {
+    function invariant_04_forceValidatorExit_should_not_revert_when_has_obligations_shortfall() external {
         bool forceValidatorExitReverted = svHandler.didForceValidatorExitReverted();
         assertFalse(forceValidatorExitReverted, "forceValidatorExit should not revert when has obligations shortfall");
     }
@@ -280,7 +280,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_5_applied_tv_should_not_be_greater_than_reported_tv() external {
+    function invariant_05_applied_tv_should_not_be_greater_than_reported_tv() external {
         uint256 appliedTotalValue = svHandler.getAppliedTotalValue();
         uint256 reportedTotalValue = svHandler.getReportedTotalValue();
 
@@ -299,7 +299,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_6_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
+    function invariant_06_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
         //Get the share limit from the vault
         uint256 liabilityShares = vaultHubProxy.liabilityShares(address(stakingVaultProxy));
 
@@ -331,7 +331,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_7_locked_cannot_be_less_than_slashing_connected_reserve()
+    function invariant_07_locked_cannot_be_less_than_slashing_connected_reserve()
         external
         vaultMustBeConnected
         vaultNotPendingDisconnect
@@ -361,7 +361,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_8_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
+    function invariant_08_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
         external
     {
         uint256 withdrawableValue = vaultHubProxy.withdrawableValue(address(stakingVaultProxy));
@@ -389,7 +389,7 @@ contract StakingVaultsTest is Test {
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
-    function invariant_9_totalValue_should_be_less_than_or_equal_to_effective_total_value() external {
+    function invariant_09_totalValue_should_be_less_than_or_equal_to_effective_total_value() external {
         uint256 totalValue = svHandler.getVaultTotalValue();
         uint256 effectiveTotalValue = svHandler.getEffectiveVaultTotalValue();
         assertLe(totalValue, effectiveTotalValue, "Total value should be less than or equal to effective total value");
