@@ -22,6 +22,8 @@ match_path = '**/test/**/*.t.sol'
 
 # Enable latest EVM features
 evm_version = "prague"
+optimizer = true
+optimizer_runs = 200
 
 # https://book.getfoundry.sh/reference/config/testing#fuzz
 # fuzz = { runs = 256 }
@@ -33,15 +35,25 @@ evm_version = "prague"
 
 fmt = { int_types = 'long' }
 
-# add via_ir profile
+# profiles required by compilation_restrictions
 additional_compiler_profiles = [
-    { name = "v3", version = "0.8.25", optimizer = true, optimizer_runs = 200, via_ir = true, evm_version = "cancun" },
-    { name = "vaultHub", version = "0.8.25", optimizer = true, optimizer_runs = 100, via_ir = true, evm_version = "cancun" },
+    { name = "solc0424", optimizer = true, optimizer_runs = 200, evm_version = "constantinople" },
+    { name = "solc06x_089", optimizer = true, optimizer_runs = 200, evm_version = "istanbul" },
+    { name = "solc0825", optimizer = true, optimizer_runs = 200, via_ir = true, evm_version = "cancun" },
+    { name = "v3", optimizer = true, optimizer_runs = 200, via_ir = true, evm_version = "cancun" },
+    { name = "vaultHub", optimizer = true, optimizer_runs = 100, via_ir = true, evm_version = "cancun" },
 ]
 
-# enforce compiling 0.8.25 contract with via_ir
+# align compiler settings with hardhat.config.ts
 compilation_restrictions = [
-    { paths = "contracts/0.8.25/**", optimizer_runs = 200, via_ir = true },
-    { paths = "contracts/0.8.25/vaults/VaultHub.sol", optimizer_runs = 100, via_ir = true },
-    { paths = "contracts/upgrade/**", optimizer_runs = 200, via_ir = true },
+    { paths = "contracts/0.4.24/**", optimizer_runs = 200, evm_version = "constantinople" },
+    { paths = "contracts/0.6.11/**", optimizer_runs = 200, evm_version = "istanbul" },
+    { paths = "contracts/0.6.12/**", optimizer_runs = 200, evm_version = "istanbul" },
+    { paths = "contracts/0.8.9/**", optimizer_runs = 200, evm_version = "istanbul" },
+    { paths = "contracts/0.8.25/**", optimizer_runs = 200, via_ir = true, evm_version = "cancun" },
+    { paths = "contracts/upgrade/**", optimizer_runs = 200, via_ir = true, evm_version = "cancun" },
+    # NB: Foundry cannot safely mirror Hardhat's strict VaultHub runs=100 override
+    # together with a runs=200 rule on the same import graph, so we keep a merge-safe
+    # range here for compatibility.
+    { paths = "contracts/0.8.25/vaults/VaultHub.sol", min_optimizer_runs = 100, max_optimizer_runs = 200, via_ir = true, evm_version = "cancun" },
 ]
