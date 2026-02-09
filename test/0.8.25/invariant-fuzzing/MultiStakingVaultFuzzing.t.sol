@@ -363,7 +363,7 @@ contract MultiStakingVaultsTest is Test {
             address vault = address(stakingVaultProxies[i]);
             VaultHub.VaultConnection memory vc = vaultHubProxy.vaultConnection(vault);
 
-            if (vc.vaultIndex == 0) return;
+            if (vc.vaultIndex == 0) continue;
 
             (
                 ,
@@ -375,10 +375,10 @@ contract MultiStakingVaultsTest is Test {
                 uint256 liquidityFeeBP,
                 uint256 reservationFeeBP
             ) = operatorGridProxy.vaultInfo(vault);
-            assertEq(
+            assertLe(
                 vc.shareLimit,
                 shareLimit,
-                "Vault's shareLimit in connection must match OperatorGrid registered VaultInfo"
+                "Vault's shareLimit in connection must not exceed OperatorGrid tier shareLimit"
             );
             assertEq(
                 vc.reserveRatioBP,

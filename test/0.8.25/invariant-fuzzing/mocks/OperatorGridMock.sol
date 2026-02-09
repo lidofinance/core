@@ -531,7 +531,8 @@ contract OperatorGridMock is AccessControlEnumerableUpgradeable {
     /// @notice Mint shares limit check
     /// @param _vault address of the vault
     /// @param _amount amount of shares will be minted
-    function onMintedShares(address _vault, uint256 _amount) external {
+    /// @param _overrideLimits if true, skip tier and group limit checks
+    function onMintedShares(address _vault, uint256 _amount, bool _overrideLimits) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("onMintedShares", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
@@ -540,14 +541,14 @@ contract OperatorGridMock is AccessControlEnumerableUpgradeable {
         Tier storage tier_ = $.tiers[tierId];
 
         uint96 tierLiabilityShares = tier_.liabilityShares;
-        if (tierLiabilityShares + _amount > tier_.shareLimit) revert TierLimitExceeded();
+        if (!_overrideLimits && tierLiabilityShares + _amount > tier_.shareLimit) revert TierLimitExceeded();
 
         tier_.liabilityShares = tierLiabilityShares + uint96(_amount);
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
             uint96 groupMintedShares = group_.liabilityShares;
-            if (groupMintedShares + _amount > group_.shareLimit) revert GroupLimitExceeded();
+            if (!_overrideLimits && groupMintedShares + _amount > group_.shareLimit) revert GroupLimitExceeded();
 
             group_.liabilityShares = groupMintedShares + uint96(_amount);
         }
