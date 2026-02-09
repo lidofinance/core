@@ -294,10 +294,6 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
     });
 
     it("should calculate same balance for Format 1 and Format 2 with same validators", async () => {
-      // Set a generous limit
-      const limit = CURATED_MODULE_MAX_BALANCE_GWEI * 10n + MAXEB_MODULE_MAX_BALANCE_GWEI * 5n;
-      await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(limit);
-
       const requestsV1: ExitRequest[] = [
         { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
         { moduleId: 3, nodeOpId: 2, valIndex: 20, valPubkey: PUBKEYS[1] },
@@ -308,19 +304,26 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
         { moduleId: 3, nodeOpId: 2, valIndex: 20, keyIndex: 200, valPubkey: PUBKEYS[1] },
       ];
 
+      const dataV1 = encodeExitRequestsDataList(requestsV1, DATA_FORMAT_LIST);
+      const dataV2 = encodeExitRequestsDataList(requestsV2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+
+      // Verify both formats calculate the same balance
+      const balanceV1 = await oracle.calculateTotalExitBalanceGwei(dataV1, DATA_FORMAT_LIST);
+      const balanceV2 = await oracle.calculateTotalExitBalanceGwei(dataV2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+
+      expect(balanceV1).to.equal(balanceV2, "Format 1 and Format 2 should calculate the same balance");
+
+      // Set limit based on calculated balance and verify both formats pass sanity check
+      const limit = balanceV1 + CURATED_MODULE_MAX_BALANCE_GWEI; // Add some headroom
+      await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(limit);
+
       // Both should pass - same validators, same balance calculation
       const { reportData: reportDataV1 } = await prepareReportAndSubmitHash(requestsV1, DATA_FORMAT_LIST);
-
-      // Both formats calculate the same balance, so both should pass
       await expect(oracle.connect(member1).submitReportData(reportDataV1, oracleVersion)).not.to.be.reverted;
 
-      // Restore snapshot and test Format 2 as well
-      await Snapshot.restore(originalState);
-      const { reportData: reportDataV2Again } = await prepareReportAndSubmitHash(
-        requestsV2,
-        DATA_FORMAT_LIST_WITH_KEY_INDEX,
-      );
-      await expect(oracle.connect(member1).submitReportData(reportDataV2Again, oracleVersion)).not.to.be.reverted;
+      // Format 2 should also pass with the same limit
+      const { reportData: reportDataV2 } = await prepareReportAndSubmitHash(requestsV2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      await expect(oracle.connect(member1).submitReportData(reportDataV2, oracleVersion)).not.to.be.reverted;
     });
   });
 });
