@@ -34,7 +34,7 @@ library SRUtils {
     error StakingModuleAddressExists();
     error StakingModuleWrongName();
     error StakingModuleUnregistered();
-    error InvalidWithdrawalCredentialsType();
+    error WrongWithdrawalCredentialsType();
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
@@ -95,7 +95,7 @@ library SRUtils {
 
     function _validateWithdrawalCredentialsType(uint256 _withdrawalCredentialsType) internal pure {
         if (_withdrawalCredentialsType != WC_TYPE_01 && _withdrawalCredentialsType != WC_TYPE_02) {
-            revert InvalidWithdrawalCredentialsType();
+            revert WrongWithdrawalCredentialsType();
         }
     }
 
@@ -117,7 +117,13 @@ library SRUtils {
         } else if (_withdrawalCredentialsType == WC_TYPE_02) {
             return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
         } else {
-            revert InvalidWithdrawalCredentialsType();
+            revert WrongWithdrawalCredentialsType();
+        }
+    }
+
+    function _validateWC0x02(uint8 _withdrawalCredentialsType) internal pure {
+        if (_withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
+            revert WrongWithdrawalCredentialsType();
         }
     }
 
