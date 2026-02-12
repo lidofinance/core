@@ -517,8 +517,8 @@ contract AccountingOracle is BaseOracle {
             ReportValues(
                 GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
                 slotsElapsed * SECONDS_PER_SLOT,
-                data.clActiveBalanceGwei * 1e9,    // Active balance
-                data.clPendingBalanceGwei * 1e9,   // Pending balance
+                data.clActiveBalanceGwei * 1e9,    // Validators Active balance
+                data.clPendingBalanceGwei * 1e9,   // Validators Pending balance
                 data.withdrawalVaultBalance,
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,

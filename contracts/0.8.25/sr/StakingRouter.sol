@@ -319,7 +319,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice Reports operator balances for balance-based staking modules (v2 modules with 0x02 withdrawal credentials)
     /// @param _stakingModuleId The id of the staking module to be updated
-    /// @param _operatorIds Ids of the node operators to be updated
+    /// @param _nodeOperatorIds Ids of the node operators to be updated
     /// @param _totalBalancesGwei Total CL balances (active + pending) for the specified operators
     function reportStakingModuleOperatorBalances(
         uint256 _stakingModuleId,
@@ -329,7 +329,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SRLib._reportStakingModuleOperatorBalances(_stakingModuleId, _nodeOperatorIds, _totalBalancesGwei);
     }
 
-    // todo REMOVE
+    /// @dev DEPRECATED
     /// @dev See {SRLib._unsafeSetExitedValidatorsCount}.
     function unsafeSetExitedValidatorsCount(
         uint256 _stakingModuleId,

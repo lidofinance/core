@@ -45,7 +45,7 @@ interface ILido is IERC20, IVersioned {
         external
         view
         returns (
-            uint256 clActiveBalanceAtLastReport,
+            uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport
         );

@@ -80,7 +80,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       expect((await lido.getBeaconStat()).beaconBalance).to.equal(clBalance);
       expect((await lido.getBeaconStat()).beaconValidators).to.equal(depositedValidators);
       expect((await lido.getBeaconStat()).depositedValidators).to.equal(depositedValidators);
-      expect((await lido.getBalanceStats()).clActiveBalanceAtLastReport).to.equal(clBalance);
+      expect((await lido.getBalanceStats()).clValidatorsBalanceAtLastReport).to.equal(clBalance);
       expect((await lido.getBalanceStats()).clPendingBalanceAtLastReport).to.equal(0);
       expect((await lido.getBalanceStats()).depositedSinceLastReport).to.equal(depositedBalance);
     });
