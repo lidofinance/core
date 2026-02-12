@@ -64,12 +64,12 @@ contract Lido__MockForAccounting {
         external
         view
         returns (
-            uint256 clActiveBalanceAtLastReport,
+            uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport
         )
     {
-        clActiveBalanceAtLastReport = reportClActiveBalance;
+        clValidatorsBalanceAtLastReport = reportClActiveBalance;
         clPendingBalanceAtLastReport = reportClPendingBalance;
         depositedSinceLastReport = depositedBalance;
     }

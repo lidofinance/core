@@ -66,10 +66,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @dev Debug event for top-up flow
     event DebugTopUp(
         uint256 indexed stakingModuleId,
-        uint256 allocationAmount,       // sum from deposit allocation (stakingModuleDepositableEthAmount)
-        uint256 moduleAllocatedAmount,   // sum returned by module's allocateDeposits
-        uint256[] topUpLimits,           // limits from TopUpGateway (per-validator CL-based limits)
-        uint256[] moduleAllocations      // per-validator allocations returned by module
+        uint256 allocationAmount, // sum from deposit allocation (stakingModuleDepositableEthAmount)
+        uint256 moduleAllocatedAmount, // sum returned by module's allocateDeposits
+        uint256[] topUpLimits, // limits from TopUpGateway (per-validator CL-based limits)
+        uint256[] moduleAllocations // per-validator allocations returned by module
     );
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
@@ -100,7 +100,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error AllocationExceedsTarget();
     error DepositValueNotMultipleOfInitialDeposit();
     error StakingModuleStatusTheSame();
-    error WrongWithdrawalCredentialsType();
     error LegacyStakingModuleRequired();
     error KeysDoesntBelongToModule();
     error WrongArrayLength();
@@ -314,33 +313,23 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _nodeOperatorIds,
         bytes calldata _exitedValidatorsCounts
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
-        /// @dev validation of _stakingModuleId is done in _reportValidatorExitDelay
-        SRLib._reportStakingModuleExitedValidatorsCountByNodeOperator(
-            _stakingModuleId, _nodeOperatorIds, _exitedValidatorsCounts
-        );
+        /// @dev validation of _stakingModuleId is done in _reportValidatorExitDelay_validateAndGetModuleState
+        SRLib._reportStakingModuleOperatorExitedValidators(_stakingModuleId, _nodeOperatorIds, _exitedValidatorsCounts);
     }
 
     /// @notice Reports operator balances for balance-based staking modules (v2 modules with 0x02 withdrawal credentials)
     /// @param _stakingModuleId The id of the staking module to be updated
-    /// @param _operatorIds Ids of the node operators to be updated
-    /// @param _effectiveBalances Effective balances for the specified operators
+    /// @param _nodeOperatorIds Ids of the node operators to be updated
+    /// @param _totalBalancesGwei Total CL balances (active + pending) for the specified operators
     function reportStakingModuleOperatorBalances(
         uint256 _stakingModuleId,
-        bytes calldata _operatorIds,
-        bytes calldata _effectiveBalances
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _totalBalancesGwei
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
-
-        /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
-        if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
-            revert WrongWithdrawalCredentialsType();
-        }
-
-        // TODO: fix interface
-        _stakingModuleId.getIStakingModuleV2().updateOperatorBalances(_operatorIds, _effectiveBalances);
+        SRLib._reportStakingModuleOperatorBalances(_stakingModuleId, _nodeOperatorIds, _totalBalancesGwei);
     }
 
-    // todo REMOVE
+    /// @dev DEPRECATED
     /// @dev See {SRLib._unsafeSetExitedValidatorsCount}.
     function unsafeSetExitedValidatorsCount(
         uint256 _stakingModuleId,
@@ -751,9 +740,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (!_canDeposit(_stakingModuleId)) revert CannotDeposit();
 
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
-        if (stateConfig.withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
-            revert WrongWithdrawalCredentialsType();
-        }
+        SRUtils._validateWC0x02(stateConfig.withdrawalCredentialsType);
 
         // Get allocation based on target share
         uint256 depositableEther = LIDO.getDepositableEther();

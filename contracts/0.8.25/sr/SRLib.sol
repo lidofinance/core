@@ -543,7 +543,7 @@ library SRLib {
         bytes calldata _vettedSigningKeysCounts
     ) public {
         SRUtils._validateModuleId(_stakingModuleId);
-        _checkValidatorsByNodeOperatorReportData(_nodeOperatorIds, _vettedSigningKeysCounts);
+        _checkOperatorsReportData(_nodeOperatorIds, _vettedSigningKeysCounts);
         _stakingModuleId.getIStakingModule().decreaseVettedSigningKeysCount(_nodeOperatorIds, _vettedSigningKeysCounts);
     }
 
@@ -554,16 +554,27 @@ library SRLib {
     /// @param _stakingModuleId The id of the staking modules to be updated.
     /// @param _nodeOperatorIds Ids of the node operators to be updated.
     /// @param _exitedValidatorsCounts New counts of exited validators for the specified node operators.
-    ///
-    /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
-    function _reportStakingModuleExitedValidatorsCountByNodeOperator(
+    function _reportStakingModuleOperatorExitedValidators(
         uint256 _stakingModuleId,
         bytes calldata _nodeOperatorIds,
         bytes calldata _exitedValidatorsCounts
     ) public {
         SRUtils._validateModuleId(_stakingModuleId);
-        _checkValidatorsByNodeOperatorReportData(_nodeOperatorIds, _exitedValidatorsCounts);
+        _checkOperatorsReportData(_nodeOperatorIds, _exitedValidatorsCounts);
         _stakingModuleId.getIStakingModule().updateExitedValidatorsCount(_nodeOperatorIds, _exitedValidatorsCounts);
+    }
+
+    function _reportStakingModuleOperatorBalances(
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _totalBalancesGwei
+    ) public {
+        SRUtils._validateModuleId(_stakingModuleId);
+        _checkOperatorsReportData(_nodeOperatorIds, _totalBalancesGwei);
+        /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
+        SRUtils._validateWC0x02(_stakingModuleId.getModuleState().config.withdrawalCredentialsType);
+
+        _stakingModuleId.getIStakingModuleV2().updateOperatorBalances(_nodeOperatorIds, _totalBalancesGwei);
     }
 
     /// @notice Updates total numbers of exited validators for staking modules with the specified module ids.
@@ -786,18 +797,15 @@ library SRLib {
         }
     }
 
-    function _checkValidatorsByNodeOperatorReportData(bytes calldata _nodeOperatorIds, bytes calldata _validatorsCounts)
-        internal
-        pure
-    {
-        if (_nodeOperatorIds.length % 8 != 0 || _validatorsCounts.length % 16 != 0) {
+    function _checkOperatorsReportData(bytes calldata _ids, bytes calldata _values) internal pure {
+        if (_ids.length % 8 != 0 || _values.length % 16 != 0) {
             revert InvalidReportData(3);
         }
-        uint256 nodeOperatorsCount = _nodeOperatorIds.length / 8;
-        if (_validatorsCounts.length / 16 != nodeOperatorsCount) {
+        uint256 count = _ids.length / 8;
+        if (_values.length / 16 != count) {
             revert InvalidReportData(2);
         }
-        if (nodeOperatorsCount == 0) {
+        if (count == 0) {
             revert InvalidReportData(1);
         }
     }

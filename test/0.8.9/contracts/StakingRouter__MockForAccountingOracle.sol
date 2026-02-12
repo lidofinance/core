@@ -82,10 +82,10 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
     function reportStakingModuleOperatorBalances(
         uint256 _stakingModuleId,
         bytes calldata _operatorIds,
-        bytes calldata _effectiveBalances
+        bytes calldata _totalBalancesGwei
     ) external {
         calls_reportExitedKeysByNodeOperator.push(
-            ReportKeysByNodeOperatorCallData(_stakingModuleId, _operatorIds, _effectiveBalances)
+            ReportKeysByNodeOperatorCallData(_stakingModuleId, _operatorIds, _totalBalancesGwei)
         );
     }
 
