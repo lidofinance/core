@@ -58,8 +58,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 consensusVersion,
         uint256 lastProcessingRefSlot,
         uint256 maxValidatorsPerRequest,
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceGwei,
+        uint256 balancePerFrameGwei,
         uint256 frameDurationInSec
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
@@ -68,7 +68,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
 
-        _initialize_v2(maxValidatorsPerRequest, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _initialize_v2(maxValidatorsPerRequest, maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
     }
 
     /**
@@ -78,22 +78,22 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
      */
     function finalizeUpgrade_v2(
         uint256 maxValidatorsPerReport,
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceGwei,
+        uint256 balancePerFrameGwei,
         uint256 frameDurationInSec
     ) external {
-        _initialize_v2(maxValidatorsPerReport, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _initialize_v2(maxValidatorsPerReport, maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
     }
 
     function _initialize_v2(
         uint256 maxValidatorsPerReport,
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceGwei,
+        uint256 balancePerFrameGwei,
         uint256 frameDurationInSec
     ) internal {
         _updateContractVersion(2);
         _setMaxValidatorsPerReport(maxValidatorsPerReport);
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _setExitRequestLimit(maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
     }
 
     ///

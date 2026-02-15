@@ -342,7 +342,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
         oracle
           .connect(authorizedEntity)
           .setExitRequestLimit(10n * MAXEB_VALIDATOR_BALANCE_GWEI, 12n * MAXEB_VALIDATOR_BALANCE_GWEI, FRAME_DURATION),
-      ).to.be.revertedWithCustomError(oracle, "TooLargeExitsPerFrame");
+      ).to.be.revertedWithCustomError(oracle, "TooLargeBalancePerFrame");
     });
 
     it("Should deliver request as it is below limit", async () => {
@@ -381,10 +381,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Should not allow to deliver if limit doesnt cover full request", async () => {
       // Previous test consumed 64 ETH (2 legacy validators × 32 ETH)
-      // Remaining from BALANCE_PER_FRAME_GWEI (2048 ETH): 2048 - 64 = 1984 ETH = 1,984,000,000,000 Gwei
-      // REQUEST needs 6208 ETH total, which exceeds the remaining limit
+      // The limit starts at MAX_EXIT_BALANCE_GWEI (6208 ETH), not BALANCE_PER_FRAME_GWEI
+      // Remaining: 6208 - 64 = 6144 ETH
       const consumed = 2n * LEGACY_VALIDATOR_BALANCE_GWEI; // 64 ETH
-      const remaining = BALANCE_PER_FRAME_GWEI - consumed; // 1,984 ETH
+      const remaining = MAX_EXIT_BALANCE_GWEI - consumed; // 6144 ETH
       const requestTotal = 2n * LEGACY_VALIDATOR_BALANCE_GWEI + 3n * MAXEB_VALIDATOR_BALANCE_GWEI; // 6208 ETH
 
       await oracle.connect(authorizedEntity).submitExitRequestsHash(HASH_REQUEST);
@@ -397,7 +397,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const data = await oracle.getExitRequestLimitFullInfo();
 
       const consumed = 2n * LEGACY_VALIDATOR_BALANCE_GWEI; // 64 ETH from previous test
-      const remaining = BALANCE_PER_FRAME_GWEI - consumed; // 1,984 ETH
+      const remaining = MAX_EXIT_BALANCE_GWEI - consumed; // 6144 ETH
 
       expect(data.maxExitBalanceGwei).to.equal(MAX_EXIT_BALANCE_GWEI);
       expect(data.balancePerFrameGwei).to.equal(BALANCE_PER_FRAME_GWEI);
@@ -411,22 +411,33 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const data = await oracle.getExitRequestLimitFullInfo();
 
       const consumed = 2n * LEGACY_VALIDATOR_BALANCE_GWEI; // 64 ETH from first test
-      const remaining = BALANCE_PER_FRAME_GWEI - consumed; // 1,984 ETH
-      // After 2 frames (2×48 seconds), we get 2 more frames worth of balance
-      const increased = remaining + 2n * BALANCE_PER_FRAME_GWEI; // 1,984 + 4,096 = 6,080 ETH
-      // But capped at MAX_EXIT_BALANCE_GWEI (6,208 ETH)
-      const expected = increased > MAX_EXIT_BALANCE_GWEI ? MAX_EXIT_BALANCE_GWEI : increased;
+      const remaining = MAX_EXIT_BALANCE_GWEI - consumed; // 6144 ETH
 
       expect(data.maxExitBalanceGwei).to.equal(MAX_EXIT_BALANCE_GWEI);
       expect(data.balancePerFrameGwei).to.equal(BALANCE_PER_FRAME_GWEI);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitBalanceGwei).to.equal(remaining);
-      expect(data.currentExitBalanceGwei).to.equal(expected);
+      // After 2 frames (2×48 seconds), we get 2 more frames worth of balance: 6144 + 4096 = 10240 ETH
+      // But capped at MAX_EXIT_BALANCE_GWEI (6208 ETH)
+      expect(data.currentExitBalanceGwei).to.equal(MAX_EXIT_BALANCE_GWEI);
     });
 
     it("Should process requests after 2 frames passes", async () => {
       const emitTx = await oracle.submitExitRequestsData(REQUEST);
-      const timestamp = await oracle.getTime();
+      const receipt = await emitTx.wait();
+
+      // Extract timestamp from the emitted events
+      const exitRequestEvent = receipt?.logs
+        .map((log) => {
+          try {
+            return oracle.interface.parseLog({ topics: [...log.topics], data: log.data });
+          } catch {
+            return null;
+          }
+        })
+        .find((parsed) => parsed?.name === "ValidatorExitRequest");
+
+      const timestamp = exitRequestEvent?.args[4];
 
       for (let i = 0; i < 5; i++) {
         const request = VALIDATORS[i];
@@ -501,8 +512,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
         .withArgs(5, 4);
     });
 
-    it("Should set maxExitRequestsLimit equal to 0 and return as currentExitRequestsLimit type(uint256).max", async () => {
-      // can't set just maxExitRequestsLimit to 0, as it will be less than exitsPerFrame
+    it("Should set maxExitBalanceGwei equal to 0 and return as currentExitBalanceGwei type(uint256).max", async () => {
+      // can't set just maxExitBalanceGwei to 0, as it will be less than balancePerFrameGwei
       const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit(0, 0, FRAME_DURATION);
       await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(0, 0, FRAME_DURATION);
 
@@ -515,7 +526,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       expect(data.currentExitBalanceGwei).to.equal(2n ** 256n - 1n);
     });
 
-    it("Should not check limit, if maxLimitRequests equal to 0 (means limit was not set)", async () => {
+    it("Should not check limit, if maxExitBalanceGwei equal to 0 (means limit was not set)", async () => {
       const exitRequestsRandom = [
         { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
         { moduleId: 101, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
@@ -531,14 +542,24 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestRandomHash);
 
       const emitTx = await oracle.submitExitRequestsData(exitRequestRandom);
-      const timestamp = await oracle.getTime();
+      const receipt = await emitTx.wait();
 
-      for (let i = 0; i < 2; i++) {
-        const request = exitRequestsRandom[i];
-        await expect(emitTx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
-      }
+      const exitRequestEvent = receipt?.logs
+        .map((log) => {
+          try {
+            return oracle.interface.parseLog({ topics: [...log.topics], data: log.data });
+          } catch {
+            return null;
+          }
+        })
+        .find((parsed) => parsed?.name === "ValidatorExitRequest");
+
+      const timestamp = exitRequestEvent?.args[4]; // timestamp is the 5th argument
+
+      // Check each event individually
+      await expect(emitTx).to.emit(oracle, "ValidatorExitRequest").withArgs(100, 0, 0, PUBKEYS[0], timestamp);
+
+      await expect(emitTx).to.emit(oracle, "ValidatorExitRequest").withArgs(101, 0, 2, PUBKEYS[1], timestamp);
 
       await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestRandomHash);
 

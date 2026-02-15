@@ -164,7 +164,16 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       });
       it("should revert without admin address", async () => {
         await expect(
-          oracle.initialize(ZeroAddress, await consensus.getAddress(), VEBO_CONSENSUS_VERSION, 0, 600, 13000, 1, 48),
+          oracle.initialize(
+            ZeroAddress,
+            await consensus.getAddress(),
+            VEBO_CONSENSUS_VERSION,
+            0,
+            600,
+            13_000_000_000_000n,
+            32_000_000_000n,
+            48,
+          ),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");
       });
     });

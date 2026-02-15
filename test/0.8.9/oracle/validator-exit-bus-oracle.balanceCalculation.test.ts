@@ -261,7 +261,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
       });
 
       it("should handle module with 0x02 withdrawal credentials (MaxEB)", async () => {
-        const { stakingRouter } = await deployVEBO(await admin.getAddress());
+        const { oracle: newOracle, stakingRouter } = await deployVEBO(await admin.getAddress());
 
         // Configure module 999 as MaxEB (0x02)
         await stakingRouter.setStakingModuleWithdrawalCredentialsType(999, 0x02);
@@ -269,12 +269,12 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         const requests: ExitRequest[] = [{ moduleId: 999, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await newOracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
         expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_GWEI);
       });
 
       it("should handle module with 0x01 withdrawal credentials (Legacy)", async () => {
-        const { stakingRouter } = await deployVEBO(await admin.getAddress());
+        const { oracle: newOracle, stakingRouter } = await deployVEBO(await admin.getAddress());
 
         // Configure module 888 as Legacy (0x01)
         await stakingRouter.setStakingModuleWithdrawalCredentialsType(888, 0x01);
@@ -282,7 +282,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         const requests: ExitRequest[] = [{ moduleId: 888, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await newOracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
         expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_GWEI);
       });
 

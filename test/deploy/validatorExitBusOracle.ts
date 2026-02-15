@@ -81,6 +81,13 @@ export async function deployVEBO(
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(3, 0x02);
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(5, 0x02);
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(7, 0x02);
+  // Modules 100, 101: Used in tests - configure as Legacy (0x01)
+  await stakingRouter.setStakingModuleWithdrawalCredentialsType(100, 0x01);
+  await stakingRouter.setStakingModuleWithdrawalCredentialsType(101, 0x01);
+
+  await updateLidoLocatorImplementation(locatorAddr, {
+    stakingRouter: stakingRouterAddr,
+  });
 
   // Deploy mock NodeOperatorsRegistry
   // In permissive mode (default), it returns empty keys which causes ValidatorsExitBus
@@ -112,7 +119,6 @@ export async function deployVEBO(
     lido: await lido.getAddress(),
     accountingOracle: accountingOracleAddress,
     triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
-    stakingRouter: stakingRouterAddr,
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
@@ -151,8 +157,8 @@ interface VEBOConfig {
   lastProcessingRefSlot?: number;
   resumeAfterDeploy?: boolean;
   maxRequestsPerBatch?: number;
-  maxExitRequestsLimit?: number;
-  exitsPerFrame?: number;
+  maxExitBalanceGwei?: bigint;
+  balancePerFrameGwei?: bigint;
   frameDurationInSec?: number;
 }
 
@@ -165,8 +171,8 @@ export async function initVEBO({
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
   maxRequestsPerBatch = 600,
-  maxExitRequestsLimit = 13000,
-  exitsPerFrame = 1,
+  maxExitBalanceGwei = 13_000_000_000_000n, // 13,000 ETH in Gwei
+  balancePerFrameGwei = 32_000_000_000n, // 32 ETH in Gwei (1 legacy validator per frame)
   frameDurationInSec = 48,
 }: VEBOConfig) {
   const initTx = await oracle.initialize(
@@ -175,8 +181,8 @@ export async function initVEBO({
     consensusVersion,
     lastProcessingRefSlot,
     maxRequestsPerBatch,
-    maxExitRequestsLimit,
-    exitsPerFrame,
+    maxExitBalanceGwei,
+    balancePerFrameGwei,
     frameDurationInSec,
   );
 

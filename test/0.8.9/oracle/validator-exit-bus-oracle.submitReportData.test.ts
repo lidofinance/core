@@ -613,8 +613,12 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     it("Set exit limit", async () => {
       const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(role, admin);
-      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7, 1, 48);
-      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7, 1, 48);
+      // Set limit to allow 4160 ETH (2 legacy + 2 MaxEB validators)
+      // Max: 7000 ETH, Per frame: 5000 ETH (enough to cover 4160 ETH)
+      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7_000_000_000_000n, 5_000_000_000_000n, 48);
+      await expect(exitLimitTx)
+        .to.emit(oracle, "ExitRequestsLimitSet")
+        .withArgs(7_000_000_000_000n, 5_000_000_000_000n, 48);
     });
 
     it("deliver report by actor different from oracle", async () => {
@@ -788,7 +792,9 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
         const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
         await oracle.grantRole(role, admin);
-        await oracle.connect(admin).setExitRequestLimit(100, 1, 48);
+        // Set limit to allow 4160 ETH (2 legacy + 2 MaxEB validators)
+        // Max: 100000 ETH, Per frame: 5000 ETH
+        await oracle.connect(admin).setExitRequestLimit(100_000_000_000_000n, 5_000_000_000_000n, 48);
       });
       after(async () => await Snapshot.restore(originalState));
 
