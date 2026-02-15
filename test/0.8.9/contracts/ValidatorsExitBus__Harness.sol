@@ -61,7 +61,7 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     }
 
     // Expose internal function for unit testing
-    function calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) external pure returns (uint256) {
+    function calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) external view returns (uint256) {
         return _calculateTotalExitBalanceGwei(data, dataFormat);
     }
 }

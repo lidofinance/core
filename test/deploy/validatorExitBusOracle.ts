@@ -69,6 +69,19 @@ export async function deployVEBO(
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
 
+  // Deploy mock StakingRouter with default module configurations
+  const stakingRouter = await ethers.deployContract("StakingRouter__MockForValidatorsExitBus");
+  const stakingRouterAddr = await stakingRouter.getAddress();
+
+  // Configure default modules:
+  // Module 1: Legacy (0x01) - 32 ETH validators
+  await stakingRouter.setStakingModuleWithdrawalCredentialsType(1, 0x01);
+  // Modules 2, 3, 5, 7: MaxEB (0x02) - 2048 ETH validators
+  await stakingRouter.setStakingModuleWithdrawalCredentialsType(2, 0x02);
+  await stakingRouter.setStakingModuleWithdrawalCredentialsType(3, 0x02);
+  await stakingRouter.setStakingModuleWithdrawalCredentialsType(5, 0x02);
+  await stakingRouter.setStakingModuleWithdrawalCredentialsType(7, 0x02);
+
   // Deploy mock NodeOperatorsRegistry
   // In permissive mode (default), it returns empty keys which causes ValidatorsExitBus
   // to skip validation. Tests can explicitly configure keys if needed.
@@ -99,6 +112,7 @@ export async function deployVEBO(
     lido: await lido.getAddress(),
     accountingOracle: accountingOracleAddress,
     triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
+    stakingRouter: stakingRouterAddr,
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
@@ -124,6 +138,7 @@ export async function deployVEBO(
     oracleReportSanityChecker,
     triggerableWithdrawalsGateway,
     nodeOperatorsRegistry,
+    stakingRouter,
   };
 }
 

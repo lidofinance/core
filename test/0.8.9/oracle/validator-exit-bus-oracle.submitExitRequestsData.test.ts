@@ -301,17 +301,25 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     // -----------------------------------------------------------------------------
     // Shared test data
     // -----------------------------------------------------------------------------
-    const MAX_EXIT_REQUESTS_LIMIT = 5;
-    const EXITS_PER_FRAME = 1;
+    // Balance constants (in Gwei)
+    const LEGACY_VALIDATOR_BALANCE_GWEI = 32_000_000_000n; // 32 ETH
+    const MAXEB_VALIDATOR_BALANCE_GWEI = 2_048_000_000_000n; // 2048 ETH
+
+    // Limit configuration (in Gwei)
+    // The limit allows up to 5 validators worth of balance:
+    // 2 legacy (64 ETH) + 3 MaxEB slots worth (but we'll use less to test limits)
+    const MAX_EXIT_BALANCE_GWEI = 6_208_000_000_000n; // Total balance of all 5 validators in Gwei
+    const BALANCE_PER_FRAME_GWEI = 2_048_000_000_000n; // 1 MaxEB validator per frame (2048 ETH)
     const FRAME_DURATION = 48;
 
     // Data for case when limit is not enough to process entire request
+    // Total: 2×32 ETH (module 1) + 2×2048 ETH (module 2) + 1×2048 ETH (module 3) = 6208 ETH
     const VALIDATORS: ExitRequest[] = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
-      { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }, // 32 ETH
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] }, // 32 ETH
+      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] }, // 2048 ETH
+      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] }, // 2048 ETH
+      { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] }, // 2048 ETH
     ];
 
     const REQUEST = {
@@ -325,28 +333,31 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
 
       await expect(
-        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
+        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_BALANCE_GWEI, BALANCE_PER_FRAME_GWEI, FRAME_DURATION),
       ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), reportLimitRole);
     });
 
     it("Should not allow to set exits per frame bigger than max limit", async () => {
       await expect(
-        oracle.connect(authorizedEntity).setExitRequestLimit(10, 12, FRAME_DURATION),
+        oracle
+          .connect(authorizedEntity)
+          .setExitRequestLimit(10n * MAXEB_VALIDATOR_BALANCE_GWEI, 12n * MAXEB_VALIDATOR_BALANCE_GWEI, FRAME_DURATION),
       ).to.be.revertedWithCustomError(oracle, "TooLargeExitsPerFrame");
     });
 
     it("Should deliver request as it is below limit", async () => {
       const exitLimitTx = await oracle
         .connect(authorizedEntity)
-        .setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION);
+        .setExitRequestLimit(MAX_EXIT_BALANCE_GWEI, BALANCE_PER_FRAME_GWEI, FRAME_DURATION);
       await expect(exitLimitTx)
         .to.emit(oracle, "ExitRequestsLimitSet")
-        .withArgs(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION);
+        .withArgs(MAX_EXIT_BALANCE_GWEI, BALANCE_PER_FRAME_GWEI, FRAME_DURATION);
 
       exitRequests = [
-        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }, // 32 ETH
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] }, // 32 ETH
       ];
+      // Total: 64 ETH = 64,000,000,000 Gwei (well below limit)
 
       exitRequest = {
         dataFormat: DATA_FORMAT_LIST,
@@ -369,31 +380,48 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not allow to deliver if limit doesnt cover full request", async () => {
+      // Previous test consumed 64 ETH (2 legacy validators × 32 ETH)
+      // Remaining from BALANCE_PER_FRAME_GWEI (2048 ETH): 2048 - 64 = 1984 ETH = 1,984,000,000,000 Gwei
+      // REQUEST needs 6208 ETH total, which exceeds the remaining limit
+      const consumed = 2n * LEGACY_VALIDATOR_BALANCE_GWEI; // 64 ETH
+      const remaining = BALANCE_PER_FRAME_GWEI - consumed; // 1,984 ETH
+      const requestTotal = 2n * LEGACY_VALIDATOR_BALANCE_GWEI + 3n * MAXEB_VALIDATOR_BALANCE_GWEI; // 6208 ETH
+
       await oracle.connect(authorizedEntity).submitExitRequestsHash(HASH_REQUEST);
       await expect(oracle.submitExitRequestsData(REQUEST))
         .to.be.revertedWithCustomError(oracle, "ExitRequestsLimitExceeded")
-        .withArgs(5, 3);
+        .withArgs(requestTotal, remaining);
     });
 
-    it("Current limit should be equal to 0", async () => {
+    it("Current limit should reflect consumed balance", async () => {
       const data = await oracle.getExitRequestLimitFullInfo();
 
-      expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
-      expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
+      const consumed = 2n * LEGACY_VALIDATOR_BALANCE_GWEI; // 64 ETH from previous test
+      const remaining = BALANCE_PER_FRAME_GWEI - consumed; // 1,984 ETH
+
+      expect(data.maxExitBalanceGwei).to.equal(MAX_EXIT_BALANCE_GWEI);
+      expect(data.balancePerFrameGwei).to.equal(BALANCE_PER_FRAME_GWEI);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(3);
-      expect(data.currentExitRequestsLimit).to.equal(3);
+      expect(data.prevExitBalanceGwei).to.equal(remaining);
+      expect(data.currentExitBalanceGwei).to.equal(remaining);
     });
 
-    it("Should current limit should be increased on 2 if 2*48 seconds passed", async () => {
+    it("Should current limit should be increased if 2*48 seconds passed", async () => {
       await consensus.advanceTimeBy(2 * 4 * 12);
       const data = await oracle.getExitRequestLimitFullInfo();
 
-      expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
-      expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
+      const consumed = 2n * LEGACY_VALIDATOR_BALANCE_GWEI; // 64 ETH from first test
+      const remaining = BALANCE_PER_FRAME_GWEI - consumed; // 1,984 ETH
+      // After 2 frames (2×48 seconds), we get 2 more frames worth of balance
+      const increased = remaining + 2n * BALANCE_PER_FRAME_GWEI; // 1,984 + 4,096 = 6,080 ETH
+      // But capped at MAX_EXIT_BALANCE_GWEI (6,208 ETH)
+      const expected = increased > MAX_EXIT_BALANCE_GWEI ? MAX_EXIT_BALANCE_GWEI : increased;
+
+      expect(data.maxExitBalanceGwei).to.equal(MAX_EXIT_BALANCE_GWEI);
+      expect(data.balancePerFrameGwei).to.equal(BALANCE_PER_FRAME_GWEI);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(3);
-      expect(data.currentExitRequestsLimit).to.equal(5);
+      expect(data.prevExitBalanceGwei).to.equal(remaining);
+      expect(data.currentExitBalanceGwei).to.equal(expected);
     });
 
     it("Should process requests after 2 frames passes", async () => {
@@ -438,9 +466,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not allow to process request larger than MAX_VALIDATORS_PER_REPORT", async () => {
-      await consensus.advanceTimeBy(MAX_EXIT_REQUESTS_LIMIT * 4 * 12);
+      // Advance time to ensure we have enough balance limit
+      await consensus.advanceTimeBy(MAX_EXIT_BALANCE_GWEI * 4n * 12n);
       const data = await oracle.getExitRequestLimitFullInfo();
-      expect(data.currentExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
+      expect(data.currentExitBalanceGwei).to.equal(MAX_EXIT_BALANCE_GWEI);
 
       const maxRequestsPerReport = 4;
 
@@ -448,6 +477,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await expect(tx).to.emit(oracle, "SetMaxValidatorsPerReport").withArgs(maxRequestsPerReport);
       expect(await oracle.connect(authorizedEntity).getMaxValidatorsPerReport()).to.equal(maxRequestsPerReport);
 
+      // Create a request with 5 validators (exceeds maxRequestsPerReport of 4)
       const exitRequestsRandom = [
         { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
         { moduleId: 101, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
@@ -465,6 +495,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHashRandom);
 
+      // Should fail because 5 validators > maxRequestsPerReport (4)
       await expect(oracle.submitExitRequestsData(exitRequestRandom))
         .to.be.revertedWithCustomError(oracle, "TooManyExitRequestsInReport")
         .withArgs(5, 4);
@@ -477,11 +508,11 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       const data = await oracle.getExitRequestLimitFullInfo();
 
-      expect(data.maxExitRequestsLimit).to.equal(0);
-      expect(data.exitsPerFrame).to.equal(0);
+      expect(data.maxExitBalanceGwei).to.equal(0);
+      expect(data.balancePerFrameGwei).to.equal(0);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(0);
-      expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
+      expect(data.prevExitBalanceGwei).to.equal(0);
+      expect(data.currentExitBalanceGwei).to.equal(2n ** 256n - 1n);
     });
 
     it("Should not check limit, if maxLimitRequests equal to 0 (means limit was not set)", async () => {
@@ -513,12 +544,12 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       const data = await oracle.getExitRequestLimitFullInfo();
 
-      expect(data.maxExitRequestsLimit).to.equal(0);
-      expect(data.exitsPerFrame).to.equal(0);
+      expect(data.maxExitBalanceGwei).to.equal(0);
+      expect(data.balancePerFrameGwei).to.equal(0);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(0);
+      expect(data.prevExitBalanceGwei).to.equal(0);
       // as time is mocked and we didnt change it since last consume, currentExitRequestsLimit was not increased
-      expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
+      expect(data.currentExitBalanceGwei).to.equal(2n ** 256n - 1n);
     });
   });
 

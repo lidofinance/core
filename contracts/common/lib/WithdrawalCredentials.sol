@@ -10,6 +10,20 @@ pragma solidity >=0.8.9 <0.9.0;
  * @dev WC bytes layout: [0] = prefix (0x00/0x01/0x02), [1..11] = zero, [12..31] = execution address (20b)
  */
 library WithdrawalCredentials {
+    /// @notice Withdrawal credentials type for legacy modules (0x01 - execution layer)
+    uint8 public constant WC_TYPE_01 = 0x01;
+
+    /// @notice Withdrawal credentials type for compounding modules (0x02 - compounding)
+    uint8 public constant WC_TYPE_02 = 0x02;
+
+    /// @notice Max effective balance for legacy validators with 0x01 withdrawal credentials
+    /// @dev 32 ETH expressed in Gwei (pre-MaxEB/EIP-7251)
+    uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_01_GWEI = 32_000_000_000;
+
+    /// @notice Max effective balance for validators with 0x02 withdrawal credentials
+    /// @dev 2048 ETH expressed in Gwei (post-MaxEB/EIP-7251)
+    uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_02_GWEI = 2_048_000_000_000;
+
     /// @notice Get the current prefix (0x00/0x01/0x02)
     function getType(bytes32 wc) internal pure returns (uint8) {
         return uint8(uint256(wc) >> 248);

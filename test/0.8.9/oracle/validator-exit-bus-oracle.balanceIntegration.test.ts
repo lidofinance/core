@@ -18,9 +18,9 @@ const PUBKEYS = [
   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 ];
 
-// Constants
-const CURATED_MODULE_ID = 1;
-const CURATED_MODULE_MAX_BALANCE_GWEI = 32_000_000_000n; // 32 ETH
+// Constants from WithdrawalCredentials.sol
+const LEGACY_MODULE_ID = 1; // Module with 0x01 withdrawal credentials (32 ETH)
+const LEGACY_MODULE_MAX_BALANCE_GWEI = 32_000_000_000n; // 32 ETH
 const MAXEB_MODULE_MAX_BALANCE_GWEI = 2_048_000_000_000n; // 2048 ETH
 
 describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
@@ -150,15 +150,15 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       await Snapshot.restore(originalState);
     });
 
-    it("should pass sanity check for curated validators (Format 1)", async () => {
-      // Set limit to allow 10 curated validators (320 ETH)
-      const limit = CURATED_MODULE_MAX_BALANCE_GWEI * 10n;
+    it("should pass sanity check for legacy validators (Format 1)", async () => {
+      // Set limit to allow 10 legacy validators (320 ETH)
+      const limit = LEGACY_MODULE_MAX_BALANCE_GWEI * 10n;
       await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(limit);
 
       const requests: ExitRequest[] = [
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 11, valPubkey: PUBKEYS[1] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 12, valPubkey: PUBKEYS[2] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, valPubkey: PUBKEYS[1] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, valPubkey: PUBKEYS[2] },
       ];
 
       const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST);
@@ -184,16 +184,16 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
     });
 
     it("should pass sanity check for mixed validators (Format 1)", async () => {
-      // Set limit to allow: 5 curated (160 ETH) + 1 MaxEB (2048 ETH) = 2208 ETH
-      const limit = CURATED_MODULE_MAX_BALANCE_GWEI * 5n + MAXEB_MODULE_MAX_BALANCE_GWEI * 1n;
+      // Set limit to allow: 5 legacy (160 ETH) + 1 MaxEB (2048 ETH) = 2208 ETH
+      const limit = LEGACY_MODULE_MAX_BALANCE_GWEI * 5n + MAXEB_MODULE_MAX_BALANCE_GWEI * 1n;
       await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(limit);
 
       const requests: ExitRequest[] = [
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 11, valPubkey: PUBKEYS[1] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 12, valPubkey: PUBKEYS[2] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 13, valPubkey: PUBKEYS[3] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 14, valPubkey: PUBKEYS[4] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, valPubkey: PUBKEYS[1] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, valPubkey: PUBKEYS[2] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 13, valPubkey: PUBKEYS[3] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 14, valPubkey: PUBKEYS[4] },
         { moduleId: 3, nodeOpId: 2, valIndex: 20, valPubkey: PUBKEYS[0] },
       ];
 
@@ -203,15 +203,15 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).not.to.be.reverted;
     });
 
-    it("should revert when curated validators exceed limit (Format 1)", async () => {
-      // Set limit to allow only 2 curated validators (64 ETH)
-      const limit = CURATED_MODULE_MAX_BALANCE_GWEI * 2n;
+    it("should revert when legacy validators exceed limit (Format 1)", async () => {
+      // Set limit to allow only 2 legacy validators (64 ETH)
+      const limit = LEGACY_MODULE_MAX_BALANCE_GWEI * 2n;
       await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(limit);
 
       const requests: ExitRequest[] = [
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 11, valPubkey: PUBKEYS[1] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 12, valPubkey: PUBKEYS[2] }, // Exceeds limit
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, valPubkey: PUBKEYS[1] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, valPubkey: PUBKEYS[2] }, // Exceeds limit
       ];
 
       const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST);
@@ -240,15 +240,15 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
         .withArgs(limit);
     });
 
-    it("should pass sanity check for curated validators (Format 2)", async () => {
-      // Set limit to allow 10 curated validators (320 ETH)
-      const limit = CURATED_MODULE_MAX_BALANCE_GWEI * 10n;
+    it("should pass sanity check for legacy validators (Format 2)", async () => {
+      // Set limit to allow 10 legacy validators (320 ETH)
+      const limit = LEGACY_MODULE_MAX_BALANCE_GWEI * 10n;
       await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(limit);
 
       const requests: ExitRequest[] = [
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 12, keyIndex: 3, valPubkey: PUBKEYS[2] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, keyIndex: 3, valPubkey: PUBKEYS[2] },
       ];
 
       const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
@@ -274,16 +274,16 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
     });
 
     it("should pass sanity check for mixed validators (Format 2)", async () => {
-      // Set limit to allow: 5 curated (160 ETH) + 1 MaxEB (2048 ETH) = 2208 ETH
-      const limit = CURATED_MODULE_MAX_BALANCE_GWEI * 5n + MAXEB_MODULE_MAX_BALANCE_GWEI * 1n;
+      // Set limit to allow: 5 legacy (160 ETH) + 1 MaxEB (2048 ETH) = 2208 ETH
+      const limit = LEGACY_MODULE_MAX_BALANCE_GWEI * 5n + MAXEB_MODULE_MAX_BALANCE_GWEI * 1n;
       await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(limit);
 
       const requests: ExitRequest[] = [
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 12, keyIndex: 3, valPubkey: PUBKEYS[2] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 13, keyIndex: 4, valPubkey: PUBKEYS[3] },
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 14, keyIndex: 5, valPubkey: PUBKEYS[4] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, keyIndex: 3, valPubkey: PUBKEYS[2] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 13, keyIndex: 4, valPubkey: PUBKEYS[3] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 14, keyIndex: 5, valPubkey: PUBKEYS[4] },
         { moduleId: 3, nodeOpId: 2, valIndex: 20, keyIndex: 20, valPubkey: PUBKEYS[0] },
       ];
 
@@ -295,12 +295,12 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
 
     it("should calculate same balance for Format 1 and Format 2 with same validators", async () => {
       const requestsV1: ExitRequest[] = [
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
         { moduleId: 3, nodeOpId: 2, valIndex: 20, valPubkey: PUBKEYS[1] },
       ];
 
       const requestsV2: ExitRequest[] = [
-        { moduleId: CURATED_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 100, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 100, valPubkey: PUBKEYS[0] },
         { moduleId: 3, nodeOpId: 2, valIndex: 20, keyIndex: 200, valPubkey: PUBKEYS[1] },
       ];
 
@@ -314,7 +314,7 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       expect(balanceV1).to.equal(balanceV2, "Format 1 and Format 2 should calculate the same balance");
 
       // Set limit based on calculated balance and verify both formats pass sanity check
-      const limit = balanceV1 + CURATED_MODULE_MAX_BALANCE_GWEI; // Add some headroom
+      const limit = balanceV1 + LEGACY_MODULE_MAX_BALANCE_GWEI; // Add some headroom
       await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(limit);
 
       // Both should pass - same validators, same balance calculation

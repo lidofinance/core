@@ -5,8 +5,9 @@ pragma solidity 0.8.9;
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {Versioned} from "../utils/Versioned.sol";
-import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
+import {ExitBalanceLimitData, ExitBalanceLimitStorage, ExitBalanceLimitUtils} from "../lib/ExitLimitUtils.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
+import {WithdrawalCredentials} from "../../common/lib/WithdrawalCredentials.sol";
 
 interface ITriggerableWithdrawalsGateway {
     struct ValidatorData {
@@ -32,10 +33,32 @@ interface INodeOperatorsRegistry {
 }
 
 
+interface IStakingRouter {
+    struct StakingModule {
+        uint24 id;
+        address stakingModuleAddress;
+        uint16 stakingModuleFee;
+        uint16 treasuryFee;
+        uint16 stakeShareLimit;
+        uint8 status;
+        string name;
+        uint64 lastDepositAt;
+        uint256 lastDepositBlock;
+        uint256 exitedValidatorsCount;
+        uint16 priorityExitShareThreshold;
+        uint64 maxDepositsPerBlock;
+        uint64 minDepositBlockDistance;
+        uint8 withdrawalCredentialsType;
+    }
+
+    function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
+}
+
 interface ILidoLocator {
     function validatorExitDelayVerifier() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
     function oracleReportSanityChecker() external view returns(address);
+    function stakingRouter() external view returns (address);
 }
 
 /**
@@ -45,8 +68,8 @@ interface ILidoLocator {
  */
 abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
-    using ExitLimitUtilsStorage for bytes32;
-    using ExitLimitUtils for ExitRequestLimitData;
+    using ExitBalanceLimitStorage for bytes32;
+    using ExitBalanceLimitUtils for ExitBalanceLimitData;
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -109,11 +132,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     error InvalidExitDataIndexSortOrder();
 
     /**
-     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
-     * @param requestsCount Amount of requests that were sent for processing
-     * @param remainingLimit Amount of requests that still can be processed at current day
+     * @notice Thrown when remaining exit balance limit is not enough to cover the exit requests
+     * @param balanceGwei Total balance in Gwei of validators being exited
+     * @param remainingLimit Remaining balance limit in Gwei that can still be processed
      */
-    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
+    error ExitRequestsLimitExceeded(uint256 balanceGwei, uint256 remainingLimit);
 
     /**
      * @notice Thrown when submitting was not started for request
@@ -150,11 +173,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Emitted when limits configs are set.
-     * @param maxExitRequestsLimit The maximum number of exit requests.
-     * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param maxExitBalanceGwei The maximum exit balance limit in Gwei.
+     * @param balancePerFrameGwei The exit balance in Gwei that can be restored per frame.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameGwei` can be restored.
      */
-    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
+    event ExitRequestsLimitSet(uint256 maxExitBalanceGwei, uint256 balancePerFrameGwei, uint256 frameDurationInSec);
 
     /**
      * @notice Emitted when exit requests were delivered
@@ -221,27 +244,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     uint256 public constant DATA_FORMAT_LIST = 1;
     uint256 public constant DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
 
-    /// @notice Module ID for the curated staking module (NodeOperatorsRegistry)
-    /// @dev This module was deployed before the MaxEB (EIP-7251) fork and uses 32 ETH validators.
-    ///      This is a protocol constant that cannot change for existing validators.
-    uint256 public constant CURATED_MODULE_ID = 1;
-
-    /// @notice Max effective balance for curated module validators (in Gwei)
-    /// @dev 32 ETH = 32_000_000_000 Gwei (pre-MaxEB validators)
-    uint256 public constant CURATED_MODULE_MAX_BALANCE_GWEI = 32_000_000_000;
-
-    /// @notice Max effective balance for MaxEB-enabled module validators (in Gwei)
-    /// @dev 2048 ETH = 2_048_000_000_000 Gwei (post-MaxEB validators: CSM, SimpleDVT, etc.)
-    ///      All modules deployed after EIP-7251 activation use this max effective balance.
-    uint256 public constant MAXEB_MODULE_MAX_BALANCE_GWEI = 2_048_000_000_000;
-
     ILidoLocator internal immutable LOCATOR;
+    IStakingRouter internal immutable STAKING_ROUTER;
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
-    // Storage slot for exit request limit configuration and current quota tracking
-    bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
+    // Storage slot for exit balance limit configuration and current quota tracking (in Gwei)
+    bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.exitBalanceLimitGwei");
     // Storage slot for the maximum number of validator exit requests allowed per processing report
     bytes32 internal constant MAX_VALIDATORS_PER_REPORT_POSITION =
         keccak256("lido.ValidatorsExitBus.maxValidatorsPerReport");
@@ -262,6 +272,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     constructor(address lidoLocator, address _nodeOperatorsRegistry) {
         LOCATOR = ILidoLocator(lidoLocator);
+        STAKING_ROUTER = IStakingRouter(ILidoLocator(lidoLocator).stakingRouter());
         NODE_OPERATORS_REGISTRY = INodeOperatorsRegistry(_nodeOperatorsRegistry);
     }
 
@@ -315,7 +326,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             revert TooManyExitRequestsInReport(requestsCount, maxRequestsPerReport);
         }
 
-        _consumeLimit(requestsCount);
+        uint256 totalBalanceGwei = _calculateTotalExitBalanceGwei(request.data, request.dataFormat);
+        _consumeLimit(totalBalanceGwei);
 
         _processExitRequestsList(request.data, request.dataFormat);
 
@@ -399,45 +411,45 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Sets the limits config
-     * @param maxExitRequestsLimit The maximum number of exit requests.
-     * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param maxExitBalanceGwei The maximum exit balance limit in Gwei.
+     * @param balancePerFrameGwei The exit balance in Gwei that can be restored per frame.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameGwei` can be restored.
      */
     function setExitRequestLimit(
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceGwei,
+        uint256 balancePerFrameGwei,
         uint256 frameDurationInSec
     ) external onlyRole(EXIT_REQUEST_LIMIT_MANAGER_ROLE) {
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _setExitRequestLimit(maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
     }
 
     /**
      * @notice Returns information about current limits data
-     * @return maxExitRequestsLimit Maximum exit requests limit
-     * @return exitsPerFrame The number of exits that can be restored per frame.
-     * @return frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
-     * @return prevExitRequestsLimit Limit left after previous requests
-     * @return currentExitRequestsLimit Current exit requests limit
+     * @return maxExitBalanceGwei Maximum exit balance limit in Gwei
+     * @return balancePerFrameGwei The exit balance in Gwei that can be restored per frame
+     * @return frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameGwei` can be restored
+     * @return prevExitBalanceGwei Balance limit in Gwei left after previous requests
+     * @return currentExitBalanceGwei Current exit balance limit in Gwei
      */
     function getExitRequestLimitFullInfo()
         external
         view
         returns (
-            uint256 maxExitRequestsLimit,
-            uint256 exitsPerFrame,
+            uint256 maxExitBalanceGwei,
+            uint256 balancePerFrameGwei,
             uint256 frameDurationInSec,
-            uint256 prevExitRequestsLimit,
-            uint256 currentExitRequestsLimit
+            uint256 prevExitBalanceGwei,
+            uint256 currentExitBalanceGwei
         )
     {
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        maxExitRequestsLimit = exitRequestLimitData.maxExitRequestsLimit;
-        exitsPerFrame = exitRequestLimitData.exitsPerFrame;
-        frameDurationInSec = exitRequestLimitData.frameDurationInSec;
-        prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
+        ExitBalanceLimitData memory exitBalanceLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitBalanceLimit();
+        maxExitBalanceGwei = exitBalanceLimitData.maxExitBalanceGwei;
+        balancePerFrameGwei = exitBalanceLimitData.balancePerFrame;
+        frameDurationInSec = exitBalanceLimitData.frameDurationInSec;
+        prevExitBalanceGwei = exitBalanceLimitData.prevExitBalanceGwei;
 
-        currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
-            ? exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp())
+        currentExitBalanceGwei = exitBalanceLimitData.isExitBalanceLimitSet()
+            ? exitBalanceLimitData.calculateCurrentExitBalanceLimit(_getTimestamp())
             : type(uint256).max;
     }
 
@@ -602,38 +614,38 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     function _setExitRequestLimit(
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceGwei,
+        uint256 balancePerFrameGwei,
         uint256 frameDurationInSec
     ) internal {
         uint256 timestamp = _getTimestamp();
 
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
-                maxExitRequestsLimit,
-                exitsPerFrame,
+        EXIT_REQUEST_LIMIT_POSITION.setStorageExitBalanceLimit(
+            EXIT_REQUEST_LIMIT_POSITION.getStorageExitBalanceLimit().setExitBalanceLimits(
+                maxExitBalanceGwei,
+                balancePerFrameGwei,
                 frameDurationInSec,
                 timestamp
             )
         );
 
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        emit ExitRequestsLimitSet(maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
     }
 
-    function _consumeLimit(uint256 requestsCount) internal {
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (!exitRequestLimitData.isExitLimitSet()) {
+    function _consumeLimit(uint256 balanceGwei) internal {
+        ExitBalanceLimitData memory exitBalanceLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitBalanceLimit();
+        if (!exitBalanceLimitData.isExitBalanceLimitSet()) {
             return;
         }
 
-        uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
+        uint256 limit = exitBalanceLimitData.calculateCurrentExitBalanceLimit(_getTimestamp());
 
-        if (requestsCount > limit) {
-            revert ExitRequestsLimitExceeded(requestsCount, limit);
+        if (balanceGwei > limit) {
+            revert ExitRequestsLimitExceeded(balanceGwei, limit);
         }
 
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updatePrevExitLimit(limit - requestsCount, _getTimestamp())
+        EXIT_REQUEST_LIMIT_POSITION.setStorageExitBalanceLimit(
+            exitBalanceLimitData.updatePrevExitBalanceLimit(limit - balanceGwei, _getTimestamp())
         );
     }
 
@@ -790,19 +802,18 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
     * @notice Calculates the total balance in Gwei for all validators in the exit requests
-    * @dev This function determines the max effective balance based on module ID:
-    *      - Module 1 (Curated/NOR): 32 ETH per validator (pre-MaxEB)
-    *      - Other modules (CSM, SimpleDVT, etc.): 2048 ETH per validator (post-MaxEB/EIP-7251)
+    * @dev This function determines the max effective balance based on the module's withdrawal credentials type:
+    *      - Legacy modules (0x01 withdrawal credentials): 32 ETH per validator
+    *      - Compounding modules (0x02 withdrawal credentials): 2048 ETH per validator (post-MaxEB/EIP-7251)
     *
-    *      This distinction is based on protocol constants, not runtime configuration:
-    *      The curated module was deployed before EIP-7251 (MaxEB) activation and its validators
-    *      are forever capped at 32 ETH. All modules deployed after EIP-7251 use 2048 ETH max.
+    *      The withdrawal credentials type is queried from the Staking Router for each module,
+    *      eliminating the need for hardcoded module IDs.
     *
     * @param data Packed exit requests data
     * @param dataFormat Format of the data (1 or 2)
     * @return totalBalanceGwei Total balance of all validators being exited in Gwei
     */
-    function _calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) internal pure returns (uint256 totalBalanceGwei) {
+    function _calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) internal view returns (uint256 totalBalanceGwei) {
         uint256 requestsCount = data.length / _getPackedRequestLength(dataFormat);
 
         for (uint256 i = 0; i < requestsCount; ++i) {
@@ -827,13 +838,27 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 revert UnsupportedRequestsDataFormat(dataFormat);
             }
 
-            // Add balance based on module type
-            if (moduleId == CURATED_MODULE_ID) {
-                totalBalanceGwei += CURATED_MODULE_MAX_BALANCE_GWEI;
+            // Add balance based on module's withdrawal credentials type
+            if (_isLegacyModule(moduleId)) {
+                totalBalanceGwei += WithdrawalCredentials.MAX_EFFECTIVE_BALANCE_WC_TYPE_01_GWEI;
             } else {
-                totalBalanceGwei += MAXEB_MODULE_MAX_BALANCE_GWEI;
+                totalBalanceGwei += WithdrawalCredentials.MAX_EFFECTIVE_BALANCE_WC_TYPE_02_GWEI;
             }
         }
+    }
+
+    /**
+    * @notice Determines if a staking module uses legacy (32 ETH) max effective balance
+    * @dev Queries the Staking Router to check the module's withdrawal credentials type:
+    *      - 0x01 (WithdrawalCredentials.WC_TYPE_01) = legacy module with 32 ETH max
+    *      - 0x02 (WithdrawalCredentials.WC_TYPE_02) = new module with 2048 ETH max (MaxEB)
+    *
+    * @param _moduleId The ID of the staking module to check
+    * @return true if the module uses legacy withdrawal credentials (0x01), false otherwise
+    */
+    function _isLegacyModule(uint256 _moduleId) internal view returns (bool) {
+        IStakingRouter.StakingModule memory module = STAKING_ROUTER.getStakingModule(_moduleId);
+        return module.withdrawalCredentialsType == WithdrawalCredentials.WC_TYPE_01;
     }
 
     /**
