@@ -95,11 +95,17 @@ export async function deployVEBO(
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
   const nodeOperatorsRegistryAddr = await nodeOperatorsRegistry.getAddress();
 
+  // Max effective balance values (in Gwei)
+  const MAX_BALANCE_WC_TYPE_01_GWEI = 32_000_000_000n; // 32 ETH for legacy validators
+  const MAX_BALANCE_WC_TYPE_02_GWEI = 2_048_000_000_000n; // 2048 ETH for MaxEB validators
+
   const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
     secondsPerSlot,
     genesisTime,
     locatorAddr,
     nodeOperatorsRegistryAddr,
+    MAX_BALANCE_WC_TYPE_01_GWEI,
+    MAX_BALANCE_WC_TYPE_02_GWEI,
   ]);
 
   const { consensus } = await deployHashConsensus(admin, {

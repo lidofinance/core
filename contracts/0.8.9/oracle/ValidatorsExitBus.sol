@@ -24,8 +24,6 @@ interface ITriggerableWithdrawalsGateway {
 }
 
 interface INodeOperatorsRegistry {
-    function getNodeOperatorsCount() external view returns (uint256);
-
     function getSigningKey(
         uint256 _nodeOperatorId,
         uint256 _index
@@ -247,6 +245,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     ILidoLocator internal immutable LOCATOR;
     IStakingRouter internal immutable STAKING_ROUTER;
 
+    /// @notice Max effective balance for legacy validators (withdrawal credentials type 0x01) in Gwei
+    /// @dev Typically 32 ETH = 32_000_000_000 Gwei
+    uint256 public immutable MAX_BALANCE_WC_TYPE_01_GWEI;
+
+    /// @notice Max effective balance for MaxEB validators (withdrawal credentials type 0x02) in Gwei
+    /// @dev Typically 2048 ETH = 2_048_000_000_000 Gwei (post-EIP-7251)
+    uint256 public immutable MAX_BALANCE_WC_TYPE_02_GWEI;
+
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
@@ -270,10 +276,17 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     INodeOperatorsRegistry public immutable NODE_OPERATORS_REGISTRY;
 
-    constructor(address lidoLocator, address _nodeOperatorsRegistry) {
+    constructor(
+        address lidoLocator,
+        address _nodeOperatorsRegistry,
+        uint256 _maxBalanceWcType01Gwei,
+        uint256 _maxBalanceWcType02Gwei
+    ) {
         LOCATOR = ILidoLocator(lidoLocator);
         STAKING_ROUTER = IStakingRouter(ILidoLocator(lidoLocator).stakingRouter());
         NODE_OPERATORS_REGISTRY = INodeOperatorsRegistry(_nodeOperatorsRegistry);
+        MAX_BALANCE_WC_TYPE_01_GWEI = _maxBalanceWcType01Gwei;
+        MAX_BALANCE_WC_TYPE_02_GWEI = _maxBalanceWcType02Gwei;
     }
 
     /**
@@ -858,9 +871,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             // Add balance based on module's withdrawal credentials type
             if (isLegacy) {
-                totalBalanceGwei += WithdrawalCredentials.MAX_EFFECTIVE_BALANCE_WC_TYPE_01_GWEI;
+                totalBalanceGwei += MAX_BALANCE_WC_TYPE_01_GWEI;
             } else {
-                totalBalanceGwei += WithdrawalCredentials.MAX_EFFECTIVE_BALANCE_WC_TYPE_02_GWEI;
+                totalBalanceGwei += MAX_BALANCE_WC_TYPE_02_GWEI;
             }
         }
     }
