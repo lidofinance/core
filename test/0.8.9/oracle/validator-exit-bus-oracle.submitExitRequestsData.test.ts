@@ -52,6 +52,29 @@ const hashExitRequest = (request: { dataFormat: number; data: string }) => {
   );
 };
 
+// Helper to extract timestamp from ValidatorExitRequest event
+// More memory-efficient than keeping full receipt in scope
+const getTimestampFromTx = async (
+  tx: Awaited<ReturnType<ValidatorsExitBus__Harness["submitExitRequestsData"]>>,
+  oracleInterface: ValidatorsExitBus__Harness["interface"],
+): Promise<bigint> => {
+  const receipt = await tx.wait();
+  if (!receipt) {
+    throw new Error("Transaction receipt is null");
+  }
+  for (const log of receipt.logs) {
+    try {
+      const parsed = oracleInterface.parseLog({ topics: [...log.topics], data: log.data });
+      if (parsed?.name === "ValidatorExitRequest") {
+        return parsed.args[4]; // Return timestamp immediately
+      }
+    } catch {
+      // Skip logs from other contracts
+    }
+  }
+  throw new Error("ValidatorExitRequest event not found");
+};
+
 describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
@@ -424,20 +447,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Should process requests after 2 frames passes", async () => {
       const emitTx = await oracle.submitExitRequestsData(REQUEST);
-      const receipt = await emitTx.wait();
-
-      // Extract timestamp from the emitted events
-      const exitRequestEvent = receipt?.logs
-        .map((log) => {
-          try {
-            return oracle.interface.parseLog({ topics: [...log.topics], data: log.data });
-          } catch {
-            return null;
-          }
-        })
-        .find((parsed) => parsed?.name === "ValidatorExitRequest");
-
-      const timestamp = exitRequestEvent?.args[4];
+      const timestamp = await getTimestampFromTx(emitTx, oracle.interface);
 
       for (let i = 0; i < 5; i++) {
         const request = VALIDATORS[i];
@@ -542,19 +552,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestRandomHash);
 
       const emitTx = await oracle.submitExitRequestsData(exitRequestRandom);
-      const receipt = await emitTx.wait();
-
-      const exitRequestEvent = receipt?.logs
-        .map((log) => {
-          try {
-            return oracle.interface.parseLog({ topics: [...log.topics], data: log.data });
-          } catch {
-            return null;
-          }
-        })
-        .find((parsed) => parsed?.name === "ValidatorExitRequest");
-
-      const timestamp = exitRequestEvent?.args[4]; // timestamp is the 5th argument
+      const timestamp = await getTimestampFromTx(emitTx, oracle.interface);
 
       // Check each event individually
       await expect(emitTx).to.emit(oracle, "ValidatorExitRequest").withArgs(100, 0, 0, PUBKEYS[0], timestamp);
