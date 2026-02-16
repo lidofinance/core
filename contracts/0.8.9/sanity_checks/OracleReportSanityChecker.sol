@@ -147,7 +147,7 @@ struct LimitsListPacked {
     uint16 appearedValidatorsPerDayLimit;
     uint16 annualBalanceIncreaseBPLimit;
     uint16 simulatedShareRateDeviationBPLimit;
-    uint32 maxBalanceExitRequestedPerReportInEth;
+    uint16 maxBalanceExitRequestedPerReportInEth;
     uint16 maxItemsPerExtraDataTransaction;
     uint16 maxNodeOperatorsPerExtraDataItem;
     uint32 requestTimestampMargin;
@@ -347,7 +347,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Sets the new value for the maxBalanceExitRequestedPerReportInEth
     /// @param _maxBalanceExitRequestedPerReportInEth new maxBalanceExitRequestedPerReportInEth value
-    function setMaxBalanceExitRequestedPerReportInEth(uint32 _maxBalanceExitRequestedPerReportInEth)
+    function setMaxBalanceExitRequestedPerReportInEth(uint16 _maxBalanceExitRequestedPerReportInEth)
         external
         onlyRole(MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE)
     {
@@ -557,7 +557,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
     /// @notice Checks the total balance of validator exit requests supplied per oracle report
     /// @param _maxBalanceExitRequestedPerReportInEth Total balance in ETH of all validators requested to exit in the oracle report
-    function checkExitBusOracleReport(uint32 _maxBalanceExitRequestedPerReportInEth)
+    function checkExitBusOracleReport(uint16 _maxBalanceExitRequestedPerReportInEth)
         external
         view
     {
@@ -916,8 +916,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             emit SimulatedShareRateDeviationBPLimitSet(_newLimitsList.simulatedShareRateDeviationBPLimit);
         }
         if (_oldLimitsList.maxBalanceExitRequestedPerReportInEth != _newLimitsList.maxBalanceExitRequestedPerReportInEth) {
-            _checkLimitValue(_newLimitsList.maxBalanceExitRequestedPerReportInEth, 0, type(uint32).max);
-            emit MaxBalanceExitRequestedPerReportInEthSet(_newLimitsList.maxBalanceExitRequestedPerReportInEth);
+            _checkLimitValue(_newLimitsList.maxBalanceExitRequestedPerReportInEth, 0, type(uint16).max);
+            emit MaxBalanceExitRequestedPerReportInEthSet(uint16(_newLimitsList.maxBalanceExitRequestedPerReportInEth));
         }
         if (_oldLimitsList.maxItemsPerExtraDataTransaction != _newLimitsList.maxItemsPerExtraDataTransaction) {
             _checkLimitValue(_newLimitsList.maxItemsPerExtraDataTransaction, 0, type(uint16).max);
@@ -962,7 +962,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
-    event MaxBalanceExitRequestedPerReportInEthSet(uint256 maxBalanceExitRequestedPerReportInEth);
+    event MaxBalanceExitRequestedPerReportInEthSet(uint16 maxBalanceExitRequestedPerReportInEth);
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
     event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
@@ -1009,7 +1009,7 @@ library LimitsListPacker {
         res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
         res.requestTimestampMargin = SafeCast.toUint32(_limitsList.requestTimestampMargin);
         res.maxPositiveTokenRebase = SafeCast.toUint64(_limitsList.maxPositiveTokenRebase);
-        res.maxBalanceExitRequestedPerReportInEth = SafeCast.toUint32(_limitsList.maxBalanceExitRequestedPerReportInEth);
+        res.maxBalanceExitRequestedPerReportInEth = SafeCast.toUint16(_limitsList.maxBalanceExitRequestedPerReportInEth);
         res.maxItemsPerExtraDataTransaction = SafeCast.toUint16(_limitsList.maxItemsPerExtraDataTransaction);
         res.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItem);
         res.initialSlashingAmountPWei = SafeCast.toUint16(_limitsList.initialSlashingAmountPWei);

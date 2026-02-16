@@ -40,7 +40,7 @@ async function deployOracleReportSanityCheckerForExitBus(
       appearedValidatorsPerDayLimit: 0n,
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
-      maxBalanceExitRequestedPerReportInEth: 10_000_000n, // 10M ETH
+      maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
       maxItemsPerExtraDataTransaction: 0n,
       maxNodeOperatorsPerExtraDataItem: 0n,
       requestTimestampMargin: 0n,

@@ -42,7 +42,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
     appearedValidatorsPerDayLimit: 100n,
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
     simulatedShareRateDeviationBPLimit: 2_50n, // 2.5%
-    maxBalanceExitRequestedPerReportInEth: 1000000n,
+    maxBalanceExitRequestedPerReportInEth: 65_000n, // Max ~65K ETH (close to uint16 max)
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,
@@ -187,7 +187,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       appearedValidatorsPerDayLimit: 75,
       annualBalanceIncreaseBPLimit: 15_00,
       simulatedShareRateDeviationBPLimit: 1_50, // 1.5%
-      maxBalanceExitRequestedPerReportInEth: 2000000,
+      maxBalanceExitRequestedPerReportInEth: 60_000, // Max ~60K ETH
       maxItemsPerExtraDataTransaction: 15 + 1,
       maxNodeOperatorsPerExtraDataItem: 16 + 1,
       requestTimestampMargin: 2048,

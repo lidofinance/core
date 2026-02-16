@@ -832,7 +832,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     * @param dataFormat Format of the data (1 or 2)
     * @return totalBalanceEth Total balance of all validators being exited in ETH
     */
-    function _calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat) internal view returns (uint32 totalBalanceEth) {
+    function _calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat) internal view returns (uint16 totalBalanceEth) {
         uint256 requestsCount = data.length / _getPackedRequestLength(dataFormat);
 
         // Cache to avoid repeated external calls for the same module
@@ -874,9 +874,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             // Add balance based on module's withdrawal credentials type
             if (isLegacy) {
-                totalBalanceEth += MAX_BALANCE_WC_TYPE_01_ETH;
+                totalBalanceEth += uint16(MAX_BALANCE_WC_TYPE_01_ETH);
             } else {
-                totalBalanceEth += MAX_BALANCE_WC_TYPE_02_ETH;
+                totalBalanceEth += uint16(MAX_BALANCE_WC_TYPE_02_ETH);
             }
         }
     }
