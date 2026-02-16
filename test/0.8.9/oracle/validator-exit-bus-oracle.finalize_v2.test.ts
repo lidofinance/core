@@ -43,8 +43,8 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
       VEBO_CONSENSUS_VERSION,
       0,
       10,
-      100_000_000_000n,
-      32_000_000_000n,
+      100n, // 100 ETH
+      32n, // 32 ETH
       48,
     );
   });
@@ -55,7 +55,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
 
   // contract version
   it("should revert if set wrong version", async () => {
-    await expect(oracle.finalizeUpgrade_v2(10, 100_000_000_000n, 32_000_000_000n, 48)).to.be.revertedWithCustomError(
+    await expect(oracle.finalizeUpgrade_v2(10, 100n, 32n, 48)).to.be.revertedWithCustomError(
       oracle,
       "InvalidContractVersionIncrement",
     );
@@ -64,19 +64,19 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
   it("should successfully finalize upgrade", async () => {
     await oracle.setContractVersion(1);
 
-    // Set balance limits in Gwei (not validator counts)
-    const maxExitBalanceGwei = 150_000_000_000n; // 150 ETH in Gwei
-    const balancePerFrameGwei = 32_000_000_000n; // 32 ETH in Gwei (1 legacy validator)
+    // Set balance limits in ETH (not Gwei, not validator counts)
+    const maxExitBalanceEth = 150n; // 150 ETH
+    const balancePerFrameEth = 32n; // 32 ETH (1 legacy validator)
     const maxValidatorsPerReport = 15;
     const frameDuration = 48;
 
-    await oracle.finalizeUpgrade_v2(maxValidatorsPerReport, maxExitBalanceGwei, balancePerFrameGwei, frameDuration);
+    await oracle.finalizeUpgrade_v2(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDuration);
 
     expect(await oracle.getContractVersion()).to.equal(2);
 
     const exitRequestLimitData = await oracle.getExitRequestLimitFullInfo();
-    expect(exitRequestLimitData.maxExitBalanceGwei).to.equal(maxExitBalanceGwei);
-    expect(exitRequestLimitData.balancePerFrameGwei).to.equal(balancePerFrameGwei);
+    expect(exitRequestLimitData.maxExitBalanceEth).to.equal(maxExitBalanceEth);
+    expect(exitRequestLimitData.balancePerFrameEth).to.equal(balancePerFrameEth);
     expect(exitRequestLimitData.frameDurationInSec).to.equal(frameDuration);
 
     expect(await oracle.getMaxValidatorsPerReport()).to.equal(maxValidatorsPerReport);

@@ -170,8 +170,8 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
             VEBO_CONSENSUS_VERSION,
             0,
             600,
-            13_000_000_000_000n,
-            32_000_000_000n,
+            13_000n, // 13,000 ETH
+            32n, // 32 ETH
             48,
           ),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");

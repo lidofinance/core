@@ -112,9 +112,9 @@ struct LimitsList {
     /// @dev Represented in the Basis Points (100% == 10_000)
     uint256 simulatedShareRateDeviationBPLimit;
 
-    /// @notice The max requested to exit balance
+    /// @notice The max requested to exit balance in ETH
     /// @dev Sum of all max effective balances of all requested validators should be equal or lower in one report
-    uint256 maxBalanceExitRequestedPerReportInGwei;
+    uint256 maxBalanceExitRequestedPerReportInEth;
 
     /// @notice The max number of data list items reported to accounting oracle in extra data per single transaction
     /// @dev Must fit into uint16 (<= 65_535)
@@ -147,7 +147,7 @@ struct LimitsListPacked {
     uint16 appearedValidatorsPerDayLimit;
     uint16 annualBalanceIncreaseBPLimit;
     uint16 simulatedShareRateDeviationBPLimit;
-    uint64 maxBalanceExitRequestedPerReportInGwei;
+    uint32 maxBalanceExitRequestedPerReportInEth;
     uint16 maxItemsPerExtraDataTransaction;
     uint16 maxNodeOperatorsPerExtraDataItem;
     uint32 requestTimestampMargin;
@@ -184,8 +184,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
     bytes32 public constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
         keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
-    bytes32 public constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE =
-        keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE");
+    bytes32 public constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE =
+        keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE");
     bytes32 public constant MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE =
         keccak256("MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE");
     bytes32 public constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE =
@@ -345,14 +345,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(limitsList);
     }
 
-    /// @notice Sets the new value for the maxBalanceExitRequestedPerReportInGwei
-    /// @param _maxBalanceExitRequestedPerReportInGwei new maxBalanceExitRequestedPerReportInGwei value
-    function setMaxBalanceExitRequestedPerReportInGwei(uint256 _maxBalanceExitRequestedPerReportInGwei)
+    /// @notice Sets the new value for the maxBalanceExitRequestedPerReportInEth
+    /// @param _maxBalanceExitRequestedPerReportInEth new maxBalanceExitRequestedPerReportInEth value
+    function setMaxBalanceExitRequestedPerReportInEth(uint32 _maxBalanceExitRequestedPerReportInEth)
         external
-        onlyRole(MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE)
+        onlyRole(MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.maxBalanceExitRequestedPerReportInGwei = _maxBalanceExitRequestedPerReportInGwei;
+        limitsList.maxBalanceExitRequestedPerReportInEth = _maxBalanceExitRequestedPerReportInEth;
         _updateLimits(limitsList);
     }
 
@@ -556,13 +556,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
     /// @notice Checks the total balance of validator exit requests supplied per oracle report
-    /// @param _maxBalanceExitRequestedPerReportInGwei Total balance in Gwei of all validators requested to exit in the oracle report
-    function checkExitBusOracleReport(uint256 _maxBalanceExitRequestedPerReportInGwei)
+    /// @param _maxBalanceExitRequestedPerReportInEth Total balance in ETH of all validators requested to exit in the oracle report
+    function checkExitBusOracleReport(uint32 _maxBalanceExitRequestedPerReportInEth)
         external
         view
     {
-        uint256 limit = _limits.unpack().maxBalanceExitRequestedPerReportInGwei;
-        if (_maxBalanceExitRequestedPerReportInGwei > limit) {
+        uint256 limit = _limits.unpack().maxBalanceExitRequestedPerReportInEth;
+        if (_maxBalanceExitRequestedPerReportInEth > limit) {
             revert IncorrectSumOfExitBalancePerReport(limit);
         }
     }
@@ -915,9 +915,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _checkLimitValue(_newLimitsList.simulatedShareRateDeviationBPLimit, 0, MAX_BASIS_POINTS);
             emit SimulatedShareRateDeviationBPLimitSet(_newLimitsList.simulatedShareRateDeviationBPLimit);
         }
-        if (_oldLimitsList.maxBalanceExitRequestedPerReportInGwei != _newLimitsList.maxBalanceExitRequestedPerReportInGwei) {
-            _checkLimitValue(_newLimitsList.maxBalanceExitRequestedPerReportInGwei, 0, type(uint64).max);
-            emit MaxBalanceExitRequestedPerReportInGweiSet(_newLimitsList.maxBalanceExitRequestedPerReportInGwei);
+        if (_oldLimitsList.maxBalanceExitRequestedPerReportInEth != _newLimitsList.maxBalanceExitRequestedPerReportInEth) {
+            _checkLimitValue(_newLimitsList.maxBalanceExitRequestedPerReportInEth, 0, type(uint32).max);
+            emit MaxBalanceExitRequestedPerReportInEthSet(_newLimitsList.maxBalanceExitRequestedPerReportInEth);
         }
         if (_oldLimitsList.maxItemsPerExtraDataTransaction != _newLimitsList.maxItemsPerExtraDataTransaction) {
             _checkLimitValue(_newLimitsList.maxItemsPerExtraDataTransaction, 0, type(uint16).max);
@@ -962,7 +962,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
-    event MaxBalanceExitRequestedPerReportInGweiSet(uint256 maxBalanceExitRequestedPerReportInGwei);
+    event MaxBalanceExitRequestedPerReportInEthSet(uint256 maxBalanceExitRequestedPerReportInEth);
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
     event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
@@ -1009,7 +1009,7 @@ library LimitsListPacker {
         res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
         res.requestTimestampMargin = SafeCast.toUint32(_limitsList.requestTimestampMargin);
         res.maxPositiveTokenRebase = SafeCast.toUint64(_limitsList.maxPositiveTokenRebase);
-        res.maxBalanceExitRequestedPerReportInGwei = SafeCast.toUint64(_limitsList.maxBalanceExitRequestedPerReportInGwei);
+        res.maxBalanceExitRequestedPerReportInEth = SafeCast.toUint32(_limitsList.maxBalanceExitRequestedPerReportInEth);
         res.maxItemsPerExtraDataTransaction = SafeCast.toUint16(_limitsList.maxItemsPerExtraDataTransaction);
         res.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItem);
         res.initialSlashingAmountPWei = SafeCast.toUint16(_limitsList.initialSlashingAmountPWei);
@@ -1033,7 +1033,7 @@ library LimitsListUnpacker {
         res.simulatedShareRateDeviationBPLimit = _limitsList.simulatedShareRateDeviationBPLimit;
         res.requestTimestampMargin = _limitsList.requestTimestampMargin;
         res.maxPositiveTokenRebase = _limitsList.maxPositiveTokenRebase;
-        res.maxBalanceExitRequestedPerReportInGwei = _limitsList.maxBalanceExitRequestedPerReportInGwei;
+        res.maxBalanceExitRequestedPerReportInEth = _limitsList.maxBalanceExitRequestedPerReportInEth;
         res.maxItemsPerExtraDataTransaction = _limitsList.maxItemsPerExtraDataTransaction;
         res.maxNodeOperatorsPerExtraDataItem = _limitsList.maxNodeOperatorsPerExtraDataItem;
         res.initialSlashingAmountPWei = _limitsList.initialSlashingAmountPWei;

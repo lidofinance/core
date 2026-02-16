@@ -40,7 +40,7 @@ async function deployOracleReportSanityCheckerForExitBus(
       appearedValidatorsPerDayLimit: 0n,
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
-      maxBalanceExitRequestedPerReportInGwei: 10_000_000_000_000_000n, // 10M ETH in Gwei
+      maxBalanceExitRequestedPerReportInEth: 10_000_000n, // 10M ETH
       maxItemsPerExtraDataTransaction: 0n,
       maxNodeOperatorsPerExtraDataItem: 0n,
       requestTimestampMargin: 0n,
@@ -95,17 +95,17 @@ export async function deployVEBO(
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
   const nodeOperatorsRegistryAddr = await nodeOperatorsRegistry.getAddress();
 
-  // Max effective balance values (in Gwei)
-  const MAX_BALANCE_WC_TYPE_01_GWEI = 32_000_000_000n; // 32 ETH for legacy validators
-  const MAX_BALANCE_WC_TYPE_02_GWEI = 2_048_000_000_000n; // 2048 ETH for MaxEB validators
+  // Max effective balance values (in ETH)
+  const MAX_BALANCE_WC_TYPE_01_ETH = 32n; // 32 ETH for legacy validators
+  const MAX_BALANCE_WC_TYPE_02_ETH = 2048n; // 2048 ETH for MaxEB validators
 
   const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
     secondsPerSlot,
     genesisTime,
     locatorAddr,
     nodeOperatorsRegistryAddr,
-    MAX_BALANCE_WC_TYPE_01_GWEI,
-    MAX_BALANCE_WC_TYPE_02_GWEI,
+    MAX_BALANCE_WC_TYPE_01_ETH,
+    MAX_BALANCE_WC_TYPE_02_ETH,
   ]);
 
   const { consensus } = await deployHashConsensus(admin, {
@@ -163,8 +163,8 @@ interface VEBOConfig {
   lastProcessingRefSlot?: number;
   resumeAfterDeploy?: boolean;
   maxRequestsPerBatch?: number;
-  maxExitBalanceGwei?: bigint;
-  balancePerFrameGwei?: bigint;
+  maxExitBalanceEth?: bigint;
+  balancePerFrameEth?: bigint;
   frameDurationInSec?: number;
 }
 
@@ -177,8 +177,8 @@ export async function initVEBO({
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
   maxRequestsPerBatch = 600,
-  maxExitBalanceGwei = 13_000_000_000_000n, // 13,000 ETH in Gwei
-  balancePerFrameGwei = 32_000_000_000n, // 32 ETH in Gwei (1 legacy validator per frame)
+  maxExitBalanceEth = 13_000n, // 13,000 ETH
+  balancePerFrameEth = 32n, // 32 ETH (1 legacy validator per frame)
   frameDurationInSec = 48,
 }: VEBOConfig) {
   const initTx = await oracle.initialize(
@@ -187,8 +187,8 @@ export async function initVEBO({
     consensusVersion,
     lastProcessingRefSlot,
     maxRequestsPerBatch,
-    maxExitBalanceGwei,
-    balancePerFrameGwei,
+    maxExitBalanceEth,
+    balancePerFrameEth,
     frameDurationInSec,
   );
 

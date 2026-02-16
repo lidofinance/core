@@ -35,7 +35,7 @@ describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
     simulatedShareRateDeviationBPLimit: 2_00n, // 2%
     maxValidatorExitRequestsPerReport: 2000n,
-    maxBalanceExitRequestedPerReportInGwei: 1000000n,
+    maxBalanceExitRequestedPerReportInEth: 1000000n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,

@@ -24,8 +24,8 @@ const MAXEB_MODULE_ID_2 = 5; // Another module with 0x02 withdrawal credentials
 const MAXEB_MODULE_ID_3 = 7; // Another module with 0x02 withdrawal credentials
 
 // Balance constants from WithdrawalCredentials.sol
-const LEGACY_MODULE_MAX_BALANCE_GWEI = 32_000_000_000n; // 32 ETH
-const MAXEB_MODULE_MAX_BALANCE_GWEI = 2_048_000_000_000n; // 2048 ETH
+const LEGACY_MODULE_MAX_BALANCE_ETH = 32n; // 32 ETH
+const MAXEB_MODULE_MAX_BALANCE_ETH = 2048n; // 2048 ETH
 
 describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
   let oracle: ValidatorsExitBus__Harness;
@@ -70,7 +70,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
     oracle = deployed.oracle;
   });
 
-  describe("_calculateTotalExitBalanceGwei", () => {
+  describe("_calculateTotalExitBalanceEth", () => {
     describe("Format 1 (DATA_FORMAT_LIST)", () => {
       it("should calculate balance for single legacy validator (32 ETH)", async () => {
         const requests: ExitRequest[] = [
@@ -78,9 +78,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
 
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_GWEI);
+        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
       });
 
       it("should calculate balance for single MaxEB validator (2048 ETH)", async () => {
@@ -89,9 +89,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
 
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_GWEI);
+        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
       });
 
       it("should calculate balance for multiple legacy validators", async () => {
@@ -102,9 +102,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
 
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_GWEI * 3n);
+        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 3n);
       });
 
       it("should calculate balance for multiple MaxEB validators", async () => {
@@ -115,9 +115,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
 
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_GWEI * 3n);
+        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH * 3n);
       });
 
       it("should calculate balance for mixed module types", async () => {
@@ -129,18 +129,18 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
 
         const expected =
-          LEGACY_MODULE_MAX_BALANCE_GWEI * 2n + // 2 legacy validators
-          MAXEB_MODULE_MAX_BALANCE_GWEI * 2n; // 2 MaxEB validators
+          LEGACY_MODULE_MAX_BALANCE_ETH * 2n + // 2 legacy validators
+          MAXEB_MODULE_MAX_BALANCE_ETH * 2n; // 2 MaxEB validators
         expect(totalBalance).to.equal(expected);
       });
 
       it("should return zero for empty data", async () => {
         const data = "0x";
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
 
         expect(totalBalance).to.equal(0n);
       });
@@ -153,9 +153,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_GWEI);
+        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
       });
 
       it("should calculate balance for single MaxEB validator (2048 ETH)", async () => {
@@ -164,9 +164,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_GWEI);
+        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
       });
 
       it("should calculate balance for multiple legacy validators", async () => {
@@ -177,9 +177,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_GWEI * 3n);
+        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 3n);
       });
 
       it("should calculate balance for multiple MaxEB validators", async () => {
@@ -190,9 +190,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_GWEI * 3n);
+        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH * 3n);
       });
 
       it("should calculate balance for mixed module types", async () => {
@@ -204,18 +204,18 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         ];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
         const expected =
-          LEGACY_MODULE_MAX_BALANCE_GWEI * 2n + // 2 legacy validators
-          MAXEB_MODULE_MAX_BALANCE_GWEI * 2n; // 2 MaxEB validators
+          LEGACY_MODULE_MAX_BALANCE_ETH * 2n + // 2 legacy validators
+          MAXEB_MODULE_MAX_BALANCE_ETH * 2n; // 2 MaxEB validators
         expect(totalBalance).to.equal(expected);
       });
 
       it("should return zero for empty data", async () => {
         const data = "0x";
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
         expect(totalBalance).to.equal(0n);
       });
@@ -234,11 +234,11 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         const data1 = encodeExitRequestsDataList(requests1, DATA_FORMAT_LIST_WITH_KEY_INDEX);
         const data2 = encodeExitRequestsDataList(requests2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
-        const totalBalance1 = await oracle.calculateTotalExitBalanceGwei(data1, DATA_FORMAT_LIST_WITH_KEY_INDEX);
-        const totalBalance2 = await oracle.calculateTotalExitBalanceGwei(data2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        const totalBalance1 = await oracle.calculateTotalExitBalanceEth(data1, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+        const totalBalance2 = await oracle.calculateTotalExitBalanceEth(data2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
         expect(totalBalance1).to.equal(totalBalance2);
-        expect(totalBalance1).to.equal(LEGACY_MODULE_MAX_BALANCE_GWEI * 2n);
+        expect(totalBalance1).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 2n);
       });
     });
 
@@ -255,9 +255,9 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         }
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
 
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_GWEI * 100n);
+        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 100n);
       });
 
       it("should handle module with 0x02 withdrawal credentials (MaxEB)", async () => {
@@ -269,8 +269,8 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         const requests: ExitRequest[] = [{ moduleId: 999, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await newOracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_GWEI);
+        const totalBalance = await newOracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
+        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
       });
 
       it("should handle module with 0x01 withdrawal credentials (Legacy)", async () => {
@@ -282,8 +282,8 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         const requests: ExitRequest[] = [{ moduleId: 888, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await newOracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_GWEI);
+        const totalBalance = await newOracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
+        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
       });
 
       it("should default to MaxEB balance for unconfigured modules", async () => {
@@ -291,10 +291,10 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         const requests: ExitRequest[] = [{ moduleId: 777, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceGwei(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
 
         // Unconfigured modules have withdrawalCredentialsType = 0, which is treated as MaxEB
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_GWEI);
+        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
       });
     });
   });

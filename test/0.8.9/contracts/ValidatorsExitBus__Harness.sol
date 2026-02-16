@@ -18,16 +18,16 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         uint256 genesisTime,
         address lidoLocator,
         address nodeOperatorsRegistry,
-        uint256 maxBalanceWcType01Gwei,
-        uint256 maxBalanceWcType02Gwei
+        uint32 maxBalanceWcType01Eth,
+        uint32 maxBalanceWcType02Eth
     )
         ValidatorsExitBusOracle(
             secondsPerSlot,
             genesisTime,
             lidoLocator,
             nodeOperatorsRegistry,
-            maxBalanceWcType01Gwei,
-            maxBalanceWcType02Gwei
+            maxBalanceWcType01Eth,
+            maxBalanceWcType02Eth
         )
     {
         // allow usage without a proxy for tests
@@ -72,7 +72,7 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     }
 
     // Expose internal function for unit testing
-    function calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) external view returns (uint256) {
-        return _calculateTotalExitBalanceGwei(data, dataFormat);
+    function calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat) external view returns (uint32) {
+        return _calculateTotalExitBalanceEth(data, dataFormat);
     }
 }

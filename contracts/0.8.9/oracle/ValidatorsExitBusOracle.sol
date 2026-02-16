@@ -10,7 +10,7 @@ import {BaseOracle} from "./BaseOracle.sol";
 import {ValidatorsExitBus} from "./ValidatorsExitBus.sol";
 
 interface IOracleReportSanityChecker {
-    function checkExitBusOracleReport(uint256 _maxBalanceExitRequestedPerReportInGwei) external view;
+    function checkExitBusOracleReport(uint32 _maxBalanceExitRequestedPerReportInEth) external view;
 }
 
 contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
@@ -50,9 +50,9 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 genesisTime,
         address lidoLocator,
         address nodeOperatorsRegistry,
-        uint256 maxBalanceWcType01Gwei,
-        uint256 maxBalanceWcType02Gwei
-    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator, nodeOperatorsRegistry, maxBalanceWcType01Gwei, maxBalanceWcType02Gwei) {}
+        uint32 maxBalanceWcType01Eth,
+        uint32 maxBalanceWcType02Eth
+    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator, nodeOperatorsRegistry, maxBalanceWcType01Eth, maxBalanceWcType02Eth) {}
 
     function initialize(
         address admin,
@@ -60,8 +60,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 consensusVersion,
         uint256 lastProcessingRefSlot,
         uint256 maxValidatorsPerRequest,
-        uint256 maxExitBalanceGwei,
-        uint256 balancePerFrameGwei,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
@@ -70,7 +70,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
 
-        _initialize_v2(maxValidatorsPerRequest, maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
+        _initialize_v2(maxValidatorsPerRequest, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     /**
@@ -80,22 +80,22 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
      */
     function finalizeUpgrade_v2(
         uint256 maxValidatorsPerReport,
-        uint256 maxExitBalanceGwei,
-        uint256 balancePerFrameGwei,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) external {
-        _initialize_v2(maxValidatorsPerReport, maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
+        _initialize_v2(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     function _initialize_v2(
         uint256 maxValidatorsPerReport,
-        uint256 maxExitBalanceGwei,
-        uint256 balancePerFrameGwei,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) internal {
         _updateContractVersion(2);
         _setMaxValidatorsPerReport(maxValidatorsPerReport);
-        _setExitRequestLimit(maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
+        _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     ///
@@ -242,11 +242,12 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             revert UnexpectedRequestsDataLength();
         }
 
-        // Calculate total balance of validators being exited in Gwei
+        // Calculate total balance of validators being exited in ETH (uint32)
         // Module 1 (curated) uses 32 ETH, other modules use 2048 ETH per validator
-        uint256 totalExitBalanceGwei = _calculateTotalExitBalanceGwei(data.data, data.dataFormat);
+        uint32 totalExitBalanceEth = _calculateTotalExitBalanceEth(data.data, data.dataFormat);
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(totalExitBalanceGwei);
+        // Pass ETH value directly to sanity checker
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(totalExitBalanceEth);
 
         _processExitRequestsList(data.data, data.dataFormat);
 

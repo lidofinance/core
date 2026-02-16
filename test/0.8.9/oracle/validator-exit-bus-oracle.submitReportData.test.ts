@@ -247,16 +247,16 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     context("invokes sanity check", () => {
       before(async () => {
         await oracleReportSanityChecker.grantRole(
-          await oracleReportSanityChecker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_GWEI_ROLE(),
+          await oracleReportSanityChecker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE(),
           admin.address,
         );
       });
 
       it("reverts if request limit is reached", async () => {
-        // Module 5 (not curated) = 2048 ETH per validator = 2_048_000_000_000 Gwei
+        // Module 5 (not curated) = 2048 ETH per validator
         // Set limit to 1 validator worth
-        const exitRequestsLimit = 2_048_000_000_000n; // 2048 ETH in Gwei
-        await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(exitRequestsLimit);
+        const exitRequestsLimit = 2_048n; // 2048 ETH
+        await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInEth(exitRequestsLimit);
         const { reportData } = await prepareReportAndSubmitHash([
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2] },
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3] },
@@ -266,10 +266,10 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
           .withArgs(exitRequestsLimit);
       });
       it("pass if requests amount equals to limit", async () => {
-        // Module 5 (not curated) = 2048 ETH per validator = 2_048_000_000_000 Gwei
+        // Module 5 (not curated) = 2048 ETH per validator
         // Set limit to exactly 1 validator worth
-        const exitRequestsLimit = 2_048_000_000_000n; // 2048 ETH in Gwei
-        await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInGwei(exitRequestsLimit);
+        const exitRequestsLimit = 2_048n; // 2048 ETH
+        await oracleReportSanityChecker.connect(admin).setMaxBalanceExitRequestedPerReportInEth(exitRequestsLimit);
         const { reportData } = await prepareReportAndSubmitHash([
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2] },
         ]);
@@ -615,10 +615,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       await oracle.grantRole(role, admin);
       // Set limit to allow 4160 ETH (2 legacy + 2 MaxEB validators)
       // Max: 7000 ETH, Per frame: 5000 ETH (enough to cover 4160 ETH)
-      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7_000_000_000_000n, 5_000_000_000_000n, 48);
-      await expect(exitLimitTx)
-        .to.emit(oracle, "ExitRequestsLimitSet")
-        .withArgs(7_000_000_000_000n, 5_000_000_000_000n, 48);
+      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7_000n, 5_000n, 48);
+      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7_000n, 5_000n, 48);
     });
 
     it("deliver report by actor different from oracle", async () => {
@@ -794,7 +792,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         await oracle.grantRole(role, admin);
         // Set limit to allow 4160 ETH (2 legacy + 2 MaxEB validators)
         // Max: 100000 ETH, Per frame: 5000 ETH
-        await oracle.connect(admin).setExitRequestLimit(100_000_000_000_000n, 5_000_000_000_000n, 48);
+        await oracle.connect(admin).setExitRequestLimit(100_000n, 5_000n, 48);
       });
       after(async () => await Snapshot.restore(originalState));
 

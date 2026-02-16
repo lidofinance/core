@@ -5,7 +5,7 @@ pragma solidity 0.8.9;
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {Versioned} from "../utils/Versioned.sol";
-import {ExitBalanceLimitData, ExitBalanceLimitStorage, ExitBalanceLimitUtils} from "../lib/ExitLimitUtils.sol";
+import {LimitData, RateLimitStorage, RateLimit} from "../../common/lib/RateLimit.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
 import {WithdrawalCredentials} from "../../common/lib/WithdrawalCredentials.sol";
 
@@ -66,8 +66,6 @@ interface ILidoLocator {
  */
 abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
-    using ExitBalanceLimitStorage for bytes32;
-    using ExitBalanceLimitUtils for ExitBalanceLimitData;
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -131,10 +129,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Thrown when remaining exit balance limit is not enough to cover the exit requests
-     * @param balanceGwei Total balance in Gwei of validators being exited
-     * @param remainingLimit Remaining balance limit in Gwei that can still be processed
+     * @param balanceEth Total balance being requested for exit in ETH
+     * @param remainingLimitEth Remaining balance limit in ETH that can still be processed
      */
-    error ExitRequestsLimitExceeded(uint256 balanceGwei, uint256 remainingLimit);
+    error ExitRequestsLimitExceeded(uint256 balanceEth, uint256 remainingLimitEth);
 
     /**
      * @notice Thrown when submitting was not started for request
@@ -171,11 +169,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Emitted when limits configs are set.
-     * @param maxExitBalanceGwei The maximum exit balance limit in Gwei.
-     * @param balancePerFrameGwei The exit balance in Gwei that can be restored per frame.
-     * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameGwei` can be restored.
+     * @param maxExitBalanceEth The maximum exit balance limit in ETH.
+     * @param balancePerFrameEth The exit balance in ETH that can be restored per frame.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameEth` can be restored.
      */
-    event ExitRequestsLimitSet(uint256 maxExitBalanceGwei, uint256 balancePerFrameGwei, uint256 frameDurationInSec);
+    event ExitRequestsLimitSet(uint256 maxExitBalanceEth, uint256 balancePerFrameEth, uint256 frameDurationInSec);
 
     /**
      * @notice Emitted when exit requests were delivered
@@ -245,19 +243,22 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     ILidoLocator internal immutable LOCATOR;
     IStakingRouter internal immutable STAKING_ROUTER;
 
-    /// @notice Max effective balance for legacy validators (withdrawal credentials type 0x01) in Gwei
-    /// @dev Typically 32 ETH = 32_000_000_000 Gwei
-    uint256 public immutable MAX_BALANCE_WC_TYPE_01_GWEI;
+    /// @notice Max effective balance for legacy validators (withdrawal credentials type 0x01) in ETH
+    /// @dev Typically 32 ETH
+    uint32 public immutable MAX_BALANCE_WC_TYPE_01_ETH;
 
-    /// @notice Max effective balance for MaxEB validators (withdrawal credentials type 0x02) in Gwei
-    /// @dev Typically 2048 ETH = 2_048_000_000_000 Gwei (post-EIP-7251)
-    uint256 public immutable MAX_BALANCE_WC_TYPE_02_GWEI;
+    /// @notice Max effective balance for MaxEB validators (withdrawal credentials type 0x02) in ETH
+    /// @dev Typically 2048 ETH (post-EIP-7251)
+    uint32 public immutable MAX_BALANCE_WC_TYPE_02_ETH;
+
+    /// @dev Conversion factor: 1 ETH = 1_000_000_000 Gwei (1e9)
+    uint256 private constant GWEI_PER_ETH = 1_000_000_000;
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
-    // Storage slot for exit balance limit configuration and current quota tracking (in Gwei)
-    bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.exitBalanceLimitGwei");
+    // Storage slot for exit balance limit configuration and current quota tracking (in ETH, not Gwei)
+    bytes32 internal constant EXIT_BALANCE_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.exitBalanceLimitEth");
     // Storage slot for the maximum number of validator exit requests allowed per processing report
     bytes32 internal constant MAX_VALIDATORS_PER_REPORT_POSITION =
         keccak256("lido.ValidatorsExitBus.maxValidatorsPerReport");
@@ -279,14 +280,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     constructor(
         address lidoLocator,
         address _nodeOperatorsRegistry,
-        uint256 _maxBalanceWcType01Gwei,
-        uint256 _maxBalanceWcType02Gwei
+        uint32 _maxBalanceWcType01Eth,
+        uint32 _maxBalanceWcType02Eth
     ) {
         LOCATOR = ILidoLocator(lidoLocator);
         STAKING_ROUTER = IStakingRouter(ILidoLocator(lidoLocator).stakingRouter());
         NODE_OPERATORS_REGISTRY = INodeOperatorsRegistry(_nodeOperatorsRegistry);
-        MAX_BALANCE_WC_TYPE_01_GWEI = _maxBalanceWcType01Gwei;
-        MAX_BALANCE_WC_TYPE_02_GWEI = _maxBalanceWcType02Gwei;
+        MAX_BALANCE_WC_TYPE_01_ETH = _maxBalanceWcType01Eth;
+        MAX_BALANCE_WC_TYPE_02_ETH = _maxBalanceWcType02Eth;
     }
 
     /**
@@ -339,8 +340,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             revert TooManyExitRequestsInReport(requestsCount, maxRequestsPerReport);
         }
 
-        uint256 totalBalanceGwei = _calculateTotalExitBalanceGwei(request.data, request.dataFormat);
-        _consumeLimit(totalBalanceGwei);
+        uint32 totalBalanceEth = _calculateTotalExitBalanceEth(request.data, request.dataFormat);
+        _consumeLimit(totalBalanceEth);
 
         _processExitRequestsList(request.data, request.dataFormat);
 
@@ -424,45 +425,45 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Sets the limits config
-     * @param maxExitBalanceGwei The maximum exit balance limit in Gwei.
-     * @param balancePerFrameGwei The exit balance in Gwei that can be restored per frame.
-     * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameGwei` can be restored.
+     * @param maxExitBalanceEth The maximum exit balance limit in ETH.
+     * @param balancePerFrameEth The exit balance in ETH that can be restored per frame.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameEth` can be restored.
      */
     function setExitRequestLimit(
-        uint256 maxExitBalanceGwei,
-        uint256 balancePerFrameGwei,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) external onlyRole(EXIT_REQUEST_LIMIT_MANAGER_ROLE) {
-        _setExitRequestLimit(maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
+        _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     /**
      * @notice Returns information about current limits data
-     * @return maxExitBalanceGwei Maximum exit balance limit in Gwei
-     * @return balancePerFrameGwei The exit balance in Gwei that can be restored per frame
-     * @return frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameGwei` can be restored
-     * @return prevExitBalanceGwei Balance limit in Gwei left after previous requests
-     * @return currentExitBalanceGwei Current exit balance limit in Gwei
+     * @return maxExitBalanceEth Maximum exit balance limit in ETH
+     * @return balancePerFrameEth The exit balance in ETH that can be restored per frame
+     * @return frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameEth` can be restored
+     * @return prevExitBalanceEth Balance limit in ETH left after previous requests
+     * @return currentExitBalanceEth Current exit balance limit in ETH
      */
     function getExitRequestLimitFullInfo()
         external
         view
         returns (
-            uint256 maxExitBalanceGwei,
-            uint256 balancePerFrameGwei,
+            uint256 maxExitBalanceEth,
+            uint256 balancePerFrameEth,
             uint256 frameDurationInSec,
-            uint256 prevExitBalanceGwei,
-            uint256 currentExitBalanceGwei
+            uint256 prevExitBalanceEth,
+            uint256 currentExitBalanceEth
         )
     {
-        ExitBalanceLimitData memory exitBalanceLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitBalanceLimit();
-        maxExitBalanceGwei = exitBalanceLimitData.maxExitBalanceGwei;
-        balancePerFrameGwei = exitBalanceLimitData.balancePerFrame;
-        frameDurationInSec = exitBalanceLimitData.frameDurationInSec;
-        prevExitBalanceGwei = exitBalanceLimitData.prevExitBalanceGwei;
+        LimitData memory limitData = RateLimitStorage.getStorageLimit(EXIT_BALANCE_LIMIT_POSITION);
+        maxExitBalanceEth = limitData.maxLimit;
+        balancePerFrameEth = limitData.itemsPerFrame;
+        frameDurationInSec = limitData.frameDurationInSec;
+        prevExitBalanceEth = limitData.prevLimit;
 
-        currentExitBalanceGwei = exitBalanceLimitData.isExitBalanceLimitSet()
-            ? exitBalanceLimitData.calculateCurrentExitBalanceLimit(_getTimestamp())
+        currentExitBalanceEth = RateLimit.isLimitSet(limitData)
+            ? RateLimit.calculateCurrentLimit(limitData, _getTimestamp())
             : type(uint256).max;
     }
 
@@ -627,38 +628,40 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     function _setExitRequestLimit(
-        uint256 maxExitBalanceGwei,
-        uint256 balancePerFrameGwei,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) internal {
         uint256 timestamp = _getTimestamp();
 
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitBalanceLimit(
-            EXIT_REQUEST_LIMIT_POSITION.getStorageExitBalanceLimit().setExitBalanceLimits(
-                maxExitBalanceGwei,
-                balancePerFrameGwei,
-                frameDurationInSec,
-                timestamp
-            )
+        LimitData memory limitData = RateLimitStorage.getStorageLimit(EXIT_BALANCE_LIMIT_POSITION);
+        limitData = RateLimit.setLimits(
+            limitData,
+            maxExitBalanceEth,
+            balancePerFrameEth,
+            frameDurationInSec,
+            timestamp
         );
+        RateLimitStorage.setStorageLimit(EXIT_BALANCE_LIMIT_POSITION, limitData);
 
-        emit ExitRequestsLimitSet(maxExitBalanceGwei, balancePerFrameGwei, frameDurationInSec);
+        emit ExitRequestsLimitSet(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
-    function _consumeLimit(uint256 balanceGwei) internal {
-        ExitBalanceLimitData memory exitBalanceLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitBalanceLimit();
-        if (!exitBalanceLimitData.isExitBalanceLimitSet()) {
+    function _consumeLimit(uint32 balanceEth) internal {
+        LimitData memory limitData = RateLimitStorage.getStorageLimit(EXIT_BALANCE_LIMIT_POSITION);
+        if (!RateLimit.isLimitSet(limitData)) {
             return;
         }
 
-        uint256 limit = exitBalanceLimitData.calculateCurrentExitBalanceLimit(_getTimestamp());
+        uint256 limitEth = RateLimit.calculateCurrentLimit(limitData, _getTimestamp());
 
-        if (balanceGwei > limit) {
-            revert ExitRequestsLimitExceeded(balanceGwei, limit);
+        if (balanceEth > limitEth) {
+            revert ExitRequestsLimitExceeded(balanceEth, limitEth);
         }
 
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitBalanceLimit(
-            exitBalanceLimitData.updatePrevExitBalanceLimit(limit - balanceGwei, _getTimestamp())
+        RateLimitStorage.setStorageLimit(
+            EXIT_BALANCE_LIMIT_POSITION,
+            RateLimit.updatePrevLimit(limitData, limitEth - balanceEth, _getTimestamp())
         );
     }
 
@@ -814,7 +817,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-    * @notice Calculates the total balance in Gwei for all validators in the exit requests
+    * @notice Calculates the total balance in ETH for all validators in the exit requests
     * @dev This function determines the max effective balance based on the module's withdrawal credentials type:
     *      - Legacy modules (0x01 withdrawal credentials): 32 ETH per validator
     *      - Compounding modules (0x02 withdrawal credentials): 2048 ETH per validator (post-MaxEB/EIP-7251)
@@ -827,9 +830,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     *
     * @param data Packed exit requests data
     * @param dataFormat Format of the data (1 or 2)
-    * @return totalBalanceGwei Total balance of all validators being exited in Gwei
+    * @return totalBalanceEth Total balance of all validators being exited in ETH
     */
-    function _calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) internal view returns (uint256 totalBalanceGwei) {
+    function _calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat) internal view returns (uint32 totalBalanceEth) {
         uint256 requestsCount = data.length / _getPackedRequestLength(dataFormat);
 
         // Cache to avoid repeated external calls for the same module
@@ -871,9 +874,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             // Add balance based on module's withdrawal credentials type
             if (isLegacy) {
-                totalBalanceGwei += MAX_BALANCE_WC_TYPE_01_GWEI;
+                totalBalanceEth += MAX_BALANCE_WC_TYPE_01_ETH;
             } else {
-                totalBalanceGwei += MAX_BALANCE_WC_TYPE_02_GWEI;
+                totalBalanceEth += MAX_BALANCE_WC_TYPE_02_ETH;
             }
         }
     }
