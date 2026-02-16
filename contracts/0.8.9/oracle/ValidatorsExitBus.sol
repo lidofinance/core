@@ -809,12 +809,20 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     *      The withdrawal credentials type is queried from the Staking Router for each module,
     *      eliminating the need for hardcoded module IDs.
     *
+    *      For gas efficiency, module types are cached during iteration to avoid repeated external calls
+    *      for the same module.
+    *
     * @param data Packed exit requests data
     * @param dataFormat Format of the data (1 or 2)
     * @return totalBalanceGwei Total balance of all validators being exited in Gwei
     */
     function _calculateTotalExitBalanceGwei(bytes calldata data, uint256 dataFormat) internal view returns (uint256 totalBalanceGwei) {
         uint256 requestsCount = data.length / _getPackedRequestLength(dataFormat);
+
+        // Cache to avoid repeated external calls for the same module
+        // Format: (moduleId << 1) | isLegacy
+        uint256 cachedModuleId = type(uint256).max; // Initialize to invalid value
+        bool cachedIsLegacy;
 
         for (uint256 i = 0; i < requestsCount; ++i) {
             uint256 moduleId;
@@ -838,8 +846,18 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 revert UnsupportedRequestsDataFormat(dataFormat);
             }
 
+            // Check cache before making external call
+            bool isLegacy;
+            if (moduleId == cachedModuleId) {
+                isLegacy = cachedIsLegacy;
+            } else {
+                isLegacy = _isLegacyModule(moduleId);
+                cachedModuleId = moduleId;
+                cachedIsLegacy = isLegacy;
+            }
+
             // Add balance based on module's withdrawal credentials type
-            if (_isLegacyModule(moduleId)) {
+            if (isLegacy) {
                 totalBalanceGwei += WithdrawalCredentials.MAX_EFFECTIVE_BALANCE_WC_TYPE_01_GWEI;
             } else {
                 totalBalanceGwei += WithdrawalCredentials.MAX_EFFECTIVE_BALANCE_WC_TYPE_02_GWEI;
