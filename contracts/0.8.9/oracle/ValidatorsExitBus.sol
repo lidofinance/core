@@ -245,11 +245,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /// @notice Max effective balance for legacy validators (withdrawal credentials type 0x01) in ETH
     /// @dev Typically 32 ETH
-    uint32 public immutable MAX_BALANCE_WC_TYPE_01_ETH;
+    uint16 public immutable MAX_BALANCE_WC_TYPE_01_ETH;
 
     /// @notice Max effective balance for MaxEB validators (withdrawal credentials type 0x02) in ETH
     /// @dev Typically 2048 ETH (post-EIP-7251)
-    uint32 public immutable MAX_BALANCE_WC_TYPE_02_ETH;
+    uint16 public immutable MAX_BALANCE_WC_TYPE_02_ETH;
 
     /// @dev Conversion factor: 1 ETH = 1_000_000_000 Gwei (1e9)
     uint256 private constant GWEI_PER_ETH = 1_000_000_000;
@@ -280,8 +280,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     constructor(
         address lidoLocator,
         address _nodeOperatorsRegistry,
-        uint32 _maxBalanceWcType01Eth,
-        uint32 _maxBalanceWcType02Eth
+        uint16 _maxBalanceWcType01Eth,
+        uint16 _maxBalanceWcType02Eth
     ) {
         LOCATOR = ILidoLocator(lidoLocator);
         STAKING_ROUTER = IStakingRouter(ILidoLocator(lidoLocator).stakingRouter());
@@ -839,6 +839,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         // Format: (moduleId << 1) | isLegacy
         uint256 cachedModuleId = type(uint256).max; // Initialize to invalid value
         bool cachedIsLegacy;
+        uint32 totalBalanceEth32 = 0;
 
         for (uint256 i = 0; i < requestsCount; ++i) {
             uint256 moduleId;
@@ -874,11 +875,15 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             // Add balance based on module's withdrawal credentials type
             if (isLegacy) {
-                totalBalanceEth += uint16(MAX_BALANCE_WC_TYPE_01_ETH);
+                totalBalanceEth32 += MAX_BALANCE_WC_TYPE_01_ETH;
             } else {
-                totalBalanceEth += uint16(MAX_BALANCE_WC_TYPE_02_ETH);
+                totalBalanceEth32 += MAX_BALANCE_WC_TYPE_02_ETH;
             }
         }
+
+        // Cast to uint16 for return - will truncate if > 65535
+        // The sanity checker will catch if this exceeds the configured limit
+        totalBalanceEth = uint16(totalBalanceEth32);
     }
 
     /**

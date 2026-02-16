@@ -18,8 +18,8 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         uint256 genesisTime,
         address lidoLocator,
         address nodeOperatorsRegistry,
-        uint32 maxBalanceWcType01Eth,
-        uint32 maxBalanceWcType02Eth
+        uint16 maxBalanceWcType01Eth,
+        uint16 maxBalanceWcType02Eth
     )
         ValidatorsExitBusOracle(
             secondsPerSlot,

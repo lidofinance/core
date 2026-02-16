@@ -25,6 +25,8 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
       100n,
       await locator.getAddress(),
       await nodeOperatorsRegistry.getAddress(),
+      32, // maxBalanceWcType01Eth - legacy validators
+      2048, // maxBalanceWcType02Eth - MaxEB validators
     ]);
 
     const consensus = await ethers.deployContract("HashConsensus__Harness", [
