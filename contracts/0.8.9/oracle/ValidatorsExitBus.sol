@@ -23,6 +23,26 @@ interface ITriggerableWithdrawalsGateway {
     ) external payable;
 }
 
+/// @notice Legacy interface for staking modules (NOR, SDVT)
+/// @dev Returns pubkeys, signatures, and used flags
+interface ILegacyStakingModule {
+    function getSigningKeys(
+        uint256 _nodeOperatorId,
+        uint256 _offset,
+        uint256 _limit
+    ) external view returns (bytes memory pubkeys, bytes memory signatures, bool[] memory used);
+}
+
+/// @notice New interface for staking modules (CSM, CuratedV2)
+/// @dev Returns only pubkeys
+interface INewStakingModule {
+    function getSigningKeys(
+        uint256 nodeOperatorId,
+        uint256 startIndex,
+        uint256 keysCount
+    ) external view returns (bytes memory);
+}
+
 interface INodeOperatorsRegistry {
     function getSigningKey(
         uint256 _nodeOperatorId,
@@ -243,6 +263,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     ILidoLocator internal immutable LOCATOR;
     IStakingRouter internal immutable STAKING_ROUTER;
 
+    /// @notice Bitmask indicating which staking modules use legacy interface
+    /// @dev Each bit represents a module ID: bit N set to 1 means module N uses legacy interface
+    ///      Legacy modules (NOR, SDVT) use old getSigningKeys interface
+    ///      New modules (CSM, CuratedV2) use new getSigningKeys interface
+    uint256 public immutable LEGACY_MODULES_BITMASK;
+
     /// @notice Max effective balance for legacy validators (withdrawal credentials type 0x01) in ETH
     /// @dev Typically 32 ETH
     uint16 public immutable MAX_BALANCE_WC_TYPE_01_ETH;
@@ -268,24 +294,22 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     uint256 public constant EXIT_TYPE = 2;
 
-    /// @dev Ensures the contract’s ETH balance is unchanged.
+    /// @dev Ensures the contract's ETH balance is unchanged.
     modifier preservesEthBalance() {
         uint256 balanceBeforeCall = address(this).balance - msg.value;
         _;
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    INodeOperatorsRegistry public immutable NODE_OPERATORS_REGISTRY;
-
     constructor(
         address lidoLocator,
-        address _nodeOperatorsRegistry,
+        uint256 _legacyModulesBitmask,
         uint16 _maxBalanceWcType01Eth,
         uint16 _maxBalanceWcType02Eth
     ) {
         LOCATOR = ILidoLocator(lidoLocator);
         STAKING_ROUTER = IStakingRouter(ILidoLocator(lidoLocator).stakingRouter());
-        NODE_OPERATORS_REGISTRY = INodeOperatorsRegistry(_nodeOperatorsRegistry);
+        LEGACY_MODULES_BITMASK = _legacyModulesBitmask;
         MAX_BALANCE_WC_TYPE_01_ETH = _maxBalanceWcType01Eth;
         MAX_BALANCE_WC_TYPE_02_ETH = _maxBalanceWcType02Eth;
     }
@@ -901,6 +925,51 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
+    * @notice Verify that a pubkey belongs to the specified module and node operator
+    * @dev Uses bitmask to determine which interface to call (legacy or new)
+    * @param moduleId Staking module ID
+    * @param nodeOpId Node operator ID
+    * @param keyIndex Index of the key in the module
+    * @param pubkey Public key to verify (48 bytes)
+    */
+    function _verifyKey(
+        uint256 moduleId,
+        uint256 nodeOpId,
+        uint256 keyIndex,
+        bytes calldata pubkey
+    ) internal view {
+        require(pubkey.length == 48, "Invalid pubkey length");
+
+        // Get module address from StakingRouter
+        address moduleAddress = STAKING_ROUTER.getStakingModule(moduleId).stakingModuleAddress;
+
+        // Check if module uses legacy or new interface via bitmask
+        bool isLegacy = (LEGACY_MODULES_BITMASK & (1 << moduleId)) != 0;
+
+        bytes memory retrievedKeys;
+
+        if (isLegacy) {
+            // Legacy interface (NOR, SDVT): returns pubkeys, signatures, used flags
+            (retrievedKeys, , ) = ILegacyStakingModule(moduleAddress).getSigningKeys(
+                nodeOpId,
+                keyIndex,  // offset
+                1          // limit: get only 1 key
+            );
+        } else {
+            // New interface (CSM, CuratedV2): returns only pubkeys
+            retrievedKeys = INewStakingModule(moduleAddress).getSigningKeys(
+                nodeOpId,
+                keyIndex,  // startIndex
+                1          // keysCount: get only 1 key
+            );
+        }
+
+        // Verify the pubkey matches
+        require(retrievedKeys.length == 48, "Invalid retrieved key length");
+        require(keccak256(retrievedKeys) == keccak256(pubkey), "Pubkey mismatch");
+    }
+
+    /**
     * @notice Dispatcher that processes exit requests based on data format
     * @param data Packed exit requests data
     * @param dataFormat Format of the data (1 or 2)
@@ -1029,17 +1098,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             valIndex = uint64(dataWithoutPubkey >> 64);
             nodeOpId = uint40(dataWithoutPubkey >> (64 + 64));
 
-            // Check key using the provided keyIndex
-            // Fetch the registered signing key for this operator at the specified key index
-            (bytes memory key, , ) = NODE_OPERATORS_REGISTRY.getSigningKey(
-                nodeOpId,
-                keyIndex
-            );
-            // Compare the keccak256 hash of the provided public key with the keccak256 hash of the signing key
-            // Skip validation if registry returns empty key (test/permissive mode)
-            if (key.length > 0 && keccak256(key) != keccak256(pubkey)) {
-                revert InvalidPublicKey(index);
-            }
+            // Verify that the pubkey belongs to the module and node operator
+            _verifyKey(moduleId, nodeOpId, keyIndex, pubkey);
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);

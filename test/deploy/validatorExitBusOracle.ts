@@ -93,17 +93,20 @@ export async function deployVEBO(
   // In permissive mode (default), it returns empty keys which causes ValidatorsExitBus
   // to skip validation. Tests can explicitly configure keys if needed.
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
-  const nodeOperatorsRegistryAddr = await nodeOperatorsRegistry.getAddress();
 
   // Max effective balance values (in ETH)
   const MAX_BALANCE_WC_TYPE_01_ETH = 32n; // 32 ETH for legacy validators
   const MAX_BALANCE_WC_TYPE_02_ETH = 2048n; // 2048 ETH for MaxEB validators
 
+  // Legacy modules bitmask: set bit for each legacy module (NOR=1, SDVT=3)
+  // Example: modules 1 and 3 are legacy -> bitmask = (1 << 1) | (1 << 3) = 0b1010 = 10
+  const LEGACY_MODULES_BITMASK = (1n << 1n) | (1n << 3n); // Modules 1 (NOR) and 3 (SDVT) are legacy
+
   const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
     secondsPerSlot,
     genesisTime,
     locatorAddr,
-    nodeOperatorsRegistryAddr,
+    LEGACY_MODULES_BITMASK,
     MAX_BALANCE_WC_TYPE_01_ETH,
     MAX_BALANCE_WC_TYPE_02_ETH,
   ]);
