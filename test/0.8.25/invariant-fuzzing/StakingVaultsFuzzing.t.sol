@@ -215,8 +215,6 @@ contract StakingVaultsTest is Test {
      * Invariant 1: Staking Vault should never go below the rebalance threshold.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_01_liabilityShares_not_above_rebalance_threshold() external {
@@ -228,8 +226,6 @@ contract StakingVaultsTest is Test {
      * Invariant 2: Dynamic total value (including deltas) should never underflow (must be >= 0).
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_02_dynamic_totalValue_should_not_underflow() external {
@@ -247,8 +243,6 @@ contract StakingVaultsTest is Test {
      * Invariant 3: forceRebalance should not revert when the vault has available balance and obligations.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_03_forceRebalance_should_not_revert_when_has_available_balance_and_obligations() external {
@@ -263,8 +257,6 @@ contract StakingVaultsTest is Test {
      * Invariant 4: forceValidatorExit should not revert when has obligations shortfall.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_04_forceValidatorExit_should_not_revert_when_has_obligations_shortfall() external {
@@ -276,8 +268,6 @@ contract StakingVaultsTest is Test {
      * Invariant 5: Applied total value should not be greater than reported total value.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_05_applied_tv_should_not_be_greater_than_reported_tv() external {
@@ -295,8 +285,6 @@ contract StakingVaultsTest is Test {
      * Invariant 6: Liability shares should never be greater than connection share limit.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_06_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
@@ -327,8 +315,6 @@ contract StakingVaultsTest is Test {
      * Invariant 7: Locked amount must be >= max(connect deposit, liability-based safety buffer).
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_07_locked_cannot_be_less_than_slashing_connected_reserve()
@@ -357,8 +343,6 @@ contract StakingVaultsTest is Test {
      * Invariant 8: Withdrawable value must be <= total value minus locked amount and unsettled obligations.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_08_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
@@ -385,8 +369,6 @@ contract StakingVaultsTest is Test {
      * Invariant 9: The reported totalValue should not exceed the effective totalValue (EL+CL balance)
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_09_totalValue_should_be_less_than_or_equal_to_effective_total_value() external {
@@ -399,8 +381,6 @@ contract StakingVaultsTest is Test {
      * Invariant 10: Total value should satisfy the forced rebalance health threshold.
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
-     * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_10_totalValue_should_satisfy_forced_rebalance_threshold()

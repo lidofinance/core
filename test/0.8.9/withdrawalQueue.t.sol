@@ -31,7 +31,6 @@ contract WQInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -44,7 +43,6 @@ contract WQInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -54,7 +52,6 @@ contract WQInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -65,7 +62,6 @@ contract WQInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -80,7 +76,6 @@ contract WQInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -94,7 +89,6 @@ contract WQInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -108,7 +102,6 @@ contract WQInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 256
      * forge-config: default.invariant.depth = 256
      * forge-config: default.invariant.fail-on-revert = true
      */

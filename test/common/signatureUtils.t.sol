@@ -71,7 +71,6 @@ contract SignatureUtilsTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_isValidSignature_EoaNum(uint256 eoa_num) public view {
@@ -86,7 +85,6 @@ contract SignatureUtilsTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_isValidSignature_EoaMessage(bytes memory data) public view {
@@ -101,7 +99,6 @@ contract SignatureUtilsTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_isValidSignature_EoaV(uint8 _v) public {
@@ -123,7 +120,6 @@ contract SignatureUtilsTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_isValidSignature_EoaR(bytes32 _r) public {
@@ -145,7 +141,6 @@ contract SignatureUtilsTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_isValidSignature_EoaS(bytes32 _s) public {
