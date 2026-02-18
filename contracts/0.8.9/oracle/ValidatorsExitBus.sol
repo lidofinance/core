@@ -121,6 +121,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     error InvalidPublicKey(uint256 index);
 
     /**
+     * @notice Thrown when retrieved pubkey length is invalid
+     */
+    error InvalidRetrievedKeyLength();
+
+    /**
      * Thrown when there are attempt to send exit events for request that was not submitted earlier by trusted entities
      */
     error ExitHashNotSubmitted();
@@ -931,33 +936,45 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     * @param nodeOpId Node operator ID
     * @param keyIndex Index of the key in the module
     * @param pubkey Public key to verify (48 bytes)
+    * @param requestIndex Index of the request in the batch (for error reporting)
+    * @param cachedModuleId Previously cached module ID (type(uint256).max if none)
+    * @param cachedModuleAddress Previously cached module address
+    * @param cachedIsLegacy Previously cached legacy flag
+    * @return newModuleAddress Updated module address (same if module unchanged)
+    * @return newIsLegacy Updated legacy flag (same if module unchanged)
     */
     function _verifyKey(
         uint256 moduleId,
         uint256 nodeOpId,
         uint256 keyIndex,
-        bytes calldata pubkey
-    ) internal view {
-        require(pubkey.length == 48, "Invalid pubkey length");
-
-        // Get module address from StakingRouter
-        address moduleAddress = STAKING_ROUTER.getStakingModule(moduleId).stakingModuleAddress;
-
-        // Check if module uses legacy or new interface via bitmask
-        bool isLegacy = (LEGACY_MODULES_BITMASK & (1 << moduleId)) != 0;
+        bytes calldata pubkey,
+        uint256 requestIndex,
+        uint256 cachedModuleId,
+        address cachedModuleAddress,
+        bool cachedIsLegacy
+    ) internal view returns (address newModuleAddress, bool newIsLegacy) {
+        // Use cached values if module hasn't changed
+        if (moduleId == cachedModuleId) {
+            newModuleAddress = cachedModuleAddress;
+            newIsLegacy = cachedIsLegacy;
+        } else {
+            // Fetch new module data
+            newModuleAddress = STAKING_ROUTER.getStakingModule(moduleId).stakingModuleAddress;
+            newIsLegacy = (LEGACY_MODULES_BITMASK & (1 << moduleId)) != 0;
+        }
 
         bytes memory retrievedKeys;
 
-        if (isLegacy) {
+        if (newIsLegacy) {
             // Legacy interface (NOR, SDVT): returns pubkeys, signatures, used flags
-            (retrievedKeys, , ) = ILegacyStakingModule(moduleAddress).getSigningKeys(
+            (retrievedKeys, , ) = ILegacyStakingModule(newModuleAddress).getSigningKeys(
                 nodeOpId,
                 keyIndex,  // offset
                 1          // limit: get only 1 key
             );
         } else {
             // New interface (CSM, CuratedV2): returns only pubkeys
-            retrievedKeys = INewStakingModule(moduleAddress).getSigningKeys(
+            retrievedKeys = INewStakingModule(newModuleAddress).getSigningKeys(
                 nodeOpId,
                 keyIndex,  // startIndex
                 1          // keysCount: get only 1 key
@@ -965,8 +982,13 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         }
 
         // Verify the pubkey matches
-        require(retrievedKeys.length == 48, "Invalid retrieved key length");
-        require(keccak256(retrievedKeys) == keccak256(pubkey), "Pubkey mismatch");
+        if (retrievedKeys.length != 48) {
+            revert InvalidRetrievedKeyLength();
+        }
+
+        if (keccak256(retrievedKeys) != keccak256(pubkey)) {
+            revert InvalidPublicKey(requestIndex);
+        }
     }
 
     /**
@@ -1061,9 +1083,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         bytes calldata pubkey;
         uint256 dataWithoutPubkey;
         uint256 moduleId;
-        uint256 nodeOpId;
-        uint64 valIndex;
-        uint64 keyIndex;
+
+        // Cache module data to avoid repeated external calls for the same module
+        uint256 cachedModuleId = type(uint256).max; // Initialize to invalid value
+        address cachedModuleAddress;
+        bool cachedIsLegacy;
 
         assembly {
             pubkey.length := 48
@@ -1094,15 +1118,29 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 revert InvalidRequestsDataSortOrder();
             }
 
-            keyIndex = uint64(dataWithoutPubkey);
-            valIndex = uint64(dataWithoutPubkey >> 64);
-            nodeOpId = uint40(dataWithoutPubkey >> (64 + 64));
-
             // Verify that the pubkey belongs to the module and node operator
-            _verifyKey(moduleId, nodeOpId, keyIndex, pubkey);
+            // Cache is updated if module changed
+            (cachedModuleAddress, cachedIsLegacy) = _verifyKey(
+                moduleId,
+                uint40(dataWithoutPubkey >> (64 + 64)),  // nodeOpId
+                uint64(dataWithoutPubkey),                // keyIndex
+                pubkey,
+                index,
+                cachedModuleId,
+                cachedModuleAddress,
+                cachedIsLegacy
+            );
 
+            cachedModuleId = moduleId;
             lastDataWithoutPubkey = dataWithoutPubkey;
-            emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
+
+            emit ValidatorExitRequest(
+                moduleId,
+                uint40(dataWithoutPubkey >> (64 + 64)),  // nodeOpId
+                uint64(dataWithoutPubkey >> 64),          // valIndex
+                pubkey,
+                timestamp
+            );
 
             unchecked {
                 ++index;
