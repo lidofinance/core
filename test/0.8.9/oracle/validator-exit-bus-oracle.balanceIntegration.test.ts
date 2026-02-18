@@ -132,16 +132,25 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
     mockModules = deployed.mockModules;
 
     // Configure signing keys for Format 2 testing (key verification)
-    // For each PUBKEY used in tests, set it up in the appropriate mock modules
+    // Set up keys for all combinations used in tests
     for (let i = 0; i < PUBKEYS.length; i++) {
-      // Module 1 (legacy): keys for nodeOpId 1
+      // Module 1 (legacy): keys for nodeOpId 1, keyIndex 1-5
       await mockModules.module1.setSigningKey(1, i + 1, PUBKEYS[i]);
-      // Module 3 (MaxEB): keys for nodeOpId 1 and 2
+
+      // Module 3 (MaxEB): keys for nodeOpId 1, keyIndex 10-14
       await mockModules.module3.setSigningKey(1, 10 + i, PUBKEYS[i]);
-      await mockModules.module3.setSigningKey(2, 20, PUBKEYS[i]);
-      // Module 5 (MaxEB): keys for nodeOpId 2
-      await mockModules.module5.setSigningKey(2, 20, PUBKEYS[i]);
+
+      // Module 3 (MaxEB): keys for nodeOpId 2, keyIndex 20
+      // Multiple PUBKEYS can map to the same keyIndex for different tests
+      await mockModules.module3.setSigningKey(2, 20, PUBKEYS[0]); // Used in mixed validator test
+
+      // Module 5 (MaxEB): keys for nodeOpId 2, keyIndex 20
+      await mockModules.module5.setSigningKey(2, 20, PUBKEYS[1]); // Used in MaxEB validator test
     }
+
+    // Additional keys for "same balance" comparison test
+    await mockModules.module1.setSigningKey(1, 100, PUBKEYS[0]); // Format 1 vs Format 2 test
+    await mockModules.module3.setSigningKey(2, 200, PUBKEYS[1]); // Format 1 vs Format 2 test
 
     await initVEBO({
       admin: admin.address,
