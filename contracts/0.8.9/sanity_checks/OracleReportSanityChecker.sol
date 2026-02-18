@@ -563,7 +563,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     {
         uint256 limit = _limits.unpack().maxBalanceExitRequestedPerReportInEth;
         if (_maxBalanceExitRequestedPerReportInEth > limit) {
-            revert IncorrectSumOfExitBalancePerReport(limit);
+            revert IncorrectSumOfExitBalancePerReport(_maxBalanceExitRequestedPerReportInEth);
         }
     }
 
@@ -962,7 +962,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
-    event MaxBalanceExitRequestedPerReportInEthSet(uint16 maxBalanceExitRequestedPerReportInEth);
+    event MaxBalanceExitRequestedPerReportInEthSet(uint256 maxBalanceExitRequestedPerReportInEth);
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
     event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
@@ -983,7 +983,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectSharesRequestedToBurn(uint256 actualSharesToBurn);
     error IncorrectCLBalanceIncrease(uint256 annualBalanceDiff);
     error IncorrectAppearedValidators(uint256 appearedValidatorsLimit);
-    error IncorrectSumOfExitBalancePerReport(uint256 maxRequestsCount);
+    error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectExitedValidators(uint256 exitedValidatorsLimit);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
