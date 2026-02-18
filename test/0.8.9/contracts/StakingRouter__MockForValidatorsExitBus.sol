@@ -31,6 +31,17 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     function setStakingModuleWithdrawalCredentialsType(uint256 moduleId, uint8 withdrawalCredentialsType) external {
         _modules[moduleId].id = uint24(moduleId);
         _modules[moduleId].withdrawalCredentialsType = withdrawalCredentialsType;
+        // Set a placeholder address - tests can override with setStakingModuleAddress if needed
+        if (_modules[moduleId].stakingModuleAddress == address(0)) {
+            _modules[moduleId].stakingModuleAddress = address(uint160(moduleId + 0x1000));
+        }
+    }
+
+    /// @notice Mock function to set staking module address
+    /// @param moduleId The module ID
+    /// @param moduleAddress The module address
+    function setStakingModuleAddress(uint256 moduleId, address moduleAddress) external {
+        _modules[moduleId].stakingModuleAddress = moduleAddress;
     }
 
     /// @notice Implementation of IStakingRouter.getStakingModule

@@ -85,6 +85,20 @@ export async function deployVEBO(
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(100, 0x01);
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(101, 0x01);
 
+  // Deploy universal mock modules for key verification (Format 2 testing)
+  // These mocks return requested keys and work for both legacy and new interfaces
+  const mockModule1 = await ethers.deployContract("StakingModule__MockForKeyVerification");
+  const mockModule2 = await ethers.deployContract("StakingModule__MockForKeyVerification");
+  const mockModule3 = await ethers.deployContract("StakingModule__MockForKeyVerification");
+  const mockModule5 = await ethers.deployContract("StakingModule__MockForKeyVerification");
+  const mockModule7 = await ethers.deployContract("StakingModule__MockForKeyVerification");
+
+  await stakingRouter.setStakingModuleAddress(1, await mockModule1.getAddress());
+  await stakingRouter.setStakingModuleAddress(2, await mockModule2.getAddress());
+  await stakingRouter.setStakingModuleAddress(3, await mockModule3.getAddress());
+  await stakingRouter.setStakingModuleAddress(5, await mockModule5.getAddress());
+  await stakingRouter.setStakingModuleAddress(7, await mockModule7.getAddress());
+
   await updateLidoLocatorImplementation(locatorAddr, {
     stakingRouter: stakingRouterAddr,
   });
@@ -100,7 +114,7 @@ export async function deployVEBO(
 
   // Legacy modules bitmask: set bit for each legacy module (NOR=1, SDVT=3)
   // Example: modules 1 and 3 are legacy -> bitmask = (1 << 1) | (1 << 3) = 0b1010 = 10
-  const LEGACY_MODULES_BITMASK = (1n << 1n) | (1n << 3n); // Modules 1 (NOR) and 3 (SDVT) are legacy
+  const LEGACY_MODULES_BITMASK = 1n << 1n; // Module 1 is legacy
 
   const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
     secondsPerSlot,
@@ -154,6 +168,13 @@ export async function deployVEBO(
     triggerableWithdrawalsGateway,
     nodeOperatorsRegistry,
     stakingRouter,
+    mockModules: {
+      module1: mockModule1,
+      module2: mockModule2,
+      module3: mockModule3,
+      module5: mockModule5,
+      module7: mockModule7,
+    },
   };
 }
 

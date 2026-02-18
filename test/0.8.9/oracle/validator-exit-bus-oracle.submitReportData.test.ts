@@ -261,9 +261,11 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[2] },
           { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3] },
         ]);
+        // 2 validators = 4096 ETH (actual balance that exceeds the limit)
+        const actualBalance = 2_048n * 2n;
         await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
           .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSumOfExitBalancePerReport")
-          .withArgs(exitRequestsLimit);
+          .withArgs(actualBalance);
       });
       it("pass if requests amount equals to limit", async () => {
         // Module 5 (not curated) = 2048 ETH per validator

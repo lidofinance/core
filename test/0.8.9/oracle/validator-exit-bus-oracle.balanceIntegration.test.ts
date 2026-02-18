@@ -3,7 +3,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  OracleReportSanityChecker,
+  StakingModule__MockForKeyVerification,
+  ValidatorsExitBus__Harness,
+} from "typechain-types";
 
 import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
@@ -31,6 +36,13 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
   let member1: HardhatEthersSigner;
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
+  let mockModules: {
+    module1: StakingModule__MockForKeyVerification;
+    module2: StakingModule__MockForKeyVerification;
+    module3: StakingModule__MockForKeyVerification;
+    module5: StakingModule__MockForKeyVerification;
+    module7: StakingModule__MockForKeyVerification;
+  };
 
   let oracleVersion: bigint;
 
@@ -117,6 +129,19 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
     consensus = deployed.consensus;
     oracle = deployed.oracle;
     oracleReportSanityChecker = deployed.oracleReportSanityChecker;
+    mockModules = deployed.mockModules;
+
+    // Configure signing keys for Format 2 testing (key verification)
+    // For each PUBKEY used in tests, set it up in the appropriate mock modules
+    for (let i = 0; i < PUBKEYS.length; i++) {
+      // Module 1 (legacy): keys for nodeOpId 1
+      await mockModules.module1.setSigningKey(1, i + 1, PUBKEYS[i]);
+      // Module 3 (MaxEB): keys for nodeOpId 1 and 2
+      await mockModules.module3.setSigningKey(1, 10 + i, PUBKEYS[i]);
+      await mockModules.module3.setSigningKey(2, 20, PUBKEYS[i]);
+      // Module 5 (MaxEB): keys for nodeOpId 2
+      await mockModules.module5.setSigningKey(2, 20, PUBKEYS[i]);
+    }
 
     await initVEBO({
       admin: admin.address,
@@ -217,9 +242,11 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST);
 
       // Should revert - 3 validators = 96 ETH > 64 ETH limit
+      // Error should contain the actual balance (96), not the limit (64)
+      const actualBalance = LEGACY_MODULE_MAX_BALANCE_ETH * 3n;
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSumOfExitBalancePerReport")
-        .withArgs(limit);
+        .withArgs(actualBalance);
     });
 
     it("should revert when MaxEB validators exceed limit (Format 1)", async () => {
@@ -235,9 +262,11 @@ describe("ValidatorsExitBusOracle.sol:balanceIntegration", () => {
       const { reportData } = await prepareReportAndSubmitHash(requests, DATA_FORMAT_LIST);
 
       // Should revert - 2 validators = 4096 ETH > 2048 ETH limit
+      // Error should contain the actual balance (4096), not the limit (2048)
+      const actualBalance = MAXEB_MODULE_MAX_BALANCE_ETH * 2n;
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
         .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSumOfExitBalancePerReport")
-        .withArgs(limit);
+        .withArgs(actualBalance);
     });
 
     it("should pass sanity check for legacy validators (Format 2)", async () => {
