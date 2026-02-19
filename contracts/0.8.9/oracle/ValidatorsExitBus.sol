@@ -221,7 +221,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 nodeOpId;
         uint256 moduleId;
         uint256 valIndex;
-        uint256 keyIndex;  // - will be 0 for format 1, actual value for format 2
+        uint256 keyIndex;  // - will be max uint256 for format 1, actual value for format 2
         bytes pubkey;
     }
 
@@ -785,7 +785,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         validatorData.valIndex = uint64(dataWithoutPubkey);
         validatorData.nodeOpId = uint40(dataWithoutPubkey >> 64);
         validatorData.moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-        validatorData.keyIndex = 0; // Format 1 always uses keyIndex 0
+        validatorData.keyIndex = type(uint256).max; // Format 1 always uses keyIndex set to max uint256 to indicate unused
 
         bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
         assembly {
