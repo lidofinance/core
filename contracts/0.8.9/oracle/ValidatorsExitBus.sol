@@ -198,7 +198,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @param balancePerFrameEth The exit balance in ETH that can be restored per frame.
      * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameEth` can be restored.
      */
-    event ExitRequestsLimitSet(uint256 maxExitBalanceEth, uint256 balancePerFrameEth, uint256 frameDurationInSec);
+    event ExitBalanceLimitSet(uint256 maxExitBalanceEth, uint256 balancePerFrameEth, uint256 frameDurationInSec);
 
     /**
      * @notice Emitted when exit requests were delivered
@@ -221,7 +221,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 nodeOpId;
         uint256 moduleId;
         uint256 valIndex;
-        uint256 keyIndex;  // NEW - will be 0 for format 1, actual value for format 2
+        uint256 keyIndex;  // - will be 0 for format 1, actual value for format 2
         bytes pubkey;
     }
 
@@ -281,9 +281,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /// @notice Max effective balance for MaxEB validators (withdrawal credentials type 0x02) in ETH
     /// @dev Typically 2048 ETH (post-EIP-7251)
     uint16 public immutable MAX_BALANCE_WC_TYPE_02_ETH;
-
-    /// @dev Conversion factor: 1 ETH = 1_000_000_000 Gwei (1e9)
-    uint256 private constant GWEI_PER_ETH = 1_000_000_000;
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
@@ -540,13 +537,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @return nodeOpId ID of the node operator.
      * @return moduleId ID of the staking module.
      * @return valIndex Index of the validator.
-     * @return keyIndex Index of the signing key (0 for format 1, actual value for format 2).
      */
     function unpackExitRequest(
         bytes calldata exitRequests,
         uint256 dataFormat,
         uint256 index
-    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex, uint256 keyIndex) {
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
         _checkExitRequestData(exitRequests, dataFormat);
 
         uint256 requestsCount = exitRequests.length / _getPackedRequestLength(dataFormat);
@@ -560,9 +556,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         nodeOpId = validatorData.nodeOpId;
         moduleId = validatorData.moduleId;
         pubkey = validatorData.pubkey;
-        keyIndex = validatorData.keyIndex;
 
-        return (pubkey, nodeOpId, moduleId, valIndex, keyIndex);
+        return (pubkey, nodeOpId, moduleId, valIndex);
     }
 
     /// @notice Resume accepting validator exit requests
@@ -673,7 +668,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         );
         RateLimitStorage.setStorageLimit(EXIT_BALANCE_LIMIT_POSITION, limitData);
 
-        emit ExitRequestsLimitSet(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
+        emit ExitBalanceLimitSet(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     function _consumeLimit(uint32 balanceEth) internal {

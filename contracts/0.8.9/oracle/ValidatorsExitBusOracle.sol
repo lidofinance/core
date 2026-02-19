@@ -70,7 +70,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
 
-        _initialize_v2(maxValidatorsPerRequest, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
+        _initialize_v3(maxValidatorsPerRequest, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     /**
@@ -78,22 +78,22 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      */
-    function finalizeUpgrade_v2(
+    function finalizeUpgrade_v3(
         uint256 maxValidatorsPerReport,
         uint256 maxExitBalanceEth,
         uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) external {
-        _initialize_v2(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
+        _initialize_v3(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
-    function _initialize_v2(
+    function _initialize_v3(
         uint256 maxValidatorsPerReport,
         uint256 maxExitBalanceEth,
         uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) internal {
-        _updateContractVersion(2);
+        _updateContractVersion(3);
         _setMaxValidatorsPerReport(maxValidatorsPerReport);
         _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }

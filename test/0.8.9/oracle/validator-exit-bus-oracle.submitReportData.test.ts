@@ -618,7 +618,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       // Set limit to allow 4160 ETH (2 legacy + 2 MaxEB validators)
       // Max: 7000 ETH, Per frame: 5000 ETH (enough to cover 4160 ETH)
       const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7_000n, 5_000n, 48);
-      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7_000n, 5_000n, 48);
+      await expect(exitLimitTx).to.emit(oracle, "ExitBalanceLimitSet").withArgs(7_000n, 5_000n, 48);
     });
 
     it("deliver report by actor different from oracle", async () => {

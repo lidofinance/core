@@ -10,7 +10,7 @@ import { EPOCHS_PER_FRAME, INITIAL_FAST_LANE_LENGTH_SLOTS, SLOTS_PER_EPOCH, VEBO
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
+describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
   let originalState: string;
   let locator: LidoLocator;
   let oracle: ValidatorsExitBus__Harness;
@@ -60,7 +60,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
 
   // contract version
   it("should revert if set wrong version", async () => {
-    await expect(oracle.finalizeUpgrade_v2(10, 100n, 32n, 48)).to.be.revertedWithCustomError(
+    await expect(oracle.finalizeUpgrade_v3(10, 100n, 32n, 48)).to.be.revertedWithCustomError(
       oracle,
       "InvalidContractVersionIncrement",
     );
@@ -75,9 +75,9 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
     const maxValidatorsPerReport = 15;
     const frameDuration = 48;
 
-    await oracle.finalizeUpgrade_v2(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDuration);
+    await oracle.finalizeUpgrade_v3(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDuration);
 
-    expect(await oracle.getContractVersion()).to.equal(2);
+    expect(await oracle.getContractVersion()).to.equal(3);
 
     const exitRequestLimitData = await oracle.getExitRequestLimitFullInfo();
     expect(exitRequestLimitData.maxExitBalanceEth).to.equal(maxExitBalanceEth);
@@ -86,8 +86,8 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
 
     expect(await oracle.getMaxValidatorsPerReport()).to.equal(maxValidatorsPerReport);
 
-    // should not allow to run finalizeUpgrade_v2 again
-    await expect(oracle.finalizeUpgrade_v2(10, 100, 1, 48)).to.be.revertedWithCustomError(
+    // should not allow to run finalizeUpgrade_v4 again
+    await expect(oracle.finalizeUpgrade_v3(10, 100, 1, 48)).to.be.revertedWithCustomError(
       oracle,
       "InvalidContractVersionIncrement",
     );

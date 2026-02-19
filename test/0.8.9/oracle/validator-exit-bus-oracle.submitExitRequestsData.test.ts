@@ -364,7 +364,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
         .connect(authorizedEntity)
         .setExitRequestLimit(MAX_EXIT_BALANCE_ETH, BALANCE_PER_FRAME_ETH, FRAME_DURATION);
       await expect(exitLimitTx)
-        .to.emit(oracle, "ExitRequestsLimitSet")
+        .to.emit(oracle, "ExitBalanceLimitSet")
         .withArgs(MAX_EXIT_BALANCE_ETH, BALANCE_PER_FRAME_ETH, FRAME_DURATION);
 
       exitRequests = [
@@ -516,7 +516,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     it("Should set maxExitBalanceEth equal to 0 and return as currentExitBalanceEth type(uint256).max", async () => {
       // can't set just maxExitBalanceEth to 0, as it will be less than balancePerFrameEth
       const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit(0, 0, FRAME_DURATION);
-      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(0, 0, FRAME_DURATION);
+      await expect(exitLimitTx).to.emit(oracle, "ExitBalanceLimitSet").withArgs(0, 0, FRAME_DURATION);
 
       const data = await oracle.getExitRequestLimitFullInfo();
 

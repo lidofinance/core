@@ -38,7 +38,6 @@ export async function main() {
   const lidoAddress = state[Sk.appLido].proxy.address;
   const agentAddress = state[Sk.appAgent].proxy.address;
   const treasuryAddress = state[Sk.appAgent].proxy.address;
-  const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
@@ -288,7 +287,14 @@ export async function main() {
     "ValidatorsExitBusOracle",
     proxyContractsOwner,
     deployer,
-    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address, nodeOperatorsRegistryAddress],
+    [
+      chainSpec.secondsPerSlot,
+      chainSpec.genesisTime,
+      locator.address,
+      validatorsExitBusOracleParams.legacyModulesBitmask,
+      validatorsExitBusOracleParams.maxBalanceWcType01Eth,
+      validatorsExitBusOracleParams.maxBalanceWcType02Eth,
+    ],
   );
 
   const hashConsensusForVebo = await deployWithoutProxy(
