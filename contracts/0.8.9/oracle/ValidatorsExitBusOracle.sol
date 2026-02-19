@@ -69,6 +69,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
+        _updateContractVersion(2);
 
         _initialize_v3(maxValidatorsPerRequest, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }

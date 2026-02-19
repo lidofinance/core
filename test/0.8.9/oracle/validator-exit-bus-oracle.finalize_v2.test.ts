@@ -67,8 +67,6 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
   });
 
   it("should successfully finalize upgrade", async () => {
-    await oracle.setContractVersion(1);
-
     // Set balance limits in ETH (not Gwei, not validator counts)
     const maxExitBalanceEth = 150n; // 150 ETH
     const balancePerFrameEth = 32n; // 32 ETH (1 legacy validator)
