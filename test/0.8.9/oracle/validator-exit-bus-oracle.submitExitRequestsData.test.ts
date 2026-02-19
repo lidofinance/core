@@ -587,7 +587,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Check version", async () => {
       // set in initialize in deployVEBO
-      expect(await oracle.getContractVersion()).to.equal(2);
+      expect(await oracle.getContractVersion()).to.equal(3);
     });
 
     it("Store exit hash", async () => {
@@ -595,14 +595,14 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("set new version", async () => {
-      await oracle.setContractVersion(3);
-      expect(await oracle.getContractVersion()).to.equal(3);
+      await oracle.setContractVersion(4);
+      expect(await oracle.getContractVersion()).to.equal(4);
     });
 
     it("Should revert if request has old contract version", async () => {
       await expect(oracle.submitExitRequestsData(REQUEST))
         .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
-        .withArgs(3, 2);
+        .withArgs(4, 3);
     });
   });
 });
