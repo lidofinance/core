@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="5604"  lines-covered="5146"  line-rate="0.9183"  branches-valid="2618"  branches-covered="2288"  branch-rate="0.8739"  timestamp="1771593656810" complexity="0" version="0.1">
+<coverage lines-valid="5601"  lines-covered="5146"  line-rate="0.9188"  branches-valid="2618"  branches-covered="2288"  branch-rate="0.8739"  timestamp="1771603966275" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2549,9 +2549,9 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.sr"  line-rate="0.8629000000000001"  branch-rate="0.8765000000000001" >
+	<package name="0.8.25.sr"  line-rate="0.8675"  branch-rate="0.8765000000000001" >
 	<classes>
-		<class name="SRLib.sol"  filename="contracts/0.8.25/sr/SRLib.sol"  line-rate="0.8066"  branch-rate="0.9808" >
+		<class name="SRLib.sol"  filename="contracts/0.8.25/sr/SRLib.sol"  line-rate="0.8167"  branch-rate="0.9808" >
 		<methods>
 			<method name="_migrateStorage"  hits="4"  signature="()V" >
 				<lines><line number="79"  hits="4" /></lines>
@@ -2630,9 +2630,6 @@
 			</method>
 			<method name="_validateEqualArrayLengths"  hits="22"  signature="()V" >
 				<lines><line number="805"  hits="22" /></lines>
-			</method>
-			<method name="_asSingletonArray"  hits="0"  signature="()V" >
-				<lines><line number="811"  hits="0" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2876,9 +2873,6 @@
 			<line number="801"  hits="2"  branch="false" />
 			<line number="806"  hits="22"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="807"  hits="2"  branch="false" />
-			<line number="812"  hits="0"  branch="false" />
-			<line number="813"  hits="0"  branch="false" />
-			<line number="815"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="SRStorage.sol"  filename="contracts/0.8.25/sr/SRStorage.sol"  line-rate="0.7692"  branch-rate="1" >
@@ -3295,7 +3289,7 @@
 			<method name="_getStakingModuleNodeOperatorIsActive"  hits="3"  signature="()V" >
 				<lines><line number="1135"  hits="3" /></lines>
 			</method>
-			<method name="_validateAndGetModuleState"  hits="20"  signature="()V" >
+			<method name="_getModuleState"  hits="20"  signature="()V" >
 				<lines><line number="1145"  hits="20" /></lines>
 			</method>
 			<method name="_getModuleStateCompat"  hits="7"  signature="()V" >
@@ -4531,10 +4525,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="47"  branch="false" />
-			<line number="173"  hits="47"  branch="false" />
-			<line number="175"  hits="47"  branch="false" />
-			<line number="176"  hits="47"  branch="false" />
+			<line number="172"  hits="26"  branch="false" />
+			<line number="173"  hits="26"  branch="false" />
+			<line number="175"  hits="26"  branch="false" />
+			<line number="176"  hits="26"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
