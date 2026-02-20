@@ -37,26 +37,26 @@ library SRLib {
     event StakingModuleExitNotificationFailed(
         uint256 indexed stakingModuleId, uint256 indexed nodeOperatorId, bytes _publicKey
     );
-    event StakingModuleShareLimitSet(
-        uint256 indexed stakingModuleId, uint256 stakeShareLimit, uint256 priorityExitShareThreshold, address setBy
-    );
-    event StakingModuleFeesSet(
-        uint256 indexed stakingModuleId, uint256 stakingModuleFee, uint256 treasuryFee, address setBy
-    );
+    // event StakingModuleShareLimitSet(
+    //     uint256 indexed stakingModuleId, uint256 stakeShareLimit, uint256 priorityExitShareThreshold, address setBy
+    // );
+    // event StakingModuleFeesSet(
+    //     uint256 indexed stakingModuleId, uint256 stakingModuleFee, uint256 treasuryFee, address setBy
+    // );
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
-    event StakingModuleMaxDepositsPerBlockSet(
-        uint256 indexed stakingModuleId, uint256 maxDepositsPerBlock, address setBy
-    );
-    event StakingModuleMinDepositBlockDistanceSet(
-        uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
-    );
+    // event StakingModuleMaxDepositsPerBlockSet(
+    //     uint256 indexed stakingModuleId, uint256 maxDepositsPerBlock, address setBy
+    // );
+    // event StakingModuleMinDepositBlockDistanceSet(
+    //     uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
+    // );
     /// Emitted when the StakingRouter received ETH
     // event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
 
     /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant STAKING_MODULES_MAPPING_POSITION = keccak256("lido.StakingRouter.moduleStates");
+    bytes32 internal constant STAKING_MODULES_MAPPING_POSITION = keccak256("lido.StakingRouter.stakingModules");
     /// @dev [deprecated] old storage slots, remove after 1st migration
     bytes32 internal constant STAKING_MODULE_INDICES_MAPPING_POSITION =
         keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
@@ -67,7 +67,10 @@ library SRLib {
     /// @dev [deprecated] old storage slots, remove after 1st migration
     bytes32 internal constant STAKING_MODULES_COUNT_POSITION = keccak256("lido.StakingRouter.stakingModulesCount");
     /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant LAST_STAKING_MODULE_ID_POSITION = keccak256("lido.StakingRouter.lastModuleId");
+    bytes32 internal constant LAST_STAKING_MODULE_ID_POSITION = keccak256("lido.StakingRouter.lastStakingModuleId");
+    /// @dev [deprecated] old Versioned storage slot
+    bytes32 internal constant CONTRACT_VERSION_POSITION = keccak256("lido.Versioned.contractVersion");
+
 
     error WrongInitialMigrationState();
     error StakingModuleAddressExists();
@@ -96,6 +99,9 @@ library SRLib {
 
         // cleanup old storage slot fully as bytes32
         delete LIDO_POSITION.getBytes32Slot().value;
+
+        // now use OZ slot
+        delete CONTRACT_VERSION_POSITION.getBytes32Slot().value;
 
         // migrate last staking module ID
         SRStorage.getRouterState().lastModuleId = uint24(LAST_STAKING_MODULE_ID_POSITION.getUint256Slot().value);

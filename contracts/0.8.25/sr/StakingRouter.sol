@@ -170,9 +170,18 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     //     _updateContractVersion(3);
     // }
 
-    /// @notice A function to migrade upgrade to v4 (from v3) and use Openzeppelin versioning.
-    function migrateUpgrade_v4() external reinitializer(4) {
+    /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
+    /// @param _admin Address to grant DEFAULT_ADMIN_ROLE
+    /// @dev Old AccessControl roles (stored at keccak256("openzeppelin.AccessControl._roles") and
+    ///      keccak256("openzeppelin.AccessControlEnumerable._roleMembers")) are NOT migrated or cleaned up.
+    ///      New OZ 5.2 AccessControl uses ERC-7201 namespaced storage at different slots, so old data
+    ///      is effectively orphaned and inaccessible by the new code.
+    ///      All operational roles (STAKING_MODULE_MANAGE_ROLE, REPORT_EXITED_VALIDATORS_ROLE, etc.)
+    ///      must be re-granted via grantRole() after this migration in the upgrade Vote Script.
+    function migrateUpgrade_v4(address _admin) external reinitializer(4) {
         __AccessControlEnumerable_init();
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
         // migrate current modules to new storage
         SRLib._migrateStorage();
@@ -384,8 +393,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SRLib._onValidatorExitTriggered(validatorExitData, _withdrawalRequestPaidFee, _exitType);
     }
 
-    // TODO replace with new method in SanityChecker, V3TemporaryAdmin etc
-    /// @dev DEPRECATED, use getStakingModuleStates() instead
     /// @notice Returns all registered staking modules.
     /// @return moduleStates Array of staking modules.
     function getStakingModules() external view returns (StakingModule[] memory) {
@@ -434,7 +441,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRStorage.getModuleIds();
     }
 
-    /// @dev DEPRECATED, use getStakingModuleState() instead
     /// @notice Returns the staking module by its id.
     /// @param _stakingModuleId Id of the staking module.
     /// @return moduleState Staking module data.
@@ -491,7 +497,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     {
         SRUtils._validateModuleId(_stakingModuleId);
         return _getNodeOperatorSummary(_stakingModuleId.getIStakingModule(), _nodeOperatorId);
-        // _fillNodeOperatorSummary(_stakingModuleId, _nodeOperatorId, summary);
     }
 
     /// @notice Returns staking module digest for each staking module registered in the staking router.
