@@ -37,21 +37,7 @@ library SRLib {
     event StakingModuleExitNotificationFailed(
         uint256 indexed stakingModuleId, uint256 indexed nodeOperatorId, bytes _publicKey
     );
-    // event StakingModuleShareLimitSet(
-    //     uint256 indexed stakingModuleId, uint256 stakeShareLimit, uint256 priorityExitShareThreshold, address setBy
-    // );
-    // event StakingModuleFeesSet(
-    //     uint256 indexed stakingModuleId, uint256 stakingModuleFee, uint256 treasuryFee, address setBy
-    // );
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
-    // event StakingModuleMaxDepositsPerBlockSet(
-    //     uint256 indexed stakingModuleId, uint256 maxDepositsPerBlock, address setBy
-    // );
-    // event StakingModuleMinDepositBlockDistanceSet(
-    //     uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
-    // );
-    /// Emitted when the StakingRouter received ETH
-    // event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
 
