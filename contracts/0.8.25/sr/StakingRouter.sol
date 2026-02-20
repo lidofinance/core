@@ -322,7 +322,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _nodeOperatorIds,
         bytes calldata _exitedValidatorsCounts
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
-        /// @dev validation of _stakingModuleId is done in _reportValidatorExitDelay_validateAndGetModuleState
+        /// @dev validation of _stakingModuleId is done inside
         SRLib._reportStakingModuleOperatorExitedValidators(_stakingModuleId, _nodeOperatorIds, _exitedValidatorsCounts);
     }
 
@@ -413,7 +413,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (ModuleStateConfig memory stateConfig)
     {
-        (, stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+        (, stateConfig) = _getModuleState(_stakingModuleId);
     }
 
     function getStakingModuleStateDeposits(uint256 _stakingModuleId)
@@ -421,7 +421,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (ModuleStateDeposits memory stateDeposits)
     {
-        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         stateDeposits = state.deposits;
     }
 
@@ -430,7 +430,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint64 activeBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount)
     {
-        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         ModuleStateAccounting memory moduleAcc = state.accounting;
         return (moduleAcc.activeBalanceGwei, moduleAcc.pendingBalanceGwei, moduleAcc.exitedValidatorsCount);
     }
@@ -628,7 +628,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module.
     /// @return Last deposit block for the staking module.
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256) {
-        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         return state.deposits.lastDepositBlock;
     }
 
@@ -636,7 +636,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module.
     /// @return Min deposit block distance for the staking module.
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256) {
-        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         return state.deposits.minDepositBlockDistance;
     }
 
@@ -655,7 +655,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint256 activeValidatorsCount)
     {
-        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         (uint256 totalExitedValidators, uint256 totalDepositedValidators,) = _getStakingModuleSummary(_stakingModuleId);
 
         activeValidatorsCount =
@@ -666,7 +666,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @return withdrawal credentials: 0x01... - for Legacy modules, 0x02... - for New modules
     function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32) {
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
         return _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
     }
 
@@ -740,7 +740,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SRUtils._validateAuth(_getTopUpGateway());
         _validateTopUpInputs(_keyIndices, _operatorIds, _topUpLimits, _pubkeys);
 
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
 
         if (!_canDeposit(_stakingModuleId)) revert CannotDeposit();
 
@@ -996,7 +996,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @dev Only the DepositSecurityModule is allowed to call this method.
     function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external {
         SRUtils._validateAuth(_getDepositSecurityModule());
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
 
         if (!_canDeposit(_stakingModuleId)) revert CannotDeposit();
 
@@ -1073,7 +1073,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     }
 
     function _getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) internal view returns (uint256) {
-        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         return state.deposits.maxDepositsPerBlock;
     }
 
@@ -1142,7 +1142,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// ---
 
-    function _validateAndGetModuleState(uint256 _moduleId)
+    function _getModuleState(uint256 _moduleId)
         internal
         view
         returns (ModuleState storage state, ModuleStateConfig storage stateConfig)

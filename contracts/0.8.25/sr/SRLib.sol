@@ -807,11 +807,4 @@ library SRLib {
             revert ArraysLengthMismatch(firstArrayLength, secondArrayLength);
         }
     }
-
-    function _asSingletonArray(uint256 element) private pure returns (uint256[] memory) {
-        uint256[] memory array = new uint256[](1);
-        array[0] = element;
-
-        return array;
-    }
 }
