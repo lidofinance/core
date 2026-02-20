@@ -1,9 +1,59 @@
 # Lido Protocol Upgrade Parameters - Hoodi Configuration
 # This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum Hoodi testnet
 
-# Predeposit guarantee configuration for validator deposit guarantees
-[predepositGuarantee]
-genesisForkVersion = "0x10000910"     # Ethereum Hoodi testnet genesis fork version
-gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
-gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
-changeSlot = 0                        # Slot number when the change takes effect
+[stakingRouterV3VoteScript]
+# Common addresses
+agent = "0x0534aA41907c9631fae990960bCC72d75fA7cfeD"
+stakingRouter = "0xCc820558B39ee15C7C45B59390B503b83fb499A8"
+burner = "0xb2c99cd38a2636a6281a849C8de938B3eF4A7C3D"
+triggerableWithdrawalsGateway = "0x6679090D92b08a2a686eF8614feECD8cDFE209db"
+easyTrackEVMScriptExecutor = "0x79a20FD0FA36453B2F45eAbab19bfef43575Ba9E"
+resealManager = "0x05172CbCDb7307228F781436b327679e4DAE166B"
+identifiedCommunityStakersGateManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
+gateSeal = "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65"
+# TODO: upgrade-specific GateSealV3 is not present in artifacts/hoodi/deploy-hoodi.json.
+# Prefill required.
+gateSealV3 = ""
+generalDelayedPenaltyReporter = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
+hashConsensusInitialEpoch = 47480
+
+[stakingRouterV3VoteScript.upgrade]
+csmProxy = "0x79CEf36D84743222f37765204Bec41E92a93E59d"
+csmImpl = "0x6140195075a2BFaE0C332377af1f1461Fced0791"
+parametersRegistryProxy = "0xA4aD5236963f9Fe4229864712269D8d79B65C5Ad"
+parametersRegistryImpl = "0xae34514B7A5B402264dB13ac8ffe25766173B3cc"
+feeOracleProxy = "0xe7314f561B2e72f9543F1004e741bab6Fc51028B"
+feeOracleImpl = "0x2fcc1bE07eAf30FC7daC541327B96B038C73eE7a"
+feeOracleConsensusVersion = 4
+vettedGateProxy = "0x10a254E724fe2b7f305F76f3F116a3969c53845f"
+vettedGateImpl = "0x86915F7D0C68A627385eF36DdB40A48391118882"
+accountingProxy = "0xA54b90BA34C5f326BC1485054080994e38FB4C60"
+accountingImpl = "0xD32b59d6054b94516f8EEE2A84C3c33DaF1d06B8"
+feeDistributorProxy = "0xaCd9820b0A2229a82dc1A0770307ce5522FF3582"
+feeDistributorImpl = "0x1B952bd0C5d65B86d4F1F29589A31584e2bE038f"
+exitPenaltiesProxy = "0xD259b31083Be841E5C85b2D481Cfc17C14276800"
+exitPenaltiesImpl = "0xF8CC5BFFC0580395a5D8bBE3C4CD07ce3F623d89"
+strikesProxy = "0x8fBA385C3c334D251eE413e79d4D3890db98693c"
+strikesImpl = "0xF9CcA99e34197E5fc70aB05F5dEb112EcD2367e9"
+oldPermissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
+verifier = "0x1773b2Ff99A030F6000554Cb8A5Ec93145650cbA"
+# TODO: upgrade-specific VerifierV3 is not present in artifacts/hoodi/deploy-hoodi.json.
+# Prefill required.
+verifierV3 = ""
+permissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
+ejector = "0x777bd76326E4aDcD353b03AD45b33BAF41048476"
+
+[stakingRouterV3VoteScript.curatedModule]
+# TODO: curated module deployment addresses are not present in artifacts/hoodi.
+# Prefill required.
+module = ""
+accounting = ""
+ejector = ""
+hashConsensus = ""
+moduleName = "curated-onchain-v1"
+stakeShareLimit = 2000
+priorityExitShareThreshold = 2500
+stakingModuleFee = 800
+treasuryFee = 200
+maxDepositsPerBlock = 30
+minDepositBlockDistance = 25
