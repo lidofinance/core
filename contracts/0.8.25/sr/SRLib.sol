@@ -667,7 +667,6 @@ library SRLib {
     /// don't match the supplied expected current values.
     ///
     /// @dev The function is restricted to the `UNSAFE_SET_EXITED_VALIDATORS_ROLE` role.
-    // todo REMOVE?
     function _unsafeSetExitedValidatorsCount(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,

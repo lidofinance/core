@@ -281,7 +281,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         initialized();
     }
 
-    // TODO remove
     /**
      * @notice A function to finalize upgrade to v3 (from v2). Can be called only once
      *
