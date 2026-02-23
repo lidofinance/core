@@ -28,7 +28,6 @@ library SRUtils {
     uint256 public constant INITIAL_DEPOSIT_SIZE = MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
 
     error StakingModulesLimitExceeded();
-    error StakingModuleAddressExists();
     error StakingModuleWrongName();
     error StakingModuleUnregistered();
     error WrongWithdrawalCredentialsType();

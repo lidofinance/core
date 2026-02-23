@@ -36,26 +36,12 @@ library SRLib {
     event StakingModuleExitNotificationFailed(
         uint256 indexed stakingModuleId, uint256 indexed nodeOperatorId, bytes _publicKey
     );
-    event StakingModuleShareLimitSet(
-        uint256 indexed stakingModuleId, uint256 stakeShareLimit, uint256 priorityExitShareThreshold, address setBy
-    );
-    event StakingModuleFeesSet(
-        uint256 indexed stakingModuleId, uint256 stakingModuleFee, uint256 treasuryFee, address setBy
-    );
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
-    event StakingModuleMaxDepositsPerBlockSet(
-        uint256 indexed stakingModuleId, uint256 maxDepositsPerBlock, address setBy
-    );
-    event StakingModuleMinDepositBlockDistanceSet(
-        uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
-    );
-    /// Emitted when the StakingRouter received ETH
-    // event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
 
     /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant STAKING_MODULES_MAPPING_POSITION = keccak256("lido.StakingRouter.moduleStates");
+    bytes32 internal constant STAKING_MODULES_MAPPING_POSITION = keccak256("lido.StakingRouter.stakingModules");
     /// @dev [deprecated] old storage slots, remove after 1st migration
     bytes32 internal constant STAKING_MODULE_INDICES_MAPPING_POSITION =
         keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
@@ -679,7 +665,6 @@ library SRLib {
     /// don't match the supplied expected current values.
     ///
     /// @dev The function is restricted to the `UNSAFE_SET_EXITED_VALIDATORS_ROLE` role.
-    // todo REMOVE?
     function _unsafeSetExitedValidatorsCount(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
@@ -818,12 +803,5 @@ library SRLib {
         if (firstArrayLength != secondArrayLength) {
             revert ArraysLengthMismatch(firstArrayLength, secondArrayLength);
         }
-    }
-
-    function _asSingletonArray(uint256 element) private pure returns (uint256[] memory) {
-        uint256[] memory array = new uint256[](1);
-        array[0] = element;
-
-        return array;
     }
 }
