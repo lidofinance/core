@@ -4,8 +4,7 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.25;
 
-import {Math256} from "contracts/common/lib/Math256.sol";
-
+import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {
     AccessControlEnumerableUpgradeable
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
@@ -165,10 +164,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice Finalizes upgrade to v3 (from v2). Can be called only once. Removed and no longer used
     /// See historical usage in commit:
-    // function finalizeUpgrade_v3() external {
-    //     _checkContractVersion(2);
-    //     _updateContractVersion(3);
-    // }
+    // function finalizeUpgrade_v3() external
 
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
     /// @param _admin Address to grant DEFAULT_ADMIN_ROLE
@@ -659,7 +655,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         (uint256 totalExitedValidators, uint256 totalDepositedValidators,) = _getStakingModuleSummary(_stakingModuleId);
 
         activeValidatorsCount =
-            totalDepositedValidators - Math256.max(state.accounting.exitedValidatorsCount, totalExitedValidators);
+            totalDepositedValidators - Math.max(state.accounting.exitedValidatorsCount, totalExitedValidators);
     }
 
     /// @notice Returns withdrawal credentials type
@@ -1010,8 +1006,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // Calculate max deposits count (capped by max and module capacity)
         (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
         uint256 _maxDepositsCount = _getStakingModuleMaxDepositsPerBlock(_stakingModuleId);
-        uint256 maxDepositsCount = Math256.min(
-            Math256.min(_maxDepositsCount, depositableValidatorsCount),
+        uint256 maxDepositsCount = Math.min(
+            Math.min(_maxDepositsCount, depositableValidatorsCount),
             SRUtils._getInitialDepositCountByAmount(stakingModuleDepositableEthAmount)
         );
 
