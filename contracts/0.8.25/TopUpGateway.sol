@@ -181,9 +181,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         if (!_isBlockDistancePassed()) return false;
 
         bytes32 wc = stakingRouter.getStakingModuleWithdrawalCredentials(_stakingModuleId);
-        if (!_isWithdrawalCredentials02(wc)) return false;
-
-        return true;
+        return wc.isType2();
     }
 
     /**
@@ -231,12 +229,8 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         }
     }
 
-    function _isWithdrawalCredentials02(bytes32 _wc) internal pure returns (bool) {
-        return _wc.getType() == 2;
-    }
-
     function _requireWithdrawalCredentials02(bytes32 _wc) internal pure {
-        if (!_isWithdrawalCredentials02(_wc)) {
+        if (!_wc.isType2()) {
             revert WrongWithdrawalCredentials();
         }
     }

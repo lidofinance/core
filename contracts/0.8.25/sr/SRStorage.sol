@@ -32,14 +32,6 @@ library SRStorage {
         return IStakingModuleV2($.config.moduleAddress);
     }
 
-    // function loadStateAccounting(ModuleState storage $) internal view returns (uint64 a, uint64 b, uint64 c, uint64 d) {
-    //     (a, b, c, d) = _unpack(_loadModuleState($, 2));
-    // }
-
-    // function saveStateAccounting(ModuleState storage $, uint64 a, uint64 b, uint64 c, uint64 d) internal {
-    //     _saveModuleState($, 2, _pack(a, b, c, d));
-    // }
-
     function getModuleState(uint256 _moduleId) internal view returns (ModuleState storage) {
         return getRouterState().moduleStates[_moduleId];
     }
@@ -51,14 +43,6 @@ library SRStorage {
             $.slot := _position
         }
     }
-
-    // function loadStateAccounting(RouterState storage $) internal view returns (uint64 a, uint64 b, uint64 c) {
-    //     (a, b, c,) = _unpack(_loadRouterState($, 2));
-    // }
-
-    // function saveStateAccounting(RouterState storage $, uint64 a, uint64 b, uint64 c) internal {
-    //     _saveRouterState($, 2, _pack(a, b, c, 0));
-    // }
 
     function getModulesCount() internal view returns (uint256) {
         return getRouterState().moduleIds.length();
@@ -84,45 +68,4 @@ library SRStorage {
     function removeModuleId(uint256 _moduleId) internal {
         getRouterState().moduleIds.remove(_moduleId);
     }
-
-    // // optimized load/save of packed state as uint256 rather than struct
-
-    // /// @dev Load/save RouterState at slot offset
-    // function _loadRouterState(RouterState storage $, uint256 o) private view returns (uint256 v) {
-    //     assembly ("memory-safe") {
-    //         v := sload(add($.slot, o))
-    //     }
-    // }
-
-    // function _saveRouterState(RouterState storage $, uint256 o, uint256 v) private {
-    //     assembly ("memory-safe") {
-    //         sstore(add($.slot, o), v)
-    //     }
-    // }
-
-    // /// @dev Load/save ModuleState at slot offset
-    // function _loadModuleState(ModuleState storage $, uint256 o) private view returns (uint256 v) {
-    //     assembly ("memory-safe") {
-    //         v := sload(add($.slot, o))
-    //     }
-    // }
-
-    // function _saveModuleState(ModuleState storage $, uint256 o, uint256 v) private {
-    //     assembly ("memory-safe") {
-    //         sstore(add($.slot, o), v)
-    //     }
-    // }
-
-    // /// optimized helpers
-
-    // function _pack(uint64 a, uint64 b, uint64 c, uint64 d) private pure returns (uint256 x) {
-    //     x = uint256(a) | (uint256(b) << 64) | (uint256(c) << 128) | (uint256(d) << 192);
-    // }
-
-    // function _unpack(uint256 x) private pure returns (uint64 a, uint64 b, uint64 c, uint64 d) {
-    //     a = uint64(x);
-    //     b = uint64(x >> 64);
-    //     c = uint64(x >> 128);
-    //     d = uint64(x >> 192);
-    // }
 }

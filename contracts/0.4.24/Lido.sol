@@ -281,89 +281,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         initialized();
     }
 
-    // TODO remove
-    /**
-     * @notice A function to finalize upgrade to v3 (from v2). Can be called only once
-     *
-     * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
-     * @param _oldBurner The address of the old Burner contract to migrate from
-     * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
-     * @param _initialMaxExternalRatioBP Initial maximum external ratio in basis points
-     */
-    // function finalizeUpgrade_v3(
+    /// @notice A function to finalize upgrade to v3 (from v2). Removed and no longer used.
+    /// @dev https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+    /// See historical usage in commit: [TBA]
+    // finalizeUpgrade_v3(
     //     address _oldBurner,
     //     address[] _contractsWithBurnerAllowances,
     //     uint256 _initialMaxExternalRatioBP
-    // ) external {
-    //     require(hasInitialized(), "NOT_INITIALIZED");
-    //     _checkContractVersion(2);
-    //     _setContractVersion(3);
-
-    //     _migrateStorage_v2_to_v3();
-
-    //     _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
-
-    //     _setMaxExternalRatioBP(_initialMaxExternalRatioBP);
-    // }
-
-    // function _migrateStorage_v2_to_v3() internal {
-    //     // migrate storage to packed representation
-    //     bytes32 LIDO_LOCATOR_POSITION = keccak256("lido.Lido.lidoLocator");
-    //     address locator = LIDO_LOCATOR_POSITION.getStorageAddress();
-    //     assert(locator != address(0)); // sanity check
-
-    //     _setLidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
-    //     LIDO_LOCATOR_POSITION.setStorageUint256(0);
-
-    //     bytes32 BUFFERED_ETHER_POSITION = keccak256("lido.Lido.bufferedEther");
-    //     _setBufferedEther(BUFFERED_ETHER_POSITION.getStorageUint256());
-    //     BUFFERED_ETHER_POSITION.setStorageUint256(0);
-
-    //     bytes32 DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.depositedValidators");
-    //     _setDepositedValidators(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
-    //     DEPOSITED_VALIDATORS_POSITION.setStorageUint256(0);
-
-    //     bytes32 CL_VALIDATORS_POSITION = keccak256("lido.Lido.beaconValidators");
-    //     bytes32 CL_BALANCE_POSITION = keccak256("lido.Lido.beaconBalance");
-    //     _setClBalanceAndClValidators(
-    //         CL_BALANCE_POSITION.getStorageUint256(),
-    //         CL_VALIDATORS_POSITION.getStorageUint256()
-    //     );
-    //     CL_BALANCE_POSITION.setStorageUint256(0);
-    //     CL_VALIDATORS_POSITION.setStorageUint256(0);
-
-    //     bytes32 TOTAL_SHARES_POSITION = keccak256("lido.StETH.totalShares");
-    //     uint256 totalShares = TOTAL_SHARES_POSITION.getStorageUint256();
-    //     assert(totalShares > 0); // sanity check
-    //     TOTAL_AND_EXTERNAL_SHARES_POSITION.setLowUint128(totalShares);
-    //     TOTAL_SHARES_POSITION.setStorageUint256(0);
-    // }
-
-    // function _migrateBurner_v2_to_v3(
-    //     address _oldBurner,
-    //     address[] _contractsWithBurnerAllowances
-    // ) internal {
-    //     require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
-    //     address burner = _burner();
-    //     require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
-
-    //     // migrate burner stETH balance
-    //     uint256 oldBurnerShares = _sharesOf(_oldBurner);
-    //     if (oldBurnerShares > 0) {
-    //         _transferShares(_oldBurner, burner, oldBurnerShares);
-    //         _emitTransferEvents(_oldBurner, burner, getPooledEthByShares(oldBurnerShares), oldBurnerShares);
-    //     }
-
-    //     // initialize new burner with state from the old burner
-    //     IBurnerMigration(burner).migrate(_oldBurner);
-
-    //     // migrating allowances
-    //     for (uint256 i = 0; i < _contractsWithBurnerAllowances.length; i++) {
-    //         uint256 oldAllowance = allowance(_contractsWithBurnerAllowances[i], _oldBurner);
-    //         _approve(_contractsWithBurnerAllowances[i], _oldBurner, 0);
-    //         _approve(_contractsWithBurnerAllowances[i], burner, oldAllowance);
-    //     }
-    // }
+    // ) external
 
     /**
      * @notice A function to finalize upgrade to v4 (from v3). Can be called only once
@@ -739,20 +664,19 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         FASTLANE_DATA_POSITION.addConsumedAmount(refSlot, _amount);
         emit Unbuffered(_amount);
 
-        /// @dev forward the requested amount of ether to the StakingRouter
-        stakingRouter.receiveDepositableEther.value(_amount)();
-
         /// @dev the requested withdrawal will be sent to DepositContract, so we increment depositedBalance counter
         ///      so that the value of _getInternalEther corresponds to reality
         (uint256 depositedBalance, uint256 depositedValidators) = _getDepositedBalanceAndDepositedValidators();
         if (_depositsCount > 0) {
             depositedValidators = depositedValidators.add(_depositsCount);
-            // TODO: deprecated. remove or move to StakingRouter?
             emit DepositedValidatorsChanged(depositedValidators);
         }
         depositedBalance = depositedBalance.add(_amount);
         _setDepositedBalanceAndDepositedValidators(depositedBalance, depositedValidators);
         emit DepositedBalancesUpdated(depositedBalance);
+
+        /// @dev forward the requested amount of ether to the StakingRouter
+        stakingRouter.receiveDepositableEther.value(_amount)();
     }
 
     function _getRefSlotDepositableEther(uint256 buffered)
