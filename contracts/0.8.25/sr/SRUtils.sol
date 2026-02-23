@@ -3,13 +3,13 @@ pragma solidity 0.8.25;
 
 import {SRStorage} from "./SRStorage.sol";
 import {ModuleState} from "./SRTypes.sol";
+import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 
 library SRUtils {
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
 
     uint256 public constant TOTAL_BASIS_POINTS = 10000;
-    // uint256 internal constant TOTAL_METRICS_COUNT = 2;
     uint256 public constant MAX_STAKING_MODULES_COUNT = 32;
     /// @dev Restrict the name size with 31 bytes to storage in a single slot.
     uint256 public constant MAX_STAKING_MODULE_NAME_LENGTH = 31;
@@ -17,9 +17,6 @@ library SRUtils {
     // Max Effective Balance for Withdrawal Credentials types
     uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = 32 ether;
     uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = 2048 ether;
-    // Withdrawal Credentials types
-    uint8 public constant WC_TYPE_01 = 0x01;
-    uint8 public constant WC_TYPE_02 = 0x02;
 
     /// @dev Large enough to fit all existing Ether per entity, yet overflow-safe when aggregating a reasonable number of entities
     uint256 internal constant MAX_VALUE_GWEI = 1_000_000_000 ether / 1 gwei; // i.e. 1B ETH
@@ -92,13 +89,6 @@ library SRUtils {
         }
         return uint64(_amountGwei);
     }
-
-    function _validateWithdrawalCredentialsType(uint256 _withdrawalCredentialsType) internal pure {
-        if (_withdrawalCredentialsType != WC_TYPE_01 && _withdrawalCredentialsType != WC_TYPE_02) {
-            revert WrongWithdrawalCredentialsType();
-        }
-    }
-
     function _validateModulesCount() internal view {
         if (SRStorage.getModulesCount() >= MAX_STAKING_MODULES_COUNT) {
             revert StakingModulesLimitExceeded();
@@ -111,18 +101,24 @@ library SRUtils {
         }
     }
 
-    function _getModuleMEB(uint8 _withdrawalCredentialsType) internal pure returns (uint256) {
-        if (_withdrawalCredentialsType == WC_TYPE_01) {
+    function _getModuleMEB(uint256 _wcType) internal pure returns (uint256) {
+        if (WithdrawalCredentials.isType1(_wcType)) {
             return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
-        } else if (_withdrawalCredentialsType == WC_TYPE_02) {
+        } else if (WithdrawalCredentials.isType2(_wcType)) {
             return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
         } else {
             revert WrongWithdrawalCredentialsType();
         }
     }
 
-    function _validateWC0x02(uint8 _withdrawalCredentialsType) internal pure {
-        if (_withdrawalCredentialsType != SRUtils.WC_TYPE_02) {
+    function _validateWC(uint256 _wcType) internal pure {
+        if (!WithdrawalCredentials.isType1(_wcType) && !WithdrawalCredentials.isType2(_wcType)) {
+            revert WrongWithdrawalCredentialsType();
+        }
+    }
+
+    function _validateWC0x02(uint256 _wcType) internal pure {
+        if (!WithdrawalCredentials.isType2(_wcType)) {
             revert WrongWithdrawalCredentialsType();
         }
     }
@@ -171,8 +167,7 @@ library SRUtils {
 
     function _toGwei(uint256 amount) internal pure returns (uint64) {
         amount /= 1 gwei;
-        _validateAmountGwei(amount);
-        return uint64(amount);
+        return _validateAmountGwei(amount);
     }
 
     function _fromGwei(uint256 amount) internal pure returns (uint256) {

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
+import {Math, SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
-import {Math256} from "contracts/common/lib/Math256.sol";
 import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
@@ -67,7 +66,9 @@ library SRLib {
     /// @dev [deprecated] old storage slots, remove after 1st migration
     bytes32 internal constant STAKING_MODULES_COUNT_POSITION = keccak256("lido.StakingRouter.stakingModulesCount");
     /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant LAST_STAKING_MODULE_ID_POSITION = keccak256("lido.StakingRouter.lastModuleId");
+    bytes32 internal constant LAST_STAKING_MODULE_ID_POSITION = keccak256("lido.StakingRouter.lastStakingModuleId");
+    /// @dev [deprecated] old Versioned storage slot
+    bytes32 internal constant CONTRACT_VERSION_POSITION = keccak256("lido.Versioned.contractVersion");
 
     error WrongInitialMigrationState();
     error StakingModuleAddressExists();
@@ -96,6 +97,9 @@ library SRLib {
 
         // cleanup old storage slot fully as bytes32
         delete LIDO_POSITION.getBytes32Slot().value;
+
+        // now use OZ slot
+        delete CONTRACT_VERSION_POSITION.getBytes32Slot().value;
 
         // migrate last staking module ID
         SRStorage.getRouterState().lastModuleId = uint24(LAST_STAKING_MODULE_ID_POSITION.getUint256Slot().value);
@@ -135,13 +139,13 @@ library SRLib {
                 depositTargetShare: smOld.stakeShareLimit,
                 withdrawalProtectShare: smOld.priorityExitShareThreshold,
                 status: StakingModuleStatus(smOld.status),
-                withdrawalCredentialsType: SRUtils.WC_TYPE_01
+                withdrawalCredentialsType: WithdrawalCredentials.WC_TYPE_01
             });
 
             // 1 SSTORE
             moduleState.deposits = ModuleStateDeposits({
                 lastDepositAt: smOld.lastDepositAt,
-                lastDepositBlock: uint64(smOld.lastDepositBlock),
+                lastDepositBlock: SafeCast.toUint64(smOld.lastDepositBlock),
                 maxDepositsPerBlock: smOld.maxDepositsPerBlock,
                 minDepositBlockDistance: smOld.minDepositBlockDistance
             });
@@ -151,7 +155,7 @@ library SRLib {
             moduleState.accounting = ModuleStateAccounting({
                 activeBalanceGwei: activeBalanceGwei,
                 pendingBalanceGwei: 0,
-                exitedValidatorsCount: uint64(smOld.exitedValidatorsCount)
+                exitedValidatorsCount: SafeCast.toUint64(smOld.exitedValidatorsCount)
             });
 
             totalActiveBalanceGwei += activeBalanceGwei;
@@ -194,7 +198,7 @@ library SRLib {
         SRUtils._validateZeroAddress(_moduleAddress);
         SRUtils._validateModuleName(_moduleName);
         SRUtils._validateModulesCount();
-        SRUtils._validateWithdrawalCredentialsType(_moduleConfig.withdrawalCredentialsType);
+        SRUtils._validateWC(_moduleConfig.withdrawalCredentialsType);
 
         // Check for duplicate module address
         /// @dev due to small number of modules, we can afford to do this check on add
@@ -255,8 +259,8 @@ library SRLib {
 
         // 1 SLOAD
         ModuleStateDeposits memory stateDeposits = _moduleId.getModuleState().deposits;
-        stateDeposits.maxDepositsPerBlock = uint64(_maxDepositsPerBlock);
-        stateDeposits.minDepositBlockDistance = uint64(_minDepositBlockDistance);
+        stateDeposits.maxDepositsPerBlock = SafeCast.toUint64(_maxDepositsPerBlock);
+        stateDeposits.minDepositBlockDistance = SafeCast.toUint64(_minDepositBlockDistance);
         // forge-lint: disable-end(unsafe-typecast)
         // 1 SSTORE
         _moduleId.getModuleState().deposits = stateDeposits;
@@ -353,7 +357,7 @@ library SRLib {
         for (uint256 i = 0; i < modulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
             // Calculate equivalent of active WC01 validators count rounded up: ceil(balance / INITIAL_DEPOSIT_SIZE)
-            uint256 validatorsCount = Math256.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.INITIAL_DEPOSIT_SIZE);
+            uint256 validatorsCount = Math.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.INITIAL_DEPOSIT_SIZE);
 
             _allocations[i] = validatorsCount;
             totalValidators += validatorsCount;
@@ -374,11 +378,11 @@ library SRLib {
             if (stateConfig.status == StakingModuleStatus.Active) {
                 (uint256 exitedValidators, uint256 depositedValidators, uint256 depositableValidatorsCount) =
                     _getStakingModuleSummary(moduleId.getIStakingModule());
-                if (_isTopUp && stateConfig.withdrawalCredentialsType == SRUtils.WC_TYPE_02) {
+                if (_isTopUp && WithdrawalCredentials.isType2(stateConfig.withdrawalCredentialsType)) {
                     // The module might not receive all exited validators data yet => we need to replacing
                     // the exitedValidatorsCount with the one that the staking router is aware of.
-                    uint256 activeValidators = depositedValidators
-                        - Math256.max(exitedValidators, moduleState.accounting.exitedValidatorsCount);
+                    uint256 activeValidators =
+                        depositedValidators - Math.max(exitedValidators, moduleState.accounting.exitedValidatorsCount);
                     // max eth capacity of active validators = n * 2048ETH,
                     // so capacity in validators equivalent = n * 2048 / 32 = n * 64
                     validatorsCapacity = activeValidators * 64;
@@ -390,7 +394,7 @@ library SRLib {
                 uint256 targetValidators =
                     (stateConfig.depositTargetShare * totalValidators) / SRUtils.TOTAL_BASIS_POINTS;
                 // Module capacity is limited by available validators and target share
-                validatorsCapacity = Math256.min(targetValidators, validatorsCapacity);
+                validatorsCapacity = Math.min(targetValidators, validatorsCapacity);
             }
 
             _capacities[i] = validatorsCapacity;
@@ -625,8 +629,8 @@ library SRLib {
             ModuleState storage state = moduleId.getModuleState();
             ModuleStateAccounting storage moduleAcc = state.accounting;
             uint64 prevReportedExitedValidatorsCount = moduleAcc.exitedValidatorsCount;
-            //todo check max uint64
-            uint64 newReportedExitedValidatorsCount = uint64(_exitedValidatorsCounts[i]);
+
+            uint64 newReportedExitedValidatorsCount = SafeCast.toUint64(_exitedValidatorsCounts[i]);
 
             if (newReportedExitedValidatorsCount < prevReportedExitedValidatorsCount) {
                 revert ExitedValidatorsCountCannotDecrease();
@@ -696,8 +700,8 @@ library SRLib {
         ) {
             revert UnexpectedCurrentValidatorsCount(prevReportedExitedValidatorsCount, totalExitedValidators);
         }
-        // todo check max uint64
-        moduleAcc.exitedValidatorsCount = uint64(_correction.newModuleExitedValidatorsCount);
+
+        moduleAcc.exitedValidatorsCount = SafeCast.toUint64(_correction.newModuleExitedValidatorsCount);
 
         stakingModule.unsafeUpdateValidatorsCount(_nodeOperatorId, _correction.newNodeOperatorExitedValidatorsCount);
 
