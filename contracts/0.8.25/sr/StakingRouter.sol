@@ -666,6 +666,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
     }
 
+    /// @notice Returns max effective balance for the staking module according WC type.
+    /// @param _stakingModuleId Id of the staking module.
+    /// @return Max effective balance for the staking module.
+    function getStakingModuleMaxEB(uint256 _stakingModuleId) external view returns (uint256) {
+        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
+        return SRUtils._getModuleMEB(stateConfig.withdrawalCredentialsType);
+    }
+
     /// @notice Returns the max count of deposits which the staking module can provide data for based
     /// on the passed `_maxDepositsValue` amount.
     /// @param _stakingModuleId Id of the staking module to be deposited.
