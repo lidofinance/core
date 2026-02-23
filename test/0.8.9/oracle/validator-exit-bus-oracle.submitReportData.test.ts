@@ -4,7 +4,12 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  OracleReportSanityChecker,
+  StakingRouter__MockForValidatorsExitBus,
+  ValidatorsExitBus__Harness,
+} from "typechain-types";
 
 import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
@@ -23,6 +28,7 @@ const HASH_1 = "0x11111111111111111111111111111111111111111111111111111111111111
 describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
+  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
   let admin: HardhatEthersSigner;
   let oracleReportSanityChecker: OracleReportSanityChecker;
 
@@ -100,6 +106,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
+    stakingRouter = deployed.stakingRouter;
     consensus = deployed.consensus;
     oracleReportSanityChecker = deployed.oracleReportSanityChecker;
 
@@ -299,8 +306,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       ]);
 
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
-        oracle,
-        "InvalidModuleId",
+        stakingRouter,
+        "StakingModuleUnregistered",
       );
     });
 

@@ -6,6 +6,8 @@ pragma solidity 0.8.9;
 import {IStakingRouter} from "contracts/0.8.9/oracle/ValidatorsExitBus.sol";
 
 contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
+    error StakingModuleUnregistered();
+
     struct StakingModuleData {
         uint24 id;
         address stakingModuleAddress;
@@ -44,27 +46,37 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
         _modules[moduleId].stakingModuleAddress = moduleAddress;
     }
 
-    /// @notice Implementation of IStakingRouter.getStakingModule
-    function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory) {
+    function getStakingModuleStateConfig(
+        uint256 _stakingModuleId
+    ) external view returns (ModuleStateConfig memory stateConfig) {
+        _validateModuleId(_stakingModuleId);
         StakingModuleData memory data = _modules[_stakingModuleId];
-
         return
-            StakingModule({
-                id: data.id,
-                stakingModuleAddress: data.stakingModuleAddress,
-                stakingModuleFee: data.stakingModuleFee,
+            ModuleStateConfig({
+                moduleAddress: data.stakingModuleAddress,
+                moduleFee: data.stakingModuleFee,
                 treasuryFee: data.treasuryFee,
-                stakeShareLimit: data.stakeShareLimit,
+                depositTargetShare: data.stakeShareLimit,
+                withdrawalProtectShare: data.priorityExitShareThreshold,
                 status: data.status,
-                name: data.name,
-                lastDepositAt: data.lastDepositAt,
-                lastDepositBlock: data.lastDepositBlock,
-                exitedValidatorsCount: data.exitedValidatorsCount,
-                priorityExitShareThreshold: data.priorityExitShareThreshold,
-                maxDepositsPerBlock: data.maxDepositsPerBlock,
-                minDepositBlockDistance: data.minDepositBlockDistance,
                 withdrawalCredentialsType: data.withdrawalCredentialsType
             });
+    }
+
+    function getStakingModuleMaxEB(uint256 _stakingModuleId) external view returns (uint256) {
+        _validateModuleId(_stakingModuleId);
+        uint8 wcType = _modules[_stakingModuleId].withdrawalCredentialsType;
+        if (wcType == 0x01) {
+            return 32 ether;
+        }
+        return 2048 ether;
+    }
+
+    function _validateModuleId(uint256 _moduleId) internal view {
+        /// @dev we don't care about the module existence (i.e. proper configuration) with `id > 0` in this mock
+        if (_moduleId == 0) {
+            revert StakingModuleUnregistered();
+        }
     }
 
     // Stub implementations for other IStakingRouter methods (not used in ValidatorsExitBus)
