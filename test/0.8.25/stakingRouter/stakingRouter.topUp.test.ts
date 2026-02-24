@@ -274,14 +274,19 @@ describe("StakingRouter.sol:topUp", () => {
     });
 
     it("Reverts when top up amount for key is below 1 ETH", async () => {
-      const [, id] = await setupModule({
+      const reducedBalanceGwei = (100n * NEW_MEB - 64n * 10n ** 18n) / 10n ** 9n;
+
+      const [stakingModule, id] = await setupModule({
         ...DEFAULT_CONFIG,
+        deposited: 100n,
         depositable: 100n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        activeBalanceGwei: reducedBalanceGwei,
       });
 
       const pubkeys = [hexlify(randomBytes(48))];
       const topUpWei = [500_000_000n * WEI_PER_GWEI]; // 0.5 ETH in wei
+      await stakingModule.mock__setTopUpDepositData(topUpWei);
 
       const depositableEth = 100n * NEW_MEB;
       await lidoMock.setDepositableEther(depositableEth);
@@ -290,41 +295,11 @@ describe("StakingRouter.sol:topUp", () => {
       const keyIndices = [0n];
       const operatorIds = [0n];
 
+      const beaconChainDepositor = await ethers.getContractFactory("BeaconChainDepositor");
       await expect(
         stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
-      ).to.be.revertedWithCustomError(stakingRouter, "TopUpAmountTooLow");
+      ).to.be.revertedWithCustomError(beaconChainDepositor, "DepositAmountTooLow");
     });
-
-    //TODO!
-    // it("Tracks deposits via deposit tracker", async () => {
-    //   const [stakingModule, id] = await setupModule({
-    //     ...DEFAULT_CONFIG,
-    //     depositable: 100n,
-    //     withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-    //   });
-
-    //   const pubkeys = [hexlify(randomBytes(48))];
-    //   const topUpWei = [10n * GWEI * WEI_PER_GWEI]; // 10 ETH in wei
-    //   await stakingModule.mock__setTopUpDepositData(topUpWei);
-
-    //   const depositAmountWei = 10n * GWEI * WEI_PER_GWEI;
-
-    //   await lidoMock.setDepositableEther(100n * NEW_MEB);
-    //   await lidoMock.fund({ value: depositAmountWei });
-
-    //   // Get deposit amount tracked before
-    //   const depositBefore = await stakingRouter.getDepositAmountFromLastSlot(999999999n);
-
-    //   const keyIndices = [0n];
-    //   const operatorIds = [0n];
-
-    //   await stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei);
-
-    //   // Get deposit amount tracked after
-    //   const depositAfter = await stakingRouter.getDepositAmountFromLastSlot(999999999n);
-
-    //   expect(depositAfter).to.equal(depositBefore + depositAmountWei);
-    // });
 
     it("Zero allocations from module result in no deposits", async () => {
       const [stakingModule, id] = await setupModule({

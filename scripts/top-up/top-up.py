@@ -1,0 +1,1675 @@
+#!/usr/bin/env python3
+"""
+Build Merkle proofs for validator top-up verification via EIP-4788.
+
+Usage examples:                                                                                                                                     
+                                                                                                                                                      
+  # Build proofs and write to default file                                                                                                            
+  python validator_proof_builder.py prove \                                                                                                
+    -e http://localhost:8545 -c http://localhost:5052 \                                                                                               
+    -v 12345 -v 67890 -o                                                                                                                              
+                                                                                                                                                      
+  # Build proofs to custom file                                                                                                                       
+  python validator_proof_builder.py prove \                                                                                                
+    -e http://localhost:8545 -c http://localhost:5052 \                                                                                               
+    -v 12345 -o my_proofs.json                                                                                                                        
+                                                                                                                                                      
+  # Send top-up transaction (reads PRIVATE_KEY from .env)                                                                                             
+  python validator_proof_builder.py top-up \                                                                                               
+    -e http://localhost:8545 \                                                                                                                        
+    -g 0xYourGatewayAddress \                                                                                                                         
+    -v 12345 -k 0 --operator-id 1 \                                                                                                                   
+    -v 67890 -k 1 --operator-id 1 \                                                                                                                   
+    -m 1
+
+  # Build proofs and send top-up in one step (reads PRIVATE_KEY from .env)
+  python validator_proof_builder.py top-up-prove \
+    -e http://localhost:8545 -c http://localhost:5052 \
+    -g 0xYourGatewayAddress \
+    -v 12345 -k 0 --operator-id 1 \
+    -v 67890 -k 1 --operator-id 1 \
+    -m 1
+
+Output:
+    JSON to stdout matching TopUpData struct for on-chain verification.
+
+Flow:
+    1. Fetch latest block from EL (eth_getBlockByNumber)
+    2. Extract parentBeaconBlockRoot and timestamp from EL block
+       - parentBeaconBlockRoot = beacon root verifiable via 4788 precompile
+       - timestamp = key to query 4788 on-chain
+    3. Fetch beacon block by root from CL
+    4. Build validator proofs against that beacon block's state
+    5. Verify proofs locally before output
+
+On-chain verification:
+    Call 4788 precompile at 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02
+    with childBlockTimestamp to get beacon_root, then verify proofs against it.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import sys
+import time
+from typing import List, Tuple, Any
+
+import requests
+from dotenv import load_dotenv
+from web3 import Web3
+
+# ============================================
+# py-ssz imports
+# ============================================
+from ssz.sedes import (
+    uint8,
+    uint64,
+    uint256,
+    boolean,
+    Bitvector,
+    Vector,
+    List as SSZList,
+    Container,
+    ByteVector,
+)
+import ssz
+
+
+# ============================================
+# Constants (Mainnet Electra)
+# ============================================
+VALIDATOR_REGISTRY_LIMIT = 2**40
+SLOTS_PER_HISTORICAL_ROOT = 8192
+EPOCHS_PER_HISTORICAL_VECTOR = 65536
+EPOCHS_PER_SLASHINGS_VECTOR = 8192
+HISTORICAL_ROOTS_LIMIT = 16777216
+ETH1_DATA_VOTES_LIMIT = 2048
+JUSTIFICATION_BITS_LENGTH = 4
+SYNC_COMMITTEE_SIZE = 512
+EPOCHS_PER_SYNC_COMMITTEE_PERIOD = 256
+MAX_PROPOSER_SLASHINGS = 16
+MAX_ATTESTER_SLASHINGS = 2
+MAX_ATTESTATIONS = 128
+MAX_DEPOSITS = 16
+MAX_VOLUNTARY_EXITS = 16
+MAX_BLS_TO_EXECUTION_CHANGES = 16
+MAX_WITHDRAWALS_PER_PAYLOAD = 16
+MAX_BLOB_COMMITMENTS_PER_BLOCK = 4096
+
+MIN_SEED_LOOKAHEAD = 1
+SLOTS_PER_EPOCH = 32
+PROPOSER_LOOKAHEAD_SIZE = (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH  # = 64
+
+
+# ============================================
+# SSZ Type Definitions (py-ssz style)
+# ============================================
+
+# Custom byte vector types
+bytes4 = ByteVector(4)
+bytes20 = ByteVector(20)
+bytes32 = ByteVector(32)
+bytes48 = ByteVector(48)
+bytes96 = ByteVector(96)
+
+# Electra-specific constants
+PENDING_DEPOSITS_LIMIT = 134217728
+PENDING_PARTIAL_WITHDRAWALS_LIMIT = 134217728
+PENDING_CONSOLIDATIONS_LIMIT = 262144
+
+from ssz.sedes import (
+    uint8,
+    uint64,
+    uint256,
+    boolean,
+    Bitvector,
+    Vector,
+    List as SSZList,
+    ByteVector,
+    Container,
+)
+
+# Custom byte vector types
+bytes4 = ByteVector(4)
+bytes20 = ByteVector(20)
+bytes32 = ByteVector(32)
+bytes48 = ByteVector(48)
+bytes96 = ByteVector(96)
+
+# Fork: previous_version, current_version, epoch
+Fork = Container(field_sedes=(bytes4, bytes4, uint64))
+
+# Checkpoint: epoch, root
+Checkpoint = Container(field_sedes=(uint64, bytes32))
+
+# Validator: pubkey, withdrawal_credentials, effective_balance, slashed,
+#            activation_eligibility_epoch, activation_epoch, exit_epoch, withdrawable_epoch
+Validator = Container(
+    field_sedes=(
+        bytes48,  # 0: pubkey
+        bytes32,  # 1: withdrawal_credentials
+        uint64,  # 2: effective_balance
+        boolean,  # 3: slashed
+        uint64,  # 4: activation_eligibility_epoch
+        uint64,  # 5: activation_epoch
+        uint64,  # 6: exit_epoch
+        uint64,  # 7: withdrawable_epoch
+    )
+)
+
+# Eth1Data: deposit_root, deposit_count, block_hash
+Eth1Data = Container(field_sedes=(bytes32, uint64, bytes32))
+
+# BeaconBlockHeader: slot, proposer_index, parent_root, state_root, body_root
+BeaconBlockHeader = Container(
+    field_sedes=(
+        uint64,  # 0: slot
+        uint64,  # 1: proposer_index
+        bytes32,  # 2: parent_root
+        bytes32,  # 3: state_root
+        bytes32,  # 4: body_root
+    )
+)
+
+# SyncCommittee: pubkeys, aggregate_pubkey
+SyncCommittee = Container(
+    field_sedes=(
+        Vector(bytes48, SYNC_COMMITTEE_SIZE),  # 0: pubkeys
+        bytes48,  # 1: aggregate_pubkey
+    )
+)
+
+# ExecutionPayloadHeader (Deneb)
+ExecutionPayloadHeader = Container(
+    field_sedes=(
+        bytes32,  # 0: parent_hash
+        bytes20,  # 1: fee_recipient
+        bytes32,  # 2: state_root
+        bytes32,  # 3: receipts_root
+        ByteVector(256),  # 4: logs_bloom
+        bytes32,  # 5: prev_randao
+        uint64,  # 6: block_number
+        uint64,  # 7: gas_limit
+        uint64,  # 8: gas_used
+        uint64,  # 9: timestamp
+        SSZList(uint8, 32),  # 10: extra_data
+        uint256,  # 11: base_fee_per_gas
+        bytes32,  # 12: block_hash
+        bytes32,  # 13: transactions_root
+        bytes32,  # 14: withdrawals_root
+        uint64,  # 15: blob_gas_used
+        uint64,  # 16: excess_blob_gas
+    )
+)
+
+# HistoricalSummary: block_summary_root, state_summary_root
+HistoricalSummary = Container(field_sedes=(bytes32, bytes32))
+
+# PendingDeposit: pubkey, withdrawal_credentials, amount, signature, slot
+PendingDeposit = Container(
+    field_sedes=(
+        bytes48,  # 0: pubkey
+        bytes32,  # 1: withdrawal_credentials
+        uint64,  # 2: amount
+        bytes96,  # 3: signature
+        uint64,  # 4: slot
+    )
+)
+
+# PendingPartialWithdrawal: validator_index, amount, withdrawable_epoch
+PendingPartialWithdrawal = Container(field_sedes=(uint64, uint64, uint64))
+
+# PendingConsolidation: source_index, target_index
+PendingConsolidation = Container(field_sedes=(uint64, uint64))
+
+# BeaconState (Electra with Fulu proposer_lookahead)
+BeaconState = Container(
+    field_sedes=(
+        # Versioning [0-3]
+        uint64,  # 0: genesis_time
+        bytes32,  # 1: genesis_validators_root
+        uint64,  # 2: slot
+        Fork,  # 3: fork
+        # History [4-7]
+        BeaconBlockHeader,  # 4: latest_block_header
+        Vector(bytes32, SLOTS_PER_HISTORICAL_ROOT),  # 5: block_roots
+        Vector(bytes32, SLOTS_PER_HISTORICAL_ROOT),  # 6: state_roots
+        SSZList(bytes32, HISTORICAL_ROOTS_LIMIT),  # 7: historical_roots
+        # Eth1 [8-10]
+        Eth1Data,  # 8: eth1_data
+        SSZList(Eth1Data, ETH1_DATA_VOTES_LIMIT),  # 9: eth1_data_votes
+        uint64,  # 10: eth1_deposit_index
+        # Registry [11-12]
+        SSZList(Validator, VALIDATOR_REGISTRY_LIMIT),  # 11: validators
+        SSZList(uint64, VALIDATOR_REGISTRY_LIMIT),  # 12: balances
+        # Randomness [13]
+        Vector(bytes32, EPOCHS_PER_HISTORICAL_VECTOR),  # 13: randao_mixes
+        # Slashings [14]
+        Vector(uint64, EPOCHS_PER_SLASHINGS_VECTOR),  # 14: slashings
+        # Participation [15-16]
+        SSZList(uint8, VALIDATOR_REGISTRY_LIMIT),  # 15: previous_epoch_participation
+        SSZList(uint8, VALIDATOR_REGISTRY_LIMIT),  # 16: current_epoch_participation
+        # Finality [17-20]
+        Bitvector(JUSTIFICATION_BITS_LENGTH),  # 17: justification_bits
+        Checkpoint,  # 18: previous_justified_checkpoint
+        Checkpoint,  # 19: current_justified_checkpoint
+        Checkpoint,  # 20: finalized_checkpoint
+        # Inactivity [21]
+        SSZList(uint64, VALIDATOR_REGISTRY_LIMIT),  # 21: inactivity_scores
+        # Sync committees [22-23]
+        SyncCommittee,  # 22: current_sync_committee
+        SyncCommittee,  # 23: next_sync_committee
+        # Execution [24]
+        ExecutionPayloadHeader,  # 24: latest_execution_payload_header
+        # Withdrawals [25-26]
+        uint64,  # 25: next_withdrawal_index
+        uint64,  # 26: next_withdrawal_validator_index
+        # Deep history [27]
+        SSZList(HistoricalSummary, HISTORICAL_ROOTS_LIMIT),  # 27: historical_summaries
+        # Electra [28-36]
+        uint64,  # 28: deposit_requests_start_index
+        uint64,  # 29: deposit_balance_to_consume
+        uint64,  # 30: exit_balance_to_consume
+        uint64,  # 31: earliest_exit_epoch
+        uint64,  # 32: consolidation_balance_to_consume
+        uint64,  # 33: earliest_consolidation_epoch
+        SSZList(PendingDeposit, PENDING_DEPOSITS_LIMIT),  # 34: pending_deposits
+        SSZList(
+            PendingPartialWithdrawal, PENDING_PARTIAL_WITHDRAWALS_LIMIT
+        ),  # 35: pending_partial_withdrawals
+        SSZList(
+            PendingConsolidation, PENDING_CONSOLIDATIONS_LIMIT
+        ),  # 36: pending_consolidations
+        # Fulu (not active yet)
+        Vector(uint64, PROPOSER_LOOKAHEAD_SIZE),  # 37: proposer_lookahead
+    )
+)
+
+# BeaconState field indices
+STATE_GENESIS_TIME = 0
+STATE_GENESIS_VALIDATORS_ROOT = 1
+STATE_SLOT = 2
+STATE_FORK = 3
+STATE_LATEST_BLOCK_HEADER = 4
+STATE_BLOCK_ROOTS = 5
+STATE_STATE_ROOTS = 6
+STATE_HISTORICAL_ROOTS = 7
+STATE_ETH1_DATA = 8
+STATE_ETH1_DATA_VOTES = 9
+STATE_ETH1_DEPOSIT_INDEX = 10
+STATE_VALIDATORS = 11
+STATE_BALANCES = 12
+STATE_RANDAO_MIXES = 13
+STATE_SLASHINGS = 14
+STATE_PREVIOUS_EPOCH_PARTICIPATION = 15
+STATE_CURRENT_EPOCH_PARTICIPATION = 16
+STATE_JUSTIFICATION_BITS = 17
+STATE_PREVIOUS_JUSTIFIED_CHECKPOINT = 18
+STATE_CURRENT_JUSTIFIED_CHECKPOINT = 19
+STATE_FINALIZED_CHECKPOINT = 20
+STATE_INACTIVITY_SCORES = 21
+STATE_CURRENT_SYNC_COMMITTEE = 22
+STATE_NEXT_SYNC_COMMITTEE = 23
+STATE_LATEST_EXECUTION_PAYLOAD_HEADER = 24
+STATE_NEXT_WITHDRAWAL_INDEX = 25
+STATE_NEXT_WITHDRAWAL_VALIDATOR_INDEX = 26
+STATE_HISTORICAL_SUMMARIES = 27
+STATE_DEPOSIT_REQUESTS_START_INDEX = 28
+STATE_DEPOSIT_BALANCE_TO_CONSUME = 29
+STATE_EXIT_BALANCE_TO_CONSUME = 30
+STATE_EARLIEST_EXIT_EPOCH = 31
+STATE_CONSOLIDATION_BALANCE_TO_CONSUME = 32
+STATE_EARLIEST_CONSOLIDATION_EPOCH = 33
+STATE_PENDING_DEPOSITS = 34
+STATE_PENDING_PARTIAL_WITHDRAWALS = 35
+STATE_PENDING_CONSOLIDATIONS = 36
+STATE_PROPOSER_LOOKAHEAD = 37
+
+# Validator field indices
+VALIDATOR_PUBKEY = 0
+VALIDATOR_WITHDRAWAL_CREDENTIALS = 1
+VALIDATOR_EFFECTIVE_BALANCE = 2
+VALIDATOR_SLASHED = 3
+VALIDATOR_ACTIVATION_ELIGIBILITY_EPOCH = 4
+VALIDATOR_ACTIVATION_EPOCH = 5
+VALIDATOR_EXIT_EPOCH = 6
+VALIDATOR_WITHDRAWABLE_EPOCH = 7
+
+# BeaconBlockHeader field indices
+HEADER_SLOT = 0
+HEADER_PROPOSER_INDEX = 1
+HEADER_PARENT_ROOT = 2
+HEADER_STATE_ROOT = 3
+HEADER_BODY_ROOT = 4
+
+
+# ============================================
+# Merkle Tree Utilities (py-ssz doesn't provide backing tree navigation)
+# ============================================
+
+
+def sha256(data: bytes) -> bytes:
+    return hashlib.sha256(data).digest()
+
+
+def hash_concat(left: bytes, right: bytes) -> bytes:
+    return sha256(left + right)
+
+
+ZERO_HASHES: List[bytes] = []
+
+
+def _init_zero_hashes(depth: int = 64):
+    """Pre-compute zero hashes for empty subtrees."""
+    global ZERO_HASHES
+    if len(ZERO_HASHES) >= depth:
+        return
+    ZERO_HASHES = [b"\x00" * 32]
+    for _ in range(1, depth):
+        ZERO_HASHES.append(sha256(ZERO_HASHES[-1] + ZERO_HASHES[-1]))
+
+
+_init_zero_hashes(64)
+
+
+def next_power_of_two(n: int) -> int:
+    """Return the smallest power of 2 >= n."""
+    if n <= 1:
+        return 1
+    return 1 << (n - 1).bit_length()
+
+
+def mix_in_length(root: bytes, length: int) -> bytes:
+    """Mix in the length for List types."""
+    length_bytes = length.to_bytes(32, "little")
+    return hash_concat(root, length_bytes)
+
+
+class MerkleTree:
+    """
+    A Merkle tree built from leaf chunks, supporting proof extraction.
+    py-ssz doesn't provide a backing tree, so we build one ourselves.
+    """
+
+    def __init__(self, chunks: List[bytes], limit: int = None):
+        """
+        Build a Merkle tree from 32-byte chunks.
+        If limit is provided, this is a List type and we pad to next_power_of_two(limit).
+        """
+        self.limit = limit
+        self.original_length = len(chunks)
+
+        if limit is not None:
+            target_len = next_power_of_two(limit)
+        else:
+            target_len = next_power_of_two(len(chunks)) if chunks else 1
+
+        self.depth = target_len.bit_length() - 1 if target_len > 1 else 0
+
+        # Pad with zero chunks
+        self.leaves = list(chunks) + [ZERO_HASHES[0]] * (target_len - len(chunks))
+
+        # Build all layers (layer 0 = leaves, last layer = root)
+        self.layers: List[List[bytes]] = [self.leaves]
+        current = self.leaves
+        while len(current) > 1:
+            next_layer = []
+            for i in range(0, len(current), 2):
+                left = current[i]
+                right = current[i + 1] if i + 1 < len(current) else ZERO_HASHES[0]
+                next_layer.append(hash_concat(left, right))
+            self.layers.append(next_layer)
+            current = next_layer
+
+        self.root = current[0] if current else ZERO_HASHES[0]
+
+    def get_proof(self, index: int) -> List[bytes]:
+        """
+        Get Merkle proof for leaf at index.
+        Returns proof in bottom-up order (leaf to root).
+        """
+        proof = []
+        idx = index
+        for layer in self.layers[:-1]:  # Exclude root layer
+            sibling_idx = idx ^ 1  # XOR to get sibling index
+            if sibling_idx < len(layer):
+                proof.append(layer[sibling_idx])
+            else:
+                # Use appropriate zero hash for this depth
+                proof.append(ZERO_HASHES[0])
+            idx //= 2
+        return proof
+
+
+def build_merkle_tree_for_list(
+    items: list, item_sedes, limit: int
+) -> Tuple[bytes, MerkleTree]:
+    """
+    Build a Merkle tree for an SSZ List.
+    Returns (root with length mixed in, MerkleTree of data).
+    """
+    chunks = []
+    for item in items:
+        chunk = ssz.get_hash_tree_root(item, item_sedes)
+        chunks.append(chunk)
+
+    tree = MerkleTree(chunks, limit=limit)
+    # List root = mix_in_length(data_root, len)
+    final_root = mix_in_length(tree.root, len(items))
+    return final_root, tree
+
+
+def build_merkle_tree_for_container(obj, container_sedes) -> Tuple[bytes, MerkleTree]:
+    """
+    Build a Merkle tree for an SSZ Container.
+    Returns (root, MerkleTree of field roots).
+    """
+    field_roots = []
+    for field_name, field_sedes in container_sedes.fields:
+        field_value = getattr(obj, field_name)
+        field_root = ssz.get_hash_tree_root(field_value, field_sedes)
+        field_roots.append(field_root)
+
+    tree = MerkleTree(field_roots)
+    return tree.root, tree
+
+
+# ============================================
+# Generalized Index Calculation
+# ============================================
+
+
+def compute_gindex_for_validator(validator_index: int) -> int:
+    """
+    Compute generalized index for validator[index] in BeaconState.
+    Proves the entire Validator object (hash_tree_root).
+    """
+    STATE_TREE_DEPTH = 6  # 37 fields (Electra) -> pad to 64
+    VALIDATORS_FIELD_INDEX = 11
+    VALIDATORS_LIST_DEPTH = 40
+
+    validators_gindex = (1 << STATE_TREE_DEPTH) + VALIDATORS_FIELD_INDEX
+    validators_data_gindex = validators_gindex * 2
+    final_gindex = (
+        validators_data_gindex * (1 << VALIDATORS_LIST_DEPTH) + validator_index
+    )
+
+    return final_gindex
+
+
+def compute_gindex_for_state_root_in_header() -> int:
+    """
+    Compute gindex for state_root inside BeaconBlockHeader.
+    5 fields -> pad to 8 -> depth 3, state_root is field 3.
+    """
+    HEADER_DEPTH = 3
+    STATE_ROOT_INDEX = 3
+    return (1 << HEADER_DEPTH) + STATE_ROOT_INDEX
+
+
+# ============================================
+# Merkle Proof Functions
+# ============================================
+
+
+def extract_proof_by_gindex(
+    tree: MerkleTree, gindex: int, tree_depth: int
+) -> List[bytes]:
+    """
+    Extract proof from a MerkleTree using generalized index.
+    Returns proof in bottom-up order (leaf to root).
+
+    gindex encodes the path: binary representation (excluding leading 1)
+    gives the path from root to leaf (0=left, 1=right).
+    """
+    if gindex <= 1:
+        return []
+
+    # Path bits from root to leaf
+    path_bits = [int(b) for b in bin(gindex)[3:]]
+
+    # We need to pad path_bits to tree_depth
+    if len(path_bits) < tree_depth:
+        path_bits = [0] * (tree_depth - len(path_bits)) + path_bits
+
+    # Navigate tree and collect siblings
+    proof_top_down = []
+    idx = 0
+    for i, bit in enumerate(path_bits):
+        layer_idx = i
+        if layer_idx >= len(tree.layers) - 1:
+            # Beyond tree depth, use zero hashes
+            proof_top_down.append(ZERO_HASHES[tree_depth - i - 1])
+            continue
+
+        layer = tree.layers[layer_idx]
+        if bit == 0:
+            # Going left, sibling is right
+            sibling_idx = idx * 2 + 1
+        else:
+            # Going right, sibling is left
+            sibling_idx = idx * 2
+
+        if sibling_idx < len(layer):
+            proof_top_down.append(layer[sibling_idx])
+        else:
+            proof_top_down.append(ZERO_HASHES[0])
+
+        idx = idx * 2 + bit
+
+    # Reverse for bottom-up order
+    return list(reversed(proof_top_down))
+
+
+def extract_proof_for_field(
+    container_tree: MerkleTree, field_index: int
+) -> List[bytes]:
+    """
+    Extract proof for a field in a container.
+    Returns proof in bottom-up order.
+    """
+    return container_tree.get_proof(field_index)
+
+
+def extract_proof_for_list_item(
+    list_tree: MerkleTree, item_index: int, list_depth: int
+) -> List[bytes]:
+    """
+    Extract proof for an item in a list.
+    Returns proof from item to list data root (not including length mixin).
+    """
+    # For lists, we need to handle the virtual tree expansion
+    # The list tree only contains actual items, but proof must account for full depth
+    proof = []
+
+    # Navigate through the tree
+    idx = item_index
+    for d in range(list_depth):
+        if d < len(list_tree.layers) - 1:
+            layer = list_tree.layers[d]
+            sibling_idx = idx ^ 1
+            if sibling_idx < len(layer):
+                proof.append(layer[sibling_idx])
+            else:
+                proof.append(ZERO_HASHES[d])
+        else:
+            # Virtual levels - use zero hashes
+            proof.append(ZERO_HASHES[d])
+        idx //= 2
+
+    return proof
+
+
+def verify_merkle_proof(
+    leaf: bytes, proof: List[bytes], gindex: int, root: bytes
+) -> bool:
+    """
+    Verify with proof ordered leaf->root (bottom-up).
+    Uses gindex path bits bottom-up (LSB-first).
+    """
+    if gindex <= 1:
+        return leaf == root
+
+    path_bits = [int(b) for b in bin(gindex)[3:]]  # root->leaf bits
+    path_bits_bottom_up = list(reversed(path_bits))
+
+    if len(proof) != len(path_bits_bottom_up):
+        return False
+
+    computed = leaf
+    for bit, sibling in zip(path_bits_bottom_up, proof):
+        if bit == 0:
+            computed = hash_concat(computed, sibling)
+        else:
+            computed = hash_concat(sibling, computed)
+
+    return computed == root
+
+
+def verify_merkle_proof_by_index(
+    leaf: bytes, proof: List[bytes], index: int, root: bytes
+) -> bool:
+    """
+    Verify Merkle proof using simple index (not gindex).
+    Proof is ordered leaf->root (bottom-up).
+    """
+    computed = leaf
+    idx = index
+
+    for sibling in proof:
+        if idx % 2 == 0:
+            # We're on the left, sibling is on the right
+            computed = hash_concat(computed, sibling)
+        else:
+            # We're on the right, sibling is on the left
+            computed = hash_concat(sibling, computed)
+        idx //= 2
+
+    return computed == root
+
+
+# ============================================
+# Multi-level proof extraction for BeaconState
+# ============================================
+
+
+def build_sparse_list_proof(chunks: List[bytes], index: int, depth: int) -> List[bytes]:
+    """
+    Build Merkle proof for item at index.
+    Efficient: computes only sibling subtree roots needed for the path.
+    """
+    n = len(chunks)
+    memo = {}
+
+    def node_hash(level: int, pos: int) -> bytes:
+        """
+        Return hash of node at `level` (0 = leaf level), position `pos`.
+        Tree is virtually padded with zero chunks up to `depth`.
+        """
+        key = (level, pos)
+        if key in memo:
+            return memo[key]
+
+        # This subtree starts beyond available leaves -> pure zero subtree.
+        if (pos << level) >= n:
+            return ZERO_HASHES[level]
+
+        if level == 0:
+            h = chunks[pos]
+        else:
+            left = node_hash(level - 1, pos * 2)
+            right = node_hash(level - 1, pos * 2 + 1)
+            h = hash_concat(left, right)
+
+        memo[key] = h
+        return h
+
+    proof = []
+    for level in range(depth):
+        sibling_pos = (index >> level) ^ 1
+        proof.append(node_hash(level, sibling_pos))
+
+    return proof
+
+
+def extract_validator_proof(
+    state_field_roots: List[bytes],
+    validators_list: list,
+    validator_index: int,
+) -> List[bytes]:
+    """
+    Extract full proof for a validator from BeaconState.
+    Optimized to avoid building full tree for 2^40 limit.
+    """
+    VALIDATORS_FIELD_INDEX = 11
+    VALIDATORS_LIST_DEPTH = 40  # log2(VALIDATOR_REGISTRY_LIMIT)
+
+    # Step 1: Compute validator roots
+    validator_chunks = []
+    for v in validators_list:
+        chunk = Validator.get_hash_tree_root(v)
+        validator_chunks.append(chunk)
+
+    # Step 2: Build sparse proof from validator to list data root
+    validator_proof = build_sparse_list_proof(
+        chunks=validator_chunks,
+        index=validator_index,
+        depth=VALIDATORS_LIST_DEPTH,
+    )
+
+    # Step 3: Add length mixin - the sibling is the length
+    length_bytes = len(validators_list).to_bytes(32, "little")
+    validator_proof.append(length_bytes)
+
+    # Step 4: Build state tree and get proof from validators field to state root
+    state_tree = MerkleTree(state_field_roots)
+    field_proof = state_tree.get_proof(VALIDATORS_FIELD_INDEX)
+    validator_proof.extend(field_proof)
+
+    return validator_proof
+
+
+def compute_merkle_root_sparse(chunks: List[bytes], depth: int) -> bytes:
+    """Compute merkle root of chunks with given tree depth using zero hashes."""
+    if not chunks:
+        return ZERO_HASHES[depth]
+
+    layer = list(chunks)
+
+    for d in range(depth):
+        next_layer = []
+        for i in range(0, len(layer), 2):
+            left = layer[i]
+            right = layer[i + 1] if i + 1 < len(layer) else ZERO_HASHES[d]
+            next_layer.append(hash_concat(left, right))
+
+        if not next_layer:
+            next_layer = [ZERO_HASHES[d + 1]]
+
+        layer = next_layer
+
+    return layer[0]
+
+
+# def extract_validator_proof(
+#     state_field_roots: List[bytes],
+#     validators_list: list,
+#     validator_index: int,
+# ) -> List[bytes]:
+#     """
+#     Extract full proof for a validator from BeaconState.
+
+#     The proof consists of:
+#     1. Proof from validator to validators list data root
+#     2. Length mixin proof (single hash)
+#     3. Proof from validators field to state root
+
+#     Returns proof in bottom-up order.
+#     """
+#     STATE_TREE_DEPTH = 6  # 37 fields -> pad to 64
+#     VALIDATORS_FIELD_INDEX = 11
+#     VALIDATORS_LIST_DEPTH = 40
+
+#     # Step 1: Build tree for validators list
+#     validator_chunks = []
+#     for v in validators_list:
+#         chunk = Validator.get_hash_tree_root(v)  # Validator - это Container
+#         validator_chunks.append(chunk)
+
+#     validators_tree = MerkleTree(validator_chunks, limit=VALIDATOR_REGISTRY_LIMIT)
+
+#     # Step 2: Get proof from validator to list data root
+#     validator_proof = extract_proof_for_list_item(
+#         validators_tree, validator_index, VALIDATORS_LIST_DEPTH
+#     )
+
+#     # Step 3: Add length mixin - the sibling is the length
+#     length_bytes = len(validators_list).to_bytes(32, "little")
+#     validator_proof.append(length_bytes)
+
+#     # Step 4: Build state tree and get proof from validators field to state root
+#     state_tree = MerkleTree(state_field_roots)
+#     field_proof = state_tree.get_proof(VALIDATORS_FIELD_INDEX)
+#     validator_proof.extend(field_proof)
+
+#     return validator_proof
+
+
+def extract_header_proof(header) -> List[bytes]:
+    """
+    Extract proof for state_root field in BeaconBlockHeader.
+    Returns proof in bottom-up order.
+    """
+    HEADER_DEPTH = 3
+    STATE_ROOT_INDEX = 3
+
+    # Build header tree
+    field_roots = []
+    for i, sedes in enumerate(BeaconBlockHeader.field_sedes):
+        field_value = header[i]
+        field_root = sedes.get_hash_tree_root(field_value)
+        field_roots.append(field_root)
+
+    header_tree = MerkleTree(field_roots)
+    return header_tree.get_proof(STATE_ROOT_INDEX)
+
+
+# ============================================
+# EL + CL Client
+# ============================================
+
+
+def get_latest_el_block(el_url: str) -> dict:
+    """
+    Step 1: Get latest EL block via eth_getBlockByNumber("latest", false).
+    Returns dict with 'timestamp' and 'parentBeaconBlockRoot'.
+    """
+    resp = requests.post(
+        el_url,
+        json={
+            "jsonrpc": "2.0",
+            "method": "eth_getBlockByNumber",
+            "params": ["latest", False],
+            "id": 1,
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    result = resp.json()["result"]
+    return {
+        "timestamp": int(result["timestamp"], 16),
+        "parentBeaconBlockRoot": bytes.fromhex(result["parentBeaconBlockRoot"][2:]),
+    }
+
+
+def get_beacon_block_header_by_root(cl_url: str, block_root: bytes) -> dict:
+    """
+    Step 3: GET /eth/v2/beacon/blocks/{root} and extract header fields.
+    """
+    root_hex = "0x" + block_root.hex()
+    url = f"{cl_url}/eth/v2/beacon/blocks/{root_hex}"
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    header = resp.json()["data"]["message"]
+    return {
+        "slot": int(header["slot"]),
+        "proposer_index": int(header["proposer_index"]),
+    }
+
+
+def get_beacon_state_ssz(cl_url: str, slot: int) -> bytes:
+    """
+    Step 4: GET /eth/v2/debug/beacon/states/{slot} in SSZ format.
+    """
+    url = f"{cl_url}/eth/v2/debug/beacon/states/{slot}"
+    headers = {"Accept": "application/octet-stream"}
+    print(f"Fetching BeaconState for slot {slot}...", file=sys.stderr)
+    resp = requests.get(url, headers=headers, timeout=300)
+    resp.raise_for_status()
+    print(f"Received {len(resp.content):,} bytes", file=sys.stderr)
+    return resp.content
+
+
+# ============================================
+# Proof Builder
+# ============================================
+
+
+def compute_state_field_roots(state) -> List[bytes]:
+    """Compute hash_tree_root for each field of BeaconState."""
+    field_roots = []
+    for i, sedes in enumerate(BeaconState.field_sedes):
+        field_value = state[i]
+        field_root = sedes.get_hash_tree_root(field_value)
+        field_roots.append(field_root)
+
+    return field_roots
+
+
+# def build_top_up_data(el_url: str, cl_url: str, validator_indices: List[int]) -> dict:
+#     """
+#     Build TopUpData for the given validator indices.
+
+#     Flow:
+#     1. Get latest EL block -> timestamp, parentBeaconBlockRoot
+#     2. parentBeaconBlockRoot IS the beacon root from 4788
+#     3. Get beacon block header by root -> slot, proposerIndex
+#     4. Get state for that slot -> build proofs
+#     5. Verify proofs locally
+#     """
+#     # Step 1-2: Get latest EL block
+#     print("Step 1: Fetching latest EL block...", file=sys.stderr)
+#     el_block = get_latest_el_block(el_url)
+#     child_block_timestamp = el_block["timestamp"]
+#     parent_beacon_block_root = el_block["parentBeaconBlockRoot"]
+#     print(f"  timestamp: {child_block_timestamp}", file=sys.stderr)
+#     print(
+#         f"  parentBeaconBlockRoot: 0x{parent_beacon_block_root.hex()}", file=sys.stderr
+#     )
+
+#     # Step 3: Get beacon block header by root
+#     print("Step 3: Fetching beacon block header...", file=sys.stderr)
+#     beacon_header = get_beacon_block_header_by_root(cl_url, parent_beacon_block_root)
+#     slot = beacon_header["slot"]
+#     proposer_index = beacon_header["proposer_index"]
+#     print(f"  slot: {slot}, proposerIndex: {proposer_index}", file=sys.stderr)
+
+#     # Step 4: Get state SSZ
+#     print("Step 4: Fetching beacon state...", file=sys.stderr)
+#     ssz_bytes = get_beacon_state_ssz(cl_url, slot)
+
+#     print("Deserializing BeaconState...", file=sys.stderr)
+#     state = ssz.decode(ssz_bytes, BeaconState)
+
+#     # Compute state root
+#     state_root = BeaconState.get_hash_tree_root(state)
+#     print(f"  state_root: 0x{state_root.hex()}", file=sys.stderr)
+
+#     # Fetch and build header object for proof extraction
+#     header_url = f"{cl_url}/eth/v1/beacon/headers/{slot}"
+#     header_resp = requests.get(header_url, timeout=30)
+#     header_resp.raise_for_status()
+#     header_msg = header_resp.json()["data"]["header"]["message"]
+
+#     header = (
+#         int(header_msg["slot"]),
+#         int(header_msg["proposer_index"]),
+#         bytes.fromhex(header_msg["parent_root"][2:]),
+#         bytes.fromhex(header_msg["state_root"][2:]),
+#         bytes.fromhex(header_msg["body_root"][2:]),
+#     )
+
+#     beacon_block_root = BeaconBlockHeader.get_hash_tree_root(header)
+#     print(f"  beacon_block_root: 0x{beacon_block_root.hex()}", file=sys.stderr)
+
+#     # Verify beacon_block_root matches parentBeaconBlockRoot from EL
+#     if beacon_block_root != parent_beacon_block_root:
+#         raise ValueError(
+#             f"beacon_block_root mismatch!\n"
+#             f"  computed:  0x{beacon_block_root.hex()}\n"
+#             f"  expected:  0x{parent_beacon_block_root.hex()}"
+#         )
+#     print("  beacon_block_root matches parentBeaconBlockRoot", file=sys.stderr)
+
+#     # Build header proof (state_root -> beacon_block_root)
+#     header_proof = extract_header_proof(header)
+#     state_root_gindex = compute_gindex_for_state_root_in_header()
+
+#     # Pre-compute state field roots for efficiency
+#     print("Computing state field roots...", file=sys.stderr)
+#     state_field_roots = compute_state_field_roots(state)
+
+#     # Build proofs for each validator
+#     validator_witnesses = []
+#     validators = state[STATE_VALIDATORS]
+
+#     for vi in validator_indices:
+#         print(f"Step 5: Building proof for validator {vi}...", file=sys.stderr)
+
+#         validator = validators[vi]
+
+#         validator_root = Validator.get_hash_tree_root(validator)
+
+#         # Proof: validator[i] -> state_root
+#         validator_gindex = compute_gindex_for_validator(vi)
+#         validator_proof = extract_validator_proof(
+#             state_field_roots, list(validators), vi
+#         )
+
+#         # Full proof: validator_proof + header_proof
+#         full_proof = validator_proof + header_proof
+
+#         # Verification: walk from leaf to state_root
+#         print(f"  Verifying validator proof (leaf -> state_root)...", file=sys.stderr)
+#         if not verify_merkle_proof(
+#             validator_root, validator_proof, validator_gindex, state_root
+#         ):
+#             raise ValueError(
+#                 f"Validator proof verification FAILED for index {vi}!\n"
+#                 f"  leaf (validator_root): 0x{validator_root.hex()}\n"
+#                 f"  expected state_root:   0x{state_root.hex()}"
+#             )
+#         print(f"  Validator proof verified OK", file=sys.stderr)
+
+#         # Verification: walk from state_root to beacon_block_root
+#         print(
+#             f"  Verifying header proof (state_root -> beacon_block_root)...",
+#             file=sys.stderr,
+#         )
+#         if not verify_merkle_proof(
+#             state_root, header_proof, state_root_gindex, beacon_block_root
+#         ):
+#             raise ValueError(
+#                 f"Header proof verification FAILED!\n"
+#                 f"  leaf (state_root):        0x{state_root.hex()}\n"
+#                 f"  expected beacon_block_root: 0x{beacon_block_root.hex()}"
+#             )
+#         print(f"  Header proof verified OK", file=sys.stderr)
+
+#         validator_witnesses.append(
+#             {
+#                 "validatorIndex": vi,
+#                 "pubkey": "0x" + bytes(validator[VALIDATOR_PUBKEY]).hex(),
+#                 "effectiveBalance": int(validator[VALIDATOR_EFFECTIVE_BALANCE]),
+#                 "activationEligibilityEpoch": int(
+#                     validator[VALIDATOR_ACTIVATION_ELIGIBILITY_EPOCH]
+#                 ),
+#                 "activationEpoch": int(validator[VALIDATOR_ACTIVATION_EPOCH]),
+#                 "exitEpoch": int(validator[VALIDATOR_EXIT_EPOCH]),
+#                 "withdrawableEpoch": int(validator[VALIDATOR_WITHDRAWABLE_EPOCH]),
+#                 "slashed": bool(validator[VALIDATOR_SLASHED]),
+#                 "proofs": ["0x" + p.hex() for p in full_proof],
+#             }
+#         )
+
+#     return {
+#         "beaconRootData": {
+#             "childBlockTimestamp": child_block_timestamp,
+#             "slot": slot,
+#             "proposerIndex": proposer_index,
+#         },
+#         "validatorWitnesses": validator_witnesses,
+#     }
+
+
+def build_top_up_data(el_url: str, cl_url: str, validator_indices: List[int]) -> dict:
+    """
+    Build TopUpData for the given validator indices.
+
+    Flow:
+    1. Get latest EL block -> timestamp, parentBeaconBlockRoot
+    2. parentBeaconBlockRoot IS the beacon root from 4788
+    3. Get beacon block header by root -> slot, proposerIndex
+    4. Get state for that slot -> build proofs
+    5. Verify proofs locally
+    """
+    # Step 1-2: Get latest EL block
+    print("Step 1: Fetching latest EL block...", file=sys.stderr)
+    el_block = get_latest_el_block(el_url)
+    child_block_timestamp = el_block["timestamp"]
+    parent_beacon_block_root = el_block["parentBeaconBlockRoot"]
+    print(f"  timestamp: {child_block_timestamp}", file=sys.stderr)
+    print(
+        f"  parentBeaconBlockRoot: 0x{parent_beacon_block_root.hex()}", file=sys.stderr
+    )
+
+    # Step 3: Get beacon block header by root
+    print("Step 3: Fetching beacon block header...", file=sys.stderr)
+    beacon_header = get_beacon_block_header_by_root(cl_url, parent_beacon_block_root)
+    slot = beacon_header["slot"]
+    proposer_index = beacon_header["proposer_index"]
+    print(f"  slot: {slot}, proposerIndex: {proposer_index}", file=sys.stderr)
+
+    # Step 4: Get state SSZ
+    print("Step 4: Fetching beacon state...", file=sys.stderr)
+    ssz_bytes = get_beacon_state_ssz(cl_url, slot)
+
+    print("Deserializing BeaconState...", file=sys.stderr)
+    state = ssz.decode(ssz_bytes, BeaconState)
+
+    # Compute state root
+    state_root = BeaconState.get_hash_tree_root(state)
+    print(f"  state_root: 0x{state_root.hex()}", file=sys.stderr)
+
+    # Fetch and build header object for proof extraction
+    header_url = f"{cl_url}/eth/v1/beacon/headers/{slot}"
+    header_resp = requests.get(header_url, timeout=30)
+    header_resp.raise_for_status()
+    header_msg = header_resp.json()["data"]["header"]["message"]
+
+    header = (
+        int(header_msg["slot"]),
+        int(header_msg["proposer_index"]),
+        bytes.fromhex(header_msg["parent_root"][2:]),
+        bytes.fromhex(header_msg["state_root"][2:]),
+        bytes.fromhex(header_msg["body_root"][2:]),
+    )
+
+    beacon_block_root = BeaconBlockHeader.get_hash_tree_root(header)
+    print(f"  beacon_block_root: 0x{beacon_block_root.hex()}", file=sys.stderr)
+
+    # Verify beacon_block_root matches parentBeaconBlockRoot from EL
+    if beacon_block_root != parent_beacon_block_root:
+        raise ValueError(
+            f"beacon_block_root mismatch!\n"
+            f"  computed:  0x{beacon_block_root.hex()}\n"
+            f"  expected:  0x{parent_beacon_block_root.hex()}"
+        )
+    print("  beacon_block_root matches parentBeaconBlockRoot", file=sys.stderr)
+
+    # Build header proof (state_root -> beacon_block_root)
+    header_proof = extract_header_proof(header)
+
+    # Pre-compute state field roots for efficiency
+    print("Computing state field roots...", file=sys.stderr)
+    state_field_roots = compute_state_field_roots(state)
+
+    # Build proofs for each validator
+    validator_witnesses = []
+    validators = state[STATE_VALIDATORS]
+    validators_list = list(validators)
+
+    # Pre-compute validator chunks and validators_data_root once
+    print("Computing validator chunks...", file=sys.stderr)
+    validator_chunks = [Validator.get_hash_tree_root(v) for v in validators_list]
+
+    VALIDATORS_LIST_DEPTH = 40
+    print("Computing validators_data_root...", file=sys.stderr)
+    validators_data_root = compute_merkle_root_sparse(
+        validator_chunks, VALIDATORS_LIST_DEPTH
+    )
+
+    for vi in validator_indices:
+        print(f"Step 5: Building proof for validator {vi}...", file=sys.stderr)
+
+        validator = validators[vi]
+        validator_root = Validator.get_hash_tree_root(validator)
+
+        # Build validator proof
+        validator_proof = extract_validator_proof(
+            state_field_roots, validators_list, vi
+        )
+
+        # Full proof: validator_proof + header_proof
+        full_proof = validator_proof + header_proof
+
+        # === ПОЭТАПНАЯ ВЕРИФИКАЦИЯ ===
+
+        # 1. Проверяем proof от validator до validators_data_root
+        print(f"  Verifying validator -> validators_data_root...", file=sys.stderr)
+        list_proof = validator_proof[:VALIDATORS_LIST_DEPTH]
+
+        if not verify_merkle_proof_by_index(
+            validator_root, list_proof, vi, validators_data_root
+        ):
+            raise ValueError(
+                f"Validator list proof FAILED for index {vi}!\n"
+                f"  validator_root: 0x{validator_root.hex()}\n"
+                f"  validators_data_root: 0x{validators_data_root.hex()}"
+            )
+        print(f"  Validator list proof OK", file=sys.stderr)
+
+        # 2. Проверяем length mixin
+        print(f"  Verifying length mixin...", file=sys.stderr)
+        length_bytes = validator_proof[VALIDATORS_LIST_DEPTH]
+        validators_root = hash_concat(validators_data_root, length_bytes)
+
+        expected_validators_root = state_field_roots[STATE_VALIDATORS]
+        if validators_root != expected_validators_root:
+            raise ValueError(
+                f"Validators root mismatch!\n"
+                f"  computed:  0x{validators_root.hex()}\n"
+                f"  expected:  0x{expected_validators_root.hex()}"
+            )
+        print(f"  Length mixin OK", file=sys.stderr)
+
+        # 3. Проверяем proof от validators field до state_root
+        print(f"  Verifying validators_root -> state_root...", file=sys.stderr)
+        field_proof = validator_proof[VALIDATORS_LIST_DEPTH + 1 :]
+
+        if not verify_merkle_proof_by_index(
+            validators_root, field_proof, STATE_VALIDATORS, state_root
+        ):
+            raise ValueError(
+                f"State field proof FAILED!\n"
+                f"  validators_root: 0x{validators_root.hex()}\n"
+                f"  state_root: 0x{state_root.hex()}"
+            )
+        print(f"  State field proof OK", file=sys.stderr)
+
+        # 4. Проверяем header proof
+        print(f"  Verifying state_root -> beacon_block_root...", file=sys.stderr)
+        if not verify_merkle_proof_by_index(
+            state_root, header_proof, HEADER_STATE_ROOT, beacon_block_root
+        ):
+            raise ValueError(
+                f"Header proof FAILED!\n"
+                f"  state_root: 0x{state_root.hex()}\n"
+                f"  beacon_block_root: 0x{beacon_block_root.hex()}"
+            )
+        print(f"  Header proof OK", file=sys.stderr)
+
+        validator_witnesses.append(
+            {
+                "validatorIndex": vi,
+                "pubkey": "0x" + bytes(validator[VALIDATOR_PUBKEY]).hex(),
+                "effectiveBalance": int(validator[VALIDATOR_EFFECTIVE_BALANCE]),
+                "activationEligibilityEpoch": int(
+                    validator[VALIDATOR_ACTIVATION_ELIGIBILITY_EPOCH]
+                ),
+                "activationEpoch": int(validator[VALIDATOR_ACTIVATION_EPOCH]),
+                "exitEpoch": int(validator[VALIDATOR_EXIT_EPOCH]),
+                "withdrawableEpoch": int(validator[VALIDATOR_WITHDRAWABLE_EPOCH]),
+                "slashed": bool(validator[VALIDATOR_SLASHED]),
+                "proofs": ["0x" + p.hex() for p in full_proof],
+            }
+        )
+
+    return {
+        "beaconRootData": {
+            "childBlockTimestamp": child_block_timestamp,
+            "slot": slot,
+            "proposerIndex": proposer_index,
+        },
+        "validatorWitnesses": validator_witnesses,
+    }
+
+
+# ============================================
+# TopUpGateway ABI (topUp function only)
+# ============================================
+
+TOP_UP_GATEWAY_ABI = json.loads(
+    """[
+    {
+        "inputs": [
+            {
+                "components": [
+                    {"internalType": "uint256", "name": "moduleId", "type": "uint256"},
+                    {"internalType": "uint256[]", "name": "keyIndices", "type": "uint256[]"},
+                    {"internalType": "uint256[]", "name": "operatorIds", "type": "uint256[]"},
+                    {"internalType": "uint256[]", "name": "validatorIndices", "type": "uint256[]"},
+                    {
+                        "components": [
+                            {"internalType": "uint64", "name": "childBlockTimestamp", "type": "uint64"},
+                            {"internalType": "uint64", "name": "slot", "type": "uint64"},
+                            {"internalType": "uint64", "name": "proposerIndex", "type": "uint64"}
+                        ],
+                        "internalType": "struct BeaconRootData",
+                        "name": "beaconRootData",
+                        "type": "tuple"
+                    },
+                    {
+                        "components": [
+                            {"internalType": "bytes32[]", "name": "proofValidator", "type": "bytes32[]"},
+                            {"internalType": "bytes", "name": "pubkey", "type": "bytes"},
+                            {"internalType": "uint64", "name": "effectiveBalance", "type": "uint64"},
+                            {"internalType": "uint64", "name": "activationEligibilityEpoch", "type": "uint64"},
+                            {"internalType": "uint64", "name": "activationEpoch", "type": "uint64"},
+                            {"internalType": "uint64", "name": "exitEpoch", "type": "uint64"},
+                            {"internalType": "uint64", "name": "withdrawableEpoch", "type": "uint64"},
+                            {"internalType": "bool", "name": "slashed", "type": "bool"}
+                        ],
+                        "internalType": "struct ValidatorWitness[]",
+                        "name": "validatorWitness",
+                        "type": "tuple[]"
+                    },
+                    {"internalType": "uint256[]", "name": "pendingBalanceGwei", "type": "uint256[]"}
+                ],
+                "internalType": "struct TopUpData",
+                "name": "_topUps",
+                "type": "tuple"
+            }
+        ],
+        "name": "topUp",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]"""
+)
+
+DEFAULT_WITNESS_FILE = "validatorWitness.json"
+
+
+# ============================================
+# CLI
+# ============================================
+
+
+def cmd_prove(args):
+    """Build proofs and optionally write to file."""
+    try:
+        result = build_top_up_data(
+            el_url=args.el_url,
+            cl_url=args.cl_url,
+            validator_indices=args.validator_indices,
+        )
+
+        json_output = json.dumps(result, indent=2)
+
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(json_output)
+            print(f"Proof data written to {args.output}", file=sys.stderr)
+        else:
+            print(json_output)
+
+    except Exception as e:
+        print(f"ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+        import traceback
+
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
+
+
+def send_top_up_tx(
+    witness_data: dict,
+    validator_indices: List[int],
+    key_indices: List[int],
+    operator_ids: List[int],
+    module_id: int,
+    el_url: str,
+    gateway_address: str,
+    gas_limit: int,
+):
+    """Shared logic: build and send a topUp transaction from witness data."""
+    load_dotenv()
+
+    private_key = os.environ.get("PRIVATE_KEY")
+    if not private_key:
+        print("ERROR: PRIVATE_KEY not found in .env file", file=sys.stderr)
+        sys.exit(1)
+
+    if len(validator_indices) != len(key_indices) or len(validator_indices) != len(
+        operator_ids
+    ):
+        print(
+            "ERROR: --validator-index, --key-index, and --operator-id must have the same count",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    w3 = Web3(Web3.HTTPProvider(el_url))
+    if not w3.is_connected():
+        print("ERROR: Cannot connect to EL node", file=sys.stderr)
+        sys.exit(1)
+
+    account = w3.eth.account.from_key(private_key)
+    print(f"Sender: {account.address}", file=sys.stderr)
+
+    beacon_root_data = witness_data["beaconRootData"]
+    validators = witness_data["validatorWitnesses"]
+
+    witness_by_index = {v["validatorIndex"]: v for v in validators}
+    ordered_witnesses = []
+    for vi in validator_indices:
+        if vi not in witness_by_index:
+            print(
+                f"ERROR: Validator index {vi} not found in witness data",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        ordered_witnesses.append(witness_by_index[vi])
+
+    validator_witnesses_tuples = [
+        (
+            [bytes.fromhex(p[2:]) for p in vw["proofs"]],
+            bytes.fromhex(vw["pubkey"][2:]),
+            vw["effectiveBalance"],
+            vw["activationEligibilityEpoch"],
+            vw["activationEpoch"],
+            vw["exitEpoch"],
+            vw["withdrawableEpoch"],
+            vw["slashed"],
+        )
+        for vw in ordered_witnesses
+    ]
+
+    pending_balances = [0] * len(validator_indices)
+
+    top_up_data = (
+        module_id,
+        list(key_indices),
+        list(operator_ids),
+        list(validator_indices),
+        (
+            beacon_root_data["childBlockTimestamp"],
+            beacon_root_data["slot"],
+            beacon_root_data["proposerIndex"],
+        ),
+        validator_witnesses_tuples,
+        pending_balances,
+    )
+
+    contract = w3.eth.contract(
+        address=Web3.to_checksum_address(gateway_address),
+        abi=TOP_UP_GATEWAY_ABI,
+    )
+
+    print("Building transaction...", file=sys.stderr)
+    tx = contract.functions.topUp(top_up_data).build_transaction(
+        {
+            "from": account.address,
+            "nonce": w3.eth.get_transaction_count(account.address),
+            "gas": gas_limit,
+            "maxFeePerGas": w3.eth.gas_price * 2,
+            "maxPriorityFeePerGas": w3.to_wei(1, "gwei"),
+        }
+    )
+
+    # Dry-run via eth_call to get revert reason before sending
+    print("Simulating transaction (eth_call)...", file=sys.stderr)
+    try:
+        contract.functions.topUp(top_up_data).call({"from": account.address})
+        print("Simulation OK", file=sys.stderr)
+    except Exception as sim_err:
+        print(f"Simulation REVERTED: {sim_err}", file=sys.stderr)
+        print("Sending anyway to get on-chain receipt...", file=sys.stderr)
+
+    print("Signing and sending transaction...", file=sys.stderr)
+    signed_tx = w3.eth.account.sign_transaction(tx, private_key)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    print(f"Transaction sent: 0x{tx_hash.hex()}", file=sys.stderr)
+
+    print("Waiting for receipt...", file=sys.stderr)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300)
+    if receipt["status"] == 1:
+        print(
+            f"Transaction confirmed in block {receipt['blockNumber']}", file=sys.stderr
+        )
+    else:
+        print(
+            f"Transaction REVERTED in block {receipt['blockNumber']}", file=sys.stderr
+        )
+        print(f"  gasUsed: {receipt['gasUsed']}", file=sys.stderr)
+        print(f"  tx hash: 0x{tx_hash.hex()}", file=sys.stderr)
+        # Try to extract revert reason via debug_traceTransaction or replay
+        try:
+            w3.eth.call(
+                {"to": receipt["to"], "from": receipt["from"], "data": tx["data"]},
+                receipt["blockNumber"],
+            )
+        except Exception as revert_err:
+            print(f"  revert reason: {revert_err}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_top_up(args):
+    """Read witness file and send topUp transaction to TopUpGateway."""
+    input_file = args.input
+    print(f"Reading witness data from {input_file}...", file=sys.stderr)
+    with open(input_file, "r") as f:
+        witness_data = json.load(f)
+
+    send_top_up_tx(
+        witness_data=witness_data,
+        validator_indices=args.validator_index,
+        key_indices=args.key_index,
+        operator_ids=args.operator_id,
+        module_id=args.module_id,
+        el_url=args.el_url,
+        gateway_address=args.gateway_address,
+        gas_limit=args.gas_limit,
+    )
+
+
+def cmd_top_up_prove(args):
+    """Build proofs and immediately send topUp transaction to TopUpGateway."""
+    try:
+        t0 = time.time()
+
+        witness_data = build_top_up_data(
+            el_url=args.el_url,
+            cl_url=args.cl_url,
+            validator_indices=args.validator_indices,
+        )
+
+        proof_elapsed = time.time() - t0
+        print(f"Proofs built in {proof_elapsed:.2f}s, sending tx to TopUpGateway...")
+
+        send_top_up_tx(
+            witness_data=witness_data,
+            validator_indices=args.validator_indices,
+            key_indices=args.key_index,
+            operator_ids=args.operator_id,
+            module_id=args.module_id,
+            el_url=args.el_url,
+            gateway_address=args.gateway_address,
+            gas_limit=args.gas_limit,
+        )
+
+        total_elapsed = time.time() - t0
+        print(
+            f"Total time: {total_elapsed:.2f}s (proof: {proof_elapsed:.2f}s, tx: {total_elapsed - proof_elapsed:.2f}s)"
+        )
+    except Exception as e:
+        print(f"ERROR: {type(e).__name__}: {e}", file=sys.stderr)
+        import traceback
+
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Build Merkle proofs and send top-up transactions for validator verification via EIP-4788.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # ---- prove command ----
+    prove_parser = subparsers.add_parser(
+        "prove",
+        help="Build Merkle proofs for validators",
+    )
+    prove_parser.add_argument(
+        "--el-url",
+        "-e",
+        required=True,
+        help="EL RPC endpoint, e.g. http://localhost:8545",
+    )
+    prove_parser.add_argument(
+        "--cl-url",
+        "-c",
+        required=True,
+        help="CL API endpoint, e.g. http://localhost:5052",
+    )
+    prove_parser.add_argument(
+        "--validator-index",
+        "-v",
+        type=int,
+        action="append",
+        required=True,
+        dest="validator_indices",
+        help="Validator index (can be specified multiple times)",
+    )
+    prove_parser.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help=f"Output file path (default: stdout, use -o without value for '{DEFAULT_WITNESS_FILE}')",
+        nargs="?",
+        const=DEFAULT_WITNESS_FILE,
+    )
+
+    # ---- top-up command ----
+    topup_parser = subparsers.add_parser(
+        "top-up",
+        help="Send topUp transaction to TopUpGateway",
+    )
+    topup_parser.add_argument(
+        "--el-url",
+        "-e",
+        required=True,
+        help="EL RPC endpoint, e.g. http://localhost:8545",
+    )
+    topup_parser.add_argument(
+        "--gateway-address",
+        "-g",
+        required=True,
+        help="TopUpGateway contract address",
+    )
+    topup_parser.add_argument(
+        "--validator-index",
+        "-v",
+        type=int,
+        action="append",
+        required=True,
+        dest="validator_index",
+        help="Validator index (can be specified multiple times, order matters)",
+    )
+    topup_parser.add_argument(
+        "--key-index",
+        "-k",
+        type=int,
+        action="append",
+        required=True,
+        dest="key_index",
+        help="Key index for each validator (same order as -v)",
+    )
+    topup_parser.add_argument(
+        "--operator-id",
+        type=int,
+        action="append",
+        required=True,
+        dest="operator_id",
+        help="Operator ID for each validator (same order as -v)",
+    )
+    topup_parser.add_argument(
+        "--module-id",
+        "-m",
+        type=int,
+        required=True,
+        dest="module_id",
+        help="Staking module ID",
+    )
+    topup_parser.add_argument(
+        "--input",
+        "-i",
+        default=DEFAULT_WITNESS_FILE,
+        help=f"Input witness file (default: {DEFAULT_WITNESS_FILE})",
+    )
+    topup_parser.add_argument(
+        "--gas-limit",
+        type=int,
+        default=1_000_000,
+        help="Gas limit for transaction (default: 1000000)",
+    )
+
+    # ---- top-up-prove command ----
+    topup_prove_parser = subparsers.add_parser(
+        "top-up-prove",
+        help="Build proofs and immediately send topUp transaction",
+    )
+    topup_prove_parser.add_argument(
+        "--el-url",
+        "-e",
+        required=True,
+        help="EL RPC endpoint, e.g. http://localhost:8545",
+    )
+    topup_prove_parser.add_argument(
+        "--cl-url",
+        "-c",
+        required=True,
+        help="CL API endpoint, e.g. http://localhost:5052",
+    )
+    topup_prove_parser.add_argument(
+        "--gateway-address",
+        "-g",
+        required=True,
+        help="TopUpGateway contract address",
+    )
+    topup_prove_parser.add_argument(
+        "--validator-index",
+        "-v",
+        type=int,
+        action="append",
+        required=True,
+        dest="validator_indices",
+        help="Validator index (can be specified multiple times)",
+    )
+    topup_prove_parser.add_argument(
+        "--key-index",
+        "-k",
+        type=int,
+        action="append",
+        required=True,
+        dest="key_index",
+        help="Key index for each validator (same order as -v)",
+    )
+    topup_prove_parser.add_argument(
+        "--operator-id",
+        type=int,
+        action="append",
+        required=True,
+        dest="operator_id",
+        help="Operator ID for each validator (same order as -v)",
+    )
+    topup_prove_parser.add_argument(
+        "--module-id",
+        "-m",
+        type=int,
+        required=True,
+        dest="module_id",
+        help="Staking module ID",
+    )
+    topup_prove_parser.add_argument(
+        "--gas-limit",
+        type=int,
+        default=1_000_000,
+        help="Gas limit for transaction (default: 1000000)",
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "prove":
+        cmd_prove(args)
+    elif args.command == "top-up":
+        cmd_top_up(args)
+    elif args.command == "top-up-prove":
+        cmd_top_up_prove(args)
+
+
+if __name__ == "__main__":
+    main()

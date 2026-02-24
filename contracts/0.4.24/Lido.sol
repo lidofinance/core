@@ -20,13 +20,6 @@ interface IBurnerMigration {
 }
 
 interface IStakingRouter {
-    function deposit(uint256 _stakingModuleId, bytes _depositCalldata) external payable;
-
-    function getStakingModuleMaxDepositsCount(uint256 _stakingModuleId, uint256 _maxDepositsValue)
-        external
-        view
-        returns (uint256);
-
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
 
     function TOTAL_BASIS_POINTS() external view returns (uint256);

@@ -62,15 +62,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     event DepositableEthReceived(uint256 amount);
 
-    /// @dev Debug event for top-up flow
-    event DebugTopUp(
-        uint256 indexed stakingModuleId,
-        uint256 allocationAmount, // sum from deposit allocation (stakingModuleDepositableEthAmount)
-        uint256 moduleAllocatedAmount, // sum returned by module's allocateDeposits
-        uint256[] topUpLimits, // limits from TopUpGateway (per-validator CL-based limits)
-        uint256[] moduleAllocations // per-validator allocations returned by module
-    );
-
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
 
     uint64 internal constant PUBKEY_LENGTH = 48;
@@ -100,12 +91,12 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error DepositValueNotMultipleOfInitialDeposit();
     error StakingModuleStatusTheSame();
     error LegacyStakingModuleRequired();
-    error KeysDoesntBelongToModule();
     error WrongArrayLength();
     error EmptyKeysList();
     error WrongPubkeysLength();
     error TopUpAmountTooLow();
     error AmountNotAlignedToGwei();
+    error AllocationExceedsLimit();
 
     /// @dev compatibility getters for constants removed in favor of SRLib
     function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
@@ -169,10 +160,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
     /// @param _admin Address to grant DEFAULT_ADMIN_ROLE
     /// @dev Old AccessControl roles (stored at keccak256("openzeppelin.AccessControl._roles") and
-    ///      keccak256("openzeppelin.AccessControlEnumerable._roleMembers")) are NOT migrated or cleaned up.
-    ///      New OZ 5.2 AccessControl uses ERC-7201 namespaced storage at different slots, so old data
-    ///      is effectively orphaned and inaccessible by the new code.
-    ///      All operational roles (STAKING_MODULE_MANAGE_ROLE, REPORT_EXITED_VALIDATORS_ROLE, etc.)
+    ///      keccak256("openzeppelin.AccessControlEnumerable._roleMembers")) are inaccessible by the new code.
+    ///      New OZ 5.2 AccessControl uses ERC-7201 namespaced storage at different slots.
+    ///      All roles (STAKING_MODULE_MANAGE_ROLE, REPORT_EXITED_VALIDATORS_ROLE, etc.)
     ///      must be re-granted via grantRole() after this migration in the upgrade Vote Script.
     function migrateUpgrade_v4(address _admin) external reinitializer(4) {
         __AccessControlEnumerable_init();
@@ -769,33 +759,30 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 amount;
         unchecked {
             for (uint256 i; i < allocations.length; ++i) {
-                if (allocations[i] != 0 && allocations[i] < 1 ether) {
-                    revert TopUpAmountTooLow();
-                }
-
-                if (amount % 1 gwei != 0) {
+                if (allocations[i] % 1 gwei != 0) {
                     revert AmountNotAlignedToGwei();
                 }
+
+                if (allocations[i] > _topUpLimits[i]) {
+                    revert AllocationExceedsLimit();
+                }
+
                 amount += allocations[i];
             }
         }
 
-        // TODO: temp event, devnet only
-        emit DebugTopUp(_stakingModuleId, stakingModuleDepositableEthAmount, amount, _topUpLimits, allocations);
-
         // Verify sum of allocations does not exceed module's max deposit amount
-        if (amount > stakingModuleDepositableEthAmount) {
+        if (amount > truncatedToGwei) {
             revert AllocationExceedsTarget();
         }
 
         if (amount > 0) {
+            uint256 etherBalanceBeforeDeposits = address(this).balance;
             // Pull ETH from Lido
             LIDO.withdrawDepositableEther(amount, 0);
 
             bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
             bytes memory wcBytes = abi.encodePacked(withdrawalCredentials);
-
-            uint256 etherBalanceBeforeDeposits = address(this).balance;
 
             // Make beacon chain top-up deposits
             BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, _pubkeys, allocations);
@@ -803,8 +790,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
             uint256 etherBalanceAfterDeposits = address(this).balance;
 
-            /// @dev All pulled ETH must be deposited and self balance stay the same.
-            assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == amount);
+            /// @dev All pulled ETH must be deposited
+            assert(etherBalanceBeforeDeposits == etherBalanceAfterDeposits);
         }
     }
 

@@ -461,7 +461,7 @@ contract DepositSecurityModule {
     }
 
     /**
-     * @notice Calls LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata).
+     * @notice Calls STAKING_ROUTER.deposit(stakingModuleId, depositCalldata).
      * @param blockNumber The block number at which the deposit intent was created.
      * @param blockHash The block hash at which the deposit intent was created.
      * @param depositRoot The deposit root hash.
@@ -504,7 +504,6 @@ contract DepositSecurityModule {
 
         if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
         if (!STAKING_ROUTER.canDeposit(stakingModuleId)) revert DepositInactiveModule();
-        if (!LIDO.canDeposit()) revert LidoCanNotDeposit();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();
