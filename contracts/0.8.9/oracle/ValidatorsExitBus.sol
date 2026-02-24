@@ -854,10 +854,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         }
 
         uint256 requestsCount = data.length / packedLength;
-
-        // Cache to avoid repeated external calls for the same module
-        // Format: (moduleId << 1) | isLegacy
-        uint256 cachedModuleId = type(uint256).max;
+        uint256 cachedModuleId = 0;
         uint256 cachedModuleMaxEBEth = 0;
         uint256 totalBalanceEthAccum = 0;
 
@@ -1021,7 +1018,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 moduleId;
 
         // Cache module data to avoid repeated external calls for the same module
-        uint256 cachedModuleId = type(uint256).max; // Initialize to invalid value
+        uint256 cachedModuleId = 0;
         address cachedModuleAddress;
 
         assembly {
