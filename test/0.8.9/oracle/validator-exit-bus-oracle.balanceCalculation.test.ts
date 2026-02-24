@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingRouter__MockForValidatorsExitBus,ValidatorsExitBus__Harness } from "typechain-types";
+import { StakingRouter__MockForValidatorsExitBus, ValidatorsExitBus__Harness } from "typechain-types";
 
 import { de0x, numberToHex } from "lib";
 
