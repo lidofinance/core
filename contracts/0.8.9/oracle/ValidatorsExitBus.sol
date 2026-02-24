@@ -731,7 +731,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     * @notice Extracts validator data from format 1 (64 bytes per request, no keyIndex)
     * @param exitRequestData Validator exit requests data
     * @param index index of request in array
-    * @return validatorData Validator data with keyIndex = 0
+    * @return validatorData Validator data with keyIndex = type(uint256).max
     */
     function _getValidatorDataV1(
         bytes calldata exitRequestData,
@@ -832,11 +832,32 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         view
         returns (uint256 totalBalanceEth)
     {
-        uint256 requestsCount = data.length / _getPackedRequestLength(dataFormat);
+        uint256 packedLength;
+        uint256 dataShift;
+        uint256 moduleShift;
+
+        if (dataFormat == DATA_FORMAT_LIST) {
+            packedLength = PACKED_REQUEST_LENGTH;
+            dataShift = 128;
+            moduleShift = 104;
+        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            packedLength = PACKED_REQUEST_LENGTH_V2;
+            dataShift = 64;
+            moduleShift = 168;
+        } else {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+
+        uint256 baseOffset;
+        assembly {
+            baseOffset := data.offset
+        }
+
+        uint256 requestsCount = data.length / packedLength;
 
         // Cache to avoid repeated external calls for the same module
         // Format: (moduleId << 1) | isLegacy
-        uint256 cachedModuleId = type(uint256).max; // Initialize to invalid value
+        uint256 cachedModuleId = type(uint256).max;
         uint256 cachedModuleMaxEBEth = 0;
         uint256 totalBalanceEthAccum = 0;
 
@@ -844,25 +865,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             uint256 moduleId;
             uint256 itemOffset;
 
-            if (dataFormat == DATA_FORMAT_LIST) {
-                // For format 1: extract moduleId from the first 24 bits
-                assembly {
-                    itemOffset := add(data.offset, mul(PACKED_REQUEST_LENGTH, i))
-                    let dataWithoutPubkey := shr(128, calldataload(itemOffset))
-                    moduleId := shr(104, dataWithoutPubkey) // Extract top 24 bits
-                }
-            } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
-                // For format 2: extract moduleId from the first 24 bits
-                assembly {
-                    itemOffset := add(data.offset, mul(PACKED_REQUEST_LENGTH_V2, i))
-                    let dataWithoutPubkey := shr(64, calldataload(itemOffset))
-                    moduleId := shr(168, dataWithoutPubkey) // Extract top 24 bits
-                }
-            } else {
-                revert UnsupportedRequestsDataFormat(dataFormat);
+            assembly {
+                itemOffset := add(baseOffset, mul(packedLength, i))
+                let dataWithoutPubkey := shr(dataShift, calldataload(itemOffset))
+                moduleId := shr(moduleShift, dataWithoutPubkey) // Extract top 24 bits
             }
 
-            // Check cache before making external call
             if (moduleId != cachedModuleId) {
                 cachedModuleId = moduleId;
                 // downscale, i.e. 2048 ether => 2048
@@ -871,8 +879,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                     revert UnexpectedMaxEB();
                 }
             }
-
-            // Add balance based on module's withdrawal credentials type
             totalBalanceEthAccum += cachedModuleMaxEBEth;
         }
 
@@ -899,11 +905,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 cachedModuleId,
         address cachedModuleAddress
     ) internal view returns (address newModuleAddress) {
-        // Use cached values if module hasn't changed
         if (moduleId == cachedModuleId) {
             newModuleAddress = cachedModuleAddress;
         } else {
-            // Fetch new module data
             newModuleAddress = STAKING_ROUTER.getStakingModuleStateConfig(moduleId).moduleAddress;
         }
 
@@ -914,7 +918,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 1 // keysCount: get only 1 key
             );
 
-        // Verify the pubkey matches
         if (retrievedKeys.length != 48) {
             revert InvalidRetrievedKeyLength();
         }
