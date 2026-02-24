@@ -10,7 +10,7 @@ import {BaseOracle} from "./BaseOracle.sol";
 import {ValidatorsExitBus} from "./ValidatorsExitBus.sol";
 
 interface IOracleReportSanityChecker {
-    function checkExitBusOracleReport(uint16 _maxBalanceExitRequestedPerReportInEth) external view;
+    function checkExitBusOracleReport(uint256 _maxBalanceExitRequestedPerReportInEth) external view;
 }
 
 contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
@@ -240,12 +240,12 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             revert UnexpectedRequestsDataLength();
         }
 
-        // Calculate total balance of validators being exited in ETH (uint16)
+        // Calculate total balance of validators being exited in ETH (uint256)
         // Module 1 (curated) uses 32 ETH, other modules use 2048 ETH per validator
-        uint16 totalExitBalanceEth = _calculateTotalExitBalanceEth(data.data, data.dataFormat);
-
-        // Pass ETH value directly to sanity checker
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(totalExitBalanceEth);
+        uint256 totalExitBalanceEth = _calculateTotalExitBalanceEth(data.data, data.dataFormat);
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(
+            totalExitBalanceEth
+        );
 
         _processExitRequestsList(data.data, data.dataFormat);
 

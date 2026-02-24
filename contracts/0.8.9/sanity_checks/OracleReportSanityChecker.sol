@@ -557,7 +557,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
     /// @notice Checks the total balance of validator exit requests supplied per oracle report
     /// @param _maxBalanceExitRequestedPerReportInEth Total balance in ETH of all validators requested to exit in the oracle report
-    function checkExitBusOracleReport(uint16 _maxBalanceExitRequestedPerReportInEth)
+    function checkExitBusOracleReport(uint256 _maxBalanceExitRequestedPerReportInEth)
         external
         view
     {

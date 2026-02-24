@@ -337,7 +337,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             revert TooManyExitRequestsInReport(requestsCount, maxRequestsPerReport);
         }
 
-        uint32 totalBalanceEth = _calculateTotalExitBalanceEth(request.data, request.dataFormat);
+        uint256 totalBalanceEth = _calculateTotalExitBalanceEth(request.data, request.dataFormat);
         _consumeLimit(totalBalanceEth);
 
         _processExitRequestsList(request.data, request.dataFormat);
@@ -642,7 +642,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         emit ExitBalanceLimitSet(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
-    function _consumeLimit(uint32 balanceEth) internal {
+    function _consumeLimit(uint256 balanceEth) internal {
         LimitData memory limitData = RateLimitStorage.getStorageLimit(EXIT_BALANCE_LIMIT_POSITION);
         if (!RateLimit.isLimitSet(limitData)) {
             return;
@@ -827,14 +827,18 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     * @param dataFormat Format of the data (1 or 2)
     * @return totalBalanceEth Total balance of all validators being exited in ETH
     */
-    function _calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat) internal view returns (uint16 totalBalanceEth) {
+    function _calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat)
+        internal
+        view
+        returns (uint256 totalBalanceEth)
+    {
         uint256 requestsCount = data.length / _getPackedRequestLength(dataFormat);
 
         // Cache to avoid repeated external calls for the same module
         // Format: (moduleId << 1) | isLegacy
         uint256 cachedModuleId = type(uint256).max; // Initialize to invalid value
         uint256 cachedModuleMaxEBEth = 0;
-        uint32 totalBalanceEth32 = 0;
+        uint256 totalBalanceEthAccum = 0;
 
         for (uint256 i = 0; i < requestsCount; ++i) {
             uint256 moduleId;
@@ -869,12 +873,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             }
 
             // Add balance based on module's withdrawal credentials type
-            totalBalanceEth32 += uint32(cachedModuleMaxEBEth);
+            totalBalanceEthAccum += cachedModuleMaxEBEth;
         }
 
-        // Cast to uint16 for return - will truncate if > 65535
-        // The sanity checker will catch if this exceeds the configured limit
-        totalBalanceEth = uint16(totalBalanceEth32);
+        totalBalanceEth = totalBalanceEthAccum;
     }
 
     /**
