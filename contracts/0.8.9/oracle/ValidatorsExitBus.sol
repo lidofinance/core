@@ -7,7 +7,6 @@ import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {Versioned} from "../utils/Versioned.sol";
 import {LimitData, RateLimitStorage, RateLimit} from "../../common/lib/RateLimit.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
-import {WithdrawalCredentials} from "../../common/lib/WithdrawalCredentials.sol";
 
 interface ITriggerableWithdrawalsGateway {
     struct ValidatorData {
@@ -23,19 +22,13 @@ interface ITriggerableWithdrawalsGateway {
     ) external payable;
 }
 
-/// @notice Legacy interface for staking modules (NOR, SDVT)
-/// @dev Returns pubkeys, signatures, and used flags
-interface ILegacyStakingModule {
-    function getSigningKeys(
-        uint256 _nodeOperatorId,
-        uint256 _offset,
-        uint256 _limit
-    ) external view returns (bytes memory pubkeys, bytes memory signatures, bool[] memory used);
-}
-
 /// @notice New interface for staking modules (CSM, CuratedV2)
 /// @dev Returns only pubkeys
 interface INewStakingModule {
+    /// @dev It also works for legacy staking modules (NOR, SDVT) where `getSigningKeys` returns different
+    ///      tuple `(bytes memory pubkeys, bytes memory signatures, bool[] memory used)`.
+    ///      The trick: `abi.decode(returndata, (bytes))` will decode only the first tuple element.
+    ///      This is safe as long as the first returned value really is `bytes pubkeys` in that position.
     function getSigningKeys(
         uint256 nodeOperatorId,
         uint256 startIndex,
@@ -52,24 +45,22 @@ interface INodeOperatorsRegistry {
 
 
 interface IStakingRouter {
-    struct StakingModule {
-        uint24 id;
-        address stakingModuleAddress;
-        uint16 stakingModuleFee;
+    struct ModuleStateConfig {
+        address moduleAddress;
+        uint16 moduleFee;
         uint16 treasuryFee;
-        uint16 stakeShareLimit;
+        uint16 depositTargetShare;
+        uint16 withdrawalProtectShare;
         uint8 status;
-        string name;
-        uint64 lastDepositAt;
-        uint256 lastDepositBlock;
-        uint256 exitedValidatorsCount;
-        uint16 priorityExitShareThreshold;
-        uint64 maxDepositsPerBlock;
-        uint64 minDepositBlockDistance;
         uint8 withdrawalCredentialsType;
     }
 
-    function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
+    function getStakingModuleStateConfig(uint256 _stakingModuleId)
+        external
+        view
+        returns (ModuleStateConfig memory stateConfig);
+
+    function getStakingModuleMaxEB(uint256 _stakingModuleId) external view returns (uint256);
 }
 
 interface ILidoLocator {
@@ -170,6 +161,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      */
     error TooManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerReport);
 
+    error UnexpectedMaxEB();
+
     /**
      * @notice Emitted when an entity with the SUBMIT_REPORT_HASH_ROLE role submits a hash of the exit requests data.
      * @param exitRequestsHash keccak256 hash of the encoded validators list
@@ -268,20 +261,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     ILidoLocator internal immutable LOCATOR;
     IStakingRouter internal immutable STAKING_ROUTER;
 
-    /// @notice Bitmask indicating which staking modules use legacy interface
-    /// @dev Each bit represents a module ID: bit N set to 1 means module N uses legacy interface
-    ///      Legacy modules (NOR, SDVT) use old getSigningKeys interface
-    ///      New modules (CSM, CuratedV2) use new getSigningKeys interface
-    uint256 public immutable LEGACY_MODULES_BITMASK;
-
-    /// @notice Max effective balance for legacy validators (withdrawal credentials type 0x01) in ETH
-    /// @dev Typically 32 ETH
-    uint16 public immutable MAX_BALANCE_WC_TYPE_01_ETH;
-
-    /// @notice Max effective balance for MaxEB validators (withdrawal credentials type 0x02) in ETH
-    /// @dev Typically 2048 ETH (post-EIP-7251)
-    uint16 public immutable MAX_BALANCE_WC_TYPE_02_ETH;
-
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
@@ -303,17 +282,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    constructor(
-        address lidoLocator,
-        uint256 _legacyModulesBitmask,
-        uint16 _maxBalanceWcType01Eth,
-        uint16 _maxBalanceWcType02Eth
-    ) {
+    constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
         STAKING_ROUTER = IStakingRouter(ILidoLocator(lidoLocator).stakingRouter());
-        LEGACY_MODULES_BITMASK = _legacyModulesBitmask;
-        MAX_BALANCE_WC_TYPE_01_ETH = _maxBalanceWcType01Eth;
-        MAX_BALANCE_WC_TYPE_02_ETH = _maxBalanceWcType02Eth;
     }
 
     /**
@@ -862,7 +833,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         // Cache to avoid repeated external calls for the same module
         // Format: (moduleId << 1) | isLegacy
         uint256 cachedModuleId = type(uint256).max; // Initialize to invalid value
-        bool cachedIsLegacy;
+        uint256 cachedModuleMaxEBEth = 0;
         uint32 totalBalanceEth32 = 0;
 
         for (uint256 i = 0; i < requestsCount; ++i) {
@@ -888,21 +859,17 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             }
 
             // Check cache before making external call
-            bool isLegacy;
-            if (moduleId == cachedModuleId) {
-                isLegacy = cachedIsLegacy;
-            } else {
-                isLegacy = _isLegacyModule(moduleId);
+            if (moduleId != cachedModuleId) {
                 cachedModuleId = moduleId;
-                cachedIsLegacy = isLegacy;
+                // downscale, i.e. 2048 ether => 2048
+                cachedModuleMaxEBEth = STAKING_ROUTER.getStakingModuleMaxEB(moduleId) / 1 ether;
+                if (cachedModuleMaxEBEth > type(uint32).max) {
+                    revert UnexpectedMaxEB();
+                }
             }
 
             // Add balance based on module's withdrawal credentials type
-            if (isLegacy) {
-                totalBalanceEth32 += MAX_BALANCE_WC_TYPE_01_ETH;
-            } else {
-                totalBalanceEth32 += MAX_BALANCE_WC_TYPE_02_ETH;
-            }
+            totalBalanceEth32 += uint32(cachedModuleMaxEBEth);
         }
 
         // Cast to uint16 for return - will truncate if > 65535
@@ -911,33 +878,16 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-    * @notice Determines if a staking module uses legacy (32 ETH) max effective balance
-    * @dev Queries the Staking Router to check the module's withdrawal credentials type:
-    *      - 0x01 (WithdrawalCredentials.WC_TYPE_01) = legacy module with 32 ETH max
-    *      - 0x02 (WithdrawalCredentials.WC_TYPE_02) = new module with 2048 ETH max (MaxEB)
-    *
-    * @param _moduleId The ID of the staking module to check
-    * @return true if the module uses legacy withdrawal credentials (0x01), false otherwise
-    */
-    function _isLegacyModule(uint256 _moduleId) internal view returns (bool) {
-        IStakingRouter.StakingModule memory module = STAKING_ROUTER.getStakingModule(_moduleId);
-        return module.withdrawalCredentialsType == WithdrawalCredentials.WC_TYPE_01;
-    }
-
-    /**
-    * @notice Verify that a pubkey belongs to the specified module and node operator
-    * @dev Uses bitmask to determine which interface to call (legacy or new)
-    * @param moduleId Staking module ID
-    * @param nodeOpId Node operator ID
-    * @param keyIndex Index of the key in the module
-    * @param pubkey Public key to verify (48 bytes)
-    * @param requestIndex Index of the request in the batch (for error reporting)
-    * @param cachedModuleId Previously cached module ID (type(uint256).max if none)
-    * @param cachedModuleAddress Previously cached module address
-    * @param cachedIsLegacy Previously cached legacy flag
-    * @return newModuleAddress Updated module address (same if module unchanged)
-    * @return newIsLegacy Updated legacy flag (same if module unchanged)
-    */
+     * @notice Verify that a pubkey belongs to the specified module and node operator
+     * @param moduleId Staking module ID
+     * @param nodeOpId Node operator ID
+     * @param keyIndex Index of the key in the module
+     * @param pubkey Public key to verify (48 bytes)
+     * @param requestIndex Index of the request in the batch (for error reporting)
+     * @param cachedModuleId Previously cached module ID (type(uint256).max if none)
+     * @param cachedModuleAddress Previously cached module address
+     * @return newModuleAddress Updated module address (same if module unchanged)
+     */
     function _verifyKey(
         uint256 moduleId,
         uint256 nodeOpId,
@@ -945,36 +895,22 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         bytes calldata pubkey,
         uint256 requestIndex,
         uint256 cachedModuleId,
-        address cachedModuleAddress,
-        bool cachedIsLegacy
-    ) internal view returns (address newModuleAddress, bool newIsLegacy) {
+        address cachedModuleAddress
+    ) internal view returns (address newModuleAddress) {
         // Use cached values if module hasn't changed
         if (moduleId == cachedModuleId) {
             newModuleAddress = cachedModuleAddress;
-            newIsLegacy = cachedIsLegacy;
         } else {
             // Fetch new module data
-            newModuleAddress = STAKING_ROUTER.getStakingModule(moduleId).stakingModuleAddress;
-            newIsLegacy = (LEGACY_MODULES_BITMASK & (1 << moduleId)) != 0;
+            newModuleAddress = STAKING_ROUTER.getStakingModuleStateConfig(moduleId).moduleAddress;
         }
 
-        bytes memory retrievedKeys;
-
-        if (newIsLegacy) {
-            // Legacy interface (NOR, SDVT): returns pubkeys, signatures, used flags
-            (retrievedKeys, , ) = ILegacyStakingModule(newModuleAddress).getSigningKeys(
+        bytes memory retrievedKeys = INewStakingModule(newModuleAddress)
+            .getSigningKeys(
                 nodeOpId,
-                keyIndex,  // offset
-                1          // limit: get only 1 key
+                keyIndex, // startIndex
+                1 // keysCount: get only 1 key
             );
-        } else {
-            // New interface (CSM, CuratedV2): returns only pubkeys
-            retrievedKeys = INewStakingModule(newModuleAddress).getSigningKeys(
-                nodeOpId,
-                keyIndex,  // startIndex
-                1          // keysCount: get only 1 key
-            );
-        }
 
         // Verify the pubkey matches
         if (retrievedKeys.length != 48) {
@@ -1082,7 +1018,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         // Cache module data to avoid repeated external calls for the same module
         uint256 cachedModuleId = type(uint256).max; // Initialize to invalid value
         address cachedModuleAddress;
-        bool cachedIsLegacy;
 
         assembly {
             pubkey.length := 48
@@ -1115,15 +1050,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             // Verify that the pubkey belongs to the module and node operator
             // Cache is updated if module changed
-            (cachedModuleAddress, cachedIsLegacy) = _verifyKey(
+            cachedModuleAddress = _verifyKey(
                 moduleId,
                 uint40(dataWithoutPubkey >> (64 + 64)),  // nodeOpId
                 uint64(dataWithoutPubkey),                // keyIndex
                 pubkey,
                 index,
                 cachedModuleId,
-                cachedModuleAddress,
-                cachedIsLegacy
+                cachedModuleAddress
             );
 
             cachedModuleId = moduleId;

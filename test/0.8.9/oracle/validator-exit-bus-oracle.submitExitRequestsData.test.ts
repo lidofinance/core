@@ -3,7 +3,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  StakingRouter__MockForValidatorsExitBus,
+  ValidatorsExitBus__Harness,
+} from "typechain-types";
 
 import { de0x, numberToHex } from "lib";
 
@@ -78,6 +82,8 @@ const getTimestampFromTx = async (
 describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
+  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
+
   let admin: HardhatEthersSigner;
 
   let exitRequests = [
@@ -99,6 +105,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
+    stakingRouter = deployed.stakingRouter;
     consensus = deployed.consensus;
 
     await initVEBO({
@@ -302,8 +309,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
 
       await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
-        oracle,
-        "InvalidModuleId",
+        stakingRouter,
+        "StakingModuleUnregistered",
       );
     });
   });

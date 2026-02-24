@@ -20,17 +20,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
     locator = await deployLidoLocator();
     [admin] = await ethers.getSigners();
 
-    // Legacy modules bitmask: Module 1 (NOR) is legacy
-    const LEGACY_MODULES_BITMASK = 1n << 1n; // Module 1 is legacy
-
-    oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
-      12n,
-      100n,
-      await locator.getAddress(),
-      LEGACY_MODULES_BITMASK,
-      32, // maxBalanceWcType01Eth - legacy validators
-      2048, // maxBalanceWcType02Eth - MaxEB validators
-    ]);
+    oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [12n, 100n, await locator.getAddress()]);
 
     const consensus = await ethers.deployContract("HashConsensus__Harness", [
       SLOTS_PER_EPOCH,

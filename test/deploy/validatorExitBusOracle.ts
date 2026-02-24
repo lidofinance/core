@@ -108,22 +108,7 @@ export async function deployVEBO(
   // to skip validation. Tests can explicitly configure keys if needed.
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
 
-  // Max effective balance values (in ETH)
-  const MAX_BALANCE_WC_TYPE_01_ETH = 32n; // 32 ETH for legacy validators
-  const MAX_BALANCE_WC_TYPE_02_ETH = 2048n; // 2048 ETH for MaxEB validators
-
-  // Legacy modules bitmask: set bit for each legacy module (NOR=1, SDVT=3)
-  // Example: modules 1 and 3 are legacy -> bitmask = (1 << 1) | (1 << 3) = 0b1010 = 10
-  const LEGACY_MODULES_BITMASK = 1n << 1n; // Module 1 is legacy
-
-  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
-    secondsPerSlot,
-    genesisTime,
-    locatorAddr,
-    LEGACY_MODULES_BITMASK,
-    MAX_BALANCE_WC_TYPE_01_ETH,
-    MAX_BALANCE_WC_TYPE_02_ETH,
-  ]);
+  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [secondsPerSlot, genesisTime, locatorAddr]);
 
   const { consensus } = await deployHashConsensus(admin, {
     reportProcessor: oracle as unknown as ReportProcessor__Mock,

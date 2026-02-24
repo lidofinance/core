@@ -613,7 +613,6 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
-        // todo add sanity checks?
         stakingRouter.reportActiveBalancesByStakingModule(stakingModuleIds, activeBalancesGwei, pendingBalancesGwei);
     }
 
