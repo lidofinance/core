@@ -4,7 +4,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  StakingRouter__MockForValidatorsExitBus,
+  ValidatorsExitBus__Harness,
+} from "typechain-types";
 
 import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
@@ -29,6 +33,7 @@ const PUBKEYS = [
 describe("ValidatorsExitBusOracle.sol:gas", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
+  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
   let admin: HardhatEthersSigner;
 
   let oracleVersion: bigint;
@@ -108,6 +113,12 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
+    stakingRouter = deployed.stakingRouter as StakingRouter__MockForValidatorsExitBus;
+
+    // Use legacy withdrawal credentials (32 ETH per validator) for all modules exercised in this suite
+    for (let moduleId = 1; moduleId <= 5; moduleId++) {
+      await stakingRouter.setStakingModuleWithdrawalCredentialsType(moduleId, 0x01);
+    }
 
     await initVEBO({
       admin: admin.address,
