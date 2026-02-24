@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ValidatorsExitBus__Harness } from "typechain-types";
+import { StakingRouter__MockForValidatorsExitBus,ValidatorsExitBus__Harness } from "typechain-types";
 
 import { de0x, numberToHex } from "lib";
 
@@ -30,6 +30,7 @@ const MAXEB_MODULE_MAX_BALANCE_ETH = 2048n; // 2048 ETH
 describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
+  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
 
   interface ExitRequest {
     moduleId: number;
@@ -68,6 +69,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
 
     const deployed = await deployVEBO(await admin.getAddress());
     oracle = deployed.oracle;
+    stakingRouter = deployed.stakingRouter as StakingRouter__MockForValidatorsExitBus;
   });
 
   describe("_calculateTotalExitBalanceEth", () => {
@@ -261,10 +263,10 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
       });
 
       it("should handle module with 0x02 withdrawal credentials (MaxEB)", async () => {
-        const { oracle: newOracle, stakingRouter } = await deployVEBO(await admin.getAddress());
+        const { oracle: newOracle, stakingRouter: localRouter } = await deployVEBO(await admin.getAddress());
 
         // Configure module 999 as MaxEB (0x02)
-        await stakingRouter.setStakingModuleWithdrawalCredentialsType(999, 0x02);
+        await localRouter.setStakingModuleWithdrawalCredentialsType(999, 0x02);
 
         const requests: ExitRequest[] = [{ moduleId: 999, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
@@ -274,10 +276,10 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
       });
 
       it("should handle module with 0x01 withdrawal credentials (Legacy)", async () => {
-        const { oracle: newOracle, stakingRouter } = await deployVEBO(await admin.getAddress());
+        const { oracle: newOracle, stakingRouter: localRouter } = await deployVEBO(await admin.getAddress());
 
         // Configure module 888 as Legacy (0x01)
-        await stakingRouter.setStakingModuleWithdrawalCredentialsType(888, 0x01);
+        await localRouter.setStakingModuleWithdrawalCredentialsType(888, 0x01);
 
         const requests: ExitRequest[] = [{ moduleId: 888, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
@@ -292,8 +294,8 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
         await expect(oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST)).to.be.revertedWithCustomError(
-          oracle,
-          "InvalidModuleId",
+          stakingRouter,
+          "StakingModuleUnregistered",
         );
       });
     });

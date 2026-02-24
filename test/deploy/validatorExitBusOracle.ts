@@ -76,9 +76,10 @@ export async function deployVEBO(
   // Configure default modules:
   // Module 1: Legacy (0x01) - 32 ETH validators
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(1, 0x01);
-  // Modules 2, 3, 5, 7: MaxEB (0x02) - 2048 ETH validators
+  // Modules 2, 3, 4, 5, 7: MaxEB (0x02) - 2048 ETH validators
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(2, 0x02);
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(3, 0x02);
+  await stakingRouter.setStakingModuleWithdrawalCredentialsType(4, 0x02);
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(5, 0x02);
   await stakingRouter.setStakingModuleWithdrawalCredentialsType(7, 0x02);
   // Modules 100, 101: Used in tests - configure as Legacy (0x01)
