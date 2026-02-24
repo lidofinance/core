@@ -286,15 +286,15 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
       });
 
-      it("should default to MaxEB balance for unconfigured modules", async () => {
-        // Module 777 is not explicitly configured in the setup
+      it("reverts for unconfigured modules", async () => {
+        // Module 777 is not configured in the router
         const requests: ExitRequest[] = [{ moduleId: 777, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
         const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
-
-        // Unconfigured modules have withdrawalCredentialsType = 0, which is treated as MaxEB
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
+        await expect(oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST)).to.be.revertedWithCustomError(
+          oracle,
+          "InvalidModuleId",
+        );
       });
     });
   });

@@ -26,6 +26,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     }
 
     mapping(uint256 => StakingModuleData) internal _modules;
+    mapping(uint256 => bool) internal _moduleConfigured;
 
     /// @notice Mock function to set up module configuration for tests
     /// @param moduleId The module ID
@@ -33,6 +34,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     function setStakingModuleWithdrawalCredentialsType(uint256 moduleId, uint8 withdrawalCredentialsType) external {
         _modules[moduleId].id = uint24(moduleId);
         _modules[moduleId].withdrawalCredentialsType = withdrawalCredentialsType;
+        _moduleConfigured[moduleId] = true;
         // Set a placeholder address - tests can override with setStakingModuleAddress if needed
         if (_modules[moduleId].stakingModuleAddress == address(0)) {
             _modules[moduleId].stakingModuleAddress = address(uint160(moduleId + 0x1000));
@@ -44,6 +46,7 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     /// @param moduleAddress The module address
     function setStakingModuleAddress(uint256 moduleId, address moduleAddress) external {
         _modules[moduleId].stakingModuleAddress = moduleAddress;
+        _moduleConfigured[moduleId] = true;
     }
 
     function getStakingModuleStateConfig(
@@ -73,8 +76,8 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
     }
 
     function _validateModuleId(uint256 _moduleId) internal view {
-        /// @dev we don't care about the module existence (i.e. proper configuration) with `id > 0` in this mock
-        if (_moduleId == 0) {
+        /// @dev require module configured and non-zero id
+        if (_moduleId == 0 || !_moduleConfigured[_moduleId]) {
             revert StakingModuleUnregistered();
         }
     }
