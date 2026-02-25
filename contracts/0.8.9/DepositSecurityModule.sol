@@ -68,7 +68,6 @@ contract DepositSecurityModule {
     error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
     error ZeroParameter(string parameter);
-    error LidoCanNotDeposit();
 
     /// @notice Represents the code version to help distinguish contract interfaces.
     uint256 public constant VERSION = 3;
