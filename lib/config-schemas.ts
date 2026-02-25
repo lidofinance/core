@@ -225,7 +225,7 @@ const OracleReportSanityCheckerSchema = z.object({
   deprecatedOneOffCLBalanceDecreaseBPLimit: BasisPointsSchema,
   annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
-  maxValidatorExitRequestsPerReport: PositiveIntSchema,
+  maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
   maxItemsPerExtraDataTransaction: PositiveIntSchema,
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,
