@@ -201,7 +201,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Emitted when max validators per report value is set.
-     * @param maxValidatorsPerReport The number of valdiators allowed per report.
+     * @param maxValidatorsPerReport The number of validators allowed per report.
      */
     event SetMaxValidatorsPerReport(uint256 maxValidatorsPerReport);
 
