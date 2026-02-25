@@ -114,7 +114,6 @@ contract DepositSecurityModule {
         if (_depositContract == address(0)) revert ZeroAddress("_depositContract");
         if (_stakingRouter == address(0)) revert ZeroAddress("_stakingRouter");
 
-        // TODO: pass in this constrcutor locator instead
         LIDO = ILido(_lido);
         STAKING_ROUTER = IStakingRouter(_stakingRouter);
         DEPOSIT_CONTRACT = IDepositContract(_depositContract);
