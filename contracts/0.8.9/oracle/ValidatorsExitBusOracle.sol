@@ -48,9 +48,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     constructor(
         uint256 secondsPerSlot,
         uint256 genesisTime,
-        address lidoLocator,
-        address stakingRouter
-    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator, stakingRouter) {}
+        address lidoLocator
+    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator) {}
 
     function initialize(
         address admin,

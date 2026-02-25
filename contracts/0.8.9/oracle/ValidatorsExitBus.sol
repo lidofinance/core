@@ -259,7 +259,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     uint256 public constant DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
 
     ILidoLocator internal immutable LOCATOR;
-    IStakingRouter internal immutable STAKING_ROUTER;
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
@@ -282,9 +281,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    constructor(address lidoLocator, address stakingRouter) {
+    constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
-        STAKING_ROUTER = IStakingRouter(stakingRouter);
     }
 
     /**
@@ -871,7 +869,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             if (moduleId != cachedModuleId) {
                 cachedModuleId = moduleId;
                 // downscale, i.e. 2048 ether => 2048
-                cachedModuleMaxEBEth = STAKING_ROUTER.getStakingModuleMaxEB(moduleId) / 1 ether;
+                cachedModuleMaxEBEth = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleMaxEB(moduleId) / 1 ether;
                 if (cachedModuleMaxEBEth > type(uint32).max) {
                     revert UnexpectedMaxEB();
                 }
@@ -905,7 +903,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         if (moduleId == cachedModuleId) {
             newModuleAddress = cachedModuleAddress;
         } else {
-            newModuleAddress = STAKING_ROUTER.getStakingModuleStateConfig(moduleId).moduleAddress;
+            newModuleAddress = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId).moduleAddress;
         }
 
         bytes memory retrievedKeys = INewStakingModule(newModuleAddress)
