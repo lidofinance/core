@@ -287,7 +287,7 @@ export async function main() {
     "ValidatorsExitBusOracle",
     proxyContractsOwner,
     deployer,
-    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address],
+    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address, stakingRouter.address],
   );
 
   const hashConsensusForVebo = await deployWithoutProxy(

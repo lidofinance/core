@@ -282,9 +282,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    constructor(address lidoLocator) {
+    constructor(address lidoLocator, address stakingRouter) {
         LOCATOR = ILidoLocator(lidoLocator);
-        STAKING_ROUTER = IStakingRouter(ILidoLocator(lidoLocator).stakingRouter());
+        STAKING_ROUTER = IStakingRouter(stakingRouter);
     }
 
     /**
