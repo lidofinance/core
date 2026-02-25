@@ -256,6 +256,17 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /// key: (moduleId, nodeOpId, validatorIndex).
     ///
     uint256 public constant DATA_FORMAT_LIST = 1;
+
+    /// @notice The extended list format that includes a key index for each validator.
+    ///
+    /// Each validator exit request is 72 bytes:
+    ///
+    /// MSB <-------------------------------------------------------------------- LSB
+    /// |  3 bytes   |  5 bytes   |     8 bytes      |   8 bytes  |    48 bytes     |
+    /// |  moduleId  |  nodeOpId  |  validatorIndex  |  keyIndex  | validatorPubkey |
+    ///
+    /// Encoding and sorting rules are identical to `DATA_FORMAT_LIST`.
+    /// `keyIndex` is used to validate the pubkey against on-chain registered keys.
     uint256 public constant DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
 
     ILidoLocator internal immutable LOCATOR;
