@@ -275,8 +275,7 @@ library SRLib {
     /// @notice Deposit allocation for modules
     /// @dev Allocates deposits to staking modules based on their stake share limits and available capacity.
     ///      The allocation algorithm prioritizes modules with lower validator (WC 0x01 equivalent) counts (MinFirst strategy).
-    /// @dev Method uses ugly conversion from/to Ether amounts due to MinFirstAllocationStrategy working with unit values.
-    ///      NB: new allocation library was ready, but at the last minute some strong-opinion folks chickened out, so we had to roll it back :)
+    /// @dev Method uses conversion from/to Ether amounts due to MinFirstAllocationStrategy working with unit values.
     /// @param _allocateAmount - Eth amount that should be allocated into modules
     /// @return totalAllocated - amount actually allocated
     /// @return allocated - Array of newly allocated amounts for each module
