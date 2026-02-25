@@ -5,6 +5,7 @@ import {
   ConsolidationGateway,
   ConsolidationMigrator,
   StakingRouter,
+  TopUpGateway,
   TriggerableWithdrawalsGateway,
 } from "typechain-types";
 
@@ -209,20 +210,37 @@ export async function main() {
   }
 
   //
-  // Deploy TopUpGateway (before StakingRouter initialization)
+  // Deploy TopUpGateway behind OssifiableProxy (before StakingRouter initialization)
   //
 
   const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
-  await deployWithoutProxy(Sk.topUpGateway, "TopUpGateway", deployer, [
-    admin,
-    locator.address,
-    topUpGatewayParams.maxValidatorsPerTopUp,
-    topUpGatewayParams.minBlockDistance,
-    topUpGatewayParams.maxRootAge,
-    topUpGatewayParams.gIFirstValidatorPrev,
-    topUpGatewayParams.gIFirstValidatorCurr,
-    topUpGatewayParams.pivotSlot,
-  ]);
+  const topUpGateway_ = await deployBehindOssifiableProxy(
+    Sk.topUpGateway,
+    "TopUpGateway",
+    proxyContractsOwner,
+    deployer,
+    [
+      locator.address,
+      topUpGatewayParams.gIFirstValidatorPrev,
+      topUpGatewayParams.gIFirstValidatorCurr,
+      topUpGatewayParams.pivotSlot,
+      chainSpec.slotsPerEpoch,
+    ],
+  );
+  const topUpGateway = await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
+  await makeTx(
+    topUpGateway,
+    "initialize",
+    [
+      admin,
+      topUpGatewayParams.maxValidatorsPerTopUp,
+      topUpGatewayParams.minBlockDistance,
+      topUpGatewayParams.maxRootAge,
+      topUpGatewayParams.targetBalanceGwei,
+      topUpGatewayParams.minTopUpGwei,
+    ],
+    { from: deployer },
+  );
 
   //
   // Initialize StakingRouter with all required parameters

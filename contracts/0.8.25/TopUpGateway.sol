@@ -49,40 +49,60 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         uint32 lastTopUpBlock; // 32
         uint16 minBlockDistance; // 16
         uint16 maxRootAge; // 16
+        uint64 targetBalanceGwei; // 64
+        uint64 minTopUpGwei; // 64
     }
 
     /// @dev Storage slot: keccak256(abi.encode(uint256(keccak256("lido.TopUpGateway.storage")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 internal constant GATEWAY_STORAGE_POSITION =
         0x22e512057841e2bc1e6d80030c8bb8b4935377af2e64ba9bf8e6a3e88fb32200;
 
-    uint256 internal constant BALANCE_THRESHOLD_GWEI = 2045750 ether / 1000 gwei; // effective_balance + pending_balance
-    uint256 internal constant MAX_EFFECTIVE_BALANCE_02_GWEI = 2048 ether / 1 gwei;
-    uint256 internal constant TOP_UP_SAFETY_MARGIN = 1.25 ether / 1 gwei;
-
     uint256 internal constant PUBKEY_LENGTH = 48;
     uint256 internal constant FAR_FUTURE_EPOCH = type(uint64).max;
-    uint256 internal constant SLOTS_PER_EPOCH = 32;
+    uint256 public immutable SLOTS_PER_EPOCH;
 
     bytes32 public constant TOP_UP_ROLE = keccak256("TOP_UP_GATEWAY_TOP_UP_ROLE");
     bytes32 public constant MANAGE_LIMITS_ROLE = keccak256("TOP_UP_GATEWAY_MANAGE_LIMITS_ROLE");
 
     constructor(
-        address _admin,
         address _lidoLocator,
+        GIndex _gIFirstValidatorPrev,
+        GIndex _gIFirstValidatorCurr,
+        uint64 _pivotSlot,
+        uint256 _slotsPerEpoch
+    ) CLTopUpVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
+        LOCATOR = ILidoLocator(_lidoLocator);
+        SLOTS_PER_EPOCH = _slotsPerEpoch;
+        _disableInitializers();
+    }
+
+    /// @notice Initializes the TopUpGateway proxy with admin, rate limits, and top-up balance parameters.
+    /// @param _admin Address to receive DEFAULT_ADMIN_ROLE
+    /// @param _maxValidatorsPerTopUp Maximum number of validators per single topUp call
+    /// @param _minBlockDistance Minimum blocks between topUp calls
+    /// @param _maxRootAgeSec Maximum age (seconds) of beacon root relative to block.timestamp
+    /// @param _targetBalanceGwei Target validator balance ceiling after top-up (in Gwei).
+    ///        Top-up amount = targetBalance - currentTotal.
+    /// @param _minTopUpGwei Minimum top-up that can be performed (in Gwei). If calculated top-up < minTopUp, returns 0.
+    ///        Must be <= _targetBalanceGwei.
+    ///
+    /// @dev Ethereum reference values (0x02 validators, MAX_EFFECTIVE_BALANCE = 2048 ETH):
+    ///        _targetBalanceGwei = 2046.75 ETH (2048e9 - 1.25e9 Gwei) — leaves 1.25 ETH safety margin
+    ///        _minTopUpGwei      = 1 ETH (1e9 Gwei) — skip top-ups below 1 ETH
+    function initialize(
+        address _admin,
         uint256 _maxValidatorsPerTopUp,
         uint256 _minBlockDistance,
         uint256 _maxRootAgeSec,
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
-        uint64 _pivotSlot
-    ) CLTopUpVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) initializer {
+        uint256 _targetBalanceGwei,
+        uint256 _minTopUpGwei
+    ) external initializer {
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-
-        LOCATOR = ILidoLocator(_lidoLocator);
         _setMaxValidatorsPerTopUp(_maxValidatorsPerTopUp);
         _setMinBlockDistance(_minBlockDistance);
         _setMaxRootAge(_maxRootAgeSec);
+        _setTopUpBalanceLimits(_targetBalanceGwei, _minTopUpGwei);
     }
 
     /**
@@ -101,9 +121,14 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
 
         if (
             _topUps.keyIndices.length != validatorsCount || _topUps.operatorIds.length != validatorsCount
-                || _topUps.validatorWitness.length != validatorsCount
+                || _topUps.validatorWitness.length != validatorsCount || _topUps.pendingBalanceGwei.length != validatorsCount
         ) {
             revert WrongArrayLength();
+        }
+
+        // length should be less than or eq maxValidatorsPerTopUp
+        if (validatorsCount > $.maxValidatorsPerTopUp) {
+            revert MaxValidatorsPerTopUpExceeded();
         }
 
         // Check for duplicate validatorIndices (O(n^2) acceptable since bounded by maxValidatorsPerTopUp)
@@ -113,11 +138,6 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
                     revert DuplicateValidatorIndex();
                 }
             }
-        }
-
-        // length should be less than or eq maxValidatorsPerTopUp
-        if (validatorsCount > $.maxValidatorsPerTopUp) {
-            revert MaxValidatorsPerTopUpExceeded();
         }
 
         _requireBlockDistancePassed();
@@ -137,7 +157,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
 
         uint256[] memory topUpLimits = new uint256[](validatorsCount);
 
-        // 1. effective balance + pending deposits should not be bigger than BALANCE_THRESHOLD_GWEI
+        // 1. Evaluate top-up limit based on current balance, pending deposits, and configured limits
         // 2. Verify proof data through CLValidatorProofVerifier
         unchecked {
             for (uint256 i; i < validatorsCount; ++i) {
@@ -192,15 +212,15 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         return _gatewayStorage().lastTopUpSlot;
     }
 
-    function getMaxValidatorsPerTopUp() public view returns (uint256) {
+    function getMaxValidatorsPerTopUp() external view returns (uint256) {
         return _gatewayStorage().maxValidatorsPerTopUp;
     }
 
-    function getMinBlockDistance() public view returns (uint256) {
+    function getMinBlockDistance() external view returns (uint256) {
         return _gatewayStorage().minBlockDistance;
     }
 
-    function getMaxRootAge() public view returns (uint256) {
+    function getMaxRootAge() external view returns (uint256) {
         return _gatewayStorage().maxRootAge;
     }
 
@@ -210,6 +230,18 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
 
     function setMinBlockDistance(uint256 _newValue) external onlyRole(MANAGE_LIMITS_ROLE) {
         _setMinBlockDistance(_newValue);
+    }
+
+    function getTargetBalanceGwei() external view returns (uint256) {
+        return _gatewayStorage().targetBalanceGwei;
+    }
+
+    function getMinTopUpGwei() external view returns (uint256) {
+        return _gatewayStorage().minTopUpGwei;
+    }
+
+    function setTopUpBalanceLimits(uint256 _targetBalanceGwei, uint256 _minTopUpGwei) external onlyRole(MANAGE_LIMITS_ROLE) {
+        _setTopUpBalanceLimits(_targetBalanceGwei, _minTopUpGwei);
     }
 
     /// @notice Sets the maximum allowed age of beacon root relative to current block timestamp
@@ -249,42 +281,6 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         emit MaxRootAgeChanged(_newValue);
     }
 
-    function _verifyRootAge(BeaconRootData calldata _beaconRootData) internal view {
-        if (block.timestamp > _beaconRootData.childBlockTimestamp + _gatewayStorage().maxRootAge) {
-            revert RootIsTooOld();
-        }
-
-        if (_beaconRootData.slot <= _gatewayStorage().lastTopUpSlot) revert SlotNotIncreasing();
-    }
-
-    function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata _w) internal pure {
-        // header slot epoch
-        uint64 epoch = uint64(_slot / SLOTS_PER_EPOCH);
-        // Validator should be activated earlier than current epoch
-        if (_w.activationEpoch >= epoch) revert ValidatorIsNotActivated();
-    }
-
-    function _evaluateTopUpLimit(ValidatorWitness calldata _validator, uint256 _pendingBalanceGwei)
-        internal
-        pure
-        returns (uint256)
-    {
-        if (
-            _validator.exitEpoch != FAR_FUTURE_EPOCH || _validator.slashed
-                || _validator.withdrawableEpoch != FAR_FUTURE_EPOCH
-        ) {
-            return 0;
-        }
-
-        // Top-up limit = MAX_BALANCE_AFTER_TOP_UP_GWEI - current_balance - pending_deposits
-        uint256 currentTotal = _validator.effectiveBalance + _pendingBalanceGwei;
-        if (currentTotal > BALANCE_THRESHOLD_GWEI) {
-            return 0;
-        }
-
-        return MAX_EFFECTIVE_BALANCE_02_GWEI - TOP_UP_SAFETY_MARGIN - currentTotal;
-    }
-
     function _setMaxValidatorsPerTopUp(uint256 _newValue) internal {
         if (_newValue == 0) revert ZeroValue();
         if (_newValue > type(uint64).max) revert TooLargeValue();
@@ -299,6 +295,54 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         emit MinBlockDistanceChanged(_newValue);
     }
 
+    function _setTopUpBalanceLimits(uint256 _targetBalanceGwei, uint256 _minTopUpGwei) internal {
+        if (_targetBalanceGwei == 0 || _minTopUpGwei == 0) revert ZeroValue();
+        if (_targetBalanceGwei > type(uint64).max || _minTopUpGwei > type(uint64).max) revert TooLargeValue();
+        if (_minTopUpGwei > _targetBalanceGwei) revert MinTopUpExceedsTarget();
+
+        Storage storage $ = _gatewayStorage();
+        $.targetBalanceGwei = uint64(_targetBalanceGwei);
+        $.minTopUpGwei = uint64(_minTopUpGwei);
+        emit TopUpBalanceLimitsChanged(_targetBalanceGwei, _minTopUpGwei);
+    }
+
+    function _verifyRootAge(BeaconRootData calldata _beaconRootData) internal view {
+        if (block.timestamp > _beaconRootData.childBlockTimestamp + _gatewayStorage().maxRootAge) {
+            revert RootIsTooOld();
+        }
+
+        if (_beaconRootData.slot <= _gatewayStorage().lastTopUpSlot) revert SlotNotIncreasing();
+    }
+
+    function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata _w) internal view {
+        // header slot epoch
+        uint64 epoch = uint64(_slot / SLOTS_PER_EPOCH);
+        // Validator should be activated earlier than current epoch
+        if (_w.activationEpoch >= epoch) revert ValidatorIsNotActivated();
+    }
+
+    function _evaluateTopUpLimit(ValidatorWitness calldata _validator, uint256 _pendingBalanceGwei)
+        internal
+        view
+        returns (uint256)
+    {
+        if (
+            _validator.exitEpoch != FAR_FUTURE_EPOCH || _validator.slashed
+                || _validator.withdrawableEpoch != FAR_FUTURE_EPOCH
+        ) {
+            return 0;
+        }
+
+        Storage storage $ = _gatewayStorage();
+        uint256 currentTotal = _validator.effectiveBalance + _pendingBalanceGwei;
+        if (currentTotal >= $.targetBalanceGwei) return 0;
+
+        uint256 topUpLimit = $.targetBalanceGwei - currentTotal;
+        if (topUpLimit < $.minTopUpGwei) return 0;
+
+        return topUpLimit;
+    }
+
     function _gatewayStorage() internal pure returns (Storage storage $) {
         bytes32 position = GATEWAY_STORAGE_POSITION;
         assembly ("memory-safe") {
@@ -310,6 +354,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     event MinBlockDistanceChanged(uint256 newValue);
     event LastTopUpChanged(uint256 newValue);
     event MaxRootAgeChanged(uint256 newValue);
+    event TopUpBalanceLimitsChanged(uint256 targetBalanceGwei, uint256 minTopUpGwei);
 
     error ZeroValue();
     error TooLargeValue();
@@ -322,4 +367,5 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     error MinBlockDistanceNotMet();
     error DuplicateValidatorIndex();
     error ValidatorIsNotActivated();
+    error MinTopUpExceedsTarget();
 }

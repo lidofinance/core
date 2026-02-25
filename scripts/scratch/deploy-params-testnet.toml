@@ -196,6 +196,8 @@ reservationFeeBP = 0                # Reservation fee in basis points (1%)
 maxValidatorsPerTopUp = 100           # Maximum validators per top-up call
 minBlockDistance = 1                  # Minimum block distance between top-ups
 maxRootAge = 300                      # Maximum allowed age of beacon root relative to current block timestamp
+targetBalanceGwei = 2046750000000
+minTopUpGwei = 1000000000
 # Generalized indices for validator/balance/pending state verification
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"

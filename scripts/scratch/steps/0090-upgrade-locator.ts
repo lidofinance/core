@@ -40,6 +40,5 @@ export async function main() {
     operatorGrid: getAddress(Sk.operatorGrid, state),
     topUpGateway: getAddress(Sk.topUpGateway, state),
   };
-
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locatorAddress, proxyContractsOwner, [locatorConfig]);
 }

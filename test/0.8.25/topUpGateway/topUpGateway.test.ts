@@ -7,6 +7,8 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 import type { TopUpGateway__Harness } from "typechain-types";
 import { Lido__MockForTopUpGateway, LidoLocator, StakingRouter__MockForTopUpGateway } from "typechain-types";
 
+import { proxify } from "lib/proxy";
+
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
@@ -29,14 +31,15 @@ describe("TopUpGateway.sol", () => {
   const SAMPLE_PUBKEY = `0x${"11".repeat(48)}`;
   const DEFAULT_MAX_VALIDATORS = 5n;
   const DEFAULT_MIN_BLOCK_DISTANCE = 1n;
-  const DEFAULT_MaX_ROOT_AGE = 300n;
+  const DEFAULT_MAX_ROOT_AGE = 300n;
   const G_INDEX = ethers.zeroPadValue("0x01", 32);
   const ZERO_BYTES_31 = "00".repeat(31);
   const WC_TYPE_02 = `0x02${ZERO_BYTES_31}`;
   const WC_TYPE_01 = `0x01${ZERO_BYTES_31}`;
-  const MAX_EFFECTIVE_BALANCE_02_GWEI = 2048n * 10n ** 9n;
-  const HYSTERESIS_GWEI = 125n * 10n ** 7n;
-  const MAX_BALANCE_AFTER_TOP_UP_GWEI = MAX_EFFECTIVE_BALANCE_02_GWEI - HYSTERESIS_GWEI;
+  // Mainnet-like values: targetBalance = 2046.75 ETH, minTopUp = 1 ETH
+  const DEFAULT_TARGET_BALANCE_GWEI = 204675n * 10n ** 7n; // 2046.75 ETH in Gwei
+  const DEFAULT_MIN_TOP_UP_GWEI = 1n * 10n ** 9n; // 1 ETH in Gwei
+  const SLOTS_PER_EPOCH = 32n;
 
   type TopUpData = {
     moduleId: bigint;
@@ -71,16 +74,24 @@ describe("TopUpGateway.sol", () => {
       lido: await lido.getAddress(),
     });
 
-    topUpGateway = await ethers.deployContract("TopUpGateway__Harness", [
-      admin.address,
+    const impl = await ethers.deployContract("TopUpGateway__Harness", [
       await locator.getAddress(),
-      DEFAULT_MAX_VALIDATORS,
-      DEFAULT_MIN_BLOCK_DISTANCE,
-      DEFAULT_MaX_ROOT_AGE,
       G_INDEX,
       G_INDEX,
       0,
+      SLOTS_PER_EPOCH,
     ]);
+
+    [topUpGateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
+
+    await topUpGateway.initialize(
+      admin.address,
+      DEFAULT_MAX_VALIDATORS,
+      DEFAULT_MIN_BLOCK_DISTANCE,
+      DEFAULT_MAX_ROOT_AGE,
+      DEFAULT_TARGET_BALANCE_GWEI,
+      DEFAULT_MIN_TOP_UP_GWEI,
+    );
 
     topUpRole = await topUpGateway.TOP_UP_ROLE();
     manageLimitsRole = await topUpGateway.MANAGE_LIMITS_ROLE();
@@ -122,46 +133,89 @@ describe("TopUpGateway.sol", () => {
     };
   };
 
-  describe("constructor", () => {
+  describe("initialize", () => {
     it("initializes config and roles", async () => {
-      expect(await topUpGateway.harness_getMaxValidatorsPerTopUp()).to.equal(DEFAULT_MAX_VALIDATORS);
-      expect(await topUpGateway.harness_getMinBlockDistance()).to.equal(DEFAULT_MIN_BLOCK_DISTANCE);
+      expect(await topUpGateway.getMaxValidatorsPerTopUp()).to.equal(DEFAULT_MAX_VALIDATORS);
+      expect(await topUpGateway.getMinBlockDistance()).to.equal(DEFAULT_MIN_BLOCK_DISTANCE);
       expect(await topUpGateway.getLastTopUpSlot()).to.equal(0n);
       expect(await topUpGateway.hasRole(await topUpGateway.DEFAULT_ADMIN_ROLE(), admin.address)).to.be.true;
       expect(await topUpGateway.hasRole(topUpRole, admin.address)).to.be.false;
       expect(await topUpGateway.harness_getLocator()).to.equal(await locator.getAddress());
     });
 
-    it("reverts when maxValidatorsPerTopUp is zero", async () => {
-      const factory = await ethers.getContractFactory("TopUpGateway__Harness");
+    it("reverts on double initialization", async () => {
       await expect(
-        factory.deploy(
+        topUpGateway.initialize(
           admin.address,
-          await locator.getAddress(),
+          DEFAULT_MAX_VALIDATORS,
+          DEFAULT_MIN_BLOCK_DISTANCE,
+          DEFAULT_MAX_ROOT_AGE,
+          DEFAULT_TARGET_BALANCE_GWEI,
+          DEFAULT_MIN_TOP_UP_GWEI,
+        ),
+      ).to.be.revertedWithCustomError(topUpGateway, "InvalidInitialization");
+    });
+
+    it("reverts when maxValidatorsPerTopUp is zero", async () => {
+      const impl = await ethers.deployContract("TopUpGateway__Harness", [
+        await locator.getAddress(),
+        G_INDEX,
+        G_INDEX,
+        0,
+        SLOTS_PER_EPOCH,
+      ]);
+      const [gateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
+      await expect(
+        gateway.initialize(
+          admin.address,
           0n,
           DEFAULT_MIN_BLOCK_DISTANCE,
-          DEFAULT_MaX_ROOT_AGE,
-          G_INDEX,
-          G_INDEX,
-          0,
+          DEFAULT_MAX_ROOT_AGE,
+          DEFAULT_TARGET_BALANCE_GWEI,
+          DEFAULT_MIN_TOP_UP_GWEI,
         ),
-      ).to.be.revertedWithCustomError(factory, "ZeroValue");
+      ).to.be.revertedWithCustomError(gateway, "ZeroValue");
     });
 
     it("reverts when minBlockDistance is zero", async () => {
-      const factory = await ethers.getContractFactory("TopUpGateway__Harness");
+      const impl = await ethers.deployContract("TopUpGateway__Harness", [
+        await locator.getAddress(),
+        G_INDEX,
+        G_INDEX,
+        0,
+        SLOTS_PER_EPOCH,
+      ]);
+      const [gateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
       await expect(
-        factory.deploy(
+        gateway.initialize(
           admin.address,
-          await locator.getAddress(),
           DEFAULT_MAX_VALIDATORS,
           0n,
-          DEFAULT_MaX_ROOT_AGE,
-          G_INDEX,
-          G_INDEX,
-          0,
+          DEFAULT_MAX_ROOT_AGE,
+          DEFAULT_TARGET_BALANCE_GWEI,
+          DEFAULT_MIN_TOP_UP_GWEI,
         ),
-      ).to.be.revertedWithCustomError(factory, "ZeroValue");
+      ).to.be.revertedWithCustomError(gateway, "ZeroValue");
+    });
+
+    it("reverts when calling initialize on the implementation directly", async () => {
+      const impl = await ethers.deployContract("TopUpGateway__Harness", [
+        await locator.getAddress(),
+        G_INDEX,
+        G_INDEX,
+        0,
+        SLOTS_PER_EPOCH,
+      ]);
+      await expect(
+        impl.initialize(
+          admin.address,
+          DEFAULT_MAX_VALIDATORS,
+          DEFAULT_MIN_BLOCK_DISTANCE,
+          DEFAULT_MAX_ROOT_AGE,
+          DEFAULT_TARGET_BALANCE_GWEI,
+          DEFAULT_MIN_TOP_UP_GWEI,
+        ),
+      ).to.be.revertedWithCustomError(impl, "InvalidInitialization");
     });
   });
 
@@ -192,6 +246,31 @@ describe("TopUpGateway.sol", () => {
       await expect(topUpGateway.connect(stranger).setMinBlockDistance(DEFAULT_MIN_BLOCK_DISTANCE + 10n))
         .to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount")
         .withArgs(stranger.address, manageLimitsRole);
+    });
+
+    it("allows manage limits role to set top-up balance limits", async () => {
+      const newTarget = DEFAULT_TARGET_BALANCE_GWEI + 10n ** 9n;
+      const newMinTopUp = DEFAULT_MIN_TOP_UP_GWEI + 10n ** 8n;
+      await expect(topUpGateway.connect(limitsManager).setTopUpBalanceLimits(newTarget, newMinTopUp))
+        .to.emit(topUpGateway, "TopUpBalanceLimitsChanged")
+        .withArgs(newTarget, newMinTopUp);
+      expect(await topUpGateway.getTargetBalanceGwei()).to.equal(newTarget);
+      expect(await topUpGateway.getMinTopUpGwei()).to.equal(newMinTopUp);
+    });
+
+    it("reverts when non-manager tries to set top-up balance limits", async () => {
+      await expect(
+        topUpGateway.connect(stranger).setTopUpBalanceLimits(DEFAULT_TARGET_BALANCE_GWEI, DEFAULT_MIN_TOP_UP_GWEI),
+      )
+        .to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger.address, manageLimitsRole);
+    });
+
+    it("reverts when minTopUp exceeds targetBalance", async () => {
+      await expect(topUpGateway.connect(limitsManager).setTopUpBalanceLimits(100n, 200n)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "MinTopUpExceedsTarget",
+      );
     });
   });
 
@@ -239,6 +318,7 @@ describe("TopUpGateway.sol", () => {
           pubkey: secondPubkey,
         },
       ];
+      data.pendingBalanceGwei = [0n, 0n];
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
@@ -258,6 +338,7 @@ describe("TopUpGateway.sol", () => {
           pubkey: secondPubkey,
         },
       ];
+      data.pendingBalanceGwei = [0n, 0n];
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
@@ -316,9 +397,9 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
-    it("returns zero top-up limit when balance exceeds the threshold", async () => {
+    it("returns zero top-up limit when balance exceeds target", async () => {
       const data = await buildTopUpData();
-      data.validatorWitness[0].effectiveBalance = 2046n * 10n ** 9n;
+      data.validatorWitness[0].effectiveBalance = DEFAULT_TARGET_BALANCE_GWEI - DEFAULT_MIN_TOP_UP_GWEI + 1n;
       data.pendingBalanceGwei = [0n];
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
@@ -339,8 +420,8 @@ describe("TopUpGateway.sol", () => {
     it("calls StakingRouter.topUp and updates last slot", async () => {
       const data = await buildTopUpData();
       data.pendingBalanceGwei = [0n];
-      const expectedTopUpGwei = MAX_BALANCE_AFTER_TOP_UP_GWEI - data.validatorWitness[0].effectiveBalance;
-      // topUpLimits are now in wei
+      // topUp = targetBalance - currentTotal
+      const expectedTopUpGwei = DEFAULT_TARGET_BALANCE_GWEI - data.validatorWitness[0].effectiveBalance;
       const expectedTopUpWei = expectedTopUpGwei * 1_000_000_000n;
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
@@ -358,8 +439,7 @@ describe("TopUpGateway.sol", () => {
       const pendingAmount = 100n * 10n ** 9n;
       data.pendingBalanceGwei = [pendingAmount]; // 100 Gwei
 
-      const expectedTopUpGwei =
-        MAX_BALANCE_AFTER_TOP_UP_GWEI - data.validatorWitness[0].effectiveBalance - pendingAmount;
+      const expectedTopUpGwei = DEFAULT_TARGET_BALANCE_GWEI - data.validatorWitness[0].effectiveBalance - pendingAmount;
       // topUpLimits are now in wei
       const expectedTopUpWei = expectedTopUpGwei * 1_000_000_000n;
 
@@ -368,43 +448,38 @@ describe("TopUpGateway.sol", () => {
         .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [expectedTopUpWei]);
     });
 
-    it("returns zero top-up limit when balance + pending > 2045", async () => {
+    it("returns zero when topUp < minTopUp (balance + pending just below target)", async () => {
       const data = await buildTopUpData();
-      // Set balance close to max
-      data.validatorWitness[0].effectiveBalance = 204575n * 10n ** 7n; // 2045.75 ether
-
-      // Add pending that would push total over max
-      const pendingAmount = 100n; // 100 Gwei
-      data.pendingBalanceGwei = [pendingAmount];
-
-      // balance (2000) + pending (100) = 2100 > max (2048), so top-up should be 0
-      await expect(topUpGateway.connect(topUpOperator).topUp(data))
-        .to.emit(stakingRouter, "TopUpCalled")
-        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
-    });
-
-    it("returns zero top-up limit when balance + pending exactly equals max effective balance", async () => {
-      const data = await buildTopUpData();
-      // Set balance so that balance + pending = max exactly
-      data.validatorWitness[0].effectiveBalance = 2045n * 10n ** 9n; // 1948 Gwei
-
-      const pendingAmount = MAX_BALANCE_AFTER_TOP_UP_GWEI - data.validatorWitness[0].effectiveBalance; // 100 Gwei
-      data.pendingBalanceGwei[0] = pendingAmount;
-
-      await expect(topUpGateway.connect(topUpOperator).topUp(data))
-        .to.emit(stakingRouter, "TopUpCalled")
-        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
-    });
-
-    it("returns minimum top-up ether when balance is at threshold", async () => {
-      const data = await buildTopUpData();
-      data.validatorWitness[0].effectiveBalance = 2045n * 10n ** 9n;
+      // Set balance so that topUp = targetBalance - currentTotal < minTopUp
+      // targetBalance = 2046.75 ETH, minTopUp = 1 ETH → threshold = 2045.75 ETH
+      data.validatorWitness[0].effectiveBalance = DEFAULT_TARGET_BALANCE_GWEI - DEFAULT_MIN_TOP_UP_GWEI + 1n;
       data.pendingBalanceGwei = [0n];
 
-      // topUpLimits are now in wei: 1.75 ETH = 175n * 10n ** 7n gwei * 10n ** 9n (wei/gwei) = 175n * 10n ** 16n wei
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
         .to.emit(stakingRouter, "TopUpCalled")
-        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [175n * 10n ** 16n]); // 1.75 ether in wei
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
+    });
+
+    it("returns zero when balance + pending exactly equals target", async () => {
+      const data = await buildTopUpData();
+      data.validatorWitness[0].effectiveBalance = 2045n * 10n ** 9n;
+      data.pendingBalanceGwei[0] = DEFAULT_TARGET_BALANCE_GWEI - data.validatorWitness[0].effectiveBalance;
+
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
+    });
+
+    it("returns exactly minTopUp when balance is at threshold", async () => {
+      const data = await buildTopUpData();
+      // Set balance so topUp = exactly minTopUp (= 1 ETH)
+      data.validatorWitness[0].effectiveBalance = DEFAULT_TARGET_BALANCE_GWEI - DEFAULT_MIN_TOP_UP_GWEI;
+      data.pendingBalanceGwei = [0n];
+
+      const expectedTopUpWei = DEFAULT_MIN_TOP_UP_GWEI * 1_000_000_000n;
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [expectedTopUpWei]);
     });
 
     it("returns zero when validator is slashed", async () => {
@@ -436,7 +511,6 @@ describe("TopUpGateway.sol", () => {
 
     it("revert if validator is not active", async () => {
       const data = await buildTopUpData();
-      const SLOTS_PER_EPOCH = 32n;
       const epoch = data.beaconRootData.slot / SLOTS_PER_EPOCH;
       // Validator should be activated earlier than current epoch
       data.validatorWitness[0].activationEpoch = epoch + 1n;

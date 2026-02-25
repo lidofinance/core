@@ -91,6 +91,8 @@ const TopUpGatewaySchema = z.object({
   maxValidatorsPerTopUp: PositiveIntSchema,
   minBlockDistance: PositiveIntSchema,
   maxRootAge: PositiveIntSchema,
+  targetBalanceGwei: PositiveIntSchema,
+  minTopUpGwei: PositiveIntSchema,
   gIFirstValidatorPrev: HexStringSchema,
   gIFirstValidatorCurr: HexStringSchema,
   pivotSlot: NonNegativeIntSchema,

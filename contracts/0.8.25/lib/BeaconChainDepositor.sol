@@ -39,7 +39,7 @@ library BeaconChainDepositor {
         bytes memory _withdrawalCredentials,
         bytes memory _publicKeysBatch,
         bytes memory _signaturesBatch
-    ) public {
+    ) external {
         if (_publicKeysBatch.length != PUBLIC_KEY_LENGTH * _keysCount) {
             revert InvalidPublicKeysBatchLength(_publicKeysBatch.length, PUBLIC_KEY_LENGTH * _keysCount);
         }
@@ -142,7 +142,6 @@ library BeaconChainDepositor {
         }
     }
 
-    // error DepositContractZeroAddress();
     error InvalidPublicKeysBatchLength(uint256 actual, uint256 expected);
     error InvalidSignaturesBatchLength(uint256 actual, uint256 expected);
     error ArrayLengthMismatch();
