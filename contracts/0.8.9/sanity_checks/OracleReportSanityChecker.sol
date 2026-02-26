@@ -12,6 +12,8 @@ import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.s
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 
 // import {StakingRouter} from "../StakingRouter.sol";
 import {ISecondOpinionOracle} from "../interfaces/ISecondOpinionOracle.sol";
@@ -154,7 +156,7 @@ struct LimitsListPacked {
 struct ReportData {
     uint256 clBalance;      // CL balance in Wei
     uint256 deposits;       // Deposits for the period since the last report in Wei
-    uint256 withdrawals;    // withdrawalVaultBalance in Wei (as-is)
+    uint256 withdrawals;    // Reported withdrawalVaultBalance snapshot in Wei
 }
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
@@ -189,11 +191,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     bytes32 public constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
     bytes32 public constant MAX_CL_BALANCE_DECREASE_MANAGER_ROLE =
         keccak256("MAX_CL_BALANCE_DECREASE_MANAGER_ROLE");
+    bytes32 public constant MIGRATION_MANAGER_ROLE = keccak256("MIGRATION_MANAGER_ROLE");
 
     uint256 private constant DEFAULT_TIME_ELAPSED = 1 hours;
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
-    uint256 private constant CL_BALANCE_WINDOW = 36;
+    /// @dev Maximum withdrawals ether used for migration bootstrap, bounded by CL churn limit per report window
+    uint256 private constant MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT = 57_600 ether;
+    /// @dev Number of report-to-report periods in the sliding window for the CL balance decrease check
+    uint256 private constant REPORTS_WINDOW = 36;
 
     ILidoLocator private immutable LIDO_LOCATOR;
     uint256 private immutable GENESIS_TIME;
@@ -423,6 +429,30 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(limitsList);
     }
 
+    /// @notice One-time migration: seeds initial snapshots into reportData
+    ///     so that the sliding-window CL decrease check has a valid starting point.
+    function migrateBaselineSnapshot() external onlyRole(MIGRATION_MANAGER_ROLE) {
+        if (reportData.length != 0) revert MigrationAlreadyDone();
+
+        address lidoAddr = LIDO_LOCATOR.lido();
+        uint256 lidoVersion = IVersioned(lidoAddr).getContractVersion();
+        if (lidoVersion != 4) revert UnexpectedLidoVersion(lidoVersion, 4);
+
+        (uint256 clActive, uint256 clPending, uint256 deposits) = ILido(lidoAddr).getBalanceStats();
+        uint256 clBalance = clActive + clPending;
+
+        uint256 withdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
+
+        // The decrease formula uses baseline report B[X-k] and sums flows from reports [X-k+1..X].
+        // To include migration-time deposits/withdrawals without any special-case branch in formula code:
+        // 1) store pure baseline point with zero flows;
+        // 2) store bootstrap flow chunk at the same CL balance right after baseline.
+        _addReportData(clBalance, 0, 0);
+        _addReportData(clBalance, deposits, withdrawals);
+
+        emit BaselineSnapshotMigrated(clBalance, deposits, withdrawals);
+    }
+
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
     ///     rewards vault during Lido's oracle report processing
     /// @param _preInternalEther amount of internal ETH controlled by the protocol before the report
@@ -647,12 +677,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _deposits,
         uint256 _refSlot
     ) internal {
+        // Store current report point together with report-level flow terms:
+        // - deposits are reported since previous oracle report
+        // - withdrawals use reported withdrawalVaultBalance snapshot
         _addReportData(_postCLBalance, _deposits, _withdrawalVaultBalance);
 
         // If the CL balance didn't decrease accounting for withdrawals, skip the window check
         if (_preCLBalance <= _postCLBalance + _withdrawalVaultBalance) return;
 
         uint256 len = reportData.length;
+        // Need at least two snapshots to build a window: baseline B[X-k] and current point B[X].
+        // With migration we seed them upfront (baseline + bootstrap flow chunk), so checks work immediately.
+        // Without migration this still works, but the very first report cannot be checked and pre-deploy
+        // state is not part of the window until enough post-deploy snapshots are accumulated.
         if (len < 2) return;
 
         (uint256 actualDiff, uint256 maxDiff) = _calcCLBalanceDecrease(_limitsList.maxCLBalanceDecreaseBP, _postCLBalance, len);
@@ -675,22 +712,51 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _postCLBalance,
         uint256 _len
     ) internal view returns (uint256 actualDiff, uint256 maxDiff) {
-        uint256 window = _len - 1 > CL_BALANCE_WINDOW ? CL_BALANCE_WINDOW : _len - 1;
-        uint256 oldIdx = _len - 1 - window;
+        // Window formula:
+        // X  = latest report index
+        // k  = min(REPORTS_WINDOW, X)
+        // X-k is the baseline report
+        // actualDiff   = B[X-k] - B[X]
+        // adjustedBase = B[X-k] + sum_{i = X-k+1..X}(D[i] - W[i])
+        // maxDiff      = adjustedBase * limitBP / 10_000
+        //
+        // ReportData semantics:
+        // - clBalance is a point value at report i
+        // - deposits correspond to period flow for transition (i-1 -> i)
+        // - withdrawals are withdrawalVaultBalance snapshots reported at report i
+        uint256 latestReportDataIndex = _len - 1;
+        uint256 windowTransitionsCount =
+            latestReportDataIndex > REPORTS_WINDOW ? REPORTS_WINDOW : latestReportDataIndex;
+        uint256 baselineReportDataIndex = latestReportDataIndex - windowTransitionsCount;
 
-        if (_postCLBalance >= reportData[oldIdx].clBalance) return (0, 0);
+        uint256 baselineBalance = reportData[baselineReportDataIndex].clBalance;
+        if (_postCLBalance >= baselineBalance) return (0, 0);
 
-        actualDiff = reportData[oldIdx].clBalance - _postCLBalance;
+        actualDiff = baselineBalance - _postCLBalance;
 
+        uint256 firstReportDataIndexWithinWindowFlowRange = baselineReportDataIndex + 1;
         uint256 totalDeposits;
-        uint256 totalWithdrawals;
-        for (uint256 i = oldIdx + 1; i < _len; i++) {
-            totalDeposits += reportData[i].deposits;
-            totalWithdrawals += reportData[i].withdrawals;
+        uint256 totalReportedWithdrawalVaultBalances;
+        for (
+            uint256 reportDataIndex = firstReportDataIndexWithinWindowFlowRange;
+            reportDataIndex <= latestReportDataIndex;
+            ++reportDataIndex
+        ) {
+            totalDeposits += reportData[reportDataIndex].deposits;
+            totalReportedWithdrawalVaultBalances += reportData[reportDataIndex].withdrawals;
         }
 
-        uint256 adjusted = reportData[oldIdx].clBalance + totalDeposits - totalWithdrawals;
-        maxDiff = (adjusted * _maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
+        uint256 baselineWithDeposits = baselineBalance + totalDeposits;
+        if (baselineWithDeposits < totalReportedWithdrawalVaultBalances) {
+            revert IncorrectCLBalanceDecreaseWindowData(
+                baselineBalance,
+                totalDeposits,
+                totalReportedWithdrawalVaultBalances
+            );
+        }
+
+        uint256 adjustedBase = baselineWithDeposits - totalReportedWithdrawalVaultBalances;
+        maxDiff = (adjustedBase * _maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
     }
 
     function _askSecondOpinion(
@@ -930,6 +996,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error NegativeRebaseFailedWithdrawalVaultBalanceMismatch(uint256 reportedValue, uint256 provedValue);
     error NegativeRebaseFailedSecondOpinionReportIsNotReady();
     error CalledNotFromAccounting();
+    error IncorrectCLBalanceDecreaseWindowData(
+        uint256 baselineBalance,
+        uint256 totalDeposits,
+        uint256 totalReportedWithdrawalVaultBalances
+    );
+    error MigrationAlreadyDone();
+    error UnexpectedLidoVersion(uint256 actual, uint256 expected);
+
+    event BaselineSnapshotMigrated(uint256 clBalance, uint256 deposits, uint256 withdrawals);
 }
 
 library LimitsListPacker {
