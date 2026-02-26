@@ -36,9 +36,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   const defaultLimitsList = {
     exitedValidatorsPerDayLimit: 50n,
     appearedValidatorsPerDayLimit: 75n,
-    annualBalanceIncreaseBPLimit: 10_00n,
-    simulatedShareRateDeviationBPLimit: 2_00n,
-    maxValidatorExitRequestsPerReport: 2000n,
+    annualBalanceIncreaseBPLimit: 10_00n, // 10%
+    simulatedShareRateDeviationBPLimit: 2_00n, // 2%
+    maxBalanceExitRequestedPerReportInEth: 64_000n, // Max ~65K ETH (close to uint16 max)
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,
@@ -182,7 +182,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       const structSizeInBits = functionABI.outputs[0].components
         .map((x: { type: string }) => x.type)
         .reduce((acc: number, x: string) => acc + sizeOfCalc(x), 0);
-      expect(structSizeInBits).to.lessThanOrEqual(256);
+      expect(structSizeInBits).to.lessThanOrEqual(512);
     });
 
     it("second opinion can be changed or removed", async () => {

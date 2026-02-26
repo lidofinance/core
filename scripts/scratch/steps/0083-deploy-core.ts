@@ -524,7 +524,7 @@ export async function main() {
       sanityCheckerParams.appearedValidatorsPerDayLimit,
       sanityCheckerParams.annualBalanceIncreaseBPLimit,
       sanityCheckerParams.simulatedShareRateDeviationBPLimit,
-      sanityCheckerParams.maxValidatorExitRequestsPerReport,
+      sanityCheckerParams.maxBalanceExitRequestedPerReportInEth,
       sanityCheckerParams.maxItemsPerExtraDataTransaction,
       sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
       sanityCheckerParams.requestTimestampMargin,
