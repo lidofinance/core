@@ -433,8 +433,7 @@ contract Accounting {
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            _pre.clActiveBalance,
-            _pre.clPendingBalance
+            _pre.depositedBalance
         );
 
         if (_report.withdrawalFinalizationBatches.length > 0) {

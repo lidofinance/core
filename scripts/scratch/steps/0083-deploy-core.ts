@@ -529,8 +529,7 @@ export async function main() {
       sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
       sanityCheckerParams.requestTimestampMargin,
       sanityCheckerParams.maxPositiveTokenRebase,
-      sanityCheckerParams.initialSlashingAmountPWei,
-      sanityCheckerParams.inactivityPenaltiesAmountPWei,
+      sanityCheckerParams.maxCLBalanceDecreaseBP,
       sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
     ],
   ];

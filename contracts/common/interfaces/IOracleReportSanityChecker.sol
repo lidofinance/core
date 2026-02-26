@@ -26,8 +26,7 @@ interface IOracleReportSanityChecker {
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
-        uint256 _preCLValidators,
-        uint256 _postCLValidators
+        uint256 _deposits
     ) external;
 
     //

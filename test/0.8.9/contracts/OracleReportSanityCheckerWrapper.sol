@@ -24,16 +24,8 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         LimitsList memory _limitsList
     ) OracleReportSanityChecker(_lidoLocator, _accountingOracle, _accounting, _admin, _limitsList) {}
 
-    function addReportData(uint256 _timestamp, uint256 _exitedValidatorsCount, uint256 _negativeCLRebase) public {
-        _addReportData(_timestamp, _exitedValidatorsCount, _negativeCLRebase);
-    }
-
-    function sumNegativeRebasesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
-        return _sumNegativeRebasesNotOlderThan(_timestamp);
-    }
-
-    function exitedValidatorsAtTimestamp(uint256 _timestamp) public view returns (uint256) {
-        return _exitedValidatorsAtTimestamp(_timestamp);
+    function addReportData(uint256 _clBalance, uint256 _deposits, uint256 _withdrawals) public {
+        _addReportData(_clBalance, _deposits, _withdrawals);
     }
 
     function exposePackedLimits() public view returns (LimitsListPacked memory) {

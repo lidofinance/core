@@ -13,14 +13,16 @@ import {
   StakingRouter__MockForSanityChecker,
 } from "typechain-types";
 
-import { ether, getCurrentBlockTimestamp, impersonate } from "lib";
+import { ether, impersonate } from "lib";
 
 import { Snapshot } from "test/suite";
 
 const SLOTS_PER_DAY = 7200n;
+const CL_BALANCE_WINDOW = 36;
+const MAX_BASIS_POINTS = 10_000n;
+const MAX_CL_BALANCE_DECREASE_BP = 380n; // 3.8%
 
-// TODO: refactor after devnet-0
-describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
+describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let locator: LidoLocator__MockForSanityChecker;
   let checker: OracleReportSanityChecker;
   let accountingOracle: AccountingOracle__MockForSanityChecker;
@@ -32,19 +34,31 @@ describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
   const defaultLimitsList = {
     exitedValidatorsPerDayLimit: 50n,
     appearedValidatorsPerDayLimit: 75n,
-    annualBalanceIncreaseBPLimit: 10_00n, // 10%
-    simulatedShareRateDeviationBPLimit: 2_00n, // 2%
+    annualBalanceIncreaseBPLimit: 10_00n,
+    simulatedShareRateDeviationBPLimit: 2_00n,
     maxValidatorExitRequestsPerReport: 2000n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,
-    maxPositiveTokenRebase: 5_000_000n, // 0.05%
-    initialSlashingAmountPWei: 1000n, // 1 ETH = 1000 PWei
-    inactivityPenaltiesAmountPWei: 101n, // 0.101 ETH = 101 PWei
-    clBalanceOraclesErrorUpperBPLimit: 50n, // 0.5%
+    maxPositiveTokenRebase: 5_000_000n,
+    maxCLBalanceDecreaseBP: MAX_CL_BALANCE_DECREASE_BP,
+    clBalanceOraclesErrorUpperBPLimit: 50n,
   };
 
   let originalState: string;
+
+  const callCheck = (
+    preCLBalance: bigint,
+    postCLBalance: bigint,
+    withdrawalVaultBalance = 0n,
+    deposits = 0n,
+    timeElapsed = 24n * 60n * 60n,
+  ) =>
+    checker
+      .connect(accountingSigner)
+      .checkAccountingOracleReport(timeElapsed, preCLBalance, postCLBalance, withdrawalVaultBalance, 0n, 0n, deposits);
+
+  const maxDiffFor = (adjusted: bigint) => (adjusted * MAX_CL_BALANCE_DECREASE_BP) / MAX_BASIS_POINTS;
 
   const deploySecondOpinionOracle = async () => {
     const secondOpinionOracle = await ethers.deployContract("SecondOpinionOracle__Mock");
@@ -52,8 +66,6 @@ describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
     const clOraclesRole = await checker.SECOND_OPINION_MANAGER_ROLE();
     await checker.grantRole(clOraclesRole, deployer.address);
 
-    // 10000 BP - 100%
-    // 74 BP - 0.74%
     await checker.setSecondOpinionOracleAndCLBalanceUpperMargin(await secondOpinionOracle.getAddress(), 74n);
     return secondOpinionOracle;
   };
@@ -97,18 +109,18 @@ describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
         lazyOracle: deployer.address,
         predepositGuarantee: deployer.address,
         operatorGrid: deployer.address,
+        topUpGateway: deployer.address,
       },
     ]);
 
-    const locatorAddress = await locator.getAddress();
-    const accountingOracleAddress = await accountingOracle.getAddress();
-    const accountingAddress = await accounting.getAddress();
-
-    checker = await ethers
-      .getContractFactory("OracleReportSanityChecker")
-      .then((f) =>
-        f.deploy(locatorAddress, accountingOracleAddress, accountingAddress, deployer.address, defaultLimitsList),
-      );
+    const factory = await ethers.getContractFactory("OracleReportSanityChecker");
+    checker = await factory.deploy(
+      await locator.getAddress(),
+      await accountingOracle.getAddress(),
+      await accounting.getAddress(),
+      deployer.address,
+      defaultLimitsList,
+    );
 
     accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
   });
@@ -119,13 +131,13 @@ describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
 
   context("OracleReportSanityChecker checkAccountingOracleReport authorization", () => {
     it("should allow calling from Accounting address", async () => {
-      await checker.connect(accountingSigner).checkAccountingOracleReport(0, 110 * 1e9, 109.99 * 1e9, 0, 0, 0, 10, 10);
+      await callCheck(ether("100"), ether("100"));
     });
 
     it("should not allow calling from non-Accounting address", async () => {
       const [, otherClient] = await ethers.getSigners();
       await expect(
-        checker.connect(otherClient).checkAccountingOracleReport(0, 110 * 1e9, 110.01 * 1e9, 0, 0, 0, 10, 10),
+        checker.connect(otherClient).checkAccountingOracleReport(0, ether("100"), ether("100"), 0, 0, 0, 0),
       ).to.be.revertedWithCustomError(checker, "CalledNotFromAccounting");
     });
   });
@@ -187,295 +199,684 @@ describe.skip("OracleReportSanityChecker.sol:negative-rebase", () => {
     });
   });
 
-  context("OracleReportSanityChecker rebase report data", () => {
-    async function newChecker() {
-      return await ethers.deployContract("OracleReportSanityCheckerWrapper", [
-        await locator.getAddress(),
-        await accountingOracle.getAddress(),
-        await accounting.getAddress(),
-        deployer.address,
-        Object.values(defaultLimitsList),
-      ]);
-    }
+  context("OracleReportSanityChecker balance-based CL decrease check", () => {
+    let genesisTime: bigint;
+    let baseRefSlot: bigint;
 
-    it("sums negative rebases for a few days", async () => {
-      const reportChecker = await newChecker();
-      const timestamp = await getCurrentBlockTimestamp();
-      expect(await reportChecker.sumNegativeRebasesNotOlderThan(timestamp - 18n * SLOTS_PER_DAY)).to.equal(0);
-      await reportChecker.addReportData(timestamp - 1n * SLOTS_PER_DAY, 10, 100);
-      await reportChecker.addReportData(timestamp - 2n * SLOTS_PER_DAY, 10, 150);
-      expect(await reportChecker.sumNegativeRebasesNotOlderThan(timestamp - 18n * SLOTS_PER_DAY)).to.equal(250);
+    before(async () => {
+      genesisTime = await accountingOracle.GENESIS_TIME();
+      const timestamp = (await ethers.provider.getBlock("latest"))!.timestamp;
+      baseRefSlot = (BigInt(timestamp) - genesisTime) / 12n;
     });
 
-    it("sums negative rebases for 18 days", async () => {
-      const reportChecker = await newChecker();
-      const timestamp = await getCurrentBlockTimestamp();
+    const setRefSlot = (slot: bigint) => accountingOracle.setLastProcessingRefSlot(slot);
 
-      await reportChecker.addReportData(timestamp - 19n * SLOTS_PER_DAY, 0, 700);
-      await reportChecker.addReportData(timestamp - 18n * SLOTS_PER_DAY, 0, 13);
-      await reportChecker.addReportData(timestamp - 17n * SLOTS_PER_DAY, 0, 10);
-      await reportChecker.addReportData(timestamp - 5n * SLOTS_PER_DAY, 0, 5);
-      await reportChecker.addReportData(timestamp - 2n * SLOTS_PER_DAY, 0, 150);
-      await reportChecker.addReportData(timestamp - 1n * SLOTS_PER_DAY, 0, 100);
+    context("early exit predicate", () => {
+      it("passes when postCL >= preCL (no decrease)", async () => {
+        await expect(callCheck(ether("100"), ether("100.001"))).not.to.be.reverted;
+      });
 
-      const expectedSum = await reportChecker.sumNegativeRebasesNotOlderThan(timestamp - 18n * SLOTS_PER_DAY);
-      expect(expectedSum).to.equal(100 + 150 + 5 + 10);
+      it("passes when postCL + withdrawals >= preCL", async () => {
+        await expect(callCheck(ether("105"), ether("100"), ether("10"))).not.to.be.reverted;
+      });
+
+      it("passes when postCL + withdrawals == preCL", async () => {
+        await expect(callCheck(ether("100"), ether("95"), ether("5"))).not.to.be.reverted;
+      });
+
+      it("passes when postCL == preCL", async () => {
+        await expect(callCheck(ether("100"), ether("100"))).not.to.be.reverted;
+      });
     });
 
-    it("returns exited validators count", async () => {
-      const reportChecker = await newChecker();
-      const timestamp = await getCurrentBlockTimestamp();
-
-      await reportChecker.addReportData(timestamp - 19n * SLOTS_PER_DAY, 10, 100);
-      await reportChecker.addReportData(timestamp - 18n * SLOTS_PER_DAY, 11, 100);
-      await reportChecker.addReportData(timestamp - 17n * SLOTS_PER_DAY, 12, 100);
-      await reportChecker.addReportData(timestamp - 5n * SLOTS_PER_DAY, 13, 100);
-      await reportChecker.addReportData(timestamp - 2n * SLOTS_PER_DAY, 14, 100);
-      await reportChecker.addReportData(timestamp - 1n * SLOTS_PER_DAY, 15, 100);
-
-      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 19n * SLOTS_PER_DAY)).to.equal(10);
-      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 18n * SLOTS_PER_DAY)).to.equal(11);
-      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 1n * SLOTS_PER_DAY)).to.equal(15);
+    context("first report (no history)", () => {
+      it("passes on first report even with large decrease", async () => {
+        await expect(callCheck(ether("100"), ether("50"))).not.to.be.reverted;
+      });
     });
 
-    it("returns exited validators count for missed or non-existent report", async () => {
-      const reportChecker = await newChecker();
-      const timestamp = await getCurrentBlockTimestamp();
-      await reportChecker.addReportData(timestamp - 19n * SLOTS_PER_DAY, 10, 100);
-      await reportChecker.addReportData(timestamp - 18n * SLOTS_PER_DAY, 11, 100);
-      await reportChecker.addReportData(timestamp - 15n * SLOTS_PER_DAY, 12, 100);
-      await reportChecker.addReportData(timestamp - 5n * SLOTS_PER_DAY, 13, 100);
-      await reportChecker.addReportData(timestamp - 2n * SLOTS_PER_DAY, 14, 100);
-      await reportChecker.addReportData(timestamp - 1n * SLOTS_PER_DAY, 15, 100);
+    context("single-period decrease", () => {
+      it("decrease within limit passes and emits NegativeCLRebaseAccepted", async () => {
+        const baseline = ether("10000");
+        const postCL = ether("9700");
+        const actualDiff = baseline - postCL;
+        const expectedMaxDiff = maxDiffFor(baseline);
 
-      // Out of range: day -20
-      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 20n * SLOTS_PER_DAY)).to.equal(0);
-      // Missed report: day -6
-      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 6n * SLOTS_PER_DAY)).to.equal(12);
-      // Missed report: day -7
-      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 7n * SLOTS_PER_DAY)).to.equal(12);
-      // Expected report: day 15
-      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 15n * SLOTS_PER_DAY)).to.equal(12);
-      // Missed report: day -16
-      expect(await reportChecker.exitedValidatorsAtTimestamp(timestamp - 16n * SLOTS_PER_DAY)).to.equal(11);
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(baseline, postCL))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
+
+      it("decrease exactly at limit passes", async () => {
+        const baseline = ether("10000");
+        const expectedMaxDiff = maxDiffFor(baseline);
+        const postCL = baseline - expectedMaxDiff;
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(baseline, postCL))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, expectedMaxDiff, expectedMaxDiff);
+      });
+
+      it("decrease exceeding limit reverts with IncorrectCLBalanceDecrease", async () => {
+        const baseline = ether("10000");
+        const postCL = ether("9500");
+        const actualDiff = baseline - postCL;
+        const expectedMaxDiff = maxDiffFor(baseline);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(baseline, postCL))
+          .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+          .withArgs(actualDiff, expectedMaxDiff);
+      });
+    });
+
+    context("deposits and withdrawals adjustment", () => {
+      it("deposits increase adjusted balance and allowed decrease", async () => {
+        const baseline = ether("10000");
+        const depositAmount = ether("500");
+        const postCL = ether("9700");
+        const principalCL = baseline + depositAmount;
+        const actualDiff = baseline - postCL;
+        const adjusted = baseline + depositAmount;
+        const expectedMaxDiff = maxDiffFor(adjusted);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        // adjusted includes depositAmount ->
+        // expectedMaxDiff is larger than without deposits -> actualDiff fits
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(principalCL, postCL, 0n, depositAmount))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
+
+      it("withdrawals decrease adjusted balance and allowed decrease", async () => {
+        const baseline = ether("10000");
+        const postCL = ether("9700");
+        const wVault = ether("200");
+        const actualDiff = baseline - postCL;
+        const adjusted = baseline - wVault;
+        const expectedMaxDiff = maxDiffFor(adjusted);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        // adjusted = baseline - wVault ->
+        // smaller expectedMaxDiff, but actualDiff still within limit
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(baseline, postCL, wVault))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
+
+      it("large withdrawals trigger stricter limit and cause revert", async () => {
+        const baseline = ether("10000");
+        const postCL = ether("9600");
+        const wVault = ether("300");
+        const actualDiff = baseline - postCL;
+        const adjusted = baseline - wVault;
+        const expectedMaxDiff = maxDiffFor(adjusted);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        // adjusted = baseline - wVault ->
+        // expectedMaxDiff shrinks below actualDiff -> reverts
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(baseline, postCL, wVault))
+          .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+          .withArgs(actualDiff, expectedMaxDiff);
+      });
+
+      it("deposits and withdrawals combined over multiple reports", async () => {
+        const baseline = ether("10000");
+        const report2Deposits = ether("200");
+        const report2Withdrawals = ether("100");
+        const report3Deposits = ether("300");
+        const report3Withdrawals = ether("50");
+        const postCL = ether("9700");
+
+        const actualDiff = baseline - postCL;
+        const totalDeposits = report2Deposits + report3Deposits;
+        const totalWithdrawals = report2Withdrawals + report3Withdrawals;
+        const adjusted = baseline + totalDeposits - totalWithdrawals;
+        const expectedMaxDiff = maxDiffFor(adjusted);
+
+        await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(ether("10200"), ether("9900"), report2Withdrawals, report2Deposits);
+
+        // adjusted = baseline + totalDeposits - totalWithdrawals
+        // actualDiff = baseline - postCL
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(ether("10150"), postCL, report3Withdrawals, report3Deposits))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
+    });
+
+    context("accumulation over multiple reports", () => {
+      it("gradual decrease over several reports accumulates", async () => {
+        const baseline = ether("10000");
+        const finalPostCL = ether("9500");
+        const cumulativeDiff = baseline - finalPostCL;
+        const expectedMaxDiff = maxDiffFor(baseline);
+
+        await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, ether("9800"));
+
+        // cumulativeDiff = baseline - finalPostCL
+        // (summed over 2 decreases) > expectedMaxDiff
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(ether("9800"), finalPostCL))
+          .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+          .withArgs(cumulativeDiff, expectedMaxDiff);
+      });
+
+      it("balance recovery within window via deposits", async () => {
+        const baseline = ether("10000");
+
+        await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, ether("9700"));
+
+        // deposits raise adjusted balance, increasing the allowed decrease
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(ether("9700"), ether("9700.001"), 0n, ether("300"))).not.to.be.reverted;
+      });
+
+      it("single large decrease exceeds limit", async () => {
+        const baseline = ether("10000");
+        const postCL = ether("9300");
+        const actualDiff = baseline - postCL;
+        const expectedMaxDiff = maxDiffFor(baseline);
+
+        await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await expect(callCheck(baseline, postCL))
+          .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+          .withArgs(actualDiff, expectedMaxDiff);
+      });
+    });
+
+    context("window boundary behavior", () => {
+      it("window grows adaptively from 1 to 36", async () => {
+        const baseline = ether("10000");
+        const postCL = ether("9700");
+        // actualDiff measured from baseline (window start), not from previous report
+        const actualDiff = baseline - postCL;
+        const expectedMaxDiff = maxDiffFor(baseline);
+
+        await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, ether("9800"));
+
+        // window=2: cumulative actualDiff (300) < expectedMaxDiff (380) -> passes
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(ether("9800"), postCL))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
+
+      it("window = 1 with only 2 reports", async () => {
+        const baseline = ether("10000");
+        const postCL = ether("9700");
+        const actualDiff = baseline - postCL;
+        const expectedMaxDiff = maxDiffFor(baseline);
+
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(baseline, postCL))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
+
+      it("old data is evicted after window is full", async () => {
+        const totalReports = CL_BALANCE_WINDOW + 2;
+        const baseline = ether("10000");
+        const stableBalance = ether("9600");
+        const postCL = ether("9590");
+        const actualDiff = stableBalance - postCL;
+        const expectedMaxDiff = maxDiffFor(stableBalance);
+
+        await setRefSlot(baseRefSlot - BigInt(totalReports) * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        // wVault triggers early exit, storing data without running the check
+        await setRefSlot(baseRefSlot - BigInt(totalReports - 1) * SLOTS_PER_DAY);
+        await callCheck(baseline, stableBalance, ether("500"));
+
+        for (let i = 2; i <= CL_BALANCE_WINDOW; i++) {
+          await setRefSlot(baseRefSlot - BigInt(totalReports - i) * SLOTS_PER_DAY);
+          await callCheck(stableBalance, stableBalance);
+        }
+
+        // report 0 (baseline=10000) evicted -> new baseline = stableBalance
+        // actualDiff = stableBalance - postCL (small) < expectedMaxDiff -> passes
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(stableBalance, postCL))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
+
+      it("before eviction the old baseline is still in window", async () => {
+        const totalReports = CL_BALANCE_WINDOW + 1;
+        const baseline = ether("10000");
+        const stableBalance = ether("9600");
+        const postCL = ether("9590");
+        const wVaultReport1 = ether("500");
+        const actualDiff = baseline - postCL;
+        const adjusted = baseline - wVaultReport1;
+        const expectedMaxDiff = maxDiffFor(adjusted);
+
+        await setRefSlot(baseRefSlot - BigInt(totalReports) * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        await setRefSlot(baseRefSlot - BigInt(totalReports - 1) * SLOTS_PER_DAY);
+        await callCheck(baseline, stableBalance, wVaultReport1);
+
+        for (let i = 2; i < CL_BALANCE_WINDOW; i++) {
+          await setRefSlot(baseRefSlot - BigInt(totalReports - i) * SLOTS_PER_DAY);
+          await callCheck(stableBalance, stableBalance);
+        }
+
+        // report 0 (baseline) still in window ->
+        // actualDiff = baseline - postCL (large)
+        // adjusted = baseline - wVaultReport1 ->
+        // expectedMaxDiff is small -> actualDiff > expectedMaxDiff -> reverts
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(stableBalance, postCL))
+          .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+          .withArgs(actualDiff, expectedMaxDiff);
+      });
+
+      it("eviction also removes old deposits from the window", async () => {
+        const totalReports = CL_BALANCE_WINDOW + 2;
+        const baseline = ether("10000");
+        const stableBalance = ether("9600");
+        const postCL = ether("9590");
+        const actualDiff = stableBalance - postCL;
+        const expectedMaxDiff = maxDiffFor(stableBalance);
+
+        await setRefSlot(baseRefSlot - BigInt(totalReports) * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        // deposits=1000 stored with report 1; after eviction they leave the window
+        await setRefSlot(baseRefSlot - BigInt(totalReports - 1) * SLOTS_PER_DAY);
+        await callCheck(baseline, stableBalance, ether("500"), ether("1000"));
+
+        for (let i = 2; i <= CL_BALANCE_WINDOW; i++) {
+          await setRefSlot(baseRefSlot - BigInt(totalReports - i) * SLOTS_PER_DAY);
+          await callCheck(stableBalance, stableBalance);
+        }
+
+        // deposits evicted too -> adjusted = stableBalance (no extra deposits)
+        // expectedMaxDiff based on stableBalance only
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(stableBalance, postCL))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
     });
   });
 
-  context("OracleReportSanityChecker additional balance decrease check", () => {
-    it("works for IncorrectCLBalanceDecrease", async () => {
-      await expect(
-        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("320"), ether("300"), 0, 0, 0, 10, 10),
-      )
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
-        .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"));
+  context("OracleReportSanityChecker day-one attack", () => {
+    let genesisTime: bigint;
+    let baseRefSlot: bigint;
+
+    before(async () => {
+      genesisTime = await accountingOracle.GENESIS_TIME();
+      const timestamp = (await ethers.provider.getBlock("latest"))!.timestamp;
+      baseRefSlot = (BigInt(timestamp) - genesisTime) / 12n;
     });
 
-    it("works as accumulation for IncorrectCLBalanceDecrease", async () => {
-      const genesisTime = await accountingOracle.GENESIS_TIME();
-      const timestamp = await getCurrentBlockTimestamp();
-      const refSlot = (timestamp - genesisTime) / 12n;
-      const prevRefSlot = refSlot - SLOTS_PER_DAY;
+    const setRefSlot = (slot: bigint) => accountingOracle.setLastProcessingRefSlot(slot);
 
-      await accountingOracle.setLastProcessingRefSlot(prevRefSlot);
-      await checker
-        .connect(accountingSigner)
-        .checkAccountingOracleReport(0, ether("320"), ether("310"), 0, 0, 0, 10, 10);
+    it("3.8% on day 1 passes, repeated 3.8% on day 2 reverts", async () => {
+      const baseline = ether("10000");
+      const day1PostCL = baseline - maxDiffFor(baseline);
+      const day2PostCL = day1PostCL - maxDiffFor(day1PostCL);
 
-      await accountingOracle.setLastProcessingRefSlot(refSlot);
-      await expect(
-        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("310"), ether("300"), 0, 0, 0, 10, 10),
-      )
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
-        .withArgs(20n * ether("1"), 10n * ether("1") + 10n * ether("0.101"));
+      await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
+      await callCheck(baseline, baseline);
+
+      // day 1: exactly at limit, passes
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await expect(callCheck(baseline, day1PostCL))
+        .to.emit(checker, "NegativeCLRebaseAccepted")
+        .withArgs(baseRefSlot - SLOTS_PER_DAY, day1PostCL, maxDiffFor(baseline), maxDiffFor(baseline));
+
+      // day 2: cumulative baseline -> day2PostCL ≈ 7.6% > 3.8% limit
+      await setRefSlot(baseRefSlot);
+      await expect(callCheck(day1PostCL, day2PostCL))
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease");
     });
+
+    it("small daily decreases accumulate and trigger revert", async () => {
+      const baseline = ether("10000");
+      const dailyDecrease = ether("100");
+      const numReports = 5;
+      const expectedMaxDiff = maxDiffFor(baseline);
+
+      await setRefSlot(baseRefSlot - BigInt(numReports) * SLOTS_PER_DAY);
+      await callCheck(baseline, baseline);
+
+      // 3 reports of 1% decrease each: cumulative 3% < 3.8% limit
+      let currentBalance = baseline;
+      for (let i = 1; i <= 3; i++) {
+        const newBalance = currentBalance - dailyDecrease;
+        await setRefSlot(baseRefSlot - BigInt(numReports - i) * SLOTS_PER_DAY);
+        await callCheck(currentBalance, newBalance);
+        currentBalance = newBalance;
+      }
+
+      // 4th decrease: cumulativeDiff = 4 × dailyDecrease (4%)
+      // > expectedMaxDiff (3.8%)
+      const cumulativeDiff = baseline - (currentBalance - dailyDecrease);
+      await setRefSlot(baseRefSlot);
+      await expect(callCheck(currentBalance, currentBalance - dailyDecrease))
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+        .withArgs(cumulativeDiff, expectedMaxDiff);
+    });
+  });
+
+  context("OracleReportSanityChecker edge cases", () => {
+    let genesisTime: bigint;
+    let baseRefSlot: bigint;
+
+    before(async () => {
+      genesisTime = await accountingOracle.GENESIS_TIME();
+      const timestamp = (await ethers.provider.getBlock("latest"))!.timestamp;
+      baseRefSlot = (BigInt(timestamp) - genesisTime) / 12n;
+    });
+
+    const setRefSlot = (slot: bigint) => accountingOracle.setLastProcessingRefSlot(slot);
+
+    it("maxCLBalanceDecreaseBP = 0 forbids any decrease", async () => {
+      const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
+      await checker.grantRole(role, deployer.address);
+      await checker.setMaxCLBalanceDecreaseBP(0);
+
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(ether("10000"), ether("10000"));
+
+      await setRefSlot(baseRefSlot);
+      await expect(callCheck(ether("10000"), ether("10000") - 1n))
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease");
+    });
+
+    it("maxCLBalanceDecreaseBP = 10000 allows any decrease", async () => {
+      const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
+      await checker.grantRole(role, deployer.address);
+      await checker.setMaxCLBalanceDecreaseBP(10000);
+
+      const baseline = ether("10000");
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(baseline, baseline);
+
+      await setRefSlot(baseRefSlot);
+      await expect(callCheck(baseline, ether("1")))
+        .to.emit(checker, "NegativeCLRebaseAccepted")
+        .withArgs(baseRefSlot, ether("1"), baseline - ether("1"), baseline);
+    });
+
+    it("reverts with arithmetic underflow when stored withdrawals exceed adjusted balance", async () => {
+      const baseline = ether("100");
+      const hugeWithdrawals = ether("5000");
+
+      await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
+      await callCheck(baseline, baseline);
+
+      // wVault triggers early exit but stores huge withdrawals value
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(baseline, ether("80"), hugeWithdrawals);
+
+      // adjusted = baseline + 0 - hugeWithdrawals ->
+      // underflow in uint256 -> panic(0x11)
+      await setRefSlot(baseRefSlot);
+      await expect(callCheck(ether("80"), ether("50"))).to.be.revertedWithPanic(0x11);
+    });
+
+    it("large balances (36M ETH) do not cause overflow", async () => {
+      const totalCLBalance = ether("36000000");
+      const depositAmount = ether("1000000");
+      const decrease = maxDiffFor(totalCLBalance);
+
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(totalCLBalance + depositAmount, totalCLBalance, 0n, depositAmount);
+
+      const postCL = totalCLBalance - decrease;
+      await setRefSlot(baseRefSlot);
+      await expect(callCheck(postCL + depositAmount, postCL, 0n, depositAmount)).not.to.be.reverted;
+    });
+
+    it("getReportDataCount returns correct count after reports", async () => {
+      expect(await checker.getReportDataCount()).to.equal(0);
+
+      await callCheck(ether("10000"), ether("10000"));
+      expect(await checker.getReportDataCount()).to.equal(1);
+
+      await callCheck(ether("10000"), ether("10000"));
+      expect(await checker.getReportDataCount()).to.equal(2);
+
+      await callCheck(ether("10000"), ether("10000"));
+      expect(await checker.getReportDataCount()).to.equal(3);
+    });
+
+    it("second opinion oracle is not consulted when decrease is within limit", async () => {
+      await deploySecondOpinionOracle();
+
+      const baseline = ether("10000");
+      const postCL = ether("9700");
+      const actualDiff = baseline - postCL;
+      const expectedMaxDiff = maxDiffFor(baseline);
+
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(baseline, baseline);
+
+      // actualDiff < expectedMaxDiff -> within limit ->
+      // Accepted (not Confirmed via second opinion)
+      await setRefSlot(baseRefSlot);
+      const tx = callCheck(baseline, postCL);
+      await expect(tx)
+        .to.emit(checker, "NegativeCLRebaseAccepted")
+        .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      await expect(tx).not.to.emit(checker, "NegativeCLRebaseConfirmed");
+    });
+  });
+
+  context("OracleReportSanityChecker setMaxCLBalanceDecreaseBP validation", () => {
+    it("accepts 0", async () => {
+      const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
+      await checker.grantRole(role, deployer.address);
+      await expect(checker.setMaxCLBalanceDecreaseBP(0)).not.to.be.reverted;
+    });
+
+    it("accepts 10000 (MAX_BASIS_POINTS)", async () => {
+      const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
+      await checker.grantRole(role, deployer.address);
+      await expect(checker.setMaxCLBalanceDecreaseBP(10000)).not.to.be.reverted;
+    });
+
+    it("reverts for 10001 with IncorrectLimitValue", async () => {
+      const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
+      await checker.grantRole(role, deployer.address);
+      await expect(checker.setMaxCLBalanceDecreaseBP(10001))
+        .to.be.revertedWithCustomError(checker, "IncorrectLimitValue")
+        .withArgs(10001, 0, 10000);
+    });
+
+    it("emits MaxCLBalanceDecreaseBPSet event on change", async () => {
+      const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
+      await checker.grantRole(role, deployer.address);
+      await expect(checker.setMaxCLBalanceDecreaseBP(500))
+        .to.emit(checker, "MaxCLBalanceDecreaseBPSet")
+        .withArgs(500);
+    });
+  });
+
+  context("OracleReportSanityChecker second opinion oracle", () => {
+    let genesisTime: bigint;
+    let baseRefSlot: bigint;
+
+    before(async () => {
+      genesisTime = await accountingOracle.GENESIS_TIME();
+      const timestamp = (await ethers.provider.getBlock("latest"))!.timestamp;
+      baseRefSlot = (BigInt(timestamp) - genesisTime) / 12n;
+    });
+
+    const setRefSlot = (slot: bigint) => accountingOracle.setLastProcessingRefSlot(slot);
 
     it("works for happy path and report is not ready", async () => {
-      const genesisTime = await accountingOracle.GENESIS_TIME();
-      const timestamp = await getCurrentBlockTimestamp();
-      const refSlot = (timestamp - genesisTime) / 12n;
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(ether("10000"), ether("10000"));
 
-      await accountingOracle.setLastProcessingRefSlot(refSlot);
+      await setRefSlot(baseRefSlot);
 
-      // Expect to pass through
-      await checker.connect(accountingSigner).checkAccountingOracleReport(0, 96 * 1e9, 96 * 1e9, 0, 0, 0, 10, 10);
+      await callCheck(ether("10000"), ether("9700"));
 
       const secondOpinionOracle = await deploySecondOpinionOracle();
 
-      await expect(
-        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("330"), ether("300"), 0, 0, 0, 10, 10),
-      ).to.be.revertedWithCustomError(checker, "NegativeRebaseFailedSecondOpinionReportIsNotReady");
+      await expect(callCheck(ether("10000"), ether("9500"))).to.be.revertedWithCustomError(
+        checker,
+        "NegativeRebaseFailedSecondOpinionReportIsNotReady",
+      );
 
-      await secondOpinionOracle.addReport(refSlot, {
+      await secondOpinionOracle.addReport(baseRefSlot, {
         success: true,
-        clBalanceGwei: parseUnits("300", "gwei"),
+        clBalanceGwei: parseUnits("9500", "gwei"),
         withdrawalVaultBalanceWei: 0,
         numValidators: 0,
         exitedValidators: 0,
       });
-      await expect(
-        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("330"), ether("300"), 0, 0, 0, 10, 10),
-      )
+      await expect(callCheck(ether("10000"), ether("9500")))
         .to.emit(checker, "NegativeCLRebaseConfirmed")
-        .withArgs(refSlot, ether("300"), ether("0"));
-    });
-
-    it("works with staking router reports exited validators at day 18 and 54", async () => {
-      const genesisTime = await accountingOracle.GENESIS_TIME();
-      const timestamp = await getCurrentBlockTimestamp();
-      const refSlot = (timestamp - genesisTime) / 12n;
-
-      const refSlot17 = refSlot - 17n * SLOTS_PER_DAY;
-      const refSlot18 = refSlot - 18n * SLOTS_PER_DAY;
-      const refSlot54 = refSlot - 54n * SLOTS_PER_DAY;
-      const refSlot55 = refSlot - 55n * SLOTS_PER_DAY;
-
-      await stakingRouter.mock__addStakingModuleExitedValidators(1, 1);
-      await accountingOracle.setLastProcessingRefSlot(refSlot55);
-      await checker
-        .connect(accountingSigner)
-        .checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
-
-      await stakingRouter.mock__removeStakingModule(1);
-      await stakingRouter.mock__addStakingModuleExitedValidators(1, 2);
-      await accountingOracle.setLastProcessingRefSlot(refSlot54);
-      await checker
-        .connect(accountingSigner)
-        .checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
-
-      await stakingRouter.mock__removeStakingModule(1);
-      await stakingRouter.mock__addStakingModuleExitedValidators(1, 3);
-      await accountingOracle.setLastProcessingRefSlot(refSlot18);
-      await checker
-        .connect(accountingSigner)
-        .checkAccountingOracleReport(0, ether("320"), ether("320"), 0, 0, 0, 10, 10);
-
-      await accountingOracle.setLastProcessingRefSlot(refSlot17);
-      await checker
-        .connect(accountingSigner)
-        .checkAccountingOracleReport(0, ether("320"), ether("315"), 0, 0, 0, 10, 10);
-
-      await accountingOracle.setLastProcessingRefSlot(refSlot);
-      await expect(
-        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("315"), ether("300"), 0, 0, 0, 10, 10),
-      )
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
-        .withArgs(20n * ether("1"), 7n * ether("1") + 8n * ether("0.101"));
+        .withArgs(baseRefSlot, ether("9500"), ether("0"));
     });
 
     it("works for reports close together", async () => {
-      const genesisTime = await accountingOracle.GENESIS_TIME();
-      const timestamp = await getCurrentBlockTimestamp();
-      const refSlot = (timestamp - genesisTime) / 12n;
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(ether("10000"), ether("10000"));
 
-      await accountingOracle.setLastProcessingRefSlot(refSlot);
+      await setRefSlot(baseRefSlot);
 
       const secondOpinionOracle = await deploySecondOpinionOracle();
 
-      // Second opinion balance is way bigger than general Oracle's (~1%)
-      await secondOpinionOracle.addReport(refSlot, {
+      // second opinion balance diverges too much (~1%) -> revert
+      await secondOpinionOracle.addReport(baseRefSlot, {
         success: true,
-        clBalanceGwei: parseUnits("302", "gwei"),
+        clBalanceGwei: parseUnits("9600", "gwei"),
         withdrawalVaultBalanceWei: 0,
         numValidators: 0,
         exitedValidators: 0,
       });
 
-      await expect(
-        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("330"), ether("299"), 0, 0, 0, 10, 10),
-      )
+      await expect(callCheck(ether("10000"), ether("9500")))
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLBalanceMismatch")
-        .withArgs(ether("299"), ether("302"), anyValue);
+        .withArgs(ether("9500"), ether("9600"), anyValue);
 
-      // Second opinion balance is almost equal general Oracle's (<0.74%) - should pass
-      await secondOpinionOracle.addReport(refSlot, {
+      // second opinion balance within margin (<0.74%) -> passes
+      await secondOpinionOracle.addReport(baseRefSlot, {
         success: true,
-        clBalanceGwei: parseUnits("301", "gwei"),
+        clBalanceGwei: parseUnits("9510", "gwei"),
         withdrawalVaultBalanceWei: 0,
         numValidators: 0,
         exitedValidators: 0,
       });
 
-      await expect(
-        checker.connect(accountingSigner).checkAccountingOracleReport(0, ether("330"), ether("299"), 0, 0, 0, 10, 10),
-      )
+      await expect(callCheck(ether("10000"), ether("9500")))
         .to.emit(checker, "NegativeCLRebaseConfirmed")
-        .withArgs(refSlot, ether("299"), ether("0"));
+        .withArgs(baseRefSlot, ether("9500"), ether("0"));
 
-      // Second opinion balance is slightly less than general Oracle's (0.01%) - should fail
-      await secondOpinionOracle.addReport(refSlot, {
+      // second opinion balance higher than reported -> revert
+      await secondOpinionOracle.addReport(baseRefSlot, {
         success: true,
-        clBalanceGwei: 100,
+        clBalanceGwei: parseUnits("9800", "gwei"),
         withdrawalVaultBalanceWei: 0,
         numValidators: 0,
         exitedValidators: 0,
       });
 
-      await expect(
-        checker.connect(accountingSigner).checkAccountingOracleReport(0, 110 * 1e9, 100.01 * 1e9, 0, 0, 0, 10, 10),
-      )
+      await expect(callCheck(ether("10000"), ether("9500")))
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedCLBalanceMismatch")
-        .withArgs(100.01 * 1e9, 100 * 1e9, anyValue);
+        .withArgs(ether("9500"), ether("9800"), anyValue);
     });
 
     it("works for reports with incorrect withdrawal vault balance", async () => {
-      const genesisTime = await accountingOracle.GENESIS_TIME();
-      const timestamp = await getCurrentBlockTimestamp();
-      const refSlot = (timestamp - genesisTime) / 12n;
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(ether("10000"), ether("10000"));
 
-      await accountingOracle.setLastProcessingRefSlot(refSlot);
+      await setRefSlot(baseRefSlot);
 
       const secondOpinionOracle = await deploySecondOpinionOracle();
 
-      // Second opinion balance is almost equal general Oracle's (<0.74%) and withdrawal value is the same - should pass
-      await secondOpinionOracle.addReport(refSlot, {
+      // withdrawal vault matches -> passes
+      await secondOpinionOracle.addReport(baseRefSlot, {
         success: true,
-        clBalanceGwei: parseUnits("300", "gwei"),
+        clBalanceGwei: parseUnits("9500", "gwei"),
         withdrawalVaultBalanceWei: ether("1"),
         numValidators: 0,
         exitedValidators: 0,
       });
 
-      await expect(
-        checker
-          .connect(accountingSigner)
-          .checkAccountingOracleReport(0, ether("330"), ether("299"), ether("1"), 0, 0, 10, 10),
-      )
+      await expect(callCheck(ether("10000"), ether("9500"), ether("1")))
         .to.emit(checker, "NegativeCLRebaseConfirmed")
-        .withArgs(refSlot, ether("299"), ether("1"));
+        .withArgs(baseRefSlot, ether("9500"), ether("1"));
 
-      // Second opinion withdrawal vault balance is different - should fail
-      await secondOpinionOracle.addReport(refSlot, {
+      // withdrawal vault mismatch -> revert
+      await secondOpinionOracle.addReport(baseRefSlot, {
         success: true,
-        clBalanceGwei: parseUnits("300", "gwei"),
+        clBalanceGwei: parseUnits("9500", "gwei"),
         withdrawalVaultBalanceWei: 0,
         numValidators: 0,
         exitedValidators: 0,
       });
 
-      await expect(
-        checker
-          .connect(accountingSigner)
-          .checkAccountingOracleReport(0, ether("330"), ether("299"), ether("1"), 0, 0, 10, 10),
-      )
+      await expect(callCheck(ether("10000"), ether("9500"), ether("1")))
         .to.be.revertedWithCustomError(checker, "NegativeRebaseFailedWithdrawalVaultBalanceMismatch")
         .withArgs(ether("1"), 0);
     });
   });
 
   context("OracleReportSanityChecker roles", () => {
-    it("CL Oracle related functions require INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE", async () => {
-      const role = await checker.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE();
+    it("setMaxCLBalanceDecreaseBP requires MAX_CL_BALANCE_DECREASE_MANAGER_ROLE", async () => {
+      const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
 
-      await expect(checker.setInitialSlashingAndPenaltiesAmount(0, 0)).to.be.revertedWithOZAccessControlError(
+      await expect(checker.setMaxCLBalanceDecreaseBP(500)).to.be.revertedWithOZAccessControlError(
         deployer.address,
         role,
       );
 
       await checker.grantRole(role, deployer.address);
-      await expect(checker.setInitialSlashingAndPenaltiesAmount(1000, 101)).to.not.be.reverted;
+      await expect(checker.setMaxCLBalanceDecreaseBP(500)).to.not.be.reverted;
     });
 
-    it("CL Oracle related functions require SECOND_OPINION_MANAGER_ROLE", async () => {
+    it("SECOND_OPINION_MANAGER_ROLE works", async () => {
       const clOraclesRole = await checker.SECOND_OPINION_MANAGER_ROLE();
 
       await expect(

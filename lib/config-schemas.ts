@@ -232,8 +232,7 @@ const OracleReportSanityCheckerSchema = z.object({
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,
   maxPositiveTokenRebase: PositiveIntSchema,
-  initialSlashingAmountPWei: PositiveIntSchema,
-  inactivityPenaltiesAmountPWei: PositiveIntSchema,
+  maxCLBalanceDecreaseBP: BasisPointsSchema,
   clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
 });
 

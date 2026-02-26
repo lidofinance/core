@@ -112,8 +112,7 @@ maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra
 maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
 requestTimestampMargin = 128                           # Request timestamp margin
 maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
-initialSlashingAmountPWei = 1000                       # Initial slashing amount (pWei)
-inactivityPenaltiesAmountPWei = 101                    # Inactivity penalties amount (pWei)
+maxCLBalanceDecreaseBP = 380                           # Max CL balance decrease over sliding window (BP, 380 = 3.8%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 
 # Oracle daemon configuration

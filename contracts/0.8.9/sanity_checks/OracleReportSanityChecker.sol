@@ -126,12 +126,9 @@ struct LimitsList {
     /// @notice The positive token rebase allowed per single LidoOracle report
     /// @dev uses 1e9 precision, e.g.: 1e6 - 0.1%; 1e9 - 100%, see `setMaxPositiveTokenRebase()`
     uint256 maxPositiveTokenRebase;
-    /// @notice Initial slashing amount per one validator to calculate initial slashing of the validators' balances on the Consensus Layer
-    /// @dev Represented in the PWei (1^15 Wei). Must fit into uint16 (<= 65_535)
-    uint256 initialSlashingAmountPWei;
-    /// @notice Inactivity penalties amount per one validator to calculate penalties of the validators' balances on the Consensus Layer
-    /// @dev Represented in the PWei (1^15 Wei). Must fit into uint16 (<= 65_535)
-    uint256 inactivityPenaltiesAmountPWei;
+    /// @notice The max allowed CL balance decrease over the CL_BALANCE_WINDOW as a fraction of the adjusted balance
+    /// @dev Represented in the Basis Points (100% == 10_000). Must fit into uint16 (<= 65_535)
+    uint256 maxCLBalanceDecreaseBP;
     /// @notice The maximum percent on how Second Opinion Oracle reported value could be greater
     ///     than reported by the AccountingOracle. There is an assumption that second opinion oracle CL balance
     ///     can be greater as calculated for the withdrawal credentials.
@@ -150,20 +147,18 @@ struct LimitsListPacked {
     uint16 maxNodeOperatorsPerExtraDataItem;
     uint32 requestTimestampMargin;
     uint64 maxPositiveTokenRebase;
-    uint16 initialSlashingAmountPWei;
-    uint16 inactivityPenaltiesAmountPWei;
+    uint16 maxCLBalanceDecreaseBP;
     uint16 clBalanceOraclesErrorUpperBPLimit;
 }
 
 struct ReportData {
-    uint64 timestamp;
-    uint64 totalExitedValidators;
-    uint128 negativeCLRebaseWei;
+    uint256 clBalance;      // CL balance in Wei
+    uint256 deposits;       // Deposits for the period since the last report in Wei
+    uint256 withdrawals;    // withdrawalVaultBalance in Wei (as-is)
 }
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
 uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
-uint256 constant ONE_PWEI = 1e15;
 
 /// @title Sanity checks for the Lido's oracle report
 /// @notice The contracts contain methods to perform sanity checks of the Lido's oracle report
@@ -192,12 +187,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     bytes32 public constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
         keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
     bytes32 public constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
-    bytes32 public constant INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE =
-        keccak256("INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE");
+    bytes32 public constant MAX_CL_BALANCE_DECREASE_MANAGER_ROLE =
+        keccak256("MAX_CL_BALANCE_DECREASE_MANAGER_ROLE");
 
     uint256 private constant DEFAULT_TIME_ELAPSED = 1 hours;
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
+    uint256 private constant CL_BALANCE_WINDOW = 36;
 
     ILidoLocator private immutable LIDO_LOCATOR;
     uint256 private immutable GENESIS_TIME;
@@ -416,16 +412,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Sets the initial slashing and penalties amounts
-    /// @param _initialSlashingAmountPWei - initial slashing amount (in PWei)
-    /// @param _inactivityPenaltiesAmountPWei - penalties amount (in PWei)
-    function setInitialSlashingAndPenaltiesAmount(uint256 _initialSlashingAmountPWei, uint256 _inactivityPenaltiesAmountPWei)
+    /// @notice Sets the max allowed CL balance decrease in basis points
+    /// @param _maxCLBalanceDecreaseBP max CL balance decrease over the sliding window (in BP, e.g. 380 = 3.8%)
+    function setMaxCLBalanceDecreaseBP(uint256 _maxCLBalanceDecreaseBP)
         external
-        onlyRole(INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE)
+        onlyRole(MAX_CL_BALANCE_DECREASE_MANAGER_ROLE)
     {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.initialSlashingAmountPWei = _initialSlashingAmountPWei;
-        limitsList.inactivityPenaltiesAmountPWei = _inactivityPenaltiesAmountPWei;
+        limitsList.maxCLBalanceDecreaseBP = _maxCLBalanceDecreaseBP;
         _updateLimits(limitsList);
     }
 
@@ -490,9 +484,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Applies sanity checks to the accounting params of Lido's oracle report
     /// WARNING. The function has side effects and modifies the state of the contract.
-    ///          It's needed to keep information about exited validators counts and negative rebase values over time.
-    ///          The function called from Lido contract that uses the 'old' Solidity version (0.4.24) and will do a correct
-    ///          call to this method even it's declared as "view" in interface there.
+    ///          It's needed to keep CL balance snapshots for the balance decrease check over a sliding window.
     /// @param _timeElapsed time elapsed since the previous oracle report
     /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
     ///     current oracle report (NB: also include the initial balance of newly appeared validators)
@@ -501,8 +493,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _withdrawalVaultBalance withdrawal vault balance on Execution Layer for the report reference slot
     /// @param _elRewardsVaultBalance el rewards vault balance on Execution Layer for the report reference slot
     /// @param _sharesRequestedToBurn shares requested to burn for the report reference slot
-    /// @param _preCLValidators Lido-participating validators on the CL side before the current oracle report
-    /// @param _postCLValidators Lido-participating validators on the CL side after the current oracle report
+    /// @param _deposits deposits to the Beacon Chain since the previous oracle report in Wei
     function checkAccountingOracleReport(
         uint256 _timeElapsed,
         uint256 _preCLBalance,
@@ -510,14 +501,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
-        uint256 _preCLValidators, // solhint-disable-line no-unused-vars
-        uint256 _postCLValidators // solhint-disable-line no-unused-vars
+        uint256 _deposits
     ) external {
         if (msg.sender != ACCOUNTING_ADDRESS) {
             revert CalledNotFromAccounting();
         }
         LimitsList memory limitsList = _limits.unpack();
-        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot(); // solhint-disable-line no-unused-vars
+        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
 
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
         // 1. Withdrawals vault reported balance
@@ -531,15 +521,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkSharesRequestedToBurn(_sharesRequestedToBurn);
 
         // 4. Consensus Layer balance decrease
-        // TODO: MaxEB - validator count-based slashing/penalty checks not relevant for balance-based accounting
-        // _checkCLBalanceDecrease(
-        //     limitsList,
-        //     _preCLBalance,
-        //     _postCLBalance,
-        //     _withdrawalVaultBalance,
-        //     _postCLValidators,
-        //     refSlot
-        // );
+        _checkCLBalanceDecrease(limitsList, _preCLBalance, _postCLBalance, _withdrawalVaultBalance, _deposits, refSlot);
 
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
@@ -653,99 +635,62 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    // TODO: MaxEB - validator count-based data tracking not relevant for balance-based accounting
-    function _addReportData(uint256 _timestamp, uint256 _exitedValidatorsCount, uint256 _negativeCLRebase) internal {
-        reportData.push(
-            ReportData(
-                SafeCast.toUint64(_timestamp),
-                SafeCast.toUint64(_exitedValidatorsCount),
-                SafeCast.toUint128(_negativeCLRebase)
-            )
-        );
+    function _addReportData(uint256 _clBalance, uint256 _deposits, uint256 _withdrawals) internal {
+        reportData.push(ReportData(_clBalance, _deposits, _withdrawals));
     }
 
-    // TODO: MaxEB - negative rebase tracking not relevant for balance-based accounting
-    function _sumNegativeRebasesNotOlderThan(uint256 _timestamp) internal view returns (uint256) {
-        uint256 sum;
-        for (int256 index = int256(reportData.length) - 1; index >= 0; index--) {
-            if (reportData[uint256(index)].timestamp > SafeCast.toUint64(_timestamp)) {
-                sum += reportData[uint256(index)].negativeCLRebaseWei;
-            } else {
-                break;
-            }
-        }
-        return sum;
-    }
-
-    // TODO: MaxEB - validator count-based data lookup not relevant for balance-based accounting
-    function _exitedValidatorsAtTimestamp(uint256 _timestamp) internal view returns (uint256) {
-        for (int256 index = int256(reportData.length) - 1; index >= 0; index--) {
-            if (reportData[uint256(index)].timestamp <= SafeCast.toUint64(_timestamp)) {
-                return reportData[uint256(index)].totalExitedValidators;
-            }
-        }
-        return 0;
-    }
-
-    // TODO: MaxEB - validator count-based slashing/penalty checks not relevant for balance-based accounting
     function _checkCLBalanceDecrease(
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
         uint256 _postCLBalance,
         uint256 _withdrawalVaultBalance,
-        uint256 _postCLValidators,
+        uint256 _deposits,
         uint256 _refSlot
     ) internal {
-        uint256 reportTimestamp = GENESIS_TIME + _refSlot * SECONDS_PER_SLOT;
+        _addReportData(_postCLBalance, _deposits, _withdrawalVaultBalance);
 
-        // Checking exitedValidators against StakingRouter
-        IStakingRouter stakingRouter = IStakingRouter(LIDO_LOCATOR.stakingRouter());
-        uint256[] memory ids = stakingRouter.getStakingModuleIds();
+        // If the CL balance didn't decrease accounting for withdrawals, skip the window check
+        if (_preCLBalance <= _postCLBalance + _withdrawalVaultBalance) return;
 
-        uint256 stakingRouterExitedValidators;
-        for (uint256 i = 0; i < ids.length; i++) {
-            StakingModule memory module = stakingRouter.getStakingModule(ids[i]);
-            stakingRouterExitedValidators += module.exitedValidatorsCount;
-        }
+        uint256 len = reportData.length;
+        if (len < 2) return;
 
-        if (_preCLBalance <= _postCLBalance + _withdrawalVaultBalance) {
-            _addReportData(reportTimestamp, stakingRouterExitedValidators, 0);
-            // If the CL balance is not decreased, we don't need to check anything here
-            return;
-        }
-        _addReportData(
-            reportTimestamp,
-            stakingRouterExitedValidators,
-            _preCLBalance - (_postCLBalance + _withdrawalVaultBalance)
-        );
+        (uint256 actualDiff, uint256 maxDiff) = _calcCLBalanceDecrease(_limitsList.maxCLBalanceDecreaseBP, _postCLBalance, len);
 
-        // NOTE. Values of 18 and 54 days are taken from spec. Check the details here
-        // https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-23.md
-        uint256 negativeCLRebaseSum = _sumNegativeRebasesNotOlderThan(reportTimestamp - 18 days);
-        uint256 maxAllowedCLRebaseNegativeSum = _limitsList.initialSlashingAmountPWei *
-            ONE_PWEI *
-            (_postCLValidators - _exitedValidatorsAtTimestamp(reportTimestamp - 18 days)) +
-            _limitsList.inactivityPenaltiesAmountPWei *
-            ONE_PWEI *
-            (_postCLValidators - _exitedValidatorsAtTimestamp(reportTimestamp - 54 days));
+        if (actualDiff == 0) return;
 
-        if (negativeCLRebaseSum <= maxAllowedCLRebaseNegativeSum) {
-            // If the rebase diff is less or equal max allowed sum, we accept the report
-            emit NegativeCLRebaseAccepted(
-                _refSlot,
-                _postCLBalance + _withdrawalVaultBalance,
-                negativeCLRebaseSum,
-                maxAllowedCLRebaseNegativeSum
-            );
+        if (actualDiff > maxDiff) {
+            if (address(secondOpinionOracle) == address(0)) {
+                revert IncorrectCLBalanceDecrease(actualDiff, maxDiff);
+            }
+            _askSecondOpinion(_refSlot, _postCLBalance, _withdrawalVaultBalance, _limitsList);
             return;
         }
 
-        // If there is no negative rebase oracle, then we don't need to check it's report
-        if (address(secondOpinionOracle) == address(0)) {
-            // If there is no oracle and the diff is more than limit, we revert
-            revert IncorrectCLBalanceDecrease(negativeCLRebaseSum, maxAllowedCLRebaseNegativeSum);
+        emit NegativeCLRebaseAccepted(_refSlot, _postCLBalance, actualDiff, maxDiff);
+    }
+
+    function _calcCLBalanceDecrease(
+        uint256 _maxCLBalanceDecreaseBP,
+        uint256 _postCLBalance,
+        uint256 _len
+    ) internal view returns (uint256 actualDiff, uint256 maxDiff) {
+        uint256 window = _len - 1 > CL_BALANCE_WINDOW ? CL_BALANCE_WINDOW : _len - 1;
+        uint256 oldIdx = _len - 1 - window;
+
+        if (_postCLBalance >= reportData[oldIdx].clBalance) return (0, 0);
+
+        actualDiff = reportData[oldIdx].clBalance - _postCLBalance;
+
+        uint256 totalDeposits;
+        uint256 totalWithdrawals;
+        for (uint256 i = oldIdx + 1; i < _len; i++) {
+            totalDeposits += reportData[i].deposits;
+            totalWithdrawals += reportData[i].withdrawals;
         }
-        _askSecondOpinion(_refSlot, _postCLBalance, _withdrawalVaultBalance, _limitsList);
+
+        uint256 adjusted = reportData[oldIdx].clBalance + totalDeposits - totalWithdrawals;
+        maxDiff = (adjusted * _maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
     }
 
     function _askSecondOpinion(
@@ -928,13 +873,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _checkLimitValue(_newLimitsList.maxPositiveTokenRebase, 1, type(uint64).max);
             emit MaxPositiveTokenRebaseSet(_newLimitsList.maxPositiveTokenRebase);
         }
-        if (_oldLimitsList.initialSlashingAmountPWei != _newLimitsList.initialSlashingAmountPWei) {
-            _checkLimitValue(_newLimitsList.initialSlashingAmountPWei, 0, type(uint16).max);
-            emit InitialSlashingAmountSet(_newLimitsList.initialSlashingAmountPWei);
-        }
-        if (_oldLimitsList.inactivityPenaltiesAmountPWei != _newLimitsList.inactivityPenaltiesAmountPWei) {
-            _checkLimitValue(_newLimitsList.inactivityPenaltiesAmountPWei, 0, type(uint16).max);
-            emit InactivityPenaltiesAmountSet(_newLimitsList.inactivityPenaltiesAmountPWei);
+        if (_oldLimitsList.maxCLBalanceDecreaseBP != _newLimitsList.maxCLBalanceDecreaseBP) {
+            _checkLimitValue(_newLimitsList.maxCLBalanceDecreaseBP, 0, MAX_BASIS_POINTS);
+            emit MaxCLBalanceDecreaseBPSet(_newLimitsList.maxCLBalanceDecreaseBP);
         }
         if (_oldLimitsList.clBalanceOraclesErrorUpperBPLimit != _newLimitsList.clBalanceOraclesErrorUpperBPLimit) {
             _checkLimitValue(_newLimitsList.clBalanceOraclesErrorUpperBPLimit, 0, MAX_BASIS_POINTS);
@@ -959,15 +900,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
     event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
-    event InitialSlashingAmountSet(uint256 initialSlashingAmountPWei);
-    event InactivityPenaltiesAmountSet(uint256 inactivityPenaltiesAmountPWei);
+    event MaxCLBalanceDecreaseBPSet(uint256 maxCLBalanceDecreaseBP);
     event CLBalanceOraclesErrorUpperBPLimitSet(uint256 clBalanceOraclesErrorUpperBPLimit);
     event NegativeCLRebaseConfirmed(uint256 refSlot, uint256 clBalanceWei, uint256 withdrawalVaultBalance);
     event NegativeCLRebaseAccepted(
         uint256 refSlot,
         uint256 clTotalBalance,
         uint256 clBalanceDecrease,
-        uint256 maxAllowedCLRebaseNegativeSum
+        uint256 maxAllowedDecrease
     );
 
     error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
@@ -1005,8 +945,7 @@ library LimitsListPacker {
         res.maxValidatorExitRequestsPerReport = SafeCast.toUint16(_limitsList.maxValidatorExitRequestsPerReport);
         res.maxItemsPerExtraDataTransaction = SafeCast.toUint16(_limitsList.maxItemsPerExtraDataTransaction);
         res.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItem);
-        res.initialSlashingAmountPWei = SafeCast.toUint16(_limitsList.initialSlashingAmountPWei);
-        res.inactivityPenaltiesAmountPWei = SafeCast.toUint16(_limitsList.inactivityPenaltiesAmountPWei);
+        res.maxCLBalanceDecreaseBP = _toBasisPoints(_limitsList.maxCLBalanceDecreaseBP);
         res.clBalanceOraclesErrorUpperBPLimit = _toBasisPoints(_limitsList.clBalanceOraclesErrorUpperBPLimit);
     }
 
@@ -1029,8 +968,7 @@ library LimitsListUnpacker {
         res.maxValidatorExitRequestsPerReport = _limitsList.maxValidatorExitRequestsPerReport;
         res.maxItemsPerExtraDataTransaction = _limitsList.maxItemsPerExtraDataTransaction;
         res.maxNodeOperatorsPerExtraDataItem = _limitsList.maxNodeOperatorsPerExtraDataItem;
-        res.initialSlashingAmountPWei = _limitsList.initialSlashingAmountPWei;
-        res.inactivityPenaltiesAmountPWei = _limitsList.inactivityPenaltiesAmountPWei;
+        res.maxCLBalanceDecreaseBP = _limitsList.maxCLBalanceDecreaseBP;
         res.clBalanceOraclesErrorUpperBPLimit = _limitsList.clBalanceOraclesErrorUpperBPLimit;
     }
 }
