@@ -120,8 +120,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         /// @dev Total number of validator exit requests in this report. Must not be greater
         /// than limit checked in OracleReportSanityChecker.checkExitBusOracleReport.
         uint256 requestsCount;
-        /// @dev Format of the validator exit requests data. Currently, only the
-        /// DATA_FORMAT_LIST=1 is supported.
+        /// @dev Format of the validator exit requests data. Currently, only the extended
+        /// DATA_FORMAT_LIST_WITH_KEY_INDEX=2 is supported.
         uint256 dataFormat;
         /// @dev Validator exit requests data. Can differ based on the data format,
         /// see the constant defining a specific data format below for more info.
