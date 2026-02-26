@@ -1,7 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HashConsensus__Harness, ReportProcessor__Mock, ValidatorsExitBusOracle } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  ReportProcessor__Mock,
+  StakingModule__MockForKeyVerification,
+  ValidatorsExitBusOracle,
+} from "typechain-types";
 
 import {
   EPOCHS_PER_FRAME,
@@ -91,12 +96,14 @@ export async function deployVEBO(
   const mockModule1 = await ethers.deployContract("StakingModule__MockForKeyVerification");
   const mockModule2 = await ethers.deployContract("StakingModule__MockForKeyVerification");
   const mockModule3 = await ethers.deployContract("StakingModule__MockForKeyVerification");
+  const mockModule4 = await ethers.deployContract("StakingModule__MockForKeyVerification");
   const mockModule5 = await ethers.deployContract("StakingModule__MockForKeyVerification");
   const mockModule7 = await ethers.deployContract("StakingModule__MockForKeyVerification");
 
   await stakingRouter.setStakingModuleAddress(1, await mockModule1.getAddress());
   await stakingRouter.setStakingModuleAddress(2, await mockModule2.getAddress());
   await stakingRouter.setStakingModuleAddress(3, await mockModule3.getAddress());
+  await stakingRouter.setStakingModuleAddress(4, await mockModule4.getAddress());
   await stakingRouter.setStakingModuleAddress(5, await mockModule5.getAddress());
   await stakingRouter.setStakingModuleAddress(7, await mockModule7.getAddress());
 
@@ -158,10 +165,53 @@ export async function deployVEBO(
       module1: mockModule1,
       module2: mockModule2,
       module3: mockModule3,
+      module4: mockModule4,
       module5: mockModule5,
       module7: mockModule7,
     },
   };
+}
+
+// Derive the same 48-byte pubkey as StakingModule__MockForKeyVerification fallback:
+// pubkey = keccak(nodeOpId, keyIndex) || first 16 bytes of keccak(nodeOpId, keyIndex, 1)
+export function makeMockPubkey(nodeOpId: number | bigint, keyIndex: number | bigint): string {
+  const hash1 = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [nodeOpId, keyIndex]),
+  );
+  const hash2 = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "uint256"], [nodeOpId, keyIndex, 1]),
+  );
+  return ("0x" + hash1.slice(2) + hash2.slice(2)).slice(0, 2 + 96);
+}
+
+// Seed StakingModule__MockForKeyVerification instances with signing keys matching requests
+export async function seedMockModuleSigningKeys(
+  mockModules: {
+    module1: StakingModule__MockForKeyVerification;
+    module2: StakingModule__MockForKeyVerification;
+    module3: StakingModule__MockForKeyVerification;
+    module4: StakingModule__MockForKeyVerification;
+    module5: StakingModule__MockForKeyVerification;
+    module7: StakingModule__MockForKeyVerification;
+  },
+  requests: { moduleId: number; nodeOpId: number; keyIndex?: number; valIndex: number; valPubkey?: string }[],
+) {
+  const modMap: Record<number, StakingModule__MockForKeyVerification> = {
+    1: mockModules.module1,
+    2: mockModules.module2,
+    3: mockModules.module3,
+    4: mockModules.module4,
+    5: mockModules.module5,
+    7: mockModules.module7,
+  };
+
+  for (const r of requests) {
+    const mod = modMap[r.moduleId];
+    if (!mod || !mod.setSigningKey) continue;
+    const keyIdx = r.keyIndex ?? r.valIndex;
+    const pubkey = r.valPubkey ?? makeMockPubkey(r.nodeOpId, keyIdx);
+    await mod.setSigningKey(r.nodeOpId, keyIdx, pubkey);
+  }
 }
 
 interface VEBOConfig {
