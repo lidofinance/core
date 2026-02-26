@@ -87,8 +87,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error EmptyWithdrawalsCredentials();
     error DirectETHTransfer();
     error AppAuthDSMFailed();
-    error AllocationExceedsTarget();
-    error DepositValueNotMultipleOfInitialDeposit();
+    error ModuleReturnExceedTarget();
     error StakingModuleStatusTheSame();
     error LegacyStakingModuleRequired();
     error WrongArrayLength();
@@ -743,17 +742,17 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         // Get allocation based on target share
         uint256 depositableEther = LIDO.getDepositableEther();
-        uint256 stakingModuleDepositableEthAmount =
+        uint256 smDepositableEthAmount =
             _getModuleDepositAllocation(_stakingModuleId, depositableEther, true);
 
         // Call allocateDeposits on the staking module to determine for what amount deposit each key
         // The module verifies keys belong to it and reverts if invalid.
-        // Even if stakingModuleDepositableEthAmount is 0, we still call the module
+        // Even if smDepositableEthAmount is 0, we still call the module
         // to allow CSM queue cursor advancement.
         uint256[] memory allocations;
-        uint256 truncatedToGwei = stakingModuleDepositableEthAmount - (stakingModuleDepositableEthAmount % 1 gwei);
+        uint256 smDepositableEthAmountRounded = smDepositableEthAmount - (smDepositableEthAmount % 1 gwei);
         allocations = IStakingModuleV2(stateConfig.moduleAddress)
-            .allocateDeposits(truncatedToGwei, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
+            .allocateDeposits(smDepositableEthAmountRounded, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
 
         // Calculate total amount from allocations returned by module (in wei)
         uint256 amount;
@@ -772,8 +771,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
 
         // Verify sum of allocations does not exceed module's max deposit amount
-        if (amount > truncatedToGwei) {
-            revert AllocationExceedsTarget();
+        if (amount > smDepositableEthAmountRounded) {
+            revert ModuleReturnExceedTarget();
         }
 
         if (amount > 0) {
@@ -1015,6 +1014,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // Calculate actual deposits count from returned keys
         if (publicKeysBatch.length % PUBKEY_LENGTH != 0) revert WrongPubkeysLength();
         uint256 actualDepositsCount = publicKeysBatch.length / PUBKEY_LENGTH;
+
+        if (actualDepositsCount > maxDepositsCount) revert ModuleReturnExceedTarget();
 
         // Calculate actual deposit value based on keys returned
         uint256 depositsValue = SRUtils._getInitialDepositAmountByCount(actualDepositsCount);
