@@ -5,7 +5,7 @@ pragma solidity 0.8.9;
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {Versioned} from "../utils/Versioned.sol";
-import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
+import {LimitData, RateLimitStorage, RateLimit} from "../../common/lib/RateLimit.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
 
 interface ITriggerableWithdrawalsGateway {
@@ -22,10 +22,52 @@ interface ITriggerableWithdrawalsGateway {
     ) external payable;
 }
 
+/// @notice New interface for staking modules (CSM, CuratedV2)
+/// @dev Returns only pubkeys
+interface INewStakingModule {
+    /// @dev It also works for legacy staking modules (NOR, SDVT) where `getSigningKeys` returns different
+    ///      tuple `(bytes memory pubkeys, bytes memory signatures, bool[] memory used)`.
+    ///      The trick: `abi.decode(returndata, (bytes))` will decode only the first tuple element.
+    ///      This is safe as long as the first returned value really is `bytes pubkeys` in that position.
+    function getSigningKeys(
+        uint256 nodeOperatorId,
+        uint256 startIndex,
+        uint256 keysCount
+    ) external view returns (bytes memory);
+}
+
+interface INodeOperatorsRegistry {
+    function getSigningKey(
+        uint256 _nodeOperatorId,
+        uint256 _index
+    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
+}
+
+
+interface IStakingRouter {
+    struct ModuleStateConfig {
+        address moduleAddress;
+        uint16 moduleFee;
+        uint16 treasuryFee;
+        uint16 depositTargetShare;
+        uint16 withdrawalProtectShare;
+        uint8 status;
+        uint8 withdrawalCredentialsType;
+    }
+
+    function getStakingModuleStateConfig(uint256 _stakingModuleId)
+        external
+        view
+        returns (ModuleStateConfig memory stateConfig);
+
+    function getStakingModuleMaxEB(uint256 _stakingModuleId) external view returns (uint256);
+}
+
 interface ILidoLocator {
     function validatorExitDelayVerifier() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
     function oracleReportSanityChecker() external view returns(address);
+    function stakingRouter() external view returns (address);
 }
 
 /**
@@ -35,8 +77,6 @@ interface ILidoLocator {
  */
 abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
-    using ExitLimitUtilsStorage for bytes32;
-    using ExitLimitUtils for ExitRequestLimitData;
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -66,6 +106,17 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     error InvalidRequestsDataSortOrder();
 
     /**
+     * @notice Thrown when provided public key does not match the registered signing key
+     * @param index Index of the validator in the exit request list
+     */
+    error InvalidPublicKey(uint256 index);
+
+    /**
+     * @notice Thrown when retrieved pubkey length is invalid
+     */
+    error InvalidRetrievedKeyLength();
+
+    /**
      * Thrown when there are attempt to send exit events for request that was not submitted earlier by trusted entities
      */
     error ExitHashNotSubmitted();
@@ -93,11 +144,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     error InvalidExitDataIndexSortOrder();
 
     /**
-     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
-     * @param requestsCount Amount of requests that were sent for processing
-     * @param remainingLimit Amount of requests that still can be processed at current day
+     * @notice Thrown when remaining exit balance limit is not enough to cover the exit requests
+     * @param balanceEth Total balance being requested for exit in ETH
+     * @param remainingLimitEth Remaining balance limit in ETH that can still be processed
      */
-    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
+    error ExitRequestsLimitExceeded(uint256 balanceEth, uint256 remainingLimitEth);
 
     /**
      * @notice Thrown when submitting was not started for request
@@ -109,6 +160,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @param requestsCount  Amount of requests that were sent for processing
      */
     error TooManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerReport);
+
+    error UnexpectedMaxEB();
 
     /**
      * @notice Emitted when an entity with the SUBMIT_REPORT_HASH_ROLE role submits a hash of the exit requests data.
@@ -134,11 +187,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Emitted when limits configs are set.
-     * @param maxExitRequestsLimit The maximum number of exit requests.
-     * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param maxExitBalanceEth The maximum exit balance limit in ETH.
+     * @param balancePerFrameEth The exit balance in ETH that can be restored per frame.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameEth` can be restored.
      */
-    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
+    event ExitBalanceLimitSet(uint256 maxExitBalanceEth, uint256 balancePerFrameEth, uint256 frameDurationInSec);
 
     /**
      * @notice Emitted when exit requests were delivered
@@ -148,7 +201,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Emitted when max validators per report value is set.
-     * @param maxValidatorsPerReport The number of valdiators allowed per report.
+     * @param maxValidatorsPerReport The number of validators allowed per report.
      */
     event SetMaxValidatorsPerReport(uint256 maxValidatorsPerReport);
 
@@ -161,6 +214,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 nodeOpId;
         uint256 moduleId;
         uint256 valIndex;
+        uint256 keyIndex;  // - will be max uint256 for format 1, actual value for format 2
         bytes pubkey;
     }
 
@@ -181,6 +235,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
+    uint256 internal constant PACKED_REQUEST_LENGTH_V2 = 72;
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
@@ -202,13 +257,25 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     ///
     uint256 public constant DATA_FORMAT_LIST = 1;
 
+    /// @notice The extended list format that includes a key index for each validator.
+    ///
+    /// Each validator exit request is 72 bytes:
+    ///
+    /// MSB <-------------------------------------------------------------------- LSB
+    /// |  3 bytes   |  5 bytes   |     8 bytes      |   8 bytes  |    48 bytes     |
+    /// |  moduleId  |  nodeOpId  |  validatorIndex  |  keyIndex  | validatorPubkey |
+    ///
+    /// Encoding and sorting rules are identical to `DATA_FORMAT_LIST`.
+    /// `keyIndex` is used to validate the pubkey against on-chain registered keys.
+    uint256 public constant DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
+
     ILidoLocator internal immutable LOCATOR;
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
-    // Storage slot for exit request limit configuration and current quota tracking
-    bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
+    // Storage slot for exit balance limit configuration and current quota tracking (in ETH, not Gwei)
+    bytes32 internal constant EXIT_BALANCE_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.exitBalanceLimitEth");
     // Storage slot for the maximum number of validator exit requests allowed per processing report
     bytes32 internal constant MAX_VALIDATORS_PER_REPORT_POSITION =
         keccak256("lido.ValidatorsExitBus.maxValidatorsPerReport");
@@ -218,7 +285,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     uint256 public constant EXIT_TYPE = 2;
 
-    /// @dev Ensures the contract’s ETH balance is unchanged.
+    /// @dev Ensures the contract's ETH balance is unchanged.
     modifier preservesEthBalance() {
         uint256 balanceBeforeCall = address(this).balance - msg.value;
         _;
@@ -272,16 +339,17 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _checkExitRequestData(request.data, request.dataFormat);
         _checkContractVersion(requestStatus.contractVersion);
 
-        uint256 requestsCount = request.data.length / PACKED_REQUEST_LENGTH;
+        uint256 requestsCount = request.data.length / _getPackedRequestLength(request.dataFormat);
         uint256 maxRequestsPerReport = _getMaxValidatorsPerReport();
 
         if (requestsCount > maxRequestsPerReport) {
             revert TooManyExitRequestsInReport(requestsCount, maxRequestsPerReport);
         }
 
-        _consumeLimit(requestsCount);
+        uint256 totalBalanceEth = _calculateTotalExitBalanceEth(request.data, request.dataFormat);
+        _consumeLimit(totalBalanceEth);
 
-        _processExitRequestsList(request.data);
+        _processExitRequestsList(request.data, request.dataFormat);
 
         TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
             TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + requestsCount
@@ -332,7 +400,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](exitDataIndexes.length);
 
         uint256 lastExitDataIndex = type(uint256).max;
-        uint256 requestsCount = exitsData.data.length / PACKED_REQUEST_LENGTH;
+        uint256 requestsCount = exitsData.data.length / _getPackedRequestLength(exitsData.dataFormat);
 
         for (uint256 i = 0; i < exitDataIndexes.length; i++) {
             if (exitDataIndexes[i] >= requestsCount) {
@@ -345,7 +413,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             lastExitDataIndex = exitDataIndexes[i];
 
-            ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitDataIndexes[i]);
+            ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitsData.dataFormat, exitDataIndexes[i]);
 
             if (validatorData.moduleId == 0) revert InvalidModuleId();
 
@@ -363,45 +431,45 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Sets the limits config
-     * @param maxExitRequestsLimit The maximum number of exit requests.
-     * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param maxExitBalanceEth The maximum exit balance limit in ETH.
+     * @param balancePerFrameEth The exit balance in ETH that can be restored per frame.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameEth` can be restored.
      */
     function setExitRequestLimit(
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) external onlyRole(EXIT_REQUEST_LIMIT_MANAGER_ROLE) {
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     /**
      * @notice Returns information about current limits data
-     * @return maxExitRequestsLimit Maximum exit requests limit
-     * @return exitsPerFrame The number of exits that can be restored per frame.
-     * @return frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
-     * @return prevExitRequestsLimit Limit left after previous requests
-     * @return currentExitRequestsLimit Current exit requests limit
+     * @return maxExitBalanceEth Maximum exit balance limit in ETH
+     * @return balancePerFrameEth The exit balance in ETH that can be restored per frame
+     * @return frameDurationInSec The duration of each frame, in seconds, after which `balancePerFrameEth` can be restored
+     * @return prevExitBalanceEth Balance limit in ETH left after previous requests
+     * @return currentExitBalanceEth Current exit balance limit in ETH
      */
     function getExitRequestLimitFullInfo()
         external
         view
         returns (
-            uint256 maxExitRequestsLimit,
-            uint256 exitsPerFrame,
+            uint256 maxExitBalanceEth,
+            uint256 balancePerFrameEth,
             uint256 frameDurationInSec,
-            uint256 prevExitRequestsLimit,
-            uint256 currentExitRequestsLimit
+            uint256 prevExitBalanceEth,
+            uint256 currentExitBalanceEth
         )
     {
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        maxExitRequestsLimit = exitRequestLimitData.maxExitRequestsLimit;
-        exitsPerFrame = exitRequestLimitData.exitsPerFrame;
-        frameDurationInSec = exitRequestLimitData.frameDurationInSec;
-        prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
+        LimitData memory limitData = RateLimitStorage.getStorageLimit(EXIT_BALANCE_LIMIT_POSITION);
+        maxExitBalanceEth = limitData.maxLimit;
+        balancePerFrameEth = limitData.itemsPerFrame;
+        frameDurationInSec = limitData.frameDurationInSec;
+        prevExitBalanceEth = limitData.prevLimit;
 
-        currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
-            ? exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp())
+        currentExitBalanceEth = RateLimit.isLimitSet(limitData)
+            ? RateLimit.calculateCurrentLimit(limitData, _getTimestamp())
             : type(uint256).max;
     }
 
@@ -457,11 +525,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
         _checkExitRequestData(exitRequests, dataFormat);
 
-        if (index >= exitRequests.length / PACKED_REQUEST_LENGTH) {
-            revert ExitDataIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
+        uint256 requestsCount = exitRequests.length / _getPackedRequestLength(dataFormat);
+        if (index >= requestsCount) {
+            revert ExitDataIndexOutOfRange(index, requestsCount);
         }
 
-        ValidatorData memory validatorData = _getValidatorData(exitRequests, index);
+        ValidatorData memory validatorData = _getValidatorData(exitRequests, dataFormat, index);
 
         valIndex = validatorData.valIndex;
         nodeOpId = validatorData.nodeOpId;
@@ -507,14 +576,23 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();
     }
 
+    /// @dev Returns the packed request length for a given data format
+    function _getPackedRequestLength(uint256 dataFormat) internal pure returns (uint256) {
+        if (dataFormat == DATA_FORMAT_LIST) {
+            return PACKED_REQUEST_LENGTH; // 64
+        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            return PACKED_REQUEST_LENGTH_V2; // 72
+        } else {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+    }
+
     /// Internal functions
 
     function _checkExitRequestData(bytes calldata requests, uint256 dataFormat) internal pure {
-        if (dataFormat != DATA_FORMAT_LIST) {
-            revert UnsupportedRequestsDataFormat(dataFormat);
-        }
+        uint256 packedLength = _getPackedRequestLength(dataFormat); // validates format
 
-        if (requests.length == 0 || requests.length % PACKED_REQUEST_LENGTH != 0) {
+        if (requests.length == 0 || requests.length % packedLength != 0) {
             revert InvalidRequestsDataLength();
         }
     }
@@ -554,38 +632,40 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     function _setExitRequestLimit(
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) internal {
         uint256 timestamp = _getTimestamp();
 
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
-                maxExitRequestsLimit,
-                exitsPerFrame,
-                frameDurationInSec,
-                timestamp
-            )
+        LimitData memory limitData = RateLimitStorage.getStorageLimit(EXIT_BALANCE_LIMIT_POSITION);
+        limitData = RateLimit.setLimits(
+            limitData,
+            maxExitBalanceEth,
+            balancePerFrameEth,
+            frameDurationInSec,
+            timestamp
         );
+        RateLimitStorage.setStorageLimit(EXIT_BALANCE_LIMIT_POSITION, limitData);
 
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        emit ExitBalanceLimitSet(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
-    function _consumeLimit(uint256 requestsCount) internal {
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (!exitRequestLimitData.isExitLimitSet()) {
+    function _consumeLimit(uint256 balanceEth) internal {
+        LimitData memory limitData = RateLimitStorage.getStorageLimit(EXIT_BALANCE_LIMIT_POSITION);
+        if (!RateLimit.isLimitSet(limitData)) {
             return;
         }
 
-        uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
+        uint256 limitEth = RateLimit.calculateCurrentLimit(limitData, _getTimestamp());
 
-        if (requestsCount > limit) {
-            revert ExitRequestsLimitExceeded(requestsCount, limit);
+        if (balanceEth > limitEth) {
+            revert ExitRequestsLimitExceeded(balanceEth, limitEth);
         }
 
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updatePrevExitLimit(limit - requestsCount, _getTimestamp())
+        RateLimitStorage.setStorageLimit(
+            EXIT_BALANCE_LIMIT_POSITION,
+            RateLimit.updatePrevLimit(limitData, limitEth - balanceEth, _getTimestamp())
         );
     }
 
@@ -634,13 +714,35 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /// Methods for reading data from tightly packed validator exit requests
     /// Format DATA_FORMAT_LIST = 1;
 
-    /**
-     * @notice Method for reading node operator id, module id and validator index from validator exit request data
-     * @param exitRequestData Validator exit requests data. DATA_FORMAT = 1
-     * @param index index of request in array above
-     * @return validatorData Validator data including node operator id, module id, validator index
-     */
+   /**
+    * @notice Method for reading node operator id, module id, validator index, and optionally key index
+    * from validator exit request data
+    * @param exitRequestData Validator exit requests data
+    * @param dataFormat Format of the data (1 or 2)
+    * @param index index of request in array above
+    * @return validatorData Validator data including node operator id, module id, validator index, and key index
+    */
     function _getValidatorData(
+        bytes calldata exitRequestData,
+        uint256 dataFormat,
+        uint256 index
+    ) internal pure returns (ValidatorData memory validatorData) {
+        if (dataFormat == DATA_FORMAT_LIST) {
+            return _getValidatorDataV1(exitRequestData, index);
+        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            return _getValidatorDataV2(exitRequestData, index);
+        } else {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+    }
+
+    /**
+    * @notice Extracts validator data from format 1 (64 bytes per request, no keyIndex)
+    * @param exitRequestData Validator exit requests data
+    * @param index index of request in array
+    * @return validatorData Validator data with keyIndex = type(uint256).max
+    */
+    function _getValidatorDataV1(
         bytes calldata exitRequestData,
         uint256 index
     ) internal pure returns (ValidatorData memory validatorData) {
@@ -663,6 +765,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         validatorData.valIndex = uint64(dataWithoutPubkey);
         validatorData.nodeOpId = uint40(dataWithoutPubkey >> 64);
         validatorData.moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+        validatorData.keyIndex = type(uint256).max; // Format 1 always uses keyIndex set to max uint256 to indicate unused
 
         bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
         assembly {
@@ -676,10 +779,181 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-     * This method read report data (DATA_FORMAT=1) within a range
-     * Check dataWithoutPubkey <= lastDataWithoutPubkey needs to prevent duplicates
+    * @notice Extracts validator data from format 2 (72 bytes per request, includes keyIndex)
+    * @param exitRequestData Validator exit requests data
+    * @param index index of request in array
+    * @return validatorData Validator data with extracted keyIndex
+    */
+    function _getValidatorDataV2(
+        bytes calldata exitRequestData,
+        uint256 index
+    ) internal pure returns (ValidatorData memory validatorData) {
+        uint256 itemOffset;
+        uint256 dataWithoutPubkey;
+
+        assembly {
+            // Compute the start of this packed request (item)
+            itemOffset := add(exitRequestData.offset, mul(PACKED_REQUEST_LENGTH_V2, index))
+
+            // Load the first 24 bytes which contain moduleId (24 bits),
+            // nodeOpId (40 bits), valIndex (64 bits), and keyIndex (64 bits).
+            dataWithoutPubkey := shr(64, calldataload(itemOffset))
+        }
+
+        // dataWithoutPubkey format (192 bits total):
+        // MSB <--------------------------------- 192 bits ----------------------------------> LSB
+        // | 64 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | 64 bits: keyIndex |
+
+        validatorData.keyIndex = uint64(dataWithoutPubkey);
+        validatorData.valIndex = uint64(dataWithoutPubkey >> 64);
+        validatorData.nodeOpId = uint40(dataWithoutPubkey >> (64 + 64));
+        validatorData.moduleId = uint24(dataWithoutPubkey >> (64 + 64 + 40));
+
+        bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
+        assembly {
+            itemOffset := add(exitRequestData.offset, mul(PACKED_REQUEST_LENGTH_V2, index))
+            let pubkeyCalldataOffset := add(itemOffset, 24)
+            let pubkeyMemPtr := add(pubkey, 32)
+            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+        }
+
+        validatorData.pubkey = pubkey;
+    }
+
+    /**
+    * @notice Calculates the total balance in ETH for all validators in the exit requests
+    * @dev This function determines the max effective balance based on the module's withdrawal credentials type:
+    *      - Legacy modules (0x01 withdrawal credentials): 32 ETH per validator
+    *      - Compounding modules (0x02 withdrawal credentials): 2048 ETH per validator (post-MaxEB/EIP-7251)
+    *
+    *      The withdrawal credentials type is queried from the Staking Router for each module,
+    *      eliminating the need for hardcoded module IDs.
+    *
+    *      For gas efficiency, module types are cached during iteration to avoid repeated external calls
+    *      for the same module.
+    *
+    * @param data Packed exit requests data
+    * @param dataFormat Format of the data (1 or 2)
+    * @return totalBalanceEth Total balance of all validators being exited in ETH
+    */
+    function _calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat)
+        internal
+        view
+        returns (uint256 totalBalanceEth)
+    {
+        uint256 packedLength;
+        uint256 dataShift;
+        uint256 moduleShift;
+
+        if (dataFormat == DATA_FORMAT_LIST) {
+            packedLength = PACKED_REQUEST_LENGTH;
+            dataShift = 128;
+            moduleShift = 104;
+        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            packedLength = PACKED_REQUEST_LENGTH_V2;
+            dataShift = 64;
+            moduleShift = 168;
+        } else {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+
+        uint256 baseOffset;
+        assembly {
+            baseOffset := data.offset
+        }
+
+        uint256 requestsCount = data.length / packedLength;
+        uint256 cachedModuleId = 0;
+        uint256 cachedModuleMaxEBEth = 0;
+        uint256 totalBalanceEthAccum = 0;
+
+        for (uint256 i = 0; i < requestsCount; ++i) {
+            uint256 moduleId;
+            uint256 itemOffset;
+
+            assembly {
+                itemOffset := add(baseOffset, mul(packedLength, i))
+                let dataWithoutPubkey := shr(dataShift, calldataload(itemOffset))
+                moduleId := shr(moduleShift, dataWithoutPubkey) // Extract top 24 bits
+            }
+
+            if (moduleId != cachedModuleId) {
+                cachedModuleId = moduleId;
+                // downscale, i.e. 2048 ether => 2048
+                cachedModuleMaxEBEth = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleMaxEB(moduleId) / 1 ether;
+                if (cachedModuleMaxEBEth > type(uint32).max) {
+                    revert UnexpectedMaxEB();
+                }
+            }
+            totalBalanceEthAccum += cachedModuleMaxEBEth;
+        }
+
+        totalBalanceEth = totalBalanceEthAccum;
+    }
+
+    /**
+     * @notice Verify that a pubkey belongs to the specified module and node operator
+     * @param moduleId Staking module ID
+     * @param nodeOpId Node operator ID
+     * @param keyIndex Index of the key in the module
+     * @param pubkey Public key to verify (48 bytes)
+     * @param requestIndex Index of the request in the batch (for error reporting)
+     * @param cachedModuleId Previously cached module ID (type(uint256).max if none)
+     * @param cachedModuleAddress Previously cached module address
+     * @return newModuleAddress Updated module address (same if module unchanged)
      */
-    function _processExitRequestsList(bytes calldata data) internal {
+    function _verifyKey(
+        uint256 moduleId,
+        uint256 nodeOpId,
+        uint256 keyIndex,
+        bytes calldata pubkey,
+        uint256 requestIndex,
+        uint256 cachedModuleId,
+        address cachedModuleAddress
+    ) internal view returns (address newModuleAddress) {
+        if (moduleId == cachedModuleId) {
+            newModuleAddress = cachedModuleAddress;
+        } else {
+            newModuleAddress = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId).moduleAddress;
+        }
+
+        bytes memory retrievedKeys = INewStakingModule(newModuleAddress)
+            .getSigningKeys(
+                nodeOpId,
+                keyIndex, // startIndex
+                1 // keysCount: get only 1 key
+            );
+
+        if (retrievedKeys.length != 48) {
+            revert InvalidRetrievedKeyLength();
+        }
+
+        if (keccak256(retrievedKeys) != keccak256(pubkey)) {
+            revert InvalidPublicKey(requestIndex);
+        }
+    }
+
+    /**
+    * @notice Dispatcher that processes exit requests based on data format
+    * @param data Packed exit requests data
+    * @param dataFormat Format of the data (1 or 2)
+    */
+    function _processExitRequestsList(bytes calldata data, uint256 dataFormat) internal {
+        if (dataFormat == DATA_FORMAT_LIST) {
+            _processExitRequestsListV1(data);
+        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            _processExitRequestsListV2(data);
+        } else {
+            revert UnsupportedRequestsDataFormat(dataFormat);
+        }
+    }
+
+    /**
+    * @notice Process exit requests for format 1 (64 bytes per request, no keyIndex)
+    * @dev Check dataWithoutPubkey <= lastDataWithoutPubkey prevents duplicates and ensures sorting
+    * @param data Packed exit requests data (DATA_FORMAT=1)
+    */
+    function _processExitRequestsListV1(bytes calldata data) internal {
         uint256 offset;
         uint256 offsetPastEnd;
         uint256 lastDataWithoutPubkey = 0;
@@ -728,6 +1002,89 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
+        }
+    }
+
+    /**
+    * @notice Process exit requests for format 2 (72 bytes per request, includes keyIndex)
+    * @dev Check dataWithoutPubkey <= lastDataWithoutPubkey prevents duplicates and ensures sorting
+    * @param data Packed exit requests data (DATA_FORMAT=2)
+    */
+    function _processExitRequestsListV2(bytes calldata data) internal {
+        uint256 offset;
+        uint256 offsetPastEnd;
+        uint256 lastDataWithoutPubkey = 0;
+        uint256 timestamp = _getTimestamp();
+        uint256 index = 0;
+
+        assembly {
+            offset := data.offset
+            offsetPastEnd := add(offset, data.length)
+        }
+
+        bytes calldata pubkey;
+        uint256 dataWithoutPubkey;
+        uint256 moduleId;
+
+        // Cache module data to avoid repeated external calls for the same module
+        uint256 cachedModuleId = 0;
+        address cachedModuleAddress;
+
+        assembly {
+            pubkey.length := 48
+        }
+
+        while (offset < offsetPastEnd) {
+            assembly {
+                // 24 most significant bytes are taken by module id, node op id, val index, and key index
+                dataWithoutPubkey := shr(64, calldataload(offset))
+                // the next 48 bytes are taken by the pubkey
+                pubkey.offset := add(offset, 24)
+                // totalling to 72 bytes
+                offset := add(offset, 72)
+            }
+
+            moduleId = uint24(dataWithoutPubkey >> (64 + 64 + 40));
+
+            if (moduleId == 0) {
+                revert InvalidModuleId();
+            }
+
+            //                              dataWithoutPubkey (192 bits)
+            // MSB <--------------------------------------------------------------------------------------- LSB
+            // | 64 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | 64 bits: keyIndex |
+            //
+            // Sorting compound key: (moduleId, nodeOpId, valIndex, keyIndex)
+            if (dataWithoutPubkey <= lastDataWithoutPubkey) {
+                revert InvalidRequestsDataSortOrder();
+            }
+
+            // Verify that the pubkey belongs to the module and node operator
+            // Cache is updated if module changed
+            cachedModuleAddress = _verifyKey(
+                moduleId,
+                uint40(dataWithoutPubkey >> (64 + 64)),  // nodeOpId
+                uint64(dataWithoutPubkey),                // keyIndex
+                pubkey,
+                index,
+                cachedModuleId,
+                cachedModuleAddress
+            );
+
+            cachedModuleId = moduleId;
+            lastDataWithoutPubkey = dataWithoutPubkey;
+
+            emit ValidatorExitRequest(
+                moduleId,
+                uint40(dataWithoutPubkey >> (64 + 64)),  // nodeOpId
+                uint64(dataWithoutPubkey >> 64),          // valIndex
+                pubkey,
+                timestamp
+            );
+
+            unchecked {
+                ++index;
+            }
         }
     }
 
