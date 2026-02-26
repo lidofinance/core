@@ -1,155 +1,33 @@
-import * as process from "node:process";
-
-import "@nomicfoundation/hardhat-chai-matchers";
-import "@nomicfoundation/ethereumjs-util";
-import "@nomicfoundation/hardhat-verify";
-import "@typechain/hardhat";
-
 import "dotenv/config";
-import "solidity-coverage";
-import "tsconfig-paths/register";
-import "hardhat-tracer";
-import "hardhat-watcher";
-import "hardhat-ignore-warnings";
-import "hardhat-contract-sizer";
-import "hardhat-gas-reporter";
-import { HardhatUserConfig } from "hardhat/config";
+import { configVariable, defineConfig } from "hardhat/config";
 
-import { mochaRootHooks } from "test/hooks";
+import HardhatToolbox from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 
-import "./tasks";
-
-import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers";
-
-const RPC_URL: string = process.env.RPC_URL || "";
+import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers.js";
+import { mochaRootHooks } from "./test/hooks/index.js";
 
 export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-const config: HardhatUserConfig = {
-  defaultNetwork: "hardhat",
-  gasReporter: {
-    enabled: !process.env.SKIP_GAS_REPORT,
-    reportPureAndViewMethods: true,
-    etherscan: process.env.ETHERSCAN_API_KEY || "",
+export default defineConfig({
+  plugins: [HardhatToolbox],
+  typechain: {
+    outDir: "typechain-types",
   },
-  networks: {
-    "hardhat": {
-      // setting base fee to 0 to avoid extra calculations doesn't work :(
-      // minimal base fee is 1 for EIP-1559
-      // gasPrice: 0,
-      // initialBaseFeePerGas: 0,
-      blockGasLimit: 30000000,
-      allowUnlimitedContractSize: true,
-      accounts: {
-        // default hardhat's node mnemonic
-        mnemonic: "test test test test test test test test test test test junk",
-        count: 30,
-        accountsBalance: "10000000000000000000000000",
-      },
-      forking: getHardhatForkingConfig(),
-      hardfork: "prague",
-      mining: {
-        mempool: {
-          order: "fifo",
-        },
-      },
-    },
-    "custom": {
-      url: RPC_URL,
-      timeout: 120_000,
-    },
-    // local nodes
-    "local": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-    },
-    "local-devnet": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-      accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
-    },
-    // testnets
-    "sepolia": {
-      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
-      chainId: 11155111,
-      accounts: loadAccounts("sepolia"),
-    },
-    "hoodi": {
-      url: process.env.HOODI_RPC_URL || RPC_URL,
-      chainId: 560048,
-      accounts: loadAccounts("hoodi"),
-    },
-    "mainnet": {
-      url: RPC_URL,
-      chainId: 1,
-      accounts: loadAccounts("mainnet"),
-    },
-    // forks
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
-    "sepolia-fork": {
-      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
-      chainId: 11155111,
-    },
-    "hoodi-fork": {
-      url: process.env.HOODI_RPC_URL || RPC_URL,
-      chainId: 560048,
+  test: {
+    mocha: {
+      rootHooks: mochaRootHooks,
     },
   },
-  etherscan: {
-    customChains: [
-      {
-        network: "local-devnet",
-        chainId: 32382,
-        urls: {
-          apiURL: "http://localhost:3080/api",
-          browserURL: "http://localhost:3080",
-        },
-      },
-      {
-        network: "hoodi",
-        chainId: 560048,
-        urls: {
-          apiURL: "https://api-hoodi.etherscan.io/api",
-          browserURL: "https://hoodi.etherscan.io/",
-        },
-      },
-      {
-        network: "local-devnet",
-        chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),
-        urls: {
-          apiURL: process.env.LOCAL_DEVNET_EXPLORER_API_URL ?? "",
-          browserURL: process.env.LOCAL_DEVNET_EXPLORER_URL ?? "",
-        },
-      },
-      {
-        network: "holesky",
-        chainId: 17000,
-        urls: {
-          apiURL: "https://api-holesky.etherscan.io/api",
-          browserURL: "https://holesky.etherscan.io/",
-        },
-      },
-      {
-        network: "sepolia",
-        chainId: 11155111,
-        urls: {
-          apiURL: "https://api-sepolia.etherscan.io/api",
-          browserURL: "https://sepolia.etherscan.io/",
-        },
-      },
-      {
-        network: "hoodi",
-        chainId: 560048,
-        urls: {
-          apiURL: "https://api-hoodi.etherscan.io/api",
-          browserURL: "https://hoodi.etherscan.io/",
-        },
-      },
-    ],
-    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL ? "local-devnet" : process.env.ETHERSCAN_API_KEY || "",
+  paths: {
+    sources: {
+      solidity: ["contracts", "test"],
+    },
+    tests: {
+      mocha: "test",
+    },
   },
   solidity: {
+    npmFilesToBuild: ["@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol"],
     compilers: [
       {
         version: "0.4.24",
@@ -219,53 +97,122 @@ const config: HardhatUserConfig = {
       },
     },
   },
-  tracer: {
-    tasks: ["watch"],
-  },
-  typechain: {
-    outDir: "typechain-types",
-    target: "ethers-v6",
-    alwaysGenerateOverloads: false,
-    externalArtifacts: ["externalArtifacts/*.json"],
-    dontOverrideCompile: false,
-  },
-  watcher: {
-    test: {
-      tasks: [
-        { command: "compile", params: { quiet: true } },
-        { command: "test", params: { noCompile: true, testFiles: ["{path}"] } },
-      ],
-      files: ["./test/**/*"],
-      clearOnStart: true,
-      start: "echo Running tests...",
+  networks: {
+    "default": {
+      type: "edr-simulated",
+      // setting base fee to 0 to avoid extra calculations doesn't work :(
+      // minimal base fee is 1 for EIP-1559
+      // gasPrice: 0,
+      // initialBaseFeePerGas: 0,
+      blockGasLimit: 30000000,
+      allowUnlimitedContractSize: true,
+      accounts: {
+        // default hardhat's node mnemonic
+        mnemonic: "test test test test test test test test test test test junk",
+        count: 30,
+        accountsBalance: "10000000000000000000000000",
+      },
+      forking: getHardhatForkingConfig(),
+      hardfork: "prague",
+      mining: {
+        mempool: {
+          order: "fifo",
+        },
+      },
+    },
+    "custom": {
+      type: "http",
+      url: configVariable("RPC_URL"),
+      timeout: 120_000,
+    },
+    "local": {
+      type: "http",
+      url: configVariable("LOCAL_RPC_URL"),
+    },
+    "local-devnet": {
+      type: "http",
+      url: configVariable("LOCAL_RPC_URL"),
+      accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
+    },
+    "sepolia": {
+      type: "http",
+      url: configVariable("SEPOLIA_RPC_URL"),
+      chainId: 11155111,
+      accounts: loadAccounts("sepolia"),
+    },
+    "hoodi": {
+      type: "http",
+      url: configVariable("HOODI_RPC_URL"),
+      chainId: 560048,
+      accounts: loadAccounts("hoodi"),
+    },
+    "mainnet": {
+      type: "http",
+      url: configVariable("RPC_URL"),
+      chainId: 1,
+      accounts: loadAccounts("mainnet"),
+    },
+    "mainnet-fork": {
+      type: "http",
+      url: configVariable("MAINNET_RPC_URL"),
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
+    "sepolia-fork": {
+      type: "http",
+      url: configVariable("SEPOLIA_RPC_URL"),
+      chainId: 11155111,
+    },
+    "hoodi-fork": {
+      type: "http",
+      url: configVariable("HOODI_RPC_URL"),
+      chainId: 560048,
     },
   },
-  mocha: {
-    fullTrace: true,
-    rootHooks: mochaRootHooks,
-    timeout: 20 * 60 * 1000, // 20 minutes
-  },
-  warnings: {
-    "@aragon/**/*": {
-      default: "off",
-    },
-    "contracts/*/mocks/**/*": {
-      default: "off",
-    },
-    "test/*/contracts/**/*": {
-      default: "off",
-    },
-    "contracts/common/interfaces/ILidoLocator.sol": {
-      default: "off",
+  verify: {
+    etherscan: {
+      apiKey: configVariable("ETHERSCAN_API_KEY"),
     },
   },
-  contractSizer: {
-    alphaSort: false,
-    disambiguatePaths: false,
-    runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
-    strict: false,
-    except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
+  chainDescriptors: {
+    32382: {
+      name: "local-devnet",
+      blockExplorers: {
+        etherscan: {
+          name: "local-devnet",
+          apiUrl: process.env.LOCAL_DEVNET_EXPLORER_API_URL ?? "",
+          url: process.env.LOCAL_DEVNET_EXPLORER_URL ?? "",
+        },
+      },
+    },
+    17000: {
+      name: "holesky",
+      blockExplorers: {
+        etherscan: {
+          name: "holesky",
+          apiUrl: "https://api-holesky.etherscan.io/api",
+          url: "https://holesky.etherscan.io/",
+        },
+      },
+    },
+    11155111: {
+      name: "sepolia",
+      blockExplorers: {
+        etherscan: {
+          name: "sepolia",
+          apiUrl: "https://api-sepolia.etherscan.io/api",
+          url: "https://sepolia.etherscan.io/",
+        },
+      },
+    },
+    560048: {
+      name: "hoodi",
+      blockExplorers: {
+        etherscan: {
+          name: "hoodi",
+          apiUrl: "https://api-hoodi.etherscan.io/api",
+          url: "https://hoodi.etherscan.io/",
+        },
+      },
+    },
   },
-};
-
-export default config;
+});
