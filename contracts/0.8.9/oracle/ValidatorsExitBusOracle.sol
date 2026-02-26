@@ -227,7 +227,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     }
 
     function _handleConsensusReportData(ReportData calldata data) internal {
-        if (data.dataFormat != DATA_FORMAT_LIST && data.dataFormat != DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+        if (data.dataFormat != DATA_FORMAT_LIST_WITH_KEY_INDEX) {
             revert UnsupportedRequestsDataFormat(data.dataFormat);
         }
 
