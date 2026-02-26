@@ -53,7 +53,7 @@ library SRUtils {
         if (target == address(0)) revert ZeroAddress();
     }
 
-    /// @notice Returns true if the string length is within the allowed limit
+    /// @dev Reverts if the string length is out of allowed limit
     function _validateModuleName(string memory name) internal pure {
         if (bytes(name).length == 0 || bytes(name).length > MAX_STAKING_MODULE_NAME_LENGTH) {
             revert StakingModuleWrongName();
@@ -88,6 +88,7 @@ library SRUtils {
         }
         return uint64(_amountGwei);
     }
+
     function _validateModulesCount() internal view {
         if (SRStorage.getModulesCount() >= MAX_STAKING_MODULES_COUNT) {
             revert StakingModulesLimitExceeded();
@@ -153,15 +154,6 @@ library SRUtils {
 
     function _getTotalModulesBalance() internal view returns (uint256) {
         return _getTotalModulesActiveBalance() + _fromGwei(SRStorage.getRouterState().accounting.pendingBalanceGwei);
-    }
-
-    ///  @dev calculate module capacity in ETH
-    function _getModuleCapacity(uint8 withdrawalCredentialsType, uint256 availableKeysCount)
-        internal
-        pure
-        returns (uint256)
-    {
-        return availableKeysCount * _getModuleMEB(withdrawalCredentialsType);
     }
 
     function _toGwei(uint256 amount) internal pure returns (uint64) {

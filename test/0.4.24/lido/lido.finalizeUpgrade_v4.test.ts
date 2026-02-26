@@ -24,12 +24,8 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
 
   before(async () => {
     [deployer] = await ethers.getSigners();
-    const fastLaneLib = await ethers.deployContract("FastLaneStorage", deployer);
     impl = await ethers.deployContract("Lido__HarnessForFinalizeUpgradeV4", {
       signer: deployer,
-      libraries: {
-        ["contracts/0.4.24/lib/FastLaneStorage.sol:FastLaneStorage"]: await fastLaneLib.getAddress(),
-      },
     });
     [lido] = await proxify({ impl, admin: deployer });
   });

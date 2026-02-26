@@ -40,25 +40,7 @@ library SRLib {
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
 
-    /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant STAKING_MODULES_MAPPING_POSITION = keccak256("lido.StakingRouter.stakingModules");
-    /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant STAKING_MODULE_INDICES_MAPPING_POSITION =
-        keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
-    /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant LIDO_POSITION = keccak256("lido.StakingRouter.lido");
-    /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant WITHDRAWAL_CREDENTIALS_POSITION = keccak256("lido.StakingRouter.withdrawalCredentials");
-    /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant STAKING_MODULES_COUNT_POSITION = keccak256("lido.StakingRouter.stakingModulesCount");
-    /// @dev [deprecated] old storage slots, remove after 1st migration
-    bytes32 internal constant LAST_STAKING_MODULE_ID_POSITION = keccak256("lido.StakingRouter.lastStakingModuleId");
-    /// @dev [deprecated] old Versioned storage slot
-    bytes32 internal constant CONTRACT_VERSION_POSITION = keccak256("lido.Versioned.contractVersion");
-
-    error WrongInitialMigrationState();
     error StakingModuleAddressExists();
-    error BPSOverflow();
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
     error ReportedExitedValidatorsExceedDeposited(
         uint256 reportedExitedValidatorsCount, uint256 depositedValidatorsCount
@@ -72,36 +54,47 @@ library SRLib {
     error UnrecoverableModuleError();
     error ExitedValidatorsCountCannotDecrease();
     error InvalidReportData(uint256 code);
-    error InvalidDepositAmount();
 
+    /// @notice One-time migration from old storage layout to new RouterState struct.
+    /// @dev Storage slot positions are computed inline for migration-only use.
+    ///      After migration, this function can be removed.
     function _migrateStorage() public {
-        // revert migration if data is already exists
+        // skip migration if data already exists
         if (SRStorage.getModulesCount() > 0) {
             return;
-            // revert WrongInitialMigrationState();
         }
 
-        // cleanup old storage slot fully as bytes32
-        delete LIDO_POSITION.getBytes32Slot().value;
+        // Old storage slot positions (computed inline for migration-only use)
+        bytes32 LIDO_POS = keccak256("lido.StakingRouter.lido");
+        bytes32 WITHDRAWAL_CREDENTIALS_POS = keccak256("lido.StakingRouter.withdrawalCredentials");
+        bytes32 STAKING_MODULES_COUNT_POS = keccak256("lido.StakingRouter.stakingModulesCount");
+        bytes32 LAST_STAKING_MODULE_ID_POS = keccak256("lido.StakingRouter.lastStakingModuleId");
+        bytes32 CONTRACT_VERSION_POS = keccak256("lido.Versioned.contractVersion");
+        bytes32 STAKING_MODULES_MAPPING_POS = keccak256("lido.StakingRouter.stakingModules");
+        bytes32 STAKING_MODULE_INDICES_POS = keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
 
-        // now use OZ slot
-        delete CONTRACT_VERSION_POSITION.getBytes32Slot().value;
+        // cleanup old storage slots
+        delete LIDO_POS.getBytes32Slot().value;
+        delete CONTRACT_VERSION_POS.getBytes32Slot().value;
 
         // migrate last staking module ID
-        SRStorage.getRouterState().lastModuleId = uint24(LAST_STAKING_MODULE_ID_POSITION.getUint256Slot().value);
-        delete LAST_STAKING_MODULE_ID_POSITION.getBytes32Slot().value;
+        SRStorage.getRouterState().lastModuleId = uint24(LAST_STAKING_MODULE_ID_POS.getUint256Slot().value);
+        delete LAST_STAKING_MODULE_ID_POS.getBytes32Slot().value;
 
         // migrate WC
-        SRStorage.getRouterState().withdrawalCredentials = WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
-        delete WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
+        SRStorage.getRouterState().withdrawalCredentials = WITHDRAWAL_CREDENTIALS_POS.getBytes32Slot().value;
+        delete WITHDRAWAL_CREDENTIALS_POS.getBytes32Slot().value;
 
-        uint256 modulesCount = STAKING_MODULES_COUNT_POSITION.getUint256Slot().value;
-        delete STAKING_MODULES_COUNT_POSITION.getBytes32Slot().value;
+        uint256 modulesCount = STAKING_MODULES_COUNT_POS.getUint256Slot().value;
+        delete STAKING_MODULES_COUNT_POS.getBytes32Slot().value;
 
         // get old storage ref. for staking modules mapping
-        mapping(uint256 => StakingModule) storage oldStakingModules = _getStorageStakingModulesMapping();
+        mapping(uint256 => StakingModule) storage oldStakingModules =
+            _getStorageStakingModulesMapping(STAKING_MODULES_MAPPING_POS);
         // get old storage ref. for staking modules indices mapping
-        mapping(uint256 => uint256) storage oldStakingModuleIndices = _getStorageStakingIndicesMapping();
+        mapping(uint256 => uint256) storage oldStakingModuleIndices =
+            _getStorageStakingIndicesMapping(STAKING_MODULE_INDICES_POS);
+
         uint64 totalActiveBalanceGwei;
         StakingModule memory smOld;
 
@@ -122,8 +115,8 @@ library SRLib {
                 moduleAddress: smOld.stakingModuleAddress,
                 moduleFee: smOld.stakingModuleFee,
                 treasuryFee: smOld.treasuryFee,
-                depositTargetShare: smOld.stakeShareLimit,
-                withdrawalProtectShare: smOld.priorityExitShareThreshold,
+                stakeShareLimit: smOld.stakeShareLimit,
+                priorityExitShareThreshold: smOld.priorityExitShareThreshold,
                 status: StakingModuleStatus(smOld.status),
                 withdrawalCredentialsType: WithdrawalCredentials.WC_TYPE_01
             });
@@ -151,10 +144,36 @@ library SRLib {
             delete oldStakingModuleIndices[_moduleId];
         }
 
+        // cleanup old mapping storage slots
+        delete STAKING_MODULES_MAPPING_POS.getBytes32Slot().value;
+        delete STAKING_MODULE_INDICES_POS.getBytes32Slot().value;
+
         /// @dev use the same value for both CL balance and active balance at migration moment,
         /// next Oracle report will update the both values
         SRStorage.getRouterState().accounting =
             RouterStateAccounting({activeBalanceGwei: totalActiveBalanceGwei, pendingBalanceGwei: 0});
+    }
+
+    /// @dev Helper for migration - returns old staking modules mapping storage reference
+    function _getStorageStakingModulesMapping(bytes32 _position)
+        internal
+        pure
+        returns (mapping(uint256 => StakingModule) storage result)
+    {
+        assembly ("memory-safe") {
+            result.slot := _position
+        }
+    }
+
+    /// @dev Helper for migration - returns old staking module indices mapping storage reference
+    function _getStorageStakingIndicesMapping(bytes32 _position)
+        internal
+        pure
+        returns (mapping(uint256 => uint256) storage result)
+    {
+        assembly ("memory-safe") {
+            result.slot := _position
+        }
     }
 
     /// @dev calculate module effective balance at the migration moment
@@ -238,8 +257,8 @@ library SRLib {
         // forge-lint: disable-start(unsafe-typecast)
         stateConfig.moduleFee = uint16(_stakingModuleFee);
         stateConfig.treasuryFee = uint16(_treasuryFee);
-        stateConfig.depositTargetShare = uint16(_stakeShareLimit);
-        stateConfig.withdrawalProtectShare = uint16(_priorityExitShareThreshold);
+        stateConfig.stakeShareLimit = uint16(_stakeShareLimit);
+        stateConfig.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
         // 1 SSTORE
         _moduleId.getModuleState().config = stateConfig;
 
@@ -376,33 +395,12 @@ library SRLib {
                 }
                 // Calculate target validators for each module based on stake share limits
                 // Target validators = (stakeShareLimit * totalValidators) / TOTAL_BASIS_POINTS
-                uint256 targetValidators =
-                    (stateConfig.depositTargetShare * totalValidators) / SRUtils.TOTAL_BASIS_POINTS;
+                uint256 targetValidators = (stateConfig.stakeShareLimit * totalValidators) / SRUtils.TOTAL_BASIS_POINTS;
                 // Module capacity is limited by available validators and target share
                 validatorsCapacity = Math.min(targetValidators, validatorsCapacity);
             }
 
             _capacities[i] = validatorsCapacity;
-        }
-    }
-
-    /// @dev old storage ref. for staking modules mapping, remove after 1st migration
-    function _getStorageStakingModulesMapping()
-        internal
-        pure
-        returns (mapping(uint256 => StakingModule) storage result)
-    {
-        bytes32 position = STAKING_MODULES_MAPPING_POSITION;
-        assembly ("memory-safe") {
-            result.slot := position
-        }
-    }
-
-    /// @dev old storage ref. for staking modules mapping, remove after 1st migration
-    function _getStorageStakingIndicesMapping() internal pure returns (mapping(uint256 => uint256) storage result) {
-        bytes32 position = STAKING_MODULE_INDICES_MAPPING_POSITION;
-        assembly ("memory-safe") {
-            result.slot := position
         }
     }
 
