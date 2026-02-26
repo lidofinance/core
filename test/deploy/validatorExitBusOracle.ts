@@ -109,12 +109,7 @@ export async function deployVEBO(
   // to skip validation. Tests can explicitly configure keys if needed.
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
 
-  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
-    secondsPerSlot,
-    genesisTime,
-    locatorAddr,
-    stakingRouterAddr,
-  ]);
+  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [secondsPerSlot, genesisTime, locatorAddr]);
 
   const { consensus } = await deployHashConsensus(admin, {
     reportProcessor: oracle as unknown as ReportProcessor__Mock,
