@@ -120,9 +120,9 @@ struct ModuleStateConfig {
     /// @notice Part of the fee taken from staking rewards that goes to the treasury.
     uint16 treasuryFee;
     /// @notice Maximum stake share that can be allocated to a module, in BP.
-    uint16 depositTargetShare;
+    uint16 stakeShareLimit;
     /// @notice Module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP.
-    uint16 withdrawalProtectShare;
+    uint16 priorityExitShareThreshold;
     /// @notice Staking module status if staking module can not accept the deposits or can
     ///         participate in further reward distribution.
     StakingModuleStatus status;
@@ -140,8 +140,6 @@ struct ModuleStateDeposits {
     /// @notice block.number of the last deposit of the staking module.
     /// @dev NB: lastDepositBlock gets updated even if the deposit value was 0 and no actual deposit happened.
     uint64 lastDepositBlock;
-    /// @notice Current effective balance of the staking module, in Gwei.
-    /// @dev renamed from `exitedValidatorsCount` to `effectiveBalanceGwei`
     /// @notice The maximum number of validators that can be deposited in a single block.
     /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
     /// See docs for the `OracleReportSanityChecker.setAppearedValidatorsPerDayLimit` function.
@@ -171,7 +169,6 @@ struct RouterStateAccounting {
     uint64 pendingBalanceGwei;
     /// @notice total deposited balance since last report in Gwei.
     // uint64 depositedBalanceGwei;
-    // uint64 reserved1;
 }
 
 struct ModuleState {
@@ -208,6 +205,7 @@ struct StakingModuleSummary {
 }
 
 /// @notice A summary of node operator and its validators.
+/// @dev old data struct, kept for backward compatibility
 struct NodeOperatorSummary {
     /// @notice Shows whether the current target limit applied to the node operator.
     uint256 targetLimitMode;

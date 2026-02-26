@@ -86,15 +86,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error CannotDeposit();
     error EmptyWithdrawalsCredentials();
     error DirectETHTransfer();
-    error AppAuthDSMFailed();
     error AllocationExceedsTarget();
-    error DepositValueNotMultipleOfInitialDeposit();
     error StakingModuleStatusTheSame();
-    error LegacyStakingModuleRequired();
     error WrongArrayLength();
     error EmptyKeysList();
     error WrongPubkeysLength();
-    error TopUpAmountTooLow();
     error AmountNotAlignedToGwei();
     error AllocationExceedsLimit();
 
@@ -286,7 +282,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _exitedValidatorsCounts
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) returns (uint256) {
-        /// @dev validation of _stakingModuleId is done in _reportValidatorExitDelay
         return SRLib._updateExitedValidatorsCountByStakingModule(_stakingModuleIds, _exitedValidatorsCounts);
     }
 
@@ -300,7 +295,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SRLib._reportActiveBalancesByStakingModule(_stakingModuleIds, _activeBalancesGwei, _pendingBalancesGwei);
     }
 
-    /// @dev See {SRLib._reportStakingModuleExitedValidatorsCountByNodeOperator}.
+    /// @dev See {SRLib._reportStakingModuleOperatorExitedValidators}.
     ///
     /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
@@ -308,7 +303,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _nodeOperatorIds,
         bytes calldata _exitedValidatorsCounts
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
-        /// @dev validation of _stakingModuleId is done inside
         SRLib._reportStakingModuleOperatorExitedValidators(_stakingModuleId, _nodeOperatorIds, _exitedValidatorsCounts);
     }
 
@@ -350,7 +344,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _nodeOperatorIds,
         bytes calldata _vettedSigningKeysCounts
     ) external onlyRole(STAKING_MODULE_UNVETTING_ROLE) {
-        /// @dev validation of _stakingModuleId is done inside
         SRLib._decreaseStakingModuleVettedKeysCountByNodeOperator(
             _stakingModuleId, _nodeOperatorIds, _vettedSigningKeysCounts
         );
@@ -364,7 +357,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _publicKey,
         uint256 _eligibleToExitInSec
     ) external onlyRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE) {
-        /// @dev validation of _stakingModuleId is done inside
         SRLib._reportValidatorExitDelay(
             _stakingModuleId, _nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec
         );
@@ -686,10 +678,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function canDeposit(uint256 _stakingModuleId) external view returns (bool) {
         return hasStakingModule(_stakingModuleId) && _canDeposit(_stakingModuleId);
     }
-
-    // function _canDeposit(uint256 _stakingModuleId) internal view returns (bool) {
-    //     return SRLib._canDeposit(_stakingModuleId, _getAccountingOracle());
-    // }
 
     function _canDeposit(uint256 _moduleId) internal view returns (bool) {
         if (_moduleId.getModuleState().config.status == StakingModuleStatus.Active) {
@@ -1155,9 +1143,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         moduleState.stakingModuleAddress = stateConfig.moduleAddress;
         moduleState.stakingModuleFee = stateConfig.moduleFee;
         moduleState.treasuryFee = stateConfig.treasuryFee;
-        moduleState.stakeShareLimit = stateConfig.depositTargetShare;
+        moduleState.stakeShareLimit = stateConfig.stakeShareLimit;
         moduleState.status = uint8(stateConfig.status);
-        moduleState.priorityExitShareThreshold = stateConfig.withdrawalProtectShare;
+        moduleState.priorityExitShareThreshold = stateConfig.priorityExitShareThreshold;
         moduleState.withdrawalCredentialsType = stateConfig.withdrawalCredentialsType;
 
         ModuleStateDeposits storage stateDeposits = state.deposits;
