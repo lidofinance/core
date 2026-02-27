@@ -39,7 +39,7 @@ library BeaconChainDepositor {
         bytes memory _withdrawalCredentials,
         bytes memory _publicKeysBatch,
         bytes memory _signaturesBatch
-    ) external {
+    ) public {
         if (_publicKeysBatch.length != PUBLIC_KEY_LENGTH * _keysCount) {
             revert InvalidPublicKeysBatchLength(_publicKeysBatch.length, PUBLIC_KEY_LENGTH * _keysCount);
         }
@@ -68,7 +68,7 @@ library BeaconChainDepositor {
         bytes memory _withdrawalCredentials,
         bytes[] memory _publicKeys,
         uint256[] memory _amount
-    ) external {
+    ) public {
         uint256 len = _publicKeys.length;
         if (len == 0) return;
         if (len != _amount.length) revert ArrayLengthMismatch();
