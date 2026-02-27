@@ -1,6 +1,4 @@
-import hre from "hardhat";
-
-import {
+import type {
   AccountingOracle,
   IStakingModule,
   Lido,
@@ -8,12 +6,14 @@ import {
   NodeOperatorsRegistry,
   StakingRouter,
   WithdrawalQueueERC721,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { batch, log } from "lib";
+import { ethers, networkName } from "../hardhat.js";
+import { log } from "../log.js";
+import { batch } from "../promise.js";
 
-import { getNetworkConfig, ProtocolNetworkConfig } from "./networks";
-import {
+import { getNetworkConfig, type ProtocolNetworkConfig } from "./networks.js";
+import type {
   AragonContracts,
   ContractName,
   ContractType,
@@ -25,16 +25,16 @@ import {
   StakingModuleContracts,
   VaultsContracts,
   WstETHContracts,
-} from "./types";
+} from "./types.js";
 
 const guard = (address: string, env: string) => {
   if (!address) throw new Error(`${address} address is not set, please set it in the environment variables: ${env}`);
 };
 
 const getDiscoveryConfig = async () => {
-  const config = await getNetworkConfig(hre.network.name);
+  const config = await getNetworkConfig(networkName);
   if (!config) {
-    throw new Error(`Network ${hre.network.name} is not supported`);
+    throw new Error(`Network ${networkName} is not supported`);
   }
 
   const locatorAddress = config.get("locator");
@@ -48,7 +48,7 @@ const getDiscoveryConfig = async () => {
   guard(easyTrackExecutorAddress, config.env.easyTrackAddress);
 
   log.debug("Discovery config", {
-    "Network": hre.network.name,
+    "Network": networkName,
     "Source": config.source,
     "Locator address": locatorAddress,
     "Agent address": agentAddress,
@@ -63,7 +63,7 @@ const getDiscoveryConfig = async () => {
  * Load contract by name and address.
  */
 const loadContract = async <Name extends ContractName>(name: Name, address: string) => {
-  const contract = (await hre.ethers.getContractAt(name, address)) as unknown as LoadedContract<ContractType<Name>>;
+  const contract = (await ethers.getContractAt(name, address)) as unknown as LoadedContract<ContractType<Name>>;
   contract.address = address;
   return contract;
 };

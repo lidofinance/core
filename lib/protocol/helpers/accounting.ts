@@ -1,28 +1,21 @@
 import { expect } from "chai";
-import { ContractTransactionResponse, formatEther, Result } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractTransactionResponse, formatEther, Result } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { AccountingOracle } from "typechain-types";
-import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting";
+import type { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.js";
+import type { AccountingOracle } from "typechain-types/index.js";
 
-import {
-  advanceChainTime,
-  BigIntMath,
-  certainAddress,
-  ether,
-  EXTRA_DATA_FORMAT_EMPTY,
-  EXTRA_DATA_FORMAT_LIST,
-  getCurrentBlockTimestamp,
-  HASH_CONSENSUS_FAR_FUTURE_EPOCH,
-  impersonate,
-  log,
-  ONE_GWEI,
-  prepareExtraData,
-} from "lib";
-
-import { ProtocolContext } from "../types";
+import { impersonate } from "../../account.js";
+import { certainAddress } from "../../address.js";
+import { BigIntMath } from "../../bigint-math.js";
+import { HASH_CONSENSUS_FAR_FUTURE_EPOCH, ONE_GWEI } from "../../constants.js";
+import { ethers } from "../../hardhat.js";
+import { log } from "../../log.js";
+import { EXTRA_DATA_FORMAT_EMPTY, EXTRA_DATA_FORMAT_LIST, prepareExtraData } from "../../oracle.js";
+import { advanceChainTime, getCurrentBlockTimestamp } from "../../time.js";
+import { ether } from "../../units.js";
+import type { ProtocolContext } from "../types.js";
 
 export type OracleReportParams = {
   clDiff?: bigint;

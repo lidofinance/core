@@ -1,5 +1,6 @@
-import { Addressable, Signature, Signer, TypedDataDomain } from "ethers";
-import { network } from "hardhat";
+import { type Addressable, Signature, type Signer, type TypedDataDomain } from "ethers";
+
+import { networkConfig } from "../hardhat.js";
 
 export interface Permit {
   owner: string;
@@ -13,7 +14,7 @@ export async function stethDomain(verifyingContract: Addressable): Promise<Typed
   return {
     name: "Liquid staked Ether 2.0",
     version: "2",
-    chainId: network.config.chainId!,
+    chainId: networkConfig.chainId!,
     verifyingContract: await verifyingContract.getAddress(),
   };
 }
@@ -22,7 +23,7 @@ export async function wstethDomain(verifyingContract: Addressable): Promise<Type
   return {
     name: "Wrapped liquid staked Ether 2.0",
     version: "1",
-    chainId: network.config.chainId!,
+    chainId: networkConfig.chainId!,
     verifyingContract: await verifyingContract.getAddress(),
   };
 }

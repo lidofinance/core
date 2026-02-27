@@ -1,8 +1,8 @@
 import { solidityPackedKeccak256 } from "ethers";
 
-import { DepositSecurityModule } from "typechain-types";
+import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import { sign, toEip2098 } from "./ec";
+import { sign, toEip2098 } from "./ec.js";
 
 class DSMMessage {
   static MESSAGE_PREFIX: string;

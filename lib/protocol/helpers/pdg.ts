@@ -1,6 +1,5 @@
-import { log } from "lib/log";
-
-import { ProtocolContext } from "../types";
+import { log } from "../../log.js";
+import type { ProtocolContext } from "../types.js";
 
 export const ensurePredepositGuaranteeUnpaused = async (ctx: ProtocolContext) => {
   const { predepositGuarantee } = ctx.contracts;

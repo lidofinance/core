@@ -1,7 +1,6 @@
-import { ethers } from "hardhat";
-
-import { impersonate } from "lib";
-import { log } from "lib";
+import { impersonate } from "../account.js";
+import { ethers } from "../hardhat.js";
+import { log } from "../log.js";
 
 // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#configuration
 export const EIP7002_ADDRESS = "0x00000961Ef480Eb55e80D19ad83579A64c007002";

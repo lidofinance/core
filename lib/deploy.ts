@@ -1,14 +1,20 @@
-import { ContractFactory, ContractTransactionReceipt, Signer } from "ethers";
-import { ethers } from "hardhat";
-import { FactoryOptions } from "hardhat/types";
+import { type ContractFactory, type ContractTransactionReceipt, type Signer } from "ethers";
 
-import { LidoLocator } from "typechain-types";
+import type { FactoryOptions } from "@nomicfoundation/hardhat-ethers/types";
 
-import { addContractHelperFields, DeployedContract, getContractPath, loadContract, LoadedContract } from "lib/contract";
-import { ConvertibleToString, cy, log, yl } from "lib/log";
-import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
+import type { LidoLocator } from "typechain-types/index.js";
 
-import { keysOf } from "./protocol/types";
+import {
+  addContractHelperFields,
+  type DeployedContract,
+  getContractPath,
+  loadContract,
+  type LoadedContract,
+} from "./contract.js";
+import { ethers } from "./hardhat.js";
+import { type ConvertibleToString, cy, log, yl } from "./log.js";
+import { keysOf } from "./protocol/types.js";
+import { incrementGasUsed, Sk, updateObjectInState } from "./state-file.js";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
 const GAS_MAX_FEE = process.env.GAS_MAX_FEE || null;

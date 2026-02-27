@@ -1,6 +1,4 @@
-import { ethers } from "hardhat";
-
-import { ReportProcessor__Mock } from "typechain-types";
+import type { ReportProcessor__Mock } from "typechain-types/index.js";
 
 import {
   BASE_CONSENSUS_VERSION,
@@ -10,7 +8,8 @@ import {
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-} from "lib";
+} from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 
 export interface DeployHashConsensusParams {
   reportProcessor?: ReportProcessor__Mock;

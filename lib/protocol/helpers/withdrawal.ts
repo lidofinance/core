@@ -1,13 +1,15 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log } from "lib";
-import { LIMITER_PRECISION_BASE } from "lib/constants";
+import { impersonate } from "../../account.js";
+import { certainAddress } from "../../address.js";
+import { LIMITER_PRECISION_BASE } from "../../constants.js";
+import { log } from "../../log.js";
+import { ether } from "../../units.js";
+import type { ProtocolContext } from "../types.js";
 
-import { ProtocolContext } from "../types";
-
-import { report } from "./accounting";
-import { setMaxPositiveTokenRebase } from "./sanity-checker";
-import { removeStakingLimit, setStakingLimit } from "./staking";
+import { report } from "./accounting.js";
+import { setMaxPositiveTokenRebase } from "./sanity-checker.js";
+import { removeStakingLimit, setStakingLimit } from "./staking.js";
 
 /**
  * Unpauses the withdrawal queue contract.

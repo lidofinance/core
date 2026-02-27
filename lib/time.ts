@@ -1,9 +1,9 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import { SECONDS_PER_SLOT } from "./constants.js";
+import { ethers, networkHelpers } from "./hardhat.js";
 
-import { SECONDS_PER_SLOT } from "./constants";
+const { time } = networkHelpers;
 
 export function minutes(number: bigint): bigint {
   return number * 60n;

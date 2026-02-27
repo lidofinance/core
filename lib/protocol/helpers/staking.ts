@@ -1,13 +1,16 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import { BigIntMath, certainAddress, ether, impersonate, log } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { ZERO_HASH } from "test/deploy/index.js";
 
-import { ZERO_HASH } from "test/deploy";
+import { impersonate } from "../../account.js";
+import { certainAddress } from "../../address.js";
+import { BigIntMath } from "../../bigint-math.js";
+import { TOTAL_BASIS_POINTS } from "../../constants.js";
+import { log } from "../../log.js";
+import { ether } from "../../units.js";
+import type { ProtocolContext } from "../types.js";
 
-import { ProtocolContext } from "../types";
-
-import { report } from "./accounting";
+import { report } from "./accounting.js";
 
 const DEPOSIT_SIZE = ether("32");
 

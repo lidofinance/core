@@ -1,8 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { network as hardhatNetwork } from "hardhat";
-import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch";
+import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch.js";
+
+import { networkConfig, networkName as hardhatNetworkName } from "./hardhat.js";
 
 const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";
@@ -208,7 +209,7 @@ export function readNetworkState({
   }
 
   // Validate the chainId
-  const networkChainId = hardhatNetwork.config.chainId;
+  const networkChainId = networkConfig.chainId;
   if (state[Sk.chainSpec].chainId && networkChainId !== parseInt(state[Sk.chainSpec].chainId)) {
     throw new Error(
       `The chainId: ${networkChainId} does not match the one (${state[Sk.chainSpec].chainId}) in the state file!`,
@@ -271,7 +272,7 @@ function _getStateFileFileName(networkStateFile = "") {
   networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
   return networkStateFile
     ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
-    : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetwork.name);
+    : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetworkName);
 }
 
 function _getFileName(dir: string, networkName: string, prefix: string = NETWORK_STATE_FILE_PREFIX) {

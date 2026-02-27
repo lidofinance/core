@@ -1,6 +1,6 @@
 import { Wallet } from "ethers";
 
-import { streccak } from "./keccak";
+import { streccak } from "./keccak.js";
 
 export function randomAddress() {
   return Wallet.createRandom().address;

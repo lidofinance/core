@@ -27,7 +27,14 @@ export default defineConfig({
     },
   },
   solidity: {
-    npmFilesToBuild: ["@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol"],
+    npmFilesToBuild: [
+      "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol",
+      "@aragon/os/contracts/acl/ACL.sol",
+      "@aragon/os/contracts/kernel/Kernel.sol",
+      "@aragon/os/contracts/lib/ens/ENS.sol",
+      "@aragon/os/contracts/factory/DAOFactory.sol",
+      "@aragon/os/contracts/factory/EVMScriptRegistryFactory.sol",
+    ],
     compilers: [
       {
         version: "0.4.24",

@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { ethers } from "hardhat";
-
-import { log } from "./log";
+import { ethers } from "./hardhat.js";
+import { log } from "./log.js";
 
 class StepsFileNotFoundError extends Error {
   constructor(filePath: string) {

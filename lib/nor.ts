@@ -1,11 +1,11 @@
 import { expect } from "chai";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { NodeOperatorsRegistry__Harness } from "typechain-types";
+import type { NodeOperatorsRegistry__Harness } from "typechain-types/index.js";
 
-import { PUBKEY_LENGTH_HEX, SIGNATURE_LENGTH_HEX } from "./constants";
-import { numberToHex } from "./string";
+import { PUBKEY_LENGTH_HEX, SIGNATURE_LENGTH_HEX } from "./constants.js";
+import { numberToHex } from "./string.js";
 
 export interface NodeOperatorConfig {
   name: string;

@@ -1,24 +1,20 @@
 import * as process from "node:process";
 
-import hre from "hardhat";
-
-import { log } from "lib";
-import { readNetworkState, Sk } from "lib/state-file";
-
-import { getMode } from "../../hardhat.helpers";
+import { getMode } from "../../hardhat.helpers.js";
+import { networkConfig } from "../hardhat.js";
+import { log } from "../log.js";
+import { readNetworkState, Sk } from "../state-file.js";
 
 import {
   MAINNET_AGENT_ADDRESS,
   MAINNET_EASY_TRACK_EXECUTOR_ADDRESS,
   MAINNET_LOCATOR_ADDRESS,
   MAINNET_VOTING_ADDRESS,
-} from "./mainnet";
-import { ProtocolNetworkItems } from "./types";
+} from "./mainnet.js";
+import type { ProtocolNetworkItems } from "./types.js";
 
 export function isNonForkingHardhatNetwork() {
-  const networkName = hre.network.name;
-  if (networkName === "hardhat") {
-    const networkConfig = hre.config.networks[networkName];
+  if (networkConfig.type === "edr-simulated") {
     return !networkConfig.forking?.enabled;
   }
   return false;

@@ -1,6 +1,7 @@
 import fs from "fs";
-import { artifacts } from "hardhat";
 import path from "path";
+
+import { artifacts } from "./hardhat.js";
 
 export async function loadArtifact(artifactName: string, networkName: string) {
   if (artifactName.startsWith("external:")) {

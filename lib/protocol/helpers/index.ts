@@ -1,8 +1,8 @@
-export { depositAndReportValidators, ensureStakeLimit, unpauseStaking } from "./staking";
+export { depositAndReportValidators, ensureStakeLimit, unpauseStaking } from "./staking.js";
 
-export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal";
+export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal.js";
 
-export { setMaxPositiveTokenRebase } from "./sanity-checker";
+export { setMaxPositiveTokenRebase } from "./sanity-checker.js";
 
 export {
   calcReportDataHash,
@@ -12,21 +12,21 @@ export {
   getReportTimeElapsed,
   waitNextAvailableReportTime,
   handleOracleReport,
-  OracleReportParams,
-  OracleReportSubmitParams,
+  type OracleReportParams,
+  type OracleReportSubmitParams,
   report,
-} from "./accounting";
+} from "./accounting.js";
 
-export { ensureDsmGuardians } from "./dsm";
-export { ensurePredepositGuaranteeUnpaused } from "./pdg";
-export { norSdvtEnsureOperators } from "./nor-sdvt";
-export { calcNodeOperatorRewards } from "./staking-module";
+export { ensureDsmGuardians } from "./dsm.js";
+export { ensurePredepositGuaranteeUnpaused } from "./pdg.js";
+export { norSdvtEnsureOperators } from "./nor-sdvt.js";
+export { calcNodeOperatorRewards } from "./staking-module.js";
 
-export * from "./vaults";
-export * from "./operatorGrid";
+export * from "./vaults.js";
+export * from "./operatorGrid.js";
 
-export * from "./share-rate";
+export * from "./share-rate.js";
 
-export * from "./operatorGrid";
+export * from "./operatorGrid.js";
 
-export * from "./staking";
+export * from "./staking.js";

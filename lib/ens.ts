@@ -1,8 +1,10 @@
-import { ethers } from "hardhat";
+import type { ENS } from "typechain-types/index.js";
 
-import { ENS } from "typechain-types";
-
-import { cy, LoadedContract, log, makeTx, streccak, yl } from "lib";
+import { type LoadedContract } from "./contract.js";
+import { makeTx } from "./deploy.js";
+import { ethers } from "./hardhat.js";
+import { streccak } from "./keccak.js";
+import { cy, log, yl } from "./log.js";
 
 // Default parentName is "eth"
 export async function assignENSName(

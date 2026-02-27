@@ -1,15 +1,17 @@
 import { expect } from "chai";
 import { ethers } from "ethers";
 
-import { NodeOperatorsRegistry } from "typechain-types";
+import type { NodeOperatorsRegistry } from "typechain-types/index.js";
 
-import { certainAddress, ether, impersonate, log } from "lib";
-import { LoadedContract } from "lib/protocol/types";
+import { impersonate } from "../../account.js";
+import { certainAddress } from "../../address.js";
+import { log } from "../../log.js";
+import { ether } from "../../units.js";
+import type { LoadedContract } from "../types.js";
+import type { ProtocolContext, StakingModuleName } from "../types.js";
 
-import { ProtocolContext, StakingModuleName } from "../types";
-
-import { depositAndReportValidators } from "./staking";
-import { NOR_MODULE_ID, randomPubkeys, randomSignatures, SDVT_MODULE_ID } from "./staking-module";
+import { depositAndReportValidators } from "./staking.js";
+import { NOR_MODULE_ID, randomPubkeys, randomSignatures, SDVT_MODULE_ID } from "./staking-module.js";
 
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;

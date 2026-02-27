@@ -1,8 +1,8 @@
-import { BaseContract, BytesLike } from "ethers";
+import { type BaseContract, type BytesLike } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { OssifiableProxy, OssifiableProxy__factory } from "typechain-types";
+import { type OssifiableProxy, OssifiableProxy__factory } from "typechain-types/index.js";
 
 interface ProxifyArgs<T> {
   impl: T;

@@ -1,5 +1,5 @@
-import { PUBKEY_LENGTH_HEX, SIGNATURE_LENGTH_HEX } from "./constants";
-import { de0x } from "./string";
+import { PUBKEY_LENGTH_HEX, SIGNATURE_LENGTH_HEX } from "./constants.js";
+import { de0x } from "./string.js";
 
 class ValidatorKeys {
   public readonly count: number;

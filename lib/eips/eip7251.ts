@@ -1,8 +1,7 @@
-import { ethers } from "hardhat";
+import type { EIP7251MaxEffectiveBalanceRequest__Mock } from "typechain-types/index.js";
 
-import { EIP7251MaxEffectiveBalanceRequest__Mock } from "typechain-types";
-
-import { log } from "lib";
+import { ethers } from "../hardhat.js";
+import { log } from "../log.js";
 
 // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7251.md#execution-layer
 export const EIP7251_ADDRESS = "0x0000BBdDc7CE488642fb579F8B00f3a590007251";

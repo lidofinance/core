@@ -1,8 +1,8 @@
 import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interface, LogDescription } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   Accounting,
   AccountingOracle,
   ACL,
@@ -32,7 +32,7 @@ import {
   WithdrawalQueueERC721,
   WithdrawalVault,
   WstETH,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 export type LogDescriptionExtended = LogDescription & {
   address?: string;

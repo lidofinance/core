@@ -1,22 +1,28 @@
-import { ContractTransactionReceipt } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractTransactionReceipt } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
+import type {
   LazyOracle__MockForVaultHub,
   OperatorGrid__MockForVaultHub,
   PredepositGuarantee__HarnessForFactory,
   StakingVault__MockForVaultHub,
   VaultFactory__MockForVaultHub,
   VaultHub,
-} from "typechain-types";
-import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
+} from "typechain-types/index.js";
 
-import { certainAddress, ether, findEvents, GENESIS_FORK_VERSION, impersonate, TOTAL_BASIS_POINTS } from "lib";
+import { impersonate } from "lib/account.js";
+import { certainAddress } from "lib/address.js";
+import { GENESIS_FORK_VERSION, TOTAL_BASIS_POINTS } from "lib/constants.js";
+import { findEvents } from "lib/event.js";
+import { ethers } from "lib/hardhat.js";
+import { ether } from "lib/units.js";
 
-import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
-import { VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
+
+import { deployLidoDao } from "./dao.js";
+import { updateLidoLocatorImplementation } from "./locator.js";
 
 const CONNECT_DEPOSIT = ether("1");
 

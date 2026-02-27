@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import path from "path";
 
-import { getTxLink } from "./explorer";
+import { getTxLink } from "./explorer.js";
 
 // @ts-expect-error TS2339: Property 'toJSON' does not exist on type 'BigInt'.
 BigInt.prototype.toJSON = function () {
