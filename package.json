@@ -21,7 +21,7 @@
     "test": "hardhat test test/**/*.test.ts --parallel",
     "test:bls:blst": "SKIP_INTERFACES_CHECK=true SKIP_LINT_SOLIDITY=true SKIP_GAS_REPORT=true hardhat test test/common/bls.blst.e2e.fuzz.test.ts",
     "test:forge": "forge test",
-    "test:coverage": "COVERAGE=unit hardhat coverage",
+    "test:coverage": "NODE_OPTIONS='--max-old-space-size=10240' COVERAGE=unit hardhat coverage",
     "test:coverage:integration": "COVERAGE=integration MODE=scratch hardhat coverage",
     "test:coverage:full": "COVERAGE=full MODE=scratch hardhat coverage",
     "test:sequential": "hardhat test test/**/*.test.ts",
