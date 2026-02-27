@@ -21,12 +21,8 @@ describe("Lido.sol:initialize", () => {
 
   before(async () => {
     [deployer] = await ethers.getSigners();
-    const fastLaneLib = await ethers.deployContract("FastLaneStorage", deployer);
     const impl = await ethers.deployContract("Lido", {
       signer: deployer,
-      libraries: {
-        ["contracts/0.4.24/lib/FastLaneStorage.sol:FastLaneStorage"]: await fastLaneLib.getAddress(),
-      },
     });
 
     expect(await impl.getInitializationBlock()).to.equal(MaxUint256);

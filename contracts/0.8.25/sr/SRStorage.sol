@@ -64,8 +64,4 @@ library SRStorage {
     function addModuleId(uint256 _moduleId) internal {
         getRouterState().moduleIds.add(_moduleId);
     }
-
-    function removeModuleId(uint256 _moduleId) internal {
-        getRouterState().moduleIds.remove(_moduleId);
-    }
 }

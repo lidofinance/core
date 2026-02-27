@@ -10,7 +10,7 @@ import {BaseOracle} from "./BaseOracle.sol";
 import {ValidatorsExitBus} from "./ValidatorsExitBus.sol";
 
 interface IOracleReportSanityChecker {
-    function checkExitBusOracleReport(uint256 _exitRequestsCount) external view;
+    function checkExitBusOracleReport(uint256 _maxBalanceExitRequestedPerReportInEth) external view;
 }
 
 contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
@@ -57,8 +57,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 consensusVersion,
         uint256 lastProcessingRefSlot,
         uint256 maxValidatorsPerRequest,
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
@@ -66,33 +66,34 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
+        _updateContractVersion(2);
 
-        _initialize_v2(maxValidatorsPerRequest, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _initialize_v3(maxValidatorsPerRequest, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     /**
-     * @notice A function to finalize upgrade to v2 (from v1). Can be called only once
+     * @notice A function to finalize upgrade to v3 (from v1). Can be called only once
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      */
-    function finalizeUpgrade_v2(
+    function finalizeUpgrade_v3(
         uint256 maxValidatorsPerReport,
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) external {
-        _initialize_v2(maxValidatorsPerReport, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _initialize_v3(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
-    function _initialize_v2(
+    function _initialize_v3(
         uint256 maxValidatorsPerReport,
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
         uint256 frameDurationInSec
     ) internal {
-        _updateContractVersion(2);
+        _updateContractVersion(3);
         _setMaxValidatorsPerReport(maxValidatorsPerReport);
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     ///
@@ -119,8 +120,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         /// @dev Total number of validator exit requests in this report. Must not be greater
         /// than limit checked in OracleReportSanityChecker.checkExitBusOracleReport.
         uint256 requestsCount;
-        /// @dev Format of the validator exit requests data. Currently, only the
-        /// DATA_FORMAT_LIST=1 is supported.
+        /// @dev Format of the validator exit requests data. Currently, only the extended
+        /// DATA_FORMAT_LIST_WITH_KEY_INDEX=2 is supported.
         uint256 dataFormat;
         /// @dev Validator exit requests data. Can differ based on the data format,
         /// see the constant defining a specific data format below for more info.
@@ -226,27 +227,33 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     }
 
     function _handleConsensusReportData(ReportData calldata data) internal {
-        if (data.dataFormat != DATA_FORMAT_LIST) {
+        if (data.dataFormat != DATA_FORMAT_LIST_WITH_KEY_INDEX) {
             revert UnsupportedRequestsDataFormat(data.dataFormat);
         }
 
-        if (data.data.length % PACKED_REQUEST_LENGTH != 0) {
+        uint256 packedLength = _getPackedRequestLength(data.dataFormat);
+        if (data.data.length % packedLength != 0) {
             revert InvalidRequestsDataLength();
         }
 
-        if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
+        if (data.data.length / packedLength != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(data.requestsCount);
+        // Calculate total balance of validators being exited in ETH (uint256)
+        // Module 1 (curated) uses 32 ETH, other modules use 2048 ETH per validator
+        uint256 totalExitBalanceEth = _calculateTotalExitBalanceEth(data.data, data.dataFormat);
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(
+            totalExitBalanceEth
+        );
 
-        _processExitRequestsList(data.data);
+        _processExitRequestsList(data.data, data.dataFormat);
 
         _storageDataProcessingState().value = DataProcessingState({
             refSlot: data.refSlot.toUint64(),
             requestsCount: data.requestsCount.toUint64(),
             requestsProcessed: data.requestsCount.toUint64(),
-            dataFormat: uint16(DATA_FORMAT_LIST)
+            dataFormat: uint16(data.dataFormat)
         });
 
         if (data.requestsCount == 0) {

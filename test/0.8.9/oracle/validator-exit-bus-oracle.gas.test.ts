@@ -4,16 +4,22 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import {
+  HashConsensus__Harness,
+  StakingModule__MockForKeyVerification,
+  StakingRouter__MockForValidatorsExitBus,
+  ValidatorsExitBus__Harness,
+} from "typechain-types";
 
 import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import {
   computeTimestampAtSlot,
-  DATA_FORMAT_LIST,
+  DATA_FORMAT_LIST_WITH_KEY_INDEX,
   deployVEBO,
   initVEBO,
   SECONDS_PER_FRAME,
+  seedMockModuleSigningKeys,
   SLOTS_PER_FRAME,
 } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -29,7 +35,16 @@ const PUBKEYS = [
 describe("ValidatorsExitBusOracle.sol:gas", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
+  let stakingRouter: StakingRouter__MockForValidatorsExitBus;
   let admin: HardhatEthersSigner;
+  let mockModules: {
+    module1: StakingModule__MockForKeyVerification;
+    module2: StakingModule__MockForKeyVerification;
+    module3: StakingModule__MockForKeyVerification;
+    module4: StakingModule__MockForKeyVerification;
+    module5: StakingModule__MockForKeyVerification;
+    module7: StakingModule__MockForKeyVerification;
+  };
 
   let oracleVersion: bigint;
 
@@ -41,11 +56,13 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
   const NODE_OPS_PER_MODULE = 100;
 
   let nextValIndex = 1;
+  let nextKeyIndex = 1;
 
   interface ExitRequest {
     moduleId: number;
     nodeOpId: number;
     valIndex: number;
+    keyIndex: number;
     valPubkey: string;
   }
 
@@ -65,10 +82,16 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     return reportDataHash;
   };
 
-  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
+  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey, keyIndex }: ExitRequest) => {
     const pubkeyHex = de0x(valPubkey);
     expect(pubkeyHex.length).to.equal(48 * 2);
-    return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
+    return (
+      numberToHex(moduleId, 3) +
+      numberToHex(nodeOpId, 5) +
+      numberToHex(valIndex, 8) +
+      numberToHex(keyIndex, 8) +
+      pubkeyHex
+    );
   };
 
   const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
@@ -92,8 +115,9 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
       const moduleId = Math.floor(i / requestsPerModule);
       const nodeOpId = Math.floor((i - moduleId * requestsPerModule) / requestsPerNodeOp);
       const valIndex = nextValIndex++;
+      const keyIndex = nextKeyIndex++;
       const valPubkey = PUBKEYS[valIndex % PUBKEYS.length];
-      requests.push({ moduleId: moduleId + 1, nodeOpId, valIndex, valPubkey });
+      requests.push({ moduleId: moduleId + 1, nodeOpId, valIndex, keyIndex, valPubkey });
     }
 
     return { requests, requestsPerModule, requestsPerNodeOp };
@@ -108,6 +132,13 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
+    stakingRouter = deployed.stakingRouter as StakingRouter__MockForValidatorsExitBus;
+    mockModules = deployed.mockModules;
+
+    // Use legacy withdrawal credentials (32 ETH per validator) for all modules exercised in this suite
+    for (let moduleId = 1; moduleId <= 5; moduleId++) {
+      await stakingRouter.setStakingModuleWithdrawalCredentialsType(moduleId, 0x01);
+    }
 
     await initVEBO({
       admin: admin.address,
@@ -133,7 +164,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     );
   });
 
-  for (const totalRequests of [10, 50, 100, 1000, 2000]) {
+  for (const totalRequests of [10, 50, 100, 1000, 1700]) {
     context(`Total requests: ${totalRequests}`, () => {
       let exitRequests: { requests: ExitRequest[]; requestsPerModule: number; requestsPerNodeOp: number };
       let reportFields: ReportFields;
@@ -164,9 +195,10 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
           consensusVersion: VEBO_CONSENSUS_VERSION,
           refSlot: refSlot,
           requestsCount: exitRequests.requests.length,
-          dataFormat: DATA_FORMAT_LIST,
+          dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
           data: encodeExitRequestsDataList(exitRequests.requests),
         };
+        await seedMockModuleSigningKeys(mockModules, exitRequests.requests);
 
         reportHash = calcValidatorsExitBusReportDataHash(reportFields);
 
@@ -225,7 +257,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
         const procState = await oracle.getProcessingState();
         expect(procState.dataHash).to.equal(reportHash);
         expect(procState.dataSubmitted).to.equal(true);
-        expect(procState.dataFormat).to.equal(DATA_FORMAT_LIST);
+        expect(procState.dataFormat).to.equal(DATA_FORMAT_LIST_WITH_KEY_INDEX);
         expect(procState.requestsCount).to.equal(exitRequests.requests.length);
         expect(procState.requestsSubmitted).to.equal(exitRequests.requests.length);
       });
