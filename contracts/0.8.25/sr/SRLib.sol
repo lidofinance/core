@@ -777,7 +777,9 @@ library SRLib {
             try moduleId.getIStakingModule().onWithdrawalCredentialsChanged() {}
             catch (bytes memory lowLevelRevertData) {
                 if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
-                _setModuleStatus(moduleId, StakingModuleStatus.DepositsPaused);
+                if (moduleId.getModuleState().config.status == StakingModuleStatus.Active) {
+                    _setModuleStatus(moduleId, StakingModuleStatus.DepositsPaused);
+                }
                 emit WithdrawalsCredentialsChangeFailed(moduleId, lowLevelRevertData);
             }
         }

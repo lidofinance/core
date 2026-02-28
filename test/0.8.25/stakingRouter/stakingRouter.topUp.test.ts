@@ -270,7 +270,7 @@ describe("StakingRouter.sol:topUp", () => {
 
       await expect(
         stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
-      ).to.be.revertedWithCustomError(stakingRouter, "AllocationExceedsTarget");
+      ).to.be.revertedWithCustomError(stakingRouter, "ModuleReturnExceedTarget");
     });
 
     it("Reverts when top up amount for key is below 1 ETH", async () => {
