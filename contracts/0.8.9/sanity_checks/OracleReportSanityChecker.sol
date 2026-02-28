@@ -97,11 +97,11 @@ struct StakingModule {
 struct LimitsList {
     /// @notice The max possible exited ETH amount that might be reported
     ///     per single day.
-    /// @dev Must fit into uint16 (<= 65_535)
+    /// @dev Must fit into uint32 (<= 4_294_967_295)
     uint256 exitedEthAmountPerDayLimit;
     /// @notice The max possible appeared ETH amount that might be reported
     ///     per single day.
-    /// @dev Must fit into uint16 (<= 65_535)
+    /// @dev Must fit into uint32 (<= 4_294_967_295)
     uint256 appearedEthAmountPerDayLimit;
     /// @notice The max annual increase of the total validators' balances on the Consensus Layer
     ///     since the previous oracle report
@@ -141,7 +141,7 @@ struct LimitsList {
     uint256 clBalanceOraclesErrorUpperBPLimit;
     /// @notice The max possible consolidation ETH amount that might be reported
     ///     per single day.
-    /// @dev Must fit into uint16 (<= 65_535)
+    /// @dev Must fit into uint32 (<= 4_294_967_295)
     uint256 consolidationEthAmountPerDayLimit;
     /// @notice Effective ETH amount attributed to a single exited validator
     ///     in the exited ETH amount per day check.
@@ -151,8 +151,8 @@ struct LimitsList {
 
 /// @dev The packed version of the LimitsList struct to be effectively persisted in storage
 struct LimitsListPacked {
-    uint16 exitedEthAmountPerDayLimit;
-    uint16 appearedEthAmountPerDayLimit;
+    uint32 exitedEthAmountPerDayLimit;
+    uint32 appearedEthAmountPerDayLimit;
     uint16 annualBalanceIncreaseBPLimit;
     uint16 simulatedShareRateDeviationBPLimit;
     uint16 maxBalanceExitRequestedPerReportInEth;
@@ -162,7 +162,7 @@ struct LimitsListPacked {
     uint64 maxPositiveTokenRebase;
     uint16 maxCLBalanceDecreaseBP;
     uint16 clBalanceOraclesErrorUpperBPLimit;
-    uint16 consolidationEthAmountPerDayLimit;
+    uint32 consolidationEthAmountPerDayLimit;
     uint128 exitedValidatorEthAmountLimit;
 }
 
@@ -1155,15 +1155,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function _updateLimits(LimitsList memory _newLimitsList) internal {
         LimitsList memory _oldLimitsList = _limits.unpack();
         if (_oldLimitsList.exitedEthAmountPerDayLimit != _newLimitsList.exitedEthAmountPerDayLimit) {
-            _checkLimitValue(_newLimitsList.exitedEthAmountPerDayLimit, 0, type(uint16).max);
+            _checkLimitValue(_newLimitsList.exitedEthAmountPerDayLimit, 0, type(uint32).max);
             emit ExitedEthAmountPerDayLimitSet(_newLimitsList.exitedEthAmountPerDayLimit);
         }
         if (_oldLimitsList.appearedEthAmountPerDayLimit != _newLimitsList.appearedEthAmountPerDayLimit) {
-            _checkLimitValue(_newLimitsList.appearedEthAmountPerDayLimit, 0, type(uint16).max);
+            _checkLimitValue(_newLimitsList.appearedEthAmountPerDayLimit, 0, type(uint32).max);
             emit AppearedEthAmountPerDayLimitSet(_newLimitsList.appearedEthAmountPerDayLimit);
         }
         if (_oldLimitsList.consolidationEthAmountPerDayLimit != _newLimitsList.consolidationEthAmountPerDayLimit) {
-            _checkLimitValue(_newLimitsList.consolidationEthAmountPerDayLimit, 0, type(uint16).max);
+            _checkLimitValue(_newLimitsList.consolidationEthAmountPerDayLimit, 0, type(uint32).max);
             emit ConsolidationEthAmountPerDayLimitSet(_newLimitsList.consolidationEthAmountPerDayLimit);
         }
         if (_oldLimitsList.exitedValidatorEthAmountLimit != _newLimitsList.exitedValidatorEthAmountLimit) {
@@ -1279,9 +1279,9 @@ library LimitsListPacker {
     error BasisPointsOverflow(uint256 value, uint256 maxValue);
 
     function pack(LimitsList memory _limitsList) internal pure returns (LimitsListPacked memory res) {
-        res.exitedEthAmountPerDayLimit = SafeCast.toUint16(_limitsList.exitedEthAmountPerDayLimit);
-        res.appearedEthAmountPerDayLimit = SafeCast.toUint16(_limitsList.appearedEthAmountPerDayLimit);
-        res.consolidationEthAmountPerDayLimit = SafeCast.toUint16(_limitsList.consolidationEthAmountPerDayLimit);
+        res.exitedEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.exitedEthAmountPerDayLimit);
+        res.appearedEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.appearedEthAmountPerDayLimit);
+        res.consolidationEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.consolidationEthAmountPerDayLimit);
         res.annualBalanceIncreaseBPLimit = _toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
         res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
         res.requestTimestampMargin = SafeCast.toUint32(_limitsList.requestTimestampMargin);

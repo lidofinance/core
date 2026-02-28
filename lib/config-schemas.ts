@@ -222,8 +222,8 @@ const DepositSecurityModuleSchema = z.object({
 
 // Oracle report sanity checker schema
 const OracleReportSanityCheckerSchema = z.object({
-  exitedValidatorsPerDayLimit: PositiveIntSchema,
-  appearedValidatorsPerDayLimit: PositiveIntSchema,
+  exitedEthAmountPerDayLimit: PositiveIntSchema,
+  appearedEthAmountPerDayLimit: PositiveIntSchema,
   deprecatedOneOffCLBalanceDecreaseBPLimit: BasisPointsSchema,
   annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
@@ -234,6 +234,8 @@ const OracleReportSanityCheckerSchema = z.object({
   maxPositiveTokenRebase: PositiveIntSchema,
   maxCLBalanceDecreaseBP: BasisPointsSchema,
   clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
+  consolidationEthAmountPerDayLimit: NonNegativeIntSchema,
+  exitedValidatorEthAmountLimit: BigIntStringSchema,
 });
 
 // Oracle daemon config schema

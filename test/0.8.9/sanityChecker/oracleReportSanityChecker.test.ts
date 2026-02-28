@@ -197,7 +197,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .connect(admin)
         .grantRole(await checker.EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
 
-      await expect(checker.connect(manager).setExitedEthAmountPerDayLimit(OVER_UINT16)).to.be.revertedWithCustomError(
+      await expect(checker.connect(manager).setExitedEthAmountPerDayLimit(OVER_UINT32)).to.be.revertedWithCustomError(
         checker,
         "IncorrectLimitValue",
       );
@@ -319,7 +319,7 @@ describe("OracleReportSanityChecker.sol", () => {
         await checker.APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(),
       );
 
-      await expect(checker.connect(manager).setAppearedEthAmountPerDayLimit(OVER_UINT16)).to.be.revertedWithCustomError(
+      await expect(checker.connect(manager).setAppearedEthAmountPerDayLimit(OVER_UINT32)).to.be.revertedWithCustomError(
         checker,
         "IncorrectLimitValue",
       );
@@ -344,7 +344,7 @@ describe("OracleReportSanityChecker.sol", () => {
       );
 
       await expect(
-        checker.connect(manager).setConsolidationEthAmountPerDayLimit(OVER_UINT16),
+        checker.connect(manager).setConsolidationEthAmountPerDayLimit(OVER_UINT32),
       ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
 
       await expect(checker.connect(manager).setConsolidationEthAmountPerDayLimit(11n))

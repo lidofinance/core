@@ -186,25 +186,40 @@ export const report = async (
     log.debug("Bunker Mode", { "Is Active": isBunkerMode });
   }
 
-  const savedTotalClBalance = await ctx.contracts.stakingRouter.getTotalStakingModulesBalance();
+  const clActiveBalanceGwei = postCLBalance / ONE_GWEI;
 
   if (stakingModuleIdsWithUpdatedBalance.length === 0) {
     activeBalancesGweiByStakingModule = [];
     pendingBalancesGweiByStakingModule = [];
-    let postCLBalanceRest = postCLBalance;
     const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
+
+    const modulesWithBalance: Array<{ moduleId: bigint; moduleClBalance: bigint }> = [];
     for (const moduleId of moduleIds) {
       const moduleClBalance = await ctx.contracts.stakingRouter.getStakingModuleBalance(moduleId);
-      const moduleClBalanceNew = BigIntMath.min(
-        (postCLBalance * moduleClBalance) / savedTotalClBalance,
-        postCLBalanceRest > 0n ? postCLBalanceRest : 0n,
-      );
-      postCLBalanceRest -= moduleClBalanceNew;
       if (moduleClBalance > 0) {
-        stakingModuleIdsWithUpdatedBalance.push(moduleId);
-        activeBalancesGweiByStakingModule.push(moduleClBalanceNew / ONE_GWEI);
-        pendingBalancesGweiByStakingModule.push(0n);
+        modulesWithBalance.push({ moduleId, moduleClBalance });
       }
+    }
+
+    // Build module active balances directly in gwei with exact total conservation.
+    let remainingClBalanceGwei = clActiveBalanceGwei;
+    let remainingModulesClBalance = modulesWithBalance.reduce((sum, module) => sum + module.moduleClBalance, 0n);
+
+    for (let i = 0; i < modulesWithBalance.length; ++i) {
+      const { moduleId, moduleClBalance } = modulesWithBalance[i];
+      const isLastModule = i === modulesWithBalance.length - 1;
+
+      const moduleActiveBalanceGwei =
+        isLastModule || remainingModulesClBalance === 0n
+          ? remainingClBalanceGwei
+          : (remainingClBalanceGwei * moduleClBalance) / remainingModulesClBalance;
+
+      stakingModuleIdsWithUpdatedBalance.push(moduleId);
+      activeBalancesGweiByStakingModule.push(moduleActiveBalanceGwei);
+      pendingBalancesGweiByStakingModule.push(0n);
+
+      remainingClBalanceGwei -= moduleActiveBalanceGwei;
+      remainingModulesClBalance -= moduleClBalance;
     }
   }
 
@@ -212,7 +227,7 @@ export const report = async (
     consensusVersion: await accountingOracle.getConsensusVersion(),
     refSlot,
     // TODO: Split clBalanceGwei into clActiveBalanceGwei + clPendingBalanceGwei
-    clActiveBalanceGwei: postCLBalance / ONE_GWEI,
+    clActiveBalanceGwei,
     clPendingBalanceGwei: 0n,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,

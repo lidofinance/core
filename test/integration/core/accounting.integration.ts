@@ -227,7 +227,7 @@ describe("Integration: Accounting", () => {
         reportBurner: false,
         skipWithdrawals: true,
       }),
-    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease(uint256)");
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease");
   });
 
   it("Should account correctly with no CL rebase", async () => {
