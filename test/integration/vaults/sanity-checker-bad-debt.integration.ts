@@ -294,26 +294,17 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Bad debt internalization does not affect calculation of dynamic slashing limit
       // so the report with max allowed CL decrease should still pass with bad debt internalization
 
-      const { oracleReportSanityChecker, lido, stakingRouter } = ctx.contracts;
+      const { oracleReportSanityChecker, lido } = ctx.contracts;
 
       // Time travel to 54 days to invalidate all current penalties and get max slashing limits
       const DAYS_54_IN_SECONDS = 54n * 24n * 60n * 60n;
       await advanceChainTime(DAYS_54_IN_SECONDS);
       await report(ctx);
 
-      // Get current protocol state to calculate dynamic slashing limit
-      const { beaconValidators } = await lido.getBeaconStat();
-      const moduleDigests = await stakingRouter.getAllStakingModuleDigests();
+      // Get current protocol state to calculate max allowed CL decrease limit
+      const { beaconBalance: preCLBalance } = await lido.getBeaconStat();
       const limits = await oracleReportSanityChecker.getOracleReportLimits();
-
-      const exitedValidators = moduleDigests.reduce((total, { summary }) => total + summary.totalExitedValidators, 0n);
-      const activeValidators = beaconValidators - exitedValidators;
-
-      // maxAllowedCLRebaseNegativeSum = initialSlashingAmountPWei * 1e15 * validators + inactivityPenaltiesAmountPWei * 1e15 * validators
-      const ONE_PWEI = 10n ** 15n;
-      const maxAllowedNegativeRebase =
-        limits.initialSlashingAmountPWei * ONE_PWEI * activeValidators +
-        limits.inactivityPenaltiesAmountPWei * ONE_PWEI * activeValidators;
+      const maxAllowedNegativeRebase = (preCLBalance * limits.maxCLBalanceDecreaseBP) / 10_000n;
 
       // CL decrease exactly at limit minus 1 wei should pass
       const clSlashing = -(maxAllowedNegativeRebase - 1n);

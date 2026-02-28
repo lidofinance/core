@@ -33,26 +33,22 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForExitBus(
-  lidoLocator: string,
-  accountingOracle: string,
-  accounting: string,
-  admin: string,
-) {
+async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, accounting: string, admin: string) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, accountingOracle, accounting, admin, {
-      exitedValidatorsPerDayLimit: 0n,
-      appearedValidatorsPerDayLimit: 0n,
+    f.deploy(lidoLocator, accounting, admin, {
+      exitedEthAmountPerDayLimit: 0n,
+      appearedEthAmountPerDayLimit: 0n,
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
       maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
       maxItemsPerExtraDataTransaction: 0n,
       maxNodeOperatorsPerExtraDataItem: 0n,
       requestTimestampMargin: 0n,
-      maxPositiveTokenRebase: 0n,
-      initialSlashingAmountPWei: 0n,
-      inactivityPenaltiesAmountPWei: 0n,
+      maxPositiveTokenRebase: 1n,
+      maxCLBalanceDecreaseBP: 380n,
       clBalanceOraclesErrorUpperBPLimit: 0n,
+      consolidationEthAmountPerDayLimit: 0n,
+      exitedValidatorEthAmountLimit: 10n ** 18n,
     }),
   );
 }
@@ -139,7 +135,6 @@ export async function deployVEBO(
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
     locatorAddr,
-    accountingOracleAddress,
     accountingAddress,
     admin,
   );

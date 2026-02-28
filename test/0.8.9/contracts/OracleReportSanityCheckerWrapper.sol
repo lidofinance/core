@@ -18,11 +18,10 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
 
     constructor(
         address _lidoLocator,
-        address _accountingOracle,
         address _accounting,
         address _admin,
         LimitsList memory _limitsList
-    ) OracleReportSanityChecker(_lidoLocator, _accountingOracle, _accounting, _admin, _limitsList) {}
+    ) OracleReportSanityChecker(_lidoLocator, _accounting, _admin, _limitsList) {}
 
     function addReportData(uint256 _clBalance, uint256 _deposits, uint256 _withdrawals) public {
         _addReportData(_clBalance, _deposits, _withdrawals);
@@ -34,5 +33,9 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
 
     function packAndStore() public {
         _limitsListPacked = getOracleReportLimits().pack();
+    }
+
+    function packRawLimits(LimitsList memory _limitsList) external pure returns (LimitsListPacked memory) {
+        return _limitsList.pack();
     }
 }

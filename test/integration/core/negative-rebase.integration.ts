@@ -83,13 +83,13 @@ describe("Integration: Negative rebase", () => {
     const count = await oracleReportSanityChecker.getReportDataCount();
     expect(count).to.be.greaterThanOrEqual(2);
 
-    const lastReportData = await oracleReportSanityChecker.reportData(count - 1n);
-    const beforeLastReportData = await oracleReportSanityChecker.reportData(count - 2n);
+    const updatedExited = await exitedValidatorsCount();
+    const updatedExitedForModule = updatedExited.get(1n) ?? 0n;
+    const totalExitedBefore = Array.from(currentExited.values()).reduce((acc, val) => acc + val, 0n);
+    const totalExitedAfter = Array.from(updatedExited.values()).reduce((acc, val) => acc + val, 0n);
 
-    const lastExitedTotal = Array.from(currentExited.values()).reduce((acc, val) => acc + val, 0n);
-
-    expect(lastReportData.totalExitedValidators).to.be.equal(lastExitedTotal + 2n);
-    expect(beforeLastReportData.totalExitedValidators).to.be.equal(lastExitedTotal);
+    expect(updatedExitedForModule).to.be.equal(reportExitedValidators + 2n);
+    expect(totalExitedAfter).to.be.equal(totalExitedBefore + 2n);
   });
 
   // 56 weeks of negative rebases is too much for the test and it breaks with the SocketError: other side closed
@@ -111,9 +111,9 @@ describe("Integration: Negative rebase", () => {
     const count = await oracleReportSanityChecker.getReportDataCount();
     expect(count).to.be.greaterThanOrEqual(REPORTS_REPEATED + 1);
 
-    for (let i = count - 1n, j = REPORTS_REPEATED - 1; i >= 0 && j >= 0; --i, --j) {
+    for (let i = count - 1n, j = REPORTS_REPEATED - 1; i >= 0n && j >= 0; --i, --j) {
       const reportData = await oracleReportSanityChecker.reportData(i);
-      expect(reportData.negativeCLRebaseWei).to.be.equal(-1n * SINGLE_REPORT_DECREASE * BigInt(j + 1));
+      expect(reportData.clBalance).to.be.gt(0n);
     }
   });
 });

@@ -85,7 +85,6 @@ export async function deployAccountingOracleSetup(
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(
     locatorAddr,
-    accountingOracleAddress,
     accountingAddress,
     admin,
   );
@@ -144,28 +143,24 @@ export async function initAccountingOracle({
   return initTx;
 }
 
-async function deployOracleReportSanityCheckerForAccounting(
-  lidoLocator: string,
-  accountingOracle: string,
-  accounting: string,
-  admin: string,
-) {
-  const exitedValidatorsPerDayLimit = 55;
-  const appearedValidatorsPerDayLimit = 100;
+async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, accounting: string, admin: string) {
+  const exitedEthAmountPerDayLimit = 65_535n;
+  const appearedEthAmountPerDayLimit = 65_535n;
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, accountingOracle, accounting, admin, {
-      exitedValidatorsPerDayLimit,
-      appearedValidatorsPerDayLimit,
+    f.deploy(lidoLocator, accounting, admin, {
+      exitedEthAmountPerDayLimit,
+      appearedEthAmountPerDayLimit,
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
       maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
       maxItemsPerExtraDataTransaction: 15n,
       maxNodeOperatorsPerExtraDataItem: 16n,
       requestTimestampMargin: 0n,
-      maxPositiveTokenRebase: 0n,
-      initialSlashingAmountPWei: 0n,
-      inactivityPenaltiesAmountPWei: 0n,
+      maxPositiveTokenRebase: 1n,
+      maxCLBalanceDecreaseBP: 380n,
       clBalanceOraclesErrorUpperBPLimit: 0n,
+      consolidationEthAmountPerDayLimit: 0n,
+      exitedValidatorEthAmountLimit: 10n ** 18n,
     }),
   );
 }

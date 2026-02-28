@@ -34,8 +34,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let accountingSigner: HardhatEthersSigner;
 
   const defaultLimitsList = {
-    exitedValidatorsPerDayLimit: 50n,
-    appearedValidatorsPerDayLimit: 75n,
+    exitedEthAmountPerDayLimit: 50n,
+    appearedEthAmountPerDayLimit: 75n,
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
     simulatedShareRateDeviationBPLimit: 2_00n, // 2%
     maxBalanceExitRequestedPerReportInEth: 64_000n, // Max ~65K ETH (close to uint16 max)
@@ -45,6 +45,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     maxPositiveTokenRebase: 5_000_000n,
     maxCLBalanceDecreaseBP: MAX_CL_BALANCE_DECREASE_BP,
     clBalanceOraclesErrorUpperBPLimit: 50n,
+    consolidationEthAmountPerDayLimit: 0n,
+    exitedValidatorEthAmountLimit: ether("1"),
   };
 
   let originalState: string;
@@ -119,7 +121,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     const factory = await ethers.getContractFactory("OracleReportSanityChecker");
     checker = await factory.deploy(
       await locator.getAddress(),
-      await accountingOracle.getAddress(),
       await accounting.getAddress(),
       deployer.address,
       defaultLimitsList,
@@ -168,12 +169,16 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         switch (x) {
           case "uint256":
             return 256;
+          case "uint128":
+            return 128;
           case "uint64":
             return 64;
           case "uint32":
             return 32;
           case "uint16":
             return 16;
+          case "uint8":
+            return 8;
           default:
             expect.fail(`Unknown type ${x}`);
         }
@@ -658,8 +663,10 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       // day 2: cumulative baseline -> day2PostCL ≈ 7.6% > 3.8% limit
       await setRefSlot(baseRefSlot);
-      await expect(callCheck(day1PostCL, day2PostCL))
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease");
+      await expect(callCheck(day1PostCL, day2PostCL)).to.be.revertedWithCustomError(
+        checker,
+        "IncorrectCLBalanceDecrease",
+      );
     });
 
     it("small daily decreases accumulate and trigger revert", async () => {
@@ -711,8 +718,10 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await callCheck(ether("10000"), ether("10000"));
 
       await setRefSlot(baseRefSlot);
-      await expect(callCheck(ether("10000"), ether("10000") - 1n))
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease");
+      await expect(callCheck(ether("10000"), ether("10000") - 1n)).to.be.revertedWithCustomError(
+        checker,
+        "IncorrectCLBalanceDecrease",
+      );
     });
 
     it("maxCLBalanceDecreaseBP = 10000 allows any decrease", async () => {
@@ -820,9 +829,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     it("emits MaxCLBalanceDecreaseBPSet event on change", async () => {
       const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
       await checker.grantRole(role, deployer.address);
-      await expect(checker.setMaxCLBalanceDecreaseBP(500))
-        .to.emit(checker, "MaxCLBalanceDecreaseBPSet")
-        .withArgs(500);
+      await expect(checker.setMaxCLBalanceDecreaseBP(500)).to.emit(checker, "MaxCLBalanceDecreaseBPSet").withArgs(500);
     });
   });
 
@@ -990,10 +997,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
     it("requires MIGRATION_MANAGER_ROLE", async () => {
       const role = await checker.MIGRATION_MANAGER_ROLE();
-      await expect(checker.migrateBaselineSnapshot()).to.be.revertedWithOZAccessControlError(
-        deployer.address,
-        role,
-      );
+      await expect(checker.migrateBaselineSnapshot()).to.be.revertedWithOZAccessControlError(deployer.address, role);
     });
 
     it("reverts with UnexpectedLidoVersion when version != 4", async () => {
@@ -1043,8 +1047,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await lido.mock__setBalanceStats(ether("10000000"), ether("500000"), ether("320000"));
 
       await checker.migrateBaselineSnapshot();
-      await expect(checker.migrateBaselineSnapshot())
-        .to.be.revertedWithCustomError(checker, "MigrationAlreadyDone");
+      await expect(checker.migrateBaselineSnapshot()).to.be.revertedWithCustomError(checker, "MigrationAlreadyDone");
     });
 
     it("after migration, decrease within limit passes", async () => {

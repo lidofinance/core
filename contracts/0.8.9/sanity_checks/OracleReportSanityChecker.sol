@@ -40,8 +40,6 @@ interface IWithdrawalQueue {
 }
 
 interface IBaseOracle {
-    function SECONDS_PER_SLOT() external view returns (uint256);
-    function GENESIS_TIME() external view returns (uint256);
     function getLastProcessingRefSlot() external view returns (uint256);
 }
 
@@ -49,6 +47,10 @@ interface IStakingRouter {
     function getStakingModuleIds() external view returns (uint256[] memory);
 
     function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
+
+    function getStakingModuleBalance(uint256 moduleId) external view returns (uint256);
+
+    function getTotalStakingModulesBalance() external view returns (uint256);
 }
 
 struct StakingModule {
@@ -79,12 +81,12 @@ struct StakingModule {
     /// @notice Module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP.
     uint16 priorityExitShareThreshold;
     /// @notice The maximum number of validators that can be deposited in a single block.
-    /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
-    /// See docs for the `OracleReportSanityChecker.setAppearedValidatorsPerDayLimit` function.
+    /// @dev Must be harmonized with `OracleReportSanityChecker.appearedEthAmountPerDayLimit`.
+    /// See docs for the `OracleReportSanityChecker.setAppearedEthAmountPerDayLimit` function.
     uint64 maxDepositsPerBlock;
     /// @notice The minimum distance between deposits in blocks.
-    /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
-    /// See docs for the `OracleReportSanityChecker.setAppearedValidatorsPerDayLimit` function).
+    /// @dev Must be harmonized with `OracleReportSanityChecker.appearedEthAmountPerDayLimit`.
+    /// See docs for the `OracleReportSanityChecker.setAppearedEthAmountPerDayLimit` function).
     uint64 minDepositBlockDistance;
     /// @notice The type of withdrawal credentials for creation of validators
     uint8 withdrawalCredentialsType;
@@ -93,15 +95,14 @@ struct StakingModule {
 /// @notice The set of restrictions used in the sanity checks of the oracle report
 /// @dev struct is loaded from the storage and stored in memory during the tx running
 struct LimitsList {
-    /// @notice The max possible number of validators that might be reported as `exited`
-    ///     per single day, depends on the Consensus Layer churn limit
+    /// @notice The max possible exited ETH amount that might be reported
+    ///     per single day.
     /// @dev Must fit into uint16 (<= 65_535)
-    uint256 exitedValidatorsPerDayLimit;
-    /// @notice The max possible number of validators that might be reported as `appeared`
-    ///     per single day, limited by the max daily deposits via DepositSecurityModule in practice
-    ///     isn't limited by a consensus layer (because `appeared` includes `pending`, i.e., not `activated` yet)
+    uint256 exitedEthAmountPerDayLimit;
+    /// @notice The max possible appeared ETH amount that might be reported
+    ///     per single day.
     /// @dev Must fit into uint16 (<= 65_535)
-    uint256 appearedValidatorsPerDayLimit;
+    uint256 appearedEthAmountPerDayLimit;
     /// @notice The max annual increase of the total validators' balances on the Consensus Layer
     ///     since the previous oracle report
     /// (the increase that is limited does not include fresh deposits to the Beacon Chain as well as withdrawn ether)
@@ -138,12 +139,20 @@ struct LimitsList {
     ///     can be greater as calculated for the withdrawal credentials.
     /// @dev Represented in the Basis Points (100% == 10_000)
     uint256 clBalanceOraclesErrorUpperBPLimit;
+    /// @notice The max possible consolidation ETH amount that might be reported
+    ///     per single day.
+    /// @dev Must fit into uint16 (<= 65_535)
+    uint256 consolidationEthAmountPerDayLimit;
+    /// @notice Effective ETH amount attributed to a single exited validator
+    ///     in the exited ETH amount per day check.
+    /// @dev Stored in Wei. Must fit into uint128.
+    uint256 exitedValidatorEthAmountLimit;
 }
 
 /// @dev The packed version of the LimitsList struct to be effectively persisted in storage
 struct LimitsListPacked {
-    uint16 exitedValidatorsPerDayLimit;
-    uint16 appearedValidatorsPerDayLimit;
+    uint16 exitedEthAmountPerDayLimit;
+    uint16 appearedEthAmountPerDayLimit;
     uint16 annualBalanceIncreaseBPLimit;
     uint16 simulatedShareRateDeviationBPLimit;
     uint16 maxBalanceExitRequestedPerReportInEth;
@@ -153,6 +162,8 @@ struct LimitsListPacked {
     uint64 maxPositiveTokenRebase;
     uint16 maxCLBalanceDecreaseBP;
     uint16 clBalanceOraclesErrorUpperBPLimit;
+    uint16 consolidationEthAmountPerDayLimit;
+    uint128 exitedValidatorEthAmountLimit;
 }
 
 struct ReportData {
@@ -173,10 +184,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     using PositiveTokenRebaseLimiter for TokenRebaseLimiterData;
 
     bytes32 public constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
+    bytes32 public constant EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE =
+        keccak256("EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE");
+    bytes32 public constant APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE =
+        keccak256("APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE");
+    bytes32 public constant CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE =
+        keccak256("CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE");
+    bytes32 public constant EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE =
+        keccak256("EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE");
+    /// @dev Deprecated alias kept for compatibility.
     bytes32 public constant EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
+        EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE;
+    /// @dev Deprecated alias kept for compatibility.
     bytes32 public constant APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
+        APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE;
     bytes32 public constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
         keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
     bytes32 public constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
@@ -204,8 +225,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private constant REPORTS_WINDOW = 36;
 
     ILidoLocator private immutable LIDO_LOCATOR;
-    uint256 private immutable GENESIS_TIME;
-    uint256 private immutable SECONDS_PER_SLOT;
     address private immutable ACCOUNTING_ADDRESS;
 
     LimitsListPacked private _limits;
@@ -217,22 +236,17 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ISecondOpinionOracle public secondOpinionOracle;
 
     /// @param _lidoLocator address of the LidoLocator instance
-    /// @param _accountingOracle address of the AccountingOracle instance
     /// @param _accounting address of the Accounting instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
     constructor(
         address _lidoLocator,
-        address _accountingOracle,
         address _accounting,
         address _admin,
         LimitsList memory _limitsList
     ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
-
-        GENESIS_TIME = IBaseOracle(_accountingOracle).GENESIS_TIME();
-        SECONDS_PER_SLOT = IBaseOracle(_accountingOracle).SECONDS_PER_SLOT();
         ACCOUNTING_ADDRESS = _accounting;
 
         _updateLimits(_limitsList);
@@ -253,6 +267,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @notice Returns the limits list for the Lido's oracle report sanity checks
     function getOracleReportLimits() public view returns (LimitsList memory) {
         return _limits.unpack();
+    }
+
+    function getMaxCLBalanceDecreaseBP() external view returns (uint256) {
+        return _limits.maxCLBalanceDecreaseBP;
     }
 
     /// @notice Returns max positive token rebase value with 1e9 precision:
@@ -296,34 +314,59 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Sets the new value for the exitedValidatorsPerDayLimit
-    ///
-    /// NB: AccountingOracle reports validators as exited once they passed the `EXIT_EPOCH` on Consensus Layer
-    ///     therefore, the value should be set in accordance to the consensus layer churn limit
-    ///
-    /// @param _exitedValidatorsPerDayLimit new exitedValidatorsPerDayLimit value
-    function setExitedValidatorsPerDayLimit(
-        uint256 _exitedValidatorsPerDayLimit
-    ) external onlyRole(EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE) {
+    /// @notice Sets the new value for the exitedEthAmountPerDayLimit
+    /// @param _exitedEthAmountPerDayLimit new exitedEthAmountPerDayLimit value
+    function setExitedEthAmountPerDayLimit(
+        uint256 _exitedEthAmountPerDayLimit
+    ) public onlyRole(EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE) {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.exitedValidatorsPerDayLimit = _exitedValidatorsPerDayLimit;
+        limitsList.exitedEthAmountPerDayLimit = _exitedEthAmountPerDayLimit;
         _updateLimits(limitsList);
     }
 
-    /// @notice Sets the new value for the appearedValidatorsPerDayLimit
-    ///
-    /// NB: AccountingOracle reports validators as appeared once they become `pending`
-    ///     (might be not `activated` yet). Thus, this limit should be high enough because consensus layer
-    ///     has no intrinsic churn limit for the amount of `pending` validators (only for `activated` instead).
-    ///     For Lido it depends on the amount of deposits that can be made via DepositSecurityModule daily.
-    ///
-    /// @param _appearedValidatorsPerDayLimit new appearedValidatorsPerDayLimit value
-    function setAppearedValidatorsPerDayLimit(
-        uint256 _appearedValidatorsPerDayLimit
-    ) external onlyRole(APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE) {
+    /// @notice Sets the new value for the appearedEthAmountPerDayLimit
+    /// @param _appearedEthAmountPerDayLimit new appearedEthAmountPerDayLimit value
+    function setAppearedEthAmountPerDayLimit(
+        uint256 _appearedEthAmountPerDayLimit
+    ) public onlyRole(APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE) {
         LimitsList memory limitsList = _limits.unpack();
-        limitsList.appearedValidatorsPerDayLimit = _appearedValidatorsPerDayLimit;
+        limitsList.appearedEthAmountPerDayLimit = _appearedEthAmountPerDayLimit;
         _updateLimits(limitsList);
+    }
+
+    /// @notice Sets the new value for the consolidationEthAmountPerDayLimit
+    /// @param _consolidationEthAmountPerDayLimit new consolidationEthAmountPerDayLimit value
+    function setConsolidationEthAmountPerDayLimit(
+        uint256 _consolidationEthAmountPerDayLimit
+    ) external onlyRole(CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE) {
+        LimitsList memory limitsList = _limits.unpack();
+        limitsList.consolidationEthAmountPerDayLimit = _consolidationEthAmountPerDayLimit;
+        _updateLimits(limitsList);
+    }
+
+    /// @notice Sets exited validator ETH amount limiter value.
+    function setExitedValidatorEthAmountLimit(
+        uint256 _exitedValidatorEthAmountLimit
+    ) external onlyRole(EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE) {
+        LimitsList memory limitsList = _limits.unpack();
+        limitsList.exitedValidatorEthAmountLimit = _exitedValidatorEthAmountLimit;
+        _updateLimits(limitsList);
+    }
+
+    /// @dev Deprecated setter kept for compatibility.
+    function setExitedValidatorsPerDayLimit(uint256 _exitedValidatorsPerDayLimit)
+        external
+        onlyRole(EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE)
+    {
+        setExitedEthAmountPerDayLimit(_exitedValidatorsPerDayLimit);
+    }
+
+    /// @dev Deprecated setter kept for compatibility.
+    function setAppearedValidatorsPerDayLimit(uint256 _appearedValidatorsPerDayLimit)
+        external
+        onlyRole(APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE)
+    {
+        setAppearedEthAmountPerDayLimit(_appearedValidatorsPerDayLimit);
     }
 
     /// @notice Sets the new value for the annualBalanceIncreaseBPLimit
@@ -559,11 +602,66 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
 
-        // 6. Appeared validators increase
-        // TODO: MaxEB - validator count-based checks not relevant for balance-based accounting
-        // if (_postCLValidators > _preCLValidators) {
-        //     _checkAppearedValidatorsChurnLimit(limitsList, (_postCLValidators - _preCLValidators), _timeElapsed);
-        // }
+        // 6. Consensus Layer balance increase rate
+        if (_postCLBalance > _preCLBalance) {
+            uint256 clBalanceIncreasePerDay = _normalizePerDay(_postCLBalance - _preCLBalance, _timeElapsed);
+            _checkCLBalanceIncreaseRatePerDay(limitsList, clBalanceIncreasePerDay);
+        }
+    }
+
+    /// @notice Check that per-module active/pending CL balances are consistent with reported totals.
+    function checkCLBalancesConsistency(
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _clActiveBalanceGwei,
+        uint256 _clPendingBalanceGwei
+    ) external pure {
+        _checkCLBalancesConsistency(
+            _stakingModuleIdsWithUpdatedBalance,
+            _activeBalancesGweiByStakingModule,
+            _pendingBalancesGweiByStakingModule,
+            _clActiveBalanceGwei,
+            _clPendingBalanceGwei
+        );
+    }
+
+    /// @notice Check per-day module and total CL balance change rates against configured limits.
+    function checkModuleAndCLBalancesChangeRates(
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _clActiveBalanceGwei,
+        uint256 _clPendingBalanceGwei,
+        uint256 _timeElapsed
+    ) external view {
+        _checkCLBalancesConsistency(
+            _stakingModuleIdsWithUpdatedBalance,
+            _activeBalancesGweiByStakingModule,
+            _pendingBalancesGweiByStakingModule,
+            _clActiveBalanceGwei,
+            _clPendingBalanceGwei
+        );
+
+        IStakingRouter stakingRouter = IStakingRouter(LIDO_LOCATOR.stakingRouter());
+        LimitsList memory limitsList = _limits.unpack();
+        (uint256 moduleBalanceIncreasePerDay, uint256 moduleBalanceDecreasePerDay) = _calculateModuleBalanceChangePerDay(
+            stakingRouter,
+            _stakingModuleIdsWithUpdatedBalance,
+            _activeBalancesGweiByStakingModule,
+            _pendingBalancesGweiByStakingModule,
+            _timeElapsed
+        );
+        (uint256 clBalanceIncreasePerDay, uint256 clBalanceDecreasePerDay, uint256 currCLValidatorsBalance) =
+            _calculateCLBalanceChangePerDay(stakingRouter, _clActiveBalanceGwei, _clPendingBalanceGwei, _timeElapsed);
+
+        uint256 slashingLimit = (currCLValidatorsBalance * limitsList.maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
+        uint256 slashingLimitPerDay = _normalizePerDay(slashingLimit, _timeElapsed);
+
+        _checkAppearedEthAmountPerDay(limitsList, moduleBalanceIncreasePerDay);
+        _checkModuleBalanceDecreaseRatePerDay(limitsList, moduleBalanceDecreasePerDay, slashingLimitPerDay);
+        _checkCLBalanceIncreaseRatePerDay(limitsList, clBalanceIncreasePerDay);
+        _checkCLBalanceDecreaseRatePerDay(limitsList, clBalanceDecreasePerDay, slashingLimitPerDay);
     }
 
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
@@ -579,13 +677,33 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Check rate of exited validators per day
-    /// @param _exitedValidatorsCount Number of validator exited per oracle report
-    function checkExitedValidatorsRatePerDay(uint256 _exitedValidatorsCount) external view {
-        uint256 exitedValidatorsLimit = _limits.unpack().exitedValidatorsPerDayLimit;
-        if (_exitedValidatorsCount > exitedValidatorsLimit) {
-            revert ExitedValidatorsLimitExceeded(exitedValidatorsLimit, _exitedValidatorsCount);
-        }
+    /// @notice Check exited ETH amount rate per day based on exited validators count.
+    /// @param _newlyExitedValidatorsCount Number of newly exited validators since previous report.
+    /// @param _timeElapsed Time elapsed in seconds since previous report.
+    function checkExitedEthAmountPerDay(
+        uint256 _newlyExitedValidatorsCount,
+        uint256 _timeElapsed
+    ) external view {
+        LimitsList memory limitsList = _limits.unpack();
+        uint256 exitedEthAmount = _newlyExitedValidatorsCount * limitsList.exitedValidatorEthAmountLimit;
+        uint256 exitedEthAmountPerDay = _normalizePerDay(exitedEthAmount, _timeElapsed);
+        _checkExitedEthAmountPerDay(limitsList, exitedEthAmountPerDay);
+    }
+
+    /// @notice Check appeared ETH amount rate per day.
+    /// @param _appearedEthAmountPerDay Appeared ETH amount per day in Wei.
+    function checkAppearedEthAmountPerDay(uint256 _appearedEthAmountPerDay) external view {
+        _checkAppearedEthAmountPerDay(_limits.unpack(), _appearedEthAmountPerDay);
+    }
+
+    /// @notice Check module balances decrease rate per day.
+    /// @param _moduleDecreaseEthAmountPerDay Module balances decrease per day in Wei.
+    /// @param _slashingLimitEthAmountPerDay Slashing limit per day in Wei.
+    function checkModuleBalanceDecreaseRatePerDay(
+        uint256 _moduleDecreaseEthAmountPerDay,
+        uint256 _slashingLimitEthAmountPerDay
+    ) external view {
+        _checkModuleBalanceDecreaseRatePerDay(_limits.unpack(), _moduleDecreaseEthAmountPerDay, _slashingLimitEthAmountPerDay);
     }
 
     /// @notice check the number of node operators reported per extra data item in the accounting oracle report.
@@ -644,6 +762,145 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _postInternalShares + _sharesToBurnForWithdrawals,
             _simulatedShareRate
         );
+    }
+
+    function _checkCLBalancesConsistency(
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _clActiveBalanceGwei,
+        uint256 _clPendingBalanceGwei
+    ) internal pure {
+        uint256 modulesCount = _stakingModuleIdsWithUpdatedBalance.length;
+        if (modulesCount != _activeBalancesGweiByStakingModule.length || modulesCount != _pendingBalancesGweiByStakingModule.length) {
+            revert InvalidClBalancesData();
+        }
+
+        uint256 activeBalancesSum;
+        uint256 pendingBalancesSum;
+        for (uint256 i = 0; i < modulesCount;) {
+            activeBalancesSum += _activeBalancesGweiByStakingModule[i];
+            pendingBalancesSum += _pendingBalancesGweiByStakingModule[i];
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (activeBalancesSum != _clActiveBalanceGwei) {
+            revert InconsistentActiveBalanceByModule(_clActiveBalanceGwei, activeBalancesSum);
+        }
+        if (pendingBalancesSum != _clPendingBalanceGwei) {
+            revert InconsistentPendingBalanceByModule(_clPendingBalanceGwei, pendingBalancesSum);
+        }
+    }
+
+    function _checkExitedEthAmountPerDay(LimitsList memory _limitsList, uint256 _exitedEthAmountPerDay) internal pure {
+        uint256 exitedEthLimitWithConsolidation =
+            (_limitsList.exitedEthAmountPerDayLimit + _limitsList.consolidationEthAmountPerDayLimit) * 1 ether;
+        if (_exitedEthAmountPerDay > exitedEthLimitWithConsolidation) {
+            revert ExitedEthAmountPerDayLimitExceeded(exitedEthLimitWithConsolidation, _exitedEthAmountPerDay);
+        }
+    }
+
+    function _checkAppearedEthAmountPerDay(LimitsList memory _limitsList, uint256 _appearedEthAmountPerDay) internal pure {
+        uint256 appearedEthLimitWithConsolidation =
+            (_limitsList.appearedEthAmountPerDayLimit + _limitsList.consolidationEthAmountPerDayLimit) * 1 ether;
+        if (_appearedEthAmountPerDay > appearedEthLimitWithConsolidation) {
+            revert AppearedEthAmountPerDayLimitExceeded(appearedEthLimitWithConsolidation, _appearedEthAmountPerDay);
+        }
+    }
+
+    function _checkModuleBalanceDecreaseRatePerDay(
+        LimitsList memory _limitsList,
+        uint256 _moduleDecreaseEthAmountPerDay,
+        uint256 _slashingLimitEthAmountPerDay
+    ) internal pure {
+        uint256 moduleDecreaseLimitPerDay =
+            (_limitsList.exitedEthAmountPerDayLimit + _limitsList.consolidationEthAmountPerDayLimit) * 1 ether +
+            _slashingLimitEthAmountPerDay;
+        if (_moduleDecreaseEthAmountPerDay > moduleDecreaseLimitPerDay) {
+            revert ModuleBalanceDecreaseRatePerDayLimitExceeded(moduleDecreaseLimitPerDay, _moduleDecreaseEthAmountPerDay);
+        }
+    }
+
+    function _checkCLBalanceIncreaseRatePerDay(
+        LimitsList memory _limitsList,
+        uint256 _clBalanceIncreaseEthAmountPerDay
+    ) internal pure {
+        uint256 clBalanceIncreaseLimitPerDay = _limitsList.appearedEthAmountPerDayLimit * 1 ether;
+        if (_clBalanceIncreaseEthAmountPerDay > clBalanceIncreaseLimitPerDay) {
+            revert CLBalanceIncreaseRatePerDayLimitExceeded(
+                clBalanceIncreaseLimitPerDay,
+                _clBalanceIncreaseEthAmountPerDay
+            );
+        }
+    }
+
+    function _checkCLBalanceDecreaseRatePerDay(
+        LimitsList memory _limitsList,
+        uint256 _clBalanceDecreaseEthAmountPerDay,
+        uint256 _slashingLimitEthAmountPerDay
+    ) internal pure {
+        uint256 clBalanceDecreaseLimitPerDay = _limitsList.exitedEthAmountPerDayLimit * 1 ether + _slashingLimitEthAmountPerDay;
+        if (_clBalanceDecreaseEthAmountPerDay > clBalanceDecreaseLimitPerDay) {
+            revert CLBalanceDecreaseRatePerDayLimitExceeded(
+                clBalanceDecreaseLimitPerDay,
+                _clBalanceDecreaseEthAmountPerDay
+            );
+        }
+    }
+
+    function _calculateModuleBalanceChangePerDay(
+        IStakingRouter _stakingRouter,
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _timeElapsed
+    ) internal view returns (uint256 moduleBalanceIncreasePerDay, uint256 moduleBalanceDecreasePerDay) {
+        uint256 moduleBalanceIncrease;
+        uint256 moduleBalanceDecrease;
+        for (uint256 i = 0; i < _stakingModuleIdsWithUpdatedBalance.length;) {
+            uint256 previousModuleBalance = _stakingRouter.getStakingModuleBalance(_stakingModuleIdsWithUpdatedBalance[i]);
+            uint256 currentModuleBalance =
+                (_activeBalancesGweiByStakingModule[i] + _pendingBalancesGweiByStakingModule[i]) * 1 gwei;
+            if (currentModuleBalance >= previousModuleBalance) {
+                moduleBalanceIncrease += currentModuleBalance - previousModuleBalance;
+            } else {
+                moduleBalanceDecrease += previousModuleBalance - currentModuleBalance;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        moduleBalanceIncreasePerDay = _normalizePerDay(moduleBalanceIncrease, _timeElapsed);
+        moduleBalanceDecreasePerDay = _normalizePerDay(moduleBalanceDecrease, _timeElapsed);
+    }
+
+    function _calculateCLBalanceChangePerDay(
+        IStakingRouter _stakingRouter,
+        uint256 _clActiveBalanceGwei,
+        uint256 _clPendingBalanceGwei,
+        uint256 _timeElapsed
+    ) internal view returns (uint256 clBalanceIncreasePerDay, uint256 clBalanceDecreasePerDay, uint256 currCLValidatorsBalance) {
+        uint256 previousCLValidatorsBalance = _stakingRouter.getTotalStakingModulesBalance();
+        currCLValidatorsBalance = (_clActiveBalanceGwei + _clPendingBalanceGwei) * 1 gwei;
+        uint256 clBalanceIncrease;
+        uint256 clBalanceDecrease;
+        if (currCLValidatorsBalance >= previousCLValidatorsBalance) {
+            clBalanceIncrease = currCLValidatorsBalance - previousCLValidatorsBalance;
+        } else {
+            clBalanceDecrease = previousCLValidatorsBalance - currCLValidatorsBalance;
+        }
+        clBalanceIncreasePerDay = _normalizePerDay(clBalanceIncrease, _timeElapsed);
+        clBalanceDecreasePerDay = _normalizePerDay(clBalanceDecrease, _timeElapsed);
+    }
+
+    function _normalizePerDay(uint256 _amount, uint256 _timeElapsed) internal pure returns (uint256) {
+        if (_timeElapsed == 0) {
+            return _amount * SECONDS_PER_DAY;
+        }
+        return (_amount * SECONDS_PER_DAY) / _timeElapsed;
     }
 
     function _checkWithdrawalVaultBalance(
@@ -833,20 +1090,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    // TODO: MaxEB - validator count-based checks not relevant for balance-based accounting
-    // function _checkAppearedValidatorsChurnLimit(
-    //     LimitsList memory _limitsList,
-    //     uint256 _appearedValidators,
-    //     uint256 _timeElapsed
-    // ) internal pure {
-    //     if (_timeElapsed == 0) {
-    //         _timeElapsed = DEFAULT_TIME_ELAPSED;
-    //     }
 
-    //     uint256 appearedLimit = (_limitsList.appearedValidatorsPerDayLimit * _timeElapsed) / SECONDS_PER_DAY;
-
-    //     if (_appearedValidators > appearedLimit) revert IncorrectAppearedValidators(_appearedValidators);
-    // }
 
     function _checkLastFinalizableId(
         LimitsList memory _limitsList,
@@ -910,13 +1154,21 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _updateLimits(LimitsList memory _newLimitsList) internal {
         LimitsList memory _oldLimitsList = _limits.unpack();
-        if (_oldLimitsList.exitedValidatorsPerDayLimit != _newLimitsList.exitedValidatorsPerDayLimit) {
-            _checkLimitValue(_newLimitsList.exitedValidatorsPerDayLimit, 0, type(uint16).max);
-            emit ExitedValidatorsPerDayLimitSet(_newLimitsList.exitedValidatorsPerDayLimit);
+        if (_oldLimitsList.exitedEthAmountPerDayLimit != _newLimitsList.exitedEthAmountPerDayLimit) {
+            _checkLimitValue(_newLimitsList.exitedEthAmountPerDayLimit, 0, type(uint16).max);
+            emit ExitedEthAmountPerDayLimitSet(_newLimitsList.exitedEthAmountPerDayLimit);
         }
-        if (_oldLimitsList.appearedValidatorsPerDayLimit != _newLimitsList.appearedValidatorsPerDayLimit) {
-            _checkLimitValue(_newLimitsList.appearedValidatorsPerDayLimit, 0, type(uint16).max);
-            emit AppearedValidatorsPerDayLimitSet(_newLimitsList.appearedValidatorsPerDayLimit);
+        if (_oldLimitsList.appearedEthAmountPerDayLimit != _newLimitsList.appearedEthAmountPerDayLimit) {
+            _checkLimitValue(_newLimitsList.appearedEthAmountPerDayLimit, 0, type(uint16).max);
+            emit AppearedEthAmountPerDayLimitSet(_newLimitsList.appearedEthAmountPerDayLimit);
+        }
+        if (_oldLimitsList.consolidationEthAmountPerDayLimit != _newLimitsList.consolidationEthAmountPerDayLimit) {
+            _checkLimitValue(_newLimitsList.consolidationEthAmountPerDayLimit, 0, type(uint16).max);
+            emit ConsolidationEthAmountPerDayLimitSet(_newLimitsList.consolidationEthAmountPerDayLimit);
+        }
+        if (_oldLimitsList.exitedValidatorEthAmountLimit != _newLimitsList.exitedValidatorEthAmountLimit) {
+            _checkLimitValue(_newLimitsList.exitedValidatorEthAmountLimit, 1, type(uint128).max);
+            emit ExitedValidatorEthAmountLimitSet(_newLimitsList.exitedValidatorEthAmountLimit);
         }
         if (_oldLimitsList.annualBalanceIncreaseBPLimit != _newLimitsList.annualBalanceIncreaseBPLimit) {
             _checkLimitValue(_newLimitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
@@ -963,8 +1215,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    event ExitedValidatorsPerDayLimitSet(uint256 exitedValidatorsPerDayLimit);
-    event AppearedValidatorsPerDayLimitSet(uint256 appearedValidatorsPerDayLimit);
+    event ExitedEthAmountPerDayLimitSet(uint256 exitedEthAmountPerDayLimit);
+    event AppearedEthAmountPerDayLimitSet(uint256 appearedEthAmountPerDayLimit);
+    event ConsolidationEthAmountPerDayLimitSet(uint256 consolidationEthAmountPerDayLimit);
+    event ExitedValidatorEthAmountLimitSet(uint256 exitedValidatorEthAmountLimit);
     event SecondOpinionOracleChanged(ISecondOpinionOracle indexed secondOpinionOracle);
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
@@ -989,12 +1243,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectSharesRequestedToBurn(uint256 actualSharesToBurn);
     error IncorrectCLBalanceIncrease(uint256 annualBalanceDiff);
     error IncorrectAppearedValidators(uint256 appearedValidatorsLimit);
+    error InvalidClBalancesData();
+    error InconsistentActiveBalanceByModule(uint256 expected, uint256 actual);
+    error InconsistentPendingBalanceByModule(uint256 expected, uint256 actual);
+    error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
+    error ModuleBalanceDecreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 decreasePerDay);
+    error CLBalanceIncreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 increasePerDay);
+    error CLBalanceDecreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 decreasePerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectExitedValidators(uint256 exitedValidatorsLimit);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
     error TooManyItemsPerExtraDataTransaction(uint256 maxItemsCount, uint256 receivedItemsCount);
-    error ExitedValidatorsLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
+    error ExitedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
     error AdminCannotBeZero();
 
@@ -1018,8 +1279,9 @@ library LimitsListPacker {
     error BasisPointsOverflow(uint256 value, uint256 maxValue);
 
     function pack(LimitsList memory _limitsList) internal pure returns (LimitsListPacked memory res) {
-        res.exitedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.exitedValidatorsPerDayLimit);
-        res.appearedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.appearedValidatorsPerDayLimit);
+        res.exitedEthAmountPerDayLimit = SafeCast.toUint16(_limitsList.exitedEthAmountPerDayLimit);
+        res.appearedEthAmountPerDayLimit = SafeCast.toUint16(_limitsList.appearedEthAmountPerDayLimit);
+        res.consolidationEthAmountPerDayLimit = SafeCast.toUint16(_limitsList.consolidationEthAmountPerDayLimit);
         res.annualBalanceIncreaseBPLimit = _toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
         res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
         res.requestTimestampMargin = SafeCast.toUint32(_limitsList.requestTimestampMargin);
@@ -1029,6 +1291,7 @@ library LimitsListPacker {
         res.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItem);
         res.maxCLBalanceDecreaseBP = _toBasisPoints(_limitsList.maxCLBalanceDecreaseBP);
         res.clBalanceOraclesErrorUpperBPLimit = _toBasisPoints(_limitsList.clBalanceOraclesErrorUpperBPLimit);
+        res.exitedValidatorEthAmountLimit = SafeCast.toUint128(_limitsList.exitedValidatorEthAmountLimit);
     }
 
     function _toBasisPoints(uint256 _value) private pure returns (uint16) {
@@ -1041,8 +1304,9 @@ library LimitsListPacker {
 
 library LimitsListUnpacker {
     function unpack(LimitsListPacked memory _limitsList) internal pure returns (LimitsList memory res) {
-        res.exitedValidatorsPerDayLimit = _limitsList.exitedValidatorsPerDayLimit;
-        res.appearedValidatorsPerDayLimit = _limitsList.appearedValidatorsPerDayLimit;
+        res.exitedEthAmountPerDayLimit = _limitsList.exitedEthAmountPerDayLimit;
+        res.appearedEthAmountPerDayLimit = _limitsList.appearedEthAmountPerDayLimit;
+        res.consolidationEthAmountPerDayLimit = _limitsList.consolidationEthAmountPerDayLimit;
         res.annualBalanceIncreaseBPLimit = _limitsList.annualBalanceIncreaseBPLimit;
         res.simulatedShareRateDeviationBPLimit = _limitsList.simulatedShareRateDeviationBPLimit;
         res.requestTimestampMargin = _limitsList.requestTimestampMargin;
@@ -1052,5 +1316,6 @@ library LimitsListUnpacker {
         res.maxNodeOperatorsPerExtraDataItem = _limitsList.maxNodeOperatorsPerExtraDataItem;
         res.maxCLBalanceDecreaseBP = _limitsList.maxCLBalanceDecreaseBP;
         res.clBalanceOraclesErrorUpperBPLimit = _limitsList.clBalanceOraclesErrorUpperBPLimit;
+        res.exitedValidatorEthAmountLimit = _limitsList.exitedValidatorEthAmountLimit;
     }
 }
