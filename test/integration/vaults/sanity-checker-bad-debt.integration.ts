@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { advanceChainTime, ether, impersonate, LIMITER_PRECISION_BASE } from "lib";
+import { ether, impersonate, LIMITER_PRECISION_BASE } from "lib";
 import {
   getProtocolContext,
   ProtocolContext,
@@ -296,12 +296,10 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
       const { oracleReportSanityChecker, lido } = ctx.contracts;
 
-      // Time travel to 54 days to invalidate all current penalties and get max slashing limits
-      const DAYS_54_IN_SECONDS = 54n * 24n * 60n * 60n;
-      await advanceChainTime(DAYS_54_IN_SECONDS);
+      // Submit a neutral report to establish a fresh CL balance baseline
       await report(ctx);
 
-      // Get current protocol state to calculate max allowed CL decrease limit
+      // Get current protocol state to calculate dynamic slashing limit
       const { beaconBalance: preCLBalance } = await lido.getBeaconStat();
       const limits = await oracleReportSanityChecker.getOracleReportLimits();
       const maxAllowedNegativeRebase = (preCLBalance * limits.maxCLBalanceDecreaseBP) / 10_000n;

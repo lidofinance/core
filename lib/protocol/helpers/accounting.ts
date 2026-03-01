@@ -63,6 +63,53 @@ export const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
 
+type StakingModuleWithCLBalance = {
+  moduleId: bigint;
+  moduleClBalance: bigint;
+};
+
+type StakingModuleWithActiveBalanceGwei = {
+  moduleId: bigint;
+  moduleActiveBalanceGwei: bigint;
+};
+
+/**
+ * Build module active balances in gwei with exact total conservation.
+ * Uses proportional split over remaining totals; the last module gets the remainder.
+ */
+const buildConservedModuleActiveBalancesGwei = (
+  clActiveBalanceGwei: bigint,
+  modulesWithBalance: StakingModuleWithCLBalance[],
+): StakingModuleWithActiveBalanceGwei[] => {
+  if (modulesWithBalance.length === 0) return [];
+
+  const totalModulesClBalance = modulesWithBalance.reduce((sum, module) => sum + module.moduleClBalance, 0n);
+  if (totalModulesClBalance === 0n) {
+    return modulesWithBalance.map(({ moduleId }) => ({ moduleId, moduleActiveBalanceGwei: 0n }));
+  }
+
+  let remainingClActiveBalanceGwei = clActiveBalanceGwei;
+  let remainingModulesClBalance = totalModulesClBalance;
+  const modulesWithActiveBalances: StakingModuleWithActiveBalanceGwei[] = [];
+
+  for (let index = 0; index < modulesWithBalance.length; ++index) {
+    const { moduleId, moduleClBalance } = modulesWithBalance[index];
+    const isLastModule = index === modulesWithBalance.length - 1;
+
+    const moduleActiveBalanceGwei =
+      isLastModule || remainingModulesClBalance === 0n
+        ? remainingClActiveBalanceGwei
+        : (remainingClActiveBalanceGwei * moduleClBalance) / remainingModulesClBalance;
+
+    modulesWithActiveBalances.push({ moduleId, moduleActiveBalanceGwei });
+
+    remainingClActiveBalanceGwei -= moduleActiveBalanceGwei;
+    remainingModulesClBalance -= moduleClBalance;
+  }
+
+  return modulesWithActiveBalances;
+};
+
 /**
  * Prepare and push oracle report.
  */
@@ -193,7 +240,7 @@ export const report = async (
     pendingBalancesGweiByStakingModule = [];
     const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
 
-    const modulesWithBalance: Array<{ moduleId: bigint; moduleClBalance: bigint }> = [];
+    const modulesWithBalance: StakingModuleWithCLBalance[] = [];
     for (const moduleId of moduleIds) {
       const moduleClBalance = await ctx.contracts.stakingRouter.getStakingModuleBalance(moduleId);
       if (moduleClBalance > 0) {
@@ -201,32 +248,17 @@ export const report = async (
       }
     }
 
-    // Build module active balances directly in gwei with exact total conservation.
-    let remainingClBalanceGwei = clActiveBalanceGwei;
-    let remainingModulesClBalance = modulesWithBalance.reduce((sum, module) => sum + module.moduleClBalance, 0n);
-
-    for (let i = 0; i < modulesWithBalance.length; ++i) {
-      const { moduleId, moduleClBalance } = modulesWithBalance[i];
-      const isLastModule = i === modulesWithBalance.length - 1;
-
-      const moduleActiveBalanceGwei =
-        isLastModule || remainingModulesClBalance === 0n
-          ? remainingClBalanceGwei
-          : (remainingClBalanceGwei * moduleClBalance) / remainingModulesClBalance;
-
+    const modulesWithActiveBalances = buildConservedModuleActiveBalancesGwei(clActiveBalanceGwei, modulesWithBalance);
+    for (const { moduleId, moduleActiveBalanceGwei } of modulesWithActiveBalances) {
       stakingModuleIdsWithUpdatedBalance.push(moduleId);
       activeBalancesGweiByStakingModule.push(moduleActiveBalanceGwei);
       pendingBalancesGweiByStakingModule.push(0n);
-
-      remainingClBalanceGwei -= moduleActiveBalanceGwei;
-      remainingModulesClBalance -= moduleClBalance;
     }
   }
 
   const reportData = {
     consensusVersion: await accountingOracle.getConsensusVersion(),
     refSlot,
-    // TODO: Split clBalanceGwei into clActiveBalanceGwei + clPendingBalanceGwei
     clActiveBalanceGwei,
     clPendingBalanceGwei: 0n,
     stakingModuleIdsWithNewlyExitedValidators,
