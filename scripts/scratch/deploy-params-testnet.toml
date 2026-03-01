@@ -102,7 +102,7 @@ pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]
-exitedEthAmountPerDayLimit = 115200                    # Exited ETH amount per day limit
+exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
 deprecatedOneOffCLBalanceDecreaseBPLimit = 500         # Deprecated one-off CL balance decrease limit (BP)
 annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
@@ -114,7 +114,7 @@ requestTimestampMargin = 128                           # Request timestamp margi
 maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
 maxCLBalanceDecreaseBP = 380                           # Max CL balance decrease over sliding window (BP, 380 = 3.8%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
-consolidationEthAmountPerDayLimit = 0                  # Consolidation ETH amount per day limit
+consolidationEthAmountPerDayLimit = 57600              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = "32000000000000000000" # Exited validator ETH amount limit in Wei (32 ETH)
 
 # Oracle daemon configuration

@@ -192,12 +192,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         keccak256("CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE");
     bytes32 public constant EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE =
         keccak256("EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE");
-    /// @dev Deprecated alias kept for compatibility.
-    bytes32 public constant EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE;
-    /// @dev Deprecated alias kept for compatibility.
-    bytes32 public constant APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE;
     bytes32 public constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
         keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
     bytes32 public constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
@@ -351,22 +345,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         LimitsList memory limitsList = _limits.unpack();
         limitsList.exitedValidatorEthAmountLimit = _exitedValidatorEthAmountLimit;
         _updateLimits(limitsList);
-    }
-
-    /// @dev Deprecated setter kept for compatibility.
-    function setExitedValidatorsPerDayLimit(uint256 _exitedValidatorsPerDayLimit)
-        external
-        onlyRole(EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE)
-    {
-        setExitedEthAmountPerDayLimit(_exitedValidatorsPerDayLimit);
-    }
-
-    /// @dev Deprecated setter kept for compatibility.
-    function setAppearedValidatorsPerDayLimit(uint256 _appearedValidatorsPerDayLimit)
-        external
-        onlyRole(APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE)
-    {
-        setAppearedEthAmountPerDayLimit(_appearedValidatorsPerDayLimit);
     }
 
     /// @notice Sets the new value for the annualBalanceIncreaseBPLimit
@@ -1242,7 +1220,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectELRewardsVaultBalance(uint256 actualELRewardsVaultBalance);
     error IncorrectSharesRequestedToBurn(uint256 actualSharesToBurn);
     error IncorrectCLBalanceIncrease(uint256 annualBalanceDiff);
-    error IncorrectAppearedValidators(uint256 appearedValidatorsLimit);
     error InvalidClBalancesData();
     error InconsistentActiveBalanceByModule(uint256 expected, uint256 actual);
     error InconsistentPendingBalanceByModule(uint256 expected, uint256 actual);
@@ -1251,7 +1228,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error CLBalanceIncreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 increasePerDay);
     error CLBalanceDecreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 decreasePerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
-    error IncorrectExitedValidators(uint256 exitedValidatorsLimit);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
     error TooManyItemsPerExtraDataTransaction(uint256 maxItemsCount, uint256 receivedItemsCount);

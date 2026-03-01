@@ -216,34 +216,34 @@ describe("OracleReportSanityChecker.sol", () => {
       );
     });
 
-    it("deprecated aliases route to ETH-based setters", async () => {
+    it("sets exited/appeared ETH limits via dedicated setters", async () => {
       await checker
         .connect(admin)
-        .grantRole(await checker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
+        .grantRole(await checker.EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
       await checker
         .connect(admin)
-        .grantRole(await checker.APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
+        .grantRole(await checker.APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
 
-      await checker.connect(manager).setExitedValidatorsPerDayLimit(61n);
-      await checker.connect(manager).setAppearedValidatorsPerDayLimit(101n);
+      await checker.connect(manager).setExitedEthAmountPerDayLimit(61n);
+      await checker.connect(manager).setAppearedEthAmountPerDayLimit(101n);
 
       const limits = await checker.getOracleReportLimits();
       expect(limits.exitedEthAmountPerDayLimit).to.equal(61n);
       expect(limits.appearedEthAmountPerDayLimit).to.equal(101n);
     });
 
-    it("deprecated aliases emit ETH-based events", async () => {
+    it("dedicated exited/appeared ETH setters emit events", async () => {
       await checker
         .connect(admin)
-        .grantRole(await checker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
+        .grantRole(await checker.EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
       await checker
         .connect(admin)
-        .grantRole(await checker.APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
+        .grantRole(await checker.APPEARED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(), manager.address);
 
-      await expect(checker.connect(manager).setExitedValidatorsPerDayLimit(62n))
+      await expect(checker.connect(manager).setExitedEthAmountPerDayLimit(62n))
         .to.emit(checker, "ExitedEthAmountPerDayLimitSet")
         .withArgs(62n);
-      await expect(checker.connect(manager).setAppearedValidatorsPerDayLimit(102n))
+      await expect(checker.connect(manager).setAppearedEthAmountPerDayLimit(102n))
         .to.emit(checker, "AppearedEthAmountPerDayLimitSet")
         .withArgs(102n);
     });

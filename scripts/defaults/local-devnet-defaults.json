@@ -111,7 +111,7 @@
   },
   "oracleReportSanityChecker": {
     "deployParameters": {
-      "exitedEthAmountPerDayLimit": 115200,
+      "exitedEthAmountPerDayLimit": 57600,
       "appearedEthAmountPerDayLimit": 57600,
       "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
       "annualBalanceIncreaseBPLimit": 1000,
@@ -123,7 +123,7 @@
       "maxPositiveTokenRebase": 5000000,
       "maxCLBalanceDecreaseBP": 380,
       "clBalanceOraclesErrorUpperBPLimit": 50,
-      "consolidationEthAmountPerDayLimit": 0,
+      "consolidationEthAmountPerDayLimit": 57600,
       "exitedValidatorEthAmountLimit": "32000000000000000000"
     }
   },

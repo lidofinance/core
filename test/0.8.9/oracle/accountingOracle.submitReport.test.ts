@@ -434,10 +434,10 @@ describe("AccountingOracle.sol:submitReport", () => {
         );
         const exitingRateLimit = 0n;
         await sanityChecker.grantRole(
-          await sanityChecker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
+          await sanityChecker.EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(),
           admin.address,
         );
-        await sanityChecker.setExitedValidatorsPerDayLimit(exitingRateLimit);
+        await sanityChecker.setExitedEthAmountPerDayLimit(exitingRateLimit);
 
         const limits = await sanityChecker.getOracleReportLimits();
         expect(limits.exitedEthAmountPerDayLimit).to.equal(exitingRateLimit);
