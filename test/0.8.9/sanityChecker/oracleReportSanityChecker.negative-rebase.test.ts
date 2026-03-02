@@ -4,6 +4,7 @@ import { artifacts, ethers } from "hardhat";
 
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Accounting__MockForSanityChecker,
@@ -31,6 +32,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let stakingRouter: StakingRouter__MockForSanityChecker;
   let lido: Lido__MockForSanityChecker;
   let deployer: HardhatEthersSigner;
+  let withdrawalVault: HardhatEthersSigner;
   let accountingSigner: HardhatEthersSigner;
 
   const defaultLimitsList = {
@@ -56,11 +58,21 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     postCLBalance: bigint,
     withdrawalVaultBalance = 0n,
     deposits = 0n,
+    withdrawalsVaultTransfer = 0n,
     timeElapsed = 24n * 60n * 60n,
   ) =>
     checker
       .connect(accountingSigner)
-      .checkAccountingOracleReport(timeElapsed, preCLBalance, postCLBalance, withdrawalVaultBalance, 0n, 0n, deposits);
+      .checkAccountingOracleReport(
+        timeElapsed,
+        preCLBalance,
+        postCLBalance,
+        withdrawalVaultBalance,
+        0n,
+        0n,
+        deposits,
+        withdrawalsVaultTransfer,
+      );
 
   const maxDiffFor = (adjusted: bigint) => (adjusted * MAX_CL_BALANCE_DECREASE_BP) / MAX_BASIS_POINTS;
 
@@ -75,7 +87,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   };
 
   before(async () => {
-    [deployer] = await ethers.getSigners();
+    [deployer, withdrawalVault] = await ethers.getSigners();
+    await setBalance(withdrawalVault.address, ether("10000"));
 
     const sanityCheckerAddress = deployer.address;
 
@@ -102,7 +115,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         stakingRouter: await stakingRouter.getAddress(),
         treasury: deployer.address,
         withdrawalQueue: deployer.address,
-        withdrawalVault: deployer.address,
+        withdrawalVault: withdrawalVault.address,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
         validatorExitDelayVerifier: deployer.address,
@@ -141,7 +154,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     it("should not allow calling from non-Accounting address", async () => {
       const [, otherClient] = await ethers.getSigners();
       await expect(
-        checker.connect(otherClient).checkAccountingOracleReport(0, ether("100"), ether("100"), 0, 0, 0, 0),
+        checker.connect(otherClient).checkAccountingOracleReport(0, ether("100"), ether("100"), 0, 0, 0, 0, 0),
       ).to.be.revertedWithCustomError(checker, "CalledNotFromAccounting");
     });
   });
@@ -234,6 +247,29 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       it("passes when postCL == preCL", async () => {
         await expect(callCheck(ether("100"), ether("100"))).not.to.be.reverted;
+      });
+
+      it("does not use cumulative withdrawal vault balance for early exit when no new CL withdrawals", async () => {
+        const baseline = ether("10000");
+        const unchangedVaultBalance = ether("500");
+        const postCL = ether("9550");
+        const actualDiff = baseline - postCL;
+        const adjusted = baseline - unchangedVaultBalance;
+        const expectedMaxDiff = maxDiffFor(adjusted);
+
+        await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
+        await callCheck(baseline, baseline);
+
+        // First report with non-zero vault balance sets _lastVaultBalanceAfterTransfer to 500.
+        await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+        await callCheck(baseline, ether("9900"), unchangedVaultBalance, 0n, 0n);
+
+        // Same vault balance on the next report means clWithdrawals == 0 for this period.
+        // The check must not early-exit based on cumulative vault balance.
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(ether("9900"), postCL, unchangedVaultBalance, 0n, 0n))
+          .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+          .withArgs(actualDiff, expectedMaxDiff);
       });
     });
 
@@ -366,12 +402,12 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         await callCheck(baseline, baseline);
 
         await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
-        await callCheck(ether("10200"), ether("9900"), report2Withdrawals, report2Deposits);
+        await callCheck(ether("10200"), ether("9900"), report2Withdrawals, report2Deposits, report2Withdrawals);
 
         // adjusted = baseline + totalDeposits - totalWithdrawals
         // actualDiff = baseline - postCL
         await setRefSlot(baseRefSlot);
-        await expect(callCheck(ether("10150"), postCL, report3Withdrawals, report3Deposits))
+        await expect(callCheck(ether("10150"), postCL, report3Withdrawals, report3Deposits, report3Withdrawals))
           .to.emit(checker, "NegativeCLRebaseAccepted")
           .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
       });
@@ -381,20 +417,20 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         const repeatedWVaultSnapshot = ether("500");
         const postCL = ether("9650");
         const actualDiff = baseline - postCL;
-        const totalReportedWithdrawalVaultBalances = repeatedWVaultSnapshot * 2n;
-        const adjusted = baseline - totalReportedWithdrawalVaultBalances;
+        const totalCLWithdrawals = repeatedWVaultSnapshot * 2n;
+        const adjusted = baseline - totalCLWithdrawals;
         const expectedMaxDiff = maxDiffFor(adjusted);
 
         await setRefSlot(baseRefSlot - 3n * SLOTS_PER_DAY);
         await callCheck(baseline, baseline);
 
-        // preCL <= postCL + wVault -> early exit, but snapshot is still stored in reportData
+        // preCL <= postCL + wVault -> early exit, but CL withdrawals are still stored in reportData
         await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
-        await callCheck(baseline, ether("9900"), repeatedWVaultSnapshot);
+        await callCheck(baseline, ether("9900"), repeatedWVaultSnapshot, 0n, repeatedWVaultSnapshot);
 
-        // same for next report; repeated snapshot tightens adjustedBase
+        // same for next report; repeated CL withdrawals tighten adjustedBase
         await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
-        await callCheck(ether("9900"), ether("9800"), repeatedWVaultSnapshot);
+        await callCheck(ether("9900"), ether("9800"), repeatedWVaultSnapshot, 0n, repeatedWVaultSnapshot);
 
         await setRefSlot(baseRefSlot);
         await expect(callCheck(ether("9800"), postCL))
@@ -504,7 +540,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         await callCheck(baseline, baseline);
 
         await setRefSlot(baseRefSlot - BigInt(totalReports - 1) * SLOTS_PER_DAY);
-        await callCheck(baseline, stableBalance, wVaultReport1);
+        await callCheck(baseline, stableBalance, wVaultReport1, 0n, wVaultReport1);
 
         for (let i = 2; i < REPORTS_WINDOW; i++) {
           await setRefSlot(baseRefSlot - BigInt(totalReports - i) * SLOTS_PER_DAY);
@@ -518,6 +554,27 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
           .withArgs(actualDiff, expectedMaxDiff);
       });
 
+      it("uses a 36-day window by timestamps when reports are delayed", async () => {
+        const twoDaysInSeconds = 2n * 24n * 60n * 60n;
+        const baseline = ether("10000");
+        const postCL = ether("9700");
+        const oldWindowWithdrawal = ether("5000");
+        const actualDiff = baseline - postCL;
+        const expectedMaxDiff = maxDiffFor(baseline);
+
+        await callCheck(baseline, baseline, 0n, 0n, 0n, twoDaysInSeconds);
+        await callCheck(baseline, baseline, oldWindowWithdrawal, 0n, oldWindowWithdrawal, twoDaysInSeconds);
+
+        for (let i = 0; i < 17; ++i) {
+          await callCheck(baseline, baseline, 0n, 0n, 0n, twoDaysInSeconds);
+        }
+
+        await setRefSlot(baseRefSlot);
+        await expect(callCheck(baseline, postCL, 0n, 0n, 0n, twoDaysInSeconds))
+          .to.emit(checker, "NegativeCLRebaseAccepted")
+          .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
+      });
+
       it("excludes baseline report flows from adjusted balance", async () => {
         const totalReports = REPORTS_WINDOW + 1;
         const baseline = ether("10000");
@@ -527,7 +584,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         const expectedMaxDiff = maxDiffFor(baseline);
 
         await setRefSlot(baseRefSlot - BigInt(totalReports) * SLOTS_PER_DAY);
-        await callCheck(baseline, baseline, baselineWithdrawals);
+        await callCheck(baseline, baseline, baselineWithdrawals, 0n, baselineWithdrawals);
 
         for (let i = 1; i < REPORTS_WINDOW; i++) {
           await setRefSlot(baseRefSlot - BigInt(totalReports - i) * SLOTS_PER_DAY);
@@ -583,7 +640,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         await callCheck(baseline, baseline);
 
         await setRefSlot(baseRefSlot - BigInt(totalReports - 1) * SLOTS_PER_DAY);
-        await callCheck(baseline, stableBalance, wVaultReport1);
+        await callCheck(baseline, stableBalance, wVaultReport1, 0n, wVaultReport1);
 
         for (let i = 2; i < REPORTS_WINDOW; i++) {
           await setRefSlot(baseRefSlot - BigInt(totalReports - i) * SLOTS_PER_DAY);
@@ -613,7 +670,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
         // deposits=1000 and wVault=500 stored with report 1; after eviction they leave the window
         await setRefSlot(baseRefSlot - BigInt(totalReports - 1) * SLOTS_PER_DAY);
-        await callCheck(stableBalance, stableBalance, ether("500"), ether("1000"));
+        await callCheck(stableBalance, stableBalance, ether("500"), ether("1000"), ether("500"));
 
         // clean transition to stableBalance (becomes new baseline after eviction)
         await setRefSlot(baseRefSlot - BigInt(totalReports - 2) * SLOTS_PER_DAY);
@@ -746,15 +803,32 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await setRefSlot(baseRefSlot - 2n * SLOTS_PER_DAY);
       await callCheck(baseline, baseline);
 
-      // wVault triggers early exit but stores huge withdrawals value
+      // wVault triggers early exit but stores huge CL withdrawals value
       await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
-      await callCheck(baseline, ether("80"), hugeWithdrawals);
+      await callCheck(baseline, ether("80"), hugeWithdrawals, 0n, hugeWithdrawals);
 
       // adjusted = baseline + 0 - hugeWithdrawals -> invalid window inputs for subtraction
       await setRefSlot(baseRefSlot);
       await expect(callCheck(ether("80"), ether("50")))
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseWindowData")
         .withArgs(baseline, 0n, hugeWithdrawals);
+    });
+
+    it("reverts with IncorrectCLWithdrawalsVaultBalance when reported vault balance is below previous post-transfer state", async () => {
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(ether("100"), ether("100"), ether("200"), 0n, 0n);
+
+      await setRefSlot(baseRefSlot);
+      await expect(callCheck(ether("100"), ether("100"), ether("199"), 0n, 0n))
+        .to.be.revertedWithCustomError(checker, "IncorrectCLWithdrawalsVaultBalance")
+        .withArgs(ether("199"), ether("200"));
+    });
+
+    it("reverts with IncorrectWithdrawalsVaultTransfer when transfer exceeds reported vault balance", async () => {
+      await setRefSlot(baseRefSlot);
+      await expect(callCheck(ether("100"), ether("100"), ether("100"), 0n, ether("101")))
+        .to.be.revertedWithCustomError(checker, "IncorrectWithdrawalsVaultTransfer")
+        .withArgs(ether("100"), ether("101"));
     });
 
     it("large balances (36M ETH) do not cause overflow", async () => {
@@ -1029,14 +1103,16 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       expect(await checker.getReportDataCount()).to.equal(2);
 
       const baselineData = await checker.reportData(0);
+      expect(baselineData.timestamp).to.equal(0n);
       expect(baselineData.clBalance).to.equal(expectedCLBalance);
       expect(baselineData.deposits).to.equal(0);
-      expect(baselineData.withdrawals).to.equal(0);
+      expect(baselineData.clWithdrawals).to.equal(0);
 
       const bootstrapFlowData = await checker.reportData(1);
+      expect(bootstrapFlowData.timestamp).to.equal(0n);
       expect(bootstrapFlowData.clBalance).to.equal(expectedCLBalance);
       expect(bootstrapFlowData.deposits).to.equal(deposits);
-      expect(bootstrapFlowData.withdrawals).to.equal(CHURN_LIMIT);
+      expect(bootstrapFlowData.clWithdrawals).to.equal(CHURN_LIMIT);
     });
 
     it("reverts with MigrationAlreadyDone on second call", async () => {
@@ -1070,8 +1146,10 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       const adjusted = baseline + migrationDeposits - CHURN_LIMIT;
       const expectedMaxDiff = maxDiffFor(adjusted);
 
+      // Pass the actual vault balance as WVB since migration initialized _lastVaultBalanceAfterTransfer
+      const vaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
       await setRefSlot(baseRefSlot);
-      await expect(callCheck(baseline, postCL))
+      await expect(callCheck(baseline, postCL, vaultBalance))
         .to.emit(checker, "NegativeCLRebaseAccepted")
         .withArgs(baseRefSlot, postCL, actualDiff, expectedMaxDiff);
     });

@@ -167,9 +167,21 @@ struct LimitsListPacked {
 }
 
 struct ReportData {
+    uint256 timestamp;      // Logical report timestamp in seconds
     uint256 clBalance;      // CL balance in Wei
     uint256 deposits;       // Deposits for the period since the last report in Wei
-    uint256 withdrawals;    // Reported withdrawalVaultBalance snapshot in Wei
+    uint256 clWithdrawals;  // Actual ETH moved from CL to withdrawal vault this period
+}
+
+struct CLBalanceDecreaseCheckParams {
+    uint256 maxCLBalanceDecreaseBP;
+    uint256 clBalanceOraclesErrorUpperBPLimit;
+    uint256 preCLBalance;
+    uint256 postCLBalance;
+    uint256 withdrawalVaultBalance;
+    uint256 withdrawalsVaultTransfer;
+    uint256 deposits;
+    uint256 timeElapsed;
 }
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
@@ -215,8 +227,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
     /// @dev Maximum withdrawals ether used for migration bootstrap, bounded by CL churn limit per report window
     uint256 private constant MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT = 57_600 ether;
-    /// @dev Number of report-to-report periods in the sliding window for the CL balance decrease check
-    uint256 private constant REPORTS_WINDOW = 36;
+    /// @dev Time window for the CL balance decrease check
+    uint256 private constant CL_BALANCE_WINDOW = 36 days;
 
     ILidoLocator private immutable LIDO_LOCATOR;
     address private immutable ACCOUNTING_ADDRESS;
@@ -228,6 +240,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @dev The address of the second opinion oracle
     ISecondOpinionOracle public secondOpinionOracle;
+
+    /// @dev Withdrawal vault balance after the last report's transfer was applied.
+    ///      Used to compute actual CL withdrawals: clWithdrawals = WVB_current - _lastVaultBalanceAfterTransfer
+    uint256 private _lastVaultBalanceAfterTransfer;
+
+    /// @dev Logical timestamp of the latest stored report snapshot.
+    ///      It is advanced by `_timeElapsed` on each accounting report.
+    uint256 private _lastReportTimestamp;
 
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _accounting address of the Accounting instance
@@ -465,16 +485,21 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         (uint256 clActive, uint256 clPending, uint256 deposits) = ILido(lidoAddr).getBalanceStats();
         uint256 clBalance = clActive + clPending;
 
-        uint256 withdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
+        uint256 clWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
+
+        // Initialize vault state: vault is not drained during migration,
+        // so after-transfer balance equals current vault balance
+        _lastVaultBalanceAfterTransfer = LIDO_LOCATOR.withdrawalVault().balance;
 
         // The decrease formula uses baseline report B[X-k] and sums flows from reports [X-k+1..X].
         // To include migration-time deposits/withdrawals without any special-case branch in formula code:
         // 1) store pure baseline point with zero flows;
         // 2) store bootstrap flow chunk at the same CL balance right after baseline.
-        _addReportData(clBalance, 0, 0);
-        _addReportData(clBalance, deposits, withdrawals);
+        uint256 migrationTimestamp = _lastReportTimestamp;
+        _addReportData(migrationTimestamp, clBalance, 0, 0);
+        _addReportData(migrationTimestamp, clBalance, deposits, clWithdrawals);
 
-        emit BaselineSnapshotMigrated(clBalance, deposits, withdrawals);
+        emit BaselineSnapshotMigrated(clBalance, deposits, clWithdrawals);
     }
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
@@ -548,6 +573,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _elRewardsVaultBalance el rewards vault balance on Execution Layer for the report reference slot
     /// @param _sharesRequestedToBurn shares requested to burn for the report reference slot
     /// @param _deposits deposits to the Beacon Chain since the previous oracle report in Wei
+    /// @param _withdrawalsVaultTransfer ETH amount transferred from withdrawal vault this report
     function checkAccountingOracleReport(
         uint256 _timeElapsed,
         uint256 _preCLBalance,
@@ -555,31 +581,50 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
-        uint256 _deposits
+        uint256 _deposits,
+        uint256 _withdrawalsVaultTransfer
     ) external {
         if (msg.sender != ACCOUNTING_ADDRESS) {
             revert CalledNotFromAccounting();
         }
-        LimitsList memory limitsList = _limits.unpack();
-        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
-
-        address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
         // 1. Withdrawals vault reported balance
-        _checkWithdrawalVaultBalance(withdrawalVault.balance, _withdrawalVaultBalance);
-
-        address elRewardsVault = LIDO_LOCATOR.elRewardsVault();
+        _checkWithdrawalVaultBalance(LIDO_LOCATOR.withdrawalVault().balance, _withdrawalVaultBalance);
         // 2. EL rewards vault reported balance
-        _checkELRewardsVaultBalance(elRewardsVault.balance, _elRewardsVaultBalance);
-
+        _checkELRewardsVaultBalance(LIDO_LOCATOR.elRewardsVault().balance, _elRewardsVaultBalance);
         // 3. Burn requests
         _checkSharesRequestedToBurn(_sharesRequestedToBurn);
+        _checkAccountingOracleReportCLBalances(
+            _timeElapsed,
+            _preCLBalance,
+            _postCLBalance,
+            _withdrawalVaultBalance,
+            _deposits,
+            _withdrawalsVaultTransfer
+        );
+    }
 
+    function _checkAccountingOracleReportCLBalances(
+        uint256 _timeElapsed,
+        uint256 _preCLBalance,
+        uint256 _postCLBalance,
+        uint256 _withdrawalVaultBalance,
+        uint256 _deposits,
+        uint256 _withdrawalsVaultTransfer
+    ) internal {
+        LimitsList memory limitsList = _limits.unpack();
+        CLBalanceDecreaseCheckParams memory checkParams;
+        checkParams.maxCLBalanceDecreaseBP = limitsList.maxCLBalanceDecreaseBP;
+        checkParams.clBalanceOraclesErrorUpperBPLimit = limitsList.clBalanceOraclesErrorUpperBPLimit;
+        checkParams.preCLBalance = _preCLBalance;
+        checkParams.postCLBalance = _postCLBalance;
+        checkParams.withdrawalVaultBalance = _withdrawalVaultBalance;
+        checkParams.withdrawalsVaultTransfer = _withdrawalsVaultTransfer;
+        checkParams.deposits = _deposits;
+        checkParams.timeElapsed = _timeElapsed;
         // 4. Consensus Layer balance decrease
-        _checkCLBalanceDecrease(limitsList, _preCLBalance, _postCLBalance, _withdrawalVaultBalance, _deposits, refSlot);
-
+        _checkCLBalanceDecrease(checkParams);
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
-
         // 6. Consensus Layer balance increase rate
         if (_postCLBalance > _preCLBalance) {
             uint256 clBalanceIncreasePerDay = _normalizePerDay(_postCLBalance - _preCLBalance, _timeElapsed);
@@ -907,25 +952,44 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _addReportData(uint256 _clBalance, uint256 _deposits, uint256 _withdrawals) internal {
-        reportData.push(ReportData(_clBalance, _deposits, _withdrawals));
+    function _addReportData(
+        uint256 _timestamp,
+        uint256 _clBalance,
+        uint256 _deposits,
+        uint256 _clWithdrawals
+    ) internal {
+        reportData.push(ReportData(_timestamp, _clBalance, _deposits, _clWithdrawals));
     }
 
-    function _checkCLBalanceDecrease(
-        LimitsList memory _limitsList,
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
-        uint256 _withdrawalVaultBalance,
-        uint256 _deposits,
-        uint256 _refSlot
-    ) internal {
-        // Store current report point together with report-level flow terms:
-        // - deposits are reported since previous oracle report
-        // - withdrawals use reported withdrawalVaultBalance snapshot
-        _addReportData(_postCLBalance, _deposits, _withdrawalVaultBalance);
+    function _checkCLBalanceDecrease(CLBalanceDecreaseCheckParams memory _checkParams) internal {
+        if (_checkParams.withdrawalVaultBalance < _lastVaultBalanceAfterTransfer) {
+            revert IncorrectCLWithdrawalsVaultBalance(
+                _checkParams.withdrawalVaultBalance,
+                _lastVaultBalanceAfterTransfer
+            );
+        }
+        if (_checkParams.withdrawalsVaultTransfer > _checkParams.withdrawalVaultBalance) {
+            revert IncorrectWithdrawalsVaultTransfer(
+                _checkParams.withdrawalVaultBalance,
+                _checkParams.withdrawalsVaultTransfer
+            );
+        }
+
+        // Compute actual CL withdrawals for this period:
+        // clWithdrawals = current vault balance - vault balance after last report's transfer
+        uint256 clWithdrawals = _checkParams.withdrawalVaultBalance - _lastVaultBalanceAfterTransfer;
+        uint256 reportTimestamp = _lastReportTimestamp + _checkParams.timeElapsed;
+        _addReportData(reportTimestamp, _checkParams.postCLBalance, _checkParams.deposits, clWithdrawals);
+        _lastReportTimestamp = reportTimestamp;
+
+        // Update vault state after this report's transfer
+        _lastVaultBalanceAfterTransfer =
+            _checkParams.withdrawalVaultBalance -
+            _checkParams.withdrawalsVaultTransfer;
 
         // If the CL balance didn't decrease accounting for withdrawals, skip the window check
-        if (_preCLBalance <= _postCLBalance + _withdrawalVaultBalance) return;
+        if (_checkParams.preCLBalance <= _checkParams.postCLBalance) return;
+        if (_checkParams.preCLBalance - _checkParams.postCLBalance <= clWithdrawals) return;
 
         uint256 len = reportData.length;
         // Need at least two snapshots to build a window: baseline B[X-k] and current point B[X].
@@ -934,78 +998,86 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // state is not part of the window until enough post-deploy snapshots are accumulated.
         if (len < 2) return;
 
-        (uint256 actualDiff, uint256 maxDiff) = _calcCLBalanceDecrease(_limitsList.maxCLBalanceDecreaseBP, _postCLBalance, len);
+        (uint256 actualCLBalanceDecrease, uint256 maxAllowedCLBalanceDecrease) = _calcWindowDecrease(
+            _checkParams.maxCLBalanceDecreaseBP,
+            _checkParams.postCLBalance,
+            len
+        );
 
-        if (actualDiff == 0) return;
+        if (actualCLBalanceDecrease == 0) return;
+        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
 
-        if (actualDiff > maxDiff) {
+        if (actualCLBalanceDecrease > maxAllowedCLBalanceDecrease) {
             if (address(secondOpinionOracle) == address(0)) {
-                revert IncorrectCLBalanceDecrease(actualDiff, maxDiff);
+                revert IncorrectCLBalanceDecrease(actualCLBalanceDecrease, maxAllowedCLBalanceDecrease);
             }
-            _askSecondOpinion(_refSlot, _postCLBalance, _withdrawalVaultBalance, _limitsList);
+            _askSecondOpinion(
+                refSlot,
+                _checkParams.postCLBalance,
+                _checkParams.withdrawalVaultBalance,
+                _checkParams.clBalanceOraclesErrorUpperBPLimit
+            );
             return;
         }
 
-        emit NegativeCLRebaseAccepted(_refSlot, _postCLBalance, actualDiff, maxDiff);
+        emit NegativeCLRebaseAccepted(
+            refSlot,
+            _checkParams.postCLBalance,
+            actualCLBalanceDecrease,
+            maxAllowedCLBalanceDecrease
+        );
     }
 
-    function _calcCLBalanceDecrease(
-        uint256 _maxCLBalanceDecreaseBP,
+    function _calcWindowDecrease(
+        uint256 _maxDecreaseBP,
         uint256 _postCLBalance,
-        uint256 _len
-    ) internal view returns (uint256 actualDiff, uint256 maxDiff) {
+        uint256 _reportCount
+    ) internal view returns (uint256 actualCLBalanceDecrease, uint256 maxAllowedCLBalanceDecrease) {
         // Window formula:
-        // X  = latest report index
-        // k  = min(REPORTS_WINDOW, X)
-        // X-k is the baseline report
-        // actualDiff   = B[X-k] - B[X]
-        // adjustedBase = B[X-k] + sum_{i = X-k+1..X}(D[i] - W[i])
-        // maxDiff      = adjustedBase * limitBP / 10_000
-        //
-        // ReportData semantics:
-        // - clBalance is a point value at report i
-        // - deposits correspond to period flow for transition (i-1 -> i)
-        // - withdrawals are withdrawalVaultBalance snapshots reported at report i
-        uint256 latestReportDataIndex = _len - 1;
-        uint256 windowTransitionsCount =
-            latestReportDataIndex > REPORTS_WINDOW ? REPORTS_WINDOW : latestReportDataIndex;
-        uint256 baselineReportDataIndex = latestReportDataIndex - windowTransitionsCount;
+        // adjustedBase = B[baseline] + sum(deposits) - sum(clWithdrawals)
+        // decrease     = B[baseline] - B[current]
+        // maxAllowed   = adjustedBase * limitBP / 10_000
+        uint256 lastIndex = _reportCount - 1;
+        uint256 lastTimestamp = reportData[lastIndex].timestamp;
+        uint256 windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0;
+        uint256 baselineIndex = _findWindowStartIndex(lastIndex, windowStart);
 
-        uint256 baselineBalance = reportData[baselineReportDataIndex].clBalance;
+        uint256 baselineBalance = reportData[baselineIndex].clBalance;
         if (_postCLBalance >= baselineBalance) return (0, 0);
 
-        actualDiff = baselineBalance - _postCLBalance;
+        actualCLBalanceDecrease = baselineBalance - _postCLBalance;
 
-        uint256 firstReportDataIndexWithinWindowFlowRange = baselineReportDataIndex + 1;
         uint256 totalDeposits;
-        uint256 totalReportedWithdrawalVaultBalances;
-        for (
-            uint256 reportDataIndex = firstReportDataIndexWithinWindowFlowRange;
-            reportDataIndex <= latestReportDataIndex;
-            ++reportDataIndex
-        ) {
-            totalDeposits += reportData[reportDataIndex].deposits;
-            totalReportedWithdrawalVaultBalances += reportData[reportDataIndex].withdrawals;
+        uint256 totalCLWithdrawals;
+        for (uint256 i = baselineIndex + 1; i <= lastIndex; ++i) {
+            totalDeposits += reportData[i].deposits;
+            totalCLWithdrawals += reportData[i].clWithdrawals;
         }
 
-        uint256 baselineWithDeposits = baselineBalance + totalDeposits;
-        if (baselineWithDeposits < totalReportedWithdrawalVaultBalances) {
-            revert IncorrectCLBalanceDecreaseWindowData(
-                baselineBalance,
-                totalDeposits,
-                totalReportedWithdrawalVaultBalances
-            );
+        uint256 adjustedBase = baselineBalance + totalDeposits;
+        if (adjustedBase < totalCLWithdrawals) {
+            revert IncorrectCLBalanceDecreaseWindowData(baselineBalance, totalDeposits, totalCLWithdrawals);
         }
+        adjustedBase -= totalCLWithdrawals;
 
-        uint256 adjustedBase = baselineWithDeposits - totalReportedWithdrawalVaultBalances;
-        maxDiff = (adjustedBase * _maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
+        maxAllowedCLBalanceDecrease = (adjustedBase * _maxDecreaseBP) / MAX_BASIS_POINTS;
+    }
+
+    function _findWindowStartIndex(
+        uint256 _lastIndex,
+        uint256 _windowStart
+    ) internal view returns (uint256 windowStartIndex) {
+        windowStartIndex = _lastIndex;
+        while (windowStartIndex > 0 && reportData[windowStartIndex - 1].timestamp >= _windowStart) {
+            --windowStartIndex;
+        }
     }
 
     function _askSecondOpinion(
         uint256 _refSlot,
         uint256 _postCLBalance,
         uint256 _withdrawalVaultBalance,
-        LimitsList memory _limitsList
+        uint256 _clBalanceOraclesErrorUpperBPLimit
     ) internal {
         (bool success, uint256 clOracleBalanceGwei, uint256 oracleWithdrawalVaultBalanceWei, , ) = secondOpinionOracle
             .getReport(_refSlot);
@@ -1016,17 +1088,17 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                 revert NegativeRebaseFailedCLBalanceMismatch(
                     _postCLBalance,
                     clBalanceWei,
-                    _limitsList.clBalanceOraclesErrorUpperBPLimit
+                    _clBalanceOraclesErrorUpperBPLimit
                 );
             }
             if (
                 MAX_BASIS_POINTS * (clBalanceWei - _postCLBalance) >
-                _limitsList.clBalanceOraclesErrorUpperBPLimit * clBalanceWei
+                _clBalanceOraclesErrorUpperBPLimit * clBalanceWei
             ) {
                 revert NegativeRebaseFailedCLBalanceMismatch(
                     _postCLBalance,
                     clBalanceWei,
-                    _limitsList.clBalanceOraclesErrorUpperBPLimit
+                    _clBalanceOraclesErrorUpperBPLimit
                 );
             }
             if (oracleWithdrawalVaultBalanceWei != _withdrawalVaultBalance) {
@@ -1240,15 +1312,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error NegativeRebaseFailedWithdrawalVaultBalanceMismatch(uint256 reportedValue, uint256 provedValue);
     error NegativeRebaseFailedSecondOpinionReportIsNotReady();
     error CalledNotFromAccounting();
+    error IncorrectCLWithdrawalsVaultBalance(
+        uint256 withdrawalVaultBalance,
+        uint256 lastWithdrawalVaultBalanceAfterTransfer
+    );
+    error IncorrectWithdrawalsVaultTransfer(uint256 withdrawalVaultBalance, uint256 withdrawalsVaultTransfer);
     error IncorrectCLBalanceDecreaseWindowData(
         uint256 baselineBalance,
         uint256 totalDeposits,
-        uint256 totalReportedWithdrawalVaultBalances
+        uint256 totalCLWithdrawals
     );
     error MigrationAlreadyDone();
     error UnexpectedLidoVersion(uint256 actual, uint256 expected);
 
-    event BaselineSnapshotMigrated(uint256 clBalance, uint256 deposits, uint256 withdrawals);
+    event BaselineSnapshotMigrated(uint256 clBalance, uint256 deposits, uint256 clWithdrawals);
 }
 
 library LimitsListPacker {

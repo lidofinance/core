@@ -23,7 +23,8 @@ contract OracleReportSanityChecker__MockForAccounting {
         uint256, //_withdrawalVaultBalance,
         uint256, //_elRewardsVaultBalance,
         uint256, //_sharesRequestedToBurn,
-        uint256 //_deposits
+        uint256, //_deposits
+        uint256 //_withdrawalsVaultTransfer
     ) external view {
         if (checkAccountingOracleReportReverts) revert CheckAccountingOracleReportReverts();
     }

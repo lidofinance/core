@@ -751,11 +751,12 @@ describe("OracleReportSanityChecker.sol", () => {
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
       deposits: 0n,
+      withdrawalsVaultTransfer: 0n,
     };
 
     const report = (
       overrides: Partial<typeof baseReport> = {},
-    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
+    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
       const r = { ...baseReport, ...overrides };
       return [
         r.timeElapsed,
@@ -765,6 +766,7 @@ describe("OracleReportSanityChecker.sol", () => {
         r.elRewardsVaultBalance,
         r.sharesRequestedToBurn,
         r.deposits,
+        r.withdrawalsVaultTransfer,
       ];
     };
 
@@ -918,12 +920,14 @@ describe("OracleReportSanityChecker.sol", () => {
 
       const first = await checker.reportData(0n);
       const second = await checker.reportData(1n);
+      expect(first.timestamp).to.equal(24n * 60n * 60n);
       expect(first.clBalance).to.equal(ether("100"));
       expect(first.deposits).to.equal(0n);
-      expect(first.withdrawals).to.equal(0n);
+      expect(first.clWithdrawals).to.equal(0n);
+      expect(second.timestamp).to.equal(2n * 24n * 60n * 60n);
       expect(second.clBalance).to.equal(ether("100"));
       expect(second.deposits).to.equal(2n);
-      expect(second.withdrawals).to.equal(0n);
+      expect(second.clWithdrawals).to.equal(0n);
     });
   });
 
@@ -936,11 +940,12 @@ describe("OracleReportSanityChecker.sol", () => {
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
       deposits: 0n,
+      withdrawalsVaultTransfer: 0n,
     };
 
     const report = (
       overrides: Partial<typeof baseWindowReport> = {},
-    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
+    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
       const r = { ...baseWindowReport, ...overrides };
       return [
         r.timeElapsed,
@@ -950,6 +955,7 @@ describe("OracleReportSanityChecker.sol", () => {
         r.elRewardsVaultBalance,
         r.sharesRequestedToBurn,
         r.deposits,
+        r.withdrawalsVaultTransfer,
       ];
     };
 
@@ -1247,13 +1253,15 @@ describe("OracleReportSanityChecker.sol", () => {
       const baselineReport = await migrationChecker.reportData(0n);
       const bootstrapFlowReport = await migrationChecker.reportData(1n);
 
+      expect(baselineReport.timestamp).to.equal(0n);
       expect(baselineReport.clBalance).to.equal(ether("107"));
       expect(baselineReport.deposits).to.equal(0n);
-      expect(baselineReport.withdrawals).to.equal(0n);
+      expect(baselineReport.clWithdrawals).to.equal(0n);
 
+      expect(bootstrapFlowReport.timestamp).to.equal(0n);
       expect(bootstrapFlowReport.clBalance).to.equal(ether("107"));
       expect(bootstrapFlowReport.deposits).to.equal(ether("3"));
-      expect(bootstrapFlowReport.withdrawals).to.equal(MIGRATION_WITHDRAWALS);
+      expect(bootstrapFlowReport.clWithdrawals).to.equal(MIGRATION_WITHDRAWALS);
     });
 
     it("reverts when migration is called more than once", async () => {

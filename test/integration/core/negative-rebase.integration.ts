@@ -148,7 +148,7 @@ describe("Integration: Negative rebase", () => {
     const reportFromAccounting = (preBalance: bigint, postBalance: bigint) =>
       oracleReportSanityChecker
         .connect(accountingSigner)
-        .checkAccountingOracleReport(24n * 60n * 60n, preBalance, postBalance, 0n, 0n, 0n, 0n);
+        .checkAccountingOracleReport(24n * 60n * 60n, preBalance, postBalance, 0n, 0n, 0n, 0n, 0n);
 
     // REPORTS_WINDOW in contract is 36 (private constant, no getter).
     // Fill window + 1 neutral data points to fully control the baseline.

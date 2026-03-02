@@ -23,8 +23,8 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         LimitsList memory _limitsList
     ) OracleReportSanityChecker(_lidoLocator, _accounting, _admin, _limitsList) {}
 
-    function addReportData(uint256 _clBalance, uint256 _deposits, uint256 _withdrawals) public {
-        _addReportData(_clBalance, _deposits, _withdrawals);
+    function addReportData(uint256 _timestamp, uint256 _clBalance, uint256 _deposits, uint256 _clWithdrawals) public {
+        _addReportData(_timestamp, _clBalance, _deposits, _clWithdrawals);
     }
 
     function exposePackedLimits() public view returns (LimitsListPacked memory) {
