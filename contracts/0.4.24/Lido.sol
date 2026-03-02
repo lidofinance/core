@@ -133,9 +133,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev CL validators balance and deposited balance since last report
     /// |----- 128 bit ------------|------ 128 bit -------|
     /// | CL validators balance    |  CL pending balance  |
-    /// keccak256("lido.Lido.clActiveBalanceAndClPendingBalance");
-    bytes32 internal constant CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
-        0x29f9a759f2a4ad3efa27b3f557e6be623b4a10aecb9515f84b78b794f2b221a7;
+    /// keccak256("lido.Lido.clValidatorsBalanceAndClPendingBalance");
+    bytes32 internal constant CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
+        0x096e465397f38e659238ccd5d5a2c434ced54a63fd8d694045bfb058ab9d8112;
 
     /// @dev deposited balance since last report and deposited validators total count
     /// |----- 128 bit ------|------ 128 bit -------|
@@ -1309,22 +1309,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // helpers: CL validators and pending balances
 
-    // function _getClValidatorsBalance() internal view returns (uint256) {
-    //     return CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION.getLowUint128();
-    // }
-
     function _setClValidatorsBalance(uint256 _newClValidatorsBalance) internal {
-        CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowUint128(_newClValidatorsBalance);
+        CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowUint128(_newClValidatorsBalance);
     }
 
     function _getClValidatorsBalanceAndClPendingBalance() internal view returns (uint256, uint256) {
-        return CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION.getLowAndHighUint128();
+        return CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION.getLowAndHighUint128();
     }
 
     function _setClValidatorsBalanceAndClPendingBalance(uint256 _newClValidatorsBalance, uint256 _newClPendingBalance)
         internal
     {
-        CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowAndHighUint128(
+        CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowAndHighUint128(
             _newClValidatorsBalance, _newClPendingBalance
         );
     }
