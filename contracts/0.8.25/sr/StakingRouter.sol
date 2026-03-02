@@ -914,9 +914,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         pure
         returns (uint96 moduleFee, uint96 treasuryFee)
     {
-        // uint256 share = Math.mulDiv(moduleCache.validatorsBalance, FEE_PRECISION_POINTS, totalValidatorBalance);
-        // moduleFee = uint96(Math.mulDiv(share, moduleCache.moduleFee, TOTAL_BASIS_POINTS));
-        // treasuryFee = uint96(Math.mulDiv(share, moduleCache.treasuryFee, TOTAL_BASIS_POINTS));
         uint256 share = validatorsBalance * FEE_PRECISION_POINTS / totalValidatorBalance;
         moduleFee = uint96(share * stateConfig.moduleFee / SRUtils.TOTAL_BASIS_POINTS);
         treasuryFee = uint96(share * stateConfig.treasuryFee / SRUtils.TOTAL_BASIS_POINTS);
