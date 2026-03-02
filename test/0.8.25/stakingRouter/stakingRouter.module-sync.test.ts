@@ -1009,8 +1009,8 @@ describe("StakingRouter.sol:module-sync", () => {
         depositedValidators,
         depositableValidators,
       ); // 10 depositable validators
-      const activeBalanceGwei = _getBalanceByValidatorsCount(withdrawalCredentialsType, depositedValidators);
-      await stakingRouter.testing_setStakingModuleAccounting(newModuleId, activeBalanceGwei, 0n, exitedValidators);
+      const validatorBalanceGwei = _getBalanceByValidatorsCount(withdrawalCredentialsType, depositedValidators);
+      await stakingRouter.testing_setStakingModuleAccounting(newModuleId, validatorBalanceGwei, 0n, exitedValidators);
 
       await expect(stakingRouter.connect(dsmSigner).deposit(newModuleId, "0x")).to.emit(
         depositContract,

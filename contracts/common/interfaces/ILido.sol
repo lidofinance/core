@@ -52,7 +52,7 @@ interface ILido is IERC20, IVersioned {
 
     function processClStateUpdateV2(
         uint256 _reportTimestamp,
-        uint256 _clActiveBalance,
+        uint256 _clValidatorsBalance,
         uint256 _clPendingBalance
     ) external;
 

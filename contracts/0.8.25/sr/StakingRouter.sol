@@ -287,12 +287,12 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @dev The function is restricted to the same role as `updateExitedValidatorsCountByStakingModule`,
     /// i.e. `REPORT_EXITED_VALIDATORS_ROLE` role.
-    function reportActiveBalancesByStakingModule(
+    function reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _activeBalancesGwei,
+        uint256[] calldata _validatorBalancesGwei,
         uint256[] calldata _pendingBalancesGwei
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
-        SRLib._reportActiveBalancesByStakingModule(_stakingModuleIds, _activeBalancesGwei, _pendingBalancesGwei);
+        SRLib._reportValidatorBalancesByStakingModule(_stakingModuleIds, _validatorBalancesGwei, _pendingBalancesGwei);
     }
 
     /// @dev See {SRLib._reportStakingModuleOperatorExitedValidators}.
@@ -406,11 +406,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleStateAccounting(uint256 _stakingModuleId)
         external
         view
-        returns (uint64 activeBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount)
+        returns (uint64 validatorBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount)
     {
         (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         ModuleStateAccounting memory moduleAcc = state.accounting;
-        return (moduleAcc.activeBalanceGwei, moduleAcc.pendingBalanceGwei, moduleAcc.exitedValidatorsCount);
+        return (moduleAcc.validatorBalanceGwei, moduleAcc.pendingBalanceGwei, moduleAcc.exitedValidatorsCount);
     }
 
     /// @notice Returns the ids of all registered staking modules.
@@ -841,10 +841,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             uint256 precisionPoints
         )
     {
-        uint256 totalActiveBalance = SRUtils._getTotalModulesActiveBalance();
+        uint256 totalValidatorBalance = SRUtils._getTotalModulesValidatorBalance();
 
         uint256[] memory moduleIds = SRStorage.getModuleIds();
-        uint256 stakingModulesCount = totalActiveBalance == 0 ? 0 : moduleIds.length;
+        uint256 stakingModulesCount = totalValidatorBalance == 0 ? 0 : moduleIds.length;
 
         stakingModuleIds = new uint256[](stakingModulesCount);
         recipients = new address[](stakingModulesCount);
@@ -860,7 +860,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         for (uint256 i; i < stakingModulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
-            uint256 allocation = SRUtils._getModuleActiveBalance(moduleId);
+            uint256 allocation = SRUtils._getModuleValidatorBalance(moduleId);
 
             /// @dev Skip staking modules which have no active balance.
             if (allocation == 0) continue;
@@ -870,7 +870,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             ModuleStateConfig memory stateConfig = moduleId.getModuleState().config;
             recipients[rewardedStakingModulesCount] = stateConfig.moduleAddress;
 
-            (uint96 moduleFee, uint96 treasuryFee) = _computeModuleFee(allocation, totalActiveBalance, stateConfig);
+            (uint96 moduleFee, uint96 treasuryFee) = _computeModuleFee(allocation, totalValidatorBalance, stateConfig);
 
             /// @dev If the staking module has the Stopped status for some reason, then
             ///      the staking module's rewards go to the treasury, so that the DAO has ability
@@ -909,15 +909,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRUtils._getTotalModulesBalance();
     }
 
-    function _computeModuleFee(uint256 activeBalance, uint256 totalActiveBalance, ModuleStateConfig memory stateConfig)
+    function _computeModuleFee(uint256 validatorBalance, uint256 totalValidatorBalance, ModuleStateConfig memory stateConfig)
         internal
         pure
         returns (uint96 moduleFee, uint96 treasuryFee)
     {
-        // uint256 share = Math.mulDiv(moduleCache.activeBalance, FEE_PRECISION_POINTS, totalActiveBalance);
+        // uint256 share = Math.mulDiv(moduleCache.validatorBalance, FEE_PRECISION_POINTS, totalValidatorBalance);
         // moduleFee = uint96(Math.mulDiv(share, moduleCache.moduleFee, TOTAL_BASIS_POINTS));
         // treasuryFee = uint96(Math.mulDiv(share, moduleCache.treasuryFee, TOTAL_BASIS_POINTS));
-        uint256 share = activeBalance * FEE_PRECISION_POINTS / totalActiveBalance;
+        uint256 share = validatorBalance * FEE_PRECISION_POINTS / totalValidatorBalance;
         moduleFee = uint96(share * stateConfig.moduleFee / SRUtils.TOTAL_BASIS_POINTS);
         treasuryFee = uint96(share * stateConfig.treasuryFee / SRUtils.TOTAL_BASIS_POINTS);
     }

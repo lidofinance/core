@@ -106,33 +106,33 @@ contract StakingRouter__Harness is StakingRouter {
 
     function testing_setStakingModuleAccounting(
         uint256 _stakingModuleId,
-        uint64 activeBalanceGwei,
+        uint64 validatorBalanceGwei,
         uint64 pendingBalanceGwei,
         uint64 exitedValidatorsCount
     ) external {
         ModuleStateAccounting storage moduleAcc = SRStorage.getModuleState(_stakingModuleId).accounting;
         RouterStateAccounting storage routerAcc = SRStorage.getRouterState().accounting;
 
-        uint64 totalActiveBalanceGwei = routerAcc.activeBalanceGwei;
+        uint64 totalValidatorBalanceGwei = routerAcc.validatorBalanceGwei;
         uint64 totalPendingBalanceGwei = routerAcc.pendingBalanceGwei;
 
         // update totals incrementally as we iterate through the part of modules in general case
         // 1. subtract old values
         unchecked {
-            totalActiveBalanceGwei -= moduleAcc.activeBalanceGwei;
+            totalValidatorBalanceGwei -= moduleAcc.validatorBalanceGwei;
             totalPendingBalanceGwei -= moduleAcc.pendingBalanceGwei;
         }
         // 2. validate and add new values
 
         unchecked {
-            totalActiveBalanceGwei += activeBalanceGwei;
+            totalValidatorBalanceGwei += validatorBalanceGwei;
             totalPendingBalanceGwei += pendingBalanceGwei;
         }
 
-        routerAcc.activeBalanceGwei = totalActiveBalanceGwei;
+        routerAcc.validatorBalanceGwei = totalValidatorBalanceGwei;
         routerAcc.pendingBalanceGwei = totalPendingBalanceGwei;
 
-        moduleAcc.activeBalanceGwei = activeBalanceGwei;
+        moduleAcc.validatorBalanceGwei = validatorBalanceGwei;
         moduleAcc.pendingBalanceGwei = pendingBalanceGwei;
         moduleAcc.exitedValidatorsCount = exitedValidatorsCount;
     }

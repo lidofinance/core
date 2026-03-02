@@ -36,7 +36,7 @@ contract AccountingOracle__MockForSanityChecker {
             ReportValues(
                 data.refSlot * SECONDS_PER_SLOT,
                 slotsElapsed * SECONDS_PER_SLOT,
-                data.clActiveBalanceGwei * 1e9,
+                data.clValidatorsBalanceGwei * 1e9,
                 data.clPendingBalanceGwei * 1e9,
                 data.withdrawalVaultBalance,
                 data.elRewardsVaultBalance,

@@ -48,7 +48,7 @@ contract Accounting {
 
     /// @notice snapshot of the protocol state that may be changed during the report
     struct PreReportState {
-        uint256 clActiveBalance;
+        uint256 clValidatorsBalance;
         uint256 clPendingBalance;
         uint256 depositedBalance;
         uint256 totalPooledEther;
@@ -149,7 +149,7 @@ contract Accounting {
 
     /// @dev reads the current state of the protocol to the memory
     function _snapshotPreReportState(Contracts memory _contracts, bool isSimulation) internal view returns (PreReportState memory pre) {
-        (pre.clActiveBalance, pre.clPendingBalance, pre.depositedBalance) = LIDO.getBalanceStats();
+        (pre.clValidatorsBalance, pre.clPendingBalance, pre.depositedBalance) = LIDO.getBalanceStats();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
@@ -180,7 +180,7 @@ contract Accounting {
         );
 
         // Principal CL balance is sum of previous balances and new deposits
-        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + _pre.depositedBalance;
+        update.principalClBalance = _pre.clValidatorsBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
@@ -194,7 +194,7 @@ contract Accounting {
             _pre.totalPooledEther - _pre.externalEther, // we need to change the base as shareRate is now calculated on
             _pre.totalShares - _pre.externalShares,     // internal ether and shares, but inside it's still total
             update.principalClBalance,
-            _report.clActiveBalance + _report.clPendingBalance,
+            _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
@@ -208,7 +208,7 @@ contract Accounting {
 
         update.postInternalEther =
             _pre.totalPooledEther - _pre.externalEther // internal ether before
-            + _report.clActiveBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
+            + _report.clValidatorsBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
             + update.elRewardsVaultTransfer
             - update.etherToFinalizeWQ;
 
@@ -298,7 +298,7 @@ contract Accounting {
         // but with fees taken as ether deduction instead of minting shares
         // to learn the amount of shares we need to mint to compensate for this fee
 
-        uint256 unifiedClBalance = _report.clActiveBalance + _report.clPendingBalance + _update.withdrawalsVaultTransfer;
+        uint256 unifiedClBalance = _report.clValidatorsBalance + _report.clPendingBalance + _update.withdrawalsVaultTransfer;
         // Don't mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
@@ -360,7 +360,7 @@ contract Accounting {
 
         LIDO.processClStateUpdateV2(
             _report.timestamp,
-            _report.clActiveBalance,
+            _report.clValidatorsBalance,
             _report.clPendingBalance
         );
 
@@ -375,7 +375,7 @@ contract Accounting {
 
         LIDO.collectRewardsAndProcessWithdrawals(
             _report.timestamp,
-            _report.clActiveBalance + _report.clPendingBalance,
+            _report.clValidatorsBalance + _report.clPendingBalance,
             _update.principalClBalance,
             _update.withdrawalsVaultTransfer,
             _update.elRewardsVaultTransfer,
@@ -429,11 +429,11 @@ contract Accounting {
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
             _update.principalClBalance,
-            _report.clActiveBalance + _report.clPendingBalance,
+            _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            _pre.clActiveBalance,
+            _pre.clValidatorsBalance,
             _pre.clPendingBalance
         );
 

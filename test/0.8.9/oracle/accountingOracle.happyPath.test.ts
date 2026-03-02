@@ -132,12 +132,12 @@ describe("AccountingOracle.sol:happyPath", () => {
     reportFields = {
       consensusVersion: AO_CONSENSUS_VERSION,
       refSlot: refSlot,
-      clActiveBalanceGwei: 300n * ONE_GWEI,
+      clValidatorsBalanceGwei: 300n * ONE_GWEI,
       clPendingBalanceGwei: 20n * ONE_GWEI,
       stakingModuleIdsWithNewlyExitedValidators: [1],
       numExitedValidatorsByStakingModule: [3],
       stakingModuleIdsWithUpdatedBalance: [1],
-      activeBalancesGweiByStakingModule: [300n * ONE_GWEI],
+      validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
       pendingBalancesGweiByStakingModule: [20n * ONE_GWEI],
       withdrawalVaultBalance: ether("1"),
       elRewardsVaultBalance: ether("2"),
@@ -226,7 +226,7 @@ describe("AccountingOracle.sol:happyPath", () => {
     const lastOracleReportCall = await mockAccounting.lastCall__handleOracleReport();
     expect(lastOracleReportCall.callCount).to.equal(1);
     expect(lastOracleReportCall.arg[1]).to.equal((reportFields.refSlot - ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT);
-    expect(lastOracleReportCall.arg[2]).to.equal(BigInt(reportFields.clActiveBalanceGwei) * 1000000000n);
+    expect(lastOracleReportCall.arg[2]).to.equal(BigInt(reportFields.clValidatorsBalanceGwei) * 1000000000n);
     expect(lastOracleReportCall.arg[3]).to.equal(BigInt(reportFields.clPendingBalanceGwei) * 1000000000n);
     expect(lastOracleReportCall.arg[4]).to.equal(reportFields.withdrawalVaultBalance);
     expect(lastOracleReportCall.arg[5]).to.equal(reportFields.elRewardsVaultBalance);

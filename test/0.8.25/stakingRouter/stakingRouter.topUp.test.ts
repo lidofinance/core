@@ -203,7 +203,7 @@ describe("StakingRouter.sol:topUp", () => {
       const [stakingModule, id] = await setupModule({
         ...DEFAULT_CONFIG,
         deposited: 100n,
-        activeBalanceGwei: 100n * 32n * 10n ** 9n, //100 x 32 eth / 1 gwei
+        validatorBalanceGwei: 100n * 32n * 10n ** 9n, //100 x 32 eth / 1 gwei
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       });
 
@@ -281,7 +281,7 @@ describe("StakingRouter.sol:topUp", () => {
         deposited: 100n,
         depositable: 100n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        activeBalanceGwei: reducedBalanceGwei,
+        validatorBalanceGwei: reducedBalanceGwei,
       });
 
       const pubkeys = [hexlify(randomBytes(48))];
@@ -341,7 +341,7 @@ describe("StakingRouter.sol:topUp", () => {
     depositable = 0n,
     status = StakingModuleStatus.Active,
     withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
-    activeBalanceGwei = 0n,
+    validatorBalanceGwei = 0n,
     pendingBalanceGwei = 0n,
   }: ModuleConfig): Promise<[StakingModuleV2__MockForStakingRouter, bigint]> {
     const modulesCount = await stakingRouter.getStakingModulesCount();
@@ -365,10 +365,10 @@ describe("StakingRouter.sol:topUp", () => {
     expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
 
     await module.mock__getStakingModuleSummary(exited, deposited, depositable);
-    if (activeBalanceGwei == 0n && deposited > 0n) {
-      activeBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
+    if (validatorBalanceGwei == 0n && deposited > 0n) {
+      validatorBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
     }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, activeBalanceGwei, pendingBalanceGwei, exited);
+    await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorBalanceGwei, pendingBalanceGwei, exited);
 
     if (status != StakingModuleStatus.Active) {
       await stakingRouter.setStakingModuleStatus(moduleId, status);
@@ -390,6 +390,6 @@ interface ModuleConfig {
   deposited?: bigint;
   depositable?: bigint;
   status?: StakingModuleStatus;
-  activeBalanceGwei?: bigint;
+  validatorBalanceGwei?: bigint;
   pendingBalanceGwei?: bigint;
 }
