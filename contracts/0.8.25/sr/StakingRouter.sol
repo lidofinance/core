@@ -406,11 +406,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleStateAccounting(uint256 _stakingModuleId)
         external
         view
-        returns (uint64 validatorBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount)
+        returns (uint64 validatorsBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount)
     {
         (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         ModuleStateAccounting memory moduleAcc = state.accounting;
-        return (moduleAcc.validatorBalanceGwei, moduleAcc.pendingBalanceGwei, moduleAcc.exitedValidatorsCount);
+        return (moduleAcc.validatorsBalanceGwei, moduleAcc.pendingBalanceGwei, moduleAcc.exitedValidatorsCount);
     }
 
     /// @notice Returns the ids of all registered staking modules.
@@ -860,7 +860,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         for (uint256 i; i < stakingModulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
-            uint256 allocation = SRUtils._getModuleValidatorBalance(moduleId);
+            uint256 allocation = SRUtils._getModuleValidatorsBalance(moduleId);
 
             /// @dev Skip staking modules which have no active balance.
             if (allocation == 0) continue;
@@ -909,15 +909,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRUtils._getTotalModulesBalance();
     }
 
-    function _computeModuleFee(uint256 validatorBalance, uint256 totalValidatorBalance, ModuleStateConfig memory stateConfig)
+    function _computeModuleFee(uint256 validatorsBalance, uint256 totalValidatorBalance, ModuleStateConfig memory stateConfig)
         internal
         pure
         returns (uint96 moduleFee, uint96 treasuryFee)
     {
-        // uint256 share = Math.mulDiv(moduleCache.validatorBalance, FEE_PRECISION_POINTS, totalValidatorBalance);
+        // uint256 share = Math.mulDiv(moduleCache.validatorsBalance, FEE_PRECISION_POINTS, totalValidatorBalance);
         // moduleFee = uint96(Math.mulDiv(share, moduleCache.moduleFee, TOTAL_BASIS_POINTS));
         // treasuryFee = uint96(Math.mulDiv(share, moduleCache.treasuryFee, TOTAL_BASIS_POINTS));
-        uint256 share = validatorBalance * FEE_PRECISION_POINTS / totalValidatorBalance;
+        uint256 share = validatorsBalance * FEE_PRECISION_POINTS / totalValidatorBalance;
         moduleFee = uint96(share * stateConfig.moduleFee / SRUtils.TOTAL_BASIS_POINTS);
         treasuryFee = uint96(share * stateConfig.treasuryFee / SRUtils.TOTAL_BASIS_POINTS);
     }

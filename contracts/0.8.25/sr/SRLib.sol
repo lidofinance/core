@@ -130,14 +130,14 @@ library SRLib {
             });
 
             // 1 SSTORE
-            uint64 validatorBalanceGwei = _calcValidatorBalanceGwei(smOld.stakingModuleAddress, smOld.exitedValidatorsCount);
+            uint64 validatorsBalanceGwei = _calcValidatorsBalanceGwei(smOld.stakingModuleAddress, smOld.exitedValidatorsCount);
             moduleState.accounting = ModuleStateAccounting({
-                validatorBalanceGwei: validatorBalanceGwei,
+                validatorsBalanceGwei: validatorsBalanceGwei,
                 pendingBalanceGwei: 0,
                 exitedValidatorsCount: SafeCast.toUint64(smOld.exitedValidatorsCount)
             });
 
-            totalValidatorBalanceGwei += validatorBalanceGwei;
+            totalValidatorBalanceGwei += validatorsBalanceGwei;
 
             // cleanup old storage for staking module data
             delete oldStakingModules[i];
@@ -151,7 +151,7 @@ library SRLib {
         /// @dev use the same value for both CL balance and active balance at migration moment,
         /// next Oracle report will update the both values
         SRStorage.getRouterState().accounting =
-            RouterStateAccounting({validatorBalanceGwei: totalValidatorBalanceGwei, pendingBalanceGwei: 0});
+            RouterStateAccounting({validatorsBalanceGwei: totalValidatorBalanceGwei, pendingBalanceGwei: 0});
     }
 
     /// @dev Helper for migration - returns old staking modules mapping storage reference
@@ -177,7 +177,7 @@ library SRLib {
     }
 
     /// @dev calculate module effective balance at the migration moment
-    function _calcValidatorBalanceGwei(address moduleAddress, uint256 routerExitedValidatorsCount)
+    function _calcValidatorsBalanceGwei(address moduleAddress, uint256 routerExitedValidatorsCount)
         private
         view
         returns (uint64)
@@ -716,7 +716,7 @@ library SRLib {
         _validateEqualArrayLengths(_stakingModuleIds.length, _pendingBalancesGwei.length);
 
         RouterStateAccounting storage routerAcc = SRStorage.getRouterState().accounting;
-        uint64 totalValidatorBalanceGwei = routerAcc.validatorBalanceGwei;
+        uint64 totalValidatorBalanceGwei = routerAcc.validatorsBalanceGwei;
         uint64 totalPendingBalanceGwei = routerAcc.pendingBalanceGwei;
 
         for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
@@ -724,27 +724,27 @@ library SRLib {
             SRUtils._validateModuleId(moduleId);
             ModuleStateAccounting storage moduleAcc = moduleId.getModuleState().accounting;
             // get current values
-            uint64 validatorBalanceGwei = moduleAcc.validatorBalanceGwei;
+            uint64 validatorsBalanceGwei = moduleAcc.validatorsBalanceGwei;
             uint64 pendingBalanceGwei = moduleAcc.pendingBalanceGwei;
 
             // update totals incrementally as we iterate through the part of modules in general case
             // 1. subtract old values
             unchecked {
-                totalValidatorBalanceGwei -= validatorBalanceGwei;
+                totalValidatorBalanceGwei -= validatorsBalanceGwei;
                 totalPendingBalanceGwei -= pendingBalanceGwei;
             }
             // 2. validate and add new values
-            validatorBalanceGwei = SRUtils._validateAmountGwei(_validatorBalancesGwei[i]);
+            validatorsBalanceGwei = SRUtils._validateAmountGwei(_validatorBalancesGwei[i]);
             pendingBalanceGwei = SRUtils._validateAmountGwei(_pendingBalancesGwei[i]);
             unchecked {
-                totalValidatorBalanceGwei += validatorBalanceGwei;
+                totalValidatorBalanceGwei += validatorsBalanceGwei;
                 totalPendingBalanceGwei += pendingBalanceGwei;
             }
 
-            moduleAcc.validatorBalanceGwei = validatorBalanceGwei;
+            moduleAcc.validatorsBalanceGwei = validatorsBalanceGwei;
             moduleAcc.pendingBalanceGwei = pendingBalanceGwei;
         }
-        routerAcc.validatorBalanceGwei = totalValidatorBalanceGwei;
+        routerAcc.validatorsBalanceGwei = totalValidatorBalanceGwei;
         routerAcc.pendingBalanceGwei = totalPendingBalanceGwei;
     }
 
