@@ -14,21 +14,19 @@ interface ILido {
 }
 
 interface IAccountingOracle {
-    ///@dev replace return struct with multiple return values to avoid memory struct allocation
-    function getProcessingState()
-        external
-        view
-        returns (
-            uint256 currentFrameRefSlot,
-            uint256 processingDeadlineTime,
-            bytes32 mainDataHash,
-            bool mainDataSubmitted,
-            bytes32 extraDataHash,
-            uint256 extraDataFormat,
-            bool extraDataSubmitted,
-            uint256 extraDataItemsCount,
-            uint256 extraDataItemsSubmitted
-        );
+    struct ProcessingState {
+        uint256 currentFrameRefSlot;
+        uint256 processingDeadlineTime;
+        bytes32 mainDataHash;
+        bool mainDataSubmitted;
+        bytes32 extraDataHash;
+        uint256 extraDataFormat;
+        bool extraDataSubmitted;
+        uint256 extraDataItemsCount;
+        uint256 extraDataItemsSubmitted;
+    }
+
+    function getProcessingState() external view returns (ProcessingState memory);
     function getLastProcessingRefSlot() external view returns (uint256);
 }
 
