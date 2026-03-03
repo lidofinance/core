@@ -978,6 +978,71 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(42n, ether("97"), ether("3"), ether("3.8"));
     });
 
+    it("uses 36-day timestamp window (not report count) and keeps left boundary report in range", async () => {
+      const ONE_DAY = 24n * 60n * 60n;
+
+      // Report timestamps become: day 1, day 10, day 46.
+      // For the third report, windowStart = 46 - 36 = day 10.
+      // So baseline must be day 10 report (left boundary is included), not day 1.
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(
+          ...report({ timeElapsed: ONE_DAY, preCLBalance: ether("50"), postCLBalance: ether("50") }),
+        );
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(
+          ...report({ timeElapsed: 9n * ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("100") }),
+        );
+
+      await accountingOracle.setLastProcessingRefSlot(314n);
+      await expect(
+        checker
+          .connect(accountingSigner)
+          .checkAccountingOracleReport(
+            ...report({ timeElapsed: 36n * ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("97") }),
+          ),
+      )
+        .to.emit(checker, "NegativeCLRebaseAccepted")
+        .withArgs(314n, ether("97"), ether("3"), ether("3.8"));
+
+      expect(await checker.getReportDataCount()).to.equal(3n);
+      const first = await checker.reportData(0n);
+      const second = await checker.reportData(1n);
+      const third = await checker.reportData(2n);
+      expect(first.timestamp).to.equal(ONE_DAY);
+      expect(second.timestamp).to.equal(10n * ONE_DAY);
+      expect(third.timestamp).to.equal(46n * ONE_DAY);
+    });
+
+    it("excludes all outdated snapshots from the window after a long gap", async () => {
+      const ONE_DAY = 24n * 60n * 60n;
+
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(
+          ...report({ timeElapsed: ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("100") }),
+        );
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(
+          ...report({ timeElapsed: ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("100") }),
+        );
+
+      await expect(
+        checker
+          .connect(accountingSigner)
+          .checkAccountingOracleReport(
+            ...report({ timeElapsed: 48n * ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("90") }),
+          ),
+      ).not.to.be.reverted;
+
+      expect(await checker.getReportDataCount()).to.equal(3n);
+      const third = await checker.reportData(2n);
+      expect(third.timestamp).to.equal(50n * ONE_DAY);
+      expect(third.clBalance).to.equal(ether("90"));
+    });
+
     it("reverts with IncorrectCLBalanceDecrease when decrease exceeds limit and no second opinion", async () => {
       await checker.connect(accountingSigner).checkAccountingOracleReport(...report());
 
@@ -1179,10 +1244,17 @@ describe("OracleReportSanityChecker.sol", () => {
   context("migrateBaselineSnapshot", () => {
     const MIGRATION_WITHDRAWALS = ether("57600");
 
-    const deployMigratableChecker = async (contractVersion: bigint) => {
+    const deployMigratableChecker = async (
+      contractVersion: bigint,
+      balanceStats: { clActive: bigint; clPending: bigint; deposits: bigint } = {
+        clActive: ether("100"),
+        clPending: ether("7"),
+        deposits: ether("3"),
+      },
+    ) => {
       const lido = await ethers.deployContract("Lido__MockForSanityChecker");
       await lido.mock__setContractVersion(contractVersion);
-      await lido.mock__setBalanceStats(ether("100"), ether("7"), ether("3"));
+      await lido.mock__setBalanceStats(balanceStats.clActive, balanceStats.clPending, balanceStats.deposits);
 
       const migrationLocator = await ethers.deployContract("LidoLocator__MockForSanityChecker", [
         {
@@ -1262,6 +1334,45 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(bootstrapFlowReport.clBalance).to.equal(ether("107"));
       expect(bootstrapFlowReport.deposits).to.equal(ether("3"));
       expect(bootstrapFlowReport.clWithdrawals).to.equal(MIGRATION_WITHDRAWALS);
+    });
+
+    it("uses migrated bootstrap flows in first CL decrease window check", async () => {
+      const migratedCLBalance = ether("107000");
+      const migrationDeposits = ether("3");
+      const reportDecrease = ether("2500");
+
+      const { migrationChecker } = await deployMigratableChecker(4n, {
+        clActive: ether("100000"),
+        clPending: ether("7000"),
+        deposits: migrationDeposits,
+      });
+
+      await migrationChecker.connect(admin).grantRole(await migrationChecker.MIGRATION_MANAGER_ROLE(), manager.address);
+      await migrationChecker.connect(manager).migrateBaselineSnapshot();
+
+      const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+      const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
+
+      const maxAllowedCLBalanceDecrease =
+        ((migratedCLBalance + migrationDeposits - MIGRATION_WITHDRAWALS) * defaultLimits.maxCLBalanceDecreaseBP) /
+        TOTAL_BASIS_POINTS;
+
+      await expect(
+        migrationChecker
+          .connect(accountingSigner)
+          .checkAccountingOracleReport(
+            24n * 60n * 60n,
+            migratedCLBalance,
+            migratedCLBalance - reportDecrease,
+            withdrawalVaultBalance,
+            0n,
+            0n,
+            0n,
+            0n,
+          ),
+      )
+        .to.be.revertedWithCustomError(migrationChecker, "IncorrectCLBalanceDecrease")
+        .withArgs(reportDecrease, maxAllowedCLBalanceDecrease);
     });
 
     it("reverts when migration is called more than once", async () => {

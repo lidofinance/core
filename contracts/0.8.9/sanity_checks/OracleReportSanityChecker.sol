@@ -482,10 +482,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 lidoVersion = IVersioned(lidoAddr).getContractVersion();
         if (lidoVersion != 4) revert UnexpectedLidoVersion(lidoVersion, 4);
 
-        (uint256 clActive, uint256 clPending, uint256 deposits) = ILido(lidoAddr).getBalanceStats();
-        uint256 clBalance = clActive + clPending;
-
-        uint256 clWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
+        (uint256 migrationCLActiveBalance, uint256 migrationCLPendingBalance, uint256 migrationDeposits) = ILido(lidoAddr)
+            .getBalanceStats();
+        uint256 migrationCLBalance = migrationCLActiveBalance + migrationCLPendingBalance;
+        uint256 migrationCLWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
 
         // Initialize vault state: vault is not drained during migration,
         // so after-transfer balance equals current vault balance
@@ -495,11 +495,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // To include migration-time deposits/withdrawals without any special-case branch in formula code:
         // 1) store pure baseline point with zero flows;
         // 2) store bootstrap flow chunk at the same CL balance right after baseline.
-        uint256 migrationTimestamp = _lastReportTimestamp;
-        _addReportData(migrationTimestamp, clBalance, 0, 0);
-        _addReportData(migrationTimestamp, clBalance, deposits, clWithdrawals);
+        uint256 migrationReportTimestamp = _lastReportTimestamp;
+        _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
+        _addReportData(migrationReportTimestamp, migrationCLBalance, migrationDeposits, migrationCLWithdrawals);
 
-        emit BaselineSnapshotMigrated(clBalance, deposits, clWithdrawals);
+        emit BaselineSnapshotMigrated(migrationCLBalance, migrationDeposits, migrationCLWithdrawals);
     }
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
