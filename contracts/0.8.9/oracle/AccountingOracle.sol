@@ -45,7 +45,7 @@ interface IStakingRouter {
 
     function reportStakingModuleOperatorBalances(
         uint256 _stakingModuleId,
-        bytes calldata _operatorIds,
+        bytes calldata _nodeOperatorIds,
         bytes calldata _totalBalancesGwei
     ) external;
 
