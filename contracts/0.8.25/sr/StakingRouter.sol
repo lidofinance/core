@@ -841,10 +841,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             uint256 precisionPoints
         )
     {
-        uint256 totalValidatorBalance = SRUtils._getTotalModulesValidatorBalance();
+        uint256 totalValidatorsBalance = SRUtils._getTotalModulesValidatorsBalance();
 
         uint256[] memory moduleIds = SRStorage.getModuleIds();
-        uint256 stakingModulesCount = totalValidatorBalance == 0 ? 0 : moduleIds.length;
+        uint256 stakingModulesCount = totalValidatorsBalance == 0 ? 0 : moduleIds.length;
 
         stakingModuleIds = new uint256[](stakingModulesCount);
         recipients = new address[](stakingModulesCount);
@@ -870,7 +870,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             ModuleStateConfig memory stateConfig = moduleId.getModuleState().config;
             recipients[rewardedStakingModulesCount] = stateConfig.moduleAddress;
 
-            (uint96 moduleFee, uint96 treasuryFee) = _computeModuleFee(allocation, totalValidatorBalance, stateConfig);
+            (uint96 moduleFee, uint96 treasuryFee) = _computeModuleFee(allocation, totalValidatorsBalance, stateConfig);
 
             /// @dev If the staking module has the Stopped status for some reason, then
             ///      the staking module's rewards go to the treasury, so that the DAO has ability
@@ -909,12 +909,12 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRUtils._getTotalModulesBalance();
     }
 
-    function _computeModuleFee(uint256 validatorsBalance, uint256 totalValidatorBalance, ModuleStateConfig memory stateConfig)
+    function _computeModuleFee(uint256 validatorsBalance, uint256 totalValidatorsBalance, ModuleStateConfig memory stateConfig)
         internal
         pure
         returns (uint96 moduleFee, uint96 treasuryFee)
     {
-        uint256 share = validatorsBalance * FEE_PRECISION_POINTS / totalValidatorBalance;
+        uint256 share = validatorsBalance * FEE_PRECISION_POINTS / totalValidatorsBalance;
         moduleFee = uint96(share * stateConfig.moduleFee / SRUtils.TOTAL_BASIS_POINTS);
         treasuryFee = uint96(share * stateConfig.treasuryFee / SRUtils.TOTAL_BASIS_POINTS);
     }

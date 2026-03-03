@@ -148,12 +148,12 @@ library SRUtils {
     }
 
     ///  @dev get total balance of all modules (active + pending) in ETH
-    function _getTotalModulesValidatorBalance() internal view returns (uint256) {
+    function _getTotalModulesValidatorsBalance() internal view returns (uint256) {
         return _fromGwei(SRStorage.getRouterState().accounting.validatorsBalanceGwei);
     }
 
     function _getTotalModulesBalance() internal view returns (uint256) {
-        return _getTotalModulesValidatorBalance() + _fromGwei(SRStorage.getRouterState().accounting.pendingBalanceGwei);
+        return _getTotalModulesValidatorsBalance() + _fromGwei(SRStorage.getRouterState().accounting.pendingBalanceGwei);
     }
 
     function _toGwei(uint256 amount) internal pure returns (uint64) {

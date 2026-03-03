@@ -95,7 +95,7 @@ library SRLib {
         mapping(uint256 => uint256) storage oldStakingModuleIndices =
             _getStorageStakingIndicesMapping(STAKING_MODULE_INDICES_POS);
 
-        uint64 totalValidatorBalanceGwei;
+        uint64 totalValidatorsBalanceGwei;
         StakingModule memory smOld;
 
         for (uint256 i; i < modulesCount; ++i) {
@@ -137,7 +137,7 @@ library SRLib {
                 exitedValidatorsCount: SafeCast.toUint64(smOld.exitedValidatorsCount)
             });
 
-            totalValidatorBalanceGwei += validatorsBalanceGwei;
+            totalValidatorsBalanceGwei += validatorsBalanceGwei;
 
             // cleanup old storage for staking module data
             delete oldStakingModules[i];
@@ -151,7 +151,7 @@ library SRLib {
         /// @dev use the same value for both CL balance and active balance at migration moment,
         /// next Oracle report will update the both values
         SRStorage.getRouterState().accounting =
-            RouterStateAccounting({validatorsBalanceGwei: totalValidatorBalanceGwei, pendingBalanceGwei: 0});
+            RouterStateAccounting({validatorsBalanceGwei: totalValidatorsBalanceGwei, pendingBalanceGwei: 0});
     }
 
     /// @dev Helper for migration - returns old staking modules mapping storage reference
@@ -716,7 +716,7 @@ library SRLib {
         _validateEqualArrayLengths(_stakingModuleIds.length, _pendingBalancesGwei.length);
 
         RouterStateAccounting storage routerAcc = SRStorage.getRouterState().accounting;
-        uint64 totalValidatorBalanceGwei = routerAcc.validatorsBalanceGwei;
+        uint64 totalValidatorsBalanceGwei = routerAcc.validatorsBalanceGwei;
         uint64 totalPendingBalanceGwei = routerAcc.pendingBalanceGwei;
 
         for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
@@ -730,21 +730,21 @@ library SRLib {
             // update totals incrementally as we iterate through the part of modules in general case
             // 1. subtract old values
             unchecked {
-                totalValidatorBalanceGwei -= validatorsBalanceGwei;
+                totalValidatorsBalanceGwei -= validatorsBalanceGwei;
                 totalPendingBalanceGwei -= pendingBalanceGwei;
             }
             // 2. validate and add new values
             validatorsBalanceGwei = SRUtils._validateAmountGwei(_validatorBalancesGwei[i]);
             pendingBalanceGwei = SRUtils._validateAmountGwei(_pendingBalancesGwei[i]);
             unchecked {
-                totalValidatorBalanceGwei += validatorsBalanceGwei;
+                totalValidatorsBalanceGwei += validatorsBalanceGwei;
                 totalPendingBalanceGwei += pendingBalanceGwei;
             }
 
             moduleAcc.validatorsBalanceGwei = validatorsBalanceGwei;
             moduleAcc.pendingBalanceGwei = pendingBalanceGwei;
         }
-        routerAcc.validatorsBalanceGwei = totalValidatorBalanceGwei;
+        routerAcc.validatorsBalanceGwei = totalValidatorsBalanceGwei;
         routerAcc.pendingBalanceGwei = totalPendingBalanceGwei;
     }
 
