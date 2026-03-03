@@ -682,8 +682,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function _canDeposit(uint256 _moduleId) internal view returns (bool) {
         if (_moduleId.getModuleState().config.status == StakingModuleStatus.Active) {
             IAccountingOracle oracle = IAccountingOracle(_getAccountingOracle());
-            IAccountingOracle.ProcessingState memory state = oracle.getProcessingState();
-            bool extraDataSubmitted = state.extraDataSubmitted;
+            (,,,,,, bool extraDataSubmitted,,) = oracle.getProcessingState();
             if (!extraDataSubmitted) {
                 /// @dev allow deposits in case of initial deploy
                 ///      this flow will not be triggered onchain in most cases, so
