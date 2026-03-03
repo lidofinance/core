@@ -10,8 +10,8 @@ struct ReportValues {
     uint256 timestamp;
     /// @notice seconds elapsed since the previous report
     uint256 timeElapsed;
-    /// @notice Active validator balances without pending deposits
-    uint256 clActiveBalance;
+    /// @notice Validators balance without pending deposits
+    uint256 clValidatorsBalance;
     /// @notice Pending deposits balance on Consensus Layer
     uint256 clPendingBalance;
     /// @notice withdrawal vault balance

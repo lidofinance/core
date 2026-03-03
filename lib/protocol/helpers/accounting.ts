@@ -44,7 +44,7 @@ export type OracleReportParams = {
   stakingModuleIdsWithNewlyExitedValidators?: bigint[];
   numExitedValidatorsByStakingModule?: bigint[];
   stakingModuleIdsWithUpdatedBalance?: bigint[];
-  activeBalancesGweiByStakingModule?: bigint[];
+  validatorBalancesGweiByStakingModule?: bigint[];
   pendingBalancesGweiByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
@@ -87,7 +87,7 @@ export const report = async (
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
     stakingModuleIdsWithUpdatedBalance = [],
-    activeBalancesGweiByStakingModule = [],
+    validatorBalancesGweiByStakingModule = [],
     pendingBalancesGweiByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
@@ -104,8 +104,8 @@ export const report = async (
 
   refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
-  // TODO: Update to use balance-based accounting (clActiveBalance + clPendingBalance)
-  // note: beaconBalance = (clActiveBalance + clPendingBalance) at last report
+  // TODO: Update to use balance-based accounting (clValidatorsBalance + clPendingBalance)
+  // note: beaconBalance = (clValidatorsBalance + clPendingBalance) at last report
   const { depositedValidators: beaconValidators, beaconBalance } = await lido.getBeaconStat();
 
   const postCLBalance = beaconBalance + clDiff;
@@ -189,7 +189,7 @@ export const report = async (
   const savedTotalClBalance = await ctx.contracts.stakingRouter.getTotalStakingModulesBalance();
 
   if (stakingModuleIdsWithUpdatedBalance.length === 0) {
-    activeBalancesGweiByStakingModule = [];
+    validatorBalancesGweiByStakingModule = [];
     pendingBalancesGweiByStakingModule = [];
     let postCLBalanceRest = postCLBalance;
     const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
@@ -202,7 +202,7 @@ export const report = async (
       postCLBalanceRest -= moduleClBalanceNew;
       if (moduleClBalance > 0) {
         stakingModuleIdsWithUpdatedBalance.push(moduleId);
-        activeBalancesGweiByStakingModule.push(moduleClBalanceNew / ONE_GWEI);
+        validatorBalancesGweiByStakingModule.push(moduleClBalanceNew / ONE_GWEI);
         pendingBalancesGweiByStakingModule.push(0n);
       }
     }
@@ -211,13 +211,13 @@ export const report = async (
   const reportData = {
     consensusVersion: await accountingOracle.getConsensusVersion(),
     refSlot,
-    // TODO: Split clBalanceGwei into clActiveBalanceGwei + clPendingBalanceGwei
-    clActiveBalanceGwei: postCLBalance / ONE_GWEI,
+    // TODO: Split clBalanceGwei into clValidatorsBalanceGwei + clPendingBalanceGwei
+    clValidatorsBalanceGwei: postCLBalance / ONE_GWEI,
     clPendingBalanceGwei: 0n,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
     stakingModuleIdsWithUpdatedBalance,
-    activeBalancesGweiByStakingModule,
+    validatorBalancesGweiByStakingModule,
     pendingBalancesGweiByStakingModule,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
@@ -402,7 +402,7 @@ export const simulateReport = async (
     timestamp: reportTimestamp,
     // timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
     timeElapsed: /* 1 day */ 86_400n,
-    clActiveBalance: clBalance,
+    clValidatorsBalance: clBalance,
     clPendingBalance: 0n,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
@@ -471,8 +471,8 @@ export const handleOracleReport = async (
     await accounting.connect(accountingOracleAccount).handleOracleReport({
       timestamp: reportTimestamp,
       timeElapsed, // 1 day
-      // TODO: Split clBalance into clActiveBalance + clPendingBalance
-      clActiveBalance: clBalance,
+      // TODO: Split clBalance into clValidatorsBalance + clPendingBalance
+      clValidatorsBalance: clBalance,
       clPendingBalance: 0n,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
@@ -588,7 +588,7 @@ export type OracleReportSubmitParams = {
   stakingModuleIdsWithNewlyExitedValidators?: bigint[];
   numExitedValidatorsByStakingModule?: bigint[];
   stakingModuleIdsWithUpdatedBalance?: bigint[];
-  activeBalancesGweiByStakingModule?: bigint[];
+  validatorBalancesGweiByStakingModule?: bigint[];
   pendingBalancesGweiByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   simulatedShareRate?: bigint;
@@ -621,7 +621,7 @@ const submitReport = async (
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
     stakingModuleIdsWithUpdatedBalance = [],
-    activeBalancesGweiByStakingModule = [],
+    validatorBalancesGweiByStakingModule = [],
     pendingBalancesGweiByStakingModule = [],
     withdrawalFinalizationBatches = [],
     simulatedShareRate = 0n,
@@ -646,7 +646,7 @@ const submitReport = async (
     "Staking module ids with newly exited validators": stakingModuleIdsWithNewlyExitedValidators,
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Staking module ids with updated active balance": stakingModuleIdsWithUpdatedBalance,
-    "Active balances by staking module": activeBalancesGweiByStakingModule,
+    "Validator balances by staking module": validatorBalancesGweiByStakingModule,
     "Pending balances by staking module": pendingBalancesGweiByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
@@ -664,8 +664,8 @@ const submitReport = async (
   const data = {
     consensusVersion,
     refSlot,
-    // TODO: Split clBalanceGwei into clActiveBalanceGwei + clPendingBalanceGwei
-    clActiveBalanceGwei: clBalance / ONE_GWEI,
+    // TODO: Split clBalanceGwei into clValidatorsBalanceGwei + clPendingBalanceGwei
+    clValidatorsBalanceGwei: clBalance / ONE_GWEI,
     clPendingBalanceGwei: 0n,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
@@ -673,7 +673,7 @@ const submitReport = async (
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
     stakingModuleIdsWithUpdatedBalance,
-    activeBalancesGweiByStakingModule,
+    validatorBalancesGweiByStakingModule,
     pendingBalancesGweiByStakingModule,
     withdrawalFinalizationBatches,
     simulatedShareRate,
@@ -794,12 +794,12 @@ const reachConsensus = async (
 export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.consensusVersion,
   data.refSlot,
-  data.clActiveBalanceGwei,
+  data.clValidatorsBalanceGwei,
   data.clPendingBalanceGwei,
   data.stakingModuleIdsWithNewlyExitedValidators,
   data.numExitedValidatorsByStakingModule,
   data.stakingModuleIdsWithUpdatedBalance,
-  data.activeBalancesGweiByStakingModule,
+  data.validatorBalancesGweiByStakingModule,
   data.pendingBalancesGweiByStakingModule,
   data.withdrawalVaultBalance,
   data.elRewardsVaultBalance,
@@ -822,12 +822,12 @@ export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>)
     "uint256", // consensusVersion
     "uint256", // refSlot
     // TODO: Update types to match new balance-based structure
-    "uint256", // clActiveBalanceGwei
+    "uint256", // clValidatorsBalanceGwei
     "uint256", // clPendingBalanceGwei
     "uint256[]", // stakingModuleIdsWithNewlyExitedValidators
     "uint256[]", // numExitedValidatorsByStakingModule
     "uint256[]", // stakingModuleIdsWithUpdatedBalance
-    "uint256[]", // activeBalancesGweiByStakingModule
+    "uint256[]", // validatorBalancesGweiByStakingModule
     "uint256[]", // pendingBalancesGweiByStakingModule
     "uint256", // withdrawalVaultBalance
     "uint256", // elRewardsVaultBalance

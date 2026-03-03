@@ -7,7 +7,7 @@ contract Lido__MockForAccounting {
     uint256 public depositedValidatorsValue;
     uint256 public reportClValidators;
     uint256 public reportClBalance;
-    uint256 public reportClActiveBalance;
+    uint256 public reportClValidatorsBalance;
     uint256 public reportClPendingBalance;
     uint256 public depositedBalance;
 
@@ -16,7 +16,7 @@ contract Lido__MockForAccounting {
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
 
     // Emitted when CL balances are updated by the oracle
-    event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clActiveBalance, uint256 clPendingBalance);
+    event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
     event Mock__CollectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _reportClBalance,
@@ -38,8 +38,8 @@ contract Lido__MockForAccounting {
         depositedValidatorsValue = _amount;
     }
 
-    function mock__setClActiveBalance(uint256 _amount) external {
-        reportClActiveBalance = _amount;
+    function mock__setClValidatorsBalance(uint256 _amount) external {
+        reportClValidatorsBalance = _amount;
     }
 
     function mock__setClPendingBalance(uint256 _amount) external {
@@ -57,7 +57,7 @@ contract Lido__MockForAccounting {
     {
         depositedValidators = depositedValidatorsValue;
         beaconValidators = depositedValidators;
-        beaconBalance = reportClActiveBalance + reportClPendingBalance;
+        beaconBalance = reportClValidatorsBalance + reportClPendingBalance;
     }
 
     function getBalanceStats()
@@ -69,7 +69,7 @@ contract Lido__MockForAccounting {
             uint256 depositedSinceLastReport
         )
     {
-        clValidatorsBalanceAtLastReport = reportClActiveBalance;
+        clValidatorsBalanceAtLastReport = reportClValidatorsBalance;
         clPendingBalanceAtLastReport = reportClPendingBalance;
         depositedSinceLastReport = depositedBalance;
     }
@@ -126,13 +126,13 @@ contract Lido__MockForAccounting {
 
     function processClStateUpdateV2(
         uint256 _reportTimestamp,
-        uint256 _clActiveBalance,
+        uint256 _clValidatorsBalance,
         uint256 _clPendingBalance
     ) external {
-        reportClActiveBalance = _clActiveBalance;
+        reportClValidatorsBalance = _clValidatorsBalance;
         reportClPendingBalance = _clPendingBalance;
 
-        emit CLBalancesUpdated(_reportTimestamp, _clActiveBalance, _clPendingBalance);
+        emit CLBalancesUpdated(_reportTimestamp, _clValidatorsBalance, _clPendingBalance);
     }
 
     function mintShares(address _recipient, uint256 _sharesAmount) external {

@@ -130,12 +130,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION =
         0xa84c096ee27e195f25d7b6c7c2a03229e49f1a2a5087e57ce7d7127707942fe3;
 
-    /// @dev CL active balance and deposited balance since last report
-    /// |----- 128 bit ------|------ 128 bit -------|
-    /// | CL active balance  |  CL pending balance  |
-    /// keccak256("lido.Lido.clActiveBalanceAndClPendingBalance");
-    bytes32 internal constant CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
-        0x29f9a759f2a4ad3efa27b3f557e6be623b4a10aecb9515f84b78b794f2b221a7;
+    /// @dev CL validators balance and deposited balance since last report
+    /// |----- 128 bit ------------|------ 128 bit -------|
+    /// | CL validators balance    |  CL pending balance  |
+    /// keccak256("lido.Lido.clValidatorsBalanceAndClPendingBalance");
+    bytes32 internal constant CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
+        0x096e465397f38e659238ccd5d5a2c434ced54a63fd8d694045bfb058ab9d8112;
 
     /// @dev deposited balance since last report and deposited validators total count
     /// |----- 128 bit ------|------ 128 bit -------|
@@ -180,7 +180,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
 
     // Emitted when CL balances are updated by the oracle
-    event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clActiveBalance, uint256 clPendingBalance);
+    event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
     // Emitted when CL pending balance is updated during deposits to CL
     event DepositedBalancesUpdated(uint256 depositedBalance);
 
@@ -295,9 +295,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     function _migrateStorage_v3_to_v4() internal {
         bytes32 CL_BALANCE_AND_CL_VALIDATORS_POSITION = keccak256("lido.Lido.clBalanceAndClValidators");
-        uint256 clActiveBalance = CL_BALANCE_AND_CL_VALIDATORS_POSITION.getLowUint128();
+        uint256 clValidatorsBalance = CL_BALANCE_AND_CL_VALIDATORS_POSITION.getLowUint128();
         uint256 clValidators = CL_BALANCE_AND_CL_VALIDATORS_POSITION.getHighUint128();
-        _setClActiveBalance(clActiveBalance);
+        _setClValidatorsBalance(clValidatorsBalance);
         // wipe out the slot
         CL_BALANCE_AND_CL_VALIDATORS_POSITION.setStorageUint256(0);
 
@@ -594,9 +594,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance)
     {
         depositedValidators = _getDepositedValidators();
-        (uint256 clActiveBalance, uint256 clPendingBalance) = _getClActiveBalanceAndClPendingBalance();
+        (uint256 clValidatorsBalance, uint256 clPendingBalance) = _getClValidatorsBalanceAndClPendingBalance();
         // returning sum of active and pending balances because this amounts are visible on the CL side at moment of report
-        return (depositedValidators, depositedValidators, clActiveBalance.add(clPendingBalance));
+        return (depositedValidators, depositedValidators, clValidatorsBalance.add(clPendingBalance));
     }
 
     /// @notice Returns current balance statistics
@@ -612,7 +612,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             uint256 depositedSinceLastReport
         )
     {
-        (clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport) = _getClActiveBalanceAndClPendingBalance();
+        (clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport) = _getClValidatorsBalanceAndClPendingBalance();
         depositedSinceLastReport = _getDepositedBalance();
     }
 
@@ -813,21 +813,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev All data validation was done by Accounting and OracleReportSanityChecker
      * @dev V2: Replaces validator counting with direct balance tracking for EIP-7251 support
      * @param _reportTimestamp timestamp of the report
-     * @param _clActiveBalance Active balance of validators on the consensus layer
+     * @param _clValidatorsBalance Validators balance on the consensus layer
      * @param _clPendingBalance Pending deposits balance on the consensus layer
      */
-    function processClStateUpdateV2(uint256 _reportTimestamp, uint256 _clActiveBalance, uint256 _clPendingBalance)
+    function processClStateUpdateV2(uint256 _reportTimestamp, uint256 _clValidatorsBalance, uint256 _clPendingBalance)
         external
     {
         _whenNotStopped();
         _auth(_accounting());
 
         // Update storage with new balance model
-        _setClActiveBalanceAndClPendingBalance(_clActiveBalance, _clPendingBalance);
-        /// @dev new values of clActiveBalance and clPendingBalance should reflect all deposits between reports,
+        _setClValidatorsBalanceAndClPendingBalance(_clValidatorsBalance, _clPendingBalance);
+        /// @dev new values of clValidatorsBalance and clPendingBalance should reflect all deposits between reports,
         /// so we reset depositedBalance
         _setDepositedBalance(0);
-        emit CLBalancesUpdated(_reportTimestamp, _clActiveBalance, _clPendingBalance);
+        emit CLBalancesUpdated(_reportTimestamp, _clValidatorsBalance, _clPendingBalance);
     }
 
     /**
@@ -1057,11 +1057,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// (buffered + CL active balance + CL pending balance)
     function _getInternalEther() internal view returns (uint256) {
         uint256 bufferedEther = _getBufferedEther();
-        (uint256 clActiveBalance, uint256 clPendingBalance, uint256 depositedBalance) = getBalanceStats();
+        (uint256 clValidatorsBalance, uint256 clPendingBalance, uint256 depositedBalance) = getBalanceStats();
 
         // With balance-based accounting, we don't need to calculate transientEther
         // as pending deposits are already included in clPendingBalance
-        return bufferedEther.add(clActiveBalance).add(clPendingBalance).add(depositedBalance);
+        return bufferedEther.add(clValidatorsBalance).add(clPendingBalance).add(depositedBalance);
     }
 
     /// @dev Calculate the amount of ether controlled by external entities
@@ -1307,25 +1307,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         );
     }
 
-    // helpers: CL active and pending balances
+    // helpers: CL validators and pending balances
 
-    // function _getClActiveBalance() internal view returns (uint256) {
-    //     return CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION.getLowUint128();
-    // }
-
-    function _setClActiveBalance(uint256 _newClActiveBalance) internal {
-        CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowUint128(_newClActiveBalance);
+    function _setClValidatorsBalance(uint256 _newClValidatorsBalance) internal {
+        CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowUint128(_newClValidatorsBalance);
     }
 
-    function _getClActiveBalanceAndClPendingBalance() internal view returns (uint256, uint256) {
-        return CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION.getLowAndHighUint128();
+    function _getClValidatorsBalanceAndClPendingBalance() internal view returns (uint256, uint256) {
+        return CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION.getLowAndHighUint128();
     }
 
-    function _setClActiveBalanceAndClPendingBalance(uint256 _newClActiveBalance, uint256 _newClPendingBalance)
+    function _setClValidatorsBalanceAndClPendingBalance(uint256 _newClValidatorsBalance, uint256 _newClPendingBalance)
         internal
     {
-        CL_ACTIVE_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowAndHighUint128(
-            _newClActiveBalance, _newClPendingBalance
+        CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowAndHighUint128(
+            _newClValidatorsBalance, _newClPendingBalance
         );
     }
 

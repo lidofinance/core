@@ -89,7 +89,7 @@ describe("Lido:accounting", () => {
       await expect(
         lido.processClStateUpdateV2(
           ...args({
-            clActiveBalance: 100n,
+            clValidatorsBalance: 100n,
             clPendingBalance: 50n,
           }),
         ),
@@ -102,14 +102,14 @@ describe("Lido:accounting", () => {
 
     interface Args {
       reportTimestamp: bigint;
-      clActiveBalance: bigint;
+      clValidatorsBalance: bigint;
       clPendingBalance: bigint;
     }
 
     function args(overrides?: Partial<Args>): ArgsTuple {
       return Object.values({
         reportTimestamp: 0n,
-        clActiveBalance: 0n,
+        clValidatorsBalance: 0n,
         clPendingBalance: 0n,
         ...overrides,
       }) as ArgsTuple;
