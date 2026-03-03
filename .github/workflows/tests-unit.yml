@@ -18,6 +18,7 @@ jobs:
 
   test_foundry_fuzzing:
     name: Foundry / Fuzzing & Invariants
+    if: github.ref_name != 'develop' && github.ref_name != 'master'
     runs-on: ubuntu-latest
 
     steps:
@@ -28,13 +29,29 @@ jobs:
 
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1
-        # Use a specific version of Foundry in case nightly is broken
-        # https://github.com/foundry-rs/foundry/releases
-        # with:
-        #   version: nightly-54d8510c0f2b0f791f4c5ef99866c6af99b7606a
 
       - name: Print forge version
         run: forge --version
 
       - name: Run fuzzing and invariant tests
         run: forge test
+
+  test_foundry_fuzzing_deep:
+    name: Foundry / Fuzzing & Invariants (deep)
+    if: github.ref_name == 'develop' || github.ref_name == 'master'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Print forge version
+        run: forge --version
+
+      - name: Run fuzzing and invariant tests (deep profile, 10k runs)
+        run: FOUNDRY_PROFILE=deep forge test
