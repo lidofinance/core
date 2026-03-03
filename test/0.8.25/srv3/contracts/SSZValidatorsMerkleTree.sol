@@ -9,7 +9,7 @@ import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {SSZBLSHelpers} from "../../vaults/predepositGuarantee/contracts/SSZBLSHelpers.sol";
 
 /// Merkle tree implementation
-/// NOT gas optimized, for testing proposes only
+/// NOT gas optimized, for testing purposes only
 contract SSZValidatorsMerkleTree is SSZBLSHelpers {
     uint256 public immutable VALIDATORS_DEPTH;
 
