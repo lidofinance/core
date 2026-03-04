@@ -1,13 +1,13 @@
 import { expect } from "chai";
-import { hexlify, randomBytes } from "ethers";
+import { randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingModule__MockForStakingRouter, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether } from "lib";
-import { getModuleMEB, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
+import { certainAddress, ether, randomWCType1, wcTypeMaxEB } from "lib";
+import { StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -33,9 +33,9 @@ describe("StakingRouter.sol:rewards", () => {
     minDepositBlockDistance: 25n,
     withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
   };
-  const DEFAULT_MEB = getModuleMEB(DEFAULT_CONFIG.withdrawalCredentialsType);
+  const DEFAULT_MEB = wcTypeMaxEB(DEFAULT_CONFIG.withdrawalCredentialsType);
 
-  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials = randomWCType1();
   const lido = certainAddress("test:staking-router-modules:lido"); // mock lido address
 
   const topUpGateway = certainAddress("test:staking-router:topUpGateway");
@@ -558,7 +558,7 @@ describe("StakingRouter.sol:rewards", () => {
 
     await module.mock__getStakingModuleSummary(exited, deposited, depositable);
     if (validatorsBalanceGwei == 0n && deposited > 0n) {
-      validatorsBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
+      validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
     }
     await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, pendingBalanceGwei, exited);
 
