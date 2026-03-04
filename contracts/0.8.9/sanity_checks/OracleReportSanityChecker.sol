@@ -463,7 +463,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Sets the max allowed CL balance decrease in basis points
-    /// @param _maxCLBalanceDecreaseBP max CL balance decrease over the sliding window (in BP, e.g. 380 = 3.8%)
+    /// @param _maxCLBalanceDecreaseBP max CL balance decrease over the sliding window (in BP, e.g. 360 = 3.6%)
     function setMaxCLBalanceDecreaseBP(uint256 _maxCLBalanceDecreaseBP)
         external
         onlyRole(MAX_CL_BALANCE_DECREASE_MANAGER_ROLE)
@@ -998,18 +998,18 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // state is not part of the window until enough post-deploy snapshots are accumulated.
         if (len < 2) return;
 
-        (uint256 actualCLBalanceDecrease, uint256 maxAllowedCLBalanceDecrease) = _calcWindowDecrease(
+        (uint256 actualCLBalanceDiff, uint256 maxAllowedCLBalanceDiff) = _calcWindowDiff(
             _checkParams.maxCLBalanceDecreaseBP,
             _checkParams.postCLBalance,
             len
         );
 
-        if (actualCLBalanceDecrease == 0) return;
+        if (actualCLBalanceDiff == 0) return;
         uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
 
-        if (actualCLBalanceDecrease > maxAllowedCLBalanceDecrease) {
+        if (actualCLBalanceDiff > maxAllowedCLBalanceDiff) {
             if (address(secondOpinionOracle) == address(0)) {
-                revert IncorrectCLBalanceDecrease(actualCLBalanceDecrease, maxAllowedCLBalanceDecrease);
+                revert IncorrectCLBalanceDecrease(actualCLBalanceDiff, maxAllowedCLBalanceDiff);
             }
             _askSecondOpinion(
                 refSlot,
@@ -1023,19 +1023,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         emit NegativeCLRebaseAccepted(
             refSlot,
             _checkParams.postCLBalance,
-            actualCLBalanceDecrease,
-            maxAllowedCLBalanceDecrease
+            actualCLBalanceDiff,
+            maxAllowedCLBalanceDiff
         );
     }
 
-    function _calcWindowDecrease(
+    function _calcWindowDiff(
         uint256 _maxDecreaseBP,
         uint256 _postCLBalance,
         uint256 _reportCount
-    ) internal view returns (uint256 actualCLBalanceDecrease, uint256 maxAllowedCLBalanceDecrease) {
+    ) internal view returns (uint256 actualCLBalanceDiff, uint256 maxAllowedCLBalanceDiff) {
         // Window formula:
         // adjustedBase = B[baseline] + sum(deposits) - sum(clWithdrawals)
-        // decrease     = B[baseline] - B[current]
+        // actualDiff   = abs(B[baseline] - B[current])
         // maxAllowed   = adjustedBase * limitBP / 10_000
         uint256 lastIndex = _reportCount - 1;
         uint256 lastTimestamp = reportData[lastIndex].timestamp;
@@ -1043,9 +1043,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 baselineIndex = _findWindowStartIndex(lastIndex, windowStart);
 
         uint256 baselineBalance = reportData[baselineIndex].clBalance;
-        if (_postCLBalance >= baselineBalance) return (0, 0);
-
-        actualCLBalanceDecrease = baselineBalance - _postCLBalance;
+        actualCLBalanceDiff = baselineBalance > _postCLBalance
+            ? baselineBalance - _postCLBalance
+            : _postCLBalance - baselineBalance;
 
         uint256 totalDeposits;
         uint256 totalCLWithdrawals;
@@ -1060,7 +1060,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
         adjustedBase -= totalCLWithdrawals;
 
-        maxAllowedCLBalanceDecrease = (adjustedBase * _maxDecreaseBP) / MAX_BASIS_POINTS;
+        maxAllowedCLBalanceDiff = (adjustedBase * _maxDecreaseBP) / MAX_BASIS_POINTS;
     }
 
     function _findWindowStartIndex(

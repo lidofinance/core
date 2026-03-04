@@ -51,7 +51,7 @@ describe("OracleReportSanityChecker.sol", () => {
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,
     maxPositiveTokenRebase: 5_000_000n,
-    maxCLBalanceDecreaseBP: 380n,
+    maxCLBalanceDecreaseBP: 360n,
     clBalanceOraclesErrorUpperBPLimit: 50n,
     consolidationEthAmountPerDayLimit: 10n,
     exitedValidatorEthAmountLimit: 1n,
@@ -975,7 +975,7 @@ describe("OracleReportSanityChecker.sol", () => {
           .checkAccountingOracleReport(...report({ preCLBalance: ether("100"), postCLBalance: ether("97") })),
       )
         .to.emit(checker, "NegativeCLRebaseAccepted")
-        .withArgs(42n, ether("97"), ether("3"), ether("3.8"));
+        .withArgs(42n, ether("97"), ether("3"), ether("3.6"));
     });
 
     it("uses 36-day timestamp window (not report count) and keeps left boundary report in range", async () => {
@@ -1004,7 +1004,7 @@ describe("OracleReportSanityChecker.sol", () => {
           ),
       )
         .to.emit(checker, "NegativeCLRebaseAccepted")
-        .withArgs(314n, ether("97"), ether("3"), ether("3.8"));
+        .withArgs(314n, ether("97"), ether("3"), ether("3.6"));
 
       expect(await checker.getReportDataCount()).to.equal(3n);
       const first = await checker.reportData(0n);
@@ -1043,6 +1043,26 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(third.clBalance).to.equal(ether("90"));
     });
 
+    it("uses absolute window diff between baseline and current balances", async () => {
+      await checker.connect(admin).grantRole(await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE(), manager.address);
+      await checker.connect(manager).setMaxCLBalanceDecreaseBP(1n);
+
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(...report({ preCLBalance: ether("100000"), postCLBalance: ether("100000") }));
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(...report({ preCLBalance: ether("100000"), postCLBalance: ether("100020") }));
+
+      await expect(
+        checker
+          .connect(accountingSigner)
+          .checkAccountingOracleReport(...report({ preCLBalance: ether("100020"), postCLBalance: ether("100015") })),
+      )
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+        .withArgs(ether("15"), ether("10"));
+    });
+
     it("reverts with IncorrectCLBalanceDecrease when decrease exceeds limit and no second opinion", async () => {
       await checker.connect(accountingSigner).checkAccountingOracleReport(...report());
 
@@ -1052,7 +1072,7 @@ describe("OracleReportSanityChecker.sol", () => {
           .checkAccountingOracleReport(...report({ preCLBalance: ether("100"), postCLBalance: ether("90") })),
       )
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
-        .withArgs(ether("10"), ether("3.8"));
+        .withArgs(ether("10"), ether("3.6"));
     });
 
     it("reverts with IncorrectCLBalanceDecreaseWindowData on baseline/flows underflow", async () => {

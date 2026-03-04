@@ -36,7 +36,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,
     maxPositiveTokenRebase: 5_000_000n,
-    maxCLBalanceDecreaseBP: 380n,
+    maxCLBalanceDecreaseBP: 360n,
     clBalanceOraclesErrorUpperBPLimit: 50n,
     consolidationEthAmountPerDayLimit: 10n,
     exitedValidatorEthAmountLimit: 1n,

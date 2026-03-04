@@ -45,7 +45,7 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ac
       maxNodeOperatorsPerExtraDataItem: 0n,
       requestTimestampMargin: 0n,
       maxPositiveTokenRebase: 1n,
-      maxCLBalanceDecreaseBP: 380n,
+      maxCLBalanceDecreaseBP: 360n,
       clBalanceOraclesErrorUpperBPLimit: 0n,
       consolidationEthAmountPerDayLimit: 0n,
       exitedValidatorEthAmountLimit: 10n ** 18n,

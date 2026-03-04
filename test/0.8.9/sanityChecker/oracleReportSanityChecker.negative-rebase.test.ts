@@ -22,7 +22,7 @@ import { Snapshot } from "test/suite";
 const SLOTS_PER_DAY = 7200n;
 const REPORTS_WINDOW = 36;
 const MAX_BASIS_POINTS = 10_000n;
-const MAX_CL_BALANCE_DECREASE_BP = 380n; // 3.8%
+const MAX_CL_BALANCE_DECREASE_BP = 360n; // 3.6%
 
 describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let locator: LidoLocator__MockForSanityChecker;
@@ -504,7 +504,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
         await callCheck(baseline, ether("9800"));
 
-        // window=2: cumulative actualDiff (300) < expectedMaxDiff (380) -> passes
+        // window=2: cumulative actualDiff (300) < expectedMaxDiff (360) -> passes
         await setRefSlot(baseRefSlot);
         await expect(callCheck(ether("9800"), postCL))
           .to.emit(checker, "NegativeCLRebaseAccepted")
@@ -704,7 +704,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
     const setRefSlot = (slot: bigint) => accountingOracle.setLastProcessingRefSlot(slot);
 
-    it("3.8% on day 1 passes, repeated 3.8% on day 2 reverts", async () => {
+    it("3.6% on day 1 passes, repeated 3.6% on day 2 reverts", async () => {
       const baseline = ether("10000");
       const day1PostCL = baseline - maxDiffFor(baseline);
       const day2PostCL = day1PostCL - maxDiffFor(day1PostCL);
@@ -718,7 +718,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         .to.emit(checker, "NegativeCLRebaseAccepted")
         .withArgs(baseRefSlot - SLOTS_PER_DAY, day1PostCL, maxDiffFor(baseline), maxDiffFor(baseline));
 
-      // day 2: cumulative baseline -> day2PostCL ≈ 7.6% > 3.8% limit
+      // day 2: cumulative baseline -> day2PostCL ≈ 7.2% > 3.6% limit
       await setRefSlot(baseRefSlot);
       await expect(callCheck(day1PostCL, day2PostCL)).to.be.revertedWithCustomError(
         checker,
@@ -735,7 +735,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await setRefSlot(baseRefSlot - BigInt(numReports) * SLOTS_PER_DAY);
       await callCheck(baseline, baseline);
 
-      // 3 reports of 1% decrease each: cumulative 3% < 3.8% limit
+      // 3 reports of 1% decrease each: cumulative 3% < 3.6% limit
       let currentBalance = baseline;
       for (let i = 1; i <= 3; i++) {
         const newBalance = currentBalance - dailyDecrease;
@@ -745,7 +745,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       }
 
       // 4th decrease: cumulativeDiff = 4 × dailyDecrease (4%)
-      // > expectedMaxDiff (3.8%)
+      // > expectedMaxDiff (3.6%)
       const cumulativeDiff = baseline - (currentBalance - dailyDecrease);
       await setRefSlot(baseRefSlot);
       await expect(callCheck(currentBalance, currentBalance - dailyDecrease))

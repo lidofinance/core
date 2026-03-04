@@ -112,7 +112,7 @@ maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra
 maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
 requestTimestampMargin = 128                           # Request timestamp margin
 maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
-maxCLBalanceDecreaseBP = 380                           # Max CL balance decrease over sliding window (BP, 380 = 3.8%)
+maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 57600              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = "32000000000000000000" # Exited validator ETH amount limit in Wei (32 ETH)
