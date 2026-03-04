@@ -9,19 +9,26 @@ import {ModuleState, RouterState} from "./SRTypes.sol";
 library SRStorage {
     using EnumerableSet for EnumerableSet.UintSet;
     using SRStorage for ModuleState;
-    using SRStorage for uint256; // for module IDs
 
     /// @dev RouterState storage position
     bytes32 internal constant ROUTER_STORAGE_POSITION = keccak256(
         abi.encode(uint256(keccak256(abi.encodePacked("lido.StakingRouter.routerStorage"))) - 1)
     ) & ~bytes32(uint256(0xff));
 
-    function getIStakingModule(uint256 _moduleId) internal view returns (IStakingModule) {
-        return _moduleId.getModuleState().getIStakingModule();
+    /// @dev get RouterState storage reference
+    function getRouterState() internal pure returns (RouterState storage $) {
+        bytes32 _position = ROUTER_STORAGE_POSITION;
+        assembly ("memory-safe") {
+            $.slot := _position
+        }
     }
 
-    function getIStakingModuleV2(uint256 _moduleId) internal view returns (IStakingModuleV2) {
-        return _moduleId.getModuleState().getIStakingModuleV2();
+    /**
+     * Module state helpers
+     */
+
+    function getModuleState(uint256 _moduleId) internal view returns (ModuleState storage) {
+        return getRouterState().moduleStates[_moduleId];
     }
 
     function getIStakingModule(ModuleState storage $) internal view returns (IStakingModule) {
@@ -32,17 +39,17 @@ library SRStorage {
         return IStakingModuleV2($.config.moduleAddress);
     }
 
-    function getModuleState(uint256 _moduleId) internal view returns (ModuleState storage) {
-        return getRouterState().moduleStates[_moduleId];
+    function getIStakingModule(uint256 _moduleId) internal view returns (IStakingModule) {
+        return getModuleState(_moduleId).getIStakingModule();
     }
 
-    /// @dev get RouterState storage reference
-    function getRouterState() internal pure returns (RouterState storage $) {
-        bytes32 _position = ROUTER_STORAGE_POSITION;
-        assembly ("memory-safe") {
-            $.slot := _position
-        }
+    function getIStakingModuleV2(uint256 _moduleId) internal view returns (IStakingModuleV2) {
+        return getModuleState(_moduleId).getIStakingModuleV2();
     }
+
+    /**
+     * ModuleIds set helpers
+     */
 
     function getModulesCount() internal view returns (uint256) {
         return getRouterState().moduleIds.length();
@@ -52,12 +59,13 @@ library SRStorage {
         return getRouterState().moduleIds.values();
     }
 
-    function isModuleId(uint256 _moduleId) internal view returns (bool) {
+    function isModuleExists(uint256 _moduleId) internal view returns (bool) {
         return getRouterState().moduleIds.contains(_moduleId);
     }
 
-    function getModuleInternalPositionById(uint256 _moduleId) internal view returns (uint256) {
-        // get the internal position (1-based index) of the module ID in the enumerable set
+    /// @notice get module inner position in the list of modules (1-based)
+    /// @dev direct access to EnumerableSet internal storage
+    function getModuleIdInnerPosition(uint256 _moduleId) internal view returns (uint256) {
         return getRouterState().moduleIds._inner._positions[bytes32(_moduleId)];
     }
 
