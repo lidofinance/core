@@ -28,7 +28,7 @@ async function deployMockAccountingAndStakingRouter() {
   const accounting = await ethers.deployContract("Accounting__MockForAccountingOracle");
 
   // Initialize Lido mock with reasonable defaults for balance-based accounting
-  await lido.mock__setClActiveBalance(300n * 10n ** 18n); // 300 ETH active
+  await lido.mock__setClValidatorsBalance(300n * 10n ** 18n); // 300 ETH active
   await lido.mock__setClPendingBalance(20n * 10n ** 18n); // 20 ETH pending
   await lido.mock__setDepositedValidators(10);
 

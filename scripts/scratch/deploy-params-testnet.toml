@@ -93,6 +93,8 @@ maxValidatorsPerRequest = 600         # Maximum validators per request
 maxExitRequestsLimit = 13000          # Maximum exit requests limit
 exitsPerFrame = 1                     # Exits per frame
 frameDurationInSec = 48               # Frame duration in seconds
+maxEBWeightType1 = 32                 # maxEB equivalent weigh for WC type 1
+maxEBWeightType2 = 2048               # maxEB equivalent weigh for WC type 2
 
 # Deposit security module configuration
 [depositSecurityModule]
@@ -203,3 +205,8 @@ minTopUpGwei = 1000000000
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+
+# StakingRouter configuration
+[stakingRouter]
+maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
+maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2

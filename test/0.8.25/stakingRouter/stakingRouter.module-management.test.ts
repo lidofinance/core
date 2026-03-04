@@ -1,16 +1,16 @@
 import { expect } from "chai";
-import { hexlify, randomBytes, ZeroAddress } from "ethers";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingRouter } from "typechain-types";
 
-import { certainAddress, getNextBlock, randomString, WithdrawalCredentialsType } from "lib";
+import { certainAddress, getNextBlock, randomString, randomWCType1, WithdrawalCredentialsType } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 
-import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
+import { deployStakingRouter } from "../../deploy/stakingRouter";
 
 const UINT64_MAX = 2n ** 64n - 1n;
 
@@ -21,9 +21,8 @@ describe("StakingRouter.sol:module-management", () => {
 
   let locator: LidoLocator;
   let stakingRouter: StakingRouter;
-  let stakingRouterWithLib: StakingRouterWithLib;
 
-  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials = randomWCType1();
   const lido = certainAddress("test:staking-router-modules:lido"); // mock lido address
   const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
@@ -37,10 +36,7 @@ describe("StakingRouter.sol:module-management", () => {
       depositSecurityModule,
     });
 
-    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter(
-      { deployer, admin },
-      { lidoLocator: locator },
-    ));
+    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
 
     // initialize staking router
     await stakingRouter.initialize(admin, withdrawalCredentials);
@@ -100,7 +96,7 @@ describe("StakingRouter.sol:module-management", () => {
           ...stakingModuleConfig,
           stakeShareLimit: STAKE_SHARE_LIMIT_OVER_100,
         }),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidStakeShareLimit");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidStakeShareLimit");
     });
 
     it("Reverts if the sum of module and treasury fees is greater than 100%", async () => {
@@ -111,7 +107,7 @@ describe("StakingRouter.sol:module-management", () => {
           ...stakingModuleConfig,
           stakingModuleFee: MODULE_FEE_INVALID,
         }),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidFeeSum");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
 
       const TREASURY_FEE_INVALID = 100_01n - MODULE_FEE;
 
@@ -120,13 +116,13 @@ describe("StakingRouter.sol:module-management", () => {
           ...stakingModuleConfig,
           treasuryFee: TREASURY_FEE_INVALID,
         }),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidFeeSum");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
     });
 
     it("Reverts if the staking module address is zero address", async () => {
       await expect(
         stakingRouter.addStakingModule(NAME, ZeroAddress, stakingModuleConfig),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "ZeroAddress");
+      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddress");
     });
 
     it("Reverts if the staking module name is empty string", async () => {
@@ -134,7 +130,7 @@ describe("StakingRouter.sol:module-management", () => {
 
       await expect(
         stakingRouter.addStakingModule(NAME_EMPTY_STRING, ADDRESS, stakingModuleConfig),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "StakingModuleWrongName");
+      ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
     });
 
     it("Reverts if the staking module name is too long", async () => {
@@ -143,7 +139,7 @@ describe("StakingRouter.sol:module-management", () => {
 
       await expect(
         stakingRouter.addStakingModule(NAME_TOO_LONG, ADDRESS, stakingModuleConfig),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "StakingModuleWrongName");
+      ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
     });
 
     it("Reverts if the max number of staking modules is reached", async () => {
@@ -170,7 +166,7 @@ describe("StakingRouter.sol:module-management", () => {
       expect(await stakingRouter.getStakingModulesCount()).to.equal(MAX_STAKING_MODULES_COUNT);
 
       await expect(stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig)).to.be.revertedWithCustomError(
-        stakingRouterWithLib,
+        stakingRouter,
         "StakingModulesLimitExceeded",
       );
     });
@@ -179,7 +175,7 @@ describe("StakingRouter.sol:module-management", () => {
       await stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig);
 
       await expect(stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig)).to.be.revertedWithCustomError(
-        stakingRouterWithLib,
+        stakingRouter,
         "StakingModuleAddressExists",
       );
     });
@@ -189,13 +185,13 @@ describe("StakingRouter.sol:module-management", () => {
       const moduleAddedBlock = await getNextBlock();
 
       await expect(stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig))
-        .to.be.emit(stakingRouterWithLib, "StakingRouterETHDeposited")
+        .to.be.emit(stakingRouter, "StakingRouterETHDeposited")
         .withArgs(stakingModuleId, 0)
-        .and.to.be.emit(stakingRouterWithLib, "StakingModuleAdded")
+        .and.to.be.emit(stakingRouter, "StakingModuleAdded")
         .withArgs(stakingModuleId, ADDRESS, NAME, admin.address)
-        .and.to.be.emit(stakingRouterWithLib, "StakingModuleShareLimitSet")
+        .and.to.be.emit(stakingRouter, "StakingModuleShareLimitSet")
         .withArgs(stakingModuleId, STAKE_SHARE_LIMIT, PRIORITY_EXIT_SHARE_THRESHOLD, admin.address)
-        .and.to.be.emit(stakingRouterWithLib, "StakingModuleFeesSet")
+        .and.to.be.emit(stakingRouter, "StakingModuleFeesSet")
         .withArgs(stakingModuleId, MODULE_FEE, TREASURY_FEE, admin.address);
 
       expect(await stakingRouter.getStakingModule(stakingModuleId)).to.deep.equal([
@@ -283,7 +279,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidStakeShareLimit");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidStakeShareLimit");
     });
 
     it("Reverts if the new priority exit share is greater than 100%", async () => {
@@ -298,7 +294,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidPriorityExitShareThreshold");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidPriorityExitShareThreshold");
     });
 
     it("Reverts if the new priority exit share is less than stake share limit", async () => {
@@ -314,7 +310,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidPriorityExitShareThreshold");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidPriorityExitShareThreshold");
     });
 
     it("Reverts if the new deposit block distance is zero", async () => {
@@ -328,7 +324,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_MAX_DEPOSITS_PER_BLOCK,
           0n,
         ),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidMinDepositBlockDistance");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMinDepositBlockDistance");
     });
 
     it("Reverts if the new deposit block distance is great then uint64 max", async () => {
@@ -354,7 +350,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_MAX_DEPOSITS_PER_BLOCK,
           UINT64_MAX + 1n,
         ),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidMinDepositBlockDistance");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMinDepositBlockDistance");
     });
 
     it("Reverts if the new max deposits per block is great then uint64 max", async () => {
@@ -380,7 +376,7 @@ describe("StakingRouter.sol:module-management", () => {
           UINT64_MAX + 1n,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidMaxDepositPerBlockValue");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMaxDepositPerBlockValue");
     });
 
     it("Reverts if the sum of the new module and treasury fees is greater than 100%", async () => {
@@ -396,7 +392,7 @@ describe("StakingRouter.sol:module-management", () => {
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidFeeSum");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
 
       const NEW_TREASURY_FEE_INVALID = 100_01n - MODULE_FEE;
       await expect(
@@ -409,7 +405,7 @@ describe("StakingRouter.sol:module-management", () => {
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
         ),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidFeeSum");
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
     });
 
     it("Update target share, module and treasury fees and emits events", async () => {

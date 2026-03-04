@@ -3,8 +3,13 @@ pragma solidity 0.8.25;
 
 import {SRStorage} from "./SRStorage.sol";
 import {ModuleState} from "./SRTypes.sol";
+import {ISRBase} from "./ISRBase.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 
+/**
+ * @title StakingRouter utility functions
+ * @author KRogLA
+ */
 library SRUtils {
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
@@ -14,162 +19,93 @@ library SRUtils {
     /// @dev Restrict the name size with 31 bytes to storage in a single slot.
     uint256 public constant MAX_STAKING_MODULE_NAME_LENGTH = 31;
 
-    // Max Effective Balance for Withdrawal Credentials types
-    uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = 32 ether;
-    uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = 2048 ether;
-
     /// @dev Large enough to fit all existing Ether per entity, yet overflow-safe when aggregating a reasonable number of entities
     uint256 internal constant MAX_VALUE_GWEI = 1_000_000_000 ether / 1 gwei; // i.e. 1B ETH
 
-    /// @notice Initial deposit amount made for validator creation
-    /// @dev Identical for both 0x01 and 0x02 types.
-    ///      For 0x02, the validator may later be topped up.
-    ///      Top-ups are not supported for 0x01.
-    uint256 public constant INITIAL_DEPOSIT_SIZE = MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+    /**
+     * Validation
+     */
 
-    error StakingModulesLimitExceeded();
-    error StakingModuleWrongName();
-    error StakingModuleUnregistered();
-    error WrongWithdrawalCredentialsType();
-    error InvalidPriorityExitShareThreshold();
-    error InvalidMinDepositBlockDistance();
-    error InvalidMaxDepositPerBlockValue();
-    error InvalidAmountGwei();
-    error InvalidStakeShareLimit();
-    error InvalidFeeSum();
-    error AppAuthFailed();
-    error ZeroAddress();
-
-    /// @dev mimic OpenZeppelin ContextUpgradeable._msgSender()
-    function _msgSender() internal view returns (address) {
-        return msg.sender;
+    function _requireNotZero(uint256 _value) internal pure {
+        if (_value == 0) revert ISRBase.ZeroArgument();
     }
 
-    function _validateAuth(address app) internal view {
-        if (_msgSender() != app) revert AppAuthFailed();
+    function _requireNotZero(address _address) internal pure {
+        if (_address == address(0)) revert ISRBase.ZeroAddress();
     }
 
-    function _validateZeroAddress(address target) internal pure {
-        if (target == address(0)) revert ZeroAddress();
+    function _requireSender(address _sender) internal view {
+        if (msg.sender != _sender) revert ISRBase.NotAuthorized();
     }
 
-    /// @dev Reverts if the string length is out of allowed limit
-    function _validateModuleName(string memory name) internal pure {
-        if (bytes(name).length == 0 || bytes(name).length > MAX_STAKING_MODULE_NAME_LENGTH) {
-            revert StakingModuleWrongName();
-        }
+    function _requireWCTypeValid(uint256 _wcType) internal pure {
+        if (!WithdrawalCredentials.isTypeValid(_wcType)) revert ISRBase.WrongWithdrawalCredentialsType();
     }
 
-    function _validateModuleShare(uint256 _stakeShareLimit, uint256 _priorityExitShareThreshold) internal pure {
-        if (_stakeShareLimit > TOTAL_BASIS_POINTS) revert InvalidStakeShareLimit();
-        if (_priorityExitShareThreshold > TOTAL_BASIS_POINTS) revert InvalidPriorityExitShareThreshold();
-        if (_stakeShareLimit > _priorityExitShareThreshold) {
-            revert InvalidPriorityExitShareThreshold();
-        }
+    function _requireWCType2(uint256 _wcType) internal pure {
+        if (!WithdrawalCredentials.isType2(_wcType)) revert ISRBase.WrongWithdrawalCredentialsType();
     }
 
-    function _validateModuleFee(uint256 _moduleFee, uint256 _treasuryFee) internal pure {
-        if (_moduleFee + _treasuryFee > TOTAL_BASIS_POINTS) revert InvalidFeeSum();
+    function _requireModuleIdExists(uint256 _moduleId) internal view {
+        if (!SRStorage.isModuleExists(_moduleId)) revert ISRBase.StakingModuleUnregistered();
     }
 
-    function _validateModuleDepositParams(uint256 _minDepositBlockDistance, uint256 _maxDepositsPerBlock)
-        internal
-        pure
-    {
-        if (_minDepositBlockDistance == 0 || _minDepositBlockDistance > type(uint64).max) {
-            revert InvalidMinDepositBlockDistance();
-        }
-        if (_maxDepositsPerBlock > type(uint64).max) revert InvalidMaxDepositPerBlockValue();
+    /**
+     * Module helpers
+     */
+
+    /// @dev will cause an overflow error if moduleId does not exist
+    /// @param moduleId module id
+    /// @return module index in the list of modules (0-based)
+    function _getModuleIndexById(uint256 moduleId) internal view returns (uint256) {
+        /// @dev convert from 1-based position
+        return SRStorage.getModuleIdInnerPosition(moduleId) - 1;
     }
 
-    function _validateAmountGwei(uint256 _amountGwei) internal pure returns (uint64) {
-        if (_amountGwei > MAX_VALUE_GWEI) {
-            revert InvalidAmountGwei();
-        }
-        return uint64(_amountGwei);
+    /// @dev get validators (active) balance of the module in ETH (wei)
+    function _getModuleValidatorsBalance(uint256 moduleId) internal view returns (uint256) {
+        return _fromGwei(moduleId.getModuleState().accounting.validatorsBalanceGwei);
     }
 
-    function _validateModulesCount() internal view {
-        if (SRStorage.getModulesCount() >= MAX_STAKING_MODULES_COUNT) {
-            revert StakingModulesLimitExceeded();
-        }
-    }
-
-    function _validateModuleId(uint256 _moduleId) internal view {
-        if (!SRStorage.isModuleId(_moduleId)) {
-            revert StakingModuleUnregistered();
-        }
-    }
-
-    function _getModuleMEB(uint256 _wcType) internal pure returns (uint256) {
-        if (WithdrawalCredentials.isType1(_wcType)) {
-            return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
-        } else if (WithdrawalCredentials.isType2(_wcType)) {
-            return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
-        } else {
-            revert WrongWithdrawalCredentialsType();
-        }
-    }
-
-    function _validateWC(uint256 _wcType) internal pure {
-        if (!WithdrawalCredentials.isType1(_wcType) && !WithdrawalCredentials.isType2(_wcType)) {
-            revert WrongWithdrawalCredentialsType();
-        }
-    }
-
-    function _validateWC0x02(uint256 _wcType) internal pure {
-        if (!WithdrawalCredentials.isType2(_wcType)) {
-            revert WrongWithdrawalCredentialsType();
-        }
-    }
-
-    function _toE4Precision(uint256 _value, uint256 _precision) internal pure returns (uint16) {
-        return uint16((_value * TOTAL_BASIS_POINTS) / _precision);
-    }
-
-    function _getModuleIndexById(uint256 moduleId) internal view returns (uint256 idx) {
-        idx = SRStorage.getModuleInternalPositionById(moduleId);
-        if (idx == 0) {
-            revert StakingModuleUnregistered();
-        }
-        unchecked {
-            // Adjust for 1-based indexing
-            --idx;
-        }
-    }
-
-    ///  @dev get current balance of the module in ETH (wei)
-    function _getModuleActiveBalance(uint256 moduleId) internal view returns (uint256) {
-        return _fromGwei(moduleId.getModuleState().accounting.activeBalanceGwei);
-    }
-
+    /// @dev get (active + pending)  balance of the module in ETH (wei)
     function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
-        return _getModuleActiveBalance(moduleId) + _fromGwei(moduleId.getModuleState().accounting.pendingBalanceGwei);
+        return
+            _getModuleValidatorsBalance(moduleId) + _fromGwei(moduleId.getModuleState().accounting.pendingBalanceGwei);
     }
 
-    ///  @dev get total balance of all modules (active + pending) in ETH
-    function _getTotalModulesActiveBalance() internal view returns (uint256) {
-        return _fromGwei(SRStorage.getRouterState().accounting.activeBalanceGwei);
+    ///  @dev get total validators (active) balance of all modules in ETH
+    function _getTotalModulesValidatorsBalance() internal view returns (uint256) {
+        return _fromGwei(SRStorage.getRouterState().accounting.validatorsBalanceGwei);
     }
 
+    ///  @dev get total (active + pending) balance of all modules  in ETH
     function _getTotalModulesBalance() internal view returns (uint256) {
-        return _getTotalModulesActiveBalance() + _fromGwei(SRStorage.getRouterState().accounting.pendingBalanceGwei);
+        return _getTotalModulesValidatorsBalance() + _fromGwei(SRStorage.getRouterState().accounting.pendingBalanceGwei);
     }
 
+    /**
+     * Amount helpers
+     */
+
+    /// @dev checks if the amount not exceeds a reasonable limit and converts it to uint64
+    /// @param amountGwei checked amount in gwei
+    /// @return validated amount in gwei as uint64
+    function _ensureAmountGwei(uint256 amountGwei) internal pure returns (uint64) {
+        if (amountGwei > MAX_VALUE_GWEI) {
+            revert ISRBase.InvalidAmountGwei();
+        }
+        return uint64(amountGwei);
+    }
+
+    /// @dev converts amount from wei to gwei
     function _toGwei(uint256 amount) internal pure returns (uint64) {
-        amount /= 1 gwei;
-        return _validateAmountGwei(amount);
+        return _ensureAmountGwei(amount / 1 gwei);
     }
 
+    /// @dev converts amount from gwei to wei
+    /// @dev skip _ensureAmountGwei for the input amount due to using the method only as a reverse
+    ///      conversion to values saved via _toGwei
     function _fromGwei(uint256 amount) internal pure returns (uint256) {
         return amount * 1 gwei;
-    }
-
-    function _getInitialDepositAmountByCount(uint256 depositsCount) internal pure returns (uint256) {
-        return depositsCount * INITIAL_DEPOSIT_SIZE;
-    }
-
-    function _getInitialDepositCountByAmount(uint256 depositsAmount) internal pure returns (uint256) {
-        return depositsAmount / INITIAL_DEPOSIT_SIZE;
     }
 }

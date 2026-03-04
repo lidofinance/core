@@ -18,7 +18,7 @@
     "format": "prettier . --check",
     "format:fix": "prettier . --write",
     "check": "yarn lint && yarn format && yarn typecheck",
-    "test": "hardhat test test/**/*.test.ts --parallel",
+    "test": "NODE_OPTIONS='--max-old-space-size=10240' hardhat test test/**/*.test.ts --parallel",
     "test:bls:blst": "SKIP_INTERFACES_CHECK=true SKIP_LINT_SOLIDITY=true SKIP_GAS_REPORT=true hardhat test test/common/bls.blst.e2e.fuzz.test.ts",
     "test:forge": "forge test",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=10240' COVERAGE=unit hardhat coverage",

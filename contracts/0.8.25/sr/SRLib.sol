@@ -20,6 +20,12 @@ import {
     ValidatorsCountsCorrection,
     RouterStateAccounting
 } from "./SRTypes.sol";
+import {ISRBase} from "./ISRBase.sol";
+
+/**
+ * @title StakingRouter helper external library
+ * @author KRogLA
+ */
 
 library SRLib {
     using StorageSlot for bytes32;
@@ -27,38 +33,19 @@ library SRLib {
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
 
-    event ExitedAndStuckValidatorsCountsUpdateFailed(uint256 indexed stakingModuleId, bytes lowLevelRevertData);
-    event RewardsMintedReportFailed(uint256 indexed stakingModuleId, bytes lowLevelRevertData);
-    event StakingModuleExitedValidatorsIncompleteReporting(
-        uint256 indexed stakingModuleId, uint256 unreportedExitedValidatorsCount
-    );
-    event WithdrawalsCredentialsChangeFailed(uint256 indexed stakingModuleId, bytes lowLevelRevertData);
-    event StakingModuleExitNotificationFailed(
-        uint256 indexed stakingModuleId, uint256 indexed nodeOperatorId, bytes _publicKey
-    );
-    event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
+    /// @dev Protocol-level constants, built once per tx from immutables
+    /// @dev Due to SRLib is external library, we can't access immutable variables here, so we pass them as parameters
+    struct Config {
+        uint256 maxEBType1;
+        uint256 maxEBType2;
+    }
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
-
-    error StakingModuleAddressExists();
-    error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
-    error ReportedExitedValidatorsExceedDeposited(
-        uint256 reportedExitedValidatorsCount, uint256 depositedValidatorsCount
-    );
-    error UnexpectedCurrentValidatorsCount(
-        uint256 currentModuleExitedValidatorsCount, uint256 currentNodeOpExitedValidatorsCount
-    );
-    error UnexpectedFinalExitedValidatorsCount(
-        uint256 newModuleTotalExitedValidatorsCount, uint256 newModuleTotalExitedValidatorsCountInStakingRouter
-    );
-    error UnrecoverableModuleError();
-    error ExitedValidatorsCountCannotDecrease();
-    error InvalidReportData(uint256 code);
 
     /// @notice One-time migration from old storage layout to new RouterState struct.
     /// @dev Storage slot positions are computed inline for migration-only use.
     ///      After migration, this function can be removed.
-    function _migrateStorage() public {
+    function _migrateStorage(uint256 maxEBType1) public {
         // skip migration if data already exists
         if (SRStorage.getModulesCount() > 0) {
             return;
@@ -95,14 +82,14 @@ library SRLib {
         mapping(uint256 => uint256) storage oldStakingModuleIndices =
             _getStorageStakingIndicesMapping(STAKING_MODULE_INDICES_POS);
 
-        uint64 totalActiveBalanceGwei;
+        uint64 totalValidatorsBalanceGwei;
         StakingModule memory smOld;
 
         for (uint256 i; i < modulesCount; ++i) {
             smOld = oldStakingModules[i];
 
             uint256 _moduleId = smOld.id;
-            // push module ID to registry
+            // push module ID to EnumerableSet
             SRStorage.addModuleId(_moduleId);
 
             ModuleState storage moduleState = _moduleId.getModuleState();
@@ -129,15 +116,24 @@ library SRLib {
                 minDepositBlockDistance: smOld.minDepositBlockDistance
             });
 
+            /// @dev calculate module effective balance at the migration moment
+            (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) =
+                _getStakingModuleSummary(IStakingModule(smOld.stakingModuleAddress));
+            // The module might not receive all exited validators data yet => we need to replacing
+            // the exitedValidatorsCount with the one that the staking router is aware of.
+            uint256 activeCount =
+                depositedValidatorsCount - Math.max(smOld.exitedValidatorsCount, exitedValidatorsCount);
+
             // 1 SSTORE
-            uint64 activeBalanceGwei = _calcActiveBalanceGwei(smOld.stakingModuleAddress, smOld.exitedValidatorsCount);
+            uint64 validatorsBalanceGwei = SRUtils._toGwei(activeCount * maxEBType1);
+
             moduleState.accounting = ModuleStateAccounting({
-                activeBalanceGwei: activeBalanceGwei,
+                validatorsBalanceGwei: validatorsBalanceGwei,
                 pendingBalanceGwei: 0,
                 exitedValidatorsCount: SafeCast.toUint64(smOld.exitedValidatorsCount)
             });
 
-            totalActiveBalanceGwei += activeBalanceGwei;
+            totalValidatorsBalanceGwei += validatorsBalanceGwei;
 
             // cleanup old storage for staking module data
             delete oldStakingModules[i];
@@ -151,7 +147,7 @@ library SRLib {
         /// @dev use the same value for both CL balance and active balance at migration moment,
         /// next Oracle report will update the both values
         SRStorage.getRouterState().accounting =
-            RouterStateAccounting({activeBalanceGwei: totalActiveBalanceGwei, pendingBalanceGwei: 0});
+            RouterStateAccounting({validatorsBalanceGwei: totalValidatorsBalanceGwei, pendingBalanceGwei: 0});
     }
 
     /// @dev Helper for migration - returns old staking modules mapping storage reference
@@ -176,21 +172,6 @@ library SRLib {
         }
     }
 
-    /// @dev calculate module effective balance at the migration moment
-    function _calcActiveBalanceGwei(address moduleAddress, uint256 routerExitedValidatorsCount)
-        private
-        view
-        returns (uint64)
-    {
-        IStakingModule stakingModule = IStakingModule(moduleAddress);
-        (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) = _getStakingModuleSummary(stakingModule);
-        // The module might not receive all exited validators data yet => we need to replacing
-        // the exitedValidatorsCount with the one that the staking router is aware of.
-        uint256 activeCount = depositedValidatorsCount - Math.max(routerExitedValidatorsCount, exitedValidatorsCount);
-
-        return SRUtils._toGwei(SRUtils._getInitialDepositAmountByCount(activeCount));
-    }
-
     /// @notice Registers a new staking module.
     /// @param _moduleAddress Address of staking module.
     /// @param _moduleName Name of staking module.
@@ -200,22 +181,28 @@ library SRLib {
         public
         returns (uint256 newModuleId)
     {
-        SRUtils._validateZeroAddress(_moduleAddress);
-        SRUtils._validateModuleName(_moduleName);
-        SRUtils._validateModulesCount();
-        SRUtils._validateWC(_moduleConfig.withdrawalCredentialsType);
+        SRUtils._requireNotZero(_moduleAddress);
+
+        if (bytes(_moduleName).length == 0 || bytes(_moduleName).length > SRUtils.MAX_STAKING_MODULE_NAME_LENGTH) {
+            revert ISRBase.StakingModuleWrongName();
+        }
+        if (SRStorage.getModulesCount() >= SRUtils.MAX_STAKING_MODULES_COUNT) {
+            revert ISRBase.StakingModulesLimitExceeded();
+        }
+
+        SRUtils._requireWCTypeValid(_moduleConfig.withdrawalCredentialsType);
 
         // Check for duplicate module address
         /// @dev due to small number of modules, we can afford to do this check on add
         uint256[] memory moduleIds = SRStorage.getModuleIds();
         for (uint256 i; i < moduleIds.length; ++i) {
             if (_moduleAddress == moduleIds[i].getModuleState().config.moduleAddress) {
-                revert StakingModuleAddressExists();
+                revert ISRBase.StakingModuleAddressExists();
             }
         }
 
         newModuleId = SRStorage.getRouterState().lastModuleId + 1;
-        // push new module ID to registry
+        // push new module ID to EnumerableSet
         SRStorage.addModuleId(newModuleId);
 
         ModuleState storage moduleState = newModuleId.getModuleState();
@@ -243,19 +230,28 @@ library SRLib {
         uint256 _moduleId,
         uint256 _stakeShareLimit,
         uint256 _priorityExitShareThreshold,
-        uint256 _stakingModuleFee,
+        uint256 _moduleFee,
         uint256 _treasuryFee,
         uint256 _maxDepositsPerBlock,
         uint256 _minDepositBlockDistance
     ) public {
-        SRUtils._validateModuleShare(_stakeShareLimit, _priorityExitShareThreshold);
-        SRUtils._validateModuleFee(_stakingModuleFee, _treasuryFee);
-        SRUtils._validateModuleDepositParams(_minDepositBlockDistance, _maxDepositsPerBlock);
+        if (_stakeShareLimit > SRUtils.TOTAL_BASIS_POINTS) {
+            revert ISRBase.InvalidStakeShareLimit();
+        }
+        if (_priorityExitShareThreshold > SRUtils.TOTAL_BASIS_POINTS) {
+            revert ISRBase.InvalidPriorityExitShareThreshold();
+        }
+        if (_stakeShareLimit > _priorityExitShareThreshold) revert ISRBase.InvalidPriorityExitShareThreshold();
+        if (_moduleFee + _treasuryFee > SRUtils.TOTAL_BASIS_POINTS) revert ISRBase.InvalidFeeSum();
+        if (_minDepositBlockDistance == 0 || _minDepositBlockDistance > type(uint64).max) {
+            revert ISRBase.InvalidMinDepositBlockDistance();
+        }
+        if (_maxDepositsPerBlock > type(uint64).max) revert ISRBase.InvalidMaxDepositPerBlockValue();
 
         // 1 SLOAD
         ModuleStateConfig memory stateConfig = _moduleId.getModuleState().config;
         // forge-lint: disable-start(unsafe-typecast)
-        stateConfig.moduleFee = uint16(_stakingModuleFee);
+        stateConfig.moduleFee = uint16(_moduleFee);
         stateConfig.treasuryFee = uint16(_treasuryFee);
         stateConfig.stakeShareLimit = uint16(_stakeShareLimit);
         stateConfig.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
@@ -278,7 +274,7 @@ library SRLib {
         isChanged = stateConfig.status != _status;
         if (isChanged) {
             stateConfig.status = _status;
-            emit StakingModuleStatusSet(_moduleId, _status, SRUtils._msgSender());
+            emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
         }
     }
 
@@ -295,11 +291,13 @@ library SRLib {
     /// @dev Allocates deposits to staking modules based on their stake share limits and available capacity.
     ///      The allocation algorithm prioritizes modules with lower validator (WC 0x01 equivalent) counts (MinFirst strategy).
     /// @dev Method uses conversion from/to Ether amounts due to MinFirstAllocationStrategy working with unit values.
+    /// @param _cfg - protocol-level constants
     /// @param _allocateAmount - Eth amount that should be allocated into modules
+    /// @param _isTopUp - flag indicating whether the allocation is for top-up deposits
     /// @return totalAllocated - amount actually allocated
     /// @return allocated - Array of newly allocated amounts for each module
     /// @return newAllocations - Array of new allocation amounts for each module
-    function _getDepositAllocations(uint256 _allocateAmount, bool _isTopUp)
+    function _getDepositAllocations(Config calldata _cfg, uint256 _allocateAmount, bool _isTopUp)
         public
         view
         returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
@@ -309,11 +307,14 @@ library SRLib {
             return (0, new uint256[](0), new uint256[](0));
         }
 
-        uint256 depositsToAllocate = SRUtils._getInitialDepositCountByAmount(_allocateAmount);
+        // put calldata var to stack
+        uint256 initialDeposit = _cfg.maxEBType1;
+        // convert to validators equivalent
+        uint256 depositsToAllocate = _allocateAmount / initialDeposit;
         // get current allocations and capacities in validators equivalent
         uint256[] memory capacities;
         // @dev using output parameter as temporary storage for current allocations
-        (allocated, capacities) = _getModulesAllocationAndCapacity(depositsToAllocate, _isTopUp);
+        (allocated, capacities) = _getModulesAllocationAndCapacity(_cfg, depositsToAllocate, _isTopUp);
 
         // If no deposits to allocate, return current state
         if (depositsToAllocate > 0) {
@@ -322,33 +323,39 @@ library SRLib {
             (totalAllocated, newAllocations) =
                 MinFirstAllocationStrategy.allocate(allocated, capacities, depositsToAllocate);
             // Convert allocated validators and allocations per module back to Ether amounts
-            totalAllocated = SRUtils._getInitialDepositAmountByCount(totalAllocated);
+            totalAllocated *= initialDeposit;
             for (uint256 i = 0; i < modulesCount; ++i) {
                 // get allocation delta only: new - current
-                allocated[i] = SRUtils._getInitialDepositAmountByCount(newAllocations[i] - allocated[i]);
-                newAllocations[i] = SRUtils._getInitialDepositAmountByCount(newAllocations[i]);
+                allocated[i] = (newAllocations[i] - allocated[i]) * initialDeposit;
+                newAllocations[i] *= initialDeposit;
             }
         } else {
             newAllocations = new uint256[](modulesCount);
             // Convert allocations per module back to Ether amounts
             for (uint256 i = 0; i < modulesCount; ++i) {
-                newAllocations[i] = SRUtils._getInitialDepositAmountByCount(allocated[i]);
+                newAllocations[i] = allocated[i] * initialDeposit;
                 allocated[i] = 0;
             }
         }
     }
 
-    function _getModuleDepositAllocation(uint256 _moduleId, uint256 _allocateAmount, bool _isTopUp)
-        public
-        view
-        returns (uint256 allocation)
-    {
-        (, uint256[] memory allocated,) = _getDepositAllocations(_allocateAmount, _isTopUp);
+    /// @notice calculate allocation amount for single module
+    function _getModuleDepositAllocation(
+        Config calldata _cfg,
+        uint256 _moduleId,
+        uint256 _allocateAmount,
+        bool _isTopUp
+    ) public view returns (uint256 allocation) {
+        (, uint256[] memory allocated,) = _getDepositAllocations(_cfg, _allocateAmount, _isTopUp);
         uint256 moduleIdx = SRUtils._getModuleIndexById(_moduleId);
         allocation = allocated[moduleIdx];
     }
 
-    function _getModulesAllocationAndCapacity(uint256 depositsToAllocate, bool _isTopUp)
+    /// @notice calculate allocation amounts for all modules
+    /// @dev If `_isTopUp` is `true`, allocation is performed for top-up deposits targeting
+    ///      WC type `0x02` validators. In this case, `_cfg.maxEBType2` used
+    ///      to correctly calculate the module's capacity.
+    function _getModulesAllocationAndCapacity(Config calldata _cfg, uint256 depositsToAllocate, bool _isTopUp)
         internal
         view
         returns (uint256[] memory _allocations, uint256[] memory _capacities)
@@ -358,10 +365,12 @@ library SRLib {
         uint256 totalValidators;
         _allocations = new uint256[](modulesCount);
 
+        // put calldata msxEBType1 to stack
+        uint256 maxEBType1 = _cfg.maxEBType1;
         for (uint256 i = 0; i < modulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
-            // Calculate equivalent of active WC01 validators count rounded up: ceil(balance / INITIAL_DEPOSIT_SIZE)
-            uint256 validatorsCount = Math.ceilDiv(SRUtils._getModuleBalance(moduleId), SRUtils.INITIAL_DEPOSIT_SIZE);
+            // Calculate equivalent of active WC01 validators count rounded up: ceil(balance / maxEBType1)
+            uint256 validatorsCount = Math.ceilDiv(SRUtils._getModuleBalance(moduleId), maxEBType1);
 
             _allocations[i] = validatorsCount;
             totalValidators += validatorsCount;
@@ -371,6 +380,9 @@ library SRLib {
 
         ModuleState storage moduleState;
         _capacities = new uint256[](modulesCount);
+
+        // put calldata msxEBType2 to stack
+        uint256 maxEBType2 = _cfg.maxEBType2;
 
         for (uint256 i = 0; i < modulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
@@ -387,9 +399,9 @@ library SRLib {
                     // the exitedValidatorsCount with the one that the staking router is aware of.
                     uint256 activeValidators =
                         depositedValidators - Math.max(exitedValidators, moduleState.accounting.exitedValidatorsCount);
-                    // max eth capacity of active validators = n * 2048ETH,
-                    // so capacity in validators equivalent = n * 2048 / 32 = n * 64
-                    validatorsCapacity = activeValidators * 64;
+                    // max eth capacity of active validators = n * maxEB,
+                    // so capacity in validators equivalent = n * maxEBType2 / msxEBType1
+                    validatorsCapacity = activeValidators * maxEBType2 / maxEBType1;
                 } else {
                     validatorsCapacity = _allocations[i] + depositableValidatorsCount;
                 }
@@ -420,7 +432,7 @@ library SRLib {
         bytes calldata _publicKey,
         uint256 _eligibleToExitInSec
     ) public {
-        SRUtils._validateModuleId(_stakingModuleId);
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         _stakingModuleId.getIStakingModule()
             .reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec);
     }
@@ -443,7 +455,7 @@ library SRLib {
         ValidatorExitData calldata data;
         for (uint256 i = 0; i < validatorExitData.length; ++i) {
             data = validatorExitData[i];
-            SRUtils._validateModuleId(data.stakingModuleId);
+            SRUtils._requireModuleIdExists(data.stakingModuleId);
             try data.stakingModuleId.getIStakingModule()
                 .onValidatorExitTriggered(data.nodeOperatorId, data.pubkey, _withdrawalRequestPaidFee, _exitType) {}
             catch (bytes memory lowLevelRevertData) {
@@ -453,8 +465,8 @@ library SRLib {
                 ///      reverts because of the "out of gas" error. Here we assume that the
                 ///      onValidatorExitTriggered() method doesn't have reverts with
                 ///      empty error data except "out of gas".
-                if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
-                emit StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
+                if (lowLevelRevertData.length == 0) revert ISRBase.UnrecoverableModuleError();
+                emit ISRBase.StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
             }
         }
     }
@@ -464,11 +476,12 @@ library SRLib {
     /// @param _totalShares Total shares minted for the staking modules.
     /// @dev The function is restricted to the `REPORT_REWARDS_MINTED_ROLE` role.
     function _reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) public {
-        _validateEqualArrayLengths(_stakingModuleIds.length, _totalShares.length);
+        uint256 n = _stakingModuleIds.length;
+        if (_totalShares.length != n) revert ISRBase.ArraysLengthMismatch();
 
-        for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
+        for (uint256 i = 0; i < n; ++i) {
             if (_totalShares[i] == 0) continue;
-            SRUtils._validateModuleId(_stakingModuleIds[i]);
+            SRUtils._requireModuleIdExists(_stakingModuleIds[i]);
 
             try _stakingModuleIds[i].getIStakingModule().onRewardsMinted(_totalShares[i]) {}
             catch (bytes memory lowLevelRevertData) {
@@ -477,8 +490,8 @@ library SRLib {
                 ///      return an invalid value when the onRewardsMinted() reverts because of the
                 ///      "out of gas" error. Here we assume that the onRewardsMinted() method doesn't
                 ///      have reverts with empty error data except "out of gas".
-                if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
-                emit RewardsMintedReportFailed(_stakingModuleIds[i], lowLevelRevertData);
+                if (lowLevelRevertData.length == 0) revert ISRBase.UnrecoverableModuleError();
+                emit ISRBase.RewardsMintedReportFailed(_stakingModuleIds[i], lowLevelRevertData);
             }
         }
     }
@@ -512,8 +525,8 @@ library SRLib {
                 ///      reverts because of the "out of gas" error. Here we assume that the
                 ///      onExitedAndStuckValidatorsCountsUpdated() method doesn't have reverts with
                 ///      empty error data except "out of gas".
-                if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
-                emit ExitedAndStuckValidatorsCountsUpdateFailed(moduleId, lowLevelRevertData);
+                if (lowLevelRevertData.length == 0) revert ISRBase.UnrecoverableModuleError();
+                emit ISRBase.ExitedAndStuckValidatorsCountsUpdateFailed(moduleId, lowLevelRevertData);
             }
         }
     }
@@ -529,7 +542,7 @@ library SRLib {
         bytes calldata _nodeOperatorIds,
         bytes calldata _vettedSigningKeysCounts
     ) public {
-        SRUtils._validateModuleId(_stakingModuleId);
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         _checkOperatorsReportData(_nodeOperatorIds, _vettedSigningKeysCounts);
         _stakingModuleId.getIStakingModule().decreaseVettedSigningKeysCount(_nodeOperatorIds, _vettedSigningKeysCounts);
     }
@@ -546,7 +559,7 @@ library SRLib {
         bytes calldata _nodeOperatorIds,
         bytes calldata _exitedValidatorsCounts
     ) public {
-        SRUtils._validateModuleId(_stakingModuleId);
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         _checkOperatorsReportData(_nodeOperatorIds, _exitedValidatorsCounts);
         _stakingModuleId.getIStakingModule().updateExitedValidatorsCount(_nodeOperatorIds, _exitedValidatorsCounts);
     }
@@ -556,10 +569,10 @@ library SRLib {
         bytes calldata _nodeOperatorIds,
         bytes calldata _totalBalancesGwei
     ) public {
-        SRUtils._validateModuleId(_stakingModuleId);
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         _checkOperatorsReportData(_nodeOperatorIds, _totalBalancesGwei);
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
-        SRUtils._validateWC0x02(_stakingModuleId.getModuleState().config.withdrawalCredentialsType);
+        SRUtils._requireWCType2(_stakingModuleId.getModuleState().config.withdrawalCredentialsType);
 
         _stakingModuleId.getIStakingModuleV2().updateOperatorBalances(_nodeOperatorIds, _totalBalancesGwei);
     }
@@ -586,7 +599,7 @@ library SRLib {
     /// 3. At the end of the second data submission phase, it's expected for the aggregate exited validators count
     ///    across all module's node operators (stored in the module) to match the total count for this module
     ///    (stored in the staking router). However, it might happen that the second phase of data submission doesn't
-    ///    finish until the new oracle reporting frame is started, in which case staking router will emit a warning
+    ///    finish until the new oracle reporting frame is started, in which case staking router will emit ISRBase.a warning
     ///    event `StakingModuleExitedValidatorsIncompleteReporting` when the first data submission phase is performed
     ///    for a new reporting frame. This condition will result in the staking module having an incomplete data about
     ///    the exited validator counts during the whole reporting frame. Handling this condition is
@@ -602,13 +615,14 @@ library SRLib {
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _exitedValidatorsCounts
     ) public returns (uint256) {
-        _validateEqualArrayLengths(_stakingModuleIds.length, _exitedValidatorsCounts.length);
+        uint256 n = _stakingModuleIds.length;
+        if (_exitedValidatorsCounts.length != n) revert ISRBase.ArraysLengthMismatch();
 
         uint256 newlyExitedValidatorsCount;
 
-        for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
+        for (uint256 i = 0; i < n; ++i) {
             uint256 moduleId = _stakingModuleIds[i];
-            SRUtils._validateModuleId(moduleId);
+            SRUtils._requireModuleIdExists(moduleId);
             ModuleState storage state = moduleId.getModuleState();
             ModuleStateAccounting storage moduleAcc = state.accounting;
             uint64 prevReportedExitedValidatorsCount = moduleAcc.exitedValidatorsCount;
@@ -616,14 +630,14 @@ library SRLib {
             uint64 newReportedExitedValidatorsCount = SafeCast.toUint64(_exitedValidatorsCounts[i]);
 
             if (newReportedExitedValidatorsCount < prevReportedExitedValidatorsCount) {
-                revert ExitedValidatorsCountCannotDecrease();
+                revert ISRBase.ExitedValidatorsCountCannotDecrease();
             }
 
             (uint256 totalExitedValidators, uint256 totalDepositedValidators,) =
                 _getStakingModuleSummary(state.getIStakingModule());
 
             if (newReportedExitedValidatorsCount > totalDepositedValidators) {
-                revert ReportedExitedValidatorsExceedDeposited(
+                revert ISRBase.ReportedExitedValidatorsExceedDeposited(
                     newReportedExitedValidatorsCount, totalDepositedValidators
                 );
             }
@@ -633,7 +647,7 @@ library SRLib {
             if (totalExitedValidators < prevReportedExitedValidatorsCount) {
                 // not all of the exited validators were async reported to the module
                 unchecked {
-                    emit StakingModuleExitedValidatorsIncompleteReporting(
+                    emit ISRBase.StakingModuleExitedValidatorsIncompleteReporting(
                         moduleId, prevReportedExitedValidatorsCount - totalExitedValidators
                     );
                 }
@@ -668,7 +682,7 @@ library SRLib {
         bool _triggerUpdateFinish,
         ValidatorsCountsCorrection calldata _correction
     ) public {
-        SRUtils._validateModuleId(_stakingModuleId);
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         ModuleState storage state = _stakingModuleId.getModuleState();
         ModuleStateAccounting storage moduleAcc = state.accounting;
         uint64 prevReportedExitedValidatorsCount = moduleAcc.exitedValidatorsCount;
@@ -680,7 +694,7 @@ library SRLib {
             _correction.currentModuleExitedValidatorsCount != prevReportedExitedValidatorsCount
                 || _correction.currentNodeOperatorExitedValidatorsCount != totalExitedValidators
         ) {
-            revert UnexpectedCurrentValidatorsCount(prevReportedExitedValidatorsCount, totalExitedValidators);
+            revert ISRBase.UnexpectedCurrentValidatorsCount(prevReportedExitedValidatorsCount, totalExitedValidators);
         }
 
         moduleAcc.exitedValidatorsCount = SafeCast.toUint64(_correction.newModuleExitedValidatorsCount);
@@ -691,14 +705,14 @@ library SRLib {
             _getStakingModuleSummary(stakingModule);
 
         if (_correction.newModuleExitedValidatorsCount > moduleTotalDepositedValidators) {
-            revert ReportedExitedValidatorsExceedDeposited(
+            revert ISRBase.ReportedExitedValidatorsExceedDeposited(
                 _correction.newModuleExitedValidatorsCount, moduleTotalDepositedValidators
             );
         }
 
         if (_triggerUpdateFinish) {
             if (moduleTotalExitedValidators != _correction.newModuleExitedValidatorsCount) {
-                revert UnexpectedFinalExitedValidatorsCount(
+                revert ISRBase.UnexpectedFinalExitedValidatorsCount(
                     moduleTotalExitedValidators, _correction.newModuleExitedValidatorsCount
                 );
             }
@@ -707,44 +721,47 @@ library SRLib {
         }
     }
 
-    function _reportActiveBalancesByStakingModule(
+    function _reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _activeBalancesGwei,
+        uint256[] calldata _validatorBalancesGwei,
         uint256[] calldata _pendingBalancesGwei
     ) public {
-        _validateEqualArrayLengths(_stakingModuleIds.length, _activeBalancesGwei.length);
-        _validateEqualArrayLengths(_stakingModuleIds.length, _pendingBalancesGwei.length);
+        uint256 n = _stakingModuleIds.length;
+
+        if (_validatorBalancesGwei.length != n || _pendingBalancesGwei.length != n) {
+            revert ISRBase.ArraysLengthMismatch();
+        }
 
         RouterStateAccounting storage routerAcc = SRStorage.getRouterState().accounting;
-        uint64 totalActiveBalanceGwei = routerAcc.activeBalanceGwei;
+        uint64 totalValidatorsBalanceGwei = routerAcc.validatorsBalanceGwei;
         uint64 totalPendingBalanceGwei = routerAcc.pendingBalanceGwei;
 
-        for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
+        for (uint256 i = 0; i < n; ++i) {
             uint256 moduleId = _stakingModuleIds[i];
-            SRUtils._validateModuleId(moduleId);
+            SRUtils._requireModuleIdExists(moduleId);
             ModuleStateAccounting storage moduleAcc = moduleId.getModuleState().accounting;
             // get current values
-            uint64 activeBalanceGwei = moduleAcc.activeBalanceGwei;
+            uint64 validatorsBalanceGwei = moduleAcc.validatorsBalanceGwei;
             uint64 pendingBalanceGwei = moduleAcc.pendingBalanceGwei;
 
             // update totals incrementally as we iterate through the part of modules in general case
             // 1. subtract old values
             unchecked {
-                totalActiveBalanceGwei -= activeBalanceGwei;
+                totalValidatorsBalanceGwei -= validatorsBalanceGwei;
                 totalPendingBalanceGwei -= pendingBalanceGwei;
             }
             // 2. validate and add new values
-            activeBalanceGwei = SRUtils._validateAmountGwei(_activeBalancesGwei[i]);
-            pendingBalanceGwei = SRUtils._validateAmountGwei(_pendingBalancesGwei[i]);
+            validatorsBalanceGwei = SRUtils._ensureAmountGwei(_validatorBalancesGwei[i]);
+            pendingBalanceGwei = SRUtils._ensureAmountGwei(_pendingBalancesGwei[i]);
             unchecked {
-                totalActiveBalanceGwei += activeBalanceGwei;
+                totalValidatorsBalanceGwei += validatorsBalanceGwei;
                 totalPendingBalanceGwei += pendingBalanceGwei;
             }
 
-            moduleAcc.activeBalanceGwei = activeBalanceGwei;
+            moduleAcc.validatorsBalanceGwei = validatorsBalanceGwei;
             moduleAcc.pendingBalanceGwei = pendingBalanceGwei;
         }
-        routerAcc.activeBalanceGwei = totalActiveBalanceGwei;
+        routerAcc.validatorsBalanceGwei = totalValidatorsBalanceGwei;
         routerAcc.pendingBalanceGwei = totalPendingBalanceGwei;
     }
 
@@ -776,31 +793,25 @@ library SRLib {
 
             try moduleId.getIStakingModule().onWithdrawalCredentialsChanged() {}
             catch (bytes memory lowLevelRevertData) {
-                if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
+                if (lowLevelRevertData.length == 0) revert ISRBase.UnrecoverableModuleError();
                 if (moduleId.getModuleState().config.status == StakingModuleStatus.Active) {
                     _setModuleStatus(moduleId, StakingModuleStatus.DepositsPaused);
                 }
-                emit WithdrawalsCredentialsChangeFailed(moduleId, lowLevelRevertData);
+                emit ISRBase.WithdrawalsCredentialsChangeFailed(moduleId, lowLevelRevertData);
             }
         }
     }
 
     function _checkOperatorsReportData(bytes calldata _ids, bytes calldata _values) internal pure {
         if (_ids.length % 8 != 0 || _values.length % 16 != 0) {
-            revert InvalidReportData(3);
+            revert ISRBase.InvalidReportData(3);
         }
         uint256 count = _ids.length / 8;
         if (_values.length / 16 != count) {
-            revert InvalidReportData(2);
+            revert ISRBase.InvalidReportData(2);
         }
         if (count == 0) {
-            revert InvalidReportData(1);
-        }
-    }
-
-    function _validateEqualArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength) internal pure {
-        if (firstArrayLength != secondArrayLength) {
-            revert ArraysLengthMismatch(firstArrayLength, secondArrayLength);
+            revert ISRBase.InvalidReportData(1);
         }
     }
 }

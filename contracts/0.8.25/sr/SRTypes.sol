@@ -153,7 +153,7 @@ struct ModuleStateDeposits {
 /// @dev 1 storage slot
 struct ModuleStateAccounting {
     /// @notice total actual balance of validators for module in Gwei.
-    uint64 activeBalanceGwei;
+    uint64 validatorsBalanceGwei;
     /// @notice total pending balance of validators for module in Gwei.
     uint64 pendingBalanceGwei;
     /// @notice Cumulative number of exited validators for module
@@ -164,7 +164,7 @@ struct ModuleStateAccounting {
 
 struct RouterStateAccounting {
     /// @notice total actual balance of validators in Gwei.
-    uint64 activeBalanceGwei;
+    uint64 validatorsBalanceGwei;
     /// @notice total pending balance of validators in Gwei.
     uint64 pendingBalanceGwei;
     /// @notice total deposited balance since last report in Gwei.

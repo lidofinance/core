@@ -1,4 +1,3 @@
-import { Contract } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -8,16 +7,12 @@ import {
   DepositContract__MockForBeaconChainDepositor,
   Lido__MockForStakingRouter,
   LidoLocator,
-  MinFirstAllocationStrategy,
-  SRLib,
   StakingRouter__Harness,
 } from "typechain-types";
 
-import { proxify } from "lib";
+import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02, proxify } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-
-export type StakingRouterWithLib = Contract & SRLib & MinFirstAllocationStrategy;
 
 export interface DeployStakingRouterSigners {
   deployer: HardhatEthersSigner;
@@ -29,16 +24,23 @@ export interface DeployStakingRouterParams {
   depositContract?: DepositContract__MockForBeaconChainDepositor;
   lido?: Lido__MockForStakingRouter;
   lidoLocator?: LidoLocator;
+  maxEBType1?: bigint;
+  maxEBType2?: bigint;
 }
 
 export async function deployStakingRouter(
   { deployer, admin, user }: DeployStakingRouterSigners,
-  { depositContract, lido, lidoLocator }: DeployStakingRouterParams = {},
+  {
+    depositContract,
+    lido,
+    lidoLocator,
+    maxEBType1 = MAX_EFFECTIVE_BALANCE_WC_TYPE_01,
+    maxEBType2 = MAX_EFFECTIVE_BALANCE_WC_TYPE_02,
+  }: DeployStakingRouterParams = {},
 ): Promise<{
   depositContract: DepositContract__MockForBeaconChainDepositor;
   stakingRouter: StakingRouter__Harness;
   impl: StakingRouter__Harness;
-  stakingRouterWithLib: StakingRouterWithLib;
   beaconChainDepositor: BeaconChainDepositor;
 }> {
   if (!depositContract) {
@@ -69,15 +71,10 @@ export async function deployStakingRouter(
     },
   });
 
-  const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, lido, lidoLocator);
+  const impl = await stakingRouterFactory
+    .connect(deployer)
+    .deploy(depositContract, lido, lidoLocator, maxEBType1, maxEBType2);
   const [stakingRouter] = await proxify({ impl, admin, caller: user });
 
-  const combinedIface = new ethers.Interface([...stakingRouter.interface.fragments, ...srLib.interface.fragments]);
-  const stakingRouterWithLib = new ethers.Contract(
-    stakingRouter.target,
-    combinedIface.fragments,
-    stakingRouter.runner,
-  ) as StakingRouterWithLib;
-
-  return { stakingRouter, depositContract, impl, stakingRouterWithLib, beaconChainDepositor };
+  return { stakingRouter, depositContract, impl, beaconChainDepositor };
 }

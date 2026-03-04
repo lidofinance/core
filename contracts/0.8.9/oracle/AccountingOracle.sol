@@ -42,9 +42,9 @@ interface IStakingRouter {
         uint256[] calldata _exitedValidatorsCounts
     ) external returns (uint256);
 
-    function reportActiveBalancesByStakingModule(
+    function reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _activeBalancesGwei,
+        uint256[] calldata _validatorBalancesGwei,
         uint256[] calldata _pendingBalancesGwei
     ) external;
 
@@ -56,7 +56,7 @@ interface IStakingRouter {
 
     function reportStakingModuleOperatorBalances(
         uint256 _stakingModuleId,
-        bytes calldata _operatorIds,
+        bytes calldata _nodeOperatorIds,
         bytes calldata _totalBalancesGwei
     ) external;
 
@@ -169,9 +169,9 @@ contract AccountingOracle is BaseOracle {
         /// CL values
         ///
 
-        /// @dev Active balance of validators on the consensus layer without pending deposits
-        /// as observed at the reference slot.
-        uint256 clActiveBalanceGwei;
+        /// @dev Sum of consensus-layer validator balances (`validator.balance`),
+        /// excluding pending deposits, as observed at the reference slot.
+        uint256 clValidatorsBalanceGwei;
         /// @dev Pending deposits balance on the consensus layer
         /// as observed at the reference slot.
         uint256 clPendingBalanceGwei;
@@ -186,9 +186,13 @@ contract AccountingOracle is BaseOracle {
         /// @dev Ids of staking modules that have effective balances changed compared to the number
         /// stored in the respective staking module contract as observed at the reference slot.
         uint256[] stakingModuleIdsWithUpdatedBalance;
-        /// @dev Active balances of each staking module from stakingModuleIdsWithUpdatedBalance
-        /// without pending deposits as observed at the reference slot.
-        uint256[] activeBalancesGweiByStakingModule;
+        /// @dev Sum of consensus-layer validator balances (`validator.balance`)
+        /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,
+        /// excluding pending deposits, as observed at the reference slot.
+        uint256[] validatorBalancesGweiByStakingModule;
+        /// @dev Sum of consensus-layer pending deposits balances 
+        /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,
+        /// as observed at the reference slot.
         uint256[] pendingBalancesGweiByStakingModule;
         ///
         /// EL values
@@ -503,9 +507,9 @@ contract AccountingOracle is BaseOracle {
 
         sanityChecker.checkModuleAndCLBalancesChangeRates(
             data.stakingModuleIdsWithUpdatedBalance,
-            data.activeBalancesGweiByStakingModule,
+            data.validatorBalancesGweiByStakingModule,
             data.pendingBalancesGweiByStakingModule,
-            data.clActiveBalanceGwei,
+            data.clValidatorsBalanceGwei,
             data.clPendingBalanceGwei,
             timeElapsed
         );
@@ -522,10 +526,10 @@ contract AccountingOracle is BaseOracle {
         /// @dev we need to update balances before rewards and fee calculation
         /// Note, deposit trackers not changed at this moment, they are bumped
         /// in StakingRouter.onAccountingReport during `handleAccountingReport`
-        _processStakingRouterActiveBalancesByModule(
+        _processStakingRouterValidatorBalancesByModule(
             stakingRouter,
             data.stakingModuleIdsWithUpdatedBalance,
-            data.activeBalancesGweiByStakingModule,
+            data.validatorBalancesGweiByStakingModule,
             data.pendingBalancesGweiByStakingModule
         );
 
@@ -539,8 +543,8 @@ contract AccountingOracle is BaseOracle {
             ReportValues(
                 GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
                 timeElapsed,
-                data.clActiveBalanceGwei * 1e9,    // Validators Active balance
-                data.clPendingBalanceGwei * 1e9,   // Validators Pending balance
+                data.clValidatorsBalanceGwei * 1e9,
+                data.clPendingBalanceGwei * 1e9,
                 data.withdrawalVaultBalance,
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
@@ -611,14 +615,14 @@ contract AccountingOracle is BaseOracle {
         );
     }
 
-    function _processStakingRouterActiveBalancesByModule(
+    function _processStakingRouterValidatorBalancesByModule(
         IStakingRouter stakingRouter,
         uint256[] calldata stakingModuleIds,
-        uint256[] calldata activeBalancesGwei,
+        uint256[] calldata validatorBalancesGwei,
         uint256[] calldata pendingBalancesGwei
     ) internal {
         uint256 numModules = stakingModuleIds.length;
-        if (numModules != activeBalancesGwei.length || numModules != pendingBalancesGwei.length) {
+        if (numModules != validatorBalancesGwei.length || numModules != pendingBalancesGwei.length) {
             revert InvalidClBalancesData();
         }
         if (numModules == 0) {
@@ -634,7 +638,7 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
-        stakingRouter.reportActiveBalancesByStakingModule(stakingModuleIds, activeBalancesGwei, pendingBalancesGwei);
+        stakingRouter.reportValidatorBalancesByStakingModule(stakingModuleIds, validatorBalancesGwei, pendingBalancesGwei);
     }
 
     function _submitReportExtraDataEmpty() internal {

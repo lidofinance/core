@@ -1,18 +1,16 @@
 import { expect } from "chai";
-import { randomBytes } from "crypto";
-import { hexlify } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, WithdrawalCredentialsType } from "lib";
+import { certainAddress, randomWCType1, WithdrawalCredentialsType } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
+import { deployStakingRouter } from "../../deploy/stakingRouter";
 enum Status {
   Active,
   DepositsPaused,
@@ -26,13 +24,12 @@ context("StakingRouter.sol:status-control", () => {
 
   let locator: LidoLocator;
   let stakingRouter: StakingRouter__Harness;
-  let stakingRouterWithLib: StakingRouterWithLib;
   let moduleId: bigint;
 
   let originalState: string;
 
   const lido = certainAddress("test:staking-router-status:lido");
-  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials = randomWCType1();
   const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
 
@@ -46,10 +43,7 @@ context("StakingRouter.sol:status-control", () => {
     });
 
     // deploy staking router
-    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter(
-      { deployer, admin },
-      { lidoLocator: locator },
-    ));
+    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
 
     await stakingRouter.initialize(admin, withdrawalCredentials);
 
@@ -95,7 +89,7 @@ context("StakingRouter.sol:status-control", () => {
 
     it("Updates the status of staking module", async () => {
       await expect(stakingRouter.setStakingModuleStatus(moduleId, Status.DepositsPaused))
-        .to.emit(stakingRouterWithLib, "StakingModuleStatusSet")
+        .to.emit(stakingRouter, "StakingModuleStatusSet")
         .withArgs(moduleId, Status.DepositsPaused, admin.address);
     });
 
@@ -103,7 +97,7 @@ context("StakingRouter.sol:status-control", () => {
       await stakingRouter.setStakingModuleStatus(moduleId, Status.DepositsPaused);
 
       await expect(stakingRouter.testing_setStakingModuleStatus(moduleId, Status.DepositsPaused)).to.not.emit(
-        stakingRouterWithLib,
+        stakingRouter,
         "StakingModuleStatusSet",
       );
       expect(await stakingRouter.getStakingModuleStatus(moduleId)).to.equal(Status.DepositsPaused);

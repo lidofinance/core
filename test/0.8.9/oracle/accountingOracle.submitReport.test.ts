@@ -61,12 +61,12 @@ describe("AccountingOracle.sol:submitReport", () => {
   const getReportFields = (override = {}) => ({
     consensusVersion: AO_CONSENSUS_VERSION,
     refSlot: 0n,
-    clActiveBalanceGwei: 300n * ONE_GWEI,
+    clValidatorsBalanceGwei: 300n * ONE_GWEI,
     clPendingBalanceGwei: 20n * ONE_GWEI,
     stakingModuleIdsWithNewlyExitedValidators: [1],
     numExitedValidatorsByStakingModule: [3],
     stakingModuleIdsWithUpdatedBalance: [1],
-    activeBalancesGweiByStakingModule: [300n * ONE_GWEI],
+    validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
     pendingBalancesGweiByStakingModule: [20n * ONE_GWEI],
     withdrawalVaultBalance: ether("1"),
     elRewardsVaultBalance: ether("2"),
@@ -354,7 +354,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("reverts with UnexpectedDataHash", async () => {
         const incorrectReportFields = {
           ...reportFields,
-          clActiveBalanceGwei: getBigInt(reportFields.clActiveBalanceGwei) - ONE_GWEI,
+          clValidatorsBalanceGwei: getBigInt(reportFields.clValidatorsBalanceGwei) - ONE_GWEI,
         };
         const incorrectReportItems = getReportDataItems(incorrectReportFields);
 
@@ -474,8 +474,8 @@ describe("AccountingOracle.sol:submitReport", () => {
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
 
-        expect(lastOracleReportToAccounting.arg.clActiveBalance).to.equal(
-          reportFields.clActiveBalanceGwei + "000000000",
+        expect(lastOracleReportToAccounting.arg.clValidatorsBalance).to.equal(
+          reportFields.clValidatorsBalanceGwei + "000000000",
         );
         expect(lastOracleReportToAccounting.arg.clPendingBalance).to.equal(
           reportFields.clPendingBalanceGwei + "000000000",
@@ -671,7 +671,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const lastCall = await mockAccounting.lastCall__handleOracleReport();
         expect(lastCall.callCount).to.equal(1);
-        expect(lastCall.arg.clActiveBalance).to.equal(BigInt(reportFields.clActiveBalanceGwei) * 1000000000n);
+        expect(lastCall.arg.clValidatorsBalance).to.equal(BigInt(reportFields.clValidatorsBalanceGwei) * 1000000000n);
         expect(lastCall.arg.clPendingBalance).to.equal(BigInt(reportFields.clPendingBalanceGwei) * 1000000000n);
       });
 
@@ -681,7 +681,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clActiveBalanceGwei: 0n,
+            clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 64n * ONE_GWEI,
             activeBalancesGweiByStakingModule: [0n],
             pendingBalancesGweiByStakingModule: [64n * ONE_GWEI],
@@ -699,7 +699,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clActiveBalanceGwei: 1000n * ONE_GWEI,
+            clValidatorsBalanceGwei: 1000n * ONE_GWEI,
             clPendingBalanceGwei: 0n,
             activeBalancesGweiByStakingModule: [1000n * ONE_GWEI],
             pendingBalancesGweiByStakingModule: [0n],
@@ -717,9 +717,9 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clActiveBalanceGwei: 60000n * ONE_GWEI,
+            clValidatorsBalanceGwei: 60000n * ONE_GWEI,
             clPendingBalanceGwei: 5000n * ONE_GWEI,
-            activeBalancesGweiByStakingModule: [60000n * ONE_GWEI],
+            validatorBalancesGweiByStakingModule: [60000n * ONE_GWEI],
             pendingBalancesGweiByStakingModule: [5000n * ONE_GWEI],
           }),
         );
@@ -735,7 +735,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clActiveBalanceGwei: 100n * ONE_GWEI,
+            clValidatorsBalanceGwei: 100n * ONE_GWEI,
             clPendingBalanceGwei: 500n * ONE_GWEI,
             activeBalancesGweiByStakingModule: [100n * ONE_GWEI],
             pendingBalancesGweiByStakingModule: [500n * ONE_GWEI],
@@ -753,7 +753,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clActiveBalanceGwei: 123n * ONE_GWEI,
+            clValidatorsBalanceGwei: 123n * ONE_GWEI,
             clPendingBalanceGwei: 456n * ONE_GWEI,
             activeBalancesGweiByStakingModule: [123n * ONE_GWEI],
             pendingBalancesGweiByStakingModule: [456n * ONE_GWEI],
@@ -764,7 +764,7 @@ describe("AccountingOracle.sol:submitReport", () => {
         await oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion);
 
         const lastCall = await mockAccounting.lastCall__handleOracleReport();
-        expect(lastCall.arg.clActiveBalance).to.equal(123n * ONE_GWEI * 1000000000n);
+        expect(lastCall.arg.clValidatorsBalance).to.equal(123n * ONE_GWEI * 1000000000n);
         expect(lastCall.arg.clPendingBalance).to.equal(456n * ONE_GWEI * 1000000000n);
       });
 
@@ -774,7 +774,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clActiveBalanceGwei: 0n,
+            clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 0n,
             activeBalancesGweiByStakingModule: [0n],
             pendingBalancesGweiByStakingModule: [0n],
@@ -792,7 +792,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clActiveBalanceGwei: 1n,
+            clValidatorsBalanceGwei: 1n,
             clPendingBalanceGwei: 1n,
             activeBalancesGweiByStakingModule: [1n],
             pendingBalancesGweiByStakingModule: [1n],
@@ -810,9 +810,9 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clActiveBalanceGwei: 30000n * ONE_GWEI,
+            clValidatorsBalanceGwei: 30000n * ONE_GWEI,
             clPendingBalanceGwei: 1000n * ONE_GWEI,
-            activeBalancesGweiByStakingModule: [30000n * ONE_GWEI],
+            validatorBalancesGweiByStakingModule: [30000n * ONE_GWEI],
             pendingBalancesGweiByStakingModule: [1000n * ONE_GWEI],
           }),
         );
@@ -834,7 +834,7 @@ describe("AccountingOracle.sol:submitReport", () => {
         expect(lastCall.arg[1]).to.be.a("bigint");
         expect(lastCall.arg[2]).to.be.a("bigint");
         expect(lastCall.arg[3]).to.be.a("bigint");
-        expect(lastCall.arg[2]).to.equal(BigInt(reportFields.clActiveBalanceGwei) * 1000000000n);
+        expect(lastCall.arg[2]).to.equal(BigInt(reportFields.clValidatorsBalanceGwei) * 1000000000n);
         expect(lastCall.arg[3]).to.equal(BigInt(reportFields.clPendingBalanceGwei) * 1000000000n);
       });
     });

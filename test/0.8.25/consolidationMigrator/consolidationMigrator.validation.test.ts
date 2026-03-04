@@ -75,12 +75,10 @@ describe("ConsolidationMigrator.sol: validation", () => {
 
   context("validateConsolidationBatch", () => {
     beforeEach(async () => {
-      // Set up source module with used keys
-      await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 0, PUBKEYS[0], true);
-      await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 1, PUBKEYS[1], true);
+      // Set up source module with deposited keys (totalDeposited=2)
+      await sourceModule.mock__setOperatorData(SOURCE_OPERATOR_ID, 2, [PUBKEYS[0], PUBKEYS[1]]);
 
-      // Set up target module with deposited keys (active validators)
-      // totalDepositedValidators = 2, so keys at index 0,1 are deposited (active)
+      // Set up target module with deposited keys (totalDeposited=2)
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 2, [PUBKEYS[2], PUBKEYS[3]]);
     });
 
@@ -120,15 +118,15 @@ describe("ConsolidationMigrator.sol: validation", () => {
         .withArgs(unknownSourceOpId, unknownTargetOpId);
     });
 
-    it("should revert if source key is not used", async () => {
-      // Set key at index 2 as NOT used
-      await sourceModule.mock__setSigningKey(SOURCE_OPERATOR_ID, 2, PUBKEYS[2], false);
+    it("should revert if source key is not deposited", async () => {
+      // Key at index 2 exists but is not deposited (totalDeposited=2, 3 keys total)
+      await sourceModule.mock__setOperatorData(SOURCE_OPERATOR_ID, 2, [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]]);
       // Add more target keys and make index 2 deposited
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 3, [PUBKEYS[2], PUBKEYS[3], PUBKEYS[0]]);
 
       await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2], [2]))
-        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotDeposited")
-        .withArgs(SOURCE_OPERATOR_ID, 2);
+        .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
+        .withArgs(SOURCE_MODULE_ID, SOURCE_OPERATOR_ID, 2);
     });
 
     it("should revert if target key is not deposited", async () => {
@@ -136,8 +134,8 @@ describe("ConsolidationMigrator.sol: validation", () => {
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 1, [PUBKEYS[2], PUBKEYS[3]]);
 
       await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [1]))
-        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyNotDeposited")
-        .withArgs(TARGET_OPERATOR_ID, 1, 1);
+        .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
+        .withArgs(TARGET_MODULE_ID, TARGET_OPERATOR_ID, 1);
     });
 
     it("should allow multiple source validators to consolidate to the same target index", async () => {

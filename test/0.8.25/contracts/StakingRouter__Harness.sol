@@ -36,8 +36,10 @@ contract StakingRouter__Harness is StakingRouter {
     constructor(
         address _depositContract,
         address _lido,
-        address _lidoLocator
-    ) StakingRouter(_depositContract, _lido, _lidoLocator) {}
+        address _lidoLocator,
+        uint256 _maxEBType1,
+        uint256 _maxEBType2
+    ) StakingRouter(_depositContract, _lido, _lidoLocator, _maxEBType1, _maxEBType2) {}
 
     /// @notice Simulates old 0.8.9 StakingRouter state before v4 migration.
     /// Sets all old unstructured storage slots that _migrateStorage() reads and cleans up.
@@ -106,33 +108,33 @@ contract StakingRouter__Harness is StakingRouter {
 
     function testing_setStakingModuleAccounting(
         uint256 _stakingModuleId,
-        uint64 activeBalanceGwei,
+        uint64 validatorsBalanceGwei,
         uint64 pendingBalanceGwei,
         uint64 exitedValidatorsCount
     ) external {
         ModuleStateAccounting storage moduleAcc = SRStorage.getModuleState(_stakingModuleId).accounting;
         RouterStateAccounting storage routerAcc = SRStorage.getRouterState().accounting;
 
-        uint64 totalActiveBalanceGwei = routerAcc.activeBalanceGwei;
+        uint64 totalValidatorsBalanceGwei = routerAcc.validatorsBalanceGwei;
         uint64 totalPendingBalanceGwei = routerAcc.pendingBalanceGwei;
 
         // update totals incrementally as we iterate through the part of modules in general case
         // 1. subtract old values
         unchecked {
-            totalActiveBalanceGwei -= moduleAcc.activeBalanceGwei;
+            totalValidatorsBalanceGwei -= moduleAcc.validatorsBalanceGwei;
             totalPendingBalanceGwei -= moduleAcc.pendingBalanceGwei;
         }
         // 2. validate and add new values
 
         unchecked {
-            totalActiveBalanceGwei += activeBalanceGwei;
+            totalValidatorsBalanceGwei += validatorsBalanceGwei;
             totalPendingBalanceGwei += pendingBalanceGwei;
         }
 
-        routerAcc.activeBalanceGwei = totalActiveBalanceGwei;
+        routerAcc.validatorsBalanceGwei = totalValidatorsBalanceGwei;
         routerAcc.pendingBalanceGwei = totalPendingBalanceGwei;
 
-        moduleAcc.activeBalanceGwei = activeBalanceGwei;
+        moduleAcc.validatorsBalanceGwei = validatorsBalanceGwei;
         moduleAcc.pendingBalanceGwei = pendingBalanceGwei;
         moduleAcc.exitedValidatorsCount = exitedValidatorsCount;
     }

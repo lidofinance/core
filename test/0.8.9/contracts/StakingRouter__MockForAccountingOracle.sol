@@ -60,9 +60,9 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         return newlyExitedValidatorsCount;
     }
 
-    function reportActiveBalancesByStakingModule(
+    function reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _activeBalancesGwei,
+        uint256[] calldata _validatorBalancesGwei,
         uint256[] calldata _pendingBalancesGwei
     ) external {
         uint256 totalBalance = _totalStakingModulesBalanceWei;
