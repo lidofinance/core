@@ -26,3 +26,4 @@ export * from "./string";
 export * from "./storage";
 export * from "./time";
 export * from "./units";
+export * from "./wc";
