@@ -1,0 +1,7 @@
+{
+  "steps": [
+    "upgrade/steps/0000-check-env",
+    "upgrade/steps/0100-deploy-staking-router-v3-vote-script",
+    "upgrade/steps/0200-run-staking-router-v3-vote-script"
+  ]
+}

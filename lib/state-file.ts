@@ -111,6 +111,7 @@ export enum Sk {
   v3Template = "v3Template",
   v3Addresses = "v3Addresses",
   v3VoteScript = "v3VoteScript",
+  stakingRouterV3VoteScript = "stakingRouterV3VoteScript",
   operatorGrid = "operatorGrid",
   validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
@@ -196,6 +197,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
     case Sk.v3VoteScript:
+    case Sk.stakingRouterV3VoteScript:
     case Sk.depositsTempStorage:
     case Sk.beaconChainDepositor:
     case Sk.vaultsAdapter:
