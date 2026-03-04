@@ -413,7 +413,7 @@ describe("TopUpGateway.sol", () => {
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
-        "InvalidTopUpPubkeyLength",
+        "WrongPubkeyLength",
       );
     });
 

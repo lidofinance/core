@@ -29,7 +29,6 @@ interface ISRBase {
 
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
 
-    /// Emitted when the StakingRouter received ETH
     event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
     event DepositableEthReceived(uint256 amount);
 
@@ -74,7 +73,7 @@ interface ISRBase {
     error ModuleReturnExceedTarget();
     error StakingModuleStatusTheSame();
     error EmptyKeysList();
-    error InvalidTopUpPubkeyLength();
+    error WrongPubkeyLength();
     error AmountNotAlignedToGwei();
     error AllocationExceedsLimit();
 
