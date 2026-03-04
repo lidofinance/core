@@ -73,30 +73,18 @@ export const DISCONNECT_NOT_INITIATED = 2n ** 48n - 1n;
 export const WITHDRAWAL_CREDENTIALS_TYPE_01 = 0x01;
 export const WITHDRAWAL_CREDENTIALS_TYPE_02 = 0x02;
 
-export enum StakingModuleStatus {
-  Active = 0,
-  DepositsPaused = 1,
-  Stopped = 2,
-}
+export const MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = 32n * 10n ** 18n; // 32 ETH
+export const MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = 2048n * 10n ** 18n; // 2048 ETH
 
 export enum WithdrawalCredentialsType {
   WC0x01 = WITHDRAWAL_CREDENTIALS_TYPE_01,
   WC0x02 = WITHDRAWAL_CREDENTIALS_TYPE_02,
 }
 
-export const MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = 32n * 10n ** 18n; // 32 ETH
-export const MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = 2048n * 10n ** 18n; // 2048 ETH
+export enum StakingModuleStatus {
+  Active = 0,
+  DepositsPaused = 1,
+  Stopped = 2,
+}
 
-export const getModuleMEB = (withdrawalType: WithdrawalCredentialsType): bigint => {
-  switch (withdrawalType) {
-    case WithdrawalCredentialsType.WC0x01:
-      return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
-    case WithdrawalCredentialsType.WC0x02:
-      return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
-    default: {
-      const _exhaustive: never = withdrawalType;
-      return _exhaustive;
-    }
-  }
-};
 export const MAX_SANE_SETTLED_GROWTH = MAX_INT104;

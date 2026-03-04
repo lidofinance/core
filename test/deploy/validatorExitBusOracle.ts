@@ -23,6 +23,10 @@ import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
 export const DATA_FORMAT_LIST = 1;
 export const DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;
 
+// MaxEB weights (in ETH)
+export const MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01 = 32n; // 32 ETH for WC 0x01 validators
+export const MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02 = 2048n; // 2048 ETH for 0x02 validators
+
 async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, genesisTime = GENESIS_TIME) {
   const lido = await ethers.deployContract("Accounting__MockForAccountingOracle");
   const ao = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
@@ -116,7 +120,13 @@ export async function deployVEBO(
   // to skip validation. Tests can explicitly configure keys if needed.
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
 
-  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [secondsPerSlot, genesisTime, locatorAddr]);
+  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
+    secondsPerSlot,
+    genesisTime,
+    locatorAddr,
+    MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+    MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
+  ]);
 
   const { consensus } = await deployHashConsensus(admin, {
     reportProcessor: oracle as unknown as ReportProcessor__Mock,

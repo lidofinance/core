@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { hexlify, randomBytes } from "ethers";
+import { randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -13,13 +13,11 @@ import {
   StakingRouter__Harness,
 } from "typechain-types";
 
-import { findEventsWithInterfaces } from "lib";
-import { getModuleMEB, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
+import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib";
+import { StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-import { deployStakingRouter } from "../../deploy/stakingRouter";
 
 describe("StakingRouter.sol:topUp", () => {
   let deployer: HardhatEthersSigner;
@@ -46,9 +44,9 @@ describe("StakingRouter.sol:topUp", () => {
   };
 
   const GWEI = 1_000_000_000n;
-  const NEW_MEB = getModuleMEB(WithdrawalCredentialsType.WC0x02);
+  const NEW_MEB = wcTypeMaxEB(WithdrawalCredentialsType.WC0x02);
   const WEI_PER_GWEI = 1_000_000_000n;
-  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials = randomWCType1();
   const depositSecurityModule = "0x0000000000000000000000000000000000000002";
 
   before(async () => {
@@ -99,7 +97,7 @@ describe("StakingRouter.sol:topUp", () => {
       const operatorIds = [OPERATOR_ID];
       // topUpLimits are now in wei (TOP_UP_LIMIT_GWEI is already 10 ETH in gwei, convert to wei)
       const topUpLimits = [TOP_UP_LIMIT_GWEI * WEI_PER_GWEI];
-      const pubkeys = [hexlify(randomBytes(48))];
+      const pubkeys = [randomString(48)];
 
       return { keyIndices, operatorIds, topUpLimits, pubkeys };
     }
@@ -115,7 +113,7 @@ describe("StakingRouter.sol:topUp", () => {
 
       await expect(
         stakingRouter.connect(stranger).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
-      ).to.be.revertedWithCustomError(stakingRouter, "AppAuthFailed");
+      ).to.be.revertedWithCustomError(stakingRouter, "NotAuthorized");
     });
 
     it("Reverts if the module does not exist", async () => {
@@ -164,11 +162,11 @@ describe("StakingRouter.sol:topUp", () => {
       const keyIndices = [0n, 1n];
       const operatorIds = [0n, 0n];
       const topUpLimits = [10n * GWEI * WEI_PER_GWEI, 20n * GWEI * WEI_PER_GWEI]; // in wei
-      const pubkeys = [hexlify(randomBytes(48))]; // Only 1 key, but 2 expected
+      const pubkeys = [randomString(48)]; // Only 1 key, but 2 expected
 
       await expect(
         stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
-      ).to.be.revertedWithCustomError(stakingRouter, "WrongArrayLength");
+      ).to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch");
     });
 
     it("Does not perform deposits when module allocation is 0", async () => {
@@ -181,7 +179,7 @@ describe("StakingRouter.sol:topUp", () => {
       // Set depositable ether to 0 (no ETH available)
       await lidoMock.setDepositableEther(0n);
 
-      const pubkeys = [hexlify(randomBytes(48))];
+      const pubkeys = [randomString(48)];
       // Mock module returns 0 allocations
       await stakingModule.mock__setTopUpDepositData([0n]);
 
@@ -214,7 +212,7 @@ describe("StakingRouter.sol:topUp", () => {
         30n * 10n ** 18n, // 30 ETH in wei
       ];
 
-      const pubkeys = [hexlify(randomBytes(48)), hexlify(randomBytes(48)), hexlify(randomBytes(48))];
+      const pubkeys = [randomString(48), randomString(48), randomString(48)];
 
       // Mock module to return these allocations (in wei)
       await stakingModule.mock__setTopUpDepositData(topUpWei);
@@ -258,7 +256,7 @@ describe("StakingRouter.sol:topUp", () => {
       const depositableEth = 2n * NEW_MEB;
 
       // Mock module returns allocations that exceed target (in wei)
-      const pubkeys = [hexlify(randomBytes(48)), hexlify(randomBytes(48))];
+      const pubkeys = [randomString(48), randomString(48)];
       // These allocations will exceed 50% of depositableEth
       const topUpWei = [1500n * GWEI * WEI_PER_GWEI, 1500n * GWEI * WEI_PER_GWEI]; // 3000 ETH total, but module only gets 50% = 2048 ETH
       await stakingModule.mock__setTopUpDepositData(topUpWei);
@@ -284,7 +282,7 @@ describe("StakingRouter.sol:topUp", () => {
         validatorsBalanceGwei: reducedBalanceGwei,
       });
 
-      const pubkeys = [hexlify(randomBytes(48))];
+      const pubkeys = [randomString(48)];
       const topUpWei = [500_000_000n * WEI_PER_GWEI]; // 0.5 ETH in wei
       await stakingModule.mock__setTopUpDepositData(topUpWei);
 
@@ -308,7 +306,7 @@ describe("StakingRouter.sol:topUp", () => {
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       });
 
-      const pubkeys = [hexlify(randomBytes(48))];
+      const pubkeys = [randomString(48)];
       // Mock module returns 0 allocation
       await stakingModule.mock__setTopUpDepositData([0n]);
 
@@ -366,7 +364,7 @@ describe("StakingRouter.sol:topUp", () => {
 
     await module.mock__getStakingModuleSummary(exited, deposited, depositable);
     if (validatorsBalanceGwei == 0n && deposited > 0n) {
-      validatorsBalanceGwei = (deposited * getModuleMEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
+      validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
     }
     await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, pendingBalanceGwei, exited);
 

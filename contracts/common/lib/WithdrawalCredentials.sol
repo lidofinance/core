@@ -28,6 +28,10 @@ library WithdrawalCredentials {
         return bytes32((uint256(wc) & type(uint248).max) | (uint256(wcType) << 248));
     }
 
+    function isTypeValid(uint256 wcType) internal pure returns (bool) {
+        return isType1(wcType) || isType2(wcType);
+    }
+
     function isType1(bytes32 wc) internal pure returns (bool) {
         return isType1(getType(wc));
     }

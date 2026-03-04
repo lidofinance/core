@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { hexlify, randomBytes, ZeroAddress } from "ethers";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether } from "lib";
+import { certainAddress, ether, randomWCType1 } from "lib";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -27,7 +27,7 @@ describe("StakingRouter.sol:misc", () => {
   const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
   const accountingOracle = certainAddress("test:staking-router:accountingOracle");
-  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials = randomWCType1();
 
   before(async () => {
     [deployer, admin, stakingRouterAdmin, user] = await ethers.getSigners();
@@ -73,14 +73,14 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
 
       // fails with InvalidInitialization error when called after initialize
-      await expect(stakingRouter.migrateUpgrade_v4(stakingRouterAdmin.address)).to.be.revertedWithCustomError(
+      await expect(stakingRouter.finalizeUpgrade_v4(stakingRouterAdmin.address)).to.be.revertedWithCustomError(
         impl,
         "InvalidInitialization",
       );
     });
   });
 
-  context("migrateUpgrade_v4()", () => {
+  context("finalizeUpgrade_v4()", () => {
     beforeEach(async () => {
       // Simulate old 0.8.9 StakingRouter state (v3):
       // sets WITHDRAWAL_CREDENTIALS_POSITION, LIDO_POSITION, LAST_STAKING_MODULE_ID_POSITION,
@@ -89,7 +89,7 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("fails with InvalidInitialization error when called on implementation", async () => {
-      await expect(impl.migrateUpgrade_v4(stakingRouterAdmin.address)).to.be.revertedWithCustomError(
+      await expect(impl.finalizeUpgrade_v4(stakingRouterAdmin.address)).to.be.revertedWithCustomError(
         impl,
         "InvalidInitialization",
       );
@@ -101,7 +101,7 @@ describe("StakingRouter.sol:misc", () => {
       // but old Versioned slot has v3
       expect(await stakingRouter.testing_getOldContractVersion()).to.equal(3);
 
-      await expect(stakingRouter.migrateUpgrade_v4(stakingRouterAdmin.address))
+      await expect(stakingRouter.finalizeUpgrade_v4(stakingRouterAdmin.address))
         .to.emit(stakingRouter, "Initialized")
         .withArgs(4)
         .and.to.emit(stakingRouter, "RoleGranted")
@@ -120,7 +120,7 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("cleans up old storage slots after migration", async () => {
-      await stakingRouter.migrateUpgrade_v4(stakingRouterAdmin.address);
+      await stakingRouter.finalizeUpgrade_v4(stakingRouterAdmin.address);
 
       // all old unstructured storage slots should be zeroed
       expect(await stakingRouter.testing_getOldLidoPosition()).to.equal(ZeroAddress);
@@ -147,7 +147,7 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.hasRole(STAKING_MODULE_MANAGE_ROLE, stakingRouterAdmin.address)).to.be.false;
 
       // migration writes DEFAULT_ADMIN_ROLE to the NEW slot, but does NOT touch old slots
-      await stakingRouter.migrateUpgrade_v4(stakingRouterAdmin.address);
+      await stakingRouter.finalizeUpgrade_v4(stakingRouterAdmin.address);
 
       // after migration: only DEFAULT_ADMIN_ROLE is visible via hasRole() (granted in new slot)
       expect(await stakingRouter.hasRole(DEFAULT_ADMIN_ROLE, stakingRouterAdmin.address)).to.be.true;
@@ -160,8 +160,8 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("cannot be called twice", async () => {
-      await stakingRouter.migrateUpgrade_v4(stakingRouterAdmin.address);
-      await expect(stakingRouter.migrateUpgrade_v4(stakingRouterAdmin.address)).to.be.revertedWithCustomError(
+      await stakingRouter.finalizeUpgrade_v4(stakingRouterAdmin.address);
+      await expect(stakingRouter.finalizeUpgrade_v4(stakingRouterAdmin.address)).to.be.revertedWithCustomError(
         impl,
         "InvalidInitialization",
       );

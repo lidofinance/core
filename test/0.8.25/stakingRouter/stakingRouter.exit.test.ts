@@ -1,17 +1,16 @@
 import { expect } from "chai";
-import { hexlify, randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, randomString, WithdrawalCredentialsType } from "lib";
+import { certainAddress, ether, randomString, randomWCType1, WithdrawalCredentialsType } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
+import { deployStakingRouter } from "../../deploy/stakingRouter";
 
 describe("StakingRouter.sol:exit", () => {
   let deployer: HardhatEthersSigner;
@@ -22,7 +21,6 @@ describe("StakingRouter.sol:exit", () => {
 
   let locator: LidoLocator;
   let stakingRouter: StakingRouter__Harness;
-  let stakingRouterWithLib: StakingRouterWithLib;
   let stakingModule: StakingModule__MockForTriggerableWithdrawals;
 
   let originalState: string;
@@ -30,7 +28,7 @@ describe("StakingRouter.sol:exit", () => {
   const lido = certainAddress("test:staking-router:lido");
   const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
-  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials = randomWCType1();
   const STAKE_SHARE_LIMIT = 1_00n;
   const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
   const MODULE_FEE = 5_00n;
@@ -50,10 +48,7 @@ describe("StakingRouter.sol:exit", () => {
     });
 
     // deploy staking router
-    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter(
-      { deployer, admin },
-      { lidoLocator: locator },
-    ));
+    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
 
     // Initialize StakingRouter
     await stakingRouter.initialize(stakingRouterAdmin.address, withdrawalCredentials);
@@ -114,7 +109,7 @@ describe("StakingRouter.sol:exit", () => {
   context("reportValidatorExitDelay", () => {
     const proofSlotTimestamp = Math.floor(Date.now() / 1000);
     const eligibleToExitInSec = 86400; // 1 day
-    const publicKey = hexlify(randomBytes(48));
+    const publicKey = randomString(48);
 
     it("calls reportValidatorExitDelay on the staking module", async () => {
       await expect(
@@ -152,7 +147,7 @@ describe("StakingRouter.sol:exit", () => {
   context("onValidatorExitTriggered", () => {
     const withdrawalRequestPaidFee = ether("0.01");
     const exitType = 1n;
-    const publicKey = hexlify(randomBytes(48));
+    const publicKey = randomString(48);
 
     it("calls onValidatorExitTriggered on the staking module for each validator", async () => {
       const validatorExitData = [
@@ -185,7 +180,7 @@ describe("StakingRouter.sol:exit", () => {
       await expect(
         stakingRouter.connect(reporter).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
       )
-        .to.emit(stakingRouterWithLib, "StakingModuleExitNotificationFailed")
+        .to.emit(stakingRouter, "StakingModuleExitNotificationFailed")
         .withArgs(STAKING_MODULE_ID, NODE_OPERATOR_ID, publicKey);
     });
 
@@ -203,7 +198,7 @@ describe("StakingRouter.sol:exit", () => {
 
       await expect(
         stakingRouter.connect(reporter).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
-      ).to.be.revertedWithCustomError(stakingRouterWithLib, "UnrecoverableModuleError");
+      ).to.be.revertedWithCustomError(stakingRouter, "UnrecoverableModuleError");
     });
 
     it("reverts when called by unauthorized user", async () => {
