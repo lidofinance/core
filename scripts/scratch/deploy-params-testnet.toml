@@ -202,3 +202,8 @@ minTopUpGwei = 1000000000
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+
+# StakingRouter configuration
+[stakingRouter]
+maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
+maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2

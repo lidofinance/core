@@ -97,6 +97,12 @@ const TopUpGatewaySchema = z.object({
   gIFirstValidatorCurr: HexStringSchema,
   pivotSlot: NonNegativeIntSchema,
 });
+
+const StakingRouterSchema = z.object({
+  maxEBType1: BigIntStringSchema,
+  maxEBType2: BigIntStringSchema,
+});
+
 // Easy track schema
 const EasyTrackSchema = z.object({
   VaultsAdapter: EthereumAddressSchema,
@@ -301,6 +307,7 @@ export const ScratchParametersSchema = z.object({
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
   topUpGateway: TopUpGatewaySchema,
+  stakingRouter: StakingRouterSchema,
 });
 
 // Inferred types from zod schemas

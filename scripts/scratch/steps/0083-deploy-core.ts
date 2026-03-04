@@ -45,6 +45,7 @@ export async function main() {
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const validatorExitDelayVerifierParams = state[Sk.validatorExitDelayVerifier].deployParameters;
+  const stakingRouterParams = state[Sk.stakingRouter].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -176,7 +177,7 @@ export async function main() {
     "StakingRouter",
     proxyContractsOwner,
     deployer,
-    [depositContract, lidoAddress, locator.address],
+    [depositContract, lidoAddress, locator.address, stakingRouterParams.maxEBType1, stakingRouterParams.maxEBType2],
     null,
     true,
     {

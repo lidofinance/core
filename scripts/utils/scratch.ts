@@ -124,5 +124,8 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     topUpGateway: {
       deployParameters: params.topUpGateway,
     },
+    stakingRouter: {
+      deployParameters: params.stakingRouter,
+    },
   };
 }
