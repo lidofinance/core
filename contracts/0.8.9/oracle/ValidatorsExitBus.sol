@@ -7,6 +7,7 @@ import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {Versioned} from "../utils/Versioned.sol";
 import {LimitData, RateLimitStorage, RateLimit} from "../../common/lib/RateLimit.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
+import {WithdrawalCredentials} from "../../common/lib/WithdrawalCredentials.sol";
 
 interface ITriggerableWithdrawalsGateway {
     struct ValidatorData {
@@ -43,7 +44,6 @@ interface INodeOperatorsRegistry {
     ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
 }
 
-
 interface IStakingRouter {
     struct ModuleStateConfig {
         address moduleAddress;
@@ -59,14 +59,12 @@ interface IStakingRouter {
         external
         view
         returns (ModuleStateConfig memory stateConfig);
-
-    function getStakingModuleMaxEB(uint256 _stakingModuleId) external view returns (uint256);
 }
 
 interface ILidoLocator {
     function validatorExitDelayVerifier() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
-    function oracleReportSanityChecker() external view returns(address);
+    function oracleReportSanityChecker() external view returns (address);
     function stakingRouter() external view returns (address);
 }
 
@@ -161,7 +159,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      */
     error TooManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerReport);
 
-    error UnexpectedMaxEB();
+    error InvalidMaxEBWeight();
+    error UnexpectedWCType();
 
     /**
      * @notice Emitted when an entity with the SUBMIT_REPORT_HASH_ROLE role submits a hash of the exit requests data.
@@ -271,6 +270,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     ILidoLocator internal immutable LOCATOR;
 
+    /// @notice WC 0x01 max effective balance equivalent `weight` in ETH
+    /// @dev ideally = 32 (ETH), stored as an integer in ETH
+    uint16 public immutable MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01;
+
+    /// @notice WC 0x02 max effective balance equivalent `weight` in ETH
+    /// @dev ideally = 2048 (ETH), stored as an integer in ETH
+    uint16 public immutable MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02;
+
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
@@ -292,8 +299,18 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    constructor(address lidoLocator) {
+    constructor(address lidoLocator, uint256 maxEBWeightType1, uint256 maxEBWeightType2) {
         LOCATOR = ILidoLocator(lidoLocator);
+
+        if (
+            maxEBWeightType1 == 0 || maxEBWeightType2 == 0 || maxEBWeightType1 > type(uint16).max
+                || maxEBWeightType2 > type(uint16).max
+        ) {
+            revert InvalidMaxEBWeight();
+        }
+
+        MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01 = uint16(maxEBWeightType1);
+        MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02 = uint16(maxEBWeightType2);
     }
 
     /**
@@ -864,8 +881,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
         uint256 requestsCount = data.length / packedLength;
         uint256 cachedModuleId = 0;
-        uint256 cachedModuleMaxEBEth = 0;
-        uint256 totalBalanceEthAccum = 0;
+        uint256 cachedModuleMaxEBWeightEth = 0;
 
         for (uint256 i = 0; i < requestsCount; ++i) {
             uint256 moduleId;
@@ -879,16 +895,21 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             if (moduleId != cachedModuleId) {
                 cachedModuleId = moduleId;
-                // downscale, i.e. 2048 ether => 2048
-                cachedModuleMaxEBEth = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleMaxEB(moduleId) / 1 ether;
-                if (cachedModuleMaxEBEth > type(uint32).max) {
-                    revert UnexpectedMaxEB();
-                }
+                cachedModuleMaxEBWeightEth = _getModuleMaxEBWeight(moduleId);
             }
-            totalBalanceEthAccum += cachedModuleMaxEBEth;
+            totalBalanceEth += cachedModuleMaxEBWeightEth;
         }
+    }
 
-        totalBalanceEth = totalBalanceEthAccum;
+    function _getModuleMaxEBWeight(uint256 moduleId) internal view returns (uint16) {
+        uint256 wcType =
+            IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId).withdrawalCredentialsType;
+        if (WithdrawalCredentials.isType1(wcType)) {
+            return MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01;
+        } else if (WithdrawalCredentials.isType2(wcType)) {
+            return MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02;
+        }
+        revert UnexpectedWCType();
     }
 
     /**

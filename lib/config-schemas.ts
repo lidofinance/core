@@ -217,6 +217,8 @@ const ValidatorsExitBusOracleSchema = OracleSchema.extend({
   maxExitRequestsLimit: PositiveIntSchema,
   exitsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
+  maxEBWeightType1: PositiveIntSchema,
+  maxEBWeightType2: PositiveIntSchema,
 });
 
 // Deposit security module schema

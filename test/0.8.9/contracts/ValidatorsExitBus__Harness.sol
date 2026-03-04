@@ -16,8 +16,10 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     constructor(
         uint256 secondsPerSlot,
         uint256 genesisTime,
-        address lidoLocator
-    ) ValidatorsExitBusOracle(secondsPerSlot, genesisTime, lidoLocator) {
+        address lidoLocator,
+        uint256 maxEBWeightType1,
+        uint256 maxEBWeightType2
+    ) ValidatorsExitBusOracle(secondsPerSlot, genesisTime, lidoLocator, maxEBWeightType1, maxEBWeightType2) {
         // allow usage without a proxy for tests
         CONTRACT_VERSION_POSITION.setStorageUint256(0);
     }

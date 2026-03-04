@@ -66,15 +66,6 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
             });
     }
 
-    function getStakingModuleMaxEB(uint256 _stakingModuleId) external view returns (uint256) {
-        _validateModuleId(_stakingModuleId);
-        uint8 wcType = _modules[_stakingModuleId].withdrawalCredentialsType;
-        if (wcType == 0x01) {
-            return 32 ether;
-        }
-        return 2048 ether;
-    }
-
     function _validateModuleId(uint256 _moduleId) internal view {
         /// @dev require module configured and non-zero id
         if (_moduleId == 0 || !_moduleConfigured[_moduleId]) {
