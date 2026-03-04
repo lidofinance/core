@@ -34,6 +34,10 @@ contract StakingRouter__MockForLidoAccounting {
         emit Mock__MintedRewardsReported();
     }
 
+    function receiveDepositableEther() external payable {
+        // Mock implementation - no-op
+    }
+
     uint256 private depositAmountFromLastSlot__mocked;
 
     function onAccountingReport(uint256) external {

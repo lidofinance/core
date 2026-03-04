@@ -19,6 +19,23 @@ describe("Integration: Withdrawal edge cases", () => {
   let holder: HardhatEthersSigner;
   let lido: Lido;
   let wq: WithdrawalQueueERC721;
+  const DEPOSITS_RESERVE_TARGET = ether("25");
+
+  const assertBufferAllocationInvariants = async () => {
+    const buffered = await lido.getBufferedEther();
+    const depositsReserveTarget = await lido.getDepositsReserveTarget();
+    const depositsReserve = await lido.getDepositsReserve();
+    const withdrawalsReserve = await lido.getWithdrawalsReserve();
+    const depositable = await lido.getDepositableEther();
+    const unfinalized = await wq.unfinalizedStETH();
+
+    expect(depositsReserveTarget).to.equal(DEPOSITS_RESERVE_TARGET, "Deposits reserve target mismatch");
+    expect(depositsReserve).to.be.lte(buffered, "Deposits reserve should not exceed buffered ether");
+    expect(depositsReserve).to.be.lte(depositsReserveTarget, "Deposits reserve should not exceed target");
+    expect(depositable).to.equal(buffered - withdrawalsReserve, "Depositable should equal buffered minus reserve");
+    expect(withdrawalsReserve).to.be.lte(unfinalized, "Reserve should not exceed unfinalized withdrawals demand");
+    expect(withdrawalsReserve).to.be.lte(buffered, "Reserve should not exceed buffered ether");
+  };
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -31,6 +48,9 @@ describe("Integration: Withdrawal edge cases", () => {
     await setBalance(holder.address, ether("1000000"));
 
     await finalizeWQViaSubmit(ctx);
+
+    const agent = await ctx.getSigner("agent");
+    await lido.connect(agent).setDepositsReserveTarget(DEPOSITS_RESERVE_TARGET);
   });
 
   after(async () => await Snapshot.restore(snapshot));
@@ -46,10 +66,12 @@ describe("Integration: Withdrawal edge cases", () => {
 
       await lido.connect(holder).approve(wq.target, amount);
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
+      await assertBufferAllocationInvariants();
 
       const stethInitialBalance = await lido.balanceOf(holder.address);
 
       await report(ctx, { clDiff: ether("-1"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
 
       const stethFirstNegativeReportBalance = await lido.balanceOf(holder.address);
 
@@ -63,6 +85,7 @@ describe("Integration: Withdrawal edge cases", () => {
       const firstRequestId = firstRequestEvent!.args.requestId;
 
       await report(ctx, { clDiff: ether("-0.1"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
 
       const stethSecondNegativeReportBalance = await lido.balanceOf(holder.address);
 
@@ -86,6 +109,7 @@ describe("Integration: Withdrawal edge cases", () => {
       expect(firstStatus.amountOfShares).to.be.lt(secondStatus.amountOfShares);
 
       await report(ctx, { clDiff: ether("0.0001"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
 
       expect(await wq.isBunkerModeActive()).to.be.false;
 
@@ -119,8 +143,10 @@ describe("Integration: Withdrawal edge cases", () => {
 
       // Submit initial stETH deposit
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
+      await assertBufferAllocationInvariants();
 
       await report(ctx, { clDiff: ether("0.001"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
 
       // Create withdrawal request
       await lido.connect(holder).approve(wq.target, amount);
@@ -142,6 +168,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
       // Submit next report to finalize request
       await report(ctx, { clDiff: ether("0.001"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
 
       // Verify request finalized
       const [finalizedStatus] = await wq.getWithdrawalStatus([...requestIds]);
@@ -174,9 +201,11 @@ describe("Integration: Withdrawal edge cases", () => {
 
       await lido.connect(holder).approve(wq.target, amount);
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
+      await assertBufferAllocationInvariants();
 
       // First rebase - positive
       await report(ctx, { clDiff: ether("0.001"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.false;
 
       // Create first withdrawal request
@@ -189,6 +218,7 @@ describe("Integration: Withdrawal edge cases", () => {
     it("should handle second (negative) rebase correctly", async () => {
       // Second rebase - negative
       await report(ctx, { clDiff: ether("-0.1"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.true;
 
       // Verify first request finalized
@@ -207,6 +237,7 @@ describe("Integration: Withdrawal edge cases", () => {
     it("should handle third (negative) rebase correctly", async () => {
       // Third rebase - negative
       await report(ctx, { clDiff: ether("-0.1"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.true;
 
       // Create third withdrawal request
@@ -219,6 +250,7 @@ describe("Integration: Withdrawal edge cases", () => {
     it("should handle fourth (positive) rebase correctly", async () => {
       // Fourth rebase - positive
       await report(ctx, { clDiff: ether("0.0000001"), excludeVaultsBalances: true });
+      await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.false;
 
       // Verify all requests finalized

@@ -6,7 +6,6 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   Accounting__MockForAccountingOracle,
-  AccountingOracle__MockForLidoFastLane,
   ACL,
   Lido,
   LidoLocator,
@@ -32,7 +31,6 @@ describe("Lido.sol:misc", () => {
   let withdrawalQueue: WithdrawalQueue__MockForLidoMisc;
   let stakingRouter: StakingRouter__MockForLidoMisc;
   let accounting: Accounting__MockForAccountingOracle;
-  let accountingOracle: AccountingOracle__MockForLidoFastLane;
 
   const elRewardsVaultBalance = ether("100.0");
   const withdrawalsVaultBalance = ether("100.0");
@@ -44,7 +42,6 @@ describe("Lido.sol:misc", () => {
     withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForLidoMisc", deployer);
     stakingRouter = await ethers.deployContract("StakingRouter__MockForLidoMisc", deployer);
     accounting = await ethers.deployContract("Accounting__MockForAccountingOracle", deployer);
-    accountingOracle = await ethers.deployContract("AccountingOracle__MockForLidoFastLane", deployer);
 
     ({ lido, acl } = await deployLidoDao({
       rootAccount: deployer,
@@ -54,7 +51,6 @@ describe("Lido.sol:misc", () => {
         stakingRouter,
         depositSecurityModule,
         accounting,
-        accountingOracle,
       },
     }));
 
@@ -211,14 +207,12 @@ describe("Lido.sol:misc", () => {
     });
   });
 
-  context("getDepositableEther (fastLane disabled)", () => {
-    before(async () => {
-      expect(await lido.getFastLaneMaxAllowedAmount()).to.equal(0);
-    });
-
-    it("Returns the amount of ether eligible for deposits", async () => {
+  context("getDepositableEther", () => {
+    it("Returns the amount of ether eligible for deposits (deposits reserve = 0)", async () => {
       await lido.resume();
 
+      expect(await lido.getDepositsReserve()).to.equal(0n);
+      expect(await lido.getDepositsReserveTarget()).to.equal(0n);
       const bufferedEtherBefore = await lido.getBufferedEther();
 
       // top up buffer
@@ -228,9 +222,11 @@ describe("Lido.sol:misc", () => {
       expect(await lido.getDepositableEther()).to.equal(bufferedEtherBefore + deposit);
     });
 
-    it("Returns 0 if reserved by the buffered ether is fully reserved for withdrawals", async () => {
+    it("Returns 0 if buffered ether is fully reserved for withdrawals (deposits reserve = 0)", async () => {
       await lido.resume();
 
+      expect(await lido.getDepositsReserve()).to.equal(0n);
+      expect(await lido.getDepositsReserveTarget()).to.equal(0n);
       const bufferedEther = await lido.getBufferedEther();
 
       // reserve all buffered ether for withdrawals
@@ -239,9 +235,11 @@ describe("Lido.sol:misc", () => {
       expect(await lido.getDepositableEther()).to.equal(0);
     });
 
-    it("Returns the difference if the buffered ether is partially reserved", async () => {
+    it("Returns buffered-minus-withdrawals reserve (deposits reserve = 0)", async () => {
       await lido.resume();
 
+      expect(await lido.getDepositsReserve()).to.equal(0n);
+      expect(await lido.getDepositsReserveTarget()).to.equal(0n);
       const bufferedEther = await lido.getBufferedEther();
 
       // reserve half of buffered ether for withdrawals
@@ -250,272 +248,464 @@ describe("Lido.sol:misc", () => {
 
       expect(await lido.getDepositableEther()).to.equal(bufferedEther - reservedForWithdrawals);
     });
+
+    it("Spending depositable ether does not affect withdrawals reserve", async () => {
+      await lido.resume();
+      await acl.createPermission(user, lido, await lido.BUFFER_RESERVE_MANAGER_ROLE(), deployer);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("1.0"));
+      const stakingRouterSigner = await impersonate(await locator.stakingRouter(), ether("1.0"));
+
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("25.0"));
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+
+      const unfinalized = ether("50.0");
+      await withdrawalQueue.mock__unfinalizedStETH(unfinalized);
+
+      const bufferedBefore = await lido.getBufferedEther();
+      const depositsReserveBefore = await lido.getDepositsReserve();
+      const expectedWithdrawalsReserveBefore =
+        bufferedBefore - depositsReserveBefore < unfinalized ? bufferedBefore - depositsReserveBefore : unfinalized;
+      const withdrawalsReserveBefore = await lido.getWithdrawalsReserve();
+      expect(withdrawalsReserveBefore).to.equal(expectedWithdrawalsReserveBefore);
+      expect(withdrawalsReserveBefore).to.be.gt(0n);
+      const depositableBefore = await lido.getDepositableEther();
+      expect(depositableBefore).to.be.gt(1n);
+
+      await lido.connect(stakingRouterSigner).withdrawDepositableEther(depositableBefore / 2n, 0n);
+      expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveBefore);
+
+      const remainingDepositable = await lido.getDepositableEther();
+      await lido.connect(stakingRouterSigner).withdrawDepositableEther(remainingDepositable, 0n);
+
+      expect(await lido.getDepositableEther()).to.equal(0n);
+      expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveBefore);
+    });
+
+    it("Returns deposits reserve when withdrawals demand saturates remaining buffer", async () => {
+      await lido.resume();
+      await acl.createPermission(user, lido, await lido.BUFFER_RESERVE_MANAGER_ROLE(), deployer);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("1.0"));
+
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("25.0"));
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+
+      const depositsReserve = await lido.getDepositsReserve();
+      expect(depositsReserve).to.equal(ether("25.0"));
+      expect(await lido.getDepositableEther()).to.be.gt(depositsReserve);
+
+      await withdrawalQueue.mock__unfinalizedStETH(ether("1000.0"));
+      expect(await lido.getDepositableEther()).to.equal(depositsReserve);
+    });
+
+    it("Keeps depositable unchanged on reserve target increase before report sync", async () => {
+      await lido.resume();
+      await acl.createPermission(user, lido, await lido.BUFFER_RESERVE_MANAGER_ROLE(), deployer);
+
+      const accountingSigner = await impersonate(await locator.accounting(), ether("1.0"));
+
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("10.0"));
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await withdrawalQueue.mock__unfinalizedStETH(ether("100.0"));
+
+      const depositableBefore = await lido.getDepositableEther();
+      const withdrawalsReserveBefore = await lido.getWithdrawalsReserve();
+      const depositsReserveBefore = await lido.getDepositsReserve();
+
+      await lido.setDepositsReserveTarget(ether("50.0"));
+
+      expect(await lido.getDepositsReserve()).to.equal(depositsReserveBefore);
+      expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveBefore);
+      expect(await lido.getDepositableEther()).to.equal(depositableBefore);
+    });
   });
 
-  context("fastLane", () => {
-    const fastLaneAmount = ether("50.0");
+  context("depositsReserve", () => {
     let stakingRouterSigner: HardhatEthersSigner;
+    let accountingSigner: HardhatEthersSigner;
+
+    const syncReserveWithOracleReport = async () => {
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+    };
+
+    const assertDepositsReserveInvariants = async () => {
+      const buffered = await lido.getBufferedEther();
+      const depositsReserve = await lido.getDepositsReserve();
+      const withdrawalsReserve = await lido.getWithdrawalsReserve();
+      const depositable = await lido.getDepositableEther();
+
+      expect(depositsReserve).to.be.lte(buffered);
+      expect(withdrawalsReserve).to.be.lte(buffered);
+      expect(depositable).to.be.lte(buffered);
+      expect(depositable).to.equal(buffered - withdrawalsReserve);
+      expect(depositsReserve + withdrawalsReserve).to.be.lte(buffered);
+    };
 
     beforeEach(async () => {
       await lido.resume();
-      const stakingRouterAddress = await locator.stakingRouter();
-      stakingRouterSigner = await impersonate(stakingRouterAddress, ether("1.0"));
+      await acl.createPermission(user, lido, await lido.BUFFER_RESERVE_MANAGER_ROLE(), deployer);
+      stakingRouterSigner = await impersonate(await locator.stakingRouter(), ether("1.0"));
+      accountingSigner = await impersonate(await locator.accounting(), ether("1.0"));
     });
 
-    it("get/set fastLane maxAllowedAmount", async () => {
-      expect(await lido.getFastLaneMaxAllowedAmount()).to.equal(0);
-
-      await lido.setFastLaneMaxAllowedAmount(fastLaneAmount);
-      expect(await lido.getFastLaneMaxAllowedAmount()).to.equal(fastLaneAmount);
+    it("Reverts if caller has no BUFFER_RESERVE_MANAGER_ROLE", async () => {
+      await expect(lido.connect(stranger).setDepositsReserveTarget(ether("1.0"))).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
-    context("getDepositableEther (fastLane disabled - before oracle)", () => {
-      beforeEach(async () => {
-        // Ensure oracle report is incomplete (mainDataSubmitted = false)
-        await accountingOracle.mock_setProcessingState(1n, false, false);
-      });
+    it("Calculates allocation consistently with withdrawals reserve and target", async () => {
+      const deposit = ether("100.0");
+      const reserveTarget = ether("30.0");
+      await lido.submit(ZeroAddress, { value: deposit });
+      await lido.setDepositsReserveTarget(reserveTarget);
+      await syncReserveWithOracleReport();
 
-      // it("Returns 0 when buffer is empty", async () => {
-      //   expect(await lido.getDepositableEther()).to.equal(0);
-      // });
+      const buffered = await lido.getBufferedEther();
+      const unfinalized = ether("40.0");
+      await withdrawalQueue.mock__unfinalizedStETH(unfinalized);
 
-      it("Returns full buffer when no withdrawals are reserved", async () => {
-        const deposit = ether("50.0");
-        await lido.submit(ZeroAddress, { value: deposit });
-        const bufferedEther = await lido.getBufferedEther();
+      const expectedDepositsReserve = buffered < reserveTarget ? buffered : reserveTarget;
+      const remainingAfterDeposits = buffered - expectedDepositsReserve;
+      const expectedWithdrawalsReserve = remainingAfterDeposits < unfinalized ? remainingAfterDeposits : unfinalized;
 
-        expect(await lido.getDepositableEther()).to.equal(bufferedEther);
-      });
-
-      it("Returns 0 when all buffer is reserved for withdrawals", async () => {
-        const deposit = ether("50.0");
-        await lido.submit(ZeroAddress, { value: deposit });
-        const bufferedEther = await lido.getBufferedEther();
-
-        await withdrawalQueue.mock__unfinalizedStETH(bufferedEther);
-        expect(await lido.getDepositableEther()).to.equal(0);
-      });
-
-      it("Returns partial buffer when partially reserved for withdrawals", async () => {
-        const deposit = ether("100.0");
-        await lido.submit(ZeroAddress, { value: deposit });
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther / 4n;
-
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        expect(await lido.getDepositableEther()).to.equal(bufferedEther - reserved);
-      });
-
-      it("Returns reserved amount when reserved exceeds buffer", async () => {
-        const deposit = ether("50.0");
-        await lido.submit(ZeroAddress, { value: deposit });
-        const bufferedEther = await lido.getBufferedEther();
-
-        // Reserve more than buffer has
-        await withdrawalQueue.mock__unfinalizedStETH(bufferedEther + ether("100.0"));
-        expect(await lido.getDepositableEther()).to.equal(0);
-      });
+      expect(await lido.getDepositsReserve()).to.equal(expectedDepositsReserve);
+      expect(await lido.getWithdrawalsReserve()).to.equal(expectedWithdrawalsReserve);
+      expect(await lido.getDepositableEther()).to.equal(buffered - expectedWithdrawalsReserve);
     });
 
-    context("getDepositableEther (fastLane enabled, completed Oracle report)", () => {
-      const refSlot = 10n;
+    it("Does not increase current reserve immediately when target is increased", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("10.0"));
+      await syncReserveWithOracleReport();
+      expect(await lido.getDepositsReserve()).to.equal(ether("10.0"));
 
-      beforeEach(async () => {
-        await lido.submit(ZeroAddress, { value: ether("100.0") });
-        // simulate finished Oracle report for fast lane activation
-        await accountingOracle.mock_setProcessingState(refSlot, true, true);
-
-        const report = await accountingOracle.getProcessingState();
-        expect(report.currentFrameRefSlot).to.equal(refSlot);
-        expect(report.mainDataSubmitted).to.equal(true);
-      });
-
-      it("Returns depositable when fastLane is not set", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther / 4n;
-
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        await lido.setFastLaneMaxAllowedAmount(0);
-        expect(await lido.getDepositableEther()).to.equal(bufferedEther - reserved);
-      });
-
-      it("Returns full buffer when consumable >= buffer", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther / 4n;
-        const maxAllowed = bufferedEther * 2n; // consumable exceeds buffer
-
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        await lido.setFastLaneMaxAllowedAmount(maxAllowed);
-
-        expect(await lido.getDepositableEther()).to.equal(bufferedEther);
-      });
-
-      it("Returns depositable when consumable <= depositable (fastLane not applied)", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther / 2n;
-        const consumable = bufferedEther / 3n;
-        const depositable = bufferedEther - reserved;
-
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        await lido.setFastLaneMaxAllowedAmount(consumable);
-
-        expect(await lido.getDepositableEther()).to.equal(depositable);
-      });
-
-      it("Returns consumable when depositable < consumable < buffer (fastLane applied)", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther / 2n;
-        const consumable = (bufferedEther * 2n) / 3n;
-
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        await lido.setFastLaneMaxAllowedAmount(consumable);
-
-        expect(await lido.getDepositableEther()).to.equal(consumable);
-      });
-
-      it("Accumulates consumedAmount across multiple withdrawals", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther * 2n;
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        const maxAllowed = ether("30.0");
-        await lido.setFastLaneMaxAllowedAmount(maxAllowed);
-
-        const depositableBefore = await lido.getDepositableEther();
-        expect(depositableBefore).to.equal(maxAllowed);
-
-        // First withdrawal
-        const firstWithdraw = ether("20.0");
-        await lido.connect(stakingRouterSigner).withdrawDepositableEther(firstWithdraw, 1n);
-
-        //  withdrawal should show reduced consumable
-        const depositableAfterFirst = await lido.getDepositableEther();
-        expect(depositableAfterFirst).to.equal(maxAllowed - firstWithdraw);
-
-        // 2nd withdrawal
-        const secondWithdraw = ether("10.0");
-        await lido.connect(stakingRouterSigner).withdrawDepositableEther(secondWithdraw, 1n);
-
-        const depositableAfterSecond = await lido.getDepositableEther();
-        expect(depositableAfterSecond).to.equal(maxAllowed - firstWithdraw - secondWithdraw);
-      });
-
-      it("Resets consumedAmount on new refSlot", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther * 2n;
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        const maxAllowed = ether("30.0");
-        await lido.setFastLaneMaxAllowedAmount(maxAllowed);
-
-        // Withdraw in first refSlot
-        const firstWithdraw = ether("20.0");
-        await lido.connect(stakingRouterSigner).withdrawDepositableEther(firstWithdraw, 1n);
-
-        // Move to new refSlot
-        const newRefSlot = refSlot + 1n;
-        await accountingOracle.mock_setProcessingState(newRefSlot, true, true);
-
-        // In new refSlot, consumable should be reset to maxAllowed
-        const depositableInNewSlot = await lido.getDepositableEther();
-        expect(depositableInNewSlot).to.equal(maxAllowed);
-      });
-
-      it("Respects consumable limit across multiple small deposits", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther * 2n;
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        const maxAllowed = ether("50.0");
-        await lido.setFastLaneMaxAllowedAmount(maxAllowed);
-
-        // Attempt multiple deposits totaling more than maxAllowed
-        const smallWithdraw = ether("10.0");
-
-        // Withdrawals 1-5 should work
-        for (let i = 0; i < 5; i++) {
-          await lido.connect(stakingRouterSigner).withdrawDepositableEther(smallWithdraw, 1n);
-        }
-
-        // Next withdrawal should fail - exceeds consumable
-        const depositableEther = await lido.getDepositableEther();
-        expect(depositableEther).to.equal(0);
-
-        await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(smallWithdraw, 1n)).to.be.revertedWith(
-          "NOT_ENOUGH_ETHER",
-        );
-      });
+      await lido.setDepositsReserveTarget(ether("60.0"));
+      // Reserve increase is deferred until report processing.
+      expect(await lido.getDepositsReserve()).to.equal(ether("10.0"));
+      await syncReserveWithOracleReport();
+      expect(await lido.getDepositsReserve()).to.equal(ether("60.0"));
     });
 
-    context("getDepositableEther (fastLane enabled, no completed Oracle report)", () => {
-      const refSlot = 10n;
+    it("Keeps depositable unchanged on target increase before report sync", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("10.0"));
+      await syncReserveWithOracleReport();
+      await withdrawalQueue.mock__unfinalizedStETH(ether("100.0"));
 
-      beforeEach(async () => {
-        await lido.submit(ZeroAddress, { value: ether("100.0") });
-        // Set mainDataSubmitted = false to simulate incomplete oracle report
-        await accountingOracle.mock_setProcessingState(refSlot, false, false);
+      const depositableBefore = await lido.getDepositableEther();
+      const withdrawalsReserveBefore = await lido.getWithdrawalsReserve();
 
-        const report = await accountingOracle.getProcessingState();
-        expect(report.mainDataSubmitted).to.equal(false);
-      });
+      await lido.setDepositsReserveTarget(ether("50.0"));
 
-      it("Does not apply fastLane when oracle report is incomplete", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther / 2n;
-        const consumable = (bufferedEther * 2n) / 3n;
-        const depositable = bufferedEther - reserved;
-
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        await lido.setFastLaneMaxAllowedAmount(consumable);
-
-        // Should return depositable, ignoring consumable limit
-        expect(await lido.getDepositableEther()).to.equal(depositable);
-      });
+      expect(await lido.getDepositableEther()).to.equal(depositableBefore);
+      expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveBefore);
     });
 
-    context("getDepositableEther (fastLane boundary conditions)", () => {
-      const refSlot = 10n;
+    it("Caps current reserve immediately when target is lowered", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("70.0"));
+      await syncReserveWithOracleReport();
+      expect(await lido.getDepositsReserve()).to.equal(ether("70.0"));
 
-      beforeEach(async () => {
-        await lido.submit(ZeroAddress, { value: ether("100.0") });
-        await accountingOracle.mock_setProcessingState(refSlot, true, true);
-      });
+      await lido.setDepositsReserveTarget(ether("20.0"));
+      expect(await lido.getDepositsReserve()).to.equal(ether("20.0"));
+    });
 
-      it("Handles withdrawal demand > buffer correctly", async () => {
-        // Withdraw all available ether
-        const bufferedEther = await lido.getBufferedEther();
-        await withdrawalQueue.mock__unfinalizedStETH(bufferedEther);
+    it("Decreases depositable immediately on target decrease in saturated withdrawals demand", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("40.0"));
+      await syncReserveWithOracleReport();
+      await withdrawalQueue.mock__unfinalizedStETH(ether("1000.0"));
 
-        expect(await lido.getDepositableEther()).to.equal(0);
-      });
+      const buffered = await lido.getBufferedEther();
+      expect(await lido.getDepositableEther()).to.equal(ether("40.0"));
+      expect(await lido.getWithdrawalsReserve()).to.equal(buffered - ether("40.0"));
 
-      it("Handles maximum consumable correctly", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const maxUint256 = 2n ** 256n - 1n;
+      await lido.setDepositsReserveTarget(ether("20.0"));
 
-        await lido.setFastLaneMaxAllowedAmount(maxUint256);
-        expect(await lido.getDepositableEther()).to.equal(bufferedEther);
-      });
+      expect(await lido.getDepositableEther()).to.equal(ether("20.0"));
+      expect(await lido.getWithdrawalsReserve()).to.equal(buffered - ether("20.0"));
+    });
 
-      it("Handles zero maxAllowedAmount", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther / 4n;
+    it("Updates depositable immediately when unfinalized withdrawals demand changes", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("30.0"));
+      await syncReserveWithOracleReport();
 
-        await lido.setFastLaneMaxAllowedAmount(0);
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
+      const buffered = await lido.getBufferedEther();
+      const depositsReserve = await lido.getDepositsReserve();
 
-        // With zero fastLane, should return normal depositable
-        expect(await lido.getDepositableEther()).to.equal(bufferedEther - reserved);
-      });
+      await withdrawalQueue.mock__unfinalizedStETH(ether("10.0"));
+      expect(await lido.getDepositableEther()).to.equal(buffered - ether("10.0"));
 
-      it("Handles equality: depositable == consumable", async () => {
-        const bufferedEther = await lido.getBufferedEther();
-        const reserved = bufferedEther / 2n;
-        const consumable = bufferedEther / 2n;
+      await withdrawalQueue.mock__unfinalizedStETH(ether("50.0"));
+      expect(await lido.getDepositableEther()).to.equal(buffered - ether("50.0"));
 
-        await withdrawalQueue.mock__unfinalizedStETH(reserved);
-        await lido.setFastLaneMaxAllowedAmount(consumable);
+      await withdrawalQueue.mock__unfinalizedStETH(ether("1000.0"));
+      expect(await lido.getDepositableEther()).to.equal(depositsReserve);
+    });
 
-        // Should return depositable since consumable == depositable
-        expect(await lido.getDepositableEther()).to.equal(consumable);
-      });
+    it("Keeps depositable at deposits reserve when unfinalized demand reaches allocation boundary", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("25.0"));
+      await syncReserveWithOracleReport();
+
+      const buffered = await lido.getBufferedEther();
+      const depositsReserve = await lido.getDepositsReserve();
+      const boundary = buffered - depositsReserve;
+
+      await withdrawalQueue.mock__unfinalizedStETH(boundary);
+      expect(await lido.getWithdrawalsReserve()).to.equal(boundary);
+      expect(await lido.getDepositableEther()).to.equal(depositsReserve);
+
+      await withdrawalQueue.mock__unfinalizedStETH(boundary + 1n);
+      expect(await lido.getWithdrawalsReserve()).to.equal(boundary);
+      expect(await lido.getDepositableEther()).to.equal(depositsReserve);
+    });
+
+    it("Handles setting reserve target to zero", async () => {
+      const deposit = ether("100.0");
+      await lido.submit(ZeroAddress, { value: deposit });
+      await lido.setDepositsReserveTarget(ether("40.0"));
+      await syncReserveWithOracleReport();
+      expect(await lido.getDepositsReserve()).to.equal(ether("40.0"));
+
+      const unfinalized = ether("30.0");
+      await withdrawalQueue.mock__unfinalizedStETH(unfinalized);
+
+      await lido.setDepositsReserveTarget(0n);
+      expect(await lido.getDepositsReserve()).to.equal(0n);
+      expect(await lido.getWithdrawalsReserve()).to.equal(unfinalized);
+      const buffered = await lido.getBufferedEther();
+      expect(await lido.getDepositableEther()).to.equal(buffered - unfinalized);
+    });
+
+    it("Consumes deposits reserve once when CL-depositable ether is spent and reserve target exceeds buffer", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      const bufferedBefore = await lido.getBufferedEther();
+
+      // Keep all buffered ether depositable and make stored reserve larger than the buffer.
+      await withdrawalQueue.mock__unfinalizedStETH(0n);
+      await lido.setDepositsReserveTarget(bufferedBefore + ether("100.0"));
+      await syncReserveWithOracleReport();
+
+      const spentDepositableEther = ether("10.0");
+      await lido.connect(stakingRouterSigner).withdrawDepositableEther(spentDepositableEther, 1n);
+
+      const bufferedAfter = await lido.getBufferedEther();
+      expect(bufferedAfter).to.equal(bufferedBefore - spentDepositableEther);
+      expect(await lido.getDepositsReserve()).to.equal(bufferedAfter);
+      expect(await lido.getDepositableEther()).to.equal(bufferedAfter);
+    });
+
+    it("Does not decrease withdrawals reserve when all depositable ether is withdrawn", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("30.0"));
+      await syncReserveWithOracleReport();
+      await withdrawalQueue.mock__unfinalizedStETH(ether("50.0"));
+
+      const bufferedBefore = await lido.getBufferedEther();
+      const withdrawalsReserveBefore = await lido.getWithdrawalsReserve();
+      const depositableBefore = await lido.getDepositableEther();
+      expect(depositableBefore).to.equal(bufferedBefore - withdrawalsReserveBefore);
+
+      await lido.connect(stakingRouterSigner).withdrawDepositableEther(depositableBefore, 0n);
+
+      expect(await lido.getDepositableEther()).to.equal(0n);
+      expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveBefore);
+    });
+
+    it("Emits only target event on target increase and emits reserve update on target decrease", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+
+      const increasedTarget = ether("25.0");
+      await expect(lido.setDepositsReserveTarget(increasedTarget))
+        .to.emit(lido, "DepositsReserveTargetSet")
+        .withArgs(increasedTarget)
+        .and.not.to.emit(lido, "DepositsReserveSet");
+
+      await syncReserveWithOracleReport();
+      expect(await lido.getDepositsReserve()).to.equal(increasedTarget);
+
+      const loweredTarget = ether("10.0");
+      await expect(lido.setDepositsReserveTarget(loweredTarget))
+        .to.emit(lido, "DepositsReserveTargetSet")
+        .withArgs(loweredTarget)
+        .and.to.emit(lido, "DepositsReserveSet")
+        .withArgs(loweredTarget);
+    });
+
+    it("Keeps deposits reserve at zero when buffer is empty and target is positive", async () => {
+      await withdrawalQueue.mock__unfinalizedStETH(0n);
+      const depositableBefore = await lido.getDepositableEther();
+      if (depositableBefore > 0n) {
+        await lido.connect(stakingRouterSigner).withdrawDepositableEther(depositableBefore, 0n);
+      }
+
+      expect(await lido.getBufferedEther()).to.equal(0n);
+
+      const target = ether("50.0");
+      await lido.setDepositsReserveTarget(target);
+      expect(await lido.getDepositsReserveTarget()).to.equal(target);
+      expect(await lido.getDepositsReserve()).to.equal(0n);
+      expect(await lido.getDepositableEther()).to.equal(0n);
+
+      await syncReserveWithOracleReport();
+      expect(await lido.getDepositsReserve()).to.equal(0n);
+      expect(await lido.getDepositableEther()).to.equal(0n);
+    });
+
+    it("Reverts withdraw when requested amount is above depositable with withdrawals reserve present", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("40.0"));
+      await syncReserveWithOracleReport();
+      await withdrawalQueue.mock__unfinalizedStETH(ether("80.0"));
+
+      const depositable = await lido.getDepositableEther();
+      await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(depositable + 1n, 0n)).to.be.revertedWith(
+        "NOT_ENOUGH_ETHER",
+      );
+    });
+
+    it("Syncs reserve to target after non-zero accounting buffer movements", async () => {
+      await lido.connect(elRewardsVault).receiveELRewards({ value: ether("3.0") });
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+
+      await lido.setDepositsReserveTarget(ether("20.0"));
+      await syncReserveWithOracleReport();
+      await lido.connect(stakingRouterSigner).withdrawDepositableEther(ether("5.0"), 0n);
+      expect(await lido.getDepositsReserve()).to.equal(ether("15.0"));
+
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+
+      expect(await lido.getDepositsReserveTarget()).to.equal(ether("20.0"));
+      expect(await lido.getDepositsReserve()).to.equal(ether("20.0"));
+    });
+
+    it("Exhausts CL-depositable ether via multiple withdrawDepositableEther() calls and then reverts", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("20.0"));
+      await syncReserveWithOracleReport();
+      await withdrawalQueue.mock__unfinalizedStETH(ether("70.0"));
+
+      const chunk = ether("5.0");
+
+      while ((await lido.getDepositableEther()) >= chunk) {
+        await lido.connect(stakingRouterSigner).withdrawDepositableEther(chunk, 0n);
+        await assertDepositsReserveInvariants();
+      }
+
+      const remaining = await lido.getDepositableEther();
+      expect(remaining).to.be.lt(chunk);
+      await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(chunk, 0n)).to.be.revertedWith(
+        "NOT_ENOUGH_ETHER",
+      );
+      await assertDepositsReserveInvariants();
+    });
+
+    it("Preserves reserve invariants over submit/withdraw/target-update/report sequence", async () => {
+      await lido.submit(ZeroAddress, { value: ether("50.0") });
+      await lido.setDepositsReserveTarget(ether("15.0"));
+      await syncReserveWithOracleReport();
+      await withdrawalQueue.mock__unfinalizedStETH(ether("20.0"));
+      await assertDepositsReserveInvariants();
+
+      await lido.connect(stakingRouterSigner).withdrawDepositableEther(ether("10.0"), 0n);
+      await assertDepositsReserveInvariants();
+
+      await lido.connect(elRewardsVault).receiveELRewards({ value: ether("7.0") });
+      await assertDepositsReserveInvariants();
+
+      await lido.setDepositsReserveTarget(ether("30.0"));
+      // target increased, reserve increase is deferred until report
+      await assertDepositsReserveInvariants();
+
+      await syncReserveWithOracleReport();
+      await assertDepositsReserveInvariants();
+    });
+  });
+
+  context("withdrawalsReserve", () => {
+    let stakingRouterSigner: HardhatEthersSigner;
+    let accountingSigner: HardhatEthersSigner;
+
+    beforeEach(async () => {
+      await lido.resume();
+      await acl.createPermission(user, lido, await lido.BUFFER_RESERVE_MANAGER_ROLE(), deployer);
+      stakingRouterSigner = await impersonate(await locator.stakingRouter(), ether("1.0"));
+      accountingSigner = await impersonate(await locator.accounting(), ether("1.0"));
+    });
+
+    it("Returns 0 when unfinalizedStETH is zero", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("30.0"));
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await withdrawalQueue.mock__unfinalizedStETH(0n);
+
+      expect(await lido.getWithdrawalsReserve()).to.equal(0n);
+    });
+
+    it("Is capped by remaining buffer after deposits reserve", async () => {
+      const deposit = ether("100.0");
+      await lido.submit(ZeroAddress, { value: deposit });
+      await lido.setDepositsReserveTarget(ether("40.0"));
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await withdrawalQueue.mock__unfinalizedStETH(ether("80.0"));
+
+      const buffered = await lido.getBufferedEther();
+      const depositsReserve = await lido.getDepositsReserve();
+      expect(await lido.getWithdrawalsReserve()).to.equal(buffered - depositsReserve);
+    });
+
+    it("Decreases when deposits reserve target increases (priority to deposits reserve)", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      const buffered = await lido.getBufferedEther();
+      // Make withdrawals demand effectively unbounded so withdrawalsReserve == buffered - depositsReserve.
+      await withdrawalQueue.mock__unfinalizedStETH(buffered);
+
+      const lowTarget = ether("10.0");
+      const highTarget = ether("50.0");
+
+      await lido.setDepositsReserveTarget(lowTarget);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      const withdrawalsReserveWithLowTarget = await lido.getWithdrawalsReserve();
+      expect(withdrawalsReserveWithLowTarget).to.equal(buffered - lowTarget);
+
+      await lido.setDepositsReserveTarget(highTarget);
+      // target increase is deferred until report, so withdrawals reserve is unchanged before sync
+      expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveWithLowTarget);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      const withdrawalsReserveWithHighTarget = await lido.getWithdrawalsReserve();
+      expect(withdrawalsReserveWithHighTarget).to.equal(buffered - highTarget);
+      expect(withdrawalsReserveWithHighTarget).to.be.lt(withdrawalsReserveWithLowTarget);
+    });
+
+    it("Does not change on oracle report when no withdrawals are finalized", async () => {
+      await lido.submit(ZeroAddress, { value: ether("100.0") });
+      await lido.setDepositsReserveTarget(ether("30.0"));
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await withdrawalQueue.mock__unfinalizedStETH(ether("40.0"));
+      const before = await lido.getWithdrawalsReserve();
+
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+
+      expect(await lido.getWithdrawalsReserve()).to.equal(before);
+    });
+
+    it("Returns 0 when buffer is empty even if unfinalizedStETH is non-zero", async () => {
+      await withdrawalQueue.mock__unfinalizedStETH(0n);
+      const depositableBefore = await lido.getDepositableEther();
+      if (depositableBefore > 0n) {
+        await lido.connect(stakingRouterSigner).withdrawDepositableEther(depositableBefore, 0n);
+      }
+
+      expect(await lido.getBufferedEther()).to.equal(0n);
+
+      await withdrawalQueue.mock__unfinalizedStETH(ether("100.0"));
+      expect(await lido.getWithdrawalsReserve()).to.equal(0n);
     });
   });
 

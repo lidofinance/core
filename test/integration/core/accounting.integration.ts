@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether, impersonate, ONE_GWEI, updateBalance } from "lib";
+import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
 import { getProtocolContext, getReportTimeElapsed, ProtocolContext, removeStakingLimit, report } from "lib/protocol";
 
@@ -98,7 +98,7 @@ describe("Integration: Accounting", () => {
   }
 
   async function readState() {
-    const { lido, accountingOracle, elRewardsVault, withdrawalVault, burner } = ctx.contracts;
+    const { lido, accountingOracle, elRewardsVault, withdrawalVault, burner, withdrawalQueue } = ctx.contracts;
 
     const lastProcessingRefSlot = await accountingOracle.getLastProcessingRefSlot();
     const totalELRewardsCollected = await lido.getTotalELRewardsCollected();
@@ -108,6 +108,12 @@ describe("Integration: Accounting", () => {
     const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault);
     const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault);
     const burnerShares = await lido.sharesOf(burner);
+    const bufferedEther = await lido.getBufferedEther();
+    const depositsReserveTarget = await lido.getDepositsReserveTarget();
+    const depositsReserve = await lido.getDepositsReserve();
+    const withdrawalsReserve = await lido.getWithdrawalsReserve();
+    const depositableEther = await lido.getDepositableEther();
+    const unfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
 
     return {
       lastProcessingRefSlot,
@@ -118,6 +124,12 @@ describe("Integration: Accounting", () => {
       elRewardsVaultBalance,
       withdrawalVaultBalance,
       burnerShares,
+      bufferedEther,
+      depositsReserveTarget,
+      depositsReserve,
+      withdrawalsReserve,
+      depositableEther,
+      unfinalizedStETH,
     };
   }
 
@@ -134,6 +146,12 @@ describe("Integration: Accounting", () => {
       elRewardsVaultBalance,
       withdrawalVaultBalance,
       burnerShares,
+      bufferedEther,
+      depositsReserveTarget,
+      depositsReserve,
+      withdrawalsReserve,
+      depositableEther,
+      unfinalizedStETH,
     } = await readState();
 
     expect(lastProcessingRefSlot).to.be.greaterThan(
@@ -166,6 +184,24 @@ describe("Integration: Accounting", () => {
       beforeState.internalShares + (expectedDelta.internalShares ?? 0n),
       "Internal shares mismatch",
     );
+
+    expect(depositsReserveTarget).to.equal(
+      beforeState.depositsReserveTarget,
+      "Deposits reserve target should not change during report processing",
+    );
+    const expectedDepositsReserve = bufferedEther < depositsReserveTarget ? bufferedEther : depositsReserveTarget;
+    expect(depositsReserve).to.equal(
+      expectedDepositsReserve,
+      "Deposits reserve should be synced to min(buffered ether, deposits reserve target)",
+    );
+    expect(depositsReserve).to.be.lte(depositsReserveTarget, "Deposits reserve should not exceed target");
+    expect(depositsReserve).to.be.lte(bufferedEther, "Deposits reserve should not exceed buffered ether");
+    expect(depositableEther).to.equal(
+      bufferedEther - withdrawalsReserve,
+      "Depositable should equal buffered minus withdrawals reserve",
+    );
+    expect(withdrawalsReserve).to.be.lte(unfinalizedStETH, "Withdrawals reserve should not exceed demand");
+    expect(withdrawalsReserve).to.be.lte(bufferedEther, "Withdrawals reserve should not exceed buffered ether");
   }
 
   async function expectTransferFeesEvents(
@@ -249,6 +285,86 @@ describe("Integration: Accounting", () => {
     const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased");
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
     expect(sharesRateBefore).to.be.lessThanOrEqual(sharesRateAfter);
+  });
+
+  it("Should account correctly with non-zero deposits and withdrawals reserves", async () => {
+    const { lido, withdrawalQueue } = ctx.contracts;
+    const agent = await ctx.getSigner("agent");
+
+    await lido.connect(agent).setDepositsReserveTarget(ether("10"));
+    await lido.connect(agent).submit(ZeroAddress, { value: ether("90") });
+    await lido.connect(agent).approve(withdrawalQueue, ether("5"));
+    await withdrawalQueue.connect(agent).requestWithdrawals([ether("5")], agent.address);
+    await report(ctx, {
+      clDiff: 0n,
+      excludeVaultsBalances: true,
+      reportBurner: false,
+      skipWithdrawals: true,
+      dryRun: false,
+    });
+
+    const beforeState = await readState();
+    expect(beforeState.depositsReserveTarget).to.equal(ether("10"));
+    expect(beforeState.depositsReserve).to.equal(ether("10"));
+    expect(beforeState.withdrawalsReserve).to.be.gt(0n);
+    const expectedWithdrawalsReserve =
+      beforeState.unfinalizedStETH < beforeState.bufferedEther - beforeState.depositsReserve
+        ? beforeState.unfinalizedStETH
+        : beforeState.bufferedEther - beforeState.depositsReserve;
+    expect(beforeState.withdrawalsReserve).to.equal(expectedWithdrawalsReserve);
+    expect(beforeState.depositableEther).to.equal(beforeState.bufferedEther - beforeState.withdrawalsReserve);
+
+    // Deferred target increase must not change effective reserves before report processing.
+    const increasedTarget = beforeState.bufferedEther + ether("1000");
+    await lido.connect(agent).setDepositsReserveTarget(increasedTarget);
+    expect(await lido.getDepositsReserve()).to.equal(beforeState.depositsReserve);
+    expect(await lido.getWithdrawalsReserve()).to.equal(beforeState.withdrawalsReserve);
+    const beforeStateAfterTargetUpdate = await readState();
+    expect(beforeStateAfterTargetUpdate.depositsReserveTarget).to.equal(increasedTarget);
+
+    const requestTimestampMargin = (await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits())
+      .requestTimestampMargin;
+    await advanceChainTime(requestTimestampMargin + 1n);
+
+    const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
+    const dryRunParams = {
+      refSlot,
+      waitNextReportTime: false,
+      dryRun: true,
+      clDiff: 0n,
+      reportElVault: false,
+      reportWithdrawalsVault: false,
+      reportBurner: false,
+      excludeVaultsBalances: true,
+    } as const;
+
+    const dryRunBefore = await report(ctx, dryRunParams);
+    expect(dryRunBefore.data.withdrawalFinalizationBatches.length).to.be.gt(
+      0,
+      "Expected non-empty withdrawal finalization batches in dry-run report",
+    );
+    const [lockBefore] = await withdrawalQueue.prefinalize(
+      dryRunBefore.data.withdrawalFinalizationBatches,
+      dryRunBefore.data.simulatedShareRate,
+    );
+    expect(lockBefore).to.be.lte(beforeStateAfterTargetUpdate.withdrawalsReserve);
+
+    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false });
+    const reportTxReceipt = (await reportTx!.wait())!;
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
+
+    await expectStateChanges(beforeStateAfterTargetUpdate, {
+      totalELRewardsCollected: 0n,
+      internalEther: amountOfETHLocked * -1n,
+      internalShares: sharesBurntAmount * -1n,
+      lidoBalance: amountOfETHLocked * -1n,
+    });
+
+    const afterState = await readState();
+    expect(afterState.depositsReserveTarget).to.equal(increasedTarget);
+    expect(afterState.depositsReserve).to.equal(afterState.bufferedEther);
+    expect(afterState.withdrawalsReserve).to.equal(0n);
+    expect(afterState.depositableEther).to.equal(afterState.bufferedEther);
   });
 
   it("Should account correctly with negative CL rebase", async () => {
