@@ -473,8 +473,8 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           .connect(submitter)
           .submitConsolidationBatch(unusedSourceOperatorId, targetOperatorId, [0n], [0n]),
       )
-        .to.be.revertedWithCustomError(consolidationMigrator, "SourceKeyNotDeposited")
-        .withArgs(unusedSourceOperatorId, 0n);
+        .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
+        .withArgs(NOR_MODULE_ID, unusedSourceOperatorId, 0n);
     });
 
     it("Should revert submitConsolidationBatch if target key is NOT deposited (not active validator)", async () => {
@@ -506,9 +506,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
         .connect(agentSigner)
         .allowPair(sourceOperatorId, undepositedTargetOperatorId, submitter.address);
 
-      // Get totalDepositedValidators for the undeposited target operator (should be 0)
-      const summary = await nor.getNodeOperatorSummary(undepositedTargetOperatorId);
-
       // Try to consolidate to undeposited target key - should fail
       // Per EIP-7251, consolidation can only happen TO active (deposited) validators
       await expect(
@@ -516,8 +513,8 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           .connect(submitter)
           .submitConsolidationBatch(sourceOperatorId, undepositedTargetOperatorId, [0n], [0n]),
       )
-        .to.be.revertedWithCustomError(consolidationMigrator, "TargetKeyNotDeposited")
-        .withArgs(undepositedTargetOperatorId, 0n, summary.totalDepositedValidators);
+        .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
+        .withArgs(NOR_MODULE_ID, undepositedTargetOperatorId, 0n);
     });
   });
 
