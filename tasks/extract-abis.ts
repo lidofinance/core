@@ -16,7 +16,7 @@ const ARAGON_ARTIFACT_PATHS = [
   "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol:TokenManager",
 ];
 
-const SKIP_NAMES_REGEX = /(Mock|Harness|test_helpers|Imports|deposit_contract|Pausable|.dbg.json|build-info)/;
+const SKIP_NAMES_REGEX = /(Mock|Harness|test_helpers|Imports|deposit_contract|Pausable|\.dbg\.json|build-info)/;
 
 task("abis:extract", "Extract ABIs from artifacts").setAction(async (_: unknown, hre: HardhatRuntimeEnvironment) => {
   await hre.run(TASK_CLEAN);
