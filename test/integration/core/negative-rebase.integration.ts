@@ -5,7 +5,14 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import {
+  getDepositedSinceLastReport,
+  getProtocolContext,
+  ProtocolContext,
+  report,
+  reportWithEffectiveClDiff,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -58,8 +65,7 @@ describe("Integration: Negative rebase", () => {
   const ensureAtLeastOneStoredReport = async () => {
     const reportDataCount = await ctx.contracts.oracleReportSanityChecker.getReportDataCount();
     if (reportDataCount === 0n) {
-      await report(ctx, {
-        clDiff: 0n,
+      await reportWithEffectiveClDiff(ctx, 0n, {
         skipWithdrawals: true,
         excludeVaultsBalances: true,
       });
@@ -101,19 +107,19 @@ describe("Integration: Negative rebase", () => {
 
     expect(await locator.oracleReportSanityChecker()).to.equal(oracleReportSanityChecker.address);
 
+    await resetCLBalanceDecreaseWindow(ctx);
     await ensureAtLeastOneStoredReport();
 
     const REPORTS_REPEATED = 10;
-    const CL_DIFF_PER_REPORT = -1000000000n; // -1 gwei per report
+    const CL_DIFF_PER_REPORT = -1000000000n; // effective -1 gwei per report relative to principal CL balance
     let reportDataCount = await oracleReportSanityChecker.getReportDataCount();
-    let previousCLBalance =
-      reportDataCount === 0n
-        ? (await ctx.contracts.lido.getBeaconStat()).beaconBalance
-        : (await oracleReportSanityChecker.reportData(reportDataCount - 1n)).clBalance;
+    expect(reportDataCount).to.be.gt(0n);
+    let previousCLBalance = (await oracleReportSanityChecker.reportData(reportDataCount - 1n)).clBalance;
 
     for (let i = 0; i < REPORTS_REPEATED; i++) {
-      await report(ctx, {
-        clDiff: CL_DIFF_PER_REPORT,
+      const depositedSinceLastReport = await getDepositedSinceLastReport(ctx);
+
+      await reportWithEffectiveClDiff(ctx, CL_DIFF_PER_REPORT, {
         skipWithdrawals: true,
         reportWithdrawalsVault: false,
         reportElVault: false,
@@ -124,10 +130,10 @@ describe("Integration: Negative rebase", () => {
       expect(reportCountAfter).to.equal(reportDataCount);
 
       const lastReportData = await oracleReportSanityChecker.reportData(reportDataCount - 1n);
-      const expectedCurrentCLBalance = previousCLBalance + CL_DIFF_PER_REPORT;
+      const expectedCurrentCLBalance = previousCLBalance + depositedSinceLastReport + CL_DIFF_PER_REPORT;
 
       expect(lastReportData.clBalance).to.equal(expectedCurrentCLBalance);
-      expect(lastReportData.clBalance).to.be.lt(previousCLBalance);
+      expect(lastReportData.clBalance).to.be.lt(previousCLBalance + depositedSinceLastReport);
       previousCLBalance = lastReportData.clBalance;
     }
   });

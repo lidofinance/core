@@ -69,7 +69,7 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
             uint256 moduleId = _stakingModuleIds[i];
             uint256 previousBalance = _moduleBalancesWei[moduleId];
-            uint256 currentBalance = (_activeBalancesGwei[i] + _pendingBalancesGwei[i]) * 1 gwei;
+            uint256 currentBalance = (_validatorBalancesGwei[i] + _pendingBalancesGwei[i]) * 1 gwei;
 
             if (currentBalance >= previousBalance) {
                 totalBalance += currentBalance - previousBalance;

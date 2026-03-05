@@ -683,7 +683,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 64n * ONE_GWEI,
-            activeBalancesGweiByStakingModule: [0n],
+            validatorBalancesGweiByStakingModule: [0n],
             pendingBalancesGweiByStakingModule: [64n * ONE_GWEI],
           }),
         );
@@ -701,7 +701,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 1000n * ONE_GWEI,
             clPendingBalanceGwei: 0n,
-            activeBalancesGweiByStakingModule: [1000n * ONE_GWEI],
+            validatorBalancesGweiByStakingModule: [1000n * ONE_GWEI],
             pendingBalancesGweiByStakingModule: [0n],
           }),
         );
@@ -737,7 +737,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 100n * ONE_GWEI,
             clPendingBalanceGwei: 500n * ONE_GWEI,
-            activeBalancesGweiByStakingModule: [100n * ONE_GWEI],
+            validatorBalancesGweiByStakingModule: [100n * ONE_GWEI],
             pendingBalancesGweiByStakingModule: [500n * ONE_GWEI],
           }),
         );
@@ -755,7 +755,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 123n * ONE_GWEI,
             clPendingBalanceGwei: 456n * ONE_GWEI,
-            activeBalancesGweiByStakingModule: [123n * ONE_GWEI],
+            validatorBalancesGweiByStakingModule: [123n * ONE_GWEI],
             pendingBalancesGweiByStakingModule: [456n * ONE_GWEI],
           }),
         );
@@ -776,7 +776,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 0n,
-            activeBalancesGweiByStakingModule: [0n],
+            validatorBalancesGweiByStakingModule: [0n],
             pendingBalancesGweiByStakingModule: [0n],
           }),
         );
@@ -794,7 +794,7 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 1n,
             clPendingBalanceGwei: 1n,
-            activeBalancesGweiByStakingModule: [1n],
+            validatorBalancesGweiByStakingModule: [1n],
             pendingBalancesGweiByStakingModule: [1n],
           }),
         );

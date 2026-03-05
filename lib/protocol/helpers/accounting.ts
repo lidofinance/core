@@ -62,6 +62,7 @@ type OracleReportResults = {
 export const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
+const CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS = 37n * 24n * 60n * 60n;
 
 type StakingModuleWithCLBalance = {
   moduleId: bigint;
@@ -151,15 +152,15 @@ export const report = async (
 
   refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
-  // TODO: Update to use balance-based accounting (clValidatorsBalance + clPendingBalance)
-  // note: beaconBalance = (clValidatorsBalance + clPendingBalance) at last report
-  const { depositedValidators: beaconValidators, beaconBalance } = await lido.getBeaconStat();
+  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+  const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
-  const postCLBalance = beaconBalance + clDiff;
-  const postBeaconValidators = beaconValidators + clAppearedValidators;
+  const postCLBalance = preCLBalance + clDiff;
+  // Validator counts are no longer part of AccountingOracle.ReportData; keep this value for debug output only.
+  const postBeaconValidators = clAppearedValidators;
 
   log.debug("Beacon", {
-    "Beacon validators": postBeaconValidators,
+    "Beacon validators delta": postBeaconValidators,
     "Beacon balance": formatEther(postCLBalance),
   });
 
@@ -289,6 +290,33 @@ export const report = async (
     ...reportData,
     clBalance: postCLBalance,
     extraDataList,
+  });
+};
+
+export const getDepositedSinceLastReport = async (ctx: ProtocolContext): Promise<bigint> => {
+  const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
+  return depositedSinceLastReport;
+};
+
+export const reportWithEffectiveClDiff = async (
+  ctx: ProtocolContext,
+  effectiveClDiff: bigint,
+  params: Omit<OracleReportParams, "clDiff"> = {},
+): Promise<OracleReportResults> => {
+  const depositedSinceLastReport = await getDepositedSinceLastReport(ctx);
+  return report(ctx, { ...params, clDiff: depositedSinceLastReport + effectiveClDiff });
+};
+
+export const resetCLBalanceDecreaseWindow = async (
+  ctx: ProtocolContext,
+  params: Omit<OracleReportParams, "clDiff"> = {},
+): Promise<OracleReportResults> => {
+  // Move report timestamp beyond the 36-day window and submit an effective neutral report.
+  await advanceChainTime(CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS);
+  return reportWithEffectiveClDiff(ctx, 0n, {
+    excludeVaultsBalances: true,
+    skipWithdrawals: true,
+    ...params,
   });
 };
 

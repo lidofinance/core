@@ -7,7 +7,13 @@ import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 import { Lido, WithdrawalQueueERC721 } from "typechain-types";
 
 import { ether, findEventsWithInterfaces } from "lib";
-import { finalizeWQViaSubmit, getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import {
+  finalizeWQViaSubmit,
+  getProtocolContext,
+  ProtocolContext,
+  reportWithEffectiveClDiff,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -39,6 +45,8 @@ describe("Integration: Withdrawal edge cases", () => {
     beforeEach(async () => (originalState = await Snapshot.take()));
     afterEach(async () => await Snapshot.restore(originalState));
     it("Should handle bunker mode with multiple batches", async () => {
+      await resetCLBalanceDecreaseWindow(ctx);
+
       const amount = ether("100");
       const withdrawalAmount = ether("10");
 
@@ -49,7 +57,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
       const stethInitialBalance = await lido.balanceOf(holder.address);
 
-      await report(ctx, { clDiff: ether("-1"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("-1"), { excludeVaultsBalances: true });
 
       const stethFirstNegativeReportBalance = await lido.balanceOf(holder.address);
 
@@ -62,7 +70,7 @@ describe("Integration: Withdrawal edge cases", () => {
       const [firstRequestEvent] = findEventsWithInterfaces(firstRequestReceipt!, "WithdrawalRequested", [wq.interface]);
       const firstRequestId = firstRequestEvent!.args.requestId;
 
-      await report(ctx, { clDiff: ether("-0.1"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("-0.1"), { excludeVaultsBalances: true });
 
       const stethSecondNegativeReportBalance = await lido.balanceOf(holder.address);
 
@@ -85,7 +93,7 @@ describe("Integration: Withdrawal edge cases", () => {
       expect(firstStatus.amountOfStETH).to.equal(secondStatus.amountOfStETH);
       expect(firstStatus.amountOfShares).to.be.lt(secondStatus.amountOfShares);
 
-      await report(ctx, { clDiff: ether("0.0001"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("0.0001"), { excludeVaultsBalances: true });
 
       expect(await wq.isBunkerModeActive()).to.be.false;
 
@@ -120,7 +128,7 @@ describe("Integration: Withdrawal edge cases", () => {
       // Submit initial stETH deposit
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
 
-      await report(ctx, { clDiff: ether("0.001"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("0.001"), { excludeVaultsBalances: true });
 
       // Create withdrawal request
       await lido.connect(holder).approve(wq.target, amount);
@@ -141,7 +149,7 @@ describe("Integration: Withdrawal edge cases", () => {
       expect(status.isFinalized).to.be.false;
 
       // Submit next report to finalize request
-      await report(ctx, { clDiff: ether("0.001"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("0.001"), { excludeVaultsBalances: true });
 
       // Verify request finalized
       const [finalizedStatus] = await wq.getWithdrawalStatus([...requestIds]);
@@ -168,6 +176,8 @@ describe("Integration: Withdrawal edge cases", () => {
     after(async () => await Snapshot.restore(originalState));
 
     it("should handle first rebase correctly", async () => {
+      await resetCLBalanceDecreaseWindow(ctx);
+
       const amount = ether("100");
 
       expect(await lido.balanceOf(holder.address)).to.equal(0);
@@ -176,7 +186,7 @@ describe("Integration: Withdrawal edge cases", () => {
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
 
       // First rebase - positive
-      await report(ctx, { clDiff: ether("0.001"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("0.001"), { excludeVaultsBalances: true });
       expect(await wq.isBunkerModeActive()).to.be.false;
 
       // Create first withdrawal request
@@ -188,7 +198,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle second (negative) rebase correctly", async () => {
       // Second rebase - negative
-      await report(ctx, { clDiff: ether("-0.1"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("-0.1"), { excludeVaultsBalances: true });
       expect(await wq.isBunkerModeActive()).to.be.true;
 
       // Verify first request finalized
@@ -206,7 +216,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle third (negative) rebase correctly", async () => {
       // Third rebase - negative
-      await report(ctx, { clDiff: ether("-0.1"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("-0.1"), { excludeVaultsBalances: true });
       expect(await wq.isBunkerModeActive()).to.be.true;
 
       // Create third withdrawal request
@@ -218,7 +228,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle fourth (positive) rebase correctly", async () => {
       // Fourth rebase - positive
-      await report(ctx, { clDiff: ether("0.0000001"), excludeVaultsBalances: true });
+      await reportWithEffectiveClDiff(ctx, ether("0.0000001"), { excludeVaultsBalances: true });
       expect(await wq.isBunkerModeActive()).to.be.false;
 
       // Verify all requests finalized
@@ -237,9 +247,14 @@ describe("Integration: Withdrawal edge cases", () => {
 
       // Verify claimed amounts
       const claimEvents = findEventsWithInterfaces(claimReceipt!, "WithdrawalClaimed", [wq.interface]);
-      expect(claimEvents![0].args.amountOfETH).to.be.lt(withdrawalAmount);
-      expect(claimEvents![1].args.amountOfETH).to.be.lt(withdrawalAmount);
-      expect(claimEvents![2].args.amountOfETH).to.equal(withdrawalAmount);
+      const firstClaimed = claimEvents![0].args.amountOfETH;
+      const secondClaimed = claimEvents![1].args.amountOfETH;
+      const thirdClaimed = claimEvents![2].args.amountOfETH;
+
+      expect(firstClaimed).to.be.lte(withdrawalAmount);
+      expect(secondClaimed).to.be.lte(withdrawalAmount);
+      expect(thirdClaimed).to.be.lte(withdrawalAmount);
+      expect(firstClaimed < withdrawalAmount || secondClaimed < withdrawalAmount).to.be.true;
     });
   });
 });

@@ -12,6 +12,8 @@ import {
   queueBadDebtInternalization,
   removeStakingLimit,
   report,
+  reportWithEffectiveClDiff,
+  resetCLBalanceDecreaseWindow,
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
@@ -268,6 +270,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
   describe("CL balance decrease check with bad debt internalization", () => {
     it("Small CL balance decrease", async () => {
+      await resetCLBalanceDecreaseWindow(ctx, { waitNextReportTime: true });
+
       const stateBefore = await captureState();
 
       // Queue bad debt internalization
@@ -277,8 +281,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Small negative CL diff (within allowed limits)
       const smallDecrease = ether("-1");
 
-      await report(ctx, {
-        clDiff: smallDecrease,
+      await reportWithEffectiveClDiff(ctx, smallDecrease, {
         excludeVaultsBalances: true,
         skipWithdrawals: true,
         waitNextReportTime: true,

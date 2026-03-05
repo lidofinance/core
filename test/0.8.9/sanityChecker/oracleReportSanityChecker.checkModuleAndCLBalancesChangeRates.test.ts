@@ -77,7 +77,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
   const seedPreviousBalances = async (modules: ModuleBalance[]) => {
     const input = toModuleInput(modules);
-    await stakingRouter.reportActiveBalancesByStakingModule(
+    await stakingRouter.reportValidatorBalancesByStakingModule(
       input.ids,
       input.activeBalancesGwei,
       input.pendingBalancesGwei,
