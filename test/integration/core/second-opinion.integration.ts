@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 import { SecondOpinionOracle__Mock } from "typechain-types";
 
 import { ether, impersonate, log, ONE_GWEI } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, report, resetCLBalanceDecreaseWindow } from "lib/protocol";
 
 import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
 
@@ -71,9 +71,14 @@ describe("Integration: Second opinion", () => {
       balanceStats = await lido.getBalanceStats();
       clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     }
-    totalSupply = clBalance;
-
     await oracleReportSanityChecker.connect(agentSigner).setSecondOpinionOracleAndCLBalanceUpperMargin(soAddress, 74n);
+
+    // Normalize CL decrease window and consume pending deposits to make
+    // second-opinion checks deterministic across different scratch states.
+    await resetCLBalanceDecreaseWindow(ctx);
+
+    balanceStats = await lido.getBalanceStats();
+    totalSupply = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
   });
 
   beforeEach(bailOnFailure);
