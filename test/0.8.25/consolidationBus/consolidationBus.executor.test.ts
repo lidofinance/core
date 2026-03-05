@@ -77,8 +77,8 @@ describe("ConsolidationBus.sol: executor", () => {
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash, fee);
 
-      // Verify batch is marked as executed (isBatchAdded returns false for executed batches)
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.false;
+      // Verify batch is removed from storage after execution
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
     });
 
     it("should forward call to ConsolidationGateway", async () => {
@@ -114,9 +114,9 @@ describe("ConsolidationBus.sol: executor", () => {
       // Execute first time
       await consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 });
 
-      // Try to execute again
+      // Try to execute again — batch was deleted, so it's not found
       await expect(consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
-        .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyExecuted")
+        .to.be.revertedWithCustomError(consolidationBus, "BatchNotFound")
         .withArgs(batchHash);
     });
 
@@ -173,17 +173,6 @@ describe("ConsolidationBus.sol: executor", () => {
       await expect(consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
         .to.emit(consolidationGateway, "AddConsolidationRequestsCalled")
         .withArgs(sourcePubkeys, targetPubkeys, executor.address, 10);
-    });
-
-    it("should preserve addedBy after execution", async () => {
-      // Before execution
-      expect(await consolidationBus.addedBy(batchHash)).to.equal(publisher.address);
-
-      // Execute
-      await consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 });
-
-      // After execution, addedBy should still return the publisher
-      expect(await consolidationBus.addedBy(batchHash)).to.equal(publisher.address);
     });
   });
 

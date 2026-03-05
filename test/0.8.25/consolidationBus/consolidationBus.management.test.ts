@@ -135,13 +135,13 @@ describe("ConsolidationBus.sol: management", () => {
     });
 
     it("should remove batches", async () => {
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.true;
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
 
       await expect(consolidationBus.connect(manager).removeBatches([batchHash]))
         .to.emit(consolidationBus, "BatchesRemoved")
         .withArgs([batchHash]);
 
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.false;
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
     });
 
     it("should revert if caller does not have MANAGER_ROLE", async () => {
@@ -168,9 +168,9 @@ describe("ConsolidationBus.sol: management", () => {
 
       await consolidationBus.connect(manager).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 });
 
-      // Try to remove the executed batch
+      // Try to remove the executed batch — batch was deleted, so it's not found
       await expect(consolidationBus.connect(manager).removeBatches([batchHash]))
-        .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyExecuted")
+        .to.be.revertedWithCustomError(consolidationBus, "BatchNotFound")
         .withArgs(batchHash);
     });
 
@@ -189,8 +189,8 @@ describe("ConsolidationBus.sol: management", () => {
         .to.emit(consolidationBus, "BatchesRemoved")
         .withArgs([batchHash, batchHash2]);
 
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.false;
-      expect(await consolidationBus.isBatchAdded(batchHash2)).to.be.false;
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
+      expect(await consolidationBus.getBatchPublisher(batchHash2)).to.equal(ethers.ZeroAddress);
     });
   });
 });

@@ -220,8 +220,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           ],
         ),
       );
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.true;
-      expect(await consolidationBus.addedBy(batchHash)).to.equal(await consolidationMigrator.getAddress());
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(await consolidationMigrator.getAddress());
 
       // Step 3: Executor calls executeConsolidation
       const fee = await withdrawalVault.getConsolidationRequestFee();
@@ -236,8 +235,8 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           value: totalFee,
         });
 
-      // Step 4: Verify batch is marked as executed
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.false; // returns false for executed batches
+      // Step 4: Verify batch is removed from storage after execution
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
 
       // Step 5: Verify ConsolidationGateway rate limit was consumed
       const finalLimit = (await consolidationGateway.getConsolidationRequestLimitFullInfo())
@@ -331,7 +330,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       // Try to execute again
       await expect(
         consolidationBus.connect(executor).executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: fee }),
-      ).to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyExecuted");
+      ).to.be.revertedWithCustomError(consolidationBus, "BatchNotFound");
     });
   });
 
@@ -348,12 +347,12 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_1], [TARGET_PUBKEY_1]]),
       );
 
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.true;
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
 
       // Manager removes the batch
       await consolidationBus.connect(agentSigner).removeBatches([batchHash]);
 
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.false;
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
     });
   });
 
@@ -630,7 +629,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const batchHash1 = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_1], [TARGET_PUBKEY_1]]),
       );
-      expect(await consolidationBus.isBatchAdded(batchHash1)).to.be.false;
+      expect(await consolidationBus.getBatchPublisher(batchHash1)).to.equal(ethers.ZeroAddress);
 
       // Execute second batch
       await consolidationBus
@@ -641,7 +640,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const batchHash2 = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [[SOURCE_PUBKEY_2], [TARGET_PUBKEY_2]]),
       );
-      expect(await consolidationBus.isBatchAdded(batchHash2)).to.be.false;
+      expect(await consolidationBus.getBatchPublisher(batchHash2)).to.equal(ethers.ZeroAddress);
     });
 
     it("Should revert executeConsolidation if batch was removed", async () => {
@@ -684,7 +683,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
         .withArgs(2, 1);
     });
 
-    it("Should revert addConsolidationRequests if batch already added (duplicate submission)", async () => {
+    it("Should revert addConsolidationRequests if batch already pending (duplicate submission)", async () => {
       // Submit batch first time
       await consolidationMigrator
         .connect(submitter)
@@ -700,7 +699,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           .connect(submitter)
           .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]),
       )
-        .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyAdded")
+        .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyPending")
         .withArgs(batchHash);
     });
   });

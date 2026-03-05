@@ -56,22 +56,16 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     error BatchTooLarge(uint256 size, uint256 limit);
 
     /**
-     * @notice Thrown when trying to add a batch that already exists
-     * @param batchHash Hash of the duplicate batch
-     */
-    error BatchAlreadyAdded(bytes32 batchHash);
+     * @notice Thrown when attempting to add a batch that is already pending execution
+     * @param batchHash Hash of the batch that already exists in the pending queue
+    */
+    error BatchAlreadyPending(bytes32 batchHash);
 
     /**
      * @notice Thrown when batch is not found in storage
      * @param batchHash Hash of the missing batch
      */
     error BatchNotFound(bytes32 batchHash);
-
-    /**
-     * @notice Thrown when trying to execute or remove an already executed batch
-     * @param batchHash Hash of the executed batch
-     */
-    error BatchAlreadyExecuted(bytes32 batchHash);
 
     /**
      * @notice Thrown when source and target pubkeys are the same
@@ -125,13 +119,8 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
     IConsolidationGateway internal immutable CONSOLIDATION_GATEWAY;
 
-    struct BatchInfo {
-        address publisher;
-        bool executed;
-    }
-
     uint256 internal _batchSize;
-    mapping(bytes32 batchHash => BatchInfo) internal _batches;
+    mapping(bytes32 batchHash => address publisher) internal _pendingBatches;
 
     constructor(
         address admin,
@@ -192,12 +181,10 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     function removeBatches(bytes32[] calldata batchHashes) external onlyRole(MANAGER_ROLE) {
         for (uint256 i = 0; i < batchHashes.length; ++i) {
             bytes32 batchHash = batchHashes[i];
-            BatchInfo storage batch = _batches[batchHash];
 
-            if (batch.publisher == address(0)) revert BatchNotFound(batchHash);
-            if (batch.executed) revert BatchAlreadyExecuted(batchHash);
+            if (_pendingBatches[batchHash] == address(0)) revert BatchNotFound(batchHash);
 
-            delete _batches[batchHash];
+            delete _pendingBatches[batchHash];
         }
         emit BatchesRemoved(batchHashes);
     }
@@ -215,30 +202,20 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     }
 
     /**
-     * @notice Checks if a batch has been added
-     * @param batchHash Hash of the batch to check
-     * @return True if batch exists and is not executed
-     */
-    function isBatchAdded(bytes32 batchHash) external view returns (bool) {
-        BatchInfo storage batch = _batches[batchHash];
-        return batch.publisher != address(0) && !batch.executed;
-    }
-
-    /**
-     * @notice Returns the publisher address for a batch
-     * @param batchHash Hash of the batch
-     * @return Address of the publisher who added the batch
-     */
-    function addedBy(bytes32 batchHash) external view returns (address) {
-        return _batches[batchHash].publisher;
-    }
-
-    /**
      * @notice Returns the address of the ConsolidationGateway
      * @return Address of the ConsolidationGateway contract
      */
     function getConsolidationGateway() external view returns (address) {
         return address(CONSOLIDATION_GATEWAY);
+    }
+
+    /**
+     * @notice Returns the publisher address for a pending batch, or zero address if batch is not in queue
+     * @param batchHash Hash of the batch to check
+     * @return Address of the publisher who added the batch, or zero address if not in queue
+     */
+    function getBatchPublisher(bytes32 batchHash) external view returns (address) {
+        return _pendingBatches[batchHash];
     }
 
     // ===============
@@ -276,12 +253,9 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
         bytes32 batchHash = _computeBatchHash(sourcePubkeys, targetPubkeys);
 
-        if (_batches[batchHash].publisher != address(0)) revert BatchAlreadyAdded(batchHash);
+        if (_pendingBatches[batchHash] != address(0)) revert BatchAlreadyPending(batchHash);
 
-        _batches[batchHash] = BatchInfo({
-            publisher: msg.sender,
-            executed: false
-        });
+        _pendingBatches[batchHash] = msg.sender;
 
         emit RequestsAdded(msg.sender, abi.encode(sourcePubkeys, targetPubkeys));
     }
@@ -305,11 +279,9 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     ) external payable onlyRole(EXECUTER_ROLE) {
         bytes32 batchHash = _computeBatchHash(sourcePubkeys, targetPubkeys);
 
-        BatchInfo storage batch = _batches[batchHash];
-        if (batch.publisher == address(0)) revert BatchNotFound(batchHash);
-        if (batch.executed) revert BatchAlreadyExecuted(batchHash);
+        if (_pendingBatches[batchHash] == address(0)) revert BatchNotFound(batchHash);
 
-        batch.executed = true;
+        delete _pendingBatches[batchHash];
 
         CONSOLIDATION_GATEWAY.addConsolidationRequests{value: msg.value}(
             sourcePubkeys,
