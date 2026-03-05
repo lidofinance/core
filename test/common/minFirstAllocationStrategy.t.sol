@@ -58,7 +58,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 1. the allocated value should be equal to the expected output
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -73,7 +72,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 2. the bucket values should be equal to the expected output
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -90,7 +88,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 3. the bucket value should not exceed the capacity
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -109,7 +106,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 4. the sum of new allocation minus the sum of prev allocation equal to distributed value
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -132,7 +128,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 5. the allocated value should be less than or equal to the allocation size
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */

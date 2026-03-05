@@ -23,14 +23,6 @@ match_path = '**/test/**/*.t.sol'
 # Enable latest EVM features
 evm_version = "prague"
 
-# https://book.getfoundry.sh/reference/config/testing#fuzz
-# fuzz = { runs = 256 }
-# https://book.getfoundry.sh/reference/config/testing#invariant
-# invariant = { runs = 256, depth = 15 }
-
-# Fails the invariant fuzzing if a revert occurs
-# fail_on_revert = true
-
 fmt = { int_types = 'long' }
 
 # add via_ir profile
@@ -45,3 +37,19 @@ compilation_restrictions = [
     { paths = "contracts/0.8.25/vaults/VaultHub.sol", optimizer_runs = 100, via_ir = true },
     { paths = "contracts/upgrade/**", optimizer_runs = 200, via_ir = true },
 ]
+
+[profile.default.invariant]
+runs = 256
+depth = 500
+
+[profile.deep]
+# Inherits all settings from default profile
+# Used for certification runs (10,000 invariant runs)
+# Run with: FOUNDRY_PROFILE=deep forge test
+
+[profile.deep.fuzz]
+runs = 10000
+
+[profile.deep.invariant]
+runs = 10000
+depth = 500
