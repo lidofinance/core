@@ -156,11 +156,9 @@ export const report = async (
   const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
   const postCLBalance = preCLBalance + clDiff;
-  // Validator counts are no longer part of AccountingOracle.ReportData; keep this value for debug output only.
-  const postBeaconValidators = clAppearedValidators;
 
   log.debug("Beacon", {
-    "Beacon validators delta": postBeaconValidators,
+    "Beacon validators delta": clAppearedValidators,
     "Beacon balance": formatEther(postCLBalance),
   });
 
@@ -198,7 +196,6 @@ export const report = async (
 
   const simulatedReport = await simulateReport(ctx, {
     refSlot,
-    beaconValidators: postBeaconValidators,
     clBalance: postCLBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
@@ -298,6 +295,13 @@ export const getDepositedSinceLastReport = async (ctx: ProtocolContext): Promise
   return depositedSinceLastReport;
 };
 
+/**
+ * Submit report with an effective CL delta between reports.
+ *
+ * `report()` expects `clDiff` as raw `postCLBalance - preCLBalance`.
+ * Since `preCLBalance` is based on last report snapshot, deposits made after that
+ * snapshot must be added to preserve the intended effective delta.
+ */
 export const reportWithEffectiveClDiff = async (
   ctx: ProtocolContext,
   effectiveClDiff: bigint,
@@ -441,7 +445,6 @@ export const waitNextAvailableReportTime = async (
 
 type SimulateReportParams = {
   refSlot: bigint;
-  beaconValidators: bigint;
   clBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
@@ -459,7 +462,7 @@ type SimulateReportResult = {
  */
 export const simulateReport = async (
   ctx: ProtocolContext,
-  { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
+  { refSlot, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
 
@@ -468,7 +471,6 @@ export const simulateReport = async (
 
   log.debug("Simulating oracle report", {
     "Ref Slot": refSlot,
-    "Beacon Validators": beaconValidators,
     "CL Balance": formatEther(clBalance),
     "Withdrawal Vault Balance": formatEther(withdrawalVaultBalance),
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
@@ -505,7 +507,6 @@ export const simulateReport = async (
 };
 
 type HandleOracleReportParams = {
-  beaconValidators: bigint;
   clBalance: bigint;
   sharesRequestedToBurn: bigint;
   withdrawalVaultBalance: bigint;
@@ -517,7 +518,6 @@ type HandleOracleReportParams = {
 export const handleOracleReport = async (
   ctx: ProtocolContext,
   {
-    beaconValidators,
     clBalance,
     sharesRequestedToBurn,
     withdrawalVaultBalance,
@@ -537,7 +537,6 @@ export const handleOracleReport = async (
   try {
     log.debug("Handle oracle report", {
       "Ref Slot": refSlot,
-      "Beacon Validators": beaconValidators,
       "CL Balance": formatEther(clBalance),
       "Withdrawal Vault Balance": formatEther(withdrawalVaultBalance),
       "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),

@@ -303,7 +303,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await report(ctx);
 
       // Get current protocol state to calculate dynamic slashing limit
-      const { beaconBalance: preCLBalance } = await lido.getBeaconStat();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const limits = await oracleReportSanityChecker.getOracleReportLimits();
       const maxAllowedNegativeRebase = (preCLBalance * limits.maxCLBalanceDecreaseBP) / 10_000n;
 
@@ -348,7 +349,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await waitNextAvailableReportTime(ctx);
 
       // Get current protocol state
-      const { beaconBalance: preCLBalance } = await lido.getBeaconStat();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
       const { secondsPerSlot } = await hashConsensus.getChainConfig();
       const { currentFrameRefSlot } = await accountingOracle.getProcessingState();

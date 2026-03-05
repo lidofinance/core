@@ -17,7 +17,7 @@ function getDiffAmount(totalSupply: bigint): bigint {
   return (totalSupply / 10n / ONE_GWEI) * ONE_GWEI;
 }
 
-describe.skip("Integration: Second opinion", () => {
+describe("Integration: Second opinion", () => {
   let ctx: ProtocolContext;
 
   let snapshot: string;
@@ -59,17 +59,19 @@ describe.skip("Integration: Second opinion", () => {
       .connect(agentSigner)
       .grantRole(await oracleReportSanityChecker.SECOND_OPINION_MANAGER_ROLE(), agentSigner.address);
 
-    let beaconBalance = (await lido.getBeaconStat()).beaconBalance;
+    let balanceStats = await lido.getBalanceStats();
+    let clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     // Report initial balances if TVL is zero
-    if (beaconBalance === 0n) {
+    if (clBalance === 0n) {
       await report(ctx, {
         clDiff: INITIAL_REPORTED_BALANCE,
         clAppearedValidators: 3n,
         excludeVaultsBalances: true,
       });
-      beaconBalance = (await lido.getBeaconStat()).beaconBalance;
+      balanceStats = await lido.getBalanceStats();
+      clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     }
-    totalSupply = beaconBalance;
+    totalSupply = clBalance;
 
     await oracleReportSanityChecker.connect(agentSigner).setSecondOpinionOracleAndCLBalanceUpperMargin(soAddress, 74n);
   });
