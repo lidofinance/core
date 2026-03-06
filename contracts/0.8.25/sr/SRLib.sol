@@ -353,7 +353,7 @@ library SRLib {
 
     /// @notice calculate allocation amounts for all modules
     /// @dev If `_isTopUp` is `true`, allocation is performed for top-up deposits targeting
-    ///      WC type `0x02` validators. In this case, `_cfg.mexEBType2` used
+    ///      WC type `0x02` validators. In this case, `_cfg.maxEBType2` used
     ///      to correctly calculate the module's capacity.
     function _getModulesAllocationAndCapacity(Config calldata _cfg, uint256 depositsToAllocate, bool _isTopUp)
         internal

@@ -32,24 +32,18 @@ interface IStakingRouter {
 }
 
 /**
- * @dev Interface for source staking module (CMv1/NOR) to get individual signing keys
+ * @dev Unified interface for staking modules (NOR, SDVT, CMv1, CMv2)
+ *      It also works for legacy staking modules (NOR, SDVT) where `getSigningKeys` returns different
+ *      tuple `(bytes memory pubkeys, bytes memory signatures, bool[] memory used)`.
+ *      The trick: `abi.decode(returndata, (bytes))` will decode only the first tuple element.
+ *      This is safe as long as the first returned value really is `bytes pubkeys` in that position.
  */
-interface ISourceModule {
-    function getSigningKey(
-        uint256 _nodeOperatorId,
-        uint256 _index
-    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
-}
-
-/**
- * @dev Interface for target staking module (CMv2/NOR) to get signing keys in batches
- */
-interface ITargetModule {
+interface IUnifiedStakingModule {
     function getSigningKeys(
-        uint256 _nodeOperatorId,
-        uint256 _offset,
-        uint256 _limit
-    ) external view returns (bytes memory pubkeys, bytes memory signatures, bool[] memory used);
+        uint256 nodeOperatorId,
+        uint256 startIndex,
+        uint256 keysCount
+    ) external view returns (bytes memory);
 
     function getNodeOperatorSummary(
         uint256 _nodeOperatorId
@@ -99,8 +93,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
     error ArraysLengthMismatch(uint256 sourceLength, uint256 targetLength);
     error EmptyBatch();
-    error SourceKeyNotDeposited(uint256 sourceOperatorId, uint256 keyIndex);
-    error TargetKeyNotDeposited(uint256 targetOperatorId, uint256 keyIndex, uint256 totalDeposited);
+    error KeyNotDeposited(uint256 moduleId, uint256 operatorId, uint256 keyIndex);
     error NotAuthorized(address caller, uint256 sourceOperatorId, uint256 targetOperatorId);
 
     // ==========
@@ -368,61 +361,50 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
             revert PairNotAllowed(sourceOperatorId, targetOperatorId);
         }
 
-        // Get module interfaces
-        ISourceModule sourceModule = _getSourceModule();
-        ITargetModule targetModule = _getTargetModule();
-
-        // Get totalDepositedValidators for target operator
-        (,,,,,, uint256 totalDepositedValidators,) = targetModule.getNodeOperatorSummary(targetOperatorId);
-
-        // Allocate arrays
-        sourcePubkeys = new bytes[](count);
-        targetPubkeys = new bytes[](count);
-
-        // Validate source keys (must be used/deposited)
-        for (uint256 i = 0; i < count; ++i) {
-            uint256 srcIndex = sourceValidatorIndices[i];
-            (bytes memory key,, bool used) = sourceModule.getSigningKey(sourceOperatorId, srcIndex);
-
-            if (!used) {
-                revert SourceKeyNotDeposited(sourceOperatorId, srcIndex);
-            }
-            sourcePubkeys[i] = key;
-        }
-
-        // Validate target keys (must be deposited - active validators)
-        for (uint256 i = 0; i < count; ++i) {
-            uint256 tgtIndex = targetValidatorIndices[i];
-
-            // Key is deposited if index < totalDepositedValidators
-            if (tgtIndex >= totalDepositedValidators) {
-                revert TargetKeyNotDeposited(targetOperatorId, tgtIndex, totalDepositedValidators);
-            }
-
-            // Get the target key using getSigningKeys with offset=tgtIndex, limit=1
-            (bytes memory pubkeys,,) = targetModule.getSigningKeys(targetOperatorId, tgtIndex, 1);
-
-            // pubkeys is concatenated, extract the single 48-byte key
-            targetPubkeys[i] = _extractPubkey(pubkeys, 0);
-        }
+        // Validate keys and extract pubkeys
+        sourcePubkeys = _validateAndExtractKeys(SOURCE_MODULE_ID, sourceOperatorId, sourceValidatorIndices);
+        targetPubkeys = _validateAndExtractKeys(TARGET_MODULE_ID, targetOperatorId, targetValidatorIndices);
 
         return (sourcePubkeys, targetPubkeys);
     }
 
     /**
-     * @dev Returns the source module interface from StakingRouter
+     * @dev Validates that all keys are deposited and extracts their pubkeys
+     * @param moduleId The staking module ID (for error reporting)
+     * @param operatorId The node operator ID
+     * @param validatorIndices Indices of validators to validate
+     * @return pubkeys Array of extracted 48-byte pubkeys
      */
-    function _getSourceModule() internal view returns (ISourceModule) {
-        IStakingRouter.StakingModule memory module = STAKING_ROUTER.getStakingModule(SOURCE_MODULE_ID);
-        return ISourceModule(module.stakingModuleAddress);
+    function _validateAndExtractKeys(
+        uint256 moduleId,
+        uint256 operatorId,
+        uint256[] calldata validatorIndices
+    ) internal view returns (bytes[] memory pubkeys) {
+        IUnifiedStakingModule module = _getModule(moduleId);
+
+        (,,,,,, uint256 totalDeposited,) = module.getNodeOperatorSummary(operatorId);
+
+        uint256 count = validatorIndices.length;
+        pubkeys = new bytes[](count);
+
+        for (uint256 i = 0; i < count; ++i) {
+            uint256 keyIndex = validatorIndices[i];
+
+            if (keyIndex >= totalDeposited) {
+                revert KeyNotDeposited(moduleId, operatorId, keyIndex);
+            }
+
+            bytes memory keys = module.getSigningKeys(operatorId, keyIndex, 1);
+            pubkeys[i] = _extractPubkey(keys, 0);
+        }
     }
 
     /**
-     * @dev Returns the target module interface from StakingRouter
+     * @dev Returns a staking module interface from StakingRouter by module ID
      */
-    function _getTargetModule() internal view returns (ITargetModule) {
-        IStakingRouter.StakingModule memory module = STAKING_ROUTER.getStakingModule(TARGET_MODULE_ID);
-        return ITargetModule(module.stakingModuleAddress);
+    function _getModule(uint256 moduleId) internal view returns (IUnifiedStakingModule) {
+        IStakingRouter.StakingModule memory sm = STAKING_ROUTER.getStakingModule(moduleId);
+        return IUnifiedStakingModule(sm.stakingModuleAddress);
     }
 
     /**

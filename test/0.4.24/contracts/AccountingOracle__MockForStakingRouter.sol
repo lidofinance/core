@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-contract AccountingOracle__MockForLidoFastLane {
+contract AccountingOracle__MockForStakingRouter {
     uint256 currentFrameRefSlot;
     uint256 lastProcessingRefSlot;
     bool mainDataSubmitted;
