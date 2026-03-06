@@ -227,24 +227,14 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .withArgs(expectedLimitPerDay, decreasePerDay);
   });
 
-  it("reverts with CLBalanceIncreaseRatePerDayLimitExceeded when CL increase exceeds appeared limit", async () => {
-    const clIncreasePerDay = ether("105");
-    const expectedLimitPerDay = limits.appearedEthAmountPerDayLimit * ether("1");
-
-    await expect(check([{ id: 1n, activeWei: clIncreasePerDay }]))
-      .to.be.revertedWithCustomError(checker, "CLBalanceIncreaseRatePerDayLimitExceeded")
-      .withArgs(expectedLimitPerDay, clIncreasePerDay);
+  it("does not apply total CL increase limit in module/consistency path", async () => {
+    await expect(check([{ id: 1n, activeWei: ether("105") }])).not.to.be.reverted;
   });
 
-  it("reverts with CLBalanceDecreaseRatePerDayLimitExceeded when CL decrease exceeds exited limit", async () => {
+  it("does not apply total CL decrease limit in module/consistency path", async () => {
     await seedPreviousBalances([{ id: 1n, activeWei: ether("105") }]);
 
-    const clDecreasePerDay = ether("105");
-    const expectedLimitPerDay = limits.exitedEthAmountPerDayLimit * ether("1");
-
-    await expect(check([{ id: 1n, activeWei: 0n }]))
-      .to.be.revertedWithCustomError(checker, "CLBalanceDecreaseRatePerDayLimitExceeded")
-      .withArgs(expectedLimitPerDay, clDecreasePerDay);
+    await expect(check([{ id: 1n, activeWei: 0n }])).not.to.be.reverted;
   });
 
   it("uses timeElapsed in per-day normalization (timeElapsed = 0 path)", async () => {

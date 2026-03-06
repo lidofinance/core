@@ -649,7 +649,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
-    /// @notice Check per-day module and total CL balance change rates against configured limits.
+    /// @notice Check per-day module balance change rates against configured limits.
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _activeBalancesGweiByStakingModule,
@@ -675,16 +675,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _pendingBalancesGweiByStakingModule,
             _timeElapsed
         );
-        (uint256 clBalanceIncreasePerDay, uint256 clBalanceDecreasePerDay, uint256 currCLValidatorsBalance) =
-            _calculateCLBalanceChangePerDay(stakingRouter, _clActiveBalanceGwei, _clPendingBalanceGwei, _timeElapsed);
+        uint256 currCLValidatorsBalance = (_clActiveBalanceGwei + _clPendingBalanceGwei) * 1 gwei;
 
         uint256 slashingLimit = (currCLValidatorsBalance * limitsList.maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
         uint256 slashingLimitPerDay = _normalizePerDay(slashingLimit, _timeElapsed);
 
         _checkAppearedEthAmountPerDay(limitsList, moduleBalanceIncreasePerDay);
         _checkModuleBalanceDecreaseRatePerDay(limitsList, moduleBalanceDecreasePerDay, slashingLimitPerDay);
-        _checkCLBalanceIncreaseRatePerDay(limitsList, clBalanceIncreasePerDay);
-        _checkCLBalanceDecreaseRatePerDay(limitsList, clBalanceDecreasePerDay, slashingLimitPerDay);
     }
 
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
@@ -859,20 +856,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _checkCLBalanceDecreaseRatePerDay(
-        LimitsList memory _limitsList,
-        uint256 _clBalanceDecreaseEthAmountPerDay,
-        uint256 _slashingLimitEthAmountPerDay
-    ) internal pure {
-        uint256 clBalanceDecreaseLimitPerDay = _limitsList.exitedEthAmountPerDayLimit * 1 ether + _slashingLimitEthAmountPerDay;
-        if (_clBalanceDecreaseEthAmountPerDay > clBalanceDecreaseLimitPerDay) {
-            revert CLBalanceDecreaseRatePerDayLimitExceeded(
-                clBalanceDecreaseLimitPerDay,
-                _clBalanceDecreaseEthAmountPerDay
-            );
-        }
-    }
-
     function _calculateModuleBalanceChangePerDay(
         IStakingRouter _stakingRouter,
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
@@ -898,25 +881,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         moduleBalanceIncreasePerDay = _normalizePerDay(moduleBalanceIncrease, _timeElapsed);
         moduleBalanceDecreasePerDay = _normalizePerDay(moduleBalanceDecrease, _timeElapsed);
-    }
-
-    function _calculateCLBalanceChangePerDay(
-        IStakingRouter _stakingRouter,
-        uint256 _clActiveBalanceGwei,
-        uint256 _clPendingBalanceGwei,
-        uint256 _timeElapsed
-    ) internal view returns (uint256 clBalanceIncreasePerDay, uint256 clBalanceDecreasePerDay, uint256 currCLValidatorsBalance) {
-        uint256 previousCLValidatorsBalance = _stakingRouter.getTotalStakingModulesBalance();
-        currCLValidatorsBalance = (_clActiveBalanceGwei + _clPendingBalanceGwei) * 1 gwei;
-        uint256 clBalanceIncrease;
-        uint256 clBalanceDecrease;
-        if (currCLValidatorsBalance >= previousCLValidatorsBalance) {
-            clBalanceIncrease = currCLValidatorsBalance - previousCLValidatorsBalance;
-        } else {
-            clBalanceDecrease = previousCLValidatorsBalance - currCLValidatorsBalance;
-        }
-        clBalanceIncreasePerDay = _normalizePerDay(clBalanceIncrease, _timeElapsed);
-        clBalanceDecreasePerDay = _normalizePerDay(clBalanceDecrease, _timeElapsed);
     }
 
     function _normalizePerDay(uint256 _amount, uint256 _timeElapsed) internal pure returns (uint256) {
@@ -1298,7 +1262,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
     error ModuleBalanceDecreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 decreasePerDay);
     error CLBalanceIncreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 increasePerDay);
-    error CLBalanceDecreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 decreasePerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
