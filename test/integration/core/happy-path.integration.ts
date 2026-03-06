@@ -201,21 +201,31 @@ describe("Scenario: Protocol Happy Path", () => {
 
   it("Should deposit to staking modules", async () => {
     const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
+    const agent = await ctx.getSigner("agent");
 
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
+    await lido.connect(agent).setDepositsReserveTarget(ether("128"));
+    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false, skipWithdrawals: true });
 
     const withdrawalsUnfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
+    const depositsReserveTarget = await lido.getDepositsReserveTarget();
+    const depositsReserve = await lido.getDepositsReserve();
+    const withdrawalsReserve = await lido.getWithdrawalsReserve();
     const depositableEther = await lido.getDepositableEther();
 
     const bufferedEtherBeforeDeposit = await lido.getBufferedEther();
 
-    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUnfinalizedStETH;
+    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsReserve;
 
+    expect(depositsReserveTarget).to.equal(ether("128"), "Deposits reserve target");
+    expect(depositsReserve).to.equal(ether("128"), "Deposits reserve");
     expect(depositableEther).to.equal(expectedDepositableEther, "Depositable ether");
+    expect(withdrawalsReserve).to.be.lte(withdrawalsUnfinalizedStETH, "Withdrawals reserve should not exceed demand");
 
     log.debug("Depositable ether", {
       "Buffered ether": ethers.formatEther(bufferedEtherBeforeDeposit),
       "Withdrawals unfinalized stETH": ethers.formatEther(withdrawalsUnfinalizedStETH),
+      "Withdrawals reserve": ethers.formatEther(withdrawalsReserve),
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 

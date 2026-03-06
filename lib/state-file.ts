@@ -91,7 +91,6 @@ export enum Sk {
   chainId = "chainId",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
-  fastLaneStorage = "fastLaneStorage",
   accounting = "accounting",
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
