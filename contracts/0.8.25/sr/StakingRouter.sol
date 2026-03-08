@@ -775,7 +775,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
         for (uint256 i; i < n; ++i) {
             if (_pubkeys[i].length != PUBKEY_LENGTH) {
-                revert InvalidTopUpPubkeyLength();
+                revert WrongPubkeyLength();
             }
         }
     }
@@ -973,7 +973,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             IStakingModule(stakingModuleAddress).obtainDepositData(maxDepositsCount, _depositCalldata);
 
         // Calculate actual deposits count from returned keys
-        if (publicKeysBatch.length % PUBKEY_LENGTH != 0) revert InvalidTopUpPubkeyLength();
+        if (publicKeysBatch.length % PUBKEY_LENGTH != 0) revert WrongPubkeyLength();
         uint256 actualDepositsCount = publicKeysBatch.length / PUBKEY_LENGTH;
 
         if (actualDepositsCount > maxDepositsCount) revert ModuleReturnExceedTarget();
@@ -987,10 +987,10 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
         if (actualDepositsCount == 0) return;
 
+        uint256 etherBalanceBeforeDeposits = address(this).balance;
+
         // Pull ETH from Lido based on actual keys returned
         LIDO.withdrawDepositableEther(depositsValue, actualDepositsCount);
-
-        uint256 etherBalanceBeforeDeposits = address(this).balance;
 
         BeaconChainDepositor.makeBeaconChainDeposits32ETH(
             DEPOSIT_CONTRACT,
@@ -1005,7 +1005,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         uint256 etherBalanceAfterDeposits = address(this).balance;
 
         /// @dev All pulled ETH must be deposited and self balance stay the same.
-        assert(etherBalanceBeforeDeposits - etherBalanceAfterDeposits == depositsValue);
+        assert(etherBalanceBeforeDeposits == etherBalanceAfterDeposits);
     }
 
     /// @notice Set 0x01 credentials to withdraw ETH on Consensus Layer side.

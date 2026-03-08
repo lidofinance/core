@@ -1034,7 +1034,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
       await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
-        "InvalidTopUpPubkeyLength",
+        "WrongPubkeyLength",
       );
     });
   });

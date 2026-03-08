@@ -165,7 +165,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
                 ValidatorWitness calldata vw = _topUps.validatorWitness[i];
 
                 if (vw.pubkey.length != PUBKEY_LENGTH) {
-                    revert InvalidTopUpPubkeyLength();
+                    revert WrongPubkeyLength();
                 }
 
                 _verifyValidatorWasActivated(_topUps.beaconRootData.slot, vw);
@@ -363,7 +363,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
     error WrongArrayLength();
     error MaxValidatorsPerTopUpExceeded();
     error WrongWithdrawalCredentials();
-    error InvalidTopUpPubkeyLength();
+    error WrongPubkeyLength();
     error MinBlockDistanceNotMet();
     error DuplicateValidatorIndex();
     error ValidatorIsNotActivated();
