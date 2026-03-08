@@ -124,7 +124,7 @@
       "maxCLBalanceDecreaseBP": 360,
       "clBalanceOraclesErrorUpperBPLimit": 50,
       "consolidationEthAmountPerDayLimit": 57600,
-      "exitedValidatorEthAmountLimit": "32000000000000000000"
+      "exitedValidatorEthAmountLimit": 32
     }
   },
   "oracleDaemonConfig": {

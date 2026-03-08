@@ -48,7 +48,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     maxCLBalanceDecreaseBP: MAX_CL_BALANCE_DECREASE_BP,
     clBalanceOraclesErrorUpperBPLimit: 50n,
     consolidationEthAmountPerDayLimit: 0n,
-    exitedValidatorEthAmountLimit: ether("1"),
+    exitedValidatorEthAmountLimit: 1n,
   };
 
   let originalState: string;

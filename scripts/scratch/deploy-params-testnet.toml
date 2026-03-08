@@ -117,7 +117,7 @@ maxPositiveTokenRebase = 5000000                       # Maximum positive token 
 maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 57600              # Consolidation ETH amount per day limit
-exitedValidatorEthAmountLimit = "32000000000000000000" # Exited validator ETH amount limit in Wei (32 ETH)
+exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 
 # Oracle daemon configuration
 [oracleDaemonConfig]

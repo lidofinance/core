@@ -52,7 +52,7 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ac
       maxCLBalanceDecreaseBP: 360n,
       clBalanceOraclesErrorUpperBPLimit: 0n,
       consolidationEthAmountPerDayLimit: 0n,
-      exitedValidatorEthAmountLimit: 10n ** 18n,
+      exitedValidatorEthAmountLimit: 1n,
     }),
   );
 }

@@ -145,7 +145,7 @@ struct LimitsList {
     uint256 consolidationEthAmountPerDayLimit;
     /// @notice Effective ETH amount attributed to a single exited validator
     ///     in the exited ETH amount per day check.
-    /// @dev Stored in Wei. Must fit into uint128.
+    /// @dev Stored in whole ETH units. Must fit into uint16.
     uint256 exitedValidatorEthAmountLimit;
 }
 
@@ -163,7 +163,7 @@ struct LimitsListPacked {
     uint16 maxCLBalanceDecreaseBP;
     uint16 clBalanceOraclesErrorUpperBPLimit;
     uint32 consolidationEthAmountPerDayLimit;
-    uint128 exitedValidatorEthAmountLimit;
+    uint16 exitedValidatorEthAmountLimit;
 }
 
 struct ReportData {
@@ -705,7 +705,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _timeElapsed
     ) external view {
         LimitsList memory limitsList = _limits.unpack();
-        uint256 exitedEthAmount = _newlyExitedValidatorsCount * limitsList.exitedValidatorEthAmountLimit;
+        uint256 exitedEthAmount = _newlyExitedValidatorsCount * limitsList.exitedValidatorEthAmountLimit * 1 ether;
         uint256 exitedEthAmountPerDay = _normalizePerDay(exitedEthAmount, _timeElapsed);
         _checkExitedEthAmountPerDay(limitsList, exitedEthAmountPerDay);
     }
@@ -1181,7 +1181,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             emit ConsolidationEthAmountPerDayLimitSet(_newLimitsList.consolidationEthAmountPerDayLimit);
         }
         if (_oldLimitsList.exitedValidatorEthAmountLimit != _newLimitsList.exitedValidatorEthAmountLimit) {
-            _checkLimitValue(_newLimitsList.exitedValidatorEthAmountLimit, 1, type(uint128).max);
+            _checkLimitValue(_newLimitsList.exitedValidatorEthAmountLimit, 1, type(uint16).max);
             emit ExitedValidatorEthAmountLimitSet(_newLimitsList.exitedValidatorEthAmountLimit);
         }
         if (_oldLimitsList.annualBalanceIncreaseBPLimit != _newLimitsList.annualBalanceIncreaseBPLimit) {
@@ -1307,7 +1307,7 @@ library LimitsListPacker {
         res.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItem);
         res.maxCLBalanceDecreaseBP = _toBasisPoints(_limitsList.maxCLBalanceDecreaseBP);
         res.clBalanceOraclesErrorUpperBPLimit = _toBasisPoints(_limitsList.clBalanceOraclesErrorUpperBPLimit);
-        res.exitedValidatorEthAmountLimit = SafeCast.toUint128(_limitsList.exitedValidatorEthAmountLimit);
+        res.exitedValidatorEthAmountLimit = SafeCast.toUint16(_limitsList.exitedValidatorEthAmountLimit);
     }
 
     function _toBasisPoints(uint256 _value) private pure returns (uint16) {

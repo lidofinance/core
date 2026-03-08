@@ -444,7 +444,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const refSlotDelta = reportFields.refSlot - (await oracle.getLastProcessingRefSlot());
         const timeElapsed = refSlotDelta * SECONDS_PER_SLOT;
-        const exitedEthAmount = totalExitedValidators * limits.exitedValidatorEthAmountLimit;
+        const exitedEthAmount = totalExitedValidators * limits.exitedValidatorEthAmountLimit * 10n ** 18n;
         const exitedEthAmountPerDay =
           timeElapsed === 0n ? exitedEthAmount * 86_400n : (exitedEthAmount * 86_400n) / timeElapsed;
         const exitedEthAmountPerDayLimitWithConsolidation =
