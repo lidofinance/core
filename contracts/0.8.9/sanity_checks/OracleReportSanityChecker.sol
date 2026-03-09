@@ -169,10 +169,10 @@ struct OperationalLimitsPacked {
 }
 
 struct ReportData {
-    uint256 timestamp;      // Logical report timestamp in seconds
-    uint256 clBalance;      // CL balance in Wei
-    uint256 deposits;       // Deposits for the period since the last report in Wei
-    uint256 clWithdrawals;  // Actual ETH moved from CL to withdrawal vault this period
+    uint64 timestamp;       // Logical report timestamp in seconds
+    uint128 clBalance;      // CL balance in Wei
+    uint128 deposits;       // Deposits for the period since the last report in Wei
+    uint128 clWithdrawals;  // Actual ETH moved from CL to withdrawal vault this period
 }
 
 struct CLBalanceDecreaseCheckParams {
@@ -947,7 +947,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _deposits,
         uint256 _clWithdrawals
     ) internal {
-        reportData.push(ReportData(_timestamp, _clBalance, _deposits, _clWithdrawals));
+        reportData.push(
+            ReportData({
+                timestamp: SafeCast.toUint64(_timestamp),
+                clBalance: SafeCast.toUint128(_clBalance),
+                deposits: SafeCast.toUint128(_deposits),
+                clWithdrawals: SafeCast.toUint128(_clWithdrawals)
+            })
+        );
     }
 
     function _checkCLBalanceDecrease(CLBalanceDecreaseCheckParams memory _checkParams) internal {
