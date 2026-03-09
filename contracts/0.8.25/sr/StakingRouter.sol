@@ -44,6 +44,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @dev ACL roles
     bytes32 public constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
     bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
+    bytes32 public constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
     bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
@@ -230,6 +231,31 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         emit StakingModuleFeesSet(_moduleId, _stakingModuleFee, _treasuryFee, setBy);
         emit StakingModuleMaxDepositsPerBlockSet(_moduleId, _maxDepositsPerBlock, setBy);
         emit StakingModuleMinDepositBlockDistanceSet(_moduleId, _minDepositBlockDistance, setBy);
+    }
+
+    /// @notice Updates staking module share params.
+    /// @param _stakingModuleId Staking module id.
+    /// @param _stakeShareLimit New stake share limit value.
+    /// @param _priorityExitShareThreshold New priority exit share threshold value.
+    /// @dev The function is restricted to the `STAKING_MODULE_SHARE_MANAGE_ROLE` role.
+    function updateModuleShares(
+        uint256 _stakingModuleId,
+        uint16 _stakeShareLimit,
+        uint16 _priorityExitShareThreshold
+    ) external onlyRole(STAKING_MODULE_SHARE_MANAGE_ROLE) {
+        SRUtils._requireModuleIdExists(_stakingModuleId);
+        SRLib._updateModuleShares(
+            _stakingModuleId,
+            _stakeShareLimit,
+            _priorityExitShareThreshold
+        );
+
+        emit StakingModuleShareLimitSet(
+            _stakingModuleId,
+            _stakeShareLimit,
+            _priorityExitShareThreshold,
+            _msgSender()
+        );
     }
 
     /// @notice Updates the limit of the validators that can be used for deposit.

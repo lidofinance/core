@@ -226,6 +226,19 @@ library SRLib {
         return newModuleId;
     }
 
+    /// @notice Validates share-related parameters.
+    /// @param _stakeShareLimit Stake share limit to validate (in basis points).
+    /// @param _priorityExitShareThreshold Priority exit share threshold to validate (in basis points).
+    function _validateShareParams(uint256 _stakeShareLimit, uint256 _priorityExitShareThreshold) private pure {
+        if (_stakeShareLimit > SRUtils.TOTAL_BASIS_POINTS) {
+            revert ISRBase.InvalidStakeShareLimit();
+        }
+        if (_priorityExitShareThreshold > SRUtils.TOTAL_BASIS_POINTS) {
+            revert ISRBase.InvalidPriorityExitShareThreshold();
+        }
+        if (_stakeShareLimit > _priorityExitShareThreshold) revert ISRBase.InvalidPriorityExitShareThreshold();
+    }
+
     function _updateModuleParams(
         uint256 _moduleId,
         uint256 _stakeShareLimit,
@@ -235,13 +248,7 @@ library SRLib {
         uint256 _maxDepositsPerBlock,
         uint256 _minDepositBlockDistance
     ) public {
-        if (_stakeShareLimit > SRUtils.TOTAL_BASIS_POINTS) {
-            revert ISRBase.InvalidStakeShareLimit();
-        }
-        if (_priorityExitShareThreshold > SRUtils.TOTAL_BASIS_POINTS) {
-            revert ISRBase.InvalidPriorityExitShareThreshold();
-        }
-        if (_stakeShareLimit > _priorityExitShareThreshold) revert ISRBase.InvalidPriorityExitShareThreshold();
+        _validateShareParams(_stakeShareLimit, _priorityExitShareThreshold);
         if (_moduleFee + _treasuryFee > SRUtils.TOTAL_BASIS_POINTS) revert ISRBase.InvalidFeeSum();
         if (_minDepositBlockDistance == 0 || _minDepositBlockDistance > type(uint64).max) {
             revert ISRBase.InvalidMinDepositBlockDistance();
@@ -265,6 +272,29 @@ library SRLib {
         // forge-lint: disable-end(unsafe-typecast)
         // 1 SSTORE
         _moduleId.getModuleState().deposits = stateDeposits;
+    }
+
+    /// @notice Updates only the share-related params of a staking module.
+    /// @param _moduleId Id of the staking module.
+    /// @param _stakeShareLimit New stake share limit (in basis points).
+    /// @param _priorityExitShareThreshold New priority exit share threshold (in basis points).
+    function _updateModuleShares(
+        uint256 _moduleId,
+        uint256 _stakeShareLimit,
+        uint256 _priorityExitShareThreshold
+    ) public {
+        _validateShareParams(_stakeShareLimit, _priorityExitShareThreshold);
+
+        // 1 SLOAD
+        ModuleStateConfig memory stateConfig = _moduleId.getModuleState().config;
+
+        // forge-lint: disable-start(unsafe-typecast)
+        stateConfig.stakeShareLimit = uint16(_stakeShareLimit);
+        stateConfig.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
+        // forge-lint: disable-end(unsafe-typecast)
+        
+        // 1 SSTORE
+        _moduleId.getModuleState().config = stateConfig;
     }
 
     /// @dev module state helpers
