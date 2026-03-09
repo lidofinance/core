@@ -22,7 +22,7 @@ const ONE_DAY = 24n * 60n * 60n;
 describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", () => {
   type ModuleBalance = {
     id: bigint;
-    activeWei: bigint;
+    validatorsBalanceWei: bigint;
     pendingWei?: bigint;
   };
 
@@ -61,16 +61,16 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
   const toModuleInput = (modules: ModuleBalance[]) => {
     const ids = modules.map((m) => m.id);
-    const activeBalancesGwei = modules.map((m) => toGwei(m.activeWei));
+    const validatorBalancesGweiByStakingModule = modules.map((m) => toGwei(m.validatorsBalanceWei));
     const pendingBalancesGwei = modules.map((m) => toGwei(m.pendingWei ?? 0n));
-    const clActiveBalanceGwei = activeBalancesGwei.reduce((sum, val) => sum + val, 0n);
+    const clValidatorsBalanceGwei = validatorBalancesGweiByStakingModule.reduce((sum, val) => sum + val, 0n);
     const clPendingBalanceGwei = pendingBalancesGwei.reduce((sum, val) => sum + val, 0n);
 
     return {
       ids,
-      activeBalancesGwei,
+      validatorBalancesGweiByStakingModule,
       pendingBalancesGwei,
-      clActiveBalanceGwei,
+      clValidatorsBalanceGwei,
       clPendingBalanceGwei,
     };
   };
@@ -79,7 +79,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const input = toModuleInput(modules);
     await stakingRouter.reportValidatorBalancesByStakingModule(
       input.ids,
-      input.activeBalancesGwei,
+      input.validatorBalancesGweiByStakingModule,
       input.pendingBalancesGwei,
     );
   };
@@ -88,9 +88,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const input = toModuleInput(modules);
     return checker.checkModuleAndCLBalancesChangeRates(
       input.ids,
-      input.activeBalancesGwei,
+      input.validatorBalancesGweiByStakingModule,
       input.pendingBalancesGwei,
-      input.clActiveBalanceGwei,
+      input.clValidatorsBalanceGwei,
       input.clPendingBalanceGwei,
       timeElapsed,
     );
@@ -164,9 +164,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     ).to.be.revertedWithCustomError(checker, "InvalidClBalancesData");
   });
 
-  it("reverts with InconsistentActiveBalanceByModule when active sum mismatches", async () => {
+  it("reverts with InconsistentValidatorsBalanceByModule when validators balance sum mismatches", async () => {
     await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 40n, 3n, ONE_DAY))
-      .to.be.revertedWithCustomError(checker, "InconsistentActiveBalanceByModule")
+      .to.be.revertedWithCustomError(checker, "InconsistentValidatorsBalanceByModule")
       .withArgs(40n, 30n);
   });
 
@@ -178,14 +178,14 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
   it("passes on boundary values with mixed module increase/decrease directions", async () => {
     await seedPreviousBalances([
-      { id: 1n, activeWei: ether("100") },
-      { id: 2n, activeWei: ether("100") },
+      { id: 1n, validatorsBalanceWei: ether("100") },
+      { id: 2n, validatorsBalanceWei: ether("100") },
     ]);
 
     await expect(
       check([
-        { id: 1n, activeWei: ether("210") }, // +110 ETH
-        { id: 2n, activeWei: ether("90") }, // -10 ETH
+        { id: 1n, validatorsBalanceWei: ether("210") }, // +110 ETH
+        { id: 2n, validatorsBalanceWei: ether("90") }, // -10 ETH
       ]),
     ).not.to.be.reverted;
   });
@@ -195,7 +195,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await expect(check([{ id: 1n, activeWei: currentIncreasePerDay }]))
+    await expect(check([{ id: 1n, validatorsBalanceWei: currentIncreasePerDay }]))
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, currentIncreasePerDay);
   });
@@ -207,8 +207,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
     await expect(
       check([
-        { id: 1n, activeWei: ether("60") },
-        { id: 2n, activeWei: ether("60") },
+        { id: 1n, validatorsBalanceWei: ether("60") },
+        { id: 2n, validatorsBalanceWei: ether("60") },
       ]),
     )
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
@@ -216,25 +216,25 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("reverts with ModuleBalanceDecreaseRatePerDayLimitExceeded when module decrease exceeds exited+consolidation", async () => {
-    await seedPreviousBalances([{ id: 1n, activeWei: ether("111") }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("111") }]);
 
     const decreasePerDay = ether("111");
     const expectedLimitPerDay =
       (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await expect(check([{ id: 1n, activeWei: 0n }]))
+    await expect(check([{ id: 1n, validatorsBalanceWei: 0n }]))
       .to.be.revertedWithCustomError(checker, "ModuleBalanceDecreaseRatePerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, decreasePerDay);
   });
 
   it("does not apply total CL increase limit in module/consistency path", async () => {
-    await expect(check([{ id: 1n, activeWei: ether("105") }])).not.to.be.reverted;
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("105") }])).not.to.be.reverted;
   });
 
   it("does not apply total CL decrease limit in module/consistency path", async () => {
-    await seedPreviousBalances([{ id: 1n, activeWei: ether("105") }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("105") }]);
 
-    await expect(check([{ id: 1n, activeWei: 0n }])).not.to.be.reverted;
+    await expect(check([{ id: 1n, validatorsBalanceWei: 0n }])).not.to.be.reverted;
   });
 
   it("uses timeElapsed in per-day normalization (timeElapsed = 0 path)", async () => {
@@ -243,20 +243,20 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await expect(check([{ id: 1n, activeWei: baseIncrease }], 0n))
+    await expect(check([{ id: 1n, validatorsBalanceWei: baseIncrease }], 0n))
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, normalizedIncreasePerDay);
   });
 
   it("applies dynamic slashing allowance to module and CL decrease limits", async () => {
-    await seedPreviousBalances([{ id: 1n, activeWei: ether("1030") }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("1030") }]);
 
-    await expect(check([{ id: 1n, activeWei: ether("900") }])).not.to.be.reverted;
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("900") }])).not.to.be.reverted;
 
     await checker.connect(admin).grantRole(await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE(), manager.address);
     await checker.connect(manager).setMaxCLBalanceDecreaseBP(0n);
 
-    await expect(check([{ id: 1n, activeWei: ether("900") }]))
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("900") }]))
       .to.be.revertedWithCustomError(checker, "ModuleBalanceDecreaseRatePerDayLimitExceeded")
       .withArgs(
         (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1"),
@@ -266,14 +266,14 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
   it("sums module decreases across modules before checking module decrease limit", async () => {
     await seedPreviousBalances([
-      { id: 1n, activeWei: ether("70") },
-      { id: 2n, activeWei: ether("41") },
+      { id: 1n, validatorsBalanceWei: ether("70") },
+      { id: 2n, validatorsBalanceWei: ether("41") },
     ]);
 
     await expect(
       check([
-        { id: 1n, activeWei: 0n },
-        { id: 2n, activeWei: 0n },
+        { id: 1n, validatorsBalanceWei: 0n },
+        { id: 2n, validatorsBalanceWei: 0n },
       ]),
     )
       .to.be.revertedWithCustomError(checker, "ModuleBalanceDecreaseRatePerDayLimitExceeded")

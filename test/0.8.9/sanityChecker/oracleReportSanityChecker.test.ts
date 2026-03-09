@@ -876,7 +876,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
     it("reverts when module sums are inconsistent", async () => {
       await expect(checker.checkCLBalancesConsistency([1n, 2n], [10n, 20n], [1n, 2n], 40n, 3n))
-        .to.be.revertedWithCustomError(checker, "InconsistentActiveBalanceByModule")
+        .to.be.revertedWithCustomError(checker, "InconsistentValidatorsBalanceByModule")
         .withArgs(40n, 30n);
     });
 

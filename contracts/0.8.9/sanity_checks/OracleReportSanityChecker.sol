@@ -498,9 +498,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 lidoVersion = IVersioned(lidoAddr).getContractVersion();
         if (lidoVersion != 4) revert UnexpectedLidoVersion(lidoVersion, 4);
 
-        (uint256 migrationCLActiveBalance, uint256 migrationCLPendingBalance, uint256 migrationDeposits) = ILido(lidoAddr)
+        (uint256 migrationCLValidatorsBalance, uint256 migrationCLPendingBalance, uint256 migrationDeposits) = ILido(lidoAddr)
             .getBalanceStats();
-        uint256 migrationCLBalance = migrationCLActiveBalance + migrationCLPendingBalance;
+        uint256 migrationCLBalance = migrationCLValidatorsBalance + migrationCLPendingBalance;
         uint256 migrationCLWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
 
         // Initialize vault state: vault is not drained during migration,
@@ -648,19 +648,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Check that per-module active/pending CL balances are consistent with reported totals.
+    /// @notice Check that per-module validators/pending CL balances are consistent with reported totals.
     function checkCLBalancesConsistency(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _clActiveBalanceGwei,
+        uint256 _clValidatorsBalanceGwei,
         uint256 _clPendingBalanceGwei
     ) external pure {
         _checkCLBalancesConsistency(
             _stakingModuleIdsWithUpdatedBalance,
-            _activeBalancesGweiByStakingModule,
+            _validatorBalancesGweiByStakingModule,
             _pendingBalancesGweiByStakingModule,
-            _clActiveBalanceGwei,
+            _clValidatorsBalanceGwei,
             _clPendingBalanceGwei
         );
     }
@@ -668,17 +668,17 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @notice Check per-day module balance change rates against configured limits.
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _clActiveBalanceGwei,
+        uint256 _clValidatorsBalanceGwei,
         uint256 _clPendingBalanceGwei,
         uint256 _timeElapsed
     ) external view {
         _checkCLBalancesConsistency(
             _stakingModuleIdsWithUpdatedBalance,
-            _activeBalancesGweiByStakingModule,
+            _validatorBalancesGweiByStakingModule,
             _pendingBalancesGweiByStakingModule,
-            _clActiveBalanceGwei,
+            _clValidatorsBalanceGwei,
             _clPendingBalanceGwei
         );
 
@@ -687,11 +687,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         (uint256 moduleBalanceIncreasePerDay, uint256 moduleBalanceDecreasePerDay) = _calculateModuleBalanceChangePerDay(
             stakingRouter,
             _stakingModuleIdsWithUpdatedBalance,
-            _activeBalancesGweiByStakingModule,
+            _validatorBalancesGweiByStakingModule,
             _pendingBalancesGweiByStakingModule,
             _timeElapsed
         );
-        uint256 currCLValidatorsBalance = (_clActiveBalanceGwei + _clPendingBalanceGwei) * 1 gwei;
+        uint256 currCLValidatorsBalance = (_clValidatorsBalanceGwei + _clPendingBalanceGwei) * 1 gwei;
 
         uint256 slashingLimit = (currCLValidatorsBalance * uint256(limitsList.maxCLBalanceDecreaseBP)) / MAX_BASIS_POINTS;
         uint256 slashingLimitPerDay = _normalizePerDay(slashingLimit, _timeElapsed);
@@ -802,28 +802,28 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _checkCLBalancesConsistency(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _clActiveBalanceGwei,
+        uint256 _clValidatorsBalanceGwei,
         uint256 _clPendingBalanceGwei
     ) internal pure {
         uint256 modulesCount = _stakingModuleIdsWithUpdatedBalance.length;
-        if (modulesCount != _activeBalancesGweiByStakingModule.length || modulesCount != _pendingBalancesGweiByStakingModule.length) {
+        if (modulesCount != _validatorBalancesGweiByStakingModule.length || modulesCount != _pendingBalancesGweiByStakingModule.length) {
             revert InvalidClBalancesData();
         }
 
-        uint256 activeBalancesSum;
+        uint256 validatorBalancesSum;
         uint256 pendingBalancesSum;
         for (uint256 i = 0; i < modulesCount;) {
-            activeBalancesSum += _activeBalancesGweiByStakingModule[i];
+            validatorBalancesSum += _validatorBalancesGweiByStakingModule[i];
             pendingBalancesSum += _pendingBalancesGweiByStakingModule[i];
             unchecked {
                 ++i;
             }
         }
 
-        if (activeBalancesSum != _clActiveBalanceGwei) {
-            revert InconsistentActiveBalanceByModule(_clActiveBalanceGwei, activeBalancesSum);
+        if (validatorBalancesSum != _clValidatorsBalanceGwei) {
+            revert InconsistentValidatorsBalanceByModule(_clValidatorsBalanceGwei, validatorBalancesSum);
         }
         if (pendingBalancesSum != _clPendingBalanceGwei) {
             revert InconsistentPendingBalanceByModule(_clPendingBalanceGwei, pendingBalancesSum);
@@ -884,7 +884,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     function _calculateModuleBalanceChangePerDay(
         IStakingRouter _stakingRouter,
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
         uint256 _timeElapsed
     ) internal view returns (uint256 moduleBalanceIncreasePerDay, uint256 moduleBalanceDecreasePerDay) {
@@ -893,7 +893,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         for (uint256 i = 0; i < _stakingModuleIdsWithUpdatedBalance.length;) {
             uint256 previousModuleBalance = _stakingRouter.getStakingModuleBalance(_stakingModuleIdsWithUpdatedBalance[i]);
             uint256 currentModuleBalance =
-                (_activeBalancesGweiByStakingModule[i] + _pendingBalancesGweiByStakingModule[i]) * 1 gwei;
+                (_validatorBalancesGweiByStakingModule[i] + _pendingBalancesGweiByStakingModule[i]) * 1 gwei;
             if (currentModuleBalance >= previousModuleBalance) {
                 moduleBalanceIncrease += currentModuleBalance - previousModuleBalance;
             } else {
@@ -1307,7 +1307,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectSharesRequestedToBurn(uint256 actualSharesToBurn);
     error IncorrectCLBalanceIncrease(uint256 annualBalanceDiff);
     error InvalidClBalancesData();
-    error InconsistentActiveBalanceByModule(uint256 expected, uint256 actual);
+    error InconsistentValidatorsBalanceByModule(uint256 expected, uint256 actual);
     error InconsistentPendingBalanceByModule(uint256 expected, uint256 actual);
     error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
     error ModuleBalanceDecreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 decreasePerDay);

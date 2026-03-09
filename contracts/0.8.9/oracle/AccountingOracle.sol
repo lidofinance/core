@@ -25,9 +25,9 @@ interface IOracleReportSanityChecker {
     ) external view;
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _activeBalancesGweiByStakingModule,
+        uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _clActiveBalanceGwei,
+        uint256 _clValidatorsBalanceGwei,
         uint256 _clPendingBalanceGwei,
         uint256 _timeElapsed
     ) external view;

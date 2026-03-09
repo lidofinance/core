@@ -4,17 +4,17 @@
 pragma solidity 0.8.9;
 
 contract Lido__MockForSanityChecker {
-    uint256 public clActiveBalance;
+    uint256 public clValidatorsBalance;
     uint256 public clPendingBalance;
     uint256 public depositedBalance;
     uint256 public contractVersion;
 
     function mock__setBalanceStats(
-        uint256 _clActiveBalance,
+        uint256 _clValidatorsBalance,
         uint256 _clPendingBalance,
         uint256 _depositedBalance
     ) external {
-        clActiveBalance = _clActiveBalance;
+        clValidatorsBalance = _clValidatorsBalance;
         clPendingBalance = _clPendingBalance;
         depositedBalance = _depositedBalance;
     }
@@ -32,7 +32,7 @@ contract Lido__MockForSanityChecker {
             uint256 depositedSinceLastReport
         )
     {
-        clValidatorsBalanceAtLastReport = clActiveBalance;
+        clValidatorsBalanceAtLastReport = clValidatorsBalance;
         clPendingBalanceAtLastReport = clPendingBalance;
         depositedSinceLastReport = depositedBalance;
     }
