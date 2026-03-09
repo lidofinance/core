@@ -174,8 +174,11 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     it("has compact packed limits representation", async () => {
       const artifact = await artifacts.readArtifact("OracleReportSanityCheckerWrapper");
 
-      const functionABI = artifact.abi.find(
-        (entry) => entry.type === "function" && entry.name === "exposePackedLimits",
+      const accountingCoreABI = artifact.abi.find(
+        (entry) => entry.type === "function" && entry.name === "exposeAccountingCorePackedLimits",
+      );
+      const operationalABI = artifact.abi.find(
+        (entry) => entry.type === "function" && entry.name === "exposeOperationalPackedLimits",
       );
 
       const sizeOfCalc = (x: string) => {
@@ -197,10 +200,15 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         }
       };
 
-      const structSizeInBits = functionABI.outputs[0].components
+      const accountingCoreSizeInBits = accountingCoreABI.outputs[0].components
         .map((x: { type: string }) => x.type)
         .reduce((acc: number, x: string) => acc + sizeOfCalc(x), 0);
-      expect(structSizeInBits).to.lessThanOrEqual(512);
+      const operationalSizeInBits = operationalABI.outputs[0].components
+        .map((x: { type: string }) => x.type)
+        .reduce((acc: number, x: string) => acc + sizeOfCalc(x), 0);
+
+      expect(accountingCoreSizeInBits).to.lessThanOrEqual(256);
+      expect(operationalSizeInBits).to.lessThanOrEqual(256);
     });
 
     it("second opinion can be changed or removed", async () => {

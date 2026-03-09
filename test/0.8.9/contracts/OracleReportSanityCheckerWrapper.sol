@@ -7,14 +7,19 @@ pragma solidity 0.8.9;
 import {
     OracleReportSanityChecker,
     LimitsList,
-    LimitsListPacked,
-    LimitsListPacker
+    AccountingCoreLimitsPacked,
+    OperationalLimitsPacked,
+    LimitsListPacker,
+    LimitsListUnpacker
 } from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
     using LimitsListPacker for LimitsList;
+    using LimitsListUnpacker for AccountingCoreLimitsPacked;
 
-    LimitsListPacked private _limitsListPacked;
+    // Test-only storage for codec roundtrip checks; these are not the parent's private slots.
+    AccountingCoreLimitsPacked private _accountingCoreLimitsPacked;
+    OperationalLimitsPacked private _operationalLimitsPacked;
 
     constructor(
         address _lidoLocator,
@@ -27,15 +32,27 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         _addReportData(_timestamp, _clBalance, _deposits, _clWithdrawals);
     }
 
-    function exposePackedLimits() public view returns (LimitsListPacked memory) {
-        return _limitsListPacked;
+    function exposeAccountingCorePackedLimits() public view returns (AccountingCoreLimitsPacked memory) {
+        return _accountingCoreLimitsPacked;
+    }
+
+    function exposeOperationalPackedLimits() public view returns (OperationalLimitsPacked memory) {
+        return _operationalLimitsPacked;
     }
 
     function packAndStore() public {
-        _limitsListPacked = getOracleReportLimits().pack();
+        LimitsList memory limits = getOracleReportLimits();
+        _accountingCoreLimitsPacked = limits.packAccountingCore();
+        _operationalLimitsPacked = limits.packOperational();
     }
 
-    function packRawLimits(LimitsList memory _limitsList) external pure returns (LimitsListPacked memory) {
-        return _limitsList.pack();
+    function packRawLimits(
+        LimitsList memory _limitsList
+    ) external pure returns (AccountingCoreLimitsPacked memory, OperationalLimitsPacked memory) {
+        return (_limitsList.packAccountingCore(), _limitsList.packOperational());
+    }
+
+    function roundtripRawLimits(LimitsList memory _limitsList) external pure returns (LimitsList memory) {
+        return _limitsList.packAccountingCore().unpack(_limitsList.packOperational());
     }
 }

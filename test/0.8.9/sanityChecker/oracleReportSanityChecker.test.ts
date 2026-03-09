@@ -11,6 +11,7 @@ import {
   Burner__MockForSanityChecker,
   LidoLocator__MockForSanityChecker,
   OracleReportSanityChecker,
+  OracleReportSanityCheckerWrapper,
   StakingRouter__MockForSanityChecker,
   WithdrawalQueue__MockForSanityChecker,
 } from "typechain-types";
@@ -398,7 +399,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect((await checker.getOracleReportLimits()).simulatedShareRateDeviationBPLimit).to.equal(300n);
     });
 
-    it("setMaxBalanceExitRequestedPerReportInEth: ACL and update", async () => {
+    it("setMaxBalanceExitRequestedPerReportInEth: ACL, bounds and update", async () => {
       await checker
         .connect(admin)
         .grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE(), manager.address);
@@ -410,11 +411,46 @@ describe("OracleReportSanityChecker.sol", () => {
         await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE(),
       );
 
+      await expect(
+        checker.connect(manager).setMaxBalanceExitRequestedPerReportInEth(OVER_UINT16),
+      ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
+
       await expect(checker.connect(manager).setMaxBalanceExitRequestedPerReportInEth(60_000n))
         .to.emit(checker, "MaxBalanceExitRequestedPerReportInEthSet")
         .withArgs(60_000n);
 
       expect((await checker.getOracleReportLimits()).maxBalanceExitRequestedPerReportInEth).to.equal(60_000n);
+    });
+
+    it("setMaxBalanceExitRequestedPerReportInEth accepts zero", async () => {
+      await checker
+        .connect(admin)
+        .grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE(), manager.address);
+
+      await expect(checker.connect(manager).setMaxBalanceExitRequestedPerReportInEth(0n))
+        .to.emit(checker, "MaxBalanceExitRequestedPerReportInEthSet")
+        .withArgs(0n);
+
+      expect((await checker.getOracleReportLimits()).maxBalanceExitRequestedPerReportInEth).to.equal(0n);
+    });
+
+    it("limit setters do not emit events when the value does not change", async () => {
+      await checker.connect(admin).grantRole(await checker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(), manager.address);
+      await checker
+        .connect(admin)
+        .grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE(), manager.address);
+
+      await checker.connect(manager).setMaxPositiveTokenRebase(600_000n);
+      await expect(checker.connect(manager).setMaxPositiveTokenRebase(600_000n)).to.not.emit(
+        checker,
+        "MaxPositiveTokenRebaseSet",
+      );
+
+      await checker.connect(manager).setMaxBalanceExitRequestedPerReportInEth(60_000n);
+      await expect(checker.connect(manager).setMaxBalanceExitRequestedPerReportInEth(60_000n)).to.not.emit(
+        checker,
+        "MaxBalanceExitRequestedPerReportInEthSet",
+      );
     });
 
     it("setMaxItemsPerExtraDataTransaction: ACL, bounds and update", async () => {
@@ -570,13 +606,123 @@ describe("OracleReportSanityChecker.sol", () => {
       ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
     });
 
-    it("LimitsListPacker reverts with BasisPointsOverflow on raw pack over MAX_BASIS_POINTS", async () => {
-      const wrapper = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
+    it("roundtrips limits at packed type boundaries", async () => {
+      const wrapper = (await ethers.deployContract("OracleReportSanityCheckerWrapper", [
         await locator.getAddress(),
         await accounting.getAddress(),
         admin.address,
         defaultLimits,
-      ]);
+      ])) as OracleReportSanityCheckerWrapper;
+
+      const maxPackedLimits = {
+        exitedEthAmountPerDayLimit: OVER_UINT32 - 1n,
+        appearedEthAmountPerDayLimit: OVER_UINT32 - 1n,
+        annualBalanceIncreaseBPLimit: TOTAL_BASIS_POINTS,
+        simulatedShareRateDeviationBPLimit: TOTAL_BASIS_POINTS,
+        maxBalanceExitRequestedPerReportInEth: OVER_UINT16 - 1n,
+        maxItemsPerExtraDataTransaction: OVER_UINT16 - 1n,
+        maxNodeOperatorsPerExtraDataItem: OVER_UINT16 - 1n,
+        requestTimestampMargin: OVER_UINT32 - 1n,
+        maxPositiveTokenRebase: OVER_UINT64 - 1n,
+        maxCLBalanceDecreaseBP: TOTAL_BASIS_POINTS,
+        clBalanceOraclesErrorUpperBPLimit: TOTAL_BASIS_POINTS,
+        consolidationEthAmountPerDayLimit: OVER_UINT32 - 1n,
+        exitedValidatorEthAmountLimit: OVER_UINT16 - 1n,
+      };
+
+      const roundtrip = await wrapper.roundtripRawLimits(maxPackedLimits);
+
+      expect(roundtrip.exitedEthAmountPerDayLimit).to.equal(maxPackedLimits.exitedEthAmountPerDayLimit);
+      expect(roundtrip.appearedEthAmountPerDayLimit).to.equal(maxPackedLimits.appearedEthAmountPerDayLimit);
+      expect(roundtrip.annualBalanceIncreaseBPLimit).to.equal(maxPackedLimits.annualBalanceIncreaseBPLimit);
+      expect(roundtrip.simulatedShareRateDeviationBPLimit).to.equal(maxPackedLimits.simulatedShareRateDeviationBPLimit);
+      expect(roundtrip.maxBalanceExitRequestedPerReportInEth).to.equal(
+        maxPackedLimits.maxBalanceExitRequestedPerReportInEth,
+      );
+      expect(roundtrip.maxItemsPerExtraDataTransaction).to.equal(maxPackedLimits.maxItemsPerExtraDataTransaction);
+      expect(roundtrip.maxNodeOperatorsPerExtraDataItem).to.equal(maxPackedLimits.maxNodeOperatorsPerExtraDataItem);
+      expect(roundtrip.requestTimestampMargin).to.equal(maxPackedLimits.requestTimestampMargin);
+      expect(roundtrip.maxPositiveTokenRebase).to.equal(maxPackedLimits.maxPositiveTokenRebase);
+      expect(roundtrip.maxCLBalanceDecreaseBP).to.equal(maxPackedLimits.maxCLBalanceDecreaseBP);
+      expect(roundtrip.clBalanceOraclesErrorUpperBPLimit).to.equal(maxPackedLimits.clBalanceOraclesErrorUpperBPLimit);
+      expect(roundtrip.consolidationEthAmountPerDayLimit).to.equal(maxPackedLimits.consolidationEthAmountPerDayLimit);
+      expect(roundtrip.exitedValidatorEthAmountLimit).to.equal(maxPackedLimits.exitedValidatorEthAmountLimit);
+    });
+
+    it("packAndStore caches packed limits in wrapper storage", async () => {
+      const wrapper = (await ethers.deployContract("OracleReportSanityCheckerWrapper", [
+        await locator.getAddress(),
+        await accounting.getAddress(),
+        admin.address,
+        defaultLimits,
+      ])) as OracleReportSanityCheckerWrapper;
+
+      await wrapper.packAndStore();
+
+      const accountingPacked = await wrapper.exposeAccountingCorePackedLimits();
+      expect(accountingPacked.exitedEthAmountPerDayLimit).to.equal(defaultLimits.exitedEthAmountPerDayLimit);
+      expect(accountingPacked.appearedEthAmountPerDayLimit).to.equal(defaultLimits.appearedEthAmountPerDayLimit);
+      expect(accountingPacked.consolidationEthAmountPerDayLimit).to.equal(
+        defaultLimits.consolidationEthAmountPerDayLimit,
+      );
+      expect(accountingPacked.exitedValidatorEthAmountLimit).to.equal(defaultLimits.exitedValidatorEthAmountLimit);
+      expect(accountingPacked.annualBalanceIncreaseBPLimit).to.equal(defaultLimits.annualBalanceIncreaseBPLimit);
+      expect(accountingPacked.simulatedShareRateDeviationBPLimit).to.equal(
+        defaultLimits.simulatedShareRateDeviationBPLimit,
+      );
+      expect(accountingPacked.maxPositiveTokenRebase).to.equal(defaultLimits.maxPositiveTokenRebase);
+      expect(accountingPacked.maxCLBalanceDecreaseBP).to.equal(defaultLimits.maxCLBalanceDecreaseBP);
+      expect(accountingPacked.clBalanceOraclesErrorUpperBPLimit).to.equal(
+        defaultLimits.clBalanceOraclesErrorUpperBPLimit,
+      );
+
+      const operationalPacked = await wrapper.exposeOperationalPackedLimits();
+      expect(operationalPacked.maxBalanceExitRequestedPerReportInEth).to.equal(
+        defaultLimits.maxBalanceExitRequestedPerReportInEth,
+      );
+      expect(operationalPacked.maxItemsPerExtraDataTransaction).to.equal(defaultLimits.maxItemsPerExtraDataTransaction);
+      expect(operationalPacked.maxNodeOperatorsPerExtraDataItem).to.equal(
+        defaultLimits.maxNodeOperatorsPerExtraDataItem,
+      );
+      expect(operationalPacked.requestTimestampMargin).to.equal(defaultLimits.requestTimestampMargin);
+    });
+
+    it("slot-local setters do not affect the other packed storage block", async () => {
+      await checker.connect(admin).grantRole(await checker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(), manager.address);
+      await checker
+        .connect(admin)
+        .grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE(), manager.address);
+
+      const initialLimits = await checker.getOracleReportLimits();
+
+      await checker.connect(manager).setMaxBalanceExitRequestedPerReportInEth(60_000n);
+      const afterOperationalUpdate = await checker.getOracleReportLimits();
+      expect(afterOperationalUpdate.maxBalanceExitRequestedPerReportInEth).to.equal(60_000n);
+      expect(afterOperationalUpdate.maxPositiveTokenRebase).to.equal(initialLimits.maxPositiveTokenRebase);
+      expect(afterOperationalUpdate.exitedEthAmountPerDayLimit).to.equal(initialLimits.exitedEthAmountPerDayLimit);
+      expect(afterOperationalUpdate.consolidationEthAmountPerDayLimit).to.equal(
+        initialLimits.consolidationEthAmountPerDayLimit,
+      );
+
+      await checker.connect(manager).setMaxPositiveTokenRebase(600_000n);
+      const afterAccountingUpdate = await checker.getOracleReportLimits();
+      expect(afterAccountingUpdate.maxPositiveTokenRebase).to.equal(600_000n);
+      expect(afterAccountingUpdate.maxBalanceExitRequestedPerReportInEth).to.equal(
+        afterOperationalUpdate.maxBalanceExitRequestedPerReportInEth,
+      );
+      expect(afterAccountingUpdate.requestTimestampMargin).to.equal(afterOperationalUpdate.requestTimestampMargin);
+      expect(afterAccountingUpdate.maxItemsPerExtraDataTransaction).to.equal(
+        afterOperationalUpdate.maxItemsPerExtraDataTransaction,
+      );
+    });
+
+    it("packed limits helpers revert with BasisPointsOverflow on raw pack over MAX_BASIS_POINTS", async () => {
+      const wrapper = (await ethers.deployContract("OracleReportSanityCheckerWrapper", [
+        await locator.getAddress(),
+        await accounting.getAddress(),
+        admin.address,
+        defaultLimits,
+      ])) as OracleReportSanityCheckerWrapper;
 
       const malformedLimits = {
         ...defaultLimits,
