@@ -178,7 +178,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .withArgs(4n, 3n);
   });
 
-  it("passes on boundary values with mixed module increase/decrease directions", async () => {
+  it("allows redistribution between modules when total CL balance is unchanged", async () => {
     await seedPreviousBalances([
       { id: 1n, validatorsBalanceWei: ether("100") },
       { id: 2n, validatorsBalanceWei: ether("100") },
@@ -186,8 +186,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
     await expect(
       check([
-        { id: 1n, validatorsBalanceWei: ether("210") }, // +110 ETH
-        { id: 2n, validatorsBalanceWei: ether("90") }, // -10 ETH
+        { id: 1n, validatorsBalanceWei: 0n }, // -100 ETH
+        { id: 2n, validatorsBalanceWei: ether("200") }, // +100 ETH
       ]),
     ).not.to.be.reverted;
   });
@@ -217,26 +217,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .withArgs(expectedLimitPerDay, totalIncreasePerDay);
   });
 
-  it("reverts with ModuleBalanceDecreaseRatePerDayLimitExceeded when module decrease exceeds exited+consolidation", async () => {
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("111") }]);
-
-    const decreasePerDay = ether("111");
-    const expectedLimitPerDay =
-      (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
-
-    await expect(check([{ id: 1n, validatorsBalanceWei: 0n }]))
-      .to.be.revertedWithCustomError(checker, "ModuleBalanceDecreaseRatePerDayLimitExceeded")
-      .withArgs(expectedLimitPerDay, decreasePerDay);
-  });
-
   it("does not apply total CL increase limit in module/consistency path", async () => {
     await expect(check([{ id: 1n, validatorsBalanceWei: ether("105") }])).not.to.be.reverted;
-  });
-
-  it("does not apply total CL decrease limit in module/consistency path", async () => {
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("105") }]);
-
-    await expect(check([{ id: 1n, validatorsBalanceWei: 0n }])).not.to.be.reverted;
   });
 
   it("uses timeElapsed in per-day normalization (timeElapsed = 0 path)", async () => {
@@ -250,38 +232,20 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .withArgs(expectedLimitPerDay, normalizedIncreasePerDay);
   });
 
-  it("applies dynamic slashing allowance to module and CL decrease limits", async () => {
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("1030") }]);
-
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("900") }])).not.to.be.reverted;
+  it("allows redistribution between modules even when maxCLBalanceDecreaseBP is zero", async () => {
+    await seedPreviousBalances([
+      { id: 1n, validatorsBalanceWei: ether("100") },
+      { id: 2n, validatorsBalanceWei: ether("100") },
+    ]);
 
     await checker.connect(admin).grantRole(await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE(), manager.address);
     await checker.connect(manager).setMaxCLBalanceDecreaseBP(0n);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("900") }]))
-      .to.be.revertedWithCustomError(checker, "ModuleBalanceDecreaseRatePerDayLimitExceeded")
-      .withArgs(
-        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1"),
-        ether("130"),
-      );
-  });
-
-  it("sums module decreases across modules before checking module decrease limit", async () => {
-    await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: ether("70") },
-      { id: 2n, validatorsBalanceWei: ether("41") },
-    ]);
-
     await expect(
       check([
         { id: 1n, validatorsBalanceWei: 0n },
-        { id: 2n, validatorsBalanceWei: 0n },
+        { id: 2n, validatorsBalanceWei: ether("200") },
       ]),
-    )
-      .to.be.revertedWithCustomError(checker, "ModuleBalanceDecreaseRatePerDayLimitExceeded")
-      .withArgs(
-        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1"),
-        ether("111"),
-      );
+    ).not.to.be.reverted;
   });
 });

@@ -706,6 +706,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Check per-day module balance change rates against configured limits.
+    /// @dev This check intentionally validates only module balance increases.
+    /// @dev A decrease on one module can be caused by balance redistribution to another module while preserving the
+    /// @dev total CL balance, and the overall CL balance decrease is validated separately in `checkAccountingOracleReport`.
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _validatorBalancesGweiByStakingModule,
@@ -724,20 +727,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         IStakingRouter stakingRouter = IStakingRouter(LIDO_LOCATOR.stakingRouter());
         AccountingCoreLimitsPacked memory limitsList = _accountingCoreLimits;
-        (uint256 moduleBalanceIncreasePerDay, uint256 moduleBalanceDecreasePerDay) = _calculateModuleBalanceChangePerDay(
+        uint256 moduleBalanceIncreasePerDay = _calculateModuleBalanceIncreasePerDay(
             stakingRouter,
             _stakingModuleIdsWithUpdatedBalance,
             _validatorBalancesGweiByStakingModule,
             _pendingBalancesGweiByStakingModule,
             _timeElapsed
         );
-        uint256 currCLValidatorsBalance = (_clValidatorsBalanceGwei + _clPendingBalanceGwei) * 1 gwei;
-
-        uint256 slashingLimit = (currCLValidatorsBalance * uint256(limitsList.maxCLBalanceDecreaseBP)) / MAX_BASIS_POINTS;
-        uint256 slashingLimitPerDay = _normalizePerDay(slashingLimit, _timeElapsed);
 
         _checkAppearedEthAmountPerDay(limitsList, moduleBalanceIncreasePerDay);
-        _checkModuleBalanceDecreaseRatePerDay(limitsList, moduleBalanceDecreasePerDay, slashingLimitPerDay);
     }
 
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
@@ -770,16 +768,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _appearedEthAmountPerDay Appeared ETH amount per day in Wei.
     function checkAppearedEthAmountPerDay(uint256 _appearedEthAmountPerDay) external view {
         _checkAppearedEthAmountPerDay(_accountingCoreLimits, _appearedEthAmountPerDay);
-    }
-
-    /// @notice Check module balances decrease rate per day.
-    /// @param _moduleDecreaseEthAmountPerDay Module balances decrease per day in Wei.
-    /// @param _slashingLimitEthAmountPerDay Slashing limit per day in Wei.
-    function checkModuleBalanceDecreaseRatePerDay(
-        uint256 _moduleDecreaseEthAmountPerDay,
-        uint256 _slashingLimitEthAmountPerDay
-    ) external view {
-        _checkModuleBalanceDecreaseRatePerDay(_accountingCoreLimits, _moduleDecreaseEthAmountPerDay, _slashingLimitEthAmountPerDay);
     }
 
     /// @notice check the number of node operators reported per extra data item in the accounting oracle report.
@@ -894,20 +882,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _checkModuleBalanceDecreaseRatePerDay(
-        AccountingCoreLimitsPacked memory _limitsList,
-        uint256 _moduleDecreaseEthAmountPerDay,
-        uint256 _slashingLimitEthAmountPerDay
-    ) internal pure {
-        uint256 moduleDecreaseLimitPerDay =
-            (uint256(_limitsList.exitedEthAmountPerDayLimit) + uint256(_limitsList.consolidationEthAmountPerDayLimit)) *
-            1 ether +
-            _slashingLimitEthAmountPerDay;
-        if (_moduleDecreaseEthAmountPerDay > moduleDecreaseLimitPerDay) {
-            revert ModuleBalanceDecreaseRatePerDayLimitExceeded(moduleDecreaseLimitPerDay, _moduleDecreaseEthAmountPerDay);
-        }
-    }
-
     function _checkCLBalanceIncreaseRatePerDay(
         AccountingCoreLimitsPacked memory _limitsList,
         uint256 _clBalanceIncreaseEthAmountPerDay
@@ -921,23 +895,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _calculateModuleBalanceChangePerDay(
+    function _calculateModuleBalanceIncreasePerDay(
         IStakingRouter _stakingRouter,
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
         uint256 _timeElapsed
-    ) internal view returns (uint256 moduleBalanceIncreasePerDay, uint256 moduleBalanceDecreasePerDay) {
+    ) internal view returns (uint256 moduleBalanceIncreasePerDay) {
         uint256 moduleBalanceIncrease;
-        uint256 moduleBalanceDecrease;
         for (uint256 i = 0; i < _stakingModuleIdsWithUpdatedBalance.length;) {
             uint256 previousModuleBalance = _stakingRouter.getStakingModuleBalance(_stakingModuleIdsWithUpdatedBalance[i]);
             uint256 currentModuleBalance =
                 (_validatorBalancesGweiByStakingModule[i] + _pendingBalancesGweiByStakingModule[i]) * 1 gwei;
             if (currentModuleBalance >= previousModuleBalance) {
                 moduleBalanceIncrease += currentModuleBalance - previousModuleBalance;
-            } else {
-                moduleBalanceDecrease += previousModuleBalance - currentModuleBalance;
             }
             unchecked {
                 ++i;
@@ -945,7 +916,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
 
         moduleBalanceIncreasePerDay = _normalizePerDay(moduleBalanceIncrease, _timeElapsed);
-        moduleBalanceDecreasePerDay = _normalizePerDay(moduleBalanceDecrease, _timeElapsed);
     }
 
     function _normalizePerDay(uint256 _amount, uint256 _timeElapsed) internal pure returns (uint256) {
@@ -1360,7 +1330,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error InconsistentValidatorsBalanceByModule(uint256 expected, uint256 actual);
     error InconsistentPendingBalanceByModule(uint256 expected, uint256 actual);
     error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
-    error ModuleBalanceDecreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 decreasePerDay);
     error CLBalanceIncreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 increasePerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);

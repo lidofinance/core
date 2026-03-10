@@ -909,30 +909,6 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(checker.checkAppearedEthAmountPerDay(limitWithConsolidationInWei)).not.to.be.reverted;
     });
 
-    it("checkModuleBalanceDecreaseRatePerDay includes slashing component", async () => {
-      const limits = await checker.getOracleReportLimits();
-      const slashing = 0n;
-      const limitInWei =
-        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1") + slashing;
-
-      await expect(checker.checkModuleBalanceDecreaseRatePerDay(0n, slashing)).not.to.be.reverted;
-
-      const guaranteedExceededModuleDecreaseValue = limitInWei + 1n;
-
-      await expect(checker.checkModuleBalanceDecreaseRatePerDay(guaranteedExceededModuleDecreaseValue, slashing))
-        .to.be.revertedWithCustomError(checker, "ModuleBalanceDecreaseRatePerDayLimitExceeded")
-        .withArgs(limitInWei, guaranteedExceededModuleDecreaseValue);
-    });
-
-    it("checkModuleBalanceDecreaseRatePerDay allows exact threshold with slashing component", async () => {
-      const limits = await checker.getOracleReportLimits();
-      const slashing = ether("1");
-      const limitInWei =
-        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1") + slashing;
-
-      await expect(checker.checkModuleBalanceDecreaseRatePerDay(limitInWei, slashing)).not.to.be.reverted;
-    });
-
     it("checkNodeOperatorsPerExtraDataItemCount", async () => {
       const limit = (await checker.getOracleReportLimits()).maxNodeOperatorsPerExtraDataItem;
       await expect(checker.checkNodeOperatorsPerExtraDataItemCount(12n, limit)).not.to.be.reverted;
