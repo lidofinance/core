@@ -192,6 +192,22 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     ).not.to.be.reverted;
   });
 
+  it("counts pending-only growth towards the module appeared balance limit", async () => {
+    const currentIncreasePerDay = ether("111");
+    const expectedLimitPerDay =
+      (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: currentIncreasePerDay }]))
+      .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
+      .withArgs(expectedLimitPerDay, currentIncreasePerDay);
+  });
+
+  it("allows pending-to-validators activation within a module when module total is unchanged", async () => {
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("100") }]);
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("100"), pendingWei: 0n }])).not.to.be.reverted;
+  });
+
   it("reverts with AppearedEthAmountPerDayLimitExceeded when module increase exceeds appeared+consolidation", async () => {
     const currentIncreasePerDay = ether("111");
     const expectedLimitPerDay =
@@ -217,6 +233,14 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .withArgs(expectedLimitPerDay, totalIncreasePerDay);
   });
 
+  it("allows an exact module increase at the appeared+consolidation limit", async () => {
+    const exactIncrease = (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
+
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("90") }]);
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("90") + exactIncrease }])).not.to.be.reverted;
+  });
+
   it("does not apply total CL increase limit in module/consistency path", async () => {
     await expect(check([{ id: 1n, validatorsBalanceWei: ether("105") }])).not.to.be.reverted;
   });
@@ -228,6 +252,21 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
     await expect(check([{ id: 1n, validatorsBalanceWei: baseIncrease }], 0n))
+      .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
+      .withArgs(expectedLimitPerDay, normalizedIncreasePerDay);
+  });
+
+  it("normalizes module increases by a non-zero elapsed time", async () => {
+    const halfDay = ONE_DAY / 2n;
+    const expectedLimitPerDay =
+      (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
+
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("100") }]);
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("155") }], halfDay)).not.to.be.reverted;
+
+    const normalizedIncreasePerDay = ether("56") * 2n;
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("156") }], halfDay))
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, normalizedIncreasePerDay);
   });
