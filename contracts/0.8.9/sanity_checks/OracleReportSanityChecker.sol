@@ -974,6 +974,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                 _lastVaultBalanceAfterTransfer
             );
         }
+        // In the current Accounting flow `withdrawalsVaultTransfer` comes from `smoothenTokenRebase()`,
+        // where it is capped by `_withdrawalVaultBalance`, so the subtraction below cannot underflow.
+        // Keep this explicit guard anyway because `checkAccountingOracleReport` still receives it as an external input.
         if (_checkParams.withdrawalsVaultTransfer > _checkParams.withdrawalVaultBalance) {
             revert IncorrectWithdrawalsVaultTransfer(
                 _checkParams.withdrawalVaultBalance,
