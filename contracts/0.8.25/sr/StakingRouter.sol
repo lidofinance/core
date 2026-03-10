@@ -238,24 +238,14 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param _stakeShareLimit New stake share limit value.
     /// @param _priorityExitShareThreshold New priority exit share threshold value.
     /// @dev The function is restricted to the `STAKING_MODULE_SHARE_MANAGE_ROLE` role.
-    function updateModuleShares(
-        uint256 _stakingModuleId,
-        uint16 _stakeShareLimit,
-        uint16 _priorityExitShareThreshold
-    ) external onlyRole(STAKING_MODULE_SHARE_MANAGE_ROLE) {
+    function updateModuleShares(uint256 _stakingModuleId, uint16 _stakeShareLimit, uint16 _priorityExitShareThreshold)
+        external
+        onlyRole(STAKING_MODULE_SHARE_MANAGE_ROLE)
+    {
         SRUtils._requireModuleIdExists(_stakingModuleId);
-        SRLib._updateModuleShares(
-            _stakingModuleId,
-            _stakeShareLimit,
-            _priorityExitShareThreshold
-        );
+        SRLib._updateModuleShares(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold);
 
-        emit StakingModuleShareLimitSet(
-            _stakingModuleId,
-            _stakeShareLimit,
-            _priorityExitShareThreshold,
-            _msgSender()
-        );
+        emit StakingModuleShareLimitSet(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold, _msgSender());
     }
 
     /// @notice Updates the limit of the validators that can be used for deposit.
@@ -632,7 +622,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module.
     /// @return Max deposits count per block for the staking module.
     function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
-        return _getStakingModuleMaxDepositsPerBlock(_stakingModuleId);
+        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
+        return state.deposits.maxDepositsPerBlock;
     }
 
     /// @notice Returns active validators count for the staking module.
@@ -973,7 +964,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @dev Only the DepositSecurityModule is allowed to call this method.
     function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external {
         _checkAppAuth(_getDepositSecurityModule());
-        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
+        (ModuleState storage state, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
 
         if (!_canDeposit(_stakingModuleId)) revert CannotDeposit();
 
@@ -986,9 +977,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             _getModuleDepositAllocation(_stakingModuleId, depositableEther, false);
         // Calculate max deposits count (capped by max and module capacity)
         (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
-        uint256 _maxDepositsCount = _getStakingModuleMaxDepositsPerBlock(_stakingModuleId);
         uint256 maxDepositsCount = Math.min(
-            Math.min(_maxDepositsCount, depositableValidatorsCount),
+            Math.min(state.deposits.maxDepositsPerBlock, depositableValidatorsCount),
             stakingModuleDepositableEthAmount / MAX_EFFECTIVE_BALANCE_WC_TYPE_01 // max possible initial deposits count
         );
 
@@ -1049,11 +1039,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @return Withdrawal credentials.
     function getWithdrawalCredentials() public view returns (bytes32) {
         return SRStorage.getRouterState().withdrawalCredentials;
-    }
-
-    function _getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) internal view returns (uint256) {
-        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
-        return state.deposits.maxDepositsPerBlock;
     }
 
     function _setWithdrawalCredentials(bytes32 wc) internal {
@@ -1158,6 +1143,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
         ModuleStateAccounting storage moduleAcc = state.accounting;
         moduleState.exitedValidatorsCount = moduleAcc.exitedValidatorsCount;
+        moduleState.validatorsBalanceGwei = moduleAcc.validatorsBalanceGwei;
+        moduleState.pendingBalanceGwei = moduleAcc.pendingBalanceGwei;
     }
 
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.

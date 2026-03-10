@@ -144,6 +144,8 @@ describe("StakingRouter.sol:module-sync", () => {
       bigint,
       bigint,
       number,
+      bigint,
+      bigint,
     ];
 
     // module mock state
@@ -201,6 +203,8 @@ describe("StakingRouter.sol:module-sync", () => {
         maxDepositsPerBlock,
         minDepositBlockDistance,
         WithdrawalCredentialsType.WC0x01,
+        balance,
+        balance,
       ];
 
       // mocking module state
