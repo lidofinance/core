@@ -13,7 +13,7 @@ import {StETHPermit} from "./StETHPermit.sol";
 import {Versioned} from "./utils/Versioned.sol";
 import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
 import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
-import {FastLaneStorage} from "./lib/FastLaneStorage.sol";
+import {Math256} from "../common/lib/Math256.sol";
 
 interface IBurnerMigration {
     function migrate(address _oldBurner) external;
@@ -50,23 +50,6 @@ interface IWithdrawalVault {
     function withdrawWithdrawals(uint256 _amount) external;
 }
 
-interface IAccountingOracle {
-    function getProcessingState()
-        external
-        view
-        returns (
-            uint256 currentFrameRefSlot,
-            uint256 processingDeadlineTime,
-            bytes32 mainDataHash,
-            bool mainDataSubmitted,
-            bytes32 extraDataHash,
-            uint256 extraDataFormat,
-            bool extraDataSubmitted,
-            uint256 extraDataItemsCount,
-            uint256 extraDataItemsSubmitted
-        );
-}
-
 /**
  * @title Liquid staking pool implementation
  *
@@ -94,7 +77,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     using UnstructuredStorage for bytes32;
     using UnstructuredStorageExt for bytes32;
     using StakeLimitUnstructuredStorage for bytes32;
-    using FastLaneStorage for bytes32;
     using StakeLimitUtils for StakeLimitState.Data;
 
     /// ACL Roles
@@ -104,6 +86,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 public constant STAKING_CONTROL_ROLE = 0xa42eee1333c0758ba72be38e728b6dadb32ea767de5b4ddbaea1dae85b1b051f; // keccak256("STAKING_CONTROL_ROLE")
     bytes32 public constant UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE =
         0xe6dc5d79630c61871e99d341ad72c5a052bed2fc8c79e5a4480a7cd31117576c; // keccak256("UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE")
+    bytes32 public constant BUFFER_RESERVE_MANAGER_ROLE = 
+        0x33969636f1fbf3d7d062d4de4a08e7bd3c46606ec28b3a4398d2665be559b921; // keccak256("BUFFER_RESERVE_MANAGER_ROLE")
 
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
@@ -161,10 +145,23 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// keccak256("lido.Lido.totalELRewardsCollected");
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb;
-    /// @dev FastLane storage position
-    /// keccak256("lido.Lido.fastLaneData");
-    bytes32 internal constant FASTLANE_DATA_POSITION =
-        0xb544551a702f5ba7fb5820212209259ba9d2f736c94014b37e3dd736f972fdd7;
+
+    /// @dev Storage slot for deposits reserve.
+    /// Holds buffered ether that remains depositable even when withdrawals demand exists.
+    /// Lifecycle:
+    ///   1) can be decreased by `setDepositsReserveTarget()` when target is lowered;
+    ///   2) consumed by `withdrawDepositableEther()` as CL deposits are performed;
+    ///   3) synced to target on report processing via `_updateBufferedEtherAllocation()`
+    /// keccak256("lido.Lido.depositsReserve")
+    bytes32 internal constant DEPOSITS_RESERVE_POSITION = 
+        0xda4fbe3b9cbd98dfae5dff538bbff4ba61f38979d4d7419bcd006f3e6250ec13;
+
+    /// @dev Storage slot for deposits reserve target.
+    /// Stores governance-configured value that deposits reserve is restored to on each oracle report.
+    /// Set via `setDepositsReserveTarget()`, gated by `BUFFER_RESERVE_MANAGER_ROLE`
+    /// keccak256("lido.Lido.depositsReserveTarget")
+    bytes32 internal constant DEPOSITS_RESERVE_TARGET_POSITION = 
+        0x3d3e9bd6e90e5d1f1c6839835bcbe5746a47c9a013d1eae6e80c248264c06a81;
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -248,7 +245,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Bad debt internalized
     event ExternalBadDebtInternalized(uint256 amountOfShares);
 
-    event FastLaneMaxAllowedAmountSet(uint256 amount);
+    // Emitted when current deposits reserve is updated.
+    // Can be emitted from `withdrawDepositableEther()`, `collectRewardsAndProcessWithdrawals()`,
+    // and `setDepositsReserveTarget()` when target is lowered below current reserve.
+    event DepositsReserveSet(uint256 depositsReserve);
+
+    // Emitted when deposits reserve target is set via `setDepositsReserveTarget()`.
+    // Emitted even if the new value equals the previous one
+    event DepositsReserveTargetSet(uint256 depositsReserveTarget);
 
     /**
      * @notice Initializer function for scratch deploy of Lido contract
@@ -457,16 +461,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _setMaxExternalRatioBP(_maxExternalRatioBP);
     }
 
-    function setFastLaneMaxAllowedAmount(uint256 _amount) external {
-        _auth(STAKING_CONTROL_ROLE);
-        FASTLANE_DATA_POSITION.setMaxAllowedAmount(_amount);
-        emit FastLaneMaxAllowedAmountSet(_amount);
-    }
-
-    function getFastLaneMaxAllowedAmount() public view returns (uint256) {
-        return FASTLANE_DATA_POSITION.getMaxAllowedAmount();
-    }
-
     /**
      * @notice Send funds to the pool and mint StETH to the `msg.sender` address
      * @dev Users are able to submit their funds by sending ether to the contract address
@@ -542,6 +536,114 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function getBufferedEther() external view returns (uint256) {
         return _getBufferedEther();
+    }
+
+    /**
+     * @notice Buffered ether split into reserve buckets.
+     * @param total Total buffered ether, equal to `getBufferedEther()`.
+     * @param unreserved Buffer remainder after both reserves are filled. Available for additional CL deposits 
+     *        beyond the deposits reserve
+     * @param depositsReserve Buffer portion available for CL deposits, protected from withdrawals demand.
+     *        Resets on each oracle report, decreases via `withdrawDepositableEther()`
+     * @param withdrawalsReserve Buffer portion allocated to unfinalized withdrawals. Not depositable to CL. 
+     *        Zero when all withdrawal requests are finalized
+     */
+    struct BufferedEtherAllocation {
+        uint256 total;
+        uint256 unreserved;
+        uint256 depositsReserve;
+        uint256 withdrawalsReserve;
+    }
+
+    /**
+     * @notice Calculates buffered ether allocation across reserves
+     * @dev Buffer is split by priority:
+     *
+     *      1. depositsReserve    - per-frame CL deposit allowance, filled first
+     *      2. withdrawalsReserve - covers unfinalized withdrawal requests
+     *      3. unreserved         - excess, available for additional CL deposits
+     *
+     *      ┌─────────── Total Buffered Ether ───────────┐
+     *      ├────────────────────┬───────────────────────┼─────┬──────────────┐
+     *      │●●●●●●●●●●●●●●●●●●●●│●●●●●●●●●●●●●●●●●●●●●●●●○○○○○│○○○○○○○○○○○○○○│
+     *      ├────────────────────┼───────────────────────┼─────┼──────────────┤
+     *      └─ Deposits Reserve ─┼─ Withdrawals Reserve ─┘     ├─ Unreserved ─┘
+                                 └───── Unfinalized stETH ─────┘
+     *
+     *      ● - covered by Buffered Ether
+     *      ○ - not covered by Buffered Ether
+     *
+     *      depositsReserve    = min(total, stored deposits reserve)
+     *      withdrawalsReserve = min(total - depositsReserve, unfinalizedStETH)
+     *      unreserved         = total - depositsReserve - withdrawalsReserve
+     */
+    function _getBufferedEtherAllocation() internal view returns (BufferedEtherAllocation allocation) {
+        uint256 remaining = _getBufferedEther();
+        allocation.total = remaining;
+
+        allocation.depositsReserve = Math256.min(remaining, DEPOSITS_RESERVE_POSITION.getStorageUint256());
+        remaining -= allocation.depositsReserve;
+
+        allocation.withdrawalsReserve = Math256.min(remaining, _withdrawalQueue().unfinalizedStETH());
+        remaining -= allocation.withdrawalsReserve;
+
+        allocation.unreserved = remaining;
+    }
+
+    /**
+     * @notice Returns the currently effective deposits reserve — buffer portion available for CL deposits, protected
+     *         from withdrawals demand
+     * @dev Capped by current buffered ether. See `_getBufferedEtherAllocation()`
+     */
+    function getDepositsReserve() public view returns (uint256 depositsReserve) {
+        return _getBufferedEtherAllocation().depositsReserve;
+    }
+
+    /**
+     * @dev Stores new deposits reserve value and emits DepositsReserveSet event
+     */
+    function _setDepositsReserve(uint256 _newDepositsReserve) internal {
+        DEPOSITS_RESERVE_POSITION.setStorageUint256(_newDepositsReserve);
+        emit DepositsReserveSet(_newDepositsReserve);
+    }
+
+    /**
+     * @notice Returns the currently effective withdrawals reserve
+     * @dev This reserve is computed after deposits reserve is applied
+     * @return Amount reserved to satisfy unfinalized withdrawals
+     */
+    function getWithdrawalsReserve() external view returns (uint256) {
+        return _getBufferedEtherAllocation().withdrawalsReserve;
+    }
+
+    /**
+     * @notice Returns configured target for deposits reserve
+     * @return depositsReserveTarget Configured reserve target in wei
+     */
+    function getDepositsReserveTarget() public view returns (uint256) {
+        return DEPOSITS_RESERVE_TARGET_POSITION.getStorageUint256();
+    }
+
+    /**
+     * @notice Sets deposits reserve target
+     * @dev Always updates target and emits DepositsReserveTargetSet
+     *      If target is lowered below current reserve, reserve is reduced immediately
+     *      If target is increased, reserve is not increased here and is synced on report processing via
+     *      `_updateBufferedEtherAllocation()`
+     * @param _newDepositsReserveTarget New target value in wei
+     */
+    function setDepositsReserveTarget(uint256 _newDepositsReserveTarget) external {
+        _auth(BUFFER_RESERVE_MANAGER_ROLE);
+
+        DEPOSITS_RESERVE_TARGET_POSITION.setStorageUint256(_newDepositsReserveTarget);
+        emit DepositsReserveTargetSet(_newDepositsReserveTarget);
+
+        uint256 currentDepositsReserve = DEPOSITS_RESERVE_POSITION.getStorageUint256();
+        // Do not increase reserve mid-frame: this could reduce available ETH for withdrawals finalization
+        // relative to the report reference slot assumptions. Increases are applied on oracle report processing.
+        if (_newDepositsReserveTarget < currentDepositsReserve) {
+            _setDepositsReserve(_newDepositsReserveTarget);
+        }
     }
 
     /**
@@ -626,14 +728,36 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @return the amount of ether in the buffer that can be deposited to the Consensus Layer
-     * @dev Takes into account unfinalized stETH required by WithdrawalQueue
+     * @dev Equals buffered ether minus withdrawals reserve from `_getBufferedEtherAllocation()`
      */
     function getDepositableEther() public view returns (uint256) {
-        uint256 bufferedEther = _getBufferedEther();
-        if (bufferedEther == 0) return 0;
+        return _getDepositableEther(_getBufferedEtherAllocation());
+    }
 
-        (, uint256 depositableEther) = _getRefSlotDepositableEther(bufferedEther);
-        return depositableEther;
+    /**
+     * @notice Calculates depositable amount from precomputed buffer allocation
+     * @return Depositable amount, equal to `allocation.depositsReserve + allocation.unreserved`
+     */
+    function _getDepositableEther(BufferedEtherAllocation allocation) internal pure returns (uint256) {
+        return allocation.depositsReserve + allocation.unreserved;
+    }
+
+    /**
+     * @dev Spends depositable buffer and updates stored deposits reserve accordingly.
+     *      Decreases stored deposits reserve by spent amount, bounded below by zero
+     */
+    function _spendDepositableEther(uint256 _depositAmount) internal {
+        BufferedEtherAllocation memory allocation = _getBufferedEtherAllocation();
+        uint256 depositableEther = _getDepositableEther(allocation);
+        require(_depositAmount <= depositableEther, "NOT_ENOUGH_ETHER");
+
+        _setBufferedEther(allocation.total.sub(_depositAmount));
+        emit Unbuffered(_depositAmount);
+
+        uint256 storedDepositsReserve = DEPOSITS_RESERVE_POSITION.getStorageUint256();
+        if (storedDepositsReserve > 0) {
+            _setDepositsReserve(storedDepositsReserve > _depositAmount ? storedDepositsReserve - _depositAmount : 0);
+        }
     }
 
     /**
@@ -648,14 +772,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(address(stakingRouter));
         require(_amount != 0, "ZERO_AMOUNT");
 
-        (uint256 bufferedEther) = _getBufferedEther();
-        (uint256 refSlot, uint256 depositableEther) = _getRefSlotDepositableEther(bufferedEther);
-        require(_amount <= depositableEther, "NOT_ENOUGH_ETHER");
-
-        _setBufferedEther(bufferedEther.sub(_amount));
-        /// @dev accumulate the deposited ether for the current checkpoint
-        FASTLANE_DATA_POSITION.addConsumedAmount(refSlot, _amount);
-        emit Unbuffered(_amount);
+        _spendDepositableEther(_amount);
 
         /// @dev the requested withdrawal will be sent to DepositContract, so we increment depositedBalance counter
         ///      so that the value of _getInternalEther corresponds to reality
@@ -670,26 +787,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         /// @dev forward the requested amount of ether to the StakingRouter
         stakingRouter.receiveDepositableEther.value(_amount)();
-    }
-
-    function _getRefSlotDepositableEther(uint256 buffered)
-        internal
-        view
-        returns (uint256 refSlot, uint256 depositable)
-    {
-        uint256 unfinalized = _withdrawalQueue().unfinalizedStETH();
-        uint256 reserved = unfinalized < buffered ? unfinalized : buffered;
-        bool mainDataSubmitted;
-        (refSlot,,, mainDataSubmitted,,,,,) = _accountingOracle().getProcessingState();
-        depositable = buffered - reserved;
-
-        // FastLane is irrelevant when nothing is reserved, or main report is not submitted yet.
-        if (reserved > 0 && mainDataSubmitted) {
-            uint256 consumable = FASTLANE_DATA_POSITION.getConsumableAmount(refSlot);
-            if (consumable > depositable) {
-                depositable = consumable < buffered ? consumable : buffered;
-            }
-        }
     }
 
     /**
@@ -907,6 +1004,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             .sub(_etherToLockOnWithdrawalQueue); // Sent to WithdrawalQueue
 
         _setBufferedEther(postBufferedEther);
+        _updateBufferedEtherAllocation();
 
         emit ETHDistributed(
             _reportTimestamp,
@@ -916,6 +1014,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _elRewardsToWithdraw,
             postBufferedEther
         );
+    }
+
+    /**
+     * @dev Syncs stored deposits reserve to configured target after oracle report processing
+     */
+    function _updateBufferedEtherAllocation() internal {
+        uint256 depositsReserveTarget = getDepositsReserveTarget();
+        uint256 depositsReserve = DEPOSITS_RESERVE_POSITION.getStorageUint256();
+
+        if (depositsReserve != depositsReserveTarget) {
+            _setDepositsReserve(depositsReserveTarget);
+        }
     }
 
     /**
@@ -1180,10 +1290,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev simple address-based auth
     function _auth(address _address) internal view {
         require(msg.sender == _address, "APP_AUTH_FAILED");
-    }
-
-    function _accountingOracle() internal view returns (IAccountingOracle) {
-        return IAccountingOracle(_getLidoLocator().accountingOracle());
     }
 
     function _stakingRouter() internal view returns (IStakingRouter) {

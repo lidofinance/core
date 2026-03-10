@@ -64,8 +64,7 @@ describe("ConsolidationBus.sol: publisher", () => {
         .to.emit(consolidationBus, "RequestsAdded")
         .withArgs(publisher.address, batchData);
 
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.true;
-      expect(await consolidationBus.addedBy(batchHash)).to.equal(publisher.address);
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(publisher.address);
     });
 
     it("should add multiple requests in a batch", async () => {
@@ -82,7 +81,7 @@ describe("ConsolidationBus.sol: publisher", () => {
         .to.emit(consolidationBus, "RequestsAdded")
         .withArgs(publisher.address, batchData);
 
-      expect(await consolidationBus.isBatchAdded(batchHash)).to.be.true;
+      expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
     });
 
     it("should revert if caller does not have PUBLISHER_ROLE", async () => {
@@ -152,7 +151,7 @@ describe("ConsolidationBus.sol: publisher", () => {
 
       // Try to add again
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys))
-        .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyAdded")
+        .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyPending")
         .withArgs(batchHash);
     });
 
@@ -195,20 +194,15 @@ describe("ConsolidationBus.sol: publisher", () => {
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [sourcePubkeys2, targetPubkeys2]),
       );
 
-      expect(await consolidationBus.addedBy(batchHash1)).to.equal(publisher.address);
-      expect(await consolidationBus.addedBy(batchHash2)).to.equal(publisher2.address);
+      expect(await consolidationBus.getBatchPublisher(batchHash1)).to.equal(publisher.address);
+      expect(await consolidationBus.getBatchPublisher(batchHash2)).to.equal(publisher2.address);
     });
   });
 
   context("view methods", () => {
-    it("isBatchAdded should return false for non-existent batch", async () => {
+    it("getBatchPublisher should return zero address for non-existent batch", async () => {
       const fakeBatchHash = ethers.keccak256(ethers.toUtf8Bytes("fake"));
-      expect(await consolidationBus.isBatchAdded(fakeBatchHash)).to.be.false;
-    });
-
-    it("addedBy should return zero address for non-existent batch", async () => {
-      const fakeBatchHash = ethers.keccak256(ethers.toUtf8Bytes("fake"));
-      expect(await consolidationBus.addedBy(fakeBatchHash)).to.equal(ethers.ZeroAddress);
+      expect(await consolidationBus.getBatchPublisher(fakeBatchHash)).to.equal(ethers.ZeroAddress);
     });
   });
 });

@@ -42,6 +42,10 @@ describe("Integration: Withdrawal happy path", () => {
       .grantPermission(agentSigner.address, lido.address, await lido.STAKING_CONTROL_ROLE());
     await lido.connect(agentSigner).removeStakingLimit();
     await lido.connect(holder).submit(ethers.ZeroAddress, { value: ether("10000") });
+    await lido.connect(agentSigner).setDepositsReserveTarget(ether("100"));
+    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false, skipWithdrawals: true });
+    expect(await lido.getDepositsReserveTarget()).to.equal(ether("100"));
+    expect(await lido.getDepositsReserve()).to.equal(ether("100"));
     expect(await lido.balanceOf(holder.address)).to.be.gte(REQUESTS_SUM);
 
     // Get initial state
@@ -53,6 +57,18 @@ describe("Integration: Withdrawal happy path", () => {
     const lastFinalizedRequestId = await wq.getLastFinalizedRequestId();
     const lastCheckpointIndexBefore = await wq.getLastCheckpointIndex();
     const unfinalizedSteth = await wq.unfinalizedStETH();
+    const bufferedEtherBeforeRequest = await lido.getBufferedEther();
+    const withdrawalsReserveBeforeRequest = await lido.getWithdrawalsReserve();
+    const depositableBeforeRequest = await lido.getDepositableEther();
+
+    expect(depositableBeforeRequest).to.equal(
+      bufferedEtherBeforeRequest - withdrawalsReserveBeforeRequest,
+      "Depositable should equal buffered minus withdrawals reserve",
+    );
+    expect(withdrawalsReserveBeforeRequest).to.be.lte(
+      unfinalizedSteth,
+      "Withdrawals reserve should not exceed unfinalized demand",
+    );
 
     const preReportRequestShares = await lido.getSharesByPooledEth(REQUEST_AMOUNT);
 
@@ -114,6 +130,14 @@ describe("Integration: Withdrawal happy path", () => {
     if (findEvents(reportReceipt!, "WithdrawalsFinalized").length !== 1) {
       reportTx = (await report(ctx, { clDiff: ether("0.00000000000001") })).reportTx;
     }
+
+    const bufferedEtherAfterReport = await lido.getBufferedEther();
+    const withdrawalsReserveAfterReport = await lido.getWithdrawalsReserve();
+    const depositableAfterReport = await lido.getDepositableEther();
+    expect(depositableAfterReport).to.equal(
+      bufferedEtherAfterReport - withdrawalsReserveAfterReport,
+      "Depositable should stay consistent after report processing",
+    );
 
     const [parsedFinalizedEvent] = findEventsWithInterfaces(reportReceipt!, "WithdrawalsFinalized", [wq.interface]);
     expect(parsedFinalizedEvent?.args.from).to.equal(lastFinalizedRequestId + 1n);

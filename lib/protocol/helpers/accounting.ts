@@ -9,7 +9,6 @@ import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.s
 
 import {
   advanceChainTime,
-  BigIntMath,
   certainAddress,
   ether,
   EXTRA_DATA_FORMAT_EMPTY,
@@ -584,8 +583,7 @@ const getFinalizationBatches = async (
 
   const bufferedEther = await lido.getBufferedEther();
   const unfinalizedSteth = await withdrawalQueue.unfinalizedStETH();
-
-  const reservedBuffer = BigIntMath.min(bufferedEther, unfinalizedSteth);
+  const reservedBuffer = await lido.getWithdrawalsReserve();
   const availableEth = limitedWithdrawalVaultBalance + limitedElRewardsVaultBalance + reservedBuffer;
 
   const blockTimestamp = await getCurrentBlockTimestamp();
