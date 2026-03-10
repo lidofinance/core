@@ -48,6 +48,8 @@ describe("OracleReportSanityChecker.sol", () => {
     annualBalanceIncreaseBPLimit: 1_000n,
     simulatedShareRateDeviationBPLimit: 250n,
     maxBalanceExitRequestedPerReportInEth: 65_000n,
+    maxEffectiveBalanceWeightWCType01: 32n,
+    maxEffectiveBalanceWeightWCType02: 2_048n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,
@@ -144,6 +146,8 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(limits.maxBalanceExitRequestedPerReportInEth).to.equal(
         defaultLimits.maxBalanceExitRequestedPerReportInEth,
       );
+      expect(limits.maxEffectiveBalanceWeightWCType01).to.equal(defaultLimits.maxEffectiveBalanceWeightWCType01);
+      expect(limits.maxEffectiveBalanceWeightWCType02).to.equal(defaultLimits.maxEffectiveBalanceWeightWCType02);
       expect(limits.maxItemsPerExtraDataTransaction).to.equal(defaultLimits.maxItemsPerExtraDataTransaction);
       expect(limits.maxNodeOperatorsPerExtraDataItem).to.equal(defaultLimits.maxNodeOperatorsPerExtraDataItem);
       expect(limits.requestTimestampMargin).to.equal(defaultLimits.requestTimestampMargin);
@@ -157,6 +161,12 @@ describe("OracleReportSanityChecker.sol", () => {
     it("returns max positive token rebase and max CL decrease BP", async () => {
       expect(await checker.getMaxPositiveTokenRebase()).to.equal(defaultLimits.maxPositiveTokenRebase);
       expect(await checker.getMaxCLBalanceDecreaseBP()).to.equal(defaultLimits.maxCLBalanceDecreaseBP);
+      expect(await checker.getMaxEffectiveBalanceWeightWCType01()).to.equal(
+        defaultLimits.maxEffectiveBalanceWeightWCType01,
+      );
+      expect(await checker.getMaxEffectiveBalanceWeightWCType02()).to.equal(
+        defaultLimits.maxEffectiveBalanceWeightWCType02,
+      );
     });
   });
 
@@ -434,11 +444,72 @@ describe("OracleReportSanityChecker.sol", () => {
       expect((await checker.getOracleReportLimits()).maxBalanceExitRequestedPerReportInEth).to.equal(0n);
     });
 
+    it("setMaxEffectiveBalanceWeightWCType01: ACL, bounds and update", async () => {
+      await checker
+        .connect(admin)
+        .grantRole(await checker.MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE(), manager.address);
+
+      await expect(
+        checker.connect(stranger).setMaxEffectiveBalanceWeightWCType01(64n),
+      ).to.be.revertedWithOZAccessControlError(
+        stranger.address,
+        await checker.MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE(),
+      );
+
+      await expect(checker.connect(manager).setMaxEffectiveBalanceWeightWCType01(0n)).to.be.revertedWithCustomError(
+        checker,
+        "IncorrectLimitValue",
+      );
+
+      await expect(
+        checker.connect(manager).setMaxEffectiveBalanceWeightWCType01(OVER_UINT16),
+      ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
+
+      await expect(checker.connect(manager).setMaxEffectiveBalanceWeightWCType01(64n))
+        .to.emit(checker, "MaxEffectiveBalanceWeightWCType01Set")
+        .withArgs(64n);
+
+      expect((await checker.getOracleReportLimits()).maxEffectiveBalanceWeightWCType01).to.equal(64n);
+      expect(await checker.getMaxEffectiveBalanceWeightWCType01()).to.equal(64n);
+    });
+
+    it("setMaxEffectiveBalanceWeightWCType02: ACL, bounds and update", async () => {
+      await checker
+        .connect(admin)
+        .grantRole(await checker.MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE(), manager.address);
+
+      await expect(
+        checker.connect(stranger).setMaxEffectiveBalanceWeightWCType02(4_096n),
+      ).to.be.revertedWithOZAccessControlError(
+        stranger.address,
+        await checker.MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE(),
+      );
+
+      await expect(checker.connect(manager).setMaxEffectiveBalanceWeightWCType02(0n)).to.be.revertedWithCustomError(
+        checker,
+        "IncorrectLimitValue",
+      );
+
+      await expect(
+        checker.connect(manager).setMaxEffectiveBalanceWeightWCType02(OVER_UINT16),
+      ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
+
+      await expect(checker.connect(manager).setMaxEffectiveBalanceWeightWCType02(4_096n))
+        .to.emit(checker, "MaxEffectiveBalanceWeightWCType02Set")
+        .withArgs(4_096n);
+
+      expect((await checker.getOracleReportLimits()).maxEffectiveBalanceWeightWCType02).to.equal(4_096n);
+      expect(await checker.getMaxEffectiveBalanceWeightWCType02()).to.equal(4_096n);
+    });
+
     it("limit setters do not emit events when the value does not change", async () => {
       await checker.connect(admin).grantRole(await checker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(), manager.address);
       await checker
         .connect(admin)
         .grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE(), manager.address);
+      await checker
+        .connect(admin)
+        .grantRole(await checker.MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE(), manager.address);
 
       await checker.connect(manager).setMaxPositiveTokenRebase(600_000n);
       await expect(checker.connect(manager).setMaxPositiveTokenRebase(600_000n)).to.not.emit(
@@ -450,6 +521,12 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(checker.connect(manager).setMaxBalanceExitRequestedPerReportInEth(60_000n)).to.not.emit(
         checker,
         "MaxBalanceExitRequestedPerReportInEthSet",
+      );
+
+      await checker.connect(manager).setMaxEffectiveBalanceWeightWCType01(64n);
+      await expect(checker.connect(manager).setMaxEffectiveBalanceWeightWCType01(64n)).to.not.emit(
+        checker,
+        "MaxEffectiveBalanceWeightWCType01Set",
       );
     });
 
@@ -606,6 +683,22 @@ describe("OracleReportSanityChecker.sol", () => {
       ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
     });
 
+    it("setOracleReportLimits rejects invalid maxEffectiveBalanceWeight values", async () => {
+      await checker.connect(admin).grantRole(await checker.ALL_LIMITS_MANAGER_ROLE(), manager.address);
+
+      await expect(
+        checker
+          .connect(manager)
+          .setOracleReportLimits({ ...defaultLimits, maxEffectiveBalanceWeightWCType01: 0n }, ZeroAddress),
+      ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
+
+      await expect(
+        checker
+          .connect(manager)
+          .setOracleReportLimits({ ...defaultLimits, maxEffectiveBalanceWeightWCType02: OVER_UINT16 }, ZeroAddress),
+      ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
+    });
+
     it("roundtrips limits at packed type boundaries", async () => {
       const wrapper = (await ethers.deployContract("OracleReportSanityCheckerWrapper", [
         await locator.getAddress(),
@@ -620,6 +713,8 @@ describe("OracleReportSanityChecker.sol", () => {
         annualBalanceIncreaseBPLimit: TOTAL_BASIS_POINTS,
         simulatedShareRateDeviationBPLimit: TOTAL_BASIS_POINTS,
         maxBalanceExitRequestedPerReportInEth: OVER_UINT16 - 1n,
+        maxEffectiveBalanceWeightWCType01: OVER_UINT16 - 1n,
+        maxEffectiveBalanceWeightWCType02: OVER_UINT16 - 1n,
         maxItemsPerExtraDataTransaction: OVER_UINT16 - 1n,
         maxNodeOperatorsPerExtraDataItem: OVER_UINT16 - 1n,
         requestTimestampMargin: OVER_UINT32 - 1n,
@@ -639,6 +734,8 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(roundtrip.maxBalanceExitRequestedPerReportInEth).to.equal(
         maxPackedLimits.maxBalanceExitRequestedPerReportInEth,
       );
+      expect(roundtrip.maxEffectiveBalanceWeightWCType01).to.equal(maxPackedLimits.maxEffectiveBalanceWeightWCType01);
+      expect(roundtrip.maxEffectiveBalanceWeightWCType02).to.equal(maxPackedLimits.maxEffectiveBalanceWeightWCType02);
       expect(roundtrip.maxItemsPerExtraDataTransaction).to.equal(maxPackedLimits.maxItemsPerExtraDataTransaction);
       expect(roundtrip.maxNodeOperatorsPerExtraDataItem).to.equal(maxPackedLimits.maxNodeOperatorsPerExtraDataItem);
       expect(roundtrip.requestTimestampMargin).to.equal(maxPackedLimits.requestTimestampMargin);
@@ -680,6 +777,12 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(operationalPacked.maxBalanceExitRequestedPerReportInEth).to.equal(
         defaultLimits.maxBalanceExitRequestedPerReportInEth,
       );
+      expect(operationalPacked.maxEffectiveBalanceWeightWCType01).to.equal(
+        defaultLimits.maxEffectiveBalanceWeightWCType01,
+      );
+      expect(operationalPacked.maxEffectiveBalanceWeightWCType02).to.equal(
+        defaultLimits.maxEffectiveBalanceWeightWCType02,
+      );
       expect(operationalPacked.maxItemsPerExtraDataTransaction).to.equal(defaultLimits.maxItemsPerExtraDataTransaction);
       expect(operationalPacked.maxNodeOperatorsPerExtraDataItem).to.equal(
         defaultLimits.maxNodeOperatorsPerExtraDataItem,
@@ -692,12 +795,15 @@ describe("OracleReportSanityChecker.sol", () => {
       await checker
         .connect(admin)
         .grantRole(await checker.MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE(), manager.address);
+      await checker
+        .connect(admin)
+        .grantRole(await checker.MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE(), manager.address);
 
       const initialLimits = await checker.getOracleReportLimits();
 
-      await checker.connect(manager).setMaxBalanceExitRequestedPerReportInEth(60_000n);
+      await checker.connect(manager).setMaxEffectiveBalanceWeightWCType01(64n);
       const afterOperationalUpdate = await checker.getOracleReportLimits();
-      expect(afterOperationalUpdate.maxBalanceExitRequestedPerReportInEth).to.equal(60_000n);
+      expect(afterOperationalUpdate.maxEffectiveBalanceWeightWCType01).to.equal(64n);
       expect(afterOperationalUpdate.maxPositiveTokenRebase).to.equal(initialLimits.maxPositiveTokenRebase);
       expect(afterOperationalUpdate.exitedEthAmountPerDayLimit).to.equal(initialLimits.exitedEthAmountPerDayLimit);
       expect(afterOperationalUpdate.consolidationEthAmountPerDayLimit).to.equal(
@@ -707,8 +813,8 @@ describe("OracleReportSanityChecker.sol", () => {
       await checker.connect(manager).setMaxPositiveTokenRebase(600_000n);
       const afterAccountingUpdate = await checker.getOracleReportLimits();
       expect(afterAccountingUpdate.maxPositiveTokenRebase).to.equal(600_000n);
-      expect(afterAccountingUpdate.maxBalanceExitRequestedPerReportInEth).to.equal(
-        afterOperationalUpdate.maxBalanceExitRequestedPerReportInEth,
+      expect(afterAccountingUpdate.maxEffectiveBalanceWeightWCType01).to.equal(
+        afterOperationalUpdate.maxEffectiveBalanceWeightWCType01,
       );
       expect(afterAccountingUpdate.requestTimestampMargin).to.equal(afterOperationalUpdate.requestTimestampMargin);
       expect(afterAccountingUpdate.maxItemsPerExtraDataTransaction).to.equal(

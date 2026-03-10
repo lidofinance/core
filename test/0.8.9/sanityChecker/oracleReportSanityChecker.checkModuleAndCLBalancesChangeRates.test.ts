@@ -32,6 +32,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     annualBalanceIncreaseBPLimit: 1_000n,
     simulatedShareRateDeviationBPLimit: 250n,
     maxBalanceExitRequestedPerReportInEth: 65_000n,
+    maxEffectiveBalanceWeightWCType01: 32n,
+    maxEffectiveBalanceWeightWCType02: 2_048n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,

@@ -306,13 +306,7 @@ export async function main() {
     "ValidatorsExitBusOracle",
     proxyContractsOwner,
     deployer,
-    [
-      chainSpec.secondsPerSlot,
-      chainSpec.genesisTime,
-      locator.address,
-      validatorsExitBusOracleParams.maxEBWeightType1,
-      validatorsExitBusOracleParams.maxEBWeightType2,
-    ],
+    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address],
   );
 
   const hashConsensusForVebo = await deployWithoutProxy(
@@ -532,6 +526,8 @@ export async function main() {
     annualBalanceIncreaseBPLimit: sanityCheckerParams.annualBalanceIncreaseBPLimit,
     simulatedShareRateDeviationBPLimit: sanityCheckerParams.simulatedShareRateDeviationBPLimit,
     maxBalanceExitRequestedPerReportInEth: sanityCheckerParams.maxBalanceExitRequestedPerReportInEth,
+    maxEffectiveBalanceWeightWCType01: sanityCheckerParams.maxEffectiveBalanceWeightWCType01,
+    maxEffectiveBalanceWeightWCType02: sanityCheckerParams.maxEffectiveBalanceWeightWCType02,
     maxItemsPerExtraDataTransaction: sanityCheckerParams.maxItemsPerExtraDataTransaction,
     maxNodeOperatorsPerExtraDataItem: sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
     requestTimestampMargin: sanityCheckerParams.requestTimestampMargin,

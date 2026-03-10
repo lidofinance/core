@@ -41,6 +41,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
     simulatedShareRateDeviationBPLimit: 2_00n, // 2%
     maxBalanceExitRequestedPerReportInEth: 64_000n, // Max ~65K ETH (close to uint16 max)
+    maxEffectiveBalanceWeightWCType01: 32n,
+    maxEffectiveBalanceWeightWCType02: 2_048n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,
     requestTimestampMargin: 128n,

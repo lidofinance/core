@@ -17,6 +17,10 @@ import {
 
 import { deployHashConsensus } from "./hashConsensus";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
+import {
+  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
+} from "./validatorExitBusOracle";
 
 export const ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
 export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
@@ -153,6 +157,8 @@ async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string,
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
       maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
+      maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+      maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
       maxItemsPerExtraDataTransaction: 15n,
       maxNodeOperatorsPerExtraDataItem: 16n,
       requestTimestampMargin: 0n,

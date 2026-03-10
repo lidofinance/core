@@ -217,8 +217,6 @@ const ValidatorsExitBusOracleSchema = OracleSchema.extend({
   maxExitRequestsLimit: PositiveIntSchema,
   exitsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
-  maxEBWeightType1: PositiveIntSchema,
-  maxEBWeightType2: PositiveIntSchema,
 });
 
 // Deposit security module schema
@@ -236,6 +234,8 @@ const OracleReportSanityCheckerSchema = z.object({
   annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
   maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
+  maxEffectiveBalanceWeightWCType01: PositiveIntSchema,
+  maxEffectiveBalanceWeightWCType02: PositiveIntSchema,
   maxItemsPerExtraDataTransaction: PositiveIntSchema,
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,

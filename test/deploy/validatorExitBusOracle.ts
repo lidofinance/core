@@ -45,6 +45,8 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ac
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
       maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
+      maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+      maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
       maxItemsPerExtraDataTransaction: 0n,
       maxNodeOperatorsPerExtraDataItem: 0n,
       requestTimestampMargin: 0n,
@@ -116,13 +118,7 @@ export async function deployVEBO(
   // to skip validation. Tests can explicitly configure keys if needed.
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
 
-  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
-    secondsPerSlot,
-    genesisTime,
-    locatorAddr,
-    MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-    MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-  ]);
+  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [secondsPerSlot, genesisTime, locatorAddr]);
 
   const { consensus } = await deployHashConsensus(admin, {
     reportProcessor: oracle as unknown as ReportProcessor__Mock,

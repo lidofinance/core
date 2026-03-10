@@ -116,6 +116,12 @@ struct LimitsList {
     /// @notice The max requested to exit balance in ETH
     /// @dev Sum of all max effective balances of all requested validators should be equal or lower in one report
     uint256 maxBalanceExitRequestedPerReportInEth;
+    /// @notice WC 0x01 max effective balance equivalent weight in ETH
+    /// @dev Must fit into uint16 and be non-zero
+    uint256 maxEffectiveBalanceWeightWCType01;
+    /// @notice WC 0x02 max effective balance equivalent weight in ETH
+    /// @dev Must fit into uint16 and be non-zero
+    uint256 maxEffectiveBalanceWeightWCType02;
 
     /// @notice The max number of data list items reported to accounting oracle in extra data per single transaction
     /// @dev Must fit into uint16 (<= 65_535)
@@ -163,6 +169,8 @@ struct AccountingCoreLimitsPacked {
 /// @dev The packed operational limits persisted in a single storage slot
 struct OperationalLimitsPacked {
     uint16 maxBalanceExitRequestedPerReportInEth;
+    uint16 maxEffectiveBalanceWeightWCType01;
+    uint16 maxEffectiveBalanceWeightWCType02;
     uint16 maxItemsPerExtraDataTransaction;
     uint16 maxNodeOperatorsPerExtraDataItem;
     uint32 requestTimestampMargin;
@@ -212,6 +220,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
     bytes32 public constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE =
         keccak256("MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE");
+    bytes32 public constant MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE =
+        keccak256("MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE");
     bytes32 public constant MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE =
         keccak256("MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE");
     bytes32 public constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE =
@@ -288,6 +298,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function getMaxCLBalanceDecreaseBP() external view returns (uint256) {
         return _accountingCoreLimits.maxCLBalanceDecreaseBP;
+    }
+
+    function getMaxEffectiveBalanceWeightWCType01() external view returns (uint256) {
+        return _operationalLimits.maxEffectiveBalanceWeightWCType01;
+    }
+
+    function getMaxEffectiveBalanceWeightWCType02() external view returns (uint256) {
+        return _operationalLimits.maxEffectiveBalanceWeightWCType02;
     }
 
     /// @notice Returns max positive token rebase value with 1e9 precision:
@@ -406,6 +424,28 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkLimitValue(_maxBalanceExitRequestedPerReportInEth, 0, type(uint16).max);
         OperationalLimitsPacked memory limits = _operationalLimits;
         limits.maxBalanceExitRequestedPerReportInEth = SafeCast.toUint16(_maxBalanceExitRequestedPerReportInEth);
+        _updateOperationalLimits(limits);
+    }
+
+    /// @notice Sets the new WC 0x01 max effective balance equivalent weight in ETH
+    function setMaxEffectiveBalanceWeightWCType01(uint256 _maxEffectiveBalanceWeightWCType01)
+        external
+        onlyRole(MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE)
+    {
+        _checkLimitValue(_maxEffectiveBalanceWeightWCType01, 1, type(uint16).max);
+        OperationalLimitsPacked memory limits = _operationalLimits;
+        limits.maxEffectiveBalanceWeightWCType01 = SafeCast.toUint16(_maxEffectiveBalanceWeightWCType01);
+        _updateOperationalLimits(limits);
+    }
+
+    /// @notice Sets the new WC 0x02 max effective balance equivalent weight in ETH
+    function setMaxEffectiveBalanceWeightWCType02(uint256 _maxEffectiveBalanceWeightWCType02)
+        external
+        onlyRole(MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE)
+    {
+        _checkLimitValue(_maxEffectiveBalanceWeightWCType02, 1, type(uint16).max);
+        OperationalLimitsPacked memory limits = _operationalLimits;
+        limits.maxEffectiveBalanceWeightWCType02 = SafeCast.toUint16(_maxEffectiveBalanceWeightWCType02);
         _updateOperationalLimits(limits);
     }
 
@@ -1218,6 +1258,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkLimitValue(_limitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
         _checkLimitValue(_limitsList.simulatedShareRateDeviationBPLimit, 0, MAX_BASIS_POINTS);
         _checkLimitValue(_limitsList.maxBalanceExitRequestedPerReportInEth, 0, type(uint16).max);
+        _checkLimitValue(_limitsList.maxEffectiveBalanceWeightWCType01, 1, type(uint16).max);
+        _checkLimitValue(_limitsList.maxEffectiveBalanceWeightWCType02, 1, type(uint16).max);
         _checkLimitValue(_limitsList.maxItemsPerExtraDataTransaction, 0, type(uint16).max);
         _checkLimitValue(_limitsList.maxNodeOperatorsPerExtraDataItem, 0, type(uint16).max);
         _checkLimitValue(_limitsList.requestTimestampMargin, 0, type(uint32).max);
@@ -1266,6 +1308,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (_oldLimits.maxBalanceExitRequestedPerReportInEth != _newLimits.maxBalanceExitRequestedPerReportInEth) {
             emit MaxBalanceExitRequestedPerReportInEthSet(_newLimits.maxBalanceExitRequestedPerReportInEth);
         }
+        if (_oldLimits.maxEffectiveBalanceWeightWCType01 != _newLimits.maxEffectiveBalanceWeightWCType01) {
+            emit MaxEffectiveBalanceWeightWCType01Set(_newLimits.maxEffectiveBalanceWeightWCType01);
+        }
+        if (_oldLimits.maxEffectiveBalanceWeightWCType02 != _newLimits.maxEffectiveBalanceWeightWCType02) {
+            emit MaxEffectiveBalanceWeightWCType02Set(_newLimits.maxEffectiveBalanceWeightWCType02);
+        }
         if (_oldLimits.maxItemsPerExtraDataTransaction != _newLimits.maxItemsPerExtraDataTransaction) {
             emit MaxItemsPerExtraDataTransactionSet(_newLimits.maxItemsPerExtraDataTransaction);
         }
@@ -1288,6 +1336,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
     event MaxBalanceExitRequestedPerReportInEthSet(uint256 maxBalanceExitRequestedPerReportInEth);
+    event MaxEffectiveBalanceWeightWCType01Set(uint256 maxEffectiveBalanceWeightWCType01);
+    event MaxEffectiveBalanceWeightWCType02Set(uint256 maxEffectiveBalanceWeightWCType02);
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
     event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
@@ -1362,6 +1412,8 @@ library LimitsListPacker {
         LimitsList memory _limitsList
     ) internal pure returns (OperationalLimitsPacked memory res) {
         res.maxBalanceExitRequestedPerReportInEth = SafeCast.toUint16(_limitsList.maxBalanceExitRequestedPerReportInEth);
+        res.maxEffectiveBalanceWeightWCType01 = SafeCast.toUint16(_limitsList.maxEffectiveBalanceWeightWCType01);
+        res.maxEffectiveBalanceWeightWCType02 = SafeCast.toUint16(_limitsList.maxEffectiveBalanceWeightWCType02);
         res.maxItemsPerExtraDataTransaction = SafeCast.toUint16(_limitsList.maxItemsPerExtraDataTransaction);
         res.maxNodeOperatorsPerExtraDataItem = SafeCast.toUint16(_limitsList.maxNodeOperatorsPerExtraDataItem);
         res.requestTimestampMargin = SafeCast.toUint32(_limitsList.requestTimestampMargin);
@@ -1385,6 +1437,8 @@ library LimitsListUnpacker {
         res.annualBalanceIncreaseBPLimit = _accountingLimits.annualBalanceIncreaseBPLimit;
         res.simulatedShareRateDeviationBPLimit = _accountingLimits.simulatedShareRateDeviationBPLimit;
         res.maxBalanceExitRequestedPerReportInEth = _operationalLimitsPacked.maxBalanceExitRequestedPerReportInEth;
+        res.maxEffectiveBalanceWeightWCType01 = _operationalLimitsPacked.maxEffectiveBalanceWeightWCType01;
+        res.maxEffectiveBalanceWeightWCType02 = _operationalLimitsPacked.maxEffectiveBalanceWeightWCType02;
         res.maxItemsPerExtraDataTransaction = _operationalLimitsPacked.maxItemsPerExtraDataTransaction;
         res.maxNodeOperatorsPerExtraDataItem = _operationalLimitsPacked.maxNodeOperatorsPerExtraDataItem;
         res.requestTimestampMargin = _operationalLimitsPacked.requestTimestampMargin;
