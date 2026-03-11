@@ -1028,13 +1028,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
     * @notice Process exit requests for format 2 (72 bytes per request, includes keyIndex)
-    * @dev Check dataWithoutPubkey <= lastDataWithoutPubkey prevents duplicates and ensures sorting
+    * @dev Uniqueness and sort check uses (moduleId, nodeOpId, valIndex) only — keyIndex is excluded
+    *      so that the same validator cannot appear twice with different keyIndex (double-counted).
     * @param data Packed exit requests data (DATA_FORMAT=2)
     */
     function _processExitRequestsListV2(bytes calldata data) internal {
         uint256 offset;
         uint256 offsetPastEnd;
-        uint256 lastDataWithoutPubkey = 0;
+        uint256 lastValidatorData = 0; // (moduleId, nodeOpId, valIndex) — 128 bits, no keyIndex
         uint256 timestamp = _getTimestamp();
         uint256 index = 0;
 
@@ -1045,6 +1046,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
         bytes calldata pubkey;
         uint256 dataWithoutPubkey;
+        uint256 validatorData; // 128 bits: moduleId | nodeOpId | valIndex (for sort/duplicate check)
         uint256 moduleId;
 
         // Cache module data to avoid repeated external calls for the same module
@@ -1065,18 +1067,18 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 offset := add(offset, 72)
             }
 
+            // For sort/duplicate check use only (moduleId, nodeOpId, valIndex) — drop keyIndex (low 64 bits)
+            validatorData = dataWithoutPubkey >> 64;
+
             moduleId = uint24(dataWithoutPubkey >> (64 + 64 + 40));
 
             if (moduleId == 0) {
                 revert InvalidModuleId();
             }
 
-            //                              dataWithoutPubkey (192 bits)
-            // MSB <--------------------------------------------------------------------------------------- LSB
-            // | 64 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | 64 bits: keyIndex |
-            //
-            // Sorting compound key: (moduleId, nodeOpId, valIndex, keyIndex)
-            if (dataWithoutPubkey <= lastDataWithoutPubkey) {
+            // Uniqueness and sort by validator identity only: (moduleId, nodeOpId, valIndex)
+            // dataWithoutPubkey (192b): ... | valIndex | keyIndex |  ->  validatorData (128b): ... | valIndex
+            if (validatorData <= lastValidatorData) {
                 revert InvalidRequestsDataSortOrder();
             }
 
@@ -1093,7 +1095,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             );
 
             cachedModuleId = moduleId;
-            lastDataWithoutPubkey = dataWithoutPubkey;
+            lastValidatorData = validatorData;
 
             emit ValidatorExitRequest(
                 moduleId,
