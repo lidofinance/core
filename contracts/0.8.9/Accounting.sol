@@ -358,7 +358,7 @@ contract Accounting {
             ];
         }
 
-        LIDO.processClStateUpdateV2(
+        LIDO.processClStateUpdate(
             _report.timestamp,
             _report.clValidatorsBalance,
             _report.clPendingBalance
