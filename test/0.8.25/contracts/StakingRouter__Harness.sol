@@ -8,9 +8,11 @@ import {SRLib} from "contracts/0.8.25/sr/SRLib.sol";
 import {SRStorage} from "contracts/0.8.25/sr/SRStorage.sol";
 import {StakingModuleStatus, ModuleStateAccounting, RouterStateAccounting} from "contracts/0.8.25/sr/SRTypes.sol";
 import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
+import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 
 contract StakingRouter__Harness is StakingRouter {
     using StorageSlot for bytes32;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     // Old storage slots (must match constants in old 0.8.9 StakingRouter and SRLib)
     bytes32 internal constant WITHDRAWAL_CREDENTIALS_POSITION = keccak256("lido.StakingRouter.withdrawalCredentials");
@@ -18,9 +20,6 @@ contract StakingRouter__Harness is StakingRouter {
     bytes32 internal constant LAST_STAKING_MODULE_ID_POSITION = keccak256("lido.StakingRouter.lastStakingModuleId");
     bytes32 internal constant STAKING_MODULES_COUNT_POSITION = keccak256("lido.StakingRouter.stakingModulesCount");
     bytes32 internal constant CONTRACT_VERSION_POSITION = keccak256("lido.Versioned.contractVersion");
-
-    // Old AccessControl storage slot from 0.8.9 custom implementation
-    bytes32 internal constant OLD_ROLES_POSITION = keccak256("openzeppelin.AccessControl._roles");
 
     // New storage slots
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.Initializable")) - 1)) & ~bytes32(uint256(0xff))
@@ -72,26 +71,15 @@ contract StakingRouter__Harness is StakingRouter {
         return STAKING_MODULES_COUNT_POSITION.getUint256Slot().value;
     }
 
-    /// @notice Write a role grant into the OLD AccessControl storage (0.8.9 layout).
-    /// Old layout: mapping(bytes32 role => RoleData) at OLD_ROLES_POSITION,
-    /// where RoleData slot 0 = mapping(address => bool) members.
-    function testing_setOldRole(bytes32 role, address account, bool value) external {
-        // slot of _roles[role] = keccak256(role . OLD_ROLES_POSITION)
-        bytes32 roleSlot = keccak256(abi.encode(role, OLD_ROLES_POSITION));
-        // slot of _roles[role].members[account] = keccak256(account . roleSlot)
-        bytes32 memberSlot = keccak256(abi.encode(account, roleSlot));
-        assembly {
-            sstore(memberSlot, value)
-        }
+    /// @notice Grant a role inside the OLD AccessControl storage (OZ v4.4)
+    function testing_grantRoleOld(bytes32 role, address account) external {
+        _storageRoles()[role].members[account] = true;
+        _storageRoleMembers()[role].add(account);
     }
 
-    /// @notice Read a role grant from the OLD AccessControl storage (0.8.9 layout).
-    function testing_getOldRole(bytes32 role, address account) external view returns (bool value) {
-        bytes32 roleSlot = keccak256(abi.encode(role, OLD_ROLES_POSITION));
-        bytes32 memberSlot = keccak256(abi.encode(account, roleSlot));
-        assembly {
-            value := sload(memberSlot)
-        }
+    /// @notice Read a role grant from the OLD AccessControl storage (OZ v4.4)
+    function testing_hasRoleOld(bytes32 role, address account) external view returns (bool) {
+        return _storageRoles()[role].members[account];
     }
 
     function testing_getLastModuleId() public view returns (uint256) {
@@ -142,6 +130,29 @@ contract StakingRouter__Harness is StakingRouter {
     function _getInitializableStorage_Mock() private pure returns (InitializableStorage storage $) {
         assembly {
             $.slot := INITIALIZABLE_STORAGE
+        }
+    }
+
+    // OZ AccessControl v.4.4
+
+    struct RoleDataOld {
+        mapping(address => bool) members;
+        bytes32 adminRole;
+    }
+
+    /// @dev OZ AccessControlEnumerable _roleMembers mapping storage reference
+    function _storageRoleMembers() private pure returns (mapping(bytes32 => EnumerableSet.AddressSet) storage $) {
+        bytes32 position = keccak256("openzeppelin.AccessControlEnumerable._roleMembers");
+        assembly {
+            $.slot := position
+        }
+    }
+
+    /// @dev OZ AccessControl _roles mapping storage reference
+    function _storageRoles() private pure returns (mapping(bytes32 => RoleDataOld) storage $) {
+        bytes32 position = keccak256("openzeppelin.AccessControl._roles");
+        assembly {
+            $.slot := position
         }
     }
 }

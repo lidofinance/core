@@ -154,10 +154,10 @@ library SRLib {
     function _getStorageStakingModulesMapping(bytes32 _position)
         internal
         pure
-        returns (mapping(uint256 => StakingModule) storage result)
+        returns (mapping(uint256 => StakingModule) storage $)
     {
         assembly ("memory-safe") {
-            result.slot := _position
+            $.slot := _position
         }
     }
 
@@ -165,10 +165,10 @@ library SRLib {
     function _getStorageStakingIndicesMapping(bytes32 _position)
         internal
         pure
-        returns (mapping(uint256 => uint256) storage result)
+        returns (mapping(uint256 => uint256) storage $)
     {
         assembly ("memory-safe") {
-            result.slot := _position
+            $.slot := _position
         }
     }
 
@@ -292,7 +292,7 @@ library SRLib {
         stateConfig.stakeShareLimit = uint16(_stakeShareLimit);
         stateConfig.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
         // forge-lint: disable-end(unsafe-typecast)
-        
+
         // 1 SSTORE
         _moduleId.getModuleState().config = stateConfig;
     }
