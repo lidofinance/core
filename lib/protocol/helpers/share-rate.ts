@@ -30,7 +30,7 @@ async function changeInternalEther(ctx: ProtocolContext, internalEtherDelta: big
 
   const { beaconBalance } = await lido.getBeaconStat();
 
-  await lido.connect(accountingSigner).processClStateUpdateV2(
+  await lido.connect(accountingSigner).processClStateUpdate(
     await getCurrentBlockTimestamp(),
     beaconBalance + internalEtherDelta, // new clValidatorsBalance
     0n, // new clPendingBalance
