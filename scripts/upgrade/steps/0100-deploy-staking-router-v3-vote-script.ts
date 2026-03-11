@@ -2,7 +2,7 @@ import assert from "assert";
 import { ethers } from "hardhat";
 import { readStakingRouterV3VoteScriptParameters } from "scripts/utils/staking-router-v3-vote";
 
-import { deployWithoutProxy, Sk } from "lib";
+import { deployContract, deployWithoutProxy, log, Sk } from "lib";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -10,5 +10,24 @@ export async function main() {
 
   const params = readStakingRouterV3VoteScriptParameters();
 
-  await deployWithoutProxy(Sk.stakingRouterV3VoteScript, "StakingRouterV3VoteScript", deployer, [params]);
+  const csmStepsLib = await deployContract("CSMUpgradeSteps", [], deployer, false);
+  log.success("CSMUpgradeSteps library deployed", csmStepsLib.address);
+
+  const curatedStepsLib = await deployContract("CuratedModuleSteps", [], deployer, false);
+  log.success("CuratedModuleSteps library deployed", curatedStepsLib.address);
+
+  await deployWithoutProxy(
+    Sk.stakingRouterV3VoteScript,
+    "StakingRouterV3VoteScript",
+    deployer,
+    [params],
+    "address",
+    true,
+    {
+      libraries: {
+        CSMUpgradeSteps: csmStepsLib.address,
+        CuratedModuleSteps: curatedStepsLib.address,
+      },
+    },
+  );
 }

@@ -47,6 +47,7 @@ const StakingRouterV3VoteScriptParamsSchema = z.object({
   gateSeal: EthereumAddressSchema,
   gateSealV3: EthereumAddressSchema,
   generalDelayedPenaltyReporter: EthereumAddressSchema,
+  penaltiesManager: EthereumAddressSchema,
   hashConsensusInitialEpoch: NonNegativeIntSchema,
   upgrade: UpgradeConfigSchema,
   curatedModule: CuratedModuleConfigSchema,

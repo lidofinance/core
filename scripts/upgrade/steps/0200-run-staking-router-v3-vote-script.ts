@@ -17,7 +17,7 @@ const TIMELOCK_ABI = [
   "function execute(uint256 proposalId)",
 ];
 const VOTE_SCRIPT_ABI = [
-  "function AGENT() view returns (address)",
+  "function getGeneralConfig() view returns (tuple(address agent, address stakingRouter, address burner, address triggerableWithdrawalsGateway, address easyTrackEVMScriptExecutor, address resealManager, address identifiedCommunityStakersGateManager, address gateSeal, address gateSealV3, address generalDelayedPenaltyReporter, address penaltiesManager, uint256 hashConsensusInitialEpoch))",
   "function ITEMS_COUNT() view returns (uint256)",
   "function getAgentForwardCalldata() view returns (bytes)",
 ];
@@ -68,7 +68,8 @@ export async function main(): Promise<void> {
   const dualGovernance = new Contract(dualGovernanceAddress, DG_ABI, rpcProvider);
   const timelock = new Contract(timelockAddress, TIMELOCK_ABI, rpcProvider);
 
-  const agentAddress = (await voteScript.getFunction("AGENT")()) as string;
+  const generalConfig = await voteScript.getFunction("getGeneralConfig")();
+  const agentAddress = generalConfig.agent as string;
   const itemsCount = (await voteScript.getFunction("ITEMS_COUNT")()) as bigint;
   const agentForwardCalldata = (await voteScript.getFunction("getAgentForwardCalldata")()) as string;
 
