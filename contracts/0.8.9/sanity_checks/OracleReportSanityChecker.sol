@@ -42,52 +42,7 @@ interface IBaseOracle {
 }
 
 interface IStakingRouter {
-    function getStakingModuleIds() external view returns (uint256[] memory);
-
-    function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
-
     function getStakingModuleBalance(uint256 moduleId) external view returns (uint256);
-
-    function getTotalStakingModulesBalance() external view returns (uint256);
-}
-
-struct StakingModule {
-    /// @notice Unique id of the staking module.
-    uint24 id;
-    /// @notice Address of the staking module.
-    address stakingModuleAddress;
-    /// @notice Part of the fee taken from staking rewards that goes to the staking module.
-    uint16 stakingModuleFee;
-    /// @notice Part of the fee taken from staking rewards that goes to the treasury.
-    uint16 treasuryFee;
-    /// @notice Maximum stake share that can be allocated to a module, in BP.
-    /// @dev Formerly known as `targetShare`.
-    uint16 stakeShareLimit;
-    /// @notice Staking module status if staking module can not accept the deposits or can
-    /// participate in further reward distribution.
-    uint8 status;
-    /// @notice Name of the staking module.
-    string name;
-    /// @notice block.timestamp of the last deposit of the staking module.
-    /// @dev NB: lastDepositAt gets updated even if the deposit value was 0 and no actual deposit happened.
-    uint64 lastDepositAt;
-    /// @notice block.number of the last deposit of the staking module.
-    /// @dev NB: lastDepositBlock gets updated even if the deposit value was 0 and no actual deposit happened.
-    uint256 lastDepositBlock;
-    /// @notice Number of exited validators.
-    uint256 exitedValidatorsCount;
-    /// @notice Module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP.
-    uint16 priorityExitShareThreshold;
-    /// @notice The maximum number of validators that can be deposited in a single block.
-    /// @dev Must be harmonized with `OracleReportSanityChecker.appearedEthAmountPerDayLimit`.
-    /// See docs for the `OracleReportSanityChecker.setAppearedEthAmountPerDayLimit` function.
-    uint64 maxDepositsPerBlock;
-    /// @notice The minimum distance between deposits in blocks.
-    /// @dev Must be harmonized with `OracleReportSanityChecker.appearedEthAmountPerDayLimit`.
-    /// See docs for the `OracleReportSanityChecker.setAppearedEthAmountPerDayLimit` function).
-    uint64 minDepositBlockDistance;
-    /// @notice The type of withdrawal credentials for creation of validators
-    uint8 withdrawalCredentialsType;
 }
 
 /// @notice The set of restrictions used in the sanity checks of the oracle report
