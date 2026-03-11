@@ -209,6 +209,8 @@ describe("StakingRouter.sol:module-management", () => {
         MAX_DEPOSITS_PER_BLOCK,
         MIN_DEPOSIT_BLOCK_DISTANCE,
         WithdrawalCredentialsType.WC0x01,
+        0,
+        0,
       ]);
     });
   });
@@ -424,6 +426,142 @@ describe("StakingRouter.sol:module-management", () => {
         .withArgs(ID, NEW_STAKE_SHARE_LIMIT, NEW_PRIORITY_EXIT_SHARE_THRESHOLD, admin.address)
         .and.to.be.emit(stakingRouter, "StakingModuleFeesSet")
         .withArgs(ID, NEW_MODULE_FEE, NEW_TREASURY_FEE, admin.address);
+    });
+  });
+
+  context("updateModuleShares", () => {
+    const NAME = "StakingModule";
+    const ADDRESS = certainAddress("test:staking-router-modules:staking-module-shares");
+    const STAKE_SHARE_LIMIT = 1_00n;
+    const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
+    const MODULE_FEE = 5_00n;
+    const TREASURY_FEE = 5_00n;
+    const MAX_DEPOSITS_PER_BLOCK = 150n;
+    const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
+
+    let ID: bigint;
+
+    const NEW_STAKE_SHARE_LIMIT = 2_00;
+    const NEW_PRIORITY_EXIT_SHARE_THRESHOLD = 3_00;
+
+    const stakingModuleConfig = {
+      stakeShareLimit: STAKE_SHARE_LIMIT,
+      priorityExitShareThreshold: PRIORITY_EXIT_SHARE_THRESHOLD,
+      stakingModuleFee: MODULE_FEE,
+      treasuryFee: TREASURY_FEE,
+      maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
+      minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+    };
+
+    beforeEach(async () => {
+      await stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig);
+      ID = await stakingRouter.getStakingModulesCount();
+
+      // grant the STAKING_MODULE_SHARE_MANAGE_ROLE to admin
+      await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_SHARE_MANAGE_ROLE(), admin);
+    });
+
+    it("Reverts if the caller does not have the role", async () => {
+      await expect(
+        stakingRouter.connect(user).updateModuleShares(ID, NEW_STAKE_SHARE_LIMIT, NEW_PRIORITY_EXIT_SHARE_THRESHOLD),
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_SHARE_MANAGE_ROLE());
+    });
+
+    it("Reverts if the staking module id does not exist", async () => {
+      const NON_EXISTENT_MODULE_ID = 999;
+      await expect(
+        stakingRouter.updateModuleShares(
+          NON_EXISTENT_MODULE_ID,
+          NEW_STAKE_SHARE_LIMIT,
+          NEW_PRIORITY_EXIT_SHARE_THRESHOLD,
+        ),
+      ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleUnregistered");
+    });
+
+    it("Reverts if the new stake share limit is greater than 100%", async () => {
+      const STAKE_SHARE_LIMIT_OVER_100 = 100_01;
+      await expect(
+        stakingRouter.updateModuleShares(ID, STAKE_SHARE_LIMIT_OVER_100, STAKE_SHARE_LIMIT_OVER_100),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidStakeShareLimit");
+    });
+
+    it("Reverts if the new priority exit share threshold is greater than 100%", async () => {
+      const PRIORITY_EXIT_SHARE_THRESHOLD_OVER_100 = 100_01;
+      await expect(
+        stakingRouter.updateModuleShares(ID, NEW_STAKE_SHARE_LIMIT, PRIORITY_EXIT_SHARE_THRESHOLD_OVER_100),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidPriorityExitShareThreshold");
+    });
+
+    it("Reverts if the new priority exit share threshold is less than stake share limit", async () => {
+      const HIGHER_STAKE_SHARE_LIMIT = 55_00;
+      const LOWER_PRIORITY_EXIT_SHARE_THRESHOLD = 50_00;
+      await expect(
+        stakingRouter.updateModuleShares(ID, HIGHER_STAKE_SHARE_LIMIT, LOWER_PRIORITY_EXIT_SHARE_THRESHOLD),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidPriorityExitShareThreshold");
+    });
+
+    it("Updates share params and emits StakingModuleShareLimitSet event", async () => {
+      await expect(stakingRouter.updateModuleShares(ID, NEW_STAKE_SHARE_LIMIT, NEW_PRIORITY_EXIT_SHARE_THRESHOLD))
+        .to.emit(stakingRouter, "StakingModuleShareLimitSet")
+        .withArgs(ID, NEW_STAKE_SHARE_LIMIT, NEW_PRIORITY_EXIT_SHARE_THRESHOLD, admin.address);
+
+      const moduleAfter = await stakingRouter.getStakingModule(ID);
+      expect(moduleAfter.stakeShareLimit).to.equal(NEW_STAKE_SHARE_LIMIT);
+      expect(moduleAfter.priorityExitShareThreshold).to.equal(NEW_PRIORITY_EXIT_SHARE_THRESHOLD);
+    });
+
+    it("Does not modify other module params (fees, deposits config)", async () => {
+      const moduleBefore = await stakingRouter.getStakingModule(ID);
+
+      await stakingRouter.updateModuleShares(ID, NEW_STAKE_SHARE_LIMIT, NEW_PRIORITY_EXIT_SHARE_THRESHOLD);
+
+      const moduleAfter = await stakingRouter.getStakingModule(ID);
+
+      // share params should change
+      expect(moduleAfter.stakeShareLimit).to.equal(NEW_STAKE_SHARE_LIMIT);
+      expect(moduleAfter.priorityExitShareThreshold).to.equal(NEW_PRIORITY_EXIT_SHARE_THRESHOLD);
+
+      // other params should remain unchanged
+      expect(moduleAfter.stakingModuleFee).to.equal(moduleBefore.stakingModuleFee);
+      expect(moduleAfter.treasuryFee).to.equal(moduleBefore.treasuryFee);
+      expect(moduleAfter.stakingModuleAddress).to.equal(moduleBefore.stakingModuleAddress);
+      expect(moduleAfter.maxDepositsPerBlock).to.equal(moduleBefore.maxDepositsPerBlock);
+      expect(moduleAfter.minDepositBlockDistance).to.equal(moduleBefore.minDepositBlockDistance);
+    });
+
+    it("Allows setting stake share limit and priority exit share threshold to the same value", async () => {
+      const SAME_VALUE = 50_00;
+      await expect(stakingRouter.updateModuleShares(ID, SAME_VALUE, SAME_VALUE))
+        .to.emit(stakingRouter, "StakingModuleShareLimitSet")
+        .withArgs(ID, SAME_VALUE, SAME_VALUE, admin.address);
+
+      const moduleAfter = await stakingRouter.getStakingModule(ID);
+      expect(moduleAfter.stakeShareLimit).to.equal(SAME_VALUE);
+      expect(moduleAfter.priorityExitShareThreshold).to.equal(SAME_VALUE);
+    });
+
+    it("Allows setting both values to zero", async () => {
+      await expect(stakingRouter.updateModuleShares(ID, 0, 0))
+        .to.emit(stakingRouter, "StakingModuleShareLimitSet")
+        .withArgs(ID, 0, 0, admin.address);
+
+      const moduleAfter = await stakingRouter.getStakingModule(ID);
+      expect(moduleAfter.stakeShareLimit).to.equal(0);
+      expect(moduleAfter.priorityExitShareThreshold).to.equal(0);
+    });
+
+    it("Allows setting both values to 100%", async () => {
+      const MAX_BP = 100_00;
+      await expect(stakingRouter.updateModuleShares(ID, MAX_BP, MAX_BP))
+        .to.emit(stakingRouter, "StakingModuleShareLimitSet")
+        .withArgs(ID, MAX_BP, MAX_BP, admin.address);
+
+      const moduleAfter = await stakingRouter.getStakingModule(ID);
+      expect(moduleAfter.stakeShareLimit).to.equal(MAX_BP);
+      expect(moduleAfter.priorityExitShareThreshold).to.equal(MAX_BP);
     });
   });
 });
