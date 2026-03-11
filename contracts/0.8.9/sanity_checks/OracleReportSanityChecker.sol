@@ -42,13 +42,7 @@ interface IBaseOracle {
 }
 
 interface IStakingRouter {
-    function getStakingModuleIds() external view returns (uint256[] memory);
-
-    function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
-
     function getStakingModuleBalance(uint256 moduleId) external view returns (uint256);
-
-    function getTotalStakingModulesBalance() external view returns (uint256);
 }
 
 struct StakingModule {
