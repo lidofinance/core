@@ -68,21 +68,21 @@ describe("Lido:accounting", () => {
     await lido.resume();
   });
 
-  context("processClStateUpdateV2", async () => {
+  context("processClStateUpdate", async () => {
     it("Reverts when contract is stopped", async () => {
       await lido.connect(deployer).stop();
-      await expect(lido.processClStateUpdateV2(...args())).to.be.revertedWith("CONTRACT_IS_STOPPED");
+      await expect(lido.processClStateUpdate(...args())).to.be.revertedWith("CONTRACT_IS_STOPPED");
     });
 
     it("Reverts if sender is not `Accounting`", async () => {
-      await expect(lido.connect(stranger).processClStateUpdateV2(...args())).to.be.revertedWith("APP_AUTH_FAILED");
+      await expect(lido.connect(stranger).processClStateUpdate(...args())).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
     it("Updates beacon stats", async () => {
       const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
       lido = lido.connect(accountingSigner);
       await expect(
-        lido.processClStateUpdateV2(
+        lido.processClStateUpdate(
           ...args({
             clValidatorsBalance: 100n,
             clPendingBalance: 50n,

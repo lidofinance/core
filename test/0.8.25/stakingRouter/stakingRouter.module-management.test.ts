@@ -209,6 +209,8 @@ describe("StakingRouter.sol:module-management", () => {
         MAX_DEPOSITS_PER_BLOCK,
         MIN_DEPOSIT_BLOCK_DISTANCE,
         WithdrawalCredentialsType.WC0x01,
+        0,
+        0,
       ]);
     });
   });

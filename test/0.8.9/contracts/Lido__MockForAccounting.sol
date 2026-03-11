@@ -124,7 +124,7 @@ contract Lido__MockForAccounting {
         uint256 _sharesMintedAsFees
     ) external {}
 
-    function processClStateUpdateV2(
+    function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _clValidatorsBalance,
         uint256 _clPendingBalance
