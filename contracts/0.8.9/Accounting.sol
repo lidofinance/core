@@ -517,6 +517,5 @@ contract Accounting {
 
     error NotAuthorized(string operation, address addr);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
-    error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
     error InternalSharesCantBeZero();
 }

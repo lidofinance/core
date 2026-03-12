@@ -64,7 +64,6 @@ describe("Lido:accounting", () => {
 
     await acl.createPermission(deployer, lido, await lido.RESUME_ROLE(), deployer);
     await acl.createPermission(deployer, lido, await lido.PAUSE_ROLE(), deployer);
-    await acl.createPermission(deployer, lido, await lido.UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE(), deployer);
     await lido.resume();
   });
 
