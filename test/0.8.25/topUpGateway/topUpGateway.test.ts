@@ -137,7 +137,7 @@ describe("TopUpGateway.sol", () => {
     it("initializes config and roles", async () => {
       expect(await topUpGateway.getMaxValidatorsPerTopUp()).to.equal(DEFAULT_MAX_VALIDATORS);
       expect(await topUpGateway.getMinBlockDistance()).to.equal(DEFAULT_MIN_BLOCK_DISTANCE);
-      expect(await topUpGateway.getLastTopUpSlot()).to.equal(0n);
+      expect(await topUpGateway.getLastTopUpTimestamp()).to.equal(0n);
       expect(await topUpGateway.hasRole(await topUpGateway.DEFAULT_ADMIN_ROLE(), admin.address)).to.be.true;
       expect(await topUpGateway.hasRole(topUpRole, admin.address)).to.be.false;
       expect(await topUpGateway.harness_getLocator()).to.equal(await locator.getAddress());
@@ -358,14 +358,15 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
-    it("reverts when slot does not increase", async () => {
-      await topUpGateway.harness_setLastTopUpSlot(500);
+    it("reverts when root precedes last top up", async () => {
+      const timestamp = BigInt(await time.latest());
+      await topUpGateway.harness_setLastTopUpTimestamp(timestamp);
       const data = await buildTopUpData();
-      data.beaconRootData.slot = 500n;
+      data.beaconRootData.childBlockTimestamp = timestamp;
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
-        "SlotNotIncreasing",
+        "RootPrecedesLastTopUp",
       );
     });
 
@@ -417,7 +418,7 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
-    it("calls StakingRouter.topUp and updates last slot", async () => {
+    it("calls StakingRouter.topUp and updates last timestamp", async () => {
       const data = await buildTopUpData();
       data.pendingBalanceGwei = [0n];
       // topUp = targetBalance - currentTotal
@@ -427,10 +428,10 @@ describe("TopUpGateway.sol", () => {
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
         .to.emit(stakingRouter, "TopUpCalled")
         .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [expectedTopUpWei])
-        .and.to.emit(topUpGateway, "LastTopUpChanged")
-        .withArgs(data.beaconRootData.slot);
+        .and.to.emit(topUpGateway, "LastTopUpChanged");
 
-      expect(await topUpGateway.getLastTopUpSlot()).to.equal(data.beaconRootData.slot);
+      const lastTimestamp = await topUpGateway.getLastTopUpTimestamp();
+      expect(lastTimestamp).to.be.gt(0n);
       expect(await stakingRouter.topUpCalls()).to.equal(1n);
     });
 
@@ -555,7 +556,7 @@ describe("TopUpGateway.sol", () => {
 
     it("returns false when block distance is not met", async () => {
       await topUpGateway.connect(limitsManager).setMinBlockDistance(DEFAULT_MIN_BLOCK_DISTANCE + 1n);
-      await topUpGateway.harness_setLastTopUpSlot(123);
+      await topUpGateway.harness_setLastTopUpData();
       expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
     });
 
