@@ -144,9 +144,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     // Setup roles
     // =========================================
 
-    // Grant EXECUTER_ROLE on ConsolidationBus to executor
-    const EXECUTER_ROLE = await consolidationBus.EXECUTER_ROLE();
-    await consolidationBus.connect(agentSigner).grantRole(EXECUTER_ROLE, executor.address);
+    // Grant EXECUTOR_ROLE on ConsolidationBus to executor
+    const EXECUTOR_ROLE = await consolidationBus.EXECUTOR_ROLE();
+    await consolidationBus.connect(agentSigner).grantRole(EXECUTOR_ROLE, executor.address);
 
     // Grant MANAGER_ROLE on ConsolidationBus to agent (for batch management tests)
     const MANAGER_ROLE = await consolidationBus.MANAGER_ROLE();
@@ -297,19 +297,19 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       ).to.be.reverted; // The actual error comes from WithdrawalVault
     });
 
-    it("Should revert executeConsolidation if caller does not have EXECUTER_ROLE", async () => {
+    it("Should revert executeConsolidation if caller does not have EXECUTOR_ROLE", async () => {
       // Submit batch first
       await consolidationMigrator
         .connect(submitter)
         .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
-      const EXECUTER_ROLE = await consolidationBus.EXECUTER_ROLE();
+      const EXECUTOR_ROLE = await consolidationBus.EXECUTOR_ROLE();
 
       await expect(
         consolidationBus.connect(stranger).executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: 1n }),
       )
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, EXECUTER_ROLE);
+        .withArgs(stranger.address, EXECUTOR_ROLE);
     });
 
     it("Should revert executeConsolidation if batch already executed", async () => {

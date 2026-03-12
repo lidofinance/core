@@ -412,8 +412,8 @@ export async function main() {
   // Grant MANAGER_ROLE to deployer for testing
   await makeTx(consolidationBus, "grantRole", [await consolidationBus.MANAGER_ROLE(), deployer], { from: deployer });
 
-  // Grant EXECUTER_ROLE to deployer for testing
-  await makeTx(consolidationBus, "grantRole", [await consolidationBus.EXECUTER_ROLE(), deployer], { from: deployer });
+  // Grant EXECUTOR_ROLE to deployer for testing
+  await makeTx(consolidationBus, "grantRole", [await consolidationBus.EXECUTOR_ROLE(), deployer], { from: deployer });
 
   // Grant ADD_CONSOLIDATION_REQUEST_ROLE on Gateway to Bus
   await makeTx(
