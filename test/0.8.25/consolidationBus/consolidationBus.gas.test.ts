@@ -106,13 +106,13 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     consolidationBus = await ethers.deployContract("ConsolidationBus", [
       admin.address,
       await consolidationGateway.getAddress(),
-      0, // unlimited batch size
+      200,
     ]);
 
     // 8. Set up roles
-    await consolidationBus.connect(admin).grantRole(await consolidationBus.MANAGER_ROLE(), admin.address);
-    await consolidationBus.connect(admin).grantRole(await consolidationBus.EXECUTOR_ROLE(), executor.address);
-    await consolidationBus.connect(admin).registerPublisher(publisher.address);
+    await consolidationBus.connect(admin).grantRole(await consolidationBus.MANAGE_ROLE(), admin.address);
+    await consolidationBus.connect(admin).grantRole(await consolidationBus.EXECUTE_ROLE(), executor.address);
+    await consolidationBus.connect(admin).grantRole(await consolidationBus.PUBLISH_ROLE(), publisher.address);
 
     // Grant ADD_CONSOLIDATION_REQUEST_ROLE to ConsolidationBus
     await consolidationGateway

@@ -22,8 +22,10 @@ describe("ConsolidationBus.sol: executor", () => {
   let executor: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let MANAGER_ROLE: string;
-  let EXECUTOR_ROLE: string;
+  let MANAGE_ROLE: string;
+  let EXECUTE_ROLE: string;
+  let PUBLISH_ROLE: string;
+  let REMOVE_ROLE: string;
 
   let originalState: string;
 
@@ -38,13 +40,15 @@ describe("ConsolidationBus.sol: executor", () => {
       100,
     ]);
 
-    MANAGER_ROLE = await consolidationBus.MANAGER_ROLE();
-    EXECUTOR_ROLE = await consolidationBus.EXECUTOR_ROLE();
+    MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
+    EXECUTE_ROLE = await consolidationBus.EXECUTE_ROLE();
+    PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();
+    REMOVE_ROLE = await consolidationBus.REMOVE_ROLE();
 
     // Grant roles
-    await consolidationBus.connect(admin).grantRole(MANAGER_ROLE, manager.address);
-    await consolidationBus.connect(admin).grantRole(EXECUTOR_ROLE, executor.address);
-    await consolidationBus.connect(manager).registerPublisher(publisher.address);
+    await consolidationBus.connect(admin).grantRole(MANAGE_ROLE, manager.address);
+    await consolidationBus.connect(admin).grantRole(EXECUTE_ROLE, executor.address);
+    await consolidationBus.connect(admin).grantRole(PUBLISH_ROLE, publisher.address);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -91,10 +95,10 @@ describe("ConsolidationBus.sol: executor", () => {
         .withArgs(sourcePubkeys, targetPubkeys, executor.address, fee);
     });
 
-    it("should revert if caller does not have EXECUTOR_ROLE", async () => {
+    it("should revert if caller does not have EXECUTE_ROLE", async () => {
       await expect(consolidationBus.connect(stranger).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, EXECUTOR_ROLE);
+        .withArgs(stranger.address, EXECUTE_ROLE);
     });
 
     it("should revert if batch not found", async () => {
@@ -121,6 +125,7 @@ describe("ConsolidationBus.sol: executor", () => {
     });
 
     it("should revert if batch was removed", async () => {
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
       // Remove the batch
       await consolidationBus.connect(manager).removeBatches([batchHash]);
 

@@ -81,8 +81,6 @@ interface IConsolidationBus {
 contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     using EnumerableSet for EnumerableSet.UintSet;
 
-    uint256 public constant PUBKEY_LENGTH = 48;
-
     // ==========
     //  Errors
     // ==========
@@ -119,7 +117,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     //  Immutables
     // ==========
 
-    uint256 public constant VERSION = 1;
+    uint256 public constant PUBKEY_LENGTH = 48;
 
     IStakingRouter internal immutable STAKING_ROUTER;
     IConsolidationBus internal immutable CONSOLIDATION_BUS;
@@ -144,19 +142,19 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
         address admin,
         address stakingRouter,
         address consolidationBus,
-        uint256 sourceModuleId,
-        uint256 targetModuleId
+        uint256 _sourceModuleId,
+        uint256 _targetModuleId
     ) {
         if (admin == address(0)) revert AdminCannotBeZero();
         if (stakingRouter == address(0)) revert ZeroArgument("stakingRouter");
         if (consolidationBus == address(0)) revert ZeroArgument("consolidationBus");
-        if (sourceModuleId == 0) revert ZeroArgument("sourceModuleId");
-        if (targetModuleId == 0) revert ZeroArgument("targetModuleId");
+        if (_sourceModuleId == 0) revert ZeroArgument("sourceModuleId");
+        if (_targetModuleId == 0) revert ZeroArgument("targetModuleId");
 
         STAKING_ROUTER = IStakingRouter(stakingRouter);
         CONSOLIDATION_BUS = IConsolidationBus(consolidationBus);
-        SOURCE_MODULE_ID = sourceModuleId;
-        TARGET_MODULE_ID = targetModuleId;
+        SOURCE_MODULE_ID = _sourceModuleId;
+        TARGET_MODULE_ID = _targetModuleId;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }

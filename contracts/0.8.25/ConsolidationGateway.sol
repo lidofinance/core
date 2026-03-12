@@ -83,8 +83,6 @@ contract ConsolidationGateway is PausableUntilWithRoles {
 
     bytes32 public constant CONSOLIDATION_LIMIT_POSITION = keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
 
-    uint256 public constant VERSION = 1;
-
     ILidoLocator internal immutable LOCATOR;
 
     /// @dev Ensures the contract's ETH balance is unchanged.
@@ -102,6 +100,7 @@ contract ConsolidationGateway is PausableUntilWithRoles {
         uint256 frameDurationInSec
     ) {
         if (admin == address(0)) revert AdminCannotBeZero();
+        if (lidoLocator == address(0)) revert ZeroArgument("lidoLocator");
         LOCATOR = ILidoLocator(lidoLocator);
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -128,10 +127,11 @@ contract ConsolidationGateway is PausableUntilWithRoles {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         uint256 requestsCount = sourcePubkeys.length;
         if (requestsCount == 0) revert ZeroArgument("sourcePubkeys");
-        if (requestsCount != targetPubkeys.length)
+        if (requestsCount != targetPubkeys.length) {
             revert ArraysLengthMismatch(requestsCount, targetPubkeys.length);
+        }
 
-        _ensureDSMDepositsNotPaused();    
+        _ensureDSMDepositsNotPaused();
 
         _consumeConsolidationRequestLimit(requestsCount);
 
@@ -192,7 +192,7 @@ contract ConsolidationGateway is PausableUntilWithRoles {
     /// Internal functions
 
     function _ensureDSMDepositsNotPaused() internal view {
-        // If the DSM has stopped deposits, some validators may have non-Lido withdrawal credentials. 
+        // If the DSM has stopped deposits, some validators may have non-Lido withdrawal credentials.
         // In that case, processing of all new consolidation requests should be paused.
         if (IDepositSecurityModule(LOCATOR.depositSecurityModule()).isDepositsPaused()) {
             revert DSMDepositsPaused();
@@ -215,7 +215,7 @@ contract ConsolidationGateway is PausableUntilWithRoles {
                 recipient = msg.sender;
             }
 
-            (bool success, ) = recipient.call{value: refund}("");
+            (bool success,) = recipient.call{value: refund}("");
             if (!success) {
                 revert FeeRefundFailed();
             }

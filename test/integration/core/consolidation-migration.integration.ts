@@ -144,13 +144,15 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     // Setup roles
     // =========================================
 
-    // Grant EXECUTOR_ROLE on ConsolidationBus to executor
-    const EXECUTOR_ROLE = await consolidationBus.EXECUTOR_ROLE();
-    await consolidationBus.connect(agentSigner).grantRole(EXECUTOR_ROLE, executor.address);
+    // Grant EXECUTE_ROLE on ConsolidationBus to executor
+    const EXECUTE_ROLE = await consolidationBus.EXECUTE_ROLE();
+    await consolidationBus.connect(agentSigner).grantRole(EXECUTE_ROLE, executor.address);
 
-    // Grant MANAGER_ROLE on ConsolidationBus to agent (for batch management tests)
-    const MANAGER_ROLE = await consolidationBus.MANAGER_ROLE();
-    await consolidationBus.connect(agentSigner).grantRole(MANAGER_ROLE, agentSigner.address);
+    // Grant MANAGE_ROLE on ConsolidationBus to agent (for batch management tests)
+    const MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
+    const REMOVE_ROLE = await consolidationBus.REMOVE_ROLE();
+    await consolidationBus.connect(agentSigner).grantRole(MANAGE_ROLE, agentSigner.address);
+    await consolidationBus.connect(agentSigner).grantRole(REMOVE_ROLE, agentSigner.address);
 
     // Grant ALLOW_PAIR_ROLE on ConsolidationMigrator to agent
     const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
@@ -297,19 +299,19 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       ).to.be.reverted; // The actual error comes from WithdrawalVault
     });
 
-    it("Should revert executeConsolidation if caller does not have EXECUTOR_ROLE", async () => {
+    it("Should revert executeConsolidation if caller does not have EXECUTE_ROLE", async () => {
       // Submit batch first
       await consolidationMigrator
         .connect(submitter)
         .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [0n], [0n]);
 
-      const EXECUTOR_ROLE = await consolidationBus.EXECUTOR_ROLE();
+      const EXECUTE_ROLE = await consolidationBus.EXECUTE_ROLE();
 
       await expect(
         consolidationBus.connect(stranger).executeConsolidation([SOURCE_PUBKEY_1], [TARGET_PUBKEY_1], { value: 1n }),
       )
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, EXECUTOR_ROLE);
+        .withArgs(stranger.address, EXECUTE_ROLE);
     });
 
     it("Should revert executeConsolidation if batch already executed", async () => {
