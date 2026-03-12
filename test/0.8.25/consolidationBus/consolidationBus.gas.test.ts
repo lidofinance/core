@@ -74,6 +74,9 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     const locator = await deployLidoLocator();
     const locatorAddress = await locator.getAddress();
 
+    // 3a. Deploy DSM mock (needed for _ensureDSMDepositsNotPaused check in ConsolidationGateway)
+    const dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
+
     // 4. Deploy ConsolidationGateway
     consolidationGateway = await ethers.deployContract("ConsolidationGateway", [
       admin.address,
@@ -93,9 +96,10 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     const [vault] = await proxify({ impl: vaultImpl, admin });
     withdrawalVault = vault as unknown as WithdrawalVault;
 
-    // 6. Update LidoLocator to point to real WithdrawalVault
+    // 6. Update LidoLocator to point to real WithdrawalVault and DSM mock
     await updateLidoLocatorImplementation(locatorAddress, {
       withdrawalVault: await withdrawalVault.getAddress(),
+      depositSecurityModule: await dsm.getAddress(),
     });
 
     // 7. Deploy ConsolidationBus
