@@ -8,6 +8,10 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {LimitData, RateLimitStorage, RateLimit} from "contracts/common/lib/RateLimit.sol";
 import {PausableUntilWithRoles} from "./utils/PausableUntilWithRoles.sol";
 
+interface IDepositSecurityModule {
+    function isDepositsPaused() external view returns (bool);
+}
+
 interface IWithdrawalVault {
     function addConsolidationRequests(
         bytes[] calldata sourcePubkeys,
@@ -60,6 +64,11 @@ contract ConsolidationGateway is PausableUntilWithRoles {
      * @notice Thrown when source and target arrays have different lengths
      */
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
+
+    /**
+     * @notice Thrown when DSM deposits are paused
+     */
+    error DSMDepositsPaused();
 
     /**
      * @notice Emitted when limits configs are set.
@@ -122,6 +131,8 @@ contract ConsolidationGateway is PausableUntilWithRoles {
         if (requestsCount != targetPubkeys.length)
             revert ArraysLengthMismatch(requestsCount, targetPubkeys.length);
 
+        _ensureDSMDepositsNotPaused();    
+
         _consumeConsolidationRequestLimit(requestsCount);
 
         IWithdrawalVault withdrawalVault = IWithdrawalVault(LOCATOR.withdrawalVault());
@@ -179,6 +190,14 @@ contract ConsolidationGateway is PausableUntilWithRoles {
     }
 
     /// Internal functions
+
+    function _ensureDSMDepositsNotPaused() internal view {
+        // If the DSM has stopped deposits, some validators may have non-Lido withdrawal credentials. 
+        // In that case, processing of all new consolidation requests should be paused.
+        if (IDepositSecurityModule(LOCATOR.depositSecurityModule()).isDepositsPaused()) {
+            revert DSMDepositsPaused();
+        }
+    }
 
     function _checkFee(uint256 fee) internal view returns (uint256 refund) {
         if (msg.value < fee) {
