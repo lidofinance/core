@@ -20,8 +20,9 @@ describe("ConsolidationBus.sol: management", () => {
   let publisher: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let MANAGER_ROLE: string;
-  let PUBLISHER_ROLE: string;
+  let MANAGE_ROLE: string;
+  let PUBLISH_ROLE: string;
+  let REMOVE_ROLE: string;
 
   let originalState: string;
 
@@ -36,64 +37,17 @@ describe("ConsolidationBus.sol: management", () => {
       100,
     ]);
 
-    MANAGER_ROLE = await consolidationBus.MANAGER_ROLE();
-    PUBLISHER_ROLE = await consolidationBus.PUBLISHER_ROLE();
+    MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
+    PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();
+    REMOVE_ROLE = await consolidationBus.REMOVE_ROLE();
 
     // Grant manager role
-    await consolidationBus.connect(admin).grantRole(MANAGER_ROLE, manager.address);
+    await consolidationBus.connect(admin).grantRole(MANAGE_ROLE, manager.address);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
-
-  context("registerPublisher", () => {
-    it("should register a publisher", async () => {
-      await expect(consolidationBus.connect(manager).registerPublisher(publisher.address))
-        .to.emit(consolidationBus, "PublisherRegistered")
-        .withArgs(publisher.address);
-
-      expect(await consolidationBus.hasRole(PUBLISHER_ROLE, publisher.address)).to.be.true;
-    });
-
-    it("should revert if caller does not have MANAGER_ROLE", async () => {
-      await expect(consolidationBus.connect(stranger).registerPublisher(publisher.address))
-        .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, MANAGER_ROLE);
-    });
-
-    it("should revert if publisher is zero address", async () => {
-      await expect(consolidationBus.connect(manager).registerPublisher(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(consolidationBus, "ZeroArgument")
-        .withArgs("publisher");
-    });
-  });
-
-  context("unregisterPublisher", () => {
-    beforeEach(async () => {
-      await consolidationBus.connect(manager).registerPublisher(publisher.address);
-    });
-
-    it("should unregister a publisher", async () => {
-      await expect(consolidationBus.connect(manager).unregisterPublisher(publisher.address))
-        .to.emit(consolidationBus, "PublisherUnregistered")
-        .withArgs(publisher.address);
-
-      expect(await consolidationBus.hasRole(PUBLISHER_ROLE, publisher.address)).to.be.false;
-    });
-
-    it("should revert if caller does not have MANAGER_ROLE", async () => {
-      await expect(consolidationBus.connect(stranger).unregisterPublisher(publisher.address))
-        .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, MANAGER_ROLE);
-    });
-
-    it("should revert if publisher is zero address", async () => {
-      await expect(consolidationBus.connect(manager).unregisterPublisher(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(consolidationBus, "ZeroArgument")
-        .withArgs("publisher");
-    });
-  });
 
   context("setBatchSize", () => {
     it("should set batch size", async () => {
@@ -104,15 +58,16 @@ describe("ConsolidationBus.sol: management", () => {
       expect(await consolidationBus.batchSize()).to.equal(200);
     });
 
-    it("should allow setting batch size to zero (unlimited)", async () => {
-      await consolidationBus.connect(manager).setBatchSize(0);
-      expect(await consolidationBus.batchSize()).to.equal(0);
+    it("should revert setting batch size to zero", async () => {
+      await expect(consolidationBus.connect(manager).setBatchSize(0))
+        .to.be.revertedWithCustomError(consolidationBus, "ZeroArgument")
+        .withArgs("batchSizeLimit");
     });
 
-    it("should revert if caller does not have MANAGER_ROLE", async () => {
+    it("should revert if caller does not have MANAGE_ROLE", async () => {
       await expect(consolidationBus.connect(stranger).setBatchSize(200))
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, MANAGER_ROLE);
+        .withArgs(stranger.address, MANAGE_ROLE);
     });
   });
 
@@ -121,7 +76,8 @@ describe("ConsolidationBus.sol: management", () => {
 
     beforeEach(async () => {
       // Register publisher and add a batch
-      await consolidationBus.connect(manager).registerPublisher(publisher.address);
+      await consolidationBus.connect(admin).grantRole(PUBLISH_ROLE, publisher.address);
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, publisher.address);
 
       const sourcePubkeys = [PUBKEYS[0]];
       const targetPubkeys = [PUBKEYS[1]];
@@ -135,6 +91,7 @@ describe("ConsolidationBus.sol: management", () => {
     });
 
     it("should remove batches", async () => {
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
       expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
 
       await expect(consolidationBus.connect(manager).removeBatches([batchHash]))
@@ -144,13 +101,15 @@ describe("ConsolidationBus.sol: management", () => {
       expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
     });
 
-    it("should revert if caller does not have MANAGER_ROLE", async () => {
+    it("should revert if caller does not have REMOVE_ROLE", async () => {
       await expect(consolidationBus.connect(stranger).removeBatches([batchHash]))
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, MANAGER_ROLE);
+        .withArgs(stranger.address, REMOVE_ROLE);
     });
 
     it("should revert if batch not found", async () => {
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
+
       const fakeBatchHash = ethers.keccak256(ethers.toUtf8Bytes("fake"));
 
       await expect(consolidationBus.connect(manager).removeBatches([fakeBatchHash]))
@@ -160,8 +119,9 @@ describe("ConsolidationBus.sol: management", () => {
 
     it("should revert if batch already executed", async () => {
       // Grant executor role and execute the batch
-      const EXECUTOR_ROLE = await consolidationBus.EXECUTOR_ROLE();
-      await consolidationBus.connect(admin).grantRole(EXECUTOR_ROLE, manager.address);
+      const EXECUTE_ROLE = await consolidationBus.EXECUTE_ROLE();
+      await consolidationBus.connect(admin).grantRole(EXECUTE_ROLE, manager.address);
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
 
       const sourcePubkeys = [PUBKEYS[0]];
       const targetPubkeys = [PUBKEYS[1]];
@@ -180,6 +140,7 @@ describe("ConsolidationBus.sol: management", () => {
       const targetPubkeys2 = [PUBKEYS[0]];
 
       await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys2, targetPubkeys2);
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
 
       const batchHash2 = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [sourcePubkeys2, targetPubkeys2]),

@@ -19,10 +19,11 @@ interface IConsolidationGateway {
  * @notice Message Bus for consolidation requests that decouples request submission from fee payment.
  *
  * The workflow:
- * 1. Admins register/unregister publishers (MANAGER_ROLE)
- * 2. Registered publishers add consolidation requests (PUBLISHER_ROLE)
- * 3. Executor bot executes batches, paying the required ETH fee (EXECUTOR_ROLE)
+ * 1. Admins register/unregister publishers via grant/revoke PUBLISH_ROLE
+ * 2. Registered publishers add consolidation requests (PUBLISH_ROLE)
+ * 3. Executor bot executes batches, paying the required ETH fee (EXECUTE_ROLE)
  *    The bus forwards the batch to ConsolidationGateway
+ * 4. Optional REMOVE_ROLE can remove batches from the pending queue
  */
 contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     /**
@@ -58,7 +59,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     /**
      * @notice Thrown when attempting to add a batch that is already pending execution
      * @param batchHash Hash of the batch that already exists in the pending queue
-    */
+     */
     error BatchAlreadyPending(bytes32 batchHash);
 
     /**
@@ -111,11 +112,10 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
      */
     event BatchesRemoved(bytes32[] batchHashes);
 
-    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
-    bytes32 public constant PUBLISHER_ROLE = keccak256("PUBLISHER_ROLE");
-    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
-
-    uint256 public constant VERSION = 1;
+    bytes32 public constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
+    bytes32 public constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
+    bytes32 public constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
+    bytes32 public constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
 
     IConsolidationGateway internal immutable CONSOLIDATION_GATEWAY;
 
@@ -131,54 +131,28 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
         if (consolidationGateway == address(0)) revert ZeroArgument("consolidationGateway");
 
         CONSOLIDATION_GATEWAY = IConsolidationGateway(consolidationGateway);
-        _batchSize = initialBatchSize;
-
+        _setBatchSize(initialBatchSize);
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
-    }
-
-    // ==================
-    //  Admin operations
-    // ==================
-
-    /**
-     * @notice Registers a new publisher by granting PUBLISHER_ROLE
-     * @param publisher Address to register as publisher
-     * @dev Reverts if caller does not have MANAGER_ROLE
-     */
-    function registerPublisher(address publisher) external onlyRole(MANAGER_ROLE) {
-        if (publisher == address(0)) revert ZeroArgument("publisher");
-        _grantRole(PUBLISHER_ROLE, publisher);
-        emit PublisherRegistered(publisher);
-    }
-
-    /**
-     * @notice Unregisters a publisher by revoking PUBLISHER_ROLE
-     * @param publisher Address to unregister
-     * @dev Reverts if caller does not have MANAGER_ROLE
-     */
-    function unregisterPublisher(address publisher) external onlyRole(MANAGER_ROLE) {
-        if (publisher == address(0)) revert ZeroArgument("publisher");
-        _revokeRole(PUBLISHER_ROLE, publisher);
-        emit PublisherUnregistered(publisher);
+        _grantRole(MANAGE_ROLE, admin);
+        _grantRole(REMOVE_ROLE, admin);
     }
 
     /**
      * @notice Sets the maximum batch size limit
      * @param limit New batch size limit
-     * @dev Reverts if caller does not have MANAGER_ROLE
+     * @dev Reverts if caller does not have MANAGE_ROLE
      */
-    function setBatchSize(uint256 limit) external onlyRole(MANAGER_ROLE) {
-        _batchSize = limit;
-        emit BatchLimitUpdated(limit);
+    function setBatchSize(uint256 limit) external onlyRole(MANAGE_ROLE) {
+        _setBatchSize(limit);
     }
 
     /**
      * @notice Removes batches from the queue
      * @param batchHashes Array of batch hashes to remove
-     * @dev Reverts if caller does not have MANAGER_ROLE
+     * @dev Reverts if caller does not have REMOVE_ROLE
      * @dev Reverts if any batch is not found or already executed
      */
-    function removeBatches(bytes32[] calldata batchHashes) external onlyRole(MANAGER_ROLE) {
+    function removeBatches(bytes32[] calldata batchHashes) external onlyRole(REMOVE_ROLE) {
         for (uint256 i = 0; i < batchHashes.length; ++i) {
             bytes32 batchHash = batchHashes[i];
 
@@ -227,7 +201,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
      * @param sourcePubkeys Array of 48-byte source validator public keys
      * @param targetPubkeys Array of 48-byte target validator public keys
      * @dev Reverts if:
-     *      - Caller does not have PUBLISHER_ROLE
+     *      - Caller does not have PUBLISH_ROLE
      *      - Arrays have different lengths
      *      - Batch is empty
      *      - Batch size exceeds limit (when limit > 0)
@@ -237,13 +211,13 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     function addConsolidationRequests(
         bytes[] calldata sourcePubkeys,
         bytes[] calldata targetPubkeys
-    ) external onlyRole(PUBLISHER_ROLE) {
+    ) external onlyRole(PUBLISH_ROLE) {
         uint256 count = sourcePubkeys.length;
         if (count == 0) revert EmptyBatch();
         if (count != targetPubkeys.length) revert ArraysLengthMismatch(count, targetPubkeys.length);
 
         uint256 limit = _batchSize;
-        if (limit > 0 && count > limit) revert BatchTooLarge(count, limit);
+        if (count > limit) revert BatchTooLarge(count, limit);
 
         for (uint256 i = 0; i < count; ++i) {
             if (keccak256(sourcePubkeys[i]) == keccak256(targetPubkeys[i])) {
@@ -270,13 +244,13 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
      * @param targetPubkeys Array of 48-byte target validator public keys
      * @dev Forwards the batch to ConsolidationGateway with msg.value as fee
      * @dev Reverts if:
-     *      - Caller does not have EXECUTOR_ROLE
+     *      - Caller does not have EXECUTE_ROLE
      *      - Batch was not added or was already executed/removed
      */
     function executeConsolidation(
         bytes[] calldata sourcePubkeys,
         bytes[] calldata targetPubkeys
-    ) external payable onlyRole(EXECUTOR_ROLE) {
+    ) external payable onlyRole(EXECUTE_ROLE) {
         bytes32 batchHash = _computeBatchHash(sourcePubkeys, targetPubkeys);
 
         if (_pendingBatches[batchHash] == address(0)) revert BatchNotFound(batchHash);
@@ -307,5 +281,11 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
         bytes[] calldata targetPubkeys
     ) internal pure returns (bytes32) {
         return keccak256(abi.encode(sourcePubkeys, targetPubkeys));
+    }
+
+    function _setBatchSize(uint256 limit) internal {
+        if (limit == 0) revert ZeroArgument("batchSizeLimit");
+        _batchSize = limit;
+        emit BatchLimitUpdated(limit);
     }
 }
