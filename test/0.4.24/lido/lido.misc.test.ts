@@ -57,7 +57,6 @@ describe("Lido.sol:misc", () => {
     await acl.createPermission(user, lido, await lido.STAKING_CONTROL_ROLE(), deployer);
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
     await acl.createPermission(user, lido, await lido.PAUSE_ROLE(), deployer);
-    await acl.createPermission(user, lido, await lido.UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE(), deployer);
     lido = lido.connect(user);
 
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);

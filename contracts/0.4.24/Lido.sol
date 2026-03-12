@@ -84,8 +84,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 public constant RESUME_ROLE = 0x2fc10cc8ae19568712f7a176fb4978616a610650813c9d05326c34abb62749c7; // keccak256("RESUME_ROLE");
     bytes32 public constant STAKING_PAUSE_ROLE = 0x84ea57490227bc2be925c684e2a367071d69890b629590198f4125a018eb1de8; // keccak256("STAKING_PAUSE_ROLE")
     bytes32 public constant STAKING_CONTROL_ROLE = 0xa42eee1333c0758ba72be38e728b6dadb32ea767de5b4ddbaea1dae85b1b051f; // keccak256("STAKING_CONTROL_ROLE")
-    bytes32 public constant UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE =
-        0xe6dc5d79630c61871e99d341ad72c5a052bed2fc8c79e5a4480a7cd31117576c; // keccak256("UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE")
     bytes32 public constant BUFFER_RESERVE_MANAGER_ROLE =
         0x33969636f1fbf3d7d062d4de4a08e7bd3c46606ec28b3a4398d2665be559b921; // keccak256("BUFFER_RESERVE_MANAGER_ROLE")
 
@@ -180,8 +178,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
     // Emitted when oracle accounting report processed
-    // @dev `preCLBalance` is the balance of the validators on previous report
-    // plus the amount of ether that was deposited to the deposit contract since then
+    // @dev `preCLBalance` is actually the principal CL balance: the sum of the previous report's
+    //      CL validators balance, CL pending balance, and deposited balance since the last report.
+    //      The parameter name is kept for ABI backward compatibility.
     event ETHDistributed(
         uint256 indexed reportTimestamp,
         uint256 preCLBalance, // actually its preCLBalance + deposits due to compatibility reasons
@@ -1031,16 +1030,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Emits the `TokenRebase` and `InternalShareRateUpdated` events
-     * @param _reportTimestamp timestamp of the refSlot block fro the report applied
+     * @param _reportTimestamp timestamp of the refSlot block for the report applied
      * @param _timeElapsed seconds since the previous applied report
      * @param _preTotalShares the total number of shares before the oracle report tx
      * @param _preTotalEther the total amount of ether before the oracle report tx
      * @param _postTotalShares the total number of shares after the oracle report tx
      * @param _postTotalEther the total amount of ether after the oracle report tx
-     * @param _postInternalShares the total number of internal shares before the oracle report tx
+     * @param _postInternalShares the total number of internal shares after the oracle report tx
      * @param _postInternalEther the total amount of internal ether after the oracle tx
      * @param _sharesMintedAsFees the number of shares minted to pay fees to Lido and StakingModules
-     * @dev these events are used to calculate protocol gross (without protocol fess deducted) and net APR (StETH APR)
+     * @dev these events are used to calculate protocol gross (without protocol fees deducted) and net APR (StETH APR)
      *
      *      preShareRate = preTotalEther * 1e27 / preTotalShares
      *      postShareRate = postTotalEther * 1e27 / postTotalShares
@@ -1417,10 +1416,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     // helpers: CL validators and pending balances
-
-    function _setClValidatorsBalance(uint256 _newClValidatorsBalance) internal {
-        CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION.setLowUint128(_newClValidatorsBalance);
-    }
 
     function _getClValidatorsBalanceAndClPendingBalance() internal view returns (uint256, uint256) {
         return CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION.getLowAndHighUint128();
