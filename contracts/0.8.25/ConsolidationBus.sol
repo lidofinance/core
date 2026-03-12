@@ -21,7 +21,7 @@ interface IConsolidationGateway {
  * The workflow:
  * 1. Admins register/unregister publishers (MANAGER_ROLE)
  * 2. Registered publishers add consolidation requests (PUBLISHER_ROLE)
- * 3. Executor bot executes batches, paying the required ETH fee (EXECUTER_ROLE)
+ * 3. Executor bot executes batches, paying the required ETH fee (EXECUTOR_ROLE)
  *    The bus forwards the batch to ConsolidationGateway
  */
 contract ConsolidationBus is AccessControlEnumerableUpgradeable {
@@ -113,7 +113,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     bytes32 public constant PUBLISHER_ROLE = keccak256("PUBLISHER_ROLE");
-    bytes32 public constant EXECUTER_ROLE = keccak256("EXECUTER_ROLE");
+    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     uint256 public constant VERSION = 1;
 
@@ -270,13 +270,13 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
      * @param targetPubkeys Array of 48-byte target validator public keys
      * @dev Forwards the batch to ConsolidationGateway with msg.value as fee
      * @dev Reverts if:
-     *      - Caller does not have EXECUTER_ROLE
+     *      - Caller does not have EXECUTOR_ROLE
      *      - Batch was not added or was already executed/removed
      */
     function executeConsolidation(
         bytes[] calldata sourcePubkeys,
         bytes[] calldata targetPubkeys
-    ) external payable onlyRole(EXECUTER_ROLE) {
+    ) external payable onlyRole(EXECUTOR_ROLE) {
         bytes32 batchHash = _computeBatchHash(sourcePubkeys, targetPubkeys);
 
         if (_pendingBatches[batchHash] == address(0)) revert BatchNotFound(batchHash);

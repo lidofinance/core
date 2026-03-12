@@ -23,7 +23,7 @@ describe("ConsolidationBus.sol: executor", () => {
   let stranger: HardhatEthersSigner;
 
   let MANAGER_ROLE: string;
-  let EXECUTER_ROLE: string;
+  let EXECUTOR_ROLE: string;
 
   let originalState: string;
 
@@ -39,11 +39,11 @@ describe("ConsolidationBus.sol: executor", () => {
     ]);
 
     MANAGER_ROLE = await consolidationBus.MANAGER_ROLE();
-    EXECUTER_ROLE = await consolidationBus.EXECUTER_ROLE();
+    EXECUTOR_ROLE = await consolidationBus.EXECUTOR_ROLE();
 
     // Grant roles
     await consolidationBus.connect(admin).grantRole(MANAGER_ROLE, manager.address);
-    await consolidationBus.connect(admin).grantRole(EXECUTER_ROLE, executor.address);
+    await consolidationBus.connect(admin).grantRole(EXECUTOR_ROLE, executor.address);
     await consolidationBus.connect(manager).registerPublisher(publisher.address);
   });
 
@@ -91,10 +91,10 @@ describe("ConsolidationBus.sol: executor", () => {
         .withArgs(sourcePubkeys, targetPubkeys, executor.address, fee);
     });
 
-    it("should revert if caller does not have EXECUTER_ROLE", async () => {
+    it("should revert if caller does not have EXECUTOR_ROLE", async () => {
       await expect(consolidationBus.connect(stranger).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, EXECUTER_ROLE);
+        .withArgs(stranger.address, EXECUTOR_ROLE);
     });
 
     it("should revert if batch not found", async () => {
