@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  AccountingOracle__MockForLidoFastLane,
+  AccountingOracle__MockForStakingRouter,
   Lido__MockForStakingRouter,
   LidoLocator,
   StakingModuleV2__MockForStakingRouter,
@@ -26,7 +26,7 @@ describe("StakingRouter.sol:getTopUpAllocation", () => {
   let locator: LidoLocator;
   let stakingRouter: StakingRouter__Harness;
   let lidoMock: Lido__MockForStakingRouter;
-  let accountingOracle: AccountingOracle__MockForLidoFastLane;
+  let accountingOracle: AccountingOracle__MockForStakingRouter;
 
   let originalState: string;
 
@@ -49,7 +49,7 @@ describe("StakingRouter.sol:getTopUpAllocation", () => {
     [deployer, admin, topUpGatewaySigner] = await ethers.getSigners();
 
     lidoMock = await ethers.deployContract("Lido__MockForStakingRouter", deployer);
-    accountingOracle = await ethers.deployContract("AccountingOracle__MockForLidoFastLane", deployer);
+    accountingOracle = await ethers.deployContract("AccountingOracle__MockForStakingRouter", deployer);
 
     locator = await deployLidoLocator({
       lido: await lidoMock.getAddress(),
