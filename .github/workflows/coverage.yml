@@ -10,7 +10,7 @@ jobs:
     name: Hardhat / Unit Tests
     runs-on: ubuntu-latest
     env:
-      NODE_OPTIONS: --max_old_space_size=10240
+      NODE_OPTIONS: --max_old_space_size=6144
 
     permissions:
       contents: write
@@ -24,7 +24,7 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Collect coverage
-        run: NODE_OPTIONS="--max-old-space-size=10240" yarn test:coverage
+        run: yarn test:coverage
         timeout-minutes: 30
 
       - name: Produce the coverage report
