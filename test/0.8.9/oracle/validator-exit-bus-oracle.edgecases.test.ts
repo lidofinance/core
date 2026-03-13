@@ -5,20 +5,21 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   HashConsensus__Harness,
+  OracleReportSanityChecker__MockForExitBusWeights,
   StakingModule__MockBadKeys,
   StakingRouter__MockForValidatorsExitBus,
   ValidatorsExitBus__Harness,
 } from "typechain-types";
 
-import { GENESIS_TIME, numberToHex, SECONDS_PER_SLOT } from "lib";
+import { numberToHex } from "lib";
 
 import {
   DATA_FORMAT_LIST,
   DATA_FORMAT_LIST_WITH_KEY_INDEX,
-  deployLidoLocator,
   deployVEBO,
   initVEBO,
   makeMockPubkey,
+  updateLidoLocatorImplementation,
 } from "test/deploy";
 
 const PUBKEY_AA = "0x" + "aa".repeat(48);
@@ -44,6 +45,7 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
   let stakingRouter: StakingRouter__MockForValidatorsExitBus;
   let consensus: HashConsensus__Harness;
   let admin: HardhatEthersSigner;
+  let locatorAddr: string;
 
   beforeEach(async () => {
     [admin] = await ethers.getSigners();
@@ -51,6 +53,7 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
     oracle = deployed.oracle as ValidatorsExitBus__Harness;
     stakingRouter = deployed.stakingRouter as StakingRouter__MockForValidatorsExitBus;
     consensus = deployed.consensus as HashConsensus__Harness;
+    locatorAddr = deployed.locatorAddr;
 
     await initVEBO({
       admin: admin.address,
@@ -59,20 +62,6 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
       resumeAfterDeploy: true,
       lastProcessingRefSlot: 0,
     });
-  });
-
-  it("constructor: rejects invalid MaxEB weights", async () => {
-    const locator = await deployLidoLocator();
-    const factory = await ethers.getContractFactory("ValidatorsExitBus__Harness");
-    await expect(
-      ethers.deployContract("ValidatorsExitBus__Harness", [
-        SECONDS_PER_SLOT,
-        GENESIS_TIME,
-        await locator.getAddress(),
-        0n,
-        32n,
-      ]),
-    ).to.be.revertedWithCustomError(factory, "InvalidMaxEBWeight");
   });
 
   it("unpackExitRequest happy path + bounds", async () => {
@@ -129,6 +118,23 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
     await expect(oracle.calculateTotalExitBalanceEth(req, DATA_FORMAT_LIST)).to.be.revertedWithCustomError(
       oracle,
       "UnexpectedWCType",
+    );
+  });
+
+  it("InvalidMaxEBWeight when sanity checker returns zero", async () => {
+    const mockSanity = (await ethers.deployContract("OracleReportSanityChecker__MockForExitBusWeights", [
+      0n,
+      32n,
+    ])) as OracleReportSanityChecker__MockForExitBusWeights;
+
+    await updateLidoLocatorImplementation(locatorAddr, {
+      oracleReportSanityChecker: await mockSanity.getAddress(),
+    });
+
+    const req = encodeV1(1, 1, 1, PUBKEY_AA);
+    await expect(oracle.calculateTotalExitBalanceEth(req, DATA_FORMAT_LIST)).to.be.revertedWithCustomError(
+      oracle,
+      "InvalidMaxEBWeight",
     );
   });
 
