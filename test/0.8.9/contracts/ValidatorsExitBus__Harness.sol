@@ -65,4 +65,23 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     function calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat) external view returns (uint256) {
         return _calculateTotalExitBalanceEth(data, dataFormat);
     }
+
+    /// @notice Expose base timestamp calculation (without consensus override) for coverage
+    function callBaseTimestamp() external view returns (uint32) {
+        return super._getTimestamp();
+    }
+
+    /// @notice Expose internal validator data decoder for coverage of unsupported formats
+    function callGetValidatorData(
+        bytes calldata data,
+        uint256 dataFormat,
+        uint256 index
+    ) external pure returns (ValidatorData memory) {
+        return _getValidatorData(data, dataFormat, index);
+    }
+
+    /// @notice Expose internal dispatcher for direct branch coverage
+    function callProcessExitRequestsList(bytes calldata data, uint256 dataFormat) external {
+        _processExitRequestsList(data, dataFormat);
+    }
 }
