@@ -349,12 +349,20 @@ export async function reportWithoutExtraData(
   numExitedValidatorsByStakingModule: bigint[],
   stakingModuleIdsWithNewlyExitedValidators: bigint[],
   extraData: ReturnType<typeof prepareExtraData>,
+  {
+    effectiveClDiff,
+  }: {
+    effectiveClDiff?: bigint;
+  } = {},
 ) {
   const { accountingOracle } = ctx.contracts;
 
   const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = extraData;
 
+  const clDiff = effectiveClDiff === undefined ? undefined : (await getDepositedSinceLastReport(ctx)) + effectiveClDiff;
+
   const reportData: Partial<OracleReportParams> = {
+    ...(clDiff === undefined ? {} : { clDiff }),
     excludeVaultsBalances: true,
     extraDataFormat: EXTRA_DATA_FORMAT_LIST,
     extraDataHash: extraDataChunkHashes[0],
