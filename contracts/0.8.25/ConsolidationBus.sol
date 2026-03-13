@@ -75,18 +75,6 @@ contract ConsolidationBus is AccessControlEnumerable {
     error SourceEqualsTarget(uint256 index);
 
     /**
-     * @notice Emitted when a publisher is registered
-     * @param publisher Address of the registered publisher
-     */
-    event PublisherRegistered(address indexed publisher);
-
-    /**
-     * @notice Emitted when a publisher is unregistered
-     * @param publisher Address of the unregistered publisher
-     */
-    event PublisherUnregistered(address indexed publisher);
-
-    /**
      * @notice Emitted when the batch size limit is updated
      * @param newLimit New batch size limit
      */

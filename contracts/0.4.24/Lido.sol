@@ -165,10 +165,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Staking limit was removed
     event StakingLimitRemoved();
 
-    // Emitted when validators number delivered by the oracle
-    // @deprecated This event is deprecated. Use CLBalancesUpdated instead for balance-based accounting
-    event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
-
     // Emitted when CL balances are updated by the oracle
     event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
     // Emitted when CL pending balance is updated during deposits to CL

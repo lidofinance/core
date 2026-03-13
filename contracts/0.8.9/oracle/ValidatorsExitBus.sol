@@ -39,20 +39,13 @@ interface IUnifiedStakingModule {
     ) external view returns (bytes memory);
 }
 
-interface INodeOperatorsRegistry {
-    function getSigningKey(
-        uint256 _nodeOperatorId,
-        uint256 _index
-    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
-}
-
 interface IStakingRouter {
     struct ModuleStateConfig {
         address moduleAddress;
         uint16 moduleFee;
         uint16 treasuryFee;
-        uint16 depositTargetShare;
-        uint16 withdrawalProtectShare;
+        uint16 stakeShareLimit;
+        uint16 priorityExitShareThreshold;
         uint8 status;
         uint8 withdrawalCredentialsType;
     }
