@@ -96,6 +96,7 @@ describe("OracleReportSanityChecker.sol", () => {
         oracleDaemonConfig: deployer.address,
         validatorExitDelayVerifier: deployer.address,
         triggerableWithdrawalsGateway: deployer.address,
+        consolidationGateway: deployer.address,
         accounting: await accounting.getAddress(),
         predepositGuarantee: deployer.address,
         wstETH: deployer.address,

@@ -44,8 +44,8 @@ interface IStakingRouter {
         address moduleAddress;
         uint16 moduleFee;
         uint16 treasuryFee;
-        uint16 depositTargetShare;
-        uint16 withdrawalProtectShare;
+        uint16 stakeShareLimit;
+        uint16 priorityExitShareThreshold;
         uint8 status;
         uint8 withdrawalCredentialsType;
     }

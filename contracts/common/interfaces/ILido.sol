@@ -59,11 +59,11 @@ interface ILido is IERC20, IVersioned {
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _reportClBalance,
-        uint256 _adjustedPreCLBalance,
+        uint256 _principalCLBalance,
         uint256 _withdrawalsToWithdraw,
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
-        uint256 _simulatedShareRate,
+        uint256 _withdrawalsShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external;
 
