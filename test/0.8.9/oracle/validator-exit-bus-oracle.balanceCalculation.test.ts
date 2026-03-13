@@ -3,7 +3,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingRouter__MockForValidatorsExitBus, ValidatorsExitBus__Harness } from "typechain-types";
+import {
+  OracleReportSanityChecker,
+  StakingRouter__MockForValidatorsExitBus,
+  ValidatorsExitBus__Harness,
+} from "typechain-types";
 
 import { de0x, numberToHex } from "lib";
 
@@ -30,6 +34,7 @@ const MAXEB_MODULE_MAX_BALANCE_ETH = 2048n; // 2048 ETH
 describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
+  let sanityChecker: OracleReportSanityChecker;
   let stakingRouter: StakingRouter__MockForValidatorsExitBus;
 
   interface ExitRequest {
@@ -69,6 +74,7 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
 
     const deployed = await deployVEBO(await admin.getAddress());
     oracle = deployed.oracle;
+    sanityChecker = deployed.oracleReportSanityChecker;
     stakingRouter = deployed.stakingRouter as StakingRouter__MockForValidatorsExitBus;
   });
 
@@ -286,6 +292,22 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
 
         const totalBalance = await newOracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
         expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
+      });
+
+      it("uses MaxEB weights from sanity checker and applies governance updates", async () => {
+        await sanityChecker.grantRole(await sanityChecker.MAX_EFFECTIVE_BALANCE_WEIGHTS_MANAGER_ROLE(), admin.address);
+        await sanityChecker.setMaxEffectiveBalanceWeightWCType01(40n);
+        await sanityChecker.setMaxEffectiveBalanceWeightWCType02(4_096n);
+
+        const requests: ExitRequest[] = [
+          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
+          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 2, valIndex: 20, valPubkey: PUBKEYS[1] },
+        ];
+        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
+
+        expect(await oracle.MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01()).to.equal(40n);
+        expect(await oracle.MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02()).to.equal(4_096n);
+        expect(await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST)).to.equal(4_136n);
       });
 
       it("reverts for unconfigured modules", async () => {

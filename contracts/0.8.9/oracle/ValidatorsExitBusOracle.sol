@@ -48,12 +48,10 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     constructor(
         uint256 secondsPerSlot,
         uint256 genesisTime,
-        address lidoLocator,
-        uint256 maxEBWeightType1,
-        uint256 maxEBWeightType2
+        address lidoLocator
     )
         BaseOracle(secondsPerSlot, genesisTime)
-        ValidatorsExitBus(lidoLocator, maxEBWeightType1, maxEBWeightType2)
+        ValidatorsExitBus(lidoLocator)
     {}
 
     function initialize(

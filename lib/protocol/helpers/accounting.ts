@@ -9,7 +9,6 @@ import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.s
 
 import {
   advanceChainTime,
-  BigIntMath,
   certainAddress,
   ether,
   EXTRA_DATA_FORMAT_EMPTY,
@@ -62,6 +61,54 @@ type OracleReportResults = {
 export const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
+const CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS = 37n * 24n * 60n * 60n;
+
+type StakingModuleWithCLBalance = {
+  moduleId: bigint;
+  moduleClBalance: bigint;
+};
+
+type StakingModuleWithActiveBalanceGwei = {
+  moduleId: bigint;
+  moduleActiveBalanceGwei: bigint;
+};
+
+/**
+ * Build module active balances in gwei with exact total conservation.
+ * Uses proportional split over remaining totals; the last module gets the remainder.
+ */
+const buildConservedModuleActiveBalancesGwei = (
+  clActiveBalanceGwei: bigint,
+  modulesWithBalance: StakingModuleWithCLBalance[],
+): StakingModuleWithActiveBalanceGwei[] => {
+  if (modulesWithBalance.length === 0) return [];
+
+  const totalModulesClBalance = modulesWithBalance.reduce((sum, module) => sum + module.moduleClBalance, 0n);
+  if (totalModulesClBalance === 0n) {
+    return modulesWithBalance.map(({ moduleId }) => ({ moduleId, moduleActiveBalanceGwei: 0n }));
+  }
+
+  let remainingClActiveBalanceGwei = clActiveBalanceGwei;
+  let remainingModulesClBalance = totalModulesClBalance;
+  const modulesWithActiveBalances: StakingModuleWithActiveBalanceGwei[] = [];
+
+  for (let index = 0; index < modulesWithBalance.length; ++index) {
+    const { moduleId, moduleClBalance } = modulesWithBalance[index];
+    const isLastModule = index === modulesWithBalance.length - 1;
+
+    const moduleActiveBalanceGwei =
+      isLastModule || remainingModulesClBalance === 0n
+        ? remainingClActiveBalanceGwei
+        : (remainingClActiveBalanceGwei * moduleClBalance) / remainingModulesClBalance;
+
+    modulesWithActiveBalances.push({ moduleId, moduleActiveBalanceGwei });
+
+    remainingClActiveBalanceGwei -= moduleActiveBalanceGwei;
+    remainingModulesClBalance -= moduleClBalance;
+  }
+
+  return modulesWithActiveBalances;
+};
 
 /**
  * Prepare and push oracle report.
@@ -104,15 +151,13 @@ export const report = async (
 
   refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
-  // TODO: Update to use balance-based accounting (clValidatorsBalance + clPendingBalance)
-  // note: beaconBalance = (clValidatorsBalance + clPendingBalance) at last report
-  const { depositedValidators: beaconValidators, beaconBalance } = await lido.getBeaconStat();
+  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+  const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
-  const postCLBalance = beaconBalance + clDiff;
-  const postBeaconValidators = beaconValidators + clAppearedValidators;
+  const postCLBalance = preCLBalance + clDiff;
 
   log.debug("Beacon", {
-    "Beacon validators": postBeaconValidators,
+    "Beacon validators delta": clAppearedValidators,
     "Beacon balance": formatEther(postCLBalance),
   });
 
@@ -150,7 +195,6 @@ export const report = async (
 
   const simulatedReport = await simulateReport(ctx, {
     refSlot,
-    beaconValidators: postBeaconValidators,
     clBalance: postCLBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
@@ -186,25 +230,26 @@ export const report = async (
     log.debug("Bunker Mode", { "Is Active": isBunkerMode });
   }
 
-  const savedTotalClBalance = await ctx.contracts.stakingRouter.getTotalStakingModulesBalance();
+  const clActiveBalanceGwei = postCLBalance / ONE_GWEI;
 
   if (stakingModuleIdsWithUpdatedBalance.length === 0) {
     validatorBalancesGweiByStakingModule = [];
     pendingBalancesGweiByStakingModule = [];
-    let postCLBalanceRest = postCLBalance;
     const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
+
+    const modulesWithBalance: StakingModuleWithCLBalance[] = [];
     for (const moduleId of moduleIds) {
       const moduleClBalance = await ctx.contracts.stakingRouter.getStakingModuleBalance(moduleId);
-      const moduleClBalanceNew = BigIntMath.min(
-        (postCLBalance * moduleClBalance) / savedTotalClBalance,
-        postCLBalanceRest > 0n ? postCLBalanceRest : 0n,
-      );
-      postCLBalanceRest -= moduleClBalanceNew;
       if (moduleClBalance > 0) {
-        stakingModuleIdsWithUpdatedBalance.push(moduleId);
-        validatorBalancesGweiByStakingModule.push(moduleClBalanceNew / ONE_GWEI);
-        pendingBalancesGweiByStakingModule.push(0n);
+        modulesWithBalance.push({ moduleId, moduleClBalance });
       }
+    }
+
+    const modulesWithActiveBalances = buildConservedModuleActiveBalancesGwei(clActiveBalanceGwei, modulesWithBalance);
+    for (const { moduleId, moduleActiveBalanceGwei } of modulesWithActiveBalances) {
+      stakingModuleIdsWithUpdatedBalance.push(moduleId);
+      validatorBalancesGweiByStakingModule.push(moduleActiveBalanceGwei);
+      pendingBalancesGweiByStakingModule.push(0n);
     }
   }
 
@@ -241,6 +286,40 @@ export const report = async (
     ...reportData,
     clBalance: postCLBalance,
     extraDataList,
+  });
+};
+
+export const getDepositedSinceLastReport = async (ctx: ProtocolContext): Promise<bigint> => {
+  const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
+  return depositedSinceLastReport;
+};
+
+/**
+ * Submit report with an effective CL delta between reports.
+ *
+ * `report()` expects `clDiff` as raw `postCLBalance - preCLBalance`.
+ * Since `preCLBalance` is based on last report snapshot, deposits made after that
+ * snapshot must be added to preserve the intended effective delta.
+ */
+export const reportWithEffectiveClDiff = async (
+  ctx: ProtocolContext,
+  effectiveClDiff: bigint,
+  params: Omit<OracleReportParams, "clDiff"> = {},
+): Promise<OracleReportResults> => {
+  const depositedSinceLastReport = await getDepositedSinceLastReport(ctx);
+  return report(ctx, { ...params, clDiff: depositedSinceLastReport + effectiveClDiff });
+};
+
+export const resetCLBalanceDecreaseWindow = async (
+  ctx: ProtocolContext,
+  params: Omit<OracleReportParams, "clDiff"> = {},
+): Promise<OracleReportResults> => {
+  // Move report timestamp beyond the 36-day window and submit an effective neutral report.
+  await advanceChainTime(CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS);
+  return reportWithEffectiveClDiff(ctx, 0n, {
+    excludeVaultsBalances: true,
+    skipWithdrawals: true,
+    ...params,
   });
 };
 
@@ -365,7 +444,6 @@ export const waitNextAvailableReportTime = async (
 
 type SimulateReportParams = {
   refSlot: bigint;
-  beaconValidators: bigint;
   clBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
@@ -383,7 +461,7 @@ type SimulateReportResult = {
  */
 export const simulateReport = async (
   ctx: ProtocolContext,
-  { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
+  { refSlot, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
 
@@ -392,7 +470,6 @@ export const simulateReport = async (
 
   log.debug("Simulating oracle report", {
     "Ref Slot": refSlot,
-    "Beacon Validators": beaconValidators,
     "CL Balance": formatEther(clBalance),
     "Withdrawal Vault Balance": formatEther(withdrawalVaultBalance),
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
@@ -429,7 +506,6 @@ export const simulateReport = async (
 };
 
 type HandleOracleReportParams = {
-  beaconValidators: bigint;
   clBalance: bigint;
   sharesRequestedToBurn: bigint;
   withdrawalVaultBalance: bigint;
@@ -441,7 +517,6 @@ type HandleOracleReportParams = {
 export const handleOracleReport = async (
   ctx: ProtocolContext,
   {
-    beaconValidators,
     clBalance,
     sharesRequestedToBurn,
     withdrawalVaultBalance,
@@ -461,7 +536,6 @@ export const handleOracleReport = async (
   try {
     log.debug("Handle oracle report", {
       "Ref Slot": refSlot,
-      "Beacon Validators": beaconValidators,
       "CL Balance": formatEther(clBalance),
       "Withdrawal Vault Balance": formatEther(withdrawalVaultBalance),
       "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),

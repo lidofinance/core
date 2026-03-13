@@ -427,24 +427,32 @@ describe("AccountingOracle.sol:submitReport", () => {
         ).to.be.revertedWithCustomError(oracle, "InvalidExitedValidatorsData");
       });
 
-      it("reverts with ExitedValidatorsLimitExceeded if exited validators rate limit will be reached", async () => {
-        // Really simple test here for now
-        // TODO: Come up with more tests for better coverage of edge-case scenarios that can be accrued
-        //       during calculation `exitedValidatorsPerDay` rate in AccountingOracle:612
-        const totalExitedValidators = reportFields.numExitedValidatorsByStakingModule.reduce(
-          (sum: BigNumberish, curr: BigNumberish) => getBigInt(sum) + getBigInt(curr),
-          0,
+      it("reverts with ExitedEthAmountPerDayLimitExceeded if exited ETH amount per day limit is reached", async () => {
+        const totalExitedValidators: bigint = reportFields.numExitedValidatorsByStakingModule.reduce<bigint>(
+          (sum, curr) => sum + getBigInt(curr),
+          0n,
         );
-        const exitingRateLimit = getBigInt(totalExitedValidators) - 1n;
+        const exitingRateLimit = 0n;
         await sanityChecker.grantRole(
-          await sanityChecker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
+          await sanityChecker.EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(),
           admin.address,
         );
-        await sanityChecker.setExitedValidatorsPerDayLimit(exitingRateLimit);
-        expect((await sanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.equal(exitingRateLimit);
+        await sanityChecker.setExitedEthAmountPerDayLimit(exitingRateLimit);
+
+        const limits = await sanityChecker.getOracleReportLimits();
+        expect(limits.exitedEthAmountPerDayLimit).to.equal(exitingRateLimit);
+
+        const refSlotDelta = reportFields.refSlot - (await oracle.getLastProcessingRefSlot());
+        const timeElapsed = refSlotDelta * SECONDS_PER_SLOT;
+        const exitedEthAmount = totalExitedValidators * limits.exitedValidatorEthAmountLimit * 10n ** 18n;
+        const exitedEthAmountPerDay =
+          timeElapsed === 0n ? exitedEthAmount * 86_400n : (exitedEthAmount * 86_400n) / timeElapsed;
+        const exitedEthAmountPerDayLimitWithConsolidation =
+          (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 10n ** 18n;
+
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
-          .to.be.revertedWithCustomError(sanityChecker, "ExitedValidatorsLimitExceeded")
-          .withArgs(exitingRateLimit, totalExitedValidators);
+          .to.be.revertedWithCustomError(sanityChecker, "ExitedEthAmountPerDayLimitExceeded")
+          .withArgs(exitedEthAmountPerDayLimitWithConsolidation, exitedEthAmountPerDay);
       });
     });
 
@@ -675,6 +683,8 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 64n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [0n],
+            pendingBalancesGweiByStakingModule: [64n * ONE_GWEI],
           }),
         );
 
@@ -691,6 +701,8 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 1000n * ONE_GWEI,
             clPendingBalanceGwei: 0n,
+            validatorBalancesGweiByStakingModule: [1000n * ONE_GWEI],
+            pendingBalancesGweiByStakingModule: [0n],
           }),
         );
 
@@ -705,8 +717,10 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clValidatorsBalanceGwei: 2000000n * ONE_GWEI,
-            clPendingBalanceGwei: 50000n * ONE_GWEI,
+            clValidatorsBalanceGwei: 60000n * ONE_GWEI,
+            clPendingBalanceGwei: 5000n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [60000n * ONE_GWEI],
+            pendingBalancesGweiByStakingModule: [5000n * ONE_GWEI],
           }),
         );
 
@@ -723,6 +737,8 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 100n * ONE_GWEI,
             clPendingBalanceGwei: 500n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [100n * ONE_GWEI],
+            pendingBalancesGweiByStakingModule: [500n * ONE_GWEI],
           }),
         );
 
@@ -739,6 +755,8 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 123n * ONE_GWEI,
             clPendingBalanceGwei: 456n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [123n * ONE_GWEI],
+            pendingBalancesGweiByStakingModule: [456n * ONE_GWEI],
           }),
         );
 
@@ -758,6 +776,8 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 0n,
+            validatorBalancesGweiByStakingModule: [0n],
+            pendingBalancesGweiByStakingModule: [0n],
           }),
         );
 
@@ -774,6 +794,8 @@ describe("AccountingOracle.sol:submitReport", () => {
           getReportFields({
             clValidatorsBalanceGwei: 1n,
             clPendingBalanceGwei: 1n,
+            validatorBalancesGweiByStakingModule: [1n],
+            pendingBalancesGweiByStakingModule: [1n],
           }),
         );
 
@@ -788,8 +810,10 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
-            clValidatorsBalanceGwei: 500000n * ONE_GWEI,
+            clValidatorsBalanceGwei: 30000n * ONE_GWEI,
             clPendingBalanceGwei: 1000n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [30000n * ONE_GWEI],
+            pendingBalancesGweiByStakingModule: [1000n * ONE_GWEI],
           }),
         );
 

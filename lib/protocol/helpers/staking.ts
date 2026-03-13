@@ -184,14 +184,19 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
       );
   }
 
-  const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
+  const getTotalDepositedValidators = async () => {
+    const moduleDigests = await stakingRouter.getAllStakingModuleDigests();
+    return moduleDigests.reduce((sum, digest) => sum + digest.summary.totalDepositedValidators, 0n);
+  };
+
+  const numDepositedBefore = await getTotalDepositedValidators();
 
   await ensureCanDeposit(ctx);
 
   // Deposit validators via StakingRouter (DSM calls SR which pulls ETH from Lido)
   await stakingRouter.connect(dsmSigner).deposit(moduleId, ZERO_HASH);
 
-  const numDepositedAfter = (await lido.getBeaconStat()).depositedValidators;
+  const numDepositedAfter = await getTotalDepositedValidators();
 
   // Restore original maxDepositsPerBlock
   if (originalMaxDepositsPerBlock > depositsCount) {

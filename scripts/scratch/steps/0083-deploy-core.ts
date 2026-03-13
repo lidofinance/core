@@ -306,13 +306,7 @@ export async function main() {
     "ValidatorsExitBusOracle",
     proxyContractsOwner,
     deployer,
-    [
-      chainSpec.secondsPerSlot,
-      chainSpec.genesisTime,
-      locator.address,
-      validatorsExitBusOracleParams.maxEBWeightType1,
-      validatorsExitBusOracleParams.maxEBWeightType2,
-    ],
+    [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address],
   );
 
   const hashConsensusForVebo = await deployWithoutProxy(
@@ -524,26 +518,30 @@ export async function main() {
   //
 
   const sanityCheckerParams = state["oracleReportSanityChecker"].deployParameters;
-  const oracleReportSanityCheckerArgs = [
-    locator.address,
-    accountingOracle.address,
-    accounting.address,
-    admin,
-    [
-      sanityCheckerParams.exitedValidatorsPerDayLimit,
-      sanityCheckerParams.appearedValidatorsPerDayLimit,
-      sanityCheckerParams.annualBalanceIncreaseBPLimit,
-      sanityCheckerParams.simulatedShareRateDeviationBPLimit,
-      sanityCheckerParams.maxBalanceExitRequestedPerReportInEth,
-      sanityCheckerParams.maxItemsPerExtraDataTransaction,
-      sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
-      sanityCheckerParams.requestTimestampMargin,
-      sanityCheckerParams.maxPositiveTokenRebase,
-      sanityCheckerParams.initialSlashingAmountPWei,
-      sanityCheckerParams.inactivityPenaltiesAmountPWei,
-      sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
-    ],
-  ];
+  // TODO: set final NEW sanity limits in deploy params before release deployment:
+  // - exitedEthAmountPerDayLimit
+  // - appearedEthAmountPerDayLimit
+  // - consolidationEthAmountPerDayLimit
+  // - exitedValidatorEthAmountLimit
+  const sanityLimits = {
+    exitedEthAmountPerDayLimit: sanityCheckerParams.exitedEthAmountPerDayLimit,
+    appearedEthAmountPerDayLimit: sanityCheckerParams.appearedEthAmountPerDayLimit,
+    annualBalanceIncreaseBPLimit: sanityCheckerParams.annualBalanceIncreaseBPLimit,
+    simulatedShareRateDeviationBPLimit: sanityCheckerParams.simulatedShareRateDeviationBPLimit,
+    maxBalanceExitRequestedPerReportInEth: sanityCheckerParams.maxBalanceExitRequestedPerReportInEth,
+    maxEffectiveBalanceWeightWCType01: sanityCheckerParams.maxEffectiveBalanceWeightWCType01,
+    maxEffectiveBalanceWeightWCType02: sanityCheckerParams.maxEffectiveBalanceWeightWCType02,
+    maxItemsPerExtraDataTransaction: sanityCheckerParams.maxItemsPerExtraDataTransaction,
+    maxNodeOperatorsPerExtraDataItem: sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
+    requestTimestampMargin: sanityCheckerParams.requestTimestampMargin,
+    maxPositiveTokenRebase: sanityCheckerParams.maxPositiveTokenRebase,
+    maxCLBalanceDecreaseBP: sanityCheckerParams.maxCLBalanceDecreaseBP,
+    clBalanceOraclesErrorUpperBPLimit: sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
+    consolidationEthAmountPerDayLimit: sanityCheckerParams.consolidationEthAmountPerDayLimit,
+    exitedValidatorEthAmountLimit: sanityCheckerParams.exitedValidatorEthAmountLimit,
+  };
+
+  const oracleReportSanityCheckerArgs = [locator.address, accounting.address, admin, sanityLimits];
 
   await deployWithoutProxy(
     Sk.oracleReportSanityChecker,
