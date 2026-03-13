@@ -31,6 +31,11 @@ interface IOracleReportSanityChecker {
         uint256 _clPendingBalanceGwei,
         uint256 _timeElapsed
     ) external view;
+    function checkModulePendingBalanceChangeRates(
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _timeElapsed
+    ) external view;
 
     function checkExtraDataItemsCountPerTransaction(uint256 _extraDataListItemsCount) external view;
     function checkNodeOperatorsPerExtraDataItemCount(uint256 _itemIndex, uint256 _nodeOperatorsCount) external view;
@@ -511,6 +516,11 @@ contract AccountingOracle is BaseOracle {
             data.pendingBalancesGweiByStakingModule,
             data.clValidatorsBalanceGwei,
             data.clPendingBalanceGwei,
+            timeElapsed
+        );
+        sanityChecker.checkModulePendingBalanceChangeRates(
+            data.stakingModuleIdsWithUpdatedBalance,
+            data.pendingBalancesGweiByStakingModule,
             timeElapsed
         );
 

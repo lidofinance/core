@@ -430,6 +430,8 @@ contract Accounting {
             _report.timeElapsed,
             _update.principalClBalance,
             _report.clValidatorsBalance + _report.clPendingBalance,
+            _pre.clPendingBalance,
+            _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
