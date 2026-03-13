@@ -55,11 +55,20 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
      * @param _lido the Lido token (stETH) address
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
      */
-    constructor(address _lido, address _treasury, address _triggerableWithdrawalsGateway, address _consolidationGateway) {
+    constructor(
+        address _lido,
+        address _treasury,
+        address _triggerableWithdrawalsGateway,
+        address _consolidationGateway,
+        address _withdrawalRequest,
+        address _consolidationRequest
+    ) WithdrawalVaultEIP7685(_withdrawalRequest, _consolidationRequest) {
         _onlyNonZeroAddress(_lido);
         _onlyNonZeroAddress(_treasury);
         _onlyNonZeroAddress(_triggerableWithdrawalsGateway);
         _onlyNonZeroAddress(_consolidationGateway);
+        _onlyNonZeroAddress(_withdrawalRequest);
+        _onlyNonZeroAddress(_consolidationRequest);
 
         LIDO = ILido(_lido);
         TREASURY = _treasury;

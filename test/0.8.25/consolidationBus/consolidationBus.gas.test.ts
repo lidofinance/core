@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ConsolidationBus, ConsolidationGateway, WithdrawalVault } from "typechain-types";
 
-import { EIP7251_ADDRESS, proxify } from "lib";
+import { EIP7002_ADDRESS, EIP7251_ADDRESS, proxify } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -92,6 +92,8 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
       treasury.address,
       treasury.address, // triggerableWithdrawalsGateway (not used in this test)
       await consolidationGateway.getAddress(),
+      EIP7002_ADDRESS,
+      EIP7251_ADDRESS,
     ]);
     const [vault] = await proxify({ impl: vaultImpl, admin });
     withdrawalVault = vault as unknown as WithdrawalVault;
