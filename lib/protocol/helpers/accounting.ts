@@ -183,6 +183,16 @@ export const report = async (
     if (withdrawalVaultBalance < lastVaultBalanceAfterTransfer) {
       throw new Error("Reported withdrawal vault balance is below last vault balance after transfer");
     }
+    // Sync _lastVaultBalanceAfterTransfer with the current vault balance so the pending check
+    // does not interpret test-funded vault balance as CL withdrawals (zero-sum rebalancing).
+    // The contract will update _lastVaultBalanceAfterTransfer = vaultBalance - transfer after the report.
+    if (withdrawalVaultBalance > lastVaultBalanceAfterTransfer) {
+      await ethers.provider.send("hardhat_setStorageAt", [
+        await oracleReportSanityChecker.getAddress(),
+        ethers.toBeHex(4n, 32),
+        ethers.toBeHex(withdrawalVaultBalance, 32),
+      ]);
+    }
   }
 
   const postCLBalance = preCLBalance + clDiff;
@@ -255,19 +265,21 @@ export const report = async (
       }
     }
 
-    const modulesWithReportedValidatorsBalance = buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, modulesWithBalance);
-    for (const { moduleId, moduleReportedBalanceGwei } of modulesWithReportedValidatorsBalance) {
+    const modulesWithReportedBalance = buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, modulesWithBalance);
+    for (const { moduleId, moduleReportedBalanceGwei } of modulesWithReportedBalance) {
       stakingModuleIdsWithUpdatedBalance.push(moduleId);
       validatorBalancesGweiByStakingModule.push(moduleReportedBalanceGwei);
       pendingBalancesGweiByStakingModule.push(0n);
     }
   }
 
+  const clPendingBalanceGwei = sumBigints(pendingBalancesGweiByStakingModule);
+
   const reportData = {
     consensusVersion: await accountingOracle.getConsensusVersion(),
     refSlot,
-    clValidatorsBalanceGwei: postCLBalance / ONE_GWEI,
-    clPendingBalanceGwei: 0n,
+    clValidatorsBalanceGwei: postCLBalance / ONE_GWEI - clPendingBalanceGwei,
+    clPendingBalanceGwei,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
     stakingModuleIdsWithUpdatedBalance,
@@ -471,7 +483,13 @@ type SimulateReportResult = {
  */
 export const simulateReport = async (
   ctx: ProtocolContext,
-  { refSlot, clValidatorsBalance, clPendingBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
+  {
+    refSlot,
+    clValidatorsBalance,
+    clPendingBalance,
+    withdrawalVaultBalance,
+    elRewardsVaultBalance,
+  }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
 

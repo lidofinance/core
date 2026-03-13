@@ -1056,16 +1056,19 @@ describe("OracleReportSanityChecker.sol", () => {
 
     it("reverts when annual CL increase exceeds limit", async () => {
       const secondsInOneYear = 365n * 24n * 60n * 60n;
-      const postCLBalance = ether("150000");
-
-      const annualBalanceIncrease =
-        (secondsInOneYear * TOTAL_BASIS_POINTS * (postCLBalance - baseReport.preCLBalance)) /
-        baseReport.preCLBalance /
+      // With a 1-day report, this delta annualizes to the asserted 1,001 bp.
+      const preCLBalance = 3_650_000n;
+      const postCLBalance = preCLBalance + 1_001n;
+      const expectedAnnualBalanceIncrease =
+        (secondsInOneYear * TOTAL_BASIS_POINTS * (postCLBalance - preCLBalance)) /
+        preCLBalance /
         baseReport.timeElapsed;
 
-      await expect(checker.connect(accountingSigner).checkAccountingOracleReport(...report({ postCLBalance })))
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(...report({ preCLBalance, postCLBalance })),
+      )
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceIncrease")
-        .withArgs(annualBalanceIncrease);
+        .withArgs(expectedAnnualBalanceIncrease);
     });
 
     it("reverts when CL balance increase per day exceeds appeared ETH amount limit", async () => {
@@ -1134,7 +1137,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         checker.connect(accountingSigner).checkAccountingOracleReport(
           ...report({
-            preCLBalance: 0n,
+            preCLBalance: 1n,
             postCLBalance: 1n,
           }),
         ),
@@ -1626,7 +1629,9 @@ describe("OracleReportSanityChecker.sol", () => {
           .checkAccountingOracleReport(
             24n * 60n * 60n,
             migratedCLBalance,
+            0n,
             migratedCLBalance - reportDecrease,
+            0n,
             withdrawalVaultBalance,
             0n,
             0n,

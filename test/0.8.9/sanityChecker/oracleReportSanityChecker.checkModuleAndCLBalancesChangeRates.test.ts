@@ -192,12 +192,15 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     ).not.to.be.reverted;
   });
 
-  it("counts pending-only growth towards the module appeared balance limit", async () => {
+  it("reverts with AppearedEthAmountPerDayLimitExceeded after pending balance sanity passes", async () => {
     const currentIncreasePerDay = ether("111");
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: currentIncreasePerDay }]))
+    // Seed the module pending balance so the new pending-balance corridor check passes first.
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: currentIncreasePerDay }]);
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: currentIncreasePerDay, pendingWei: currentIncreasePerDay }]))
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, currentIncreasePerDay);
   });

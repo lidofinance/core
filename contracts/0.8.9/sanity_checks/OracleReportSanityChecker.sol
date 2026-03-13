@@ -711,6 +711,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkCLBalanceDecrease(checkParams, clWithdrawals);
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, checkParams.preCLBalance, checkParams.postCLBalance, _timeElapsed);
+        // 6. Consensus Layer balance increase rate
+        if (checkParams.postCLBalance > checkParams.preCLBalance) {
+            uint256 clBalanceIncreasePerDay =
+                _normalizePerDay(checkParams.postCLBalance - checkParams.preCLBalance, _timeElapsed);
+            _checkCLBalanceIncreaseRatePerDay(limitsList, clBalanceIncreasePerDay);
+        }
         _shiftLastVaultBalanceAfterTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
     }
 
@@ -932,6 +938,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             1 ether;
         if (_appearedEthAmountPerDay > appearedEthLimitWithConsolidation) {
             revert AppearedEthAmountPerDayLimitExceeded(appearedEthLimitWithConsolidation, _appearedEthAmountPerDay);
+        }
+    }
+
+    function _checkCLBalanceIncreaseRatePerDay(
+        AccountingCoreLimitsPacked memory _limitsList,
+        uint256 _clBalanceIncreaseEthAmountPerDay
+    ) internal pure {
+        uint256 clBalanceIncreaseLimitPerDay = uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether;
+        if (_clBalanceIncreaseEthAmountPerDay > clBalanceIncreaseLimitPerDay) {
+            revert CLBalanceIncreaseRatePerDayLimitExceeded(
+                clBalanceIncreaseLimitPerDay,
+                _clBalanceIncreaseEthAmountPerDay
+            );
         }
     }
 
@@ -1538,6 +1557,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectModulePendingBalance(uint256 moduleId, uint256 minAllowed, uint256 maxAllowed, uint256 actual);
     error IncorrectTotalActiveAppearedEth(uint256 maxAllowed, uint256 actual);
     error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
+    error CLBalanceIncreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 increasePerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
