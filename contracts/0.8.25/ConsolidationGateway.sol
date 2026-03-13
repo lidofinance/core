@@ -6,7 +6,8 @@ pragma solidity 0.8.25;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {LimitData, RateLimitStorage, RateLimit} from "contracts/common/lib/RateLimit.sol";
-import {PausableUntilWithRoles} from "./utils/PausableUntilWithRoles.sol";
+import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
 
 interface IDepositSecurityModule {
     function isDepositsPaused() external view returns (bool);
@@ -26,7 +27,7 @@ interface IWithdrawalVault {
  * @notice ConsolidationGateway contract is one entrypoint for all consolidation requests in protocol.
  * This contract is responsible for limiting consolidation requests, checking ADD_CONSOLIDATION_REQUEST_ROLE role before it gets to Withdrawal Vault.
  */
-contract ConsolidationGateway is PausableUntilWithRoles {
+contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     using RateLimitStorage for bytes32;
     using RateLimit for LimitData;
 
@@ -78,6 +79,14 @@ contract ConsolidationGateway is PausableUntilWithRoles {
      */
     event ConsolidationRequestsLimitSet(uint256 maxConsolidationRequestsLimit, uint256 consolidationsPerFrame, uint256 frameDurationInSec);
 
+    /// @notice role that allows to pause the contract
+    /// @dev 0x8d0e4ae4847b49935b55c99f9c3ce025c87e7c4604c35b7ae56929bd32fa5a78
+    bytes32 public constant PAUSE_ROLE = keccak256("PausableUntilWithRoles.PauseRole");
+
+    /// @notice role that allows to resume the contract
+    /// @dev 0xa79a6aede309e0d48bf2ef0f71355c06ad317956d4c0da2deb0dc47cc34f826c
+    bytes32 public constant RESUME_ROLE = keccak256("PausableUntilWithRoles.ResumeRole");
+
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 public constant EXIT_LIMIT_MANAGER_ROLE = keccak256("EXIT_LIMIT_MANAGER_ROLE");
 
@@ -105,6 +114,37 @@ contract ConsolidationGateway is PausableUntilWithRoles {
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _setConsolidationRequestLimit(maxConsolidationRequestsLimit, consolidationsPerFrame, frameDurationInSec);
+    }
+
+    /**
+     * @notice Resume the contract
+     * @dev Reverts if contracts is not paused
+     * @dev Reverts if sender has no `RESUME_ROLE`
+     */
+    function resume() external onlyRole(RESUME_ROLE) {
+        _resume();
+    }
+
+    /**
+     * @notice Pause the contract for a specified period
+     * @param _duration pause duration in seconds (use `PAUSE_INFINITELY` for unlimited)
+     * @dev Reverts if contract is already paused
+     * @dev Reverts if sender has no `PAUSE_ROLE`
+     * @dev Reverts if zero duration is passed
+     */
+    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
+        _pauseFor(_duration);
+    }
+
+    /**
+     * @notice Pause the contract until a specified timestamp
+     * @param _pauseUntilInclusive the last second to pause until inclusive
+     * @dev Reverts if the timestamp is in the past
+     * @dev Reverts if sender has no `PAUSE_ROLE`
+     * @dev Reverts if contract is already paused
+     */
+    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
+        _pauseUntil(_pauseUntilInclusive);
     }
 
     /**

@@ -4,7 +4,7 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
 
 interface IConsolidationGateway {
     function addConsolidationRequests(
@@ -25,7 +25,7 @@ interface IConsolidationGateway {
  *    The bus forwards the batch to ConsolidationGateway
  * 4. Optional REMOVE_ROLE can remove batches from the pending queue
  */
-contract ConsolidationBus is AccessControlEnumerableUpgradeable {
+contract ConsolidationBus is AccessControlEnumerable {
     /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
