@@ -9,6 +9,7 @@ jobs:
   coverage:
     name: Hardhat / Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       NODE_OPTIONS: --max_old_space_size=10240
 
