@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
-import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
 
 /**
  * @dev Minimal interface for StakingRouter to get module addresses
@@ -78,7 +78,7 @@ interface IConsolidationBus {
  * 2. Authorized operators (reward address) submit consolidation batches
  * 3. Contract validates keys and forwards to ConsolidationBus
  */
-contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
+contract ConsolidationMigrator is AccessControlEnumerable {
     using EnumerableSet for EnumerableSet.UintSet;
 
     // ==========
