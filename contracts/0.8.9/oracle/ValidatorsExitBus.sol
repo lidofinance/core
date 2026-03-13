@@ -27,7 +27,7 @@ interface ITriggerableWithdrawalsGateway {
 
 /// @notice New interface for staking modules (CSM, CuratedV2)
 /// @dev Returns only pubkeys
-interface INewStakingModule {
+interface IUnifiedStakingModule {
     /// @dev It also works for legacy staking modules (NOR, SDVT) where `getSigningKeys` returns different
     ///      tuple `(bytes memory pubkeys, bytes memory signatures, bool[] memory used)`.
     ///      The trick: `abi.decode(returndata, (bytes))` will decode only the first tuple element.
@@ -960,7 +960,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             newModuleAddress = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId).moduleAddress;
         }
 
-        bytes memory retrievedKeys = INewStakingModule(newModuleAddress)
+        bytes memory retrievedKeys = IUnifiedStakingModule(newModuleAddress)
             .getSigningKeys(
                 nodeOpId,
                 keyIndex, // startIndex
