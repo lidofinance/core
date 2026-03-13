@@ -65,7 +65,13 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
     const locator = await deployLidoLocator();
     const factory = await ethers.getContractFactory("ValidatorsExitBus__Harness");
     await expect(
-      factory.deploy(SECONDS_PER_SLOT, GENESIS_TIME, await locator.getAddress(), 0, 32n),
+      ethers.deployContract("ValidatorsExitBus__Harness", [
+        SECONDS_PER_SLOT,
+        GENESIS_TIME,
+        await locator.getAddress(),
+        0n,
+        32n,
+      ]),
     ).to.be.revertedWithCustomError(factory, "InvalidMaxEBWeight");
   });
 
