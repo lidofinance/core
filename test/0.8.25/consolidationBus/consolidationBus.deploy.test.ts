@@ -38,12 +38,12 @@ describe("ConsolidationBus.sol: deployment", () => {
       .withArgs("consolidationGateway");
   });
 
-  it("should allow zero batch size (unlimited)", async () => {
+  it("should revert zero batch size", async () => {
     const [admin] = await ethers.getSigners();
     const gatewayAddr = await consolidationGateway.getAddress();
 
-    const bus = await ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 0]);
-
-    expect(await bus.batchSize()).to.equal(0);
+    await expect(ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 0]))
+      .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationBus"), "ZeroArgument")
+      .withArgs("batchSizeLimit");
   });
 });

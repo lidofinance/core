@@ -433,8 +433,8 @@ contract Accounting {
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            _pre.clValidatorsBalance,
-            _pre.clPendingBalance
+            _pre.depositedBalance,
+            _update.withdrawalsVaultTransfer
         );
 
         if (_report.withdrawalFinalizationBatches.length > 0) {
@@ -517,6 +517,5 @@ contract Accounting {
 
     error NotAuthorized(string operation, address addr);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
-    error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
     error InternalSharesCantBeZero();
 }

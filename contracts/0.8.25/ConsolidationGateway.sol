@@ -6,7 +6,12 @@ pragma solidity 0.8.25;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {LimitData, RateLimitStorage, RateLimit} from "contracts/common/lib/RateLimit.sol";
-import {PausableUntilWithRoles} from "./utils/PausableUntilWithRoles.sol";
+import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
+import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+
+interface IDepositSecurityModule {
+    function isDepositsPaused() external view returns (bool);
+}
 
 interface IWithdrawalVault {
     function addConsolidationRequests(
@@ -22,7 +27,7 @@ interface IWithdrawalVault {
  * @notice ConsolidationGateway contract is one entrypoint for all consolidation requests in protocol.
  * This contract is responsible for limiting consolidation requests, checking ADD_CONSOLIDATION_REQUEST_ROLE role before it gets to Withdrawal Vault.
  */
-contract ConsolidationGateway is PausableUntilWithRoles {
+contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     using RateLimitStorage for bytes32;
     using RateLimit for LimitData;
 
@@ -62,6 +67,11 @@ contract ConsolidationGateway is PausableUntilWithRoles {
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
 
     /**
+     * @notice Thrown when DSM deposits are paused
+     */
+    error DSMDepositsPaused();
+
+    /**
      * @notice Emitted when limits configs are set.
      * @param maxConsolidationRequestsLimit The maximum number of consolidation requests.
      * @param consolidationsPerFrame The number of consolidations that can be restored per frame.
@@ -69,12 +79,16 @@ contract ConsolidationGateway is PausableUntilWithRoles {
      */
     event ConsolidationRequestsLimitSet(uint256 maxConsolidationRequestsLimit, uint256 consolidationsPerFrame, uint256 frameDurationInSec);
 
+    /// @notice role that allows to pause the contract
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+
+    /// @notice role that allows to resume the contract
+    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
+
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 public constant EXIT_LIMIT_MANAGER_ROLE = keccak256("EXIT_LIMIT_MANAGER_ROLE");
 
     bytes32 public constant CONSOLIDATION_LIMIT_POSITION = keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
-
-    uint256 public constant VERSION = 1;
 
     ILidoLocator internal immutable LOCATOR;
 
@@ -93,10 +107,42 @@ contract ConsolidationGateway is PausableUntilWithRoles {
         uint256 frameDurationInSec
     ) {
         if (admin == address(0)) revert AdminCannotBeZero();
+        if (lidoLocator == address(0)) revert ZeroArgument("lidoLocator");
         LOCATOR = ILidoLocator(lidoLocator);
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _setConsolidationRequestLimit(maxConsolidationRequestsLimit, consolidationsPerFrame, frameDurationInSec);
+    }
+
+    /**
+     * @notice Resume the contract
+     * @dev Reverts if contracts is not paused
+     * @dev Reverts if sender has no `RESUME_ROLE`
+     */
+    function resume() external onlyRole(RESUME_ROLE) {
+        _resume();
+    }
+
+    /**
+     * @notice Pause the contract for a specified period
+     * @param _duration pause duration in seconds (use `PAUSE_INFINITELY` for unlimited)
+     * @dev Reverts if contract is already paused
+     * @dev Reverts if sender has no `PAUSE_ROLE`
+     * @dev Reverts if zero duration is passed
+     */
+    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
+        _pauseFor(_duration);
+    }
+
+    /**
+     * @notice Pause the contract until a specified timestamp
+     * @param _pauseUntilInclusive the last second to pause until inclusive
+     * @dev Reverts if the timestamp is in the past
+     * @dev Reverts if sender has no `PAUSE_ROLE`
+     * @dev Reverts if contract is already paused
+     */
+    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
+        _pauseUntil(_pauseUntilInclusive);
     }
 
     /**
@@ -119,8 +165,11 @@ contract ConsolidationGateway is PausableUntilWithRoles {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         uint256 requestsCount = sourcePubkeys.length;
         if (requestsCount == 0) revert ZeroArgument("sourcePubkeys");
-        if (requestsCount != targetPubkeys.length)
+        if (requestsCount != targetPubkeys.length) {
             revert ArraysLengthMismatch(requestsCount, targetPubkeys.length);
+        }
+
+        _ensureDSMDepositsNotPaused();
 
         _consumeConsolidationRequestLimit(requestsCount);
 
@@ -180,6 +229,14 @@ contract ConsolidationGateway is PausableUntilWithRoles {
 
     /// Internal functions
 
+    function _ensureDSMDepositsNotPaused() internal view {
+        // If the DSM has stopped deposits, some validators may have non-Lido withdrawal credentials.
+        // In that case, processing of all new consolidation requests should be paused.
+        if (IDepositSecurityModule(LOCATOR.depositSecurityModule()).isDepositsPaused()) {
+            revert DSMDepositsPaused();
+        }
+    }
+
     function _checkFee(uint256 fee) internal view returns (uint256 refund) {
         if (msg.value < fee) {
             revert InsufficientFee(fee, msg.value);
@@ -196,7 +253,7 @@ contract ConsolidationGateway is PausableUntilWithRoles {
                 recipient = msg.sender;
             }
 
-            (bool success, ) = recipient.call{value: refund}("");
+            (bool success,) = recipient.call{value: refund}("");
             if (!success) {
                 revert FeeRefundFailed();
             }

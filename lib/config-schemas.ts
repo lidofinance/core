@@ -217,8 +217,6 @@ const ValidatorsExitBusOracleSchema = OracleSchema.extend({
   maxExitRequestsLimit: PositiveIntSchema,
   exitsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
-  maxEBWeightType1: PositiveIntSchema,
-  maxEBWeightType2: PositiveIntSchema,
 });
 
 // Deposit security module schema
@@ -230,19 +228,22 @@ const DepositSecurityModuleSchema = z.object({
 
 // Oracle report sanity checker schema
 const OracleReportSanityCheckerSchema = z.object({
-  exitedValidatorsPerDayLimit: PositiveIntSchema,
-  appearedValidatorsPerDayLimit: PositiveIntSchema,
+  exitedEthAmountPerDayLimit: PositiveIntSchema,
+  appearedEthAmountPerDayLimit: PositiveIntSchema,
   deprecatedOneOffCLBalanceDecreaseBPLimit: BasisPointsSchema,
   annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
   maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
+  maxEffectiveBalanceWeightWCType01: PositiveIntSchema,
+  maxEffectiveBalanceWeightWCType02: PositiveIntSchema,
   maxItemsPerExtraDataTransaction: PositiveIntSchema,
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,
   maxPositiveTokenRebase: PositiveIntSchema,
-  initialSlashingAmountPWei: PositiveIntSchema,
-  inactivityPenaltiesAmountPWei: PositiveIntSchema,
+  maxCLBalanceDecreaseBP: BasisPointsSchema,
   clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
+  consolidationEthAmountPerDayLimit: NonNegativeIntSchema,
+  exitedValidatorEthAmountLimit: PositiveIntSchema,
 });
 
 // Oracle daemon config schema
