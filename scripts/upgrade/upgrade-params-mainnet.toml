@@ -10,15 +10,8 @@ frameDurationInSec = 48               # Duration of each processing frame in sec
 agent = "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c"
 easyTrackEVMScriptExecutor = "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"
 resealManager = "0x7914b5a1539b97Bd0bbd155757F25FD79A522d24"
-identifiedCommunityStakersGateManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
-gateSeal = "0xE1686C2E90eb41a48356c1cC7FaA17629af3ADB3"
-# TODO: upgrade-specific GateSealV3 is not present in artifacts/mainnet/deploy-mainnet.json.
-# Prefill required.
-gateSealV3 = ""
-generalDelayedPenaltyReporter = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
-hashConsensusInitialEpoch = 47480
 
-[stakingRouterV3VoteScript.upgrade]
+[stakingRouterV3VoteScript.csModule]
 csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"
 csmImpl = "0x1eB6d4da13ca9566c17F526aE0715325d7a07665"
 vettedGateProxy = "0xB314D4A76C457c93150d308787939063F4Cc67E0"
@@ -37,6 +30,13 @@ verifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
 verifierV3 = ""
 permissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 ejector = "0xc72b58aa02E0e98cF8A4a0E9Dce75e763800802C"
+identifiedCommunityStakersGateManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
+gateSeal = "0xE1686C2E90eb41a48356c1cC7FaA17629af3ADB3"
+# TODO: upgrade-specific GateSealV3 is not present in artifacts/mainnet/deploy-mainnet.json.
+# Prefill required.
+gateSealV3 = ""
+generalDelayedPenaltyReporter = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
+
 
 [stakingRouterV3VoteScript.curatedModule]
 # TODO: curated module deployment addresses are not present in artifacts/mainnet.
@@ -50,3 +50,4 @@ stakingModuleFee = 800
 treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
+hashConsensusInitialEpoch = 47480

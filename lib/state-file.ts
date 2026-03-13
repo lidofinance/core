@@ -128,6 +128,10 @@ export enum Sk {
   vaultsAdapter = "vaultsAdapter",
   // Harnesses
   alertingHarness = "alertingHarness",
+  // protocol upgrade
+  upgradeConfig = "upgradeConfig",
+  upgradeTemplate = "upgradeTemplate",
+  upgradeVoteScript = "upgradeVoteScript",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

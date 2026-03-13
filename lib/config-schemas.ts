@@ -105,16 +105,19 @@ const StakingRouterSchema = z.object({
 
 // Easy track schema
 const EasyTrackSchema = z.object({
-  VaultsAdapter: EthereumAddressSchema,
+  // VaultsAdapter: EthereumAddressSchema,
   newFactories: z.object({
-    AlterTiersInOperatorGrid: EthereumAddressSchema,
-    RegisterGroupsInOperatorGrid: EthereumAddressSchema,
-    RegisterTiersInOperatorGrid: EthereumAddressSchema,
-    SetJailStatusInOperatorGrid: EthereumAddressSchema,
-    SocializeBadDebtInVaultHub: EthereumAddressSchema,
-    ForceValidatorExitsInVaultHub: EthereumAddressSchema,
-    UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
-    UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
+    // v3
+    // AlterTiersInOperatorGrid: EthereumAddressSchema,
+    // RegisterGroupsInOperatorGrid: EthereumAddressSchema,
+    // RegisterTiersInOperatorGrid: EthereumAddressSchema,
+    // SetJailStatusInOperatorGrid: EthereumAddressSchema,
+    // SocializeBadDebtInVaultHub: EthereumAddressSchema,
+    // ForceValidatorExitsInVaultHub: EthereumAddressSchema,
+    // UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
+    // UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
+    // v4
+    UpdateStakingModuleShareLimits: EthereumAddressSchema,
   }),
 });
 
@@ -124,13 +127,13 @@ const OracleVersionsSchema = z.object({
 });
 
 // V3 vote script params
-const V3VoteScriptSchema = z.object({
-  expiryTimestamp: NonNegativeIntSchema,
-  initialMaxExternalRatioBP: BasisPointsSchema,
-  timeConstraintsContract: EthereumAddressSchema,
-  odcSlashingReserveWeRightShiftEpochs: NonNegativeIntSchema,
-  odcSlashingReserveWeLeftShiftEpochs: NonNegativeIntSchema,
-});
+// const V3VoteScriptSchema = z.object({
+//   expiryTimestamp: NonNegativeIntSchema,
+//   initialMaxExternalRatioBP: BasisPointsSchema,
+//   timeConstraintsContract: EthereumAddressSchema,
+//   odcSlashingReserveWeRightShiftEpochs: NonNegativeIntSchema,
+//   odcSlashingReserveWeLeftShiftEpochs: NonNegativeIntSchema,
+// });
 
 // Aragon app versions schema
 const AragonAppVersionsSchema = z.object({
@@ -138,28 +141,67 @@ const AragonAppVersionsSchema = z.object({
   sdvt_version: z.array(z.number()).length(3),
 });
 
+const CSMUpgradeConfigSchema = z.object({
+  csmProxy: EthereumAddressSchema,
+  csmImpl: EthereumAddressSchema,
+  vettedGateProxy: EthereumAddressSchema,
+  parametersRegistryImpl: EthereumAddressSchema,
+  feeOracleImpl: EthereumAddressSchema,
+  feeOracleConsensusVersion: NonNegativeIntSchema,
+  vettedGateImpl: EthereumAddressSchema,
+  accountingImpl: EthereumAddressSchema,
+  feeDistributorImpl: EthereumAddressSchema,
+  exitPenaltiesImpl: EthereumAddressSchema,
+  strikesImpl: EthereumAddressSchema,
+  oldPermissionlessGate: EthereumAddressSchema,
+  verifier: EthereumAddressSchema,
+  verifierV3: EthereumAddressSchema,
+  permissionlessGate: EthereumAddressSchema,
+  ejector: EthereumAddressSchema,
+  gateSeal: EthereumAddressSchema,
+  gateSealV3: EthereumAddressSchema,
+  identifiedCommunityStakersGateManager: EthereumAddressSchema,
+  generalDelayedPenaltyReporter: EthereumAddressSchema,
+});
+
+const CuratedModuleConfigSchema = z.object({
+  module: EthereumAddressSchema,
+  hashConsensus: EthereumAddressSchema,
+  moduleName: z.string().min(1),
+  stakeShareLimit: NonNegativeIntSchema,
+  priorityExitShareThreshold: NonNegativeIntSchema,
+  stakingModuleFee: NonNegativeIntSchema,
+  treasuryFee: NonNegativeIntSchema,
+  maxDepositsPerBlock: NonNegativeIntSchema,
+  minDepositBlockDistance: NonNegativeIntSchema,
+  hashConsensusInitialEpoch: NonNegativeIntSchema,
+});
+
+const UpgradeVoteScriptSchema = z.object({
+  expiryTimestamp: NonNegativeIntSchema
+});
+
 // Upgrade parameters schema
 export const UpgradeParametersSchema = z.object({
+  easyTrack: EasyTrackSchema,
+
+  consolidationGateway: ConsolidationGatewaySchema,
+  topUpGateway: TopUpGatewaySchema,
+  stakingRouter: StakingRouterSchema,
+
+  csmUpgrade: CSMUpgradeConfigSchema,
+  curatedModule: CuratedModuleConfigSchema,
+
+  upgradeVoteScript: UpgradeVoteScriptSchema,
+
+  // old and optional
   chainSpec: ChainSpecSchema.extend({
     genesisTime: z.number().int(),
     depositContract: EthereumAddressSchema,
-  }),
-  gateSealForVaults: z.object({
-    sealDuration: PositiveIntSchema,
-    sealingCommittee: EthereumAddressSchema,
-  }),
-  easyTrack: EasyTrackSchema,
-  vaultHub: VaultHubSchema,
-  lazyOracle: LazyOracleSchema,
-  predepositGuarantee: PredepositGuaranteeSchema.extend({
-    genesisForkVersion: HexStringSchema,
-  }),
-  operatorGrid: OperatorGridSchema,
-  burner: BurnerSchema,
+  }).optional(),
+  burner: BurnerSchema.optional(),
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
-  consolidationGateway: ConsolidationGatewaySchema,
-  v3VoteScript: V3VoteScriptSchema,
 });
 
 // Gate seal schema (for scratch deployment)

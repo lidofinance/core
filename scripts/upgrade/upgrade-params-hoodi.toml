@@ -1,23 +1,41 @@
 # Lido Protocol Upgrade Parameters - Hoodi Configuration
 # This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum Hoodi testnet
 
-[stakingRouterV3VoteScript]
-# Common addresses
-agent = "0x0534aA41907c9631fae990960bCC72d75fA7cfeD"
-stakingRouter = "0xCc820558B39ee15C7C45B59390B503b83fb499A8"
-burner = "0xb2c99cd38a2636a6281a849C8de938B3eF4A7C3D"
-triggerableWithdrawalsGateway = "0x6679090D92b08a2a686eF8614feECD8cDFE209db"
-easyTrackEVMScriptExecutor = "0x79a20FD0FA36453B2F45eAbab19bfef43575Ba9E"
-resealManager = "0x05172CbCDb7307228F781436b327679e4DAE166B"
-identifiedCommunityStakersGateManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
-gateSeal = "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65"
-# TODO: upgrade-specific GateSealV3 is not present in artifacts/hoodi/deploy-hoodi.json.
-# Prefill required.
-gateSealV3 = ""
-generalDelayedPenaltyReporter = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
-hashConsensusInitialEpoch = 47480
 
-[stakingRouterV3VoteScript.upgrade]
+
+[easyTrack]
+# TODO:  update upon deployment
+trustedCaller = "0x00000000000000000000000000000000000fAc00"     # Address of SR EasyTrack committee
+# Must be deployed before the V3 upgrading contracts
+[easyTrack.newFactories]
+# TODO: update upon deployment
+UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000fAc01"
+
+
+[consolidationGateway]
+maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
+consolidationsPerFrame = 1            # Number of consolidations processed per frame
+frameDurationInSec = 48               # Duration of each processing frame in seconds
+
+# Top-up gateway configuration for validator top-ups via Merkle proofs
+[topUpGateway]
+maxValidatorsPerTopUp = 100           # Maximum validators per top-up call
+minBlockDistance = 1                  # Minimum block distance between top-ups
+maxRootAge = 300                      # Maximum allowed age of beacon root relative to current block timestamp
+targetBalanceGwei = 2046750000000
+minTopUpGwei = 1000000000
+# Generalized indices for validator/balance/pending state verification
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
+pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+
+# StakingRouter configuration
+[stakingRouter]
+maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
+maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2
+
+
+[csmUpgrade]
 csmProxy = "0x79CEf36D84743222f37765204Bec41E92a93E59d"
 csmImpl = "0x6140195075a2BFaE0C332377af1f1461Fced0791"
 parametersRegistryProxy = "0xA4aD5236963f9Fe4229864712269D8d79B65C5Ad"
@@ -39,17 +57,23 @@ oldPermissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
 verifier = "0x1773b2Ff99A030F6000554Cb8A5Ec93145650cbA"
 # TODO: upgrade-specific VerifierV3 is not present in artifacts/hoodi/deploy-hoodi.json.
 # Prefill required.
-verifierV3 = ""
+verifierV3 = "0x00000000000000000000000000000000000dAc01"
 permissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
 ejector = "0x777bd76326E4aDcD353b03AD45b33BAF41048476"
+gateSeal = "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65"
+# TODO: upgrade-specific GateSealV3 is not present in artifacts/hoodi/deploy-hoodi.json.
+# Prefill required.
+gateSealV3 = "0x00000000000000000000000000000000000dAc02"
+identifiedCommunityStakersGateManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
+generalDelayedPenaltyReporter = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 
-[stakingRouterV3VoteScript.curatedModule]
+[curatedModule]
 # TODO: curated module deployment addresses are not present in artifacts/hoodi.
 # Prefill required.
-module = ""
-accounting = ""
-ejector = ""
-hashConsensus = ""
+module = "0x00000000000000000000000000000000000cAc01"
+accounting = "0x00000000000000000000000000000000000cAc02"
+ejector = "0x00000000000000000000000000000000000cAc03"
+hashConsensus = "0x00000000000000000000000000000000000cAc04"
 moduleName = "curated-onchain-v1"
 stakeShareLimit = 2000
 priorityExitShareThreshold = 2500
@@ -57,3 +81,11 @@ stakingModuleFee = 800
 treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
+hashConsensusInitialEpoch = 47480
+
+
+[upgradeVoteScript]
+# Expiry timestamp after which the upgrade transaction will revert
+# Format: Unix timestamp (seconds since epoch)
+# The upgrade transaction must be executed before this deadline
+expiryTimestamp = 1780272000            # JJune 1, 2026 at 00:00:00 UTC
