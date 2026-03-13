@@ -68,14 +68,15 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable NEW_LIDO_IMPL;
     address internal immutable NEW_STAKING_ROUTER_IMPL;
     address internal immutable NEW_ACCOUNTING_ORACLE_IMPL;
+    address internal immutable NEW_ACCOUNTING_IMPL;
+    address internal immutable NEW_WITHDRAWAL_VAULT_IMPL;
     address internal immutable NEW_ORACLE_REPORT_SANITY_CHECKER;
     address internal immutable NEW_DEPOSIT_SECURITY_MODULE;
-    address internal immutable NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
-    address internal immutable NEW_WITHDRAWAL_VAULT_IMPL;
-    address internal immutable NEW_ACCOUNTING_IMPL;
 
     address internal immutable TOP_UP_GATEWAY_IMPL;
-    // address internal immutable CONSOLIDATION_GATEWAY_IMPL;
+    address internal immutable CONSOLIDATION_GATEWAY_IMPL;
+    address internal immutable CONSOLIDATION_BUS;
+    address internal immutable CONSOLIDATION_MIGRATOR;
 
     address internal immutable LIDO;
     address internal immutable STAKING_ROUTER;
@@ -91,10 +92,9 @@ contract UpgradeConfig is IUpgradeConfig {
 
     address internal immutable TOP_UP_GATEWAY;
     address internal immutable CONSOLIDATION_GATEWAY;
-    address internal immutable VALIDATOR_EXIT_DELAY_VERIFIER;
     address internal immutable ORACLE_REPORT_SANITY_CHECKER;
     address internal immutable DEPOSIT_SECURITY_MODULE;
-    // todo
+    address internal immutable VALIDATOR_EXIT_DELAY_VERIFIER;
 
     //
     // -------- EasyTrack addresses --------
@@ -196,11 +196,21 @@ contract UpgradeConfig is IUpgradeConfig {
         OLD_LIDO_IMPL = coreUpgradeParams.oldLidoImpl;
         OLD_ACCOUNTING_ORACLE_IMPL = coreUpgradeParams.oldAccountingOracleImpl;
         OLD_STAKING_ROUTER_IMPL = coreUpgradeParams.oldStakingRouterImpl;
+        OLD_ORACLE_REPORT_SANITY_CHECKER = coreUpgradeParams.oldOracleReportSanityChecker;
+        OLD_DEPOSIT_SECURITY_MODULE = coreUpgradeParams.oldDepositSecurityModule;
 
         NEW_LOCATOR_IMPL = coreUpgradeParams.newLocatorImpl;
         NEW_LIDO_IMPL = coreUpgradeParams.newLidoImpl;
         NEW_ACCOUNTING_ORACLE_IMPL = coreUpgradeParams.newAccountingOracleImpl;
         NEW_STAKING_ROUTER_IMPL = coreUpgradeParams.newStakingRouterImpl;
+        NEW_ACCOUNTING_IMPL = coreUpgradeParams.newAccountingImpl;
+        NEW_WITHDRAWAL_VAULT_IMPL = coreUpgradeParams.newWithdrawalVaultImpl;
+        NEW_ORACLE_REPORT_SANITY_CHECKER = coreUpgradeParams.newOracleReportSanityChecker;
+        NEW_DEPOSIT_SECURITY_MODULE = coreUpgradeParams.newDepositSecurityModule;
+        TOP_UP_GATEWAY_IMPL = coreUpgradeParams.topUpGatewayImpl;
+        CONSOLIDATION_GATEWAY_IMPL = coreUpgradeParams.consolidationGatewayImpl;
+        CONSOLIDATION_BUS = coreUpgradeParams.consolidationBus;
+        CONSOLIDATION_MIGRATOR = coreUpgradeParams.consolidationMigrator;
 
         ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS = coreUpgradeParams.etfUpdateStakingModuleShareLimits;
 
@@ -223,8 +233,8 @@ contract UpgradeConfig is IUpgradeConfig {
         TOP_UP_GATEWAY = locator.topUpGateway();
         BURNER = locator.burner();
         TRIGGERABLE_WITHDRAWALS_GATEWAY = locator.triggerableWithdrawalsGateway();
-        // function validatorExitDelayVerifier() external view returns (address);
-        // function consolidationGateway() external view returns (address);
+        VALIDATOR_EXIT_DELAY_VERIFIER = locator.validatorExitDelayVerifier();
+        CONSOLIDATION_GATEWAY = locator.consolidationGateway();
 
         /// CSMv3
         CSMUpgradeParams memory csmUpgradeParams = params.csmUpgrade;
@@ -306,7 +316,9 @@ contract UpgradeConfig is IUpgradeConfig {
             easyTrackEVMScriptExecutor: EASY_TRACK_EVM_SCRIPT_EXECUTOR,
             stakingRouter: STAKING_ROUTER,
             triggerableWithdrawalsGateway: TRIGGERABLE_WITHDRAWALS_GATEWAY,
-            accountingOracle: ACCOUNTING_ORACLE
+            accountingOracle: ACCOUNTING_ORACLE,
+            topUpGateway: TOP_UP_GATEWAY,
+            withdrawalVault: WITHDRAWAL_VAULT
         });
     }
 
@@ -330,9 +342,18 @@ contract UpgradeConfig is IUpgradeConfig {
             newLidoImpl: NEW_LIDO_IMPL,
             newAccountingOracleImpl: NEW_ACCOUNTING_ORACLE_IMPL,
             newStakingRouterImpl: NEW_STAKING_ROUTER_IMPL,
+            newAccountingImpl: NEW_ACCOUNTING_IMPL,
+            newWithdrawalVaultImpl: NEW_WITHDRAWAL_VAULT_IMPL,
             newOracleReportSanityChecker: NEW_ORACLE_REPORT_SANITY_CHECKER,
             newDepositSecurityModule: NEW_DEPOSIT_SECURITY_MODULE,
+            accounting: ACCOUNTING,
+            withdrawalVault: WITHDRAWAL_VAULT,
+            topUpGateway: TOP_UP_GATEWAY,
             topUpGatewayImpl: TOP_UP_GATEWAY_IMPL,
+            consolidationGateway: CONSOLIDATION_GATEWAY,
+            consolidationGatewayImpl: CONSOLIDATION_GATEWAY_IMPL,
+            consolidationBus: CONSOLIDATION_BUS,
+            consolidationMigrator: CONSOLIDATION_MIGRATOR,
             etfUpdateStakingModuleShareLimits: ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS
         });
     }

@@ -107,6 +107,7 @@ interface IAccountingOracle is IBaseOracle {
 interface IWithdrawalsManagerProxy {
     function proxy_getAdmin() external view returns (address);
     function implementation() external view returns (address);
+    function proxy_upgradeTo(address newImplementation, bytes memory setupCalldata) external;
 }
 
 interface IBaseModuleV3 {
@@ -232,12 +233,16 @@ struct CoreUpgradeParams {
     address newLidoImpl;
     address newAccountingOracleImpl;
     address newStakingRouterImpl;
+    address newAccountingImpl;
+    address newWithdrawalVaultImpl;
     address newOracleReportSanityChecker;
     address newDepositSecurityModule;
 
     // New fancy proxy and blueprint contracts
     address topUpGatewayImpl;
     address consolidationGatewayImpl;
+    address consolidationBus;
+    address consolidationMigrator;
 
     // EasyTrack new factories
     address etfUpdateStakingModuleShareLimits;
@@ -292,9 +297,9 @@ struct GeneralConfig {
     address easyTrackEVMScriptExecutor;
     address stakingRouter;
     address triggerableWithdrawalsGateway;
-    //todo ?
     address accountingOracle;
-
+    address topUpGateway;
+    address withdrawalVault;
 }
 
 struct CoreUpgradeConfig {
@@ -315,10 +320,19 @@ struct CoreUpgradeConfig {
     address newLidoImpl;
     address newAccountingOracleImpl;
     address newStakingRouterImpl;
+    address newAccountingImpl;
+    address newWithdrawalVaultImpl;
     address newOracleReportSanityChecker;
     address newDepositSecurityModule;
 
+    address accounting;
+    address withdrawalVault;
+    address topUpGateway;
     address topUpGatewayImpl;
+    address consolidationGateway;
+    address consolidationGatewayImpl;
+    address consolidationBus;
+    address consolidationMigrator;
 
     address etfUpdateStakingModuleShareLimits;
 }

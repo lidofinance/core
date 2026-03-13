@@ -17,6 +17,13 @@ maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations request
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 48               # Duration of each processing frame in seconds
 
+[consolidationBus]
+batchSize = 200
+
+[consolidationMigrator]
+sourceModuleId = 1
+targetModuleId = 4
+
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
 maxValidatorsPerTopUp = 100           # Maximum validators per top-up call
@@ -66,6 +73,7 @@ gateSeal = "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65"
 gateSealV3 = "0x00000000000000000000000000000000000dAc02"
 identifiedCommunityStakersGateManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 generalDelayedPenaltyReporter = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
+penaltiesManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 
 [curatedModule]
 # TODO: curated module deployment addresses are not present in artifacts/hoodi.
@@ -88,4 +96,5 @@ hashConsensusInitialEpoch = 47480
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-expiryTimestamp = 1780272000            # JJune 1, 2026 at 00:00:00 UTC
+expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
+timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"

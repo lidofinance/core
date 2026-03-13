@@ -10,7 +10,7 @@ export async function main() {
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
 
-  const template = state[Sk.upgradeVoteScript];
+  const template = state[Sk.upgradeTemplate];
 
   await deployWithoutProxy(Sk.upgradeVoteScript, "UpgradeVoteScript", deployer, [
     [template.address, parameters.upgradeVoteScript.timeConstraintsContract],

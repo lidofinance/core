@@ -1,17 +1,38 @@
 # Lido Protocol Upgrade Parameters - Mainnet Configuration
-# This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum mainnet
+
+[easyTrack]
+[easyTrack.newFactories]
+# TODO: fill with deployed Easy Track factory address before execution
+UpdateStakingModuleShareLimits = "0x000000000000000000000000000000000000dEaD"
 
 [consolidationGateway]
-maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
-consolidationsPerFrame = 1            # Number of consolidations processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
+maxConsolidationRequestsLimit = 8000
+consolidationsPerFrame = 1
+frameDurationInSec = 48
 
-[stakingRouterV3VoteScript]
-agent = "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c"
-easyTrackEVMScriptExecutor = "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"
-resealManager = "0x7914b5a1539b97Bd0bbd155757F25FD79A522d24"
+[consolidationBus]
+batchSize = 200
 
-[stakingRouterV3VoteScript.csModule]
+[consolidationMigrator]
+sourceModuleId = 1
+targetModuleId = 4
+
+[topUpGateway]
+maxValidatorsPerTopUp = 100
+minBlockDistance = 1
+maxRootAge = 300
+targetBalanceGwei = 2046750000000
+minTopUpGwei = 1000000000
+# TODO: replace with mainnet values
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
+pivotSlot = 0
+
+[stakingRouter]
+maxEBType1 = "32000000000000000000"
+maxEBType2 = "2048000000000000000000"
+
+[csmUpgrade]
 csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"
 csmImpl = "0x1eB6d4da13ca9566c17F526aE0715325d7a07665"
 vettedGateProxy = "0xB314D4A76C457c93150d308787939063F4Cc67E0"
@@ -25,24 +46,21 @@ exitPenaltiesImpl = "0xDa22fA1CEa40d05Fe4CD536967afdD839586D546"
 strikesImpl = "0x3E5021424c9e13FC853e523Cd68ebBec848956a0"
 oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 verifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
-# TODO: upgrade-specific VerifierV3 is not present in artifacts/mainnet/deploy-mainnet.json.
-# Prefill required.
-verifierV3 = ""
+# TODO: replace with deployed verifier v3
+verifierV3 = "0x000000000000000000000000000000000000dE01"
 permissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 ejector = "0xc72b58aa02E0e98cF8A4a0E9Dce75e763800802C"
 identifiedCommunityStakersGateManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 gateSeal = "0xE1686C2E90eb41a48356c1cC7FaA17629af3ADB3"
-# TODO: upgrade-specific GateSealV3 is not present in artifacts/mainnet/deploy-mainnet.json.
-# Prefill required.
-gateSealV3 = ""
+# TODO: replace with deployed gate seal v3
+gateSealV3 = "0x000000000000000000000000000000000000dE02"
 generalDelayedPenaltyReporter = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
+penaltiesManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 
-
-[stakingRouterV3VoteScript.curatedModule]
-# TODO: curated module deployment addresses are not present in artifacts/mainnet.
-# Prefill required.
-module = ""
-hashConsensus = ""
+[curatedModule]
+# TODO: replace with deployed curated module addresses
+module = "0x000000000000000000000000000000000000cA01"
+hashConsensus = "0x000000000000000000000000000000000000cA02"
 moduleName = "curated-onchain-v1"
 stakeShareLimit = 2000
 priorityExitShareThreshold = 2500
@@ -51,3 +69,7 @@ treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
 hashConsensusInitialEpoch = 47480
+
+[upgradeVoteScript]
+expiryTimestamp = 1780272000
+timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"

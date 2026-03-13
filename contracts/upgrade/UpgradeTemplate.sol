@@ -15,6 +15,7 @@ import {
     ILidoWithFinalizeUpgrade,
     IAccountingOracle,
     IOracleReportSanityChecker,
+    IWithdrawalsManagerProxy,
     IKernel,
     IVersioned,
     IEasyTrack,
@@ -204,6 +205,7 @@ contract UpgradeTemplate is UpgradeConfig {
         // Check initial implementations of the proxies to be upgraded
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(STAKING_ROUTER), OLD_STAKING_ROUTER_IMPL);
         _assertAragonKernelImplementation(IKernel(KERNEL), OLD_LIDO_IMPL);
 
         // Check allowances of the old burner
@@ -236,6 +238,9 @@ contract UpgradeTemplate is UpgradeConfig {
 
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), NEW_ACCOUNTING_ORACLE_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(STAKING_ROUTER), NEW_STAKING_ROUTER_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING), NEW_ACCOUNTING_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(TOP_UP_GATEWAY), TOP_UP_GATEWAY_IMPL);
 
         _assertAragonKernelImplementation(IKernel(KERNEL), NEW_LIDO_IMPL);
 
@@ -302,6 +307,8 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertProxyAdmin(IOssifiableProxy(ACCOUNTING_ORACLE), AGENT);
         _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
+        _assertProxyAdmin(IOssifiableProxy(STAKING_ROUTER), AGENT);
+
         // OracleReportSanityChecker
         IOracleReportSanityChecker checker = IOracleReportSanityChecker(ORACLE_REPORT_SANITY_CHECKER);
         _assertSingleOZRoleHolder(ORACLE_REPORT_SANITY_CHECKER, DEFAULT_ADMIN_ROLE, AGENT);
@@ -325,6 +332,21 @@ contract UpgradeTemplate is UpgradeConfig {
 
         // Accounting
         _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
+        _assertProxyAdmin(IOssifiableProxy(TOP_UP_GATEWAY), AGENT);
+
+        // WithdrawalVault
+        if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).proxy_getAdmin() != AGENT) {
+            revert IncorrectProxyAdmin(WITHDRAWAL_VAULT);
+        }
+        if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation() != NEW_WITHDRAWAL_VAULT_IMPL) {
+            revert IncorrectProxyImplementation(WITHDRAWAL_VAULT, IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation());
+        }
+
+        // Consolidation rollout
+        _assertSingleOZRoleHolder(
+            CONSOLIDATION_GATEWAY, keccak256("ADD_CONSOLIDATION_REQUEST_ROLE"), CONSOLIDATION_BUS
+        );
+        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, keccak256("PUBLISH_ROLE"), CONSOLIDATION_MIGRATOR);
 
         // // PredepositGuarantee
         // _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);

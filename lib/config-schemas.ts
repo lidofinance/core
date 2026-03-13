@@ -86,6 +86,15 @@ const ConsolidationGatewaySchema = z.object({
   frameDurationInSec: PositiveIntSchema,
 });
 
+const ConsolidationBusSchema = z.object({
+  batchSize: PositiveIntSchema,
+});
+
+const ConsolidationMigratorSchema = z.object({
+  sourceModuleId: PositiveIntSchema,
+  targetModuleId: PositiveIntSchema,
+});
+
 // Top-up gateway schema
 const TopUpGatewaySchema = z.object({
   maxValidatorsPerTopUp: PositiveIntSchema,
@@ -162,6 +171,7 @@ const CSMUpgradeConfigSchema = z.object({
   gateSealV3: EthereumAddressSchema,
   identifiedCommunityStakersGateManager: EthereumAddressSchema,
   generalDelayedPenaltyReporter: EthereumAddressSchema,
+  penaltiesManager: EthereumAddressSchema,
 });
 
 const CuratedModuleConfigSchema = z.object({
@@ -178,7 +188,8 @@ const CuratedModuleConfigSchema = z.object({
 });
 
 const UpgradeVoteScriptSchema = z.object({
-  expiryTimestamp: NonNegativeIntSchema
+  expiryTimestamp: NonNegativeIntSchema,
+  timeConstraintsContract: EthereumAddressSchema,
 });
 
 // Upgrade parameters schema
@@ -186,6 +197,8 @@ export const UpgradeParametersSchema = z.object({
   easyTrack: EasyTrackSchema,
 
   consolidationGateway: ConsolidationGatewaySchema,
+  consolidationBus: ConsolidationBusSchema,
+  consolidationMigrator: ConsolidationMigratorSchema,
   topUpGateway: TopUpGatewaySchema,
   stakingRouter: StakingRouterSchema,
 

@@ -1,42 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
-
-import {IBurner} from "contracts/common/interfaces/IBurner.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 import {UpgradeTemplate} from "./UpgradeTemplate.sol";
 import {VoteScriptHelpers} from "./utils/VoteScriptHelpers.sol";
+import {CoreUpgradeItems} from "./include/CoreUpgradeItems.sol";
 import {CSMUpgradeItems} from "./include/CSMUpgradeItems.sol";
 import {CuratedModuleItems} from "./include/CuratedModuleItems.sol";
 
 import {
+    ITimeConstraints,
     GeneralConfig,
     CoreUpgradeConfig,
-    CSMUpgradeConfig,
-    CuratedModuleConfig,
-
-    // IBaseModuleV3,
     IKernel,
     IACL,
     IEasyTrack,
-    IPausableWithResumeRoles,
-    IAccountingV3,
-    IParametersRegistryV3,
-    IFeeDistributorV3,
-    IPausableRole,
-    IFeeOracleV3,
-    IOssifiableProxyV2,
-    IValidatorStrikesV3,
-    ICSModuleV3,
     IStakingRouter
 } from "./UpgradeTypes.sol";
 
 /// @title UpgradeVoteScript
 /// @notice Script for upgrading Lido protocol components
 contract UpgradeVoteScript is OmnibusBase {
+    uint32 public constant ENABLED_DAY_SPAN_START = 50400; // 14:00 UTC
+    uint32 public constant ENABLED_DAY_SPAN_END = 82800; // 23:00 UTC
+
     struct ScriptParams {
         address upgradeTemplate;
         address timeConstraints;
@@ -45,8 +34,8 @@ contract UpgradeVoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant DG_ITEMS_COUNT = 21;
-    uint256 public constant VOTING_ITEMS_COUNT = 8;
+    uint256 public constant DG_ITEMS_COUNT = 54;
+    uint256 public constant VOTING_ITEMS_COUNT = 1;
 
     //
     // Immutables
@@ -111,12 +100,19 @@ contract UpgradeVoteScript is OmnibusBase {
     }
 
     function getVoteItems() public view override returns (VoteItem[] memory voteItems) {
-        GeneralConfig memory g = TEMPLATE.getGeneralConfig();
         CoreUpgradeConfig memory c = TEMPLATE.getCoreUpgradeConfig();
 
         voteItems = new VoteItem[](DG_ITEMS_COUNT);
 
         uint256 index = 0;
+
+        voteItems[index++] = VoteScriptHelpers.item({
+            description: "1.1. Ensure DG proposal execution is within daily time window (14:00 UTC - 23:00 UTC)",
+            to: params.timeConstraints,
+            data: abi.encodeCall(
+                ITimeConstraints.checkTimeWithinDayTimeAndEmit, (ENABLED_DAY_SPAN_START, ENABLED_DAY_SPAN_END)
+            )
+        });
 
         voteItems[index++] = _itemAsAgent({
             description: "1.2. Call UpgradeTemplate.startUpgrade",
@@ -148,38 +144,7 @@ contract UpgradeVoteScript is OmnibusBase {
             data: abi.encodeCall(IACL.revokePermission, (AGENT, c.kernel, keccak256("APP_MANAGER_ROLE")))
         });
 
-        // core contract upgrades
-
-        // upgrade SR impl and call finalizeUpgrade_v4 to finish migrate access roles
-        voteItems[index++] = _itemAsAgent({
-            description: "1.5.1. Upgrade StakingRouter implementation",
-            to: g.stakingRouter,
-            data: abi.encodeCall(
-                IOssifiableProxy.proxy__upgradeToAndCall,
-                (c.newStakingRouterImpl, abi.encodeCall(IStakingRouter.finalizeUpgrade_v4, ()), false)
-            )
-        });
-
-        voteItems[index++] = _itemAsAgent({
-            description: "1.5.2. Upgrade AccountingOracle implementation",
-            to: g.accountingOracle,
-            data: abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (c.newAccountingOracleImpl))
-        });
-
-        // ...
-
-        // core contract roles
-
-        voteItems[index++] = _itemAsAgent({
-            description: "1.6.1. Grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack",
-            to: g.stakingRouter,
-            data: _grantRole(
-                keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE"), // IStakingRouter(g.stakingRouter).STAKING_MODULE_SHARE_MANAGE_ROLE()
-                g.easyTrackEVMScriptExecutor
-            )
-        });
-
-        // todo consolidation
+        index = _mergeItemsAgentForwarded(CoreUpgradeItems.getItems(TEMPLATE), voteItems, index);
 
         //
         // CSM upgrade & CMv2
@@ -247,13 +212,5 @@ contract UpgradeVoteScript is OmnibusBase {
         returns (VoteItem memory)
     {
         return VoteScriptHelpers.item(description, _forwardCall(AGENT, to, data));
-    }
-
-    function _grantRole(bytes32 role, address account) private pure returns (bytes memory) {
-        return abi.encodeCall(IAccessControl.grantRole, (role, account));
-    }
-
-    function _revokeRole(bytes32 role, address account) private pure returns (bytes memory) {
-        return abi.encodeCall(IAccessControl.revokeRole, (role, account));
     }
 }
