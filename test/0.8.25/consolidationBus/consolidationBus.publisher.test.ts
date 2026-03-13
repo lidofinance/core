@@ -21,8 +21,8 @@ describe("ConsolidationBus.sol: publisher", () => {
   let publisher: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let MANAGER_ROLE: string;
-  let PUBLISHER_ROLE: string;
+  let MANAGE_ROLE: string;
+  let PUBLISH_ROLE: string;
 
   let originalState: string;
 
@@ -37,12 +37,12 @@ describe("ConsolidationBus.sol: publisher", () => {
       10, // batch size limit
     ]);
 
-    MANAGER_ROLE = await consolidationBus.MANAGER_ROLE();
-    PUBLISHER_ROLE = await consolidationBus.PUBLISHER_ROLE();
+    MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
+    PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();
 
     // Grant roles
-    await consolidationBus.connect(admin).grantRole(MANAGER_ROLE, manager.address);
-    await consolidationBus.connect(manager).registerPublisher(publisher.address);
+    await consolidationBus.connect(admin).grantRole(MANAGE_ROLE, manager.address);
+    await consolidationBus.connect(admin).grantRole(PUBLISH_ROLE, publisher.address);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -84,13 +84,13 @@ describe("ConsolidationBus.sol: publisher", () => {
       expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
     });
 
-    it("should revert if caller does not have PUBLISHER_ROLE", async () => {
+    it("should revert if caller does not have PUBLISH_ROLE", async () => {
       const sourcePubkeys = [PUBKEYS[0]];
       const targetPubkeys = [PUBKEYS[1]];
 
       await expect(consolidationBus.connect(stranger).addConsolidationRequests(sourcePubkeys, targetPubkeys))
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, PUBLISHER_ROLE);
+        .withArgs(stranger.address, PUBLISH_ROLE);
     });
 
     it("should revert if batch is empty", async () => {
@@ -122,17 +122,6 @@ describe("ConsolidationBus.sol: publisher", () => {
     it("should allow batch at exact limit", async () => {
       const sourcePubkeys = Array(10).fill(PUBKEYS[0]);
       const targetPubkeys = Array(10).fill(PUBKEYS[1]);
-
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys)).to.not.be
-        .reverted;
-    });
-
-    it("should allow unlimited batch size when limit is 0", async () => {
-      // Set batch size to 0 (unlimited)
-      await consolidationBus.connect(manager).setBatchSize(0);
-
-      const sourcePubkeys = Array(100).fill(PUBKEYS[0]);
-      const targetPubkeys = Array(100).fill(PUBKEYS[1]);
 
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys)).to.not.be
         .reverted;
@@ -176,7 +165,7 @@ describe("ConsolidationBus.sol: publisher", () => {
     it("should allow different publishers to add different batches", async () => {
       // Register another publisher
       const [, , , , publisher2] = await ethers.getSigners();
-      await consolidationBus.connect(manager).registerPublisher(publisher2.address);
+      await consolidationBus.connect(admin).grantRole(PUBLISH_ROLE, publisher2.address);
 
       const sourcePubkeys1 = [PUBKEYS[0]];
       const targetPubkeys1 = [PUBKEYS[1]];

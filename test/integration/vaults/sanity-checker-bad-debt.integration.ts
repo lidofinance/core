@@ -5,13 +5,15 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { advanceChainTime, ether, impersonate, LIMITER_PRECISION_BASE } from "lib";
+import { ether, impersonate, LIMITER_PRECISION_BASE } from "lib";
 import {
   getProtocolContext,
   ProtocolContext,
   queueBadDebtInternalization,
   removeStakingLimit,
   report,
+  reportWithEffectiveClDiff,
+  resetCLBalanceDecreaseWindow,
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
@@ -268,6 +270,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
   describe("CL balance decrease check with bad debt internalization", () => {
     it("Small CL balance decrease", async () => {
+      await resetCLBalanceDecreaseWindow(ctx, { waitNextReportTime: true });
+
       const stateBefore = await captureState();
 
       // Queue bad debt internalization
@@ -277,8 +281,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Small negative CL diff (within allowed limits)
       const smallDecrease = ether("-1");
 
-      await report(ctx, {
-        clDiff: smallDecrease,
+      await reportWithEffectiveClDiff(ctx, smallDecrease, {
         excludeVaultsBalances: true,
         skipWithdrawals: true,
         waitNextReportTime: true,
@@ -294,26 +297,16 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Bad debt internalization does not affect calculation of dynamic slashing limit
       // so the report with max allowed CL decrease should still pass with bad debt internalization
 
-      const { oracleReportSanityChecker, lido, stakingRouter } = ctx.contracts;
+      const { oracleReportSanityChecker, lido } = ctx.contracts;
 
-      // Time travel to 54 days to invalidate all current penalties and get max slashing limits
-      const DAYS_54_IN_SECONDS = 54n * 24n * 60n * 60n;
-      await advanceChainTime(DAYS_54_IN_SECONDS);
+      // Submit a neutral report to establish a fresh CL balance baseline
       await report(ctx);
 
       // Get current protocol state to calculate dynamic slashing limit
-      const { beaconValidators } = await lido.getBeaconStat();
-      const moduleDigests = await stakingRouter.getAllStakingModuleDigests();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const limits = await oracleReportSanityChecker.getOracleReportLimits();
-
-      const exitedValidators = moduleDigests.reduce((total, { summary }) => total + summary.totalExitedValidators, 0n);
-      const activeValidators = beaconValidators - exitedValidators;
-
-      // maxAllowedCLRebaseNegativeSum = initialSlashingAmountPWei * 1e15 * validators + inactivityPenaltiesAmountPWei * 1e15 * validators
-      const ONE_PWEI = 10n ** 15n;
-      const maxAllowedNegativeRebase =
-        limits.initialSlashingAmountPWei * ONE_PWEI * activeValidators +
-        limits.inactivityPenaltiesAmountPWei * ONE_PWEI * activeValidators;
+      const maxAllowedNegativeRebase = (preCLBalance * limits.maxCLBalanceDecreaseBP) / 10_000n;
 
       // CL decrease exactly at limit minus 1 wei should pass
       const clSlashing = -(maxAllowedNegativeRebase - 1n);
@@ -356,7 +349,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await waitNextAvailableReportTime(ctx);
 
       // Get current protocol state
-      const { beaconBalance: preCLBalance } = await lido.getBeaconStat();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
       const { secondsPerSlot } = await hashConsensus.getChainConfig();
       const { currentFrameRefSlot } = await accountingOracle.getProcessingState();

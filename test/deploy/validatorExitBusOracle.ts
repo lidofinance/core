@@ -37,26 +37,24 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForExitBus(
-  lidoLocator: string,
-  accountingOracle: string,
-  accounting: string,
-  admin: string,
-) {
+async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, accounting: string, admin: string) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, accountingOracle, accounting, admin, {
-      exitedValidatorsPerDayLimit: 0n,
-      appearedValidatorsPerDayLimit: 0n,
+    f.deploy(lidoLocator, accounting, admin, {
+      exitedEthAmountPerDayLimit: 0n,
+      appearedEthAmountPerDayLimit: 0n,
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
       maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
+      maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+      maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
       maxItemsPerExtraDataTransaction: 0n,
       maxNodeOperatorsPerExtraDataItem: 0n,
       requestTimestampMargin: 0n,
-      maxPositiveTokenRebase: 0n,
-      initialSlashingAmountPWei: 0n,
-      inactivityPenaltiesAmountPWei: 0n,
+      maxPositiveTokenRebase: 1n,
+      maxCLBalanceDecreaseBP: 360n,
       clBalanceOraclesErrorUpperBPLimit: 0n,
+      consolidationEthAmountPerDayLimit: 0n,
+      exitedValidatorEthAmountLimit: 1n,
     }),
   );
 }
@@ -120,13 +118,7 @@ export async function deployVEBO(
   // to skip validation. Tests can explicitly configure keys if needed.
   const nodeOperatorsRegistry = await ethers.deployContract("NodeOperatorsRegistry__Mock");
 
-  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
-    secondsPerSlot,
-    genesisTime,
-    locatorAddr,
-    MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-    MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-  ]);
+  const oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [secondsPerSlot, genesisTime, locatorAddr]);
 
   const { consensus } = await deployHashConsensus(admin, {
     reportProcessor: oracle as unknown as ReportProcessor__Mock,
@@ -149,7 +141,6 @@ export async function deployVEBO(
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
     locatorAddr,
-    accountingOracleAddress,
     accountingAddress,
     admin,
   );

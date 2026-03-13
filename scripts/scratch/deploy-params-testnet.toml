@@ -93,8 +93,6 @@ maxValidatorsPerRequest = 600         # Maximum validators per request
 maxExitRequestsLimit = 13000          # Maximum exit requests limit
 exitsPerFrame = 1                     # Exits per frame
 frameDurationInSec = 48               # Frame duration in seconds
-maxEBWeightType1 = 32                 # maxEB equivalent weigh for WC type 1
-maxEBWeightType2 = 2048               # maxEB equivalent weigh for WC type 2
 
 # Deposit security module configuration
 [depositSecurityModule]
@@ -104,19 +102,22 @@ pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]
-exitedValidatorsPerDayLimit = 1500                     # Exited validators per day limit
-appearedValidatorsPerDayLimit = 1500                   # Appeared validators per day limit
+exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
+appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
 deprecatedOneOffCLBalanceDecreaseBPLimit = 500         # Deprecated one-off CL balance decrease limit (BP)
 annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
 simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
 maxBalanceExitRequestedPerReportInEth = 64000          # Maximum exit ETH per report
+maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
+maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
 maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
 maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
 requestTimestampMargin = 128                           # Request timestamp margin
 maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
-initialSlashingAmountPWei = 1000                       # Initial slashing amount (pWei)
-inactivityPenaltiesAmountPWei = 101                    # Inactivity penalties amount (pWei)
+maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
+consolidationEthAmountPerDayLimit = 57600              # Consolidation ETH amount per day limit
+exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 
 # Oracle daemon configuration
 [oracleDaemonConfig]

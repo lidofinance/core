@@ -14,8 +14,16 @@ contract TopUpGateway__Harness is TopUpGateway {
         uint256 _slotsPerEpoch
     ) TopUpGateway(_lidoLocator, _gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot, _slotsPerEpoch) {}
 
-    function harness_setLastTopUpSlot(uint256 newValue) external {
-        _setLastTopUpSlot(newValue);
+    function harness_setLastTopUpData() external {
+        _setLastTopUpData();
+    }
+
+    function harness_setLastTopUpTimestamp(uint256 _timestamp) external {
+        _gatewayStorage().lastTopUpTimestamp = uint32(_timestamp);
+    }
+
+    function harness_setLastTopUpBlock(uint256 _block) external {
+        _gatewayStorage().lastTopUpBlock = uint32(_block);
     }
 
     function harness_setMaxValidatorsPerTopUp(uint256 newValue) external {

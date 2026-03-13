@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 import { SecondOpinionOracle__Mock } from "typechain-types";
 
 import { ether, impersonate, log, ONE_GWEI } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, report, resetCLBalanceDecreaseWindow } from "lib/protocol";
 
 import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
 
@@ -17,7 +17,7 @@ function getDiffAmount(totalSupply: bigint): bigint {
   return (totalSupply / 10n / ONE_GWEI) * ONE_GWEI;
 }
 
-describe.skip("Integration: Second opinion", () => {
+describe("Integration: Second opinion", () => {
   let ctx: ProtocolContext;
 
   let snapshot: string;
@@ -59,19 +59,26 @@ describe.skip("Integration: Second opinion", () => {
       .connect(agentSigner)
       .grantRole(await oracleReportSanityChecker.SECOND_OPINION_MANAGER_ROLE(), agentSigner.address);
 
-    let beaconBalance = (await lido.getBeaconStat()).beaconBalance;
+    let balanceStats = await lido.getBalanceStats();
+    let clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     // Report initial balances if TVL is zero
-    if (beaconBalance === 0n) {
+    if (clBalance === 0n) {
       await report(ctx, {
         clDiff: INITIAL_REPORTED_BALANCE,
         clAppearedValidators: 3n,
         excludeVaultsBalances: true,
       });
-      beaconBalance = (await lido.getBeaconStat()).beaconBalance;
+      balanceStats = await lido.getBalanceStats();
+      clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     }
-    totalSupply = beaconBalance;
-
     await oracleReportSanityChecker.connect(agentSigner).setSecondOpinionOracleAndCLBalanceUpperMargin(soAddress, 74n);
+
+    // Normalize CL decrease window and consume pending deposits to make
+    // second-opinion checks deterministic across different scratch states.
+    await resetCLBalanceDecreaseWindow(ctx);
+
+    balanceStats = await lido.getBalanceStats();
+    totalSupply = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
   });
 
   beforeEach(bailOnFailure);

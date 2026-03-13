@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
+import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
+
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {Versioned} from "../utils/Versioned.sol";
@@ -25,7 +27,7 @@ interface ITriggerableWithdrawalsGateway {
 
 /// @notice New interface for staking modules (CSM, CuratedV2)
 /// @dev Returns only pubkeys
-interface INewStakingModule {
+interface IUnifiedStakingModule {
     /// @dev It also works for legacy staking modules (NOR, SDVT) where `getSigningKeys` returns different
     ///      tuple `(bytes memory pubkeys, bytes memory signatures, bool[] memory used)`.
     ///      The trick: `abi.decode(returndata, (bytes))` will decode only the first tuple element.
@@ -37,20 +39,13 @@ interface INewStakingModule {
     ) external view returns (bytes memory);
 }
 
-interface INodeOperatorsRegistry {
-    function getSigningKey(
-        uint256 _nodeOperatorId,
-        uint256 _index
-    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
-}
-
 interface IStakingRouter {
     struct ModuleStateConfig {
         address moduleAddress;
         uint16 moduleFee;
         uint16 treasuryFee;
-        uint16 depositTargetShare;
-        uint16 withdrawalProtectShare;
+        uint16 stakeShareLimit;
+        uint16 priorityExitShareThreshold;
         uint8 status;
         uint8 withdrawalCredentialsType;
     }
@@ -68,6 +63,11 @@ interface ILidoLocator {
     function stakingRouter() external view returns (address);
 }
 
+interface IOracleReportSanityCheckerForExitBus {
+    function getMaxEffectiveBalanceWeightWCType01() external view returns (uint256);
+    function getMaxEffectiveBalanceWeightWCType02() external view returns (uint256);
+}
+
 /**
  * @title ValidatorsExitBus
  * @notice Contract that serves as the central infrastructure for managing validator exit requests.
@@ -75,6 +75,7 @@ interface ILidoLocator {
  */
 abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
+    using SafeCast for uint256;
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -270,14 +271,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     ILidoLocator internal immutable LOCATOR;
 
-    /// @notice WC 0x01 max effective balance equivalent `weight` in ETH
-    /// @dev ideally = 32 (ETH), stored as an integer in ETH
-    uint16 public immutable MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01;
-
-    /// @notice WC 0x02 max effective balance equivalent `weight` in ETH
-    /// @dev ideally = 2048 (ETH), stored as an integer in ETH
-    uint16 public immutable MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02;
-
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
@@ -299,18 +292,18 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    constructor(address lidoLocator, uint256 maxEBWeightType1, uint256 maxEBWeightType2) {
+    constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
+    }
 
-        if (
-            maxEBWeightType1 == 0 || maxEBWeightType2 == 0 || maxEBWeightType1 > type(uint16).max
-                || maxEBWeightType2 > type(uint16).max
-        ) {
-            revert InvalidMaxEBWeight();
-        }
+    function MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01() public view returns (uint16) {
+        (uint16 maxEBWeightType1, ) = _getMaxEffectiveBalanceWeights();
+        return maxEBWeightType1;
+    }
 
-        MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01 = uint16(maxEBWeightType1);
-        MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02 = uint16(maxEBWeightType2);
+    function MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02() public view returns (uint16) {
+        (, uint16 maxEBWeightType2) = _getMaxEffectiveBalanceWeights();
+        return maxEBWeightType2;
     }
 
     /**
@@ -858,6 +851,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         view
         returns (uint256 totalBalanceEth)
     {
+        (uint16 maxEBWeightType1, uint16 maxEBWeightType2) = _getMaxEffectiveBalanceWeights();
         uint256 packedLength;
         uint256 dataShift;
         uint256 moduleShift;
@@ -895,19 +889,40 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             if (moduleId != cachedModuleId) {
                 cachedModuleId = moduleId;
-                cachedModuleMaxEBWeightEth = _getModuleMaxEBWeight(moduleId);
+                cachedModuleMaxEBWeightEth = _getModuleMaxEBWeight(moduleId, maxEBWeightType1, maxEBWeightType2);
             }
             totalBalanceEth += cachedModuleMaxEBWeightEth;
         }
     }
 
-    function _getModuleMaxEBWeight(uint256 moduleId) internal view returns (uint16) {
+    function _getMaxEffectiveBalanceWeights() internal view returns (uint16 maxEBWeightType1, uint16 maxEBWeightType2) {
+        IOracleReportSanityCheckerForExitBus sanityChecker =
+            IOracleReportSanityCheckerForExitBus(LOCATOR.oracleReportSanityChecker());
+
+        uint256 maxEBWeightType1Raw = sanityChecker.getMaxEffectiveBalanceWeightWCType01();
+        uint256 maxEBWeightType2Raw = sanityChecker.getMaxEffectiveBalanceWeightWCType02();
+        if (
+            maxEBWeightType1Raw == 0 || maxEBWeightType2Raw == 0 || maxEBWeightType1Raw > type(uint16).max
+                || maxEBWeightType2Raw > type(uint16).max
+        ) {
+            revert InvalidMaxEBWeight();
+        }
+
+        maxEBWeightType1 = maxEBWeightType1Raw.toUint16();
+        maxEBWeightType2 = maxEBWeightType2Raw.toUint16();
+    }
+
+    function _getModuleMaxEBWeight(
+        uint256 moduleId,
+        uint16 maxEBWeightType1,
+        uint16 maxEBWeightType2
+    ) internal view returns (uint16) {
         uint256 wcType =
             IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId).withdrawalCredentialsType;
         if (WithdrawalCredentials.isType1(wcType)) {
-            return MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01;
+            return maxEBWeightType1;
         } else if (WithdrawalCredentials.isType2(wcType)) {
-            return MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02;
+            return maxEBWeightType2;
         }
         revert UnexpectedWCType();
     }
@@ -938,7 +953,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             newModuleAddress = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId).moduleAddress;
         }
 
-        bytes memory retrievedKeys = INewStakingModule(newModuleAddress)
+        bytes memory retrievedKeys = IUnifiedStakingModule(newModuleAddress)
             .getSigningKeys(
                 nodeOpId,
                 keyIndex, // startIndex
@@ -1028,13 +1043,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
     * @notice Process exit requests for format 2 (72 bytes per request, includes keyIndex)
-    * @dev Check dataWithoutPubkey <= lastDataWithoutPubkey prevents duplicates and ensures sorting
+    * @dev Uniqueness and sort check uses (moduleId, nodeOpId, valIndex) only — keyIndex is excluded
+    *      so that the same validator cannot appear twice with different keyIndex (double-counted).
     * @param data Packed exit requests data (DATA_FORMAT=2)
     */
     function _processExitRequestsListV2(bytes calldata data) internal {
         uint256 offset;
         uint256 offsetPastEnd;
-        uint256 lastDataWithoutPubkey = 0;
+        uint256 lastValidatorData = 0; // (moduleId, nodeOpId, valIndex) — 128 bits, no keyIndex
         uint256 timestamp = _getTimestamp();
         uint256 index = 0;
 
@@ -1045,6 +1061,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
         bytes calldata pubkey;
         uint256 dataWithoutPubkey;
+        uint256 validatorData; // 128 bits: moduleId | nodeOpId | valIndex (for sort/duplicate check)
         uint256 moduleId;
 
         // Cache module data to avoid repeated external calls for the same module
@@ -1065,18 +1082,18 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 offset := add(offset, 72)
             }
 
+            // For sort/duplicate check use only (moduleId, nodeOpId, valIndex) — drop keyIndex (low 64 bits)
+            validatorData = dataWithoutPubkey >> 64;
+
             moduleId = uint24(dataWithoutPubkey >> (64 + 64 + 40));
 
             if (moduleId == 0) {
                 revert InvalidModuleId();
             }
 
-            //                              dataWithoutPubkey (192 bits)
-            // MSB <--------------------------------------------------------------------------------------- LSB
-            // | 64 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | 64 bits: keyIndex |
-            //
-            // Sorting compound key: (moduleId, nodeOpId, valIndex, keyIndex)
-            if (dataWithoutPubkey <= lastDataWithoutPubkey) {
+            // Uniqueness and sort by validator identity only: (moduleId, nodeOpId, valIndex)
+            // dataWithoutPubkey (192b): ... | valIndex | keyIndex |  ->  validatorData (128b): ... | valIndex
+            if (validatorData <= lastValidatorData) {
                 revert InvalidRequestsDataSortOrder();
             }
 
@@ -1093,7 +1110,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             );
 
             cachedModuleId = moduleId;
-            lastDataWithoutPubkey = dataWithoutPubkey;
+            lastValidatorData = validatorData;
 
             emit ValidatorExitRequest(
                 moduleId,

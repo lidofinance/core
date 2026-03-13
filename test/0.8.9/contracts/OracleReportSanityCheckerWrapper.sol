@@ -7,40 +7,52 @@ pragma solidity 0.8.9;
 import {
     OracleReportSanityChecker,
     LimitsList,
-    LimitsListPacked,
-    LimitsListPacker
+    AccountingCoreLimitsPacked,
+    OperationalLimitsPacked,
+    LimitsListPacker,
+    LimitsListUnpacker
 } from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
     using LimitsListPacker for LimitsList;
+    using LimitsListUnpacker for AccountingCoreLimitsPacked;
 
-    LimitsListPacked private _limitsListPacked;
+    // Test-only storage for codec roundtrip checks; these are not the parent's private slots.
+    AccountingCoreLimitsPacked private _accountingCoreLimitsPacked;
+    OperationalLimitsPacked private _operationalLimitsPacked;
 
     constructor(
         address _lidoLocator,
-        address _accountingOracle,
         address _accounting,
         address _admin,
         LimitsList memory _limitsList
-    ) OracleReportSanityChecker(_lidoLocator, _accountingOracle, _accounting, _admin, _limitsList) {}
+    ) OracleReportSanityChecker(_lidoLocator, _accounting, _admin, _limitsList) {}
 
-    function addReportData(uint256 _timestamp, uint256 _exitedValidatorsCount, uint256 _negativeCLRebase) public {
-        _addReportData(_timestamp, _exitedValidatorsCount, _negativeCLRebase);
+    function addReportData(uint256 _timestamp, uint256 _clBalance, uint256 _deposits, uint256 _clWithdrawals) public {
+        _addReportData(_timestamp, _clBalance, _deposits, _clWithdrawals);
     }
 
-    function sumNegativeRebasesNotOlderThan(uint256 _timestamp) public view returns (uint256) {
-        return _sumNegativeRebasesNotOlderThan(_timestamp);
+    function exposeAccountingCorePackedLimits() public view returns (AccountingCoreLimitsPacked memory) {
+        return _accountingCoreLimitsPacked;
     }
 
-    function exitedValidatorsAtTimestamp(uint256 _timestamp) public view returns (uint256) {
-        return _exitedValidatorsAtTimestamp(_timestamp);
-    }
-
-    function exposePackedLimits() public view returns (LimitsListPacked memory) {
-        return _limitsListPacked;
+    function exposeOperationalPackedLimits() public view returns (OperationalLimitsPacked memory) {
+        return _operationalLimitsPacked;
     }
 
     function packAndStore() public {
-        _limitsListPacked = getOracleReportLimits().pack();
+        LimitsList memory limits = getOracleReportLimits();
+        _accountingCoreLimitsPacked = limits.packAccountingCore();
+        _operationalLimitsPacked = limits.packOperational();
+    }
+
+    function packRawLimits(
+        LimitsList memory _limitsList
+    ) external pure returns (AccountingCoreLimitsPacked memory, OperationalLimitsPacked memory) {
+        return (_limitsList.packAccountingCore(), _limitsList.packOperational());
+    }
+
+    function roundtripRawLimits(LimitsList memory _limitsList) external pure returns (LimitsList memory) {
+        return _limitsList.packAccountingCore().unpack(_limitsList.packOperational());
     }
 }

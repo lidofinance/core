@@ -19,7 +19,18 @@ interface IReportReceiver {
 }
 
 interface IOracleReportSanityChecker {
-    function checkExitedValidatorsRatePerDay(uint256 _exitedValidatorsCount) external view;
+    function checkExitedEthAmountPerDay(
+        uint256 _newlyExitedValidatorsCount,
+        uint256 _timeElapsed
+    ) external view;
+    function checkModuleAndCLBalancesChangeRates(
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _validatorBalancesGweiByStakingModule,
+        uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _clValidatorsBalanceGwei,
+        uint256 _clPendingBalanceGwei,
+        uint256 _timeElapsed
+    ) external view;
 
     function checkExtraDataItemsCountPerTransaction(uint256 _extraDataListItemsCount) external view;
     function checkNodeOperatorsPerExtraDataItemCount(uint256 _itemIndex, uint256 _nodeOperatorsCount) external view;
@@ -62,8 +73,6 @@ contract AccountingOracle is BaseOracle {
 
     error LidoLocatorCannotBeZero();
     error AdminCannotBeZero();
-    error LidoCannotBeZero();
-    error IncorrectOracleMigration(uint256 code);
     error SenderNotAllowed();
     error InvalidExitedValidatorsData();
     error InvalidClBalancesData();
@@ -80,7 +89,6 @@ contract AccountingOracle is BaseOracle {
     error UnexpectedExtraDataIndex(uint256 expectedIndex, uint256 receivedIndex);
     error InvalidExtraDataItem(uint256 itemIndex);
     error InvalidExtraDataSortOrder(uint256 itemIndex);
-
     event ExtraDataSubmitted(uint256 indexed refSlot, uint256 itemsProcessed, uint256 itemsCount);
 
     event WarnExtraDataIncompleteProcessing(uint256 indexed refSlot, uint256 processedItemsCount, uint256 itemsCount);
@@ -489,15 +497,27 @@ contract AccountingOracle is BaseOracle {
         }
 
         uint256 slotsElapsed = data.refSlot - prevRefSlot;
+        uint256 timeElapsed = slotsElapsed * SECONDS_PER_SLOT;
 
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
         IWithdrawalQueue withdrawalQueue = IWithdrawalQueue(LOCATOR.withdrawalQueue());
+        IOracleReportSanityChecker sanityChecker = IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker());
+
+        sanityChecker.checkModuleAndCLBalancesChangeRates(
+            data.stakingModuleIdsWithUpdatedBalance,
+            data.validatorBalancesGweiByStakingModule,
+            data.pendingBalancesGweiByStakingModule,
+            data.clValidatorsBalanceGwei,
+            data.clPendingBalanceGwei,
+            timeElapsed
+        );
 
         _processStakingRouterExitedValidatorsByModule(
             stakingRouter,
+            sanityChecker,
             data.stakingModuleIdsWithNewlyExitedValidators,
             data.numExitedValidatorsByStakingModule,
-            slotsElapsed
+            timeElapsed
         );
 
         /// @notice update CL balances in StakingRouter
@@ -520,7 +540,7 @@ contract AccountingOracle is BaseOracle {
         IReportReceiver(LOCATOR.accounting()).handleOracleReport(
             ReportValues(
                 GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
-                slotsElapsed * SECONDS_PER_SLOT,
+                timeElapsed,
                 data.clValidatorsBalanceGwei * 1e9,
                 data.clPendingBalanceGwei * 1e9,
                 data.withdrawalVaultBalance,
@@ -551,9 +571,10 @@ contract AccountingOracle is BaseOracle {
 
     function _processStakingRouterExitedValidatorsByModule(
         IStakingRouter stakingRouter,
+        IOracleReportSanityChecker sanityChecker,
         uint256[] calldata stakingModuleIds,
         uint256[] calldata numExitedValidatorsByStakingModule,
-        uint256 slotsElapsed
+        uint256 timeElapsed
     ) internal {
         if (stakingModuleIds.length != numExitedValidatorsByStakingModule.length) {
             revert InvalidExitedValidatorsData();
@@ -586,11 +607,9 @@ contract AccountingOracle is BaseOracle {
             numExitedValidatorsByStakingModule
         );
 
-        uint256 exitedValidatorsRatePerDay = (newlyExitedValidatorsCount * (1 days)) /
-            (SECONDS_PER_SLOT * slotsElapsed);
-
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitedValidatorsRatePerDay(
-            exitedValidatorsRatePerDay
+        sanityChecker.checkExitedEthAmountPerDay(
+            newlyExitedValidatorsCount,
+            timeElapsed
         );
     }
 

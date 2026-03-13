@@ -15,6 +15,9 @@ export {
   OracleReportParams,
   OracleReportSubmitParams,
   report,
+  reportWithEffectiveClDiff,
+  resetCLBalanceDecreaseWindow,
+  getDepositedSinceLastReport,
 } from "./accounting";
 
 export { ensureDsmGuardians } from "./dsm";

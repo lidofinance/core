@@ -263,7 +263,7 @@ describe("Integration: Accounting", () => {
         reportBurner: false,
         skipWithdrawals: true,
       }),
-    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease(uint256)");
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease");
   });
 
   it("Should account correctly with no CL rebase", async () => {
@@ -399,8 +399,8 @@ describe("Integration: Accounting", () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-    // TODO: Update to use balance-based accounting
-    const { beaconBalance } = await lido.getBeaconStat();
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
@@ -408,7 +408,7 @@ describe("Integration: Accounting", () => {
     // we use (ONE_DAY + 1n) to slightly underperform for the daily limit
     // This ensures we're testing a scenario very close to, but not exceeding, the annual limit
     const time = timeElapsed + 1n;
-    let rebaseAmount = (beaconBalance * annualBalanceIncreaseBPLimit * time) / (365n * ONE_DAY) / MAX_BASIS_POINTS;
+    let rebaseAmount = (clBalance * annualBalanceIncreaseBPLimit * time) / (365n * ONE_DAY) / MAX_BASIS_POINTS;
     rebaseAmount = roundToGwei(rebaseAmount);
 
     // At this point, rebaseAmount represents a positive CL rebase that is

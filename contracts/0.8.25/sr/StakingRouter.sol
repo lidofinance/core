@@ -996,7 +996,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             stakingModuleDepositableEthAmount / MAX_EFFECTIVE_BALANCE_WC_TYPE_01 // max possible initial deposits count
         );
 
-        if (maxDepositsCount == 0) return;
+        if (maxDepositsCount == 0) revert ZeroDeposits();
 
         // Get deposit data from module first - it may return fewer keys than requested
         (bytes memory publicKeysBatch, bytes memory signaturesBatch) =

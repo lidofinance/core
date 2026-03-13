@@ -3,7 +3,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ConsolidationGateway, WithdrawalVault__MockForConsolidationGateway } from "typechain-types";
+import {
+  ConsolidationGateway,
+  DepositSecurityModule__MockForConsolidationGateway,
+  WithdrawalVault__MockForConsolidationGateway,
+} from "typechain-types";
 
 import { advanceChainTime } from "lib";
 
@@ -63,6 +67,7 @@ const expectLimitData = async (
 describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
   let consolidationGateway: ConsolidationGateway;
   let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
+  let dsm: DepositSecurityModule__MockForConsolidationGateway;
   let admin: HardhatEthersSigner;
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -76,9 +81,11 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     const locatorAddr = await locator.getAddress();
 
     withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForConsolidationGateway");
+    dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
 
     await updateLidoLocatorImplementation(locatorAddr, {
       withdrawalVault: await withdrawalVault.getAddress(),
+      depositSecurityModule: await dsm.getAddress(),
     });
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway", [
@@ -136,6 +143,26 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     )
       .to.be.revertedWithCustomError(consolidationGateway, "ArraysLengthMismatch")
       .withArgs(1, 2);
+  });
+
+  it("should revert with DSMDepositsPaused error if DSM deposits are paused", async () => {
+    await dsm.mock__setDepositsPaused(true);
+
+    await expect(
+      consolidationGateway
+        .connect(authorizedEntity)
+        .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+    ).to.be.revertedWithCustomError(consolidationGateway, "DSMDepositsPaused");
+  });
+
+  it("should not revert when DSM deposits are not paused", async () => {
+    await dsm.mock__setDepositsPaused(false);
+
+    const tx = await consolidationGateway
+      .connect(authorizedEntity)
+      .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+
+    await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled");
   });
 
   it("should revert if total fee value sent is insufficient to cover all provided consolidation requests", async () => {
