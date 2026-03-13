@@ -44,7 +44,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
     event ERC721Recovered(address indexed requestedBy, address indexed token, uint256 tokenId);
 
     // Errors
-    error ZeroAddress();
     error NotLido();
     error NotTriggerableWithdrawalsGateway();
     error NotConsolidationGateway();
@@ -67,8 +66,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
         _onlyNonZeroAddress(_treasury);
         _onlyNonZeroAddress(_triggerableWithdrawalsGateway);
         _onlyNonZeroAddress(_consolidationGateway);
-        _onlyNonZeroAddress(_withdrawalRequest);
-        _onlyNonZeroAddress(_consolidationRequest);
 
         LIDO = ILido(_lido);
         TREASURY = _treasury;
@@ -155,10 +152,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
         emit ERC721Recovered(msg.sender, address(_token), _tokenId);
 
         _token.transferFrom(address(this), TREASURY, _tokenId);
-    }
-
-    function _onlyNonZeroAddress(address _address) internal pure {
-        if (_address == address(0)) revert ZeroAddress();
     }
 
     /**

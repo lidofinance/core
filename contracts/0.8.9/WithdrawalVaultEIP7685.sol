@@ -22,6 +22,7 @@ abstract contract WithdrawalVaultEIP7685 {
     event WithdrawalRequestAdded(bytes request);
     event ConsolidationRequestAdded(bytes request);
 
+    error ZeroAddress();
     error ZeroArgument(string name);
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
     error FeeReadFailed();
@@ -31,6 +32,9 @@ abstract contract WithdrawalVaultEIP7685 {
     error InvalidPublicKeyLength(bytes pubkey);
 
     constructor(address _withdrawalRequest, address _consolidationRequest) {
+        _onlyNonZeroAddress(_withdrawalRequest);
+        _onlyNonZeroAddress(_consolidationRequest);
+
         WITHDRAWAL_REQUEST = _withdrawalRequest;
         CONSOLIDATION_REQUEST = _consolidationRequest;
     }
@@ -120,5 +124,9 @@ abstract contract WithdrawalVaultEIP7685 {
         if (requiredFee != msg.value) {
             revert IncorrectFee(requiredFee, msg.value);
         }
+    }
+
+    function _onlyNonZeroAddress(address _address) internal pure {
+        if (_address == address(0)) revert ZeroAddress();
     }
 }
