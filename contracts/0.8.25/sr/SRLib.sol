@@ -40,8 +40,6 @@ library SRLib {
         uint256 maxEBType2;
     }
 
-    uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
-
     /// @notice One-time migration from old storage layout to new RouterState struct.
     /// @dev Storage slot positions are computed inline for migration-only use.
     ///      After migration, this function can be removed.

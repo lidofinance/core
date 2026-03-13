@@ -39,13 +39,6 @@ interface INewStakingModule {
     ) external view returns (bytes memory);
 }
 
-interface INodeOperatorsRegistry {
-    function getSigningKey(
-        uint256 _nodeOperatorId,
-        uint256 _index
-    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
-}
-
 interface IStakingRouter {
     struct ModuleStateConfig {
         address moduleAddress;
