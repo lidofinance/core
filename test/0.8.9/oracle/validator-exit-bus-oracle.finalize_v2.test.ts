@@ -7,12 +7,7 @@ import { LidoLocator, ValidatorsExitBus__Harness } from "typechain-types";
 
 import { EPOCHS_PER_FRAME, INITIAL_FAST_LANE_LENGTH_SLOTS, SLOTS_PER_EPOCH, VEBO_CONSENSUS_VERSION } from "lib";
 
-import {
-  deployLidoLocator,
-  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-  updateLidoLocatorImplementation,
-} from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
@@ -32,13 +27,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
       stakingRouter: await stakingRouter.getAddress(),
     });
 
-    oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [
-      12n,
-      100n,
-      await locator.getAddress(),
-      MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-      MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-    ]);
+    oracle = await ethers.deployContract("ValidatorsExitBus__Harness", [12n, 100n, await locator.getAddress()]);
 
     const consensus = await ethers.deployContract("HashConsensus__Harness", [
       SLOTS_PER_EPOCH,

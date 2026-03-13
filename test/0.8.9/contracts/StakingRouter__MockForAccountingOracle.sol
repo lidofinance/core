@@ -19,6 +19,9 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
     }
 
     mapping(uint256 => uint256) internal _exitedKeysCountsByModuleId;
+    mapping(uint256 => uint256) internal _moduleBalancesWei;
+
+    uint256 internal _totalStakingModulesBalanceWei;
 
     UpdateExitedKeysByModuleCallData internal _lastCall_updateExitedKeysByModule;
 
@@ -62,7 +65,21 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         uint256[] calldata _validatorBalancesGwei,
         uint256[] calldata _pendingBalancesGwei
     ) external {
-        // do nothing
+        uint256 totalBalance = _totalStakingModulesBalanceWei;
+        for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
+            uint256 moduleId = _stakingModuleIds[i];
+            uint256 previousBalance = _moduleBalancesWei[moduleId];
+            uint256 currentBalance = (_validatorBalancesGwei[i] + _pendingBalancesGwei[i]) * 1 gwei;
+
+            if (currentBalance >= previousBalance) {
+                totalBalance += currentBalance - previousBalance;
+            } else {
+                totalBalance -= previousBalance - currentBalance;
+            }
+
+            _moduleBalancesWei[moduleId] = currentBalance;
+        }
+        _totalStakingModulesBalanceWei = totalBalance;
     }
 
     function getDepositAmountFromLastSlot(uint256) external view returns (uint256) {
@@ -91,5 +108,13 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external {
         ++totalCalls_onValidatorsCountsByNodeOperatorReportingFinished;
+    }
+
+    function getStakingModuleBalance(uint256 moduleId) external view returns (uint256) {
+        return _moduleBalancesWei[moduleId];
+    }
+
+    function getTotalStakingModulesBalance() external view returns (uint256) {
+        return _totalStakingModulesBalanceWei;
     }
 }

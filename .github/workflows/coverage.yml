@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      NODE_OPTIONS: --max_old_space_size=10240
+      NODE_OPTIONS: --max_old_space_size=6144
 
     permissions:
       contents: write
@@ -26,6 +26,7 @@ jobs:
 
       - name: Collect coverage
         run: yarn test:coverage
+        timeout-minutes: 30
 
       - name: Produce the coverage report
         uses: lidofinance/coverage-action@a94351baa279790f736655b1891178b1515594ea

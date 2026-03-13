@@ -74,6 +74,9 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     const locator = await deployLidoLocator();
     const locatorAddress = await locator.getAddress();
 
+    // 3a. Deploy DSM mock (needed for _ensureDSMDepositsNotPaused check in ConsolidationGateway)
+    const dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
+
     // 4. Deploy ConsolidationGateway
     consolidationGateway = await ethers.deployContract("ConsolidationGateway", [
       admin.address,
@@ -93,22 +96,23 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     const [vault] = await proxify({ impl: vaultImpl, admin });
     withdrawalVault = vault as unknown as WithdrawalVault;
 
-    // 6. Update LidoLocator to point to real WithdrawalVault
+    // 6. Update LidoLocator to point to real WithdrawalVault and DSM mock
     await updateLidoLocatorImplementation(locatorAddress, {
       withdrawalVault: await withdrawalVault.getAddress(),
+      depositSecurityModule: await dsm.getAddress(),
     });
 
     // 7. Deploy ConsolidationBus
     consolidationBus = await ethers.deployContract("ConsolidationBus", [
       admin.address,
       await consolidationGateway.getAddress(),
-      0, // unlimited batch size
+      200,
     ]);
 
     // 8. Set up roles
-    await consolidationBus.connect(admin).grantRole(await consolidationBus.MANAGER_ROLE(), admin.address);
-    await consolidationBus.connect(admin).grantRole(await consolidationBus.EXECUTER_ROLE(), executor.address);
-    await consolidationBus.connect(admin).registerPublisher(publisher.address);
+    await consolidationBus.connect(admin).grantRole(await consolidationBus.MANAGE_ROLE(), admin.address);
+    await consolidationBus.connect(admin).grantRole(await consolidationBus.EXECUTE_ROLE(), executor.address);
+    await consolidationBus.connect(admin).grantRole(await consolidationBus.PUBLISH_ROLE(), publisher.address);
 
     // Grant ADD_CONSOLIDATION_REQUEST_ROLE to ConsolidationBus
     await consolidationGateway
