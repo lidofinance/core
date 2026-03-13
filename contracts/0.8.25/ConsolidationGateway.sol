@@ -80,12 +80,10 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     event ConsolidationRequestsLimitSet(uint256 maxConsolidationRequestsLimit, uint256 consolidationsPerFrame, uint256 frameDurationInSec);
 
     /// @notice role that allows to pause the contract
-    /// @dev 0x8d0e4ae4847b49935b55c99f9c3ce025c87e7c4604c35b7ae56929bd32fa5a78
-    bytes32 public constant PAUSE_ROLE = keccak256("PausableUntilWithRoles.PauseRole");
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
 
     /// @notice role that allows to resume the contract
-    /// @dev 0xa79a6aede309e0d48bf2ef0f71355c06ad317956d4c0da2deb0dc47cc34f826c
-    bytes32 public constant RESUME_ROLE = keccak256("PausableUntilWithRoles.ResumeRole");
+    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
 
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 public constant EXIT_LIMIT_MANAGER_ROLE = keccak256("EXIT_LIMIT_MANAGER_ROLE");
