@@ -67,8 +67,10 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       .connect(accountingSigner)
       .checkAccountingOracleReport(
         timeElapsed,
-        preCLBalance,
+        preCLBalance - deposits,
+        0n,
         postCLBalance,
+        0n,
         withdrawalVaultBalance,
         0n,
         0n,
@@ -156,7 +158,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     it("should not allow calling from non-Accounting address", async () => {
       const [, otherClient] = await ethers.getSigners();
       await expect(
-        checker.connect(otherClient).checkAccountingOracleReport(0, ether("100"), ether("100"), 0, 0, 0, 0, 0),
+        checker.connect(otherClient).checkAccountingOracleReport(0, ether("100"), 0, ether("100"), 0, 0, 0, 0, 0, 0),
       ).to.be.revertedWithCustomError(checker, "CalledNotFromAccounting");
     });
   });

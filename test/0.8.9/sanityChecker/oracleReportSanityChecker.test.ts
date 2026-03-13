@@ -982,6 +982,8 @@ describe("OracleReportSanityChecker.sol", () => {
       timeElapsed: 24n * 60n * 60n,
       preCLBalance: ether("100000"),
       postCLBalance: ether("100001"),
+      preCLPendingBalance: 0n,
+      postCLPendingBalance: 0n,
       withdrawalVaultBalance: 0n,
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
@@ -991,12 +993,14 @@ describe("OracleReportSanityChecker.sol", () => {
 
     const report = (
       overrides: Partial<typeof baseReport> = {},
-    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
+    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
       const r = { ...baseReport, ...overrides };
       return [
         r.timeElapsed,
-        r.preCLBalance,
-        r.postCLBalance,
+        r.preCLBalance - r.preCLPendingBalance - r.deposits,
+        r.preCLPendingBalance,
+        r.postCLBalance - r.postCLPendingBalance,
+        r.postCLPendingBalance,
         r.withdrawalVaultBalance,
         r.elRewardsVaultBalance,
         r.sharesRequestedToBurn,
@@ -1171,6 +1175,8 @@ describe("OracleReportSanityChecker.sol", () => {
       timeElapsed: 24n * 60n * 60n,
       preCLBalance: ether("100"),
       postCLBalance: ether("100"),
+      preCLPendingBalance: 0n,
+      postCLPendingBalance: 0n,
       withdrawalVaultBalance: 0n,
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
@@ -1180,12 +1186,14 @@ describe("OracleReportSanityChecker.sol", () => {
 
     const report = (
       overrides: Partial<typeof baseWindowReport> = {},
-    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
+    ): [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] => {
       const r = { ...baseWindowReport, ...overrides };
       return [
         r.timeElapsed,
-        r.preCLBalance,
-        r.postCLBalance,
+        r.preCLBalance - r.preCLPendingBalance - r.deposits,
+        r.preCLPendingBalance,
+        r.postCLBalance - r.postCLPendingBalance,
+        r.postCLPendingBalance,
         r.withdrawalVaultBalance,
         r.elRewardsVaultBalance,
         r.sharesRequestedToBurn,

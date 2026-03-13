@@ -35,6 +35,11 @@ async function deployMockAccountingAndStakingRouter() {
   await lido.mock__setClValidatorsBalance(300n * 10n ** 18n); // 300 ETH active
   await lido.mock__setClPendingBalance(20n * 10n ** 18n); // 20 ETH pending
   await lido.mock__setDepositedValidators(10);
+  await stakingRouter.reportValidatorBalancesByStakingModule(
+    [1],
+    [300n * 10n ** 9n],
+    [20n * 10n ** 9n],
+  );
 
   return { accounting, stakingRouter, withdrawalQueue, lido };
 }

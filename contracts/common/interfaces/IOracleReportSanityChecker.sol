@@ -21,9 +21,9 @@ interface IOracleReportSanityChecker {
     //
     function checkAccountingOracleReport(
         uint256 _timeElapsed,
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
+        uint256 _preCLValidatorsBalance,
         uint256 _preCLPendingBalance,
+        uint256 _postCLValidatorsBalance,
         uint256 _postCLPendingBalance,
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
@@ -34,13 +34,13 @@ interface IOracleReportSanityChecker {
 
     //
     function checkCLPendingBalanceIncrease(
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
+        uint256 _timeElapsed,
+        uint256 _preCLValidatorsBalance,
         uint256 _preCLPendingBalance,
+        uint256 _postCLValidatorsBalance,
         uint256 _postCLPendingBalance,
         uint256 _withdrawalVaultBalance,
-        uint256 _deposits,
-        uint256 _timeElapsed
+        uint256 _deposits
     ) external view;
 
     //

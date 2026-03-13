@@ -20,6 +20,8 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
 
     mapping(uint256 => uint256) internal _exitedKeysCountsByModuleId;
     mapping(uint256 => uint256) internal _moduleBalancesWei;
+    mapping(uint256 => uint64) internal _validatorBalancesGweiByModuleId;
+    mapping(uint256 => uint64) internal _pendingBalancesGweiByModuleId;
 
     uint256 internal _totalStakingModulesBalanceWei;
 
@@ -78,6 +80,8 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
             }
 
             _moduleBalancesWei[moduleId] = currentBalance;
+            _validatorBalancesGweiByModuleId[moduleId] = uint64(_validatorBalancesGwei[i]);
+            _pendingBalancesGweiByModuleId[moduleId] = uint64(_pendingBalancesGwei[i]);
         }
         _totalStakingModulesBalanceWei = totalBalance;
     }
@@ -112,6 +116,22 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
 
     function getStakingModuleBalance(uint256 moduleId) external view returns (uint256) {
         return _moduleBalancesWei[moduleId];
+    }
+
+    function getStakingModuleStateAccounting(uint256 moduleId)
+        external
+        view
+        returns (
+            uint64 validatorsBalanceGwei,
+            uint64 pendingBalanceGwei,
+            uint64 exitedValidatorsCount
+        )
+    {
+        return (
+            _validatorBalancesGweiByModuleId[moduleId],
+            _pendingBalancesGweiByModuleId[moduleId],
+            uint64(_exitedKeysCountsByModuleId[moduleId])
+        );
     }
 
     function getTotalStakingModulesBalance() external view returns (uint256) {

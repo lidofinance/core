@@ -428,9 +428,9 @@ contract Accounting {
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
-            _update.principalClBalance,
-            _report.clValidatorsBalance + _report.clPendingBalance,
+            _pre.clValidatorsBalance,
             _pre.clPendingBalance,
+            _report.clValidatorsBalance,
             _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,

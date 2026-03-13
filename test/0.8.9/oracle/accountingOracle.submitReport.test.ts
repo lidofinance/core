@@ -678,6 +678,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should accept zero active balance", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [64n * ONE_GWEI]);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -714,6 +715,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should accept large balance values", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [5000n * ONE_GWEI]);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -732,6 +734,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should handle pending larger than active", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [500n * ONE_GWEI]);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -750,6 +753,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should convert gwei to wei correctly", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [456n * ONE_GWEI]);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -807,6 +811,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should handle realistic scenarios", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [1000n * ONE_GWEI]);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
