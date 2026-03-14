@@ -33,7 +33,6 @@ abstract contract CLTopUpVerifier {
 
     error InvalidSlot();
     error RootNotFound();
-    error InvalidSignLength();
 
     constructor(GIndex _gIFirstValidatorPrev, GIndex _gIFirstValidatorCurr, uint64 _pivotSlot) {
         GI_FIRST_VALIDATOR_PREV = _gIFirstValidatorPrev;

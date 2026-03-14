@@ -7,8 +7,8 @@ pragma solidity >=0.4.24;
 
 interface IOracleReportSanityChecker {
     function smoothenTokenRebase(
-        uint256 _preTotalPooledEther,
-        uint256 _preTotalShares,
+        uint256 _preInternalEther,
+        uint256 _preInternalShares,
         uint256 _preCLBalance,
         uint256 _postCLBalance,
         uint256 _withdrawalVaultBalance,
@@ -51,10 +51,10 @@ interface IOracleReportSanityChecker {
 
     //
     function checkSimulatedShareRate(
-        uint256 _postTotalPooledEther,
-        uint256 _postTotalShares,
-        uint256 _etherLockedOnWithdrawalQueue,
-        uint256 _sharesBurntDueToWithdrawals,
+        uint256 _postInternalEther,
+        uint256 _postInternalShares,
+        uint256 _etherToFinalizeWQ,
+        uint256 _sharesToBurnForWithdrawals,
         uint256 _simulatedShareRate
     ) external view;
 }

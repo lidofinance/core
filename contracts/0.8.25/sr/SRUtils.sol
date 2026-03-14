@@ -34,10 +34,6 @@ library SRUtils {
         if (_address == address(0)) revert ISRBase.ZeroAddress();
     }
 
-    function _requireSender(address _sender) internal view {
-        if (msg.sender != _sender) revert ISRBase.NotAuthorized();
-    }
-
     function _requireWCTypeValid(uint256 _wcType) internal pure {
         if (!WithdrawalCredentials.isTypeValid(_wcType)) revert ISRBase.WrongWithdrawalCredentialsType();
     }

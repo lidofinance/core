@@ -40,8 +40,6 @@ library SRLib {
         uint256 maxEBType2;
     }
 
-    uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
-
     /// @notice One-time migration from old storage layout to new RouterState struct.
     /// @dev Storage slot positions are computed inline for migration-only use.
     ///      After migration, this function can be removed.
@@ -154,10 +152,10 @@ library SRLib {
     function _getStorageStakingModulesMapping(bytes32 _position)
         internal
         pure
-        returns (mapping(uint256 => StakingModule) storage result)
+        returns (mapping(uint256 => StakingModule) storage $)
     {
         assembly ("memory-safe") {
-            result.slot := _position
+            $.slot := _position
         }
     }
 
@@ -165,10 +163,10 @@ library SRLib {
     function _getStorageStakingIndicesMapping(bytes32 _position)
         internal
         pure
-        returns (mapping(uint256 => uint256) storage result)
+        returns (mapping(uint256 => uint256) storage $)
     {
         assembly ("memory-safe") {
-            result.slot := _position
+            $.slot := _position
         }
     }
 
@@ -292,7 +290,7 @@ library SRLib {
         stateConfig.stakeShareLimit = uint16(_stakeShareLimit);
         stateConfig.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
         // forge-lint: disable-end(unsafe-typecast)
-        
+
         // 1 SSTORE
         _moduleId.getModuleState().config = stateConfig;
     }

@@ -6,7 +6,8 @@ pragma solidity 0.8.25;
 
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {
-    AccessControlEnumerableUpgradeable
+    AccessControlEnumerableUpgradeable,
+    EnumerableSet
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {BeaconChainDepositor, IDepositContract} from "contracts/0.8.25/lib/BeaconChainDepositor.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -40,6 +41,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     using WithdrawalCredentials for bytes32;
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     /// @dev ACL roles
     bytes32 public constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
@@ -51,7 +53,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     bytes32 public constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
-    bytes32 public constant ACCOUNTING_REPORT_ROLE = keccak256("ACCOUNTING_REPORT_ROLE");
 
     uint256 public constant FEE_PRECISION_POINTS = 10 ** 20; // 100 * 10 ** 18
     uint64 internal constant PUBKEY_LENGTH = 48;
@@ -115,43 +116,56 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     function initialize(address _admin, bytes32 _withdrawalCredentials) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddress();
 
-        __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setWithdrawalCredentials(_withdrawalCredentials);
+    }
+
+    /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
+    function finalizeUpgrade_v4() external reinitializer(4) {
+        // migrate current modules to new storage
+        SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
+
+        /// @dev migrate OZ roles
+        ///      Due to OZ 5.2 AccessControl uses ERC-7201 namespaced storage at different slots we should
+        ///      migrate roles from old storage to new one.
+        ///      We use only _roleMembers mapping and safely ignore the second mapping _roles, because
+        ///      both mappings are updated atomically, so we only need one.
+
+        // pre upgrade roles
+        bytes32[9] memory roles = [
+            DEFAULT_ADMIN_ROLE,
+            MANAGE_WITHDRAWAL_CREDENTIALS_ROLE,
+            STAKING_MODULE_MANAGE_ROLE,
+            STAKING_MODULE_UNVETTING_ROLE,
+            REPORT_EXITED_VALIDATORS_ROLE,
+            REPORT_VALIDATOR_EXITING_STATUS_ROLE,
+            REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE,
+            UNSAFE_SET_EXITED_VALIDATORS_ROLE,
+            REPORT_REWARDS_MINTED_ROLE
+        ];
+
+        EnumerableSet.AddressSet storage members;
+        for (uint256 i = 0; i < roles.length; ++i) {
+            bytes32 role = roles[i];
+            members = _getStorageRoleMembersOld()[role];
+            for (uint256 j; j < members.length(); ++j) {
+                _grantRole(role, members.at(j));
+            }
+        }
+    }
+
+    /// @dev Helper for migration - returns OZ AccessControlEnumerable _roleMembers mapping storage reference
+    function _getStorageRoleMembersOld() private pure returns (mapping(bytes32 => EnumerableSet.AddressSet) storage $) {
+        /// @dev Old _roleMembers storage slot.
+        bytes32 position = keccak256("openzeppelin.AccessControlEnumerable._roleMembers");
+        assembly ("memory-safe") {
+            $.slot := position
+        }
     }
 
     /// @dev Prohibit direct transfer to contract.
     receive() external payable {
         revert DirectETHTransfer();
-    }
-
-    /// @notice A function to finalize upgrade to v2 (from v1). Removed and no longer used.
-    /// @dev https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
-    /// See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.8.9/StakingRouter.sol#L190
-    // function finalizeUpgrade_v2(
-    //     uint256[] memory _priorityExitShareThresholds,
-    //     uint256[] memory _maxDepositsPerBlock,
-    //     uint256[] memory _minDepositBlockDistances
-    // ) external
-
-    /// @notice Finalizes upgrade to v3 (from v2). Can be called only once. Removed and no longer used
-    /// See historical usage in commit:
-    // function finalizeUpgrade_v3() external
-
-    /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
-    /// @param _admin Address to grant DEFAULT_ADMIN_ROLE
-    /// @dev Old AccessControl roles (stored at keccak256("openzeppelin.AccessControl._roles") and
-    ///      keccak256("openzeppelin.AccessControlEnumerable._roleMembers")) are inaccessible by the new code.
-    ///      New OZ 5.2 AccessControl uses ERC-7201 namespaced storage at different slots.
-    ///      All roles (STAKING_MODULE_MANAGE_ROLE, REPORT_EXITED_VALIDATORS_ROLE, etc.)
-    ///      must be re-granted via grantRole() after this migration in the upgrade Vote Script.
-    function finalizeUpgrade_v4(address _admin) external reinitializer(4) {
-        __AccessControlEnumerable_init();
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-
-        // migrate current modules to new storage
-        SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
     }
 
     /// @notice Registers a new staking module.
@@ -238,24 +252,14 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param _stakeShareLimit New stake share limit value.
     /// @param _priorityExitShareThreshold New priority exit share threshold value.
     /// @dev The function is restricted to the `STAKING_MODULE_SHARE_MANAGE_ROLE` role.
-    function updateModuleShares(
-        uint256 _stakingModuleId,
-        uint16 _stakeShareLimit,
-        uint16 _priorityExitShareThreshold
-    ) external onlyRole(STAKING_MODULE_SHARE_MANAGE_ROLE) {
+    function updateModuleShares(uint256 _stakingModuleId, uint16 _stakeShareLimit, uint16 _priorityExitShareThreshold)
+        external
+        onlyRole(STAKING_MODULE_SHARE_MANAGE_ROLE)
+    {
         SRUtils._requireModuleIdExists(_stakingModuleId);
-        SRLib._updateModuleShares(
-            _stakingModuleId,
-            _stakeShareLimit,
-            _priorityExitShareThreshold
-        );
+        SRLib._updateModuleShares(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold);
 
-        emit StakingModuleShareLimitSet(
-            _stakingModuleId,
-            _stakeShareLimit,
-            _priorityExitShareThreshold,
-            _msgSender()
-        );
+        emit StakingModuleShareLimitSet(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold, _msgSender());
     }
 
     /// @notice Updates the limit of the validators that can be used for deposit.
@@ -632,7 +636,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module.
     /// @return Max deposits count per block for the staking module.
     function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
-        return _getStakingModuleMaxDepositsPerBlock(_stakingModuleId);
+        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
+        return state.deposits.maxDepositsPerBlock;
     }
 
     /// @notice Returns active validators count for the staking module.
@@ -973,7 +978,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @dev Only the DepositSecurityModule is allowed to call this method.
     function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external {
         _checkAppAuth(_getDepositSecurityModule());
-        (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
+        (ModuleState storage state, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
 
         if (!_canDeposit(_stakingModuleId)) revert CannotDeposit();
 
@@ -986,13 +991,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             _getModuleDepositAllocation(_stakingModuleId, depositableEther, false);
         // Calculate max deposits count (capped by max and module capacity)
         (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
-        uint256 _maxDepositsCount = _getStakingModuleMaxDepositsPerBlock(_stakingModuleId);
         uint256 maxDepositsCount = Math.min(
-            Math.min(_maxDepositsCount, depositableValidatorsCount),
+            Math.min(state.deposits.maxDepositsPerBlock, depositableValidatorsCount),
             stakingModuleDepositableEthAmount / MAX_EFFECTIVE_BALANCE_WC_TYPE_01 // max possible initial deposits count
         );
 
-        if (maxDepositsCount == 0) return;
+        if (maxDepositsCount == 0) revert ZeroDeposits();
 
         // Get deposit data from module first - it may return fewer keys than requested
         (bytes memory publicKeysBatch, bytes memory signaturesBatch) =
@@ -1049,11 +1053,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @return Withdrawal credentials.
     function getWithdrawalCredentials() public view returns (bytes32) {
         return SRStorage.getRouterState().withdrawalCredentials;
-    }
-
-    function _getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) internal view returns (uint256) {
-        (ModuleState storage state,) = _getModuleState(_stakingModuleId);
-        return state.deposits.maxDepositsPerBlock;
     }
 
     function _setWithdrawalCredentials(bytes32 wc) internal {
@@ -1158,6 +1157,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
         ModuleStateAccounting storage moduleAcc = state.accounting;
         moduleState.exitedValidatorsCount = moduleAcc.exitedValidatorsCount;
+        moduleState.validatorsBalanceGwei = moduleAcc.validatorsBalanceGwei;
+        moduleState.pendingBalanceGwei = moduleAcc.pendingBalanceGwei;
     }
 
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.

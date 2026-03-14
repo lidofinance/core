@@ -27,7 +27,7 @@ interface ITriggerableWithdrawalsGateway {
 
 /// @notice New interface for staking modules (CSM, CuratedV2)
 /// @dev Returns only pubkeys
-interface INewStakingModule {
+interface IUnifiedStakingModule {
     /// @dev It also works for legacy staking modules (NOR, SDVT) where `getSigningKeys` returns different
     ///      tuple `(bytes memory pubkeys, bytes memory signatures, bool[] memory used)`.
     ///      The trick: `abi.decode(returndata, (bytes))` will decode only the first tuple element.
@@ -39,20 +39,13 @@ interface INewStakingModule {
     ) external view returns (bytes memory);
 }
 
-interface INodeOperatorsRegistry {
-    function getSigningKey(
-        uint256 _nodeOperatorId,
-        uint256 _index
-    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
-}
-
 interface IStakingRouter {
     struct ModuleStateConfig {
         address moduleAddress;
         uint16 moduleFee;
         uint16 treasuryFee;
-        uint16 depositTargetShare;
-        uint16 withdrawalProtectShare;
+        uint16 stakeShareLimit;
+        uint16 priorityExitShareThreshold;
         uint8 status;
         uint8 withdrawalCredentialsType;
     }
@@ -960,7 +953,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             newModuleAddress = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId).moduleAddress;
         }
 
-        bytes memory retrievedKeys = INewStakingModule(newModuleAddress)
+        bytes memory retrievedKeys = IUnifiedStakingModule(newModuleAddress)
             .getSigningKeys(
                 nodeOpId,
                 keyIndex, // startIndex
@@ -1050,13 +1043,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
     * @notice Process exit requests for format 2 (72 bytes per request, includes keyIndex)
-    * @dev Check dataWithoutPubkey <= lastDataWithoutPubkey prevents duplicates and ensures sorting
+    * @dev Uniqueness and sort check uses (moduleId, nodeOpId, valIndex) only — keyIndex is excluded
+    *      so that the same validator cannot appear twice with different keyIndex (double-counted).
     * @param data Packed exit requests data (DATA_FORMAT=2)
     */
     function _processExitRequestsListV2(bytes calldata data) internal {
         uint256 offset;
         uint256 offsetPastEnd;
-        uint256 lastDataWithoutPubkey = 0;
+        uint256 lastValidatorData = 0; // (moduleId, nodeOpId, valIndex) — 128 bits, no keyIndex
         uint256 timestamp = _getTimestamp();
         uint256 index = 0;
 
@@ -1067,6 +1061,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
         bytes calldata pubkey;
         uint256 dataWithoutPubkey;
+        uint256 validatorData; // 128 bits: moduleId | nodeOpId | valIndex (for sort/duplicate check)
         uint256 moduleId;
 
         // Cache module data to avoid repeated external calls for the same module
@@ -1087,18 +1082,18 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 offset := add(offset, 72)
             }
 
+            // For sort/duplicate check use only (moduleId, nodeOpId, valIndex) — drop keyIndex (low 64 bits)
+            validatorData = dataWithoutPubkey >> 64;
+
             moduleId = uint24(dataWithoutPubkey >> (64 + 64 + 40));
 
             if (moduleId == 0) {
                 revert InvalidModuleId();
             }
 
-            //                              dataWithoutPubkey (192 bits)
-            // MSB <--------------------------------------------------------------------------------------- LSB
-            // | 64 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex | 64 bits: keyIndex |
-            //
-            // Sorting compound key: (moduleId, nodeOpId, valIndex, keyIndex)
-            if (dataWithoutPubkey <= lastDataWithoutPubkey) {
+            // Uniqueness and sort by validator identity only: (moduleId, nodeOpId, valIndex)
+            // dataWithoutPubkey (192b): ... | valIndex | keyIndex |  ->  validatorData (128b): ... | valIndex
+            if (validatorData <= lastValidatorData) {
                 revert InvalidRequestsDataSortOrder();
             }
 
@@ -1115,7 +1110,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             );
 
             cachedModuleId = moduleId;
-            lastDataWithoutPubkey = dataWithoutPubkey;
+            lastValidatorData = validatorData;
 
             emit ValidatorExitRequest(
                 moduleId,

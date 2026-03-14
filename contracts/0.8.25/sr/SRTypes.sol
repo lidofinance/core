@@ -109,6 +109,10 @@ struct StakingModule {
     uint64 minDepositBlockDistance;
     /// @notice Withdrawal credentials type (0x01/0x02)
     uint8 withdrawalCredentialsType;
+    /// @notice total actual balance of validators for module in Gwei.
+    uint64 validatorsBalanceGwei;
+    /// @notice total pending balance of validators for module in Gwei.
+    uint64 pendingBalanceGwei;
 }
 
 /// @dev 1 storage slot

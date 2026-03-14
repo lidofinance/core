@@ -403,11 +403,11 @@ export async function main() {
 
   const consolidationBus = await loadContract<ConsolidationBus>("ConsolidationBus", consolidationBus_.address);
 
-  // Grant MANAGER_ROLE to deployer for testing
-  await makeTx(consolidationBus, "grantRole", [await consolidationBus.MANAGER_ROLE(), deployer], { from: deployer });
+  // Grant MANAGE_ROLE to deployer for testing
+  await makeTx(consolidationBus, "grantRole", [await consolidationBus.MANAGE_ROLE(), deployer], { from: deployer });
 
-  // Grant EXECUTER_ROLE to deployer for testing
-  await makeTx(consolidationBus, "grantRole", [await consolidationBus.EXECUTER_ROLE(), deployer], { from: deployer });
+  // Grant EXECUTE_ROLE to deployer for testing
+  await makeTx(consolidationBus, "grantRole", [await consolidationBus.EXECUTE_ROLE(), deployer], { from: deployer });
 
   // Grant ADD_CONSOLIDATION_REQUEST_ROLE on Gateway to Bus
   await makeTx(
@@ -453,7 +453,10 @@ export async function main() {
   });
 
   // Register ConsolidationMigrator as publisher on ConsolidationBus
-  await makeTx(consolidationBus, "registerPublisher", [consolidationMigrator_.address], { from: deployer });
+
+  await makeTx(consolidationBus, "grantRole", [await consolidationBus.PUBLISH_ROLE(), consolidationMigrator_.address], {
+    from: deployer,
+  });
 
   //
   // Deploy ValidatorExitDelayVerifier

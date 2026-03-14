@@ -144,6 +144,8 @@ describe("StakingRouter.sol:module-sync", () => {
       bigint,
       bigint,
       number,
+      bigint,
+      bigint,
     ];
 
     // module mock state
@@ -201,6 +203,8 @@ describe("StakingRouter.sol:module-sync", () => {
         maxDepositsPerBlock,
         minDepositBlockDistance,
         WithdrawalCredentialsType.WC0x01,
+        balance,
+        balance,
       ];
 
       // mocking module state
@@ -971,12 +975,12 @@ describe("StakingRouter.sol:module-sync", () => {
       );
     });
 
-    it("Does not submit 0 deposits when no depositable ether", async () => {
+    it("Revert when 0 deposits", async () => {
       // Set depositable ether to 0
       await lidoMock.setDepositableEther(0n);
-      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).not.to.emit(
-        depositContract,
-        "Deposited__MockEvent",
+      await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
+        stakingRouter,
+        "ZeroDeposits",
       );
     });
 

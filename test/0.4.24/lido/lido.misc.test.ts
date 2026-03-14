@@ -57,7 +57,6 @@ describe("Lido.sol:misc", () => {
     await acl.createPermission(user, lido, await lido.STAKING_CONTROL_ROLE(), deployer);
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
     await acl.createPermission(user, lido, await lido.PAUSE_ROLE(), deployer);
-    await acl.createPermission(user, lido, await lido.UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE(), deployer);
     lido = lido.connect(user);
 
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
@@ -741,7 +740,7 @@ describe("Lido.sol:misc", () => {
       );
     });
 
-    it("Emits `Unbuffered`, `DepositedValidatorsChanged` and `DepositedBalancesUpdated` events when withdrawing ether", async () => {
+    it("Emits `Unbuffered`, `DepositedValidatorsChanged` and `DepositedPostReportUpdated` events when withdrawing ether", async () => {
       const depositAmount = ether("32.0");
       // top up Lido buffer enough for deposit
       await lido.submit(ZeroAddress, { value: depositAmount });
@@ -764,7 +763,7 @@ describe("Lido.sol:misc", () => {
         .withArgs(amountToWithdraw)
         .and.to.emit(lido, "DepositedValidatorsChanged")
         .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n)
-        .and.to.emit(lido, "DepositedBalancesUpdated")
+        .and.to.emit(lido, "DepositedPostReportUpdated")
         .withArgs(beforeDeposit.balanceStats.depositedSinceLastReport + amountToWithdraw);
 
       const afterDeposit = await batch({

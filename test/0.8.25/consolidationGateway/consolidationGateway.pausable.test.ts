@@ -3,7 +3,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ConsolidationGateway, WithdrawalVault__MockForConsolidationGateway } from "typechain-types";
+import {
+  ConsolidationGateway,
+  DepositSecurityModule__MockForConsolidationGateway,
+  WithdrawalVault__MockForConsolidationGateway,
+} from "typechain-types";
 
 import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
 
@@ -21,6 +25,7 @@ const ZERO_ADDRESS = ethers.ZeroAddress;
 describe("ConsolidationGateway.sol: pausable", () => {
   let consolidationGateway: ConsolidationGateway;
   let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
+  let dsm: DepositSecurityModule__MockForConsolidationGateway;
   let admin: HardhatEthersSigner;
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -37,9 +42,11 @@ describe("ConsolidationGateway.sol: pausable", () => {
     const locatorAddr = await locator.getAddress();
 
     withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForConsolidationGateway");
+    dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
 
     await updateLidoLocatorImplementation(locatorAddr, {
       withdrawalVault: await withdrawalVault.getAddress(),
+      depositSecurityModule: await dsm.getAddress(),
     });
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway", [admin, locatorAddr, 100, 1, 48]);

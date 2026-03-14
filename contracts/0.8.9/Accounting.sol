@@ -103,9 +103,6 @@ contract Accounting {
         uint256 treasurySharesToMint;
     }
 
-    /// @notice deposit size in wei (for pre-maxEB accounting)
-    uint256 private constant DEPOSIT_SIZE = 32 ether;
-
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 
@@ -358,7 +355,7 @@ contract Accounting {
             ];
         }
 
-        LIDO.processClStateUpdateV2(
+        LIDO.processClStateUpdate(
             _report.timestamp,
             _report.clValidatorsBalance,
             _report.clPendingBalance
@@ -519,6 +516,5 @@ contract Accounting {
 
     error NotAuthorized(string operation, address addr);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
-    error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
     error InternalSharesCantBeZero();
 }
