@@ -17,7 +17,8 @@ import {
     IKernel,
     IACL,
     IEasyTrack,
-    IStakingRouter
+    IStakingRouter,
+    IConsolidationMigrator
 } from "./UpgradeTypes.sol";
 
 /// @title UpgradeVoteScript
@@ -34,8 +35,8 @@ contract UpgradeVoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant DG_ITEMS_COUNT = 54;
-    uint256 public constant VOTING_ITEMS_COUNT = 1;
+    uint256 public constant DG_ITEMS_COUNT = 71;
+    uint256 public constant VOTING_ITEMS_COUNT = 10;
 
     //
     // Immutables
@@ -79,22 +80,17 @@ contract UpgradeVoteScript is OmnibusBase {
             )
         });
 
-        // votingVoteItems[index++] = _item({
-        //     description: "3. Add RegisterGroupsInOperatorGrid factory to Easy Track (permissions: operatorGrid, registerGroup + registerTiers)",
-        //         to: easyTrack,
-        //         data: abi.encodeCall(
-        //             IEasyTrack.addEVMScriptFactory,
-        //             (
-        //                 TEMPLATE.ETF_REGISTER_GROUPS_IN_OPERATOR_GRID(),
-        //                 bytes.concat(
-        //                     bytes20(operatorGrid),
-        //                     bytes4(OperatorGrid.registerGroup.selector),
-        //                     bytes20(operatorGrid),
-        //                     bytes4(OperatorGrid.registerTiers.selector)
-        //                 )
-        //             )
-        //         )
-        // });
+        votingVoteItems[index++] = VoteScriptHelpers.item({
+            description: "3. Add AllowConsolidationPair factory to Easy Track",
+            to: g.easyTrack,
+            data: abi.encodeCall(
+                IEasyTrack.addEVMScriptFactory,
+                (
+                    c.etfAllowConsolidationPair,
+                    bytes.concat(bytes20(c.consolidationMigrator), bytes4(IConsolidationMigrator.allowPair.selector))
+                )
+            )
+        });
 
         assert(index == VOTING_ITEMS_COUNT);
     }

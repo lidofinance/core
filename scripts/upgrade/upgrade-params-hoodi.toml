@@ -10,15 +10,27 @@ trustedCaller = "0x00000000000000000000000000000000000fAc00"     # Address of SR
 [easyTrack.newFactories]
 # TODO: update upon deployment
 UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000fAc01"
+AllowConsolidationPair = "0x00000000000000000000000000000000000fAc0A"
 
+[triggerableWithdrawalsGateway]
+maxExitRequestsLimit = 13000
+exitsPerFrame = 1
+frameDurationInSec = 48
+
+# Deposit security module configuration
+[depositSecurityModule]
+maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
+pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 
 [consolidationGateway]
 maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 48               # Duration of each processing frame in seconds
+gateSeal = "0x00000000000000000000000000000000000bAc01"
 
 [consolidationBus]
 batchSize = 200
+executorBot = "0x00000000000000000000000000000000000bAc02"
 
 [consolidationMigrator]
 sourceModuleId = 1
@@ -35,12 +47,12 @@ minTopUpGwei = 1000000000
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+depositorBot = "0x00000000000000000000000000000000000bAc03"
 
 # StakingRouter configuration
 [stakingRouter]
 maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
 maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2
-
 
 [csmUpgrade]
 csmProxy = "0x79CEf36D84743222f37765204Bec41E92a93E59d"

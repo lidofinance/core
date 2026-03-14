@@ -1,10 +1,10 @@
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { IOracleReportSanityChecker_preV3, LidoLocator } from "typechain-types";
+import { IOracleReportSanityChecker_preV3, LidoLocator, TopUpGateway } from "typechain-types";
 
 import { loadContract } from "lib/contract";
-import { deployImplementation, deployWithoutProxy } from "lib/deploy";
+import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy } from "lib/deploy";
 import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 export async function main() {
@@ -21,7 +21,6 @@ export async function main() {
   const accountingOracleAddress = getAddress(Sk.accountingOracle, state);
   const withdrawalVaultAddress = getAddress(Sk.withdrawalVault, state);
   const triggerableWithdrawalsGatewayAddress = getAddress(Sk.triggerableWithdrawalsGateway, state);
-  const topUpGatewayAddress = getAddress(Sk.topUpGateway, state);
   const validatorExitDelayVerifierAddress = getAddress(Sk.validatorExitDelayVerifier, state);
   const wstETHAddress = getAddress(Sk.wstETH, state);
 
@@ -72,12 +71,42 @@ export async function main() {
     },
   );
 
-  await deployImplementation(Sk.topUpGateway, "TopUpGateway", deployer, [
-    locatorAddress,
-    parameters.topUpGateway.gIFirstValidatorPrev,
-    parameters.topUpGateway.gIFirstValidatorCurr,
-    parameters.topUpGateway.pivotSlot,
-    chainSpec.slotsPerEpoch,
+  // Deploy TopUpGateway behind OssifiableProxy
+  const topUpGatewayInterface = await ethers.getContractFactory("TopUpGateway");
+  const topUpGatewayInitData = topUpGatewayInterface.interface.encodeFunctionData("initialize", [
+    agentAddress,
+    parameters.topUpGateway.maxValidatorsPerTopUp,
+    parameters.topUpGateway.minBlockDistance,
+    parameters.topUpGateway.maxRootAge,
+    parameters.topUpGateway.targetBalanceGwei,
+    parameters.topUpGateway.minTopUpGwei,
+  ]);
+
+  const topUpGateway_ = await deployBehindOssifiableProxy(
+    Sk.topUpGateway,
+    "TopUpGateway",
+    agentAddress,
+    deployer,
+    [
+      locatorAddress,
+      parameters.topUpGateway.gIFirstValidatorPrev,
+      parameters.topUpGateway.gIFirstValidatorCurr,
+      parameters.topUpGateway.pivotSlot,
+      chainSpec.slotsPerEpoch,
+    ],
+    null, // implementation
+    true, // withStateFile
+    undefined, // factoryOptions
+    topUpGatewayInitData,
+  );
+  const topUpGateway = await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
+
+  const depositSecurityModule = await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
+    lidoAddress,
+    depositContractAddress,
+    stakingRouterAddress,
+    parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
+    parameters.depositSecurityModule.maxOperatorsPerUnvetting,
   ]);
 
   const oldSanityChecker = await loadContract<IOracleReportSanityChecker_preV3>(
@@ -142,7 +171,7 @@ export async function main() {
 
   const locatorConfig: LidoLocator.ConfigStruct = {
     accountingOracle: await locator.accountingOracle(),
-    depositSecurityModule: await locator.depositSecurityModule(),
+    depositSecurityModule: depositSecurityModule.address,
     elRewardsVault: await locator.elRewardsVault(),
     lido: lidoAddress,
     oracleReportSanityChecker: newSanityChecker.address,
@@ -164,7 +193,7 @@ export async function main() {
     vaultFactory: await locator.vaultFactory(),
     lazyOracle: await locator.lazyOracle(),
     operatorGrid: await locator.operatorGrid(),
-    topUpGateway: topUpGatewayAddress,
+    topUpGateway: topUpGateway.address,
   };
 
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);

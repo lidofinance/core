@@ -205,6 +205,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.beaconChainDepositor:
     case Sk.vaultsAdapter:
     case Sk.easyTrack:
+    case Sk.upgradeTemplate:
+    case Sk.upgradeVoteScript:
     case Sk.gateSealFactory:
       return state[contractKey].address;
     default:

@@ -96,6 +96,11 @@ interface IOracleReportSanityChecker is IAccessControlEnumerable {
     function INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE() external view returns (bytes32);
 }
 
+interface IConsolidationMigrator {
+    function allowPair(uint256 sourceOperatorId, uint256 targetOperatorId, address submitter) external;
+    function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external;
+}
+
 interface ILidoWithFinalizeUpgrade is ILido {
     function finalizeUpgrade_v4() external;
 }
@@ -125,40 +130,26 @@ interface IOssifiableProxyV2 {
 
 interface ICSModuleV3 {
     function finalizeUpgradeV3() external;
-    function VERIFIER_ROLE() external view returns (bytes32);
-    function REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE() external view returns (bytes32);
-    function REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE() external view returns (bytes32);
-    function CREATE_NODE_OPERATOR_ROLE() external view returns (bytes32);
-    function PAUSE_ROLE() external view returns (bytes32);
-    function RESUME_ROLE() external view returns (bytes32);
     function resume() external;
 }
 
 interface IParametersRegistryV3 {
     function finalizeUpgradeV3() external;
-    function MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE() external view returns (bytes32);
 }
 
 interface IFeeOracleV3 {
     function finalizeUpgradeV3(uint256 consensusVersion) external;
-    function PAUSE_ROLE() external view returns (bytes32);
     function STRIKES() external view returns (address);
 }
 
 interface IAccountingV3 {
     function finalizeUpgradeV3() external;
-    function PAUSE_ROLE() external view returns (bytes32);
     function FEE_DISTRIBUTOR() external view returns (address);
 }
 
 interface IFeeDistributorV3 {
     function ORACLE() external view returns (address);
     function finalizeUpgradeV3() external;
-}
-
-interface IPausableWithResumeRoles {
-    function PAUSE_ROLE() external view returns (bytes32);
-    function RESUME_ROLE() external view returns (bytes32);
 }
 
 interface IPausableRole {
@@ -171,7 +162,8 @@ interface IValidatorStrikesV3 {
 }
 
 interface ITriggerableWithdrawalsGateway {
-    function ADD_FULL_WITHDRAWAL_REQUEST_ROLE() external view returns (bytes32);
+    function setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
+        external;
 }
 
 interface IHashConsensusV3 {
@@ -240,12 +232,21 @@ struct CoreUpgradeParams {
 
     // New fancy proxy and blueprint contracts
     address topUpGatewayImpl;
+    address topUpDepositorBot;
     address consolidationGatewayImpl;
     address consolidationBus;
     address consolidationMigrator;
+    address consolidationCommittee;
+    address consolidationBusBot;
+    address consolidationGatewayGateSeal;
+
+    uint256 twMaxExitRequestsLimit;
+    uint256 twExitsPerFrame;
+    uint256 twFrameDurationInSec;
 
     // EasyTrack new factories
     address etfUpdateStakingModuleShareLimits;
+    address etfAllowConsolidationPair;
 }
 
 struct CSMUpgradeParams {
@@ -329,12 +330,20 @@ struct CoreUpgradeConfig {
     address withdrawalVault;
     address topUpGateway;
     address topUpGatewayImpl;
+    address topUpDepositorBot;
     address consolidationGateway;
     address consolidationGatewayImpl;
     address consolidationBus;
+    address consolidationBusBot;
     address consolidationMigrator;
+    address consolidationGatewayGateSeal;
+
+    uint256 twMaxExitRequestsLimit;
+    uint256 twExitsPerFrame;
+    uint256 twFrameDurationInSec;
 
     address etfUpdateStakingModuleShareLimits;
+    address etfAllowConsolidationPair;
 }
 
 struct CSMUpgradeConfig {

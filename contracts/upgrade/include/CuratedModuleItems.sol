@@ -20,7 +20,10 @@ import {VoteScriptHelpers} from "../utils/VoteScriptHelpers.sol";
 library CuratedModuleItems {
     uint256 internal constant COUNT = 7;
 
-    // function getItems(GeneralConfig calldata g, CuratedModuleConfig calldata c)
+    bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
+    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
+
     function getItems(IUpgradeConfig template) external view returns (OmnibusBase.VoteItem[] memory items) {
         GeneralConfig memory g = template.getGeneralConfig();
         CuratedModuleConfig memory c = template.getCuratedModuleConfig();
@@ -49,21 +52,17 @@ library CuratedModuleItems {
 
         items[i++] = VoteScriptHelpers.item({
             description: "42. Grant REQUEST_BURN_MY_STETH_ROLE to Curated Accounting",
-            call: VoteScriptHelpers.grantRole(g.burner, IBurner(g.burner).REQUEST_BURN_MY_STETH_ROLE(), c.accounting)
+            call: VoteScriptHelpers.grantRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, c.accounting)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "43. Grant TWG full-withdrawal role to Curated Ejector",
-            call: VoteScriptHelpers.grantRole(
-                g.triggerableWithdrawalsGateway,
-                ITriggerableWithdrawalsGateway(g.triggerableWithdrawalsGateway).ADD_FULL_WITHDRAWAL_REQUEST_ROLE(),
-                c.ejector
-            )
+            call: VoteScriptHelpers.grantRole(g.triggerableWithdrawalsGateway, REQUEST_BURN_MY_STETH_ROLE, c.ejector)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "44. Grant RESUME_ROLE to agent on Curated module",
-            call: VoteScriptHelpers.grantRole(c.module, ICSModuleV3(c.module).RESUME_ROLE(), g.agent)
+            call: VoteScriptHelpers.grantRole(c.module, RESUME_ROLE, g.agent)
         });
 
         items[i++] = VoteScriptHelpers.item({
@@ -72,7 +71,7 @@ library CuratedModuleItems {
 
         items[i++] = VoteScriptHelpers.item({
             description: "46. Revoke RESUME_ROLE from agent on Curated module",
-            call: VoteScriptHelpers.revokeRole(c.module, ICSModuleV3(c.module).RESUME_ROLE(), g.agent)
+            call: VoteScriptHelpers.revokeRole(c.module, RESUME_ROLE, g.agent)
         });
 
         items[i++] = VoteScriptHelpers.item({

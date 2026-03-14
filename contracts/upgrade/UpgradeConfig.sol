@@ -77,6 +77,13 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CONSOLIDATION_GATEWAY_IMPL;
     address internal immutable CONSOLIDATION_BUS;
     address internal immutable CONSOLIDATION_MIGRATOR;
+    address internal immutable CONSOLIDATION_COMMITTEE;
+    address internal immutable CONSOLIDATION_BUS_BOT;
+    address internal immutable CONSOLIDATION_GATEWAY_GATE_SEAL;
+    address internal immutable TOP_UP_DEPOSITOR_BOT;
+    uint256 internal immutable TW_MAX_EXIT_REQUESTS_LIMIT;
+    uint256 internal immutable TW_EXITS_PER_FRAME;
+    uint256 internal immutable TW_FRAME_DURATION_IN_SEC;
 
     address internal immutable LIDO;
     address internal immutable STAKING_ROUTER;
@@ -104,7 +111,8 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable EASY_TRACK_EVM_SCRIPT_EXECUTOR;
     // ETF = EasyTrack Factory
     address internal immutable ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS;
-    /// ...
+    address internal immutable ETF_ALLOW_CONSOLIDATION_PAIR;
+    /// TODO csm easytracks
 
     //
     // -------- Unchanged contracts --------
@@ -153,6 +161,7 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CURATED_ACCOUNTING;
     address internal immutable CURATED_EJECTOR;
     address internal immutable CURATED_HASH_CONSENSUS;
+    address internal immutable CURATED_MERKLE_GATE;
     // save in storage
     string internal _curatedModuleName;
     uint256 internal immutable CURATED_STAKE_SHARE_LIMIT;
@@ -211,8 +220,16 @@ contract UpgradeConfig is IUpgradeConfig {
         CONSOLIDATION_GATEWAY_IMPL = coreUpgradeParams.consolidationGatewayImpl;
         CONSOLIDATION_BUS = coreUpgradeParams.consolidationBus;
         CONSOLIDATION_MIGRATOR = coreUpgradeParams.consolidationMigrator;
+        CONSOLIDATION_COMMITTEE = coreUpgradeParams.consolidationCommittee;
+        CONSOLIDATION_BUS_BOT = coreUpgradeParams.consolidationBusBot;
+        CONSOLIDATION_GATEWAY_GATE_SEAL = coreUpgradeParams.consolidationGatewayGateSeal;
+        TOP_UP_DEPOSITOR_BOT = coreUpgradeParams.topUpDepositorBot;
+        TW_MAX_EXIT_REQUESTS_LIMIT = coreUpgradeParams.twMaxExitRequestsLimit;
+        TW_EXITS_PER_FRAME = coreUpgradeParams.twExitsPerFrame;
+        TW_FRAME_DURATION_IN_SEC = coreUpgradeParams.twFrameDurationInSec;
 
         ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS = coreUpgradeParams.etfUpdateStakingModuleShareLimits;
+        ETF_ALLOW_CONSOLIDATION_PAIR = coreUpgradeParams.etfAllowConsolidationPair;
 
         // todo add CSM etf
 
@@ -350,11 +367,19 @@ contract UpgradeConfig is IUpgradeConfig {
             withdrawalVault: WITHDRAWAL_VAULT,
             topUpGateway: TOP_UP_GATEWAY,
             topUpGatewayImpl: TOP_UP_GATEWAY_IMPL,
+            topUpDepositorBot: TOP_UP_DEPOSITOR_BOT,
             consolidationGateway: CONSOLIDATION_GATEWAY,
             consolidationGatewayImpl: CONSOLIDATION_GATEWAY_IMPL,
             consolidationBus: CONSOLIDATION_BUS,
+            consolidationBusBot: CONSOLIDATION_BUS_BOT,
             consolidationMigrator: CONSOLIDATION_MIGRATOR,
-            etfUpdateStakingModuleShareLimits: ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS
+            consolidationGatewayGateSeal: CONSOLIDATION_GATEWAY_GATE_SEAL,
+            // consolidationCommittee: CONSOLIDATION_COMMITTEE,
+            twMaxExitRequestsLimit: TW_MAX_EXIT_REQUESTS_LIMIT,
+            twExitsPerFrame: TW_EXITS_PER_FRAME,
+            twFrameDurationInSec: TW_FRAME_DURATION_IN_SEC,
+            etfUpdateStakingModuleShareLimits: ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS,
+            etfAllowConsolidationPair: ETF_ALLOW_CONSOLIDATION_PAIR
         });
     }
 

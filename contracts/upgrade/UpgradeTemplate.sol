@@ -80,6 +80,15 @@ contract UpgradeTemplate is UpgradeConfig {
     // / keccak256("UpgradeTemplate.upgradeStartedFlag");
     bytes32 public constant UPGRADE_STARTED_SLOT = 0x058d69f67a3d86c424c516d23a070ff8bed34431617274caa2049bd702675e3f;
 
+    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 internal constant ALLOW_PAIR_ROLE = keccak256("ALLOW_PAIR_ROLE");
+    bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
+    bytes32 internal constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
+    bytes32 internal constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
+    bytes32 internal constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
+    bytes32 internal constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
+    bytes32 internal constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
+
     //
     // Intermediate setup's completion status
     //
@@ -153,7 +162,7 @@ contract UpgradeTemplate is UpgradeConfig {
     //         sr.REPORT_EXITED_VALIDATORS_ROLE(),
     //         sr.REPORT_VALIDATOR_EXITING_STATUS_ROLE(),
     //         sr.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(),
-    //         sr.REPORT_REWARDS_MINTED_ROLE(),
+    //         REPORT_REWARDS_MINTED_ROLE,
     //         sr.UNSAFE_SET_EXITED_VALIDATORS_ROLE(),
     //         sr.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE()
     //     ];
@@ -176,7 +185,7 @@ contract UpgradeTemplate is UpgradeConfig {
     //         sr.REPORT_EXITED_VALIDATORS_ROLE(),
     //         sr.REPORT_VALIDATOR_EXITING_STATUS_ROLE(),
     //         sr.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(),
-    //         sr.REPORT_REWARDS_MINTED_ROLE(),
+    //         REPORT_REWARDS_MINTED_ROLE,
     //         sr.UNSAFE_SET_EXITED_VALIDATORS_ROLE(),
     //         sr.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE()
     //     ];
@@ -339,14 +348,21 @@ contract UpgradeTemplate is UpgradeConfig {
             revert IncorrectProxyAdmin(WITHDRAWAL_VAULT);
         }
         if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation() != NEW_WITHDRAWAL_VAULT_IMPL) {
-            revert IncorrectProxyImplementation(WITHDRAWAL_VAULT, IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation());
+            revert IncorrectProxyImplementation(
+                WITHDRAWAL_VAULT, IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation()
+            );
         }
 
         // Consolidation rollout
-        _assertSingleOZRoleHolder(
-            CONSOLIDATION_GATEWAY, keccak256("ADD_CONSOLIDATION_REQUEST_ROLE"), CONSOLIDATION_BUS
+        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, ADD_CONSOLIDATION_REQUEST_ROLE, CONSOLIDATION_BUS);
+        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, PUBLISH_ROLE, CONSOLIDATION_MIGRATOR);
+        _assertTwoOZRoleHolders(
+            CONSOLIDATION_GATEWAY, PAUSE_ROLE, CONSOLIDATION_COMMITTEE, CONSOLIDATION_GATEWAY_GATE_SEAL
         );
-        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, keccak256("PUBLISH_ROLE"), CONSOLIDATION_MIGRATOR);
+        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, EXECUTE_ROLE, CONSOLIDATION_BUS_BOT);
+        _assertTwoOZRoleHolders(CONSOLIDATION_BUS, REMOVE_ROLE, AGENT, CONSOLIDATION_BUS_BOT);
+        _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, ALLOW_PAIR_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
+        _assertSingleOZRoleHolder(TOP_UP_GATEWAY, TOP_UP_ROLE, TOP_UP_DEPOSITOR_BOT);
 
         // // PredepositGuarantee
         // _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
@@ -359,8 +375,7 @@ contract UpgradeTemplate is UpgradeConfig {
         // );
 
         // StakingRouter
-        bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
-        _assertSingleOZRoleHolder(STAKING_ROUTER, reportRewardsMintedRole, ACCOUNTING);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, ACCOUNTING);
 
         _assertEasyTrackFactoriesAdded();
     }
@@ -369,8 +384,7 @@ contract UpgradeTemplate is UpgradeConfig {
         IEasyTrack easyTrack = IEasyTrack(EASY_TRACK);
         address[] memory factories = easyTrack.getEVMScriptFactories();
 
-        // The expected order of the last 8 EasyTrack factories
-        address[1] memory expectedFactories = [ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS];
+        address[2] memory expectedFactories = [ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS, ETF_ALLOW_CONSOLIDATION_PAIR];
 
         uint256 numFactories = factories.length;
         if (numFactories < expectedFactories.length) {

@@ -21,7 +21,10 @@ export async function main() {
   const kernel = await loadContract<IAragonKernel>("IAragonKernel", getAddress(Sk.aragonKernel, state));
   const oldLidoImpl = await kernel.getApp(await kernel.APP_BASES_NAMESPACE(), state[Sk.appLido].aragonApp.id);
 
-  const accountingOracleProxy = OssifiableProxy__factory.connect(getAddress(Sk.accountingOracle, state), deployerSigner);
+  const accountingOracleProxy = OssifiableProxy__factory.connect(
+    getAddress(Sk.accountingOracle, state),
+    deployerSigner,
+  );
   const stakingRouterProxy = OssifiableProxy__factory.connect(getAddress(Sk.stakingRouter, state), deployerSigner);
 
   const upgradeParams = {
@@ -38,6 +41,7 @@ export async function main() {
       oldStakingRouterImpl: await stakingRouterProxy.proxy__getImplementation(),
       oldOracleReportSanityChecker: await locator.oracleReportSanityChecker(),
       oldDepositSecurityModule: await locator.depositSecurityModule(),
+
       newLocatorImpl: state[Sk.lidoLocator].implementation.address,
       newLidoImpl: state[Sk.appLido].implementation.address,
       newAccountingOracleImpl: state[Sk.accountingOracle].implementation.address,
@@ -46,11 +50,27 @@ export async function main() {
       newWithdrawalVaultImpl: state[Sk.withdrawalVault].implementation.address,
       newOracleReportSanityChecker: getAddress(Sk.oracleReportSanityChecker, state),
       newDepositSecurityModule: await locator.depositSecurityModule(),
+
+      // TopUp GW
       topUpGatewayImpl: state[Sk.topUpGateway].implementation.address,
+      topUpDepositorBot: parameters.topUpGateway.depositorBot,
+
+      // Consolidation
       consolidationGatewayImpl: getAddress(Sk.consolidationGateway, state),
       consolidationBus: getAddress(Sk.consolidationBus, state),
+      consolidationBusBot: parameters.consolidationBus.executorBot,
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
+      consolidationGatewayGateSeal: parameters.consolidationGateway.gateSeal,
+      // consolidationCommittee: parameters.easyTrack.trustedCaller,
+
+      // TW
+      twMaxExitRequestsLimit: parameters.triggerableWithdrawalsGateway.maxExitRequestsLimit,
+      twExitsPerFrame: parameters.triggerableWithdrawalsGateway.exitsPerFrame,
+      twFrameDurationInSec: parameters.triggerableWithdrawalsGateway.frameDurationInSec,
+
+      // easy tracks
       etfUpdateStakingModuleShareLimits: parameters.easyTrack.newFactories.UpdateStakingModuleShareLimits,
+      etfAllowConsolidationPair: parameters.easyTrack.newFactories.AllowConsolidationPair,
     },
     csmUpgrade: parameters.csmUpgrade,
     curatedModule: parameters.curatedModule,

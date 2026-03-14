@@ -12,7 +12,6 @@ import {
     IFeeOracleV3,
     IAccountingV3,
     IFeeDistributorV3,
-    IPausableWithResumeRoles,
     IPausableRole,
     IValidatorStrikesV3,
     ITriggerableWithdrawalsGateway
@@ -38,6 +37,15 @@ library CSMUpgradeItems {
         keccak256("REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE");
     bytes32 internal constant START_REFERRAL_SEASON_ROLE = keccak256("START_REFERRAL_SEASON_ROLE");
     bytes32 internal constant END_REFERRAL_SEASON_ROLE = keccak256("END_REFERRAL_SEASON_ROLE");
+    bytes32 internal constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
+    bytes32 internal constant CREATE_NODE_OPERATOR_ROLE = keccak256("CREATE_NODE_OPERATOR_ROLE");
+    bytes32 internal constant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE =
+        keccak256("MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE");
+    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
+    bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
+    bytes32 internal constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
+    bytes32 internal constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
 
     // function getItems(     GeneralConfig calldata g,     CSMUpgradeConfig calldata c )
     function getItems(IUpgradeConfig template) external view returns (OmnibusBase.VoteItem[] memory items) {
@@ -151,12 +159,12 @@ library CSMUpgradeItems {
 
         items[i++] = VoteScriptHelpers.item({
             description: "14. Revoke VERIFIER_ROLE from old verifier",
-            call: VoteScriptHelpers.revokeRole(c.csm, ICSModuleV3(c.csm).VERIFIER_ROLE(), c.verifier)
+            call: VoteScriptHelpers.revokeRole(c.csm, VERIFIER_ROLE, c.verifier)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "15. Grant VERIFIER_ROLE to VerifierV3",
-            call: VoteScriptHelpers.grantRole(c.csm, ICSModuleV3(c.csm).VERIFIER_ROLE(), c.verifierV3)
+            call: VoteScriptHelpers.grantRole(c.csm, VERIFIER_ROLE, c.verifierV3)
         });
 
         items[i++] = VoteScriptHelpers.item({
@@ -173,78 +181,64 @@ library CSMUpgradeItems {
 
         items[i++] = VoteScriptHelpers.item({
             description: "18. Revoke CREATE_NODE_OPERATOR_ROLE from old PermissionlessGate",
-            call: VoteScriptHelpers.revokeRole(
-                c.csm, ICSModuleV3(c.csm).CREATE_NODE_OPERATOR_ROLE(), c.oldPermissionlessGate
-            )
+            call: VoteScriptHelpers.revokeRole(c.csm, CREATE_NODE_OPERATOR_ROLE, c.oldPermissionlessGate)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "19. Grant CREATE_NODE_OPERATOR_ROLE to new PermissionlessGate",
-            call: VoteScriptHelpers.grantRole(
-                c.csm, ICSModuleV3(c.csm).CREATE_NODE_OPERATOR_ROLE(), c.permissionlessGate
-            )
+            call: VoteScriptHelpers.grantRole(c.csm, CREATE_NODE_OPERATOR_ROLE, c.permissionlessGate)
         });
 
         // --- Gate seal migration ---
 
         items[i++] = VoteScriptHelpers.item({
             description: "20. Revoke PAUSE_ROLE from old gate seal on CSModule",
-            call: VoteScriptHelpers.revokeRole(c.csm, ICSModuleV3(c.csm).PAUSE_ROLE(), c.gateSeal)
+            call: VoteScriptHelpers.revokeRole(c.csm, PAUSE_ROLE, c.gateSeal)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "21. Revoke PAUSE_ROLE from old gate seal on Accounting",
-            call: VoteScriptHelpers.revokeRole(c.accounting, IAccountingV3(c.accounting).PAUSE_ROLE(), c.gateSeal)
+            call: VoteScriptHelpers.revokeRole(c.accounting, PAUSE_ROLE, c.gateSeal)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "22. Revoke PAUSE_ROLE from old gate seal on FeeOracle",
-            call: VoteScriptHelpers.revokeRole(c.feeOracle, IFeeOracleV3(c.feeOracle).PAUSE_ROLE(), c.gateSeal)
+            call: VoteScriptHelpers.revokeRole(c.feeOracle, PAUSE_ROLE, c.gateSeal)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "23. Revoke PAUSE_ROLE from old gate seal on VettedGate",
-            call: VoteScriptHelpers.revokeRole(c.vettedGate, IPausableRole(c.vettedGate).PAUSE_ROLE(), c.gateSeal)
+            call: VoteScriptHelpers.revokeRole(c.vettedGate, PAUSE_ROLE, c.gateSeal)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "24. Revoke PAUSE_ROLE from old gate seal on old Verifier",
-            call: VoteScriptHelpers.revokeRole(c.verifier, IPausableRole(c.verifier).PAUSE_ROLE(), c.gateSeal)
+            call: VoteScriptHelpers.revokeRole(c.verifier, PAUSE_ROLE, c.gateSeal)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "25. Revoke PAUSE_ROLE from old gate seal on old Ejector",
-            call: VoteScriptHelpers.revokeRole(
-                oldEjector, IPausableWithResumeRoles(oldEjector).PAUSE_ROLE(), c.gateSeal
-            )
+            call: VoteScriptHelpers.revokeRole(oldEjector, PAUSE_ROLE, c.gateSeal)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "26. Revoke PAUSE_ROLE from reseal manager on old Verifier",
-            call: VoteScriptHelpers.revokeRole(
-                c.verifier, IPausableWithResumeRoles(c.verifier).PAUSE_ROLE(), g.resealManager
-            )
+            call: VoteScriptHelpers.revokeRole(c.verifier, PAUSE_ROLE, g.resealManager)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "27. Revoke RESUME_ROLE from reseal manager on old Verifier",
-            call: VoteScriptHelpers.revokeRole(
-                c.verifier, IPausableWithResumeRoles(c.verifier).RESUME_ROLE(), g.resealManager
-            )
+            call: VoteScriptHelpers.revokeRole(c.verifier, RESUME_ROLE, g.resealManager)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "28. Revoke PAUSE_ROLE from reseal manager on old Ejector",
-            call: VoteScriptHelpers.revokeRole(
-                oldEjector, IPausableWithResumeRoles(oldEjector).PAUSE_ROLE(), g.resealManager
-            )
+            call: VoteScriptHelpers.revokeRole(oldEjector, PAUSE_ROLE, g.resealManager)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "29. Revoke RESUME_ROLE from reseal manager on old Ejector",
-            call: VoteScriptHelpers.revokeRole(
-                oldEjector, IPausableWithResumeRoles(oldEjector).RESUME_ROLE(), g.resealManager
-            )
+            call: VoteScriptHelpers.revokeRole(oldEjector, RESUME_ROLE, g.resealManager)
         });
 
         items[i++] = VoteScriptHelpers.item({
@@ -261,30 +255,28 @@ library CSMUpgradeItems {
 
         items[i++] = VoteScriptHelpers.item({
             description: "32. Grant PAUSE_ROLE to GateSealV3 on CSModule",
-            call: VoteScriptHelpers.grantRole(c.csm, ICSModuleV3(c.csm).PAUSE_ROLE(), c.gateSealV3)
+            call: VoteScriptHelpers.grantRole(c.csm, PAUSE_ROLE, c.gateSealV3)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "33. Grant PAUSE_ROLE to GateSealV3 on Accounting",
-            call: VoteScriptHelpers.grantRole(c.accounting, IAccountingV3(c.accounting).PAUSE_ROLE(), c.gateSealV3)
+            call: VoteScriptHelpers.grantRole(c.accounting, PAUSE_ROLE, c.gateSealV3)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "34. Grant PAUSE_ROLE to GateSealV3 on FeeOracle",
-            call: VoteScriptHelpers.grantRole(c.feeOracle, IFeeOracleV3(c.feeOracle).PAUSE_ROLE(), c.gateSealV3)
+            call: VoteScriptHelpers.grantRole(c.feeOracle, PAUSE_ROLE, c.gateSealV3)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "35. Grant PAUSE_ROLE to GateSealV3 on VettedGate",
-            call: VoteScriptHelpers.grantRole(c.vettedGate, IPausableRole(c.vettedGate).PAUSE_ROLE(), c.gateSealV3)
+            call: VoteScriptHelpers.grantRole(c.vettedGate, PAUSE_ROLE, c.gateSealV3)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "36. Grant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE to penaltiesManager",
             call: VoteScriptHelpers.grantRole(
-                c.parametersRegistry,
-                IParametersRegistryV3(c.parametersRegistry).MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE(),
-                c.penaltiesManager
+                c.parametersRegistry, MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE, c.penaltiesManager
             )
         });
 
@@ -292,12 +284,12 @@ library CSMUpgradeItems {
 
         items[i++] = VoteScriptHelpers.item({
             description: "37. Revoke REQUEST_BURN_SHARES_ROLE from CSM Accounting",
-            call: VoteScriptHelpers.revokeRole(g.burner, IBurner(g.burner).REQUEST_BURN_SHARES_ROLE(), c.accounting)
+            call: VoteScriptHelpers.revokeRole(g.burner, REQUEST_BURN_SHARES_ROLE, c.accounting)
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "38. Grant REQUEST_BURN_MY_STETH_ROLE to CSM Accounting",
-            call: VoteScriptHelpers.grantRole(g.burner, IBurner(g.burner).REQUEST_BURN_MY_STETH_ROLE(), c.accounting)
+            call: VoteScriptHelpers.grantRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, c.accounting)
         });
 
         // --- TWG role migration ---
@@ -305,18 +297,14 @@ library CSMUpgradeItems {
         items[i++] = VoteScriptHelpers.item({
             description: "39. Revoke TWG full-withdrawal role from old Ejector",
             call: VoteScriptHelpers.revokeRole(
-                g.triggerableWithdrawalsGateway,
-                ITriggerableWithdrawalsGateway(g.triggerableWithdrawalsGateway).ADD_FULL_WITHDRAWAL_REQUEST_ROLE(),
-                oldEjector
+                g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, oldEjector
             )
         });
 
         items[i++] = VoteScriptHelpers.item({
             description: "40. Grant TWG full-withdrawal role to new Ejector",
             call: VoteScriptHelpers.grantRole(
-                g.triggerableWithdrawalsGateway,
-                ITriggerableWithdrawalsGateway(g.triggerableWithdrawalsGateway).ADD_FULL_WITHDRAWAL_REQUEST_ROLE(),
-                c.ejector
+                g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, c.ejector
             )
         });
 

@@ -1,17 +1,30 @@
 # Lido Protocol Upgrade Parameters - Mainnet Configuration
 
 [easyTrack]
+trustedCaller = "0x000000000000000000000000000000000000dE10"
 [easyTrack.newFactories]
 # TODO: fill with deployed Easy Track factory address before execution
 UpdateStakingModuleShareLimits = "0x000000000000000000000000000000000000dEaD"
+AllowConsolidationPair = "0x000000000000000000000000000000000000dE19"
+
+[triggerableWithdrawalsGateway]
+maxExitRequestsLimit = 13000
+exitsPerFrame = 1
+frameDurationInSec = 48
+
+[depositSecurityModule]
+maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
+pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 
 [consolidationGateway]
 maxConsolidationRequestsLimit = 8000
 consolidationsPerFrame = 1
 frameDurationInSec = 48
+gateSeal = "0x000000000000000000000000000000000000dE20"
 
 [consolidationBus]
 batchSize = 200
+executorBot = "0x000000000000000000000000000000000000dE21"
 
 [consolidationMigrator]
 sourceModuleId = 1
@@ -27,6 +40,7 @@ minTopUpGwei = 1000000000
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 pivotSlot = 0
+depositorBot = "0x000000000000000000000000000000000000dE22"
 
 [stakingRouter]
 maxEBType1 = "32000000000000000000"
@@ -60,6 +74,8 @@ penaltiesManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 [curatedModule]
 # TODO: replace with deployed curated module addresses
 module = "0x000000000000000000000000000000000000cA01"
+accounting = "0x000000000000000000000000000000000000cA04"
+ejector = "0x000000000000000000000000000000000000cA05"
 hashConsensus = "0x000000000000000000000000000000000000cA02"
 moduleName = "curated-onchain-v1"
 stakeShareLimit = 2000

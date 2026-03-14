@@ -84,10 +84,12 @@ const ConsolidationGatewaySchema = z.object({
   maxConsolidationRequestsLimit: PositiveIntSchema,
   consolidationsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
+  gateSeal: EthereumAddressSchema,
 });
 
 const ConsolidationBusSchema = z.object({
   batchSize: PositiveIntSchema,
+  executorBot: EthereumAddressSchema,
 });
 
 const ConsolidationMigratorSchema = z.object({
@@ -105,6 +107,7 @@ const TopUpGatewaySchema = z.object({
   gIFirstValidatorPrev: HexStringSchema,
   gIFirstValidatorCurr: HexStringSchema,
   pivotSlot: NonNegativeIntSchema,
+  depositorBot: EthereumAddressSchema,
 });
 
 const StakingRouterSchema = z.object({
@@ -115,6 +118,7 @@ const StakingRouterSchema = z.object({
 // Easy track schema
 const EasyTrackSchema = z.object({
   // VaultsAdapter: EthereumAddressSchema,
+  // trustedCaller: EthereumAddressSchema,
   newFactories: z.object({
     // v3
     // AlterTiersInOperatorGrid: EthereumAddressSchema,
@@ -127,6 +131,7 @@ const EasyTrackSchema = z.object({
     // UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
     // v4
     UpdateStakingModuleShareLimits: EthereumAddressSchema,
+    AllowConsolidationPair: EthereumAddressSchema,
   }),
 });
 
@@ -190,31 +195,6 @@ const CuratedModuleConfigSchema = z.object({
 const UpgradeVoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
   timeConstraintsContract: EthereumAddressSchema,
-});
-
-// Upgrade parameters schema
-export const UpgradeParametersSchema = z.object({
-  easyTrack: EasyTrackSchema,
-
-  consolidationGateway: ConsolidationGatewaySchema,
-  consolidationBus: ConsolidationBusSchema,
-  consolidationMigrator: ConsolidationMigratorSchema,
-  topUpGateway: TopUpGatewaySchema,
-  stakingRouter: StakingRouterSchema,
-
-  csmUpgrade: CSMUpgradeConfigSchema,
-  curatedModule: CuratedModuleConfigSchema,
-
-  upgradeVoteScript: UpgradeVoteScriptSchema,
-
-  // old and optional
-  chainSpec: ChainSpecSchema.extend({
-    genesisTime: z.number().int(),
-    depositContract: EthereumAddressSchema,
-  }).optional(),
-  burner: BurnerSchema.optional(),
-  oracleVersions: OracleVersionsSchema.optional(),
-  aragonAppVersions: AragonAppVersionsSchema.optional(),
 });
 
 // Gate seal schema (for scratch deployment)
@@ -366,6 +346,32 @@ export const ScratchParametersSchema = z.object({
   operatorGrid: OperatorGridSchema,
   topUpGateway: TopUpGatewaySchema,
   stakingRouter: StakingRouterSchema,
+});
+
+// Upgrade parameters schema
+export const UpgradeParametersSchema = z.object({
+  easyTrack: EasyTrackSchema,
+  depositSecurityModule: DepositSecurityModuleSchema,
+  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  consolidationGateway: ConsolidationGatewaySchema,
+  consolidationBus: ConsolidationBusSchema,
+  consolidationMigrator: ConsolidationMigratorSchema,
+  topUpGateway: TopUpGatewaySchema,
+  stakingRouter: StakingRouterSchema,
+
+  csmUpgrade: CSMUpgradeConfigSchema,
+  curatedModule: CuratedModuleConfigSchema,
+
+  upgradeVoteScript: UpgradeVoteScriptSchema,
+
+  // old and optional
+  chainSpec: ChainSpecSchema.extend({
+    genesisTime: z.number().int(),
+    depositContract: EthereumAddressSchema,
+  }).optional(),
+  burner: BurnerSchema.optional(),
+  oracleVersions: OracleVersionsSchema.optional(),
+  aragonAppVersions: AragonAppVersionsSchema.optional(),
 });
 
 // Inferred types from zod schemas

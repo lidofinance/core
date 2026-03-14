@@ -45,7 +45,6 @@ export async function main() {
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const validatorExitDelayVerifierParams = state[Sk.validatorExitDelayVerifier].deployParameters;
-  const stakingRouterParams = state[Sk.stakingRouter].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -115,8 +114,7 @@ export async function main() {
     [wstETH.address, withdrawalQueueERC721Params.name, withdrawalQueueERC721Params.symbol],
   );
   const withdrawalQueue = await loadContract("WithdrawalQueueERC721", withdrawalQueue_.address);
-  const withdrawalQueueAdmin = deployer;
-  await makeTx(withdrawalQueue, "initialize", [withdrawalQueueAdmin], { from: deployer });
+  await makeTx(withdrawalQueue, "initialize", [admin], { from: deployer });
 
   const withdrawalQueueBaseUri = state["withdrawalQueueERC721"].deployParameters.baseUri;
   if (withdrawalQueueBaseUri !== null && withdrawalQueueBaseUri !== "") {
@@ -172,6 +170,14 @@ export async function main() {
     },
   });
 
+  const stakingRouterParams = state[Sk.stakingRouter].deployParameters;
+  const stakingRouterInterface = await ethers.getContractFactory("StakingRouter");
+  const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
+  const stakingRouterInitData = stakingRouterInterface.interface.encodeFunctionData("initialize", [
+    admin,
+    withdrawalCredentials,
+  ]);
+
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
     "StakingRouter",
@@ -186,6 +192,7 @@ export async function main() {
         SRLib: srLib.address,
       },
     },
+    stakingRouterInitData,
   );
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
 
@@ -215,6 +222,16 @@ export async function main() {
   //
 
   const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
+  const topUpGatewayInterface = await ethers.getContractFactory("TopUpGateway");
+  const topUpGatewayInitData = topUpGatewayInterface.interface.encodeFunctionData("initialize", [
+    admin,
+    topUpGatewayParams.maxValidatorsPerTopUp,
+    topUpGatewayParams.minBlockDistance,
+    topUpGatewayParams.maxRootAge,
+    topUpGatewayParams.targetBalanceGwei,
+    topUpGatewayParams.minTopUpGwei,
+  ]);
+
   const topUpGateway_ = await deployBehindOssifiableProxy(
     Sk.topUpGateway,
     "TopUpGateway",
@@ -227,29 +244,12 @@ export async function main() {
       topUpGatewayParams.pivotSlot,
       chainSpec.slotsPerEpoch,
     ],
+    null, // implementation
+    true, // withStateFile
+    undefined, // factoryOptions
+    topUpGatewayInitData,
   );
   const topUpGateway = await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
-  await makeTx(
-    topUpGateway,
-    "initialize",
-    [
-      admin,
-      topUpGatewayParams.maxValidatorsPerTopUp,
-      topUpGatewayParams.minBlockDistance,
-      topUpGatewayParams.maxRootAge,
-      topUpGatewayParams.targetBalanceGwei,
-      topUpGatewayParams.minTopUpGwei,
-    ],
-    { from: deployer },
-  );
-
-  //
-  // Initialize StakingRouter with all required parameters
-  //
-
-  const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
-  const stakingRouterAdmin = deployer;
-  await makeTx(stakingRouter, "initialize", [stakingRouterAdmin, withdrawalCredentials], { from: deployer });
 
   //
   // Deploy Accounting
