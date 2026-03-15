@@ -1094,6 +1094,29 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(checker.connect(accountingSigner).checkAccountingOracleReport(...report())).not.to.be.reverted;
     });
 
+    it("reverts when validator decrease is hidden by pending increase", async () => {
+      const preCLBalance = ether("10000");
+      const postCLBalance = preCLBalance;
+      const postCLPendingBalance = ether("1000");
+      const secondsInOneYear = 365n * 24n * 60n * 60n;
+      const expectedMaxPendingLimit =
+        (preCLBalance * defaultLimits.annualBalanceIncreaseBPLimit * baseReport.timeElapsed) /
+        secondsInOneYear /
+        TOTAL_BASIS_POINTS;
+
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(
+          ...report({
+            preCLBalance,
+            postCLBalance,
+            postCLPendingBalance,
+          }),
+        ),
+      )
+        .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
+        .withArgs(0n, expectedMaxPendingLimit, postCLPendingBalance);
+    });
+
     it("handles CL balance increase exactly at appeared ETH amount limit", async () => {
       const preCLBalance = ether("1000000");
       const postCLBalance = preCLBalance + ether("100");

@@ -972,15 +972,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         uint256 validatorsBalanceBeforeCurrentReport = previousValidatorsBalance - _clWithdrawals;
 
-        // Adjust maxPendingLimit by clAppearedBalance (signed difference handled via branches)
         if (currentValidatorsBalance >= validatorsBalanceBeforeCurrentReport) {
             uint256 clAppearedBalance = currentValidatorsBalance - validatorsBalanceBeforeCurrentReport;
             if (clAppearedBalance > maxPendingLimit) {
                 revert IncorrectCLBalanceIncrease(clAppearedBalance);
             }
             maxPendingLimit -= clAppearedBalance;
-        } else {
-            maxPendingLimit += validatorsBalanceBeforeCurrentReport - currentValidatorsBalance;
         }
 
         if (_postCLPendingBalance < minPendingLimit || _postCLPendingBalance > maxPendingLimit) {
