@@ -697,6 +697,8 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should accept zero pending balance", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        // Seed the previous router balances to the target values; this case checks zero pending itself, not one-frame growth.
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [1000n * ONE_GWEI], [0n]);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -715,7 +717,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should accept large balance values", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [5000n * ONE_GWEI]);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [60000n * ONE_GWEI], [5000n * ONE_GWEI]);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -811,7 +813,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should handle realistic scenarios", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [1000n * ONE_GWEI]);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [30000n * ONE_GWEI], [1000n * ONE_GWEI]);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({

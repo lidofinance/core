@@ -27,6 +27,8 @@ interface IOracleReportSanityChecker {
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _preCLBalanceGwei,
+        uint256 _postCLBalanceGwei,
         uint256 _clValidatorsBalanceGwei,
         uint256 _clPendingBalanceGwei,
         uint256 _timeElapsed
@@ -61,6 +63,8 @@ interface IStakingRouter {
     ) external;
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
+
+    function getTotalStakingModulesBalance() external view returns (uint256);
 }
 
 interface IWithdrawalQueue {
@@ -503,14 +507,7 @@ contract AccountingOracle is BaseOracle {
         IWithdrawalQueue withdrawalQueue = IWithdrawalQueue(LOCATOR.withdrawalQueue());
         IOracleReportSanityChecker sanityChecker = IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker());
 
-        sanityChecker.checkModuleAndCLBalancesChangeRates(
-            data.stakingModuleIdsWithUpdatedBalance,
-            data.validatorBalancesGweiByStakingModule,
-            data.pendingBalancesGweiByStakingModule,
-            data.clValidatorsBalanceGwei,
-            data.clPendingBalanceGwei,
-            timeElapsed
-        );
+        _checkStakingRouterModuleBalances(stakingRouter, sanityChecker, data, timeElapsed);
         _processStakingRouterExitedValidatorsByModule(
             stakingRouter,
             sanityChecker,
@@ -726,6 +723,26 @@ contract AccountingOracle is BaseOracle {
         }
 
         emit ExtraDataSubmitted(procState.refSlot, procState.itemsProcessed, procState.itemsCount);
+    }
+
+    function _checkStakingRouterModuleBalances(
+        IStakingRouter stakingRouter,
+        IOracleReportSanityChecker sanityChecker,
+        ReportData calldata data,
+        uint256 timeElapsed
+    ) internal view {
+        // This check must run before `reportValidatorBalancesByStakingModule(...)` mutates the router state,
+        // because it compares the report against the previous per-module validators/pending balances in StakingRouter.
+        sanityChecker.checkModuleAndCLBalancesChangeRates(
+            data.stakingModuleIdsWithUpdatedBalance,
+            data.validatorBalancesGweiByStakingModule,
+            data.pendingBalancesGweiByStakingModule,
+            stakingRouter.getTotalStakingModulesBalance() / 1 gwei,
+            data.clValidatorsBalanceGwei + data.clPendingBalanceGwei,
+            data.clValidatorsBalanceGwei,
+            data.clPendingBalanceGwei,
+            timeElapsed
+        );
     }
 
     function _processExtraDataItems(bytes calldata data, ExtraDataIterState memory iter) internal {

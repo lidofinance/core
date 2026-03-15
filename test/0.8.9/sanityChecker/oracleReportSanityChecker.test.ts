@@ -1074,9 +1074,8 @@ describe("OracleReportSanityChecker.sol", () => {
 
     it("reverts when CL balance increase per day exceeds appeared ETH amount limit", async () => {
       const preCLBalance = ether("1000000");
-      const postCLBalance = preCLBalance + ether("101");
-      const clIncreasePerDay = ether("101");
-      const clIncreasePerDayLimit = ether("100");
+      const postCLBalance = preCLBalance + ether("274");
+      const clIncrease = ether("274");
 
       await expect(
         checker.connect(accountingSigner).checkAccountingOracleReport(
@@ -1087,8 +1086,8 @@ describe("OracleReportSanityChecker.sol", () => {
           }),
         ),
       )
-        .to.be.revertedWithCustomError(checker, "CLBalanceIncreaseRatePerDayLimitExceeded")
-        .withArgs(clIncreasePerDayLimit, clIncreasePerDay);
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceIncrease")
+        .withArgs(clIncrease);
     });
 
     it("passes with valid report", async () => {

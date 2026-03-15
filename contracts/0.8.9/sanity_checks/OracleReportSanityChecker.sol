@@ -50,7 +50,6 @@ interface IStakingRouter {
             uint64 pendingBalanceGwei,
             uint64 exitedValidatorsCount
         );
-    function getStakingModuleBalance(uint256 moduleId) external view returns (uint256);
 }
 
 /// @notice The set of restrictions used in the sanity checks of the oracle report
@@ -665,12 +664,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkCLBalanceDecrease(checkParams, clWithdrawals);
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, checkParams.preCLBalance, checkParams.postCLBalance, _timeElapsed);
-        // 6. Consensus Layer balance increase rate
-        if (checkParams.postCLBalance > checkParams.preCLBalance) {
-            uint256 clBalanceIncreasePerDay =
-                _normalizePerDay(checkParams.postCLBalance - checkParams.preCLBalance, _timeElapsed);
-            _checkCLBalanceIncreaseRatePerDay(limitsList, clBalanceIncreasePerDay);
-        }
         _shiftLastVaultBalanceAfterTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
     }
 
@@ -713,11 +706,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
-    /// @notice Check per-day module validators and pending balances change rates against configured limits.
+    /// @notice Check module balances consistency, pending consumption, total CL growth and per-day module validator balance growth.
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _preCLBalanceGwei,
+        uint256 _postCLBalanceGwei,
         uint256 _clValidatorsBalanceGwei,
         uint256 _clPendingBalanceGwei,
         uint256 _timeElapsed
@@ -730,25 +725,24 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _clPendingBalanceGwei
         );
 
-        IStakingRouter stakingRouter = IStakingRouter(LIDO_LOCATOR.stakingRouter());
-        AccountingCoreLimitsPacked memory limitsList = _accountingCoreLimits;
-
-        _checkModulePendingBalanceChangeRates(
-            stakingRouter,
-            limitsList,
+        _checkModulePendingAndTotalCLBalanceIncrease(
+            IStakingRouter(LIDO_LOCATOR.stakingRouter()),
+            _accountingCoreLimits,
             _stakingModuleIdsWithUpdatedBalance,
             _pendingBalancesGweiByStakingModule,
+            _preCLBalanceGwei,
+            _postCLBalanceGwei,
             _timeElapsed
         );
 
         uint256 moduleBalanceIncreasePerDay = _calculateModuleBalanceIncreasePerDay(
-            stakingRouter,
+            IStakingRouter(LIDO_LOCATOR.stakingRouter()),
             _stakingModuleIdsWithUpdatedBalance,
             _validatorBalancesGweiByStakingModule,
             _timeElapsed
         );
 
-        _checkAppearedEthAmountPerDay(limitsList, moduleBalanceIncreasePerDay);
+        _checkAppearedEthAmountPerDay(_accountingCoreLimits, moduleBalanceIncreasePerDay);
     }
 
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
@@ -895,19 +889,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _checkCLBalanceIncreaseRatePerDay(
-        AccountingCoreLimitsPacked memory _limitsList,
-        uint256 _clBalanceIncreaseEthAmountPerDay
-    ) internal pure {
-        uint256 clBalanceIncreaseLimitPerDay = uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether;
-        if (_clBalanceIncreaseEthAmountPerDay > clBalanceIncreaseLimitPerDay) {
-            revert CLBalanceIncreaseRatePerDayLimitExceeded(
-                clBalanceIncreaseLimitPerDay,
-                _clBalanceIncreaseEthAmountPerDay
-            );
-        }
-    }
-
     function _calculateModuleBalanceIncreasePerDay(
         IStakingRouter _stakingRouter,
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
@@ -1013,7 +994,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
         uint256 _timeElapsed
-    ) internal view {
+    ) internal view returns (uint256 totalActiveAppearedEthGwei) {
         uint256 modulesCount = _stakingModuleIdsWithUpdatedBalance.length;
         if (modulesCount != _pendingBalancesGweiByStakingModule.length) {
             revert InvalidClBalancesData();
@@ -1025,7 +1006,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 appearedLimitPerPeriodGwei =
             _calculateAmountForPeriod((uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether) / 1 gwei, effectiveTimeElapsed);
 
-        uint256 totalActiveAppearedEthGwei = _accumulateModulePendingBalanceChanges(
+        totalActiveAppearedEthGwei = _accumulateModulePendingBalanceChanges(
             _stakingRouter,
             _stakingModuleIdsWithUpdatedBalance,
             _pendingBalancesGweiByStakingModule,
@@ -1036,6 +1017,30 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (totalActiveAppearedEthGwei > appearedLimitPerPeriodGwei) {
             revert IncorrectTotalActiveAppearedEth(appearedLimitPerPeriodGwei, totalActiveAppearedEthGwei);
         }
+    }
+
+    function _checkModulePendingAndTotalCLBalanceIncrease(
+        IStakingRouter _stakingRouter,
+        AccountingCoreLimitsPacked memory _limitsList,
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _preCLBalanceGwei,
+        uint256 _postCLBalanceGwei,
+        uint256 _timeElapsed
+    ) internal view {
+        uint256 totalActiveAppearedEthGwei = _checkModulePendingBalanceChangeRates(
+            _stakingRouter,
+            _limitsList,
+            _stakingModuleIdsWithUpdatedBalance,
+            _pendingBalancesGweiByStakingModule,
+            _timeElapsed
+        );
+
+        _checkTotalCLBalanceIncreaseAgainstActiveAppearedEth(
+            _preCLBalanceGwei,
+            _postCLBalanceGwei,
+            totalActiveAppearedEthGwei
+        );
     }
 
     function _accumulateModulePendingBalanceChanges(
@@ -1094,6 +1099,23 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                 upperBound,
                 _currentPendingBalanceGwei
             );
+        }
+    }
+
+    // `totalActiveAppearedEth` is the total pending balance consumed by modules into active validators
+    // during the period. The reported total CL balance growth cannot exceed that consumed pending amount.
+    function _checkTotalCLBalanceIncreaseAgainstActiveAppearedEth(
+        uint256 _preCLBalanceGwei,
+        uint256 _postCLBalanceGwei,
+        uint256 _totalActiveAppearedEthGwei
+    ) internal pure {
+        if (_postCLBalanceGwei <= _preCLBalanceGwei) {
+            return;
+        }
+
+        uint256 clBalanceIncreaseGwei = _postCLBalanceGwei - _preCLBalanceGwei;
+        if (clBalanceIncreaseGwei > _totalActiveAppearedEthGwei) {
+            revert IncorrectTotalCLBalanceIncrease(_totalActiveAppearedEthGwei, clBalanceIncreaseGwei);
         }
     }
 
@@ -1510,8 +1532,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectTotalPendingBalance(uint256 minAllowed, uint256 maxAllowed, uint256 actual);
     error IncorrectModulePendingBalance(uint256 moduleId, uint256 minAllowed, uint256 maxAllowed, uint256 actual);
     error IncorrectTotalActiveAppearedEth(uint256 maxAllowed, uint256 actual);
+    error IncorrectTotalCLBalanceIncrease(uint256 maxAllowed, uint256 actual);
     error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
-    error CLBalanceIncreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 increasePerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);

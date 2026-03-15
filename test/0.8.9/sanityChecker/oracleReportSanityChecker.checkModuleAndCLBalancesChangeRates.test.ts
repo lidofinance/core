@@ -88,10 +88,16 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
   const check = async (modules: ModuleBalance[], timeElapsed = ONE_DAY) => {
     const input = toModuleInput(modules);
+    // Mirror AccountingOracle: compare the reported current total CL balance against
+    // the previous total CL balance stored in StakingRouter before balances are updated.
+    const preCLBalanceGwei = (await stakingRouter.getTotalStakingModulesBalance()) / ONE_GWEI;
+    const postCLBalanceGwei = input.clValidatorsBalanceGwei + input.clPendingBalanceGwei;
     return checker.checkModuleAndCLBalancesChangeRates(
       input.ids,
       input.validatorBalancesGweiByStakingModule,
       input.pendingBalancesGwei,
+      preCLBalanceGwei,
+      postCLBalanceGwei,
       input.clValidatorsBalanceGwei,
       input.clPendingBalanceGwei,
       timeElapsed,
@@ -158,23 +164,23 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("passes for empty module arrays and zero totals", async () => {
-    await expect(checker.checkModuleAndCLBalancesChangeRates([], [], [], 0n, 0n, ONE_DAY)).not.to.be.reverted;
+    await expect(checker.checkModuleAndCLBalancesChangeRates([], [], [], 0n, 0n, 0n, 0n, ONE_DAY)).not.to.be.reverted;
   });
 
   it("reverts with InvalidClBalancesData on array length mismatch", async () => {
     await expect(
-      checker.checkModuleAndCLBalancesChangeRates([1n], [1n], [], 1n, 0n, ONE_DAY),
+      checker.checkModuleAndCLBalancesChangeRates([1n], [1n], [], 0n, 1n, 1n, 0n, ONE_DAY),
     ).to.be.revertedWithCustomError(checker, "InvalidClBalancesData");
   });
 
   it("reverts with InconsistentValidatorsBalanceByModule when validators balance sum mismatches", async () => {
-    await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 40n, 3n, ONE_DAY))
+    await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 0n, 33n, 40n, 3n, ONE_DAY))
       .to.be.revertedWithCustomError(checker, "InconsistentValidatorsBalanceByModule")
       .withArgs(40n, 30n);
   });
 
   it("reverts with InconsistentPendingBalanceByModule when pending sum mismatches", async () => {
-    await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 30n, 4n, ONE_DAY))
+    await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 0n, 33n, 30n, 4n, ONE_DAY))
       .to.be.revertedWithCustomError(checker, "InconsistentPendingBalanceByModule")
       .withArgs(4n, 3n);
   });
@@ -194,14 +200,15 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("reverts with AppearedEthAmountPerDayLimitExceeded after pending balance sanity passes", async () => {
-    const currentIncreasePerDay = ether("111");
+    const currentIncreasePerDay = ether("120");
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    // Seed the module pending balance so the new pending-balance corridor check passes first.
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: currentIncreasePerDay }]);
+    // Keep 60 ETH on the pending side so the report can spend it into validators first,
+    // then hit the per-day validators increase limit.
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("60") }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: currentIncreasePerDay, pendingWei: currentIncreasePerDay }]))
+    await expect(check([{ id: 1n, validatorsBalanceWei: currentIncreasePerDay, pendingWei: 0n }]))
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, currentIncreasePerDay);
   });
@@ -213,11 +220,13 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("reverts with AppearedEthAmountPerDayLimitExceeded when module increase exceeds appeared+consolidation", async () => {
-    const currentIncreasePerDay = ether("111");
+    const currentIncreasePerDay = ether("120");
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: currentIncreasePerDay }]))
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("60") }]);
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: currentIncreasePerDay, pendingWei: 0n }]))
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, currentIncreasePerDay);
   });
@@ -227,10 +236,17 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
+    await seedPreviousBalances([
+      // Split the baseline pending evenly so the new total CL growth gate is satisfied
+      // and the test still reaches the summed per-day validators increase check.
+      { id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
+      { id: 2n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
+    ]);
+
     await expect(
       check([
-        { id: 1n, validatorsBalanceWei: ether("60") },
-        { id: 2n, validatorsBalanceWei: ether("60") },
+        { id: 1n, validatorsBalanceWei: ether("60"), pendingWei: 0n },
+        { id: 2n, validatorsBalanceWei: ether("60"), pendingWei: 0n },
       ]),
     )
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
@@ -240,13 +256,18 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   it("allows an exact module increase at the appeared+consolidation limit", async () => {
     const exactIncrease = (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("90") }]);
+    // 55 ETH of previous pending lets the module grow validators by the full 110 ETH/day limit
+    // while the total CL increase only grows by 55 ETH.
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("90"), pendingWei: ether("55") }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("90") + exactIncrease }])).not.to.be.reverted;
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("90") + exactIncrease, pendingWei: 0n }])).not.to.be
+      .reverted;
   });
 
   it("does not apply total CL increase limit in module/consistency path", async () => {
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("105") }])).not.to.be.reverted;
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("5"), pendingWei: ether("100") }]);
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("105"), pendingWei: 0n }])).not.to.be.reverted;
   });
 
   it("uses timeElapsed in per-day normalization (timeElapsed = 0 path)", async () => {
@@ -255,7 +276,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: baseIncrease }], 0n))
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: baseIncrease }]);
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: baseIncrease, pendingWei: 0n }], 0n))
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, normalizedIncreasePerDay);
   });
@@ -265,12 +288,14 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("100") }]);
+    // At half-day, 50 ETH is the largest pending baseline that still allows `pending = 0`
+    // to stay inside the lower bound of the pending corridor.
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("100"), pendingWei: ether("50") }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("155") }], halfDay)).not.to.be.reverted;
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("155"), pendingWei: 0n }], halfDay)).not.to.be.reverted;
 
     const normalizedIncreasePerDay = ether("56") * 2n;
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("156") }], halfDay))
+    await expect(check([{ id: 1n, validatorsBalanceWei: ether("156"), pendingWei: 0n }], halfDay))
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, normalizedIncreasePerDay);
   });
