@@ -9,12 +9,15 @@ import {
   Burner__MockForSanityChecker,
   LidoLocator__MockForSanityChecker,
   OracleReportSanityChecker,
+  StakingModule__MockForStakingRouter,
+  StakingRouter__Harness,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForSanityChecker,
 } from "typechain-types";
 
-import { ether, ONE_GWEI } from "lib";
+import { ether, impersonate, ONE_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib";
 
+import { deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const ONE_DAY = 24n * 60n * 60n;
@@ -104,6 +107,125 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     );
   };
 
+  const deployCheckerWithRouterModules = async (modulesCount = 1) => {
+    const routerHarness = (await deployStakingRouter({ deployer, admin }, {})) as {
+      stakingRouter: StakingRouter__Harness;
+    };
+    const moduleIds: bigint[] = [];
+
+    await routerHarness.stakingRouter.connect(admin).initialize(admin.address, randomWCType1());
+    await routerHarness.stakingRouter
+      .connect(admin)
+      .grantRole(await routerHarness.stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin.address);
+    await routerHarness.stakingRouter
+      .connect(admin)
+      .grantRole(await routerHarness.stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), admin.address);
+    for (let i = 0; i < modulesCount; i++) {
+      const module = (await ethers.deployContract(
+        "StakingModule__MockForStakingRouter",
+        deployer,
+      )) as StakingModule__MockForStakingRouter;
+
+      await routerHarness.stakingRouter
+        .connect(admin)
+        .addStakingModule(`new module ${i + 1}`, await module.getAddress(), {
+          stakeShareLimit: 10_000n,
+          priorityExitShareThreshold: 10_000n,
+          stakingModuleFee: 500n,
+          treasuryFee: 500n,
+          maxDepositsPerBlock: 150n,
+          minDepositBlockDistance: 25n,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+        });
+
+      moduleIds.push(BigInt(i + 1));
+    }
+
+    const locatorWithRouter = await ethers.deployContract("LidoLocator__MockForSanityChecker", [
+      {
+        lido: deployer.address,
+        depositSecurityModule: deployer.address,
+        elRewardsVault: elRewardsVault.address,
+        accountingOracle: await accountingOracle.getAddress(),
+        oracleReportSanityChecker: deployer.address,
+        burner: await burner.getAddress(),
+        validatorsExitBusOracle: deployer.address,
+        stakingRouter: await routerHarness.stakingRouter.getAddress(),
+        treasury: deployer.address,
+        withdrawalQueue: await withdrawalQueue.getAddress(),
+        withdrawalVault: deployer.address,
+        postTokenRebaseReceiver: deployer.address,
+        oracleDaemonConfig: deployer.address,
+        validatorExitDelayVerifier: deployer.address,
+        triggerableWithdrawalsGateway: deployer.address,
+        consolidationGateway: deployer.address,
+        accounting: await accounting.getAddress(),
+        predepositGuarantee: deployer.address,
+        wstETH: deployer.address,
+        vaultHub: deployer.address,
+        vaultFactory: deployer.address,
+        lazyOracle: deployer.address,
+        operatorGrid: deployer.address,
+        topUpGateway: deployer.address,
+      },
+    ]);
+
+    const checkerWithRouter = await ethers.deployContract("OracleReportSanityChecker", [
+      await locatorWithRouter.getAddress(),
+      await accounting.getAddress(),
+      admin.address,
+      limits,
+    ]);
+
+    return {
+      checkerWithRouter,
+      stakingRouterHarness: routerHarness.stakingRouter,
+      moduleIds,
+    };
+  };
+
+  const checkGlobalReport = (
+    sanityChecker: OracleReportSanityChecker,
+    accountingSigner: HardhatEthersSigner,
+    {
+      timeElapsed = ONE_DAY,
+      preValidatorsWei = 0n,
+      prePendingWei = 0n,
+      postValidatorsWei = 0n,
+      postPendingWei = 0n,
+      withdrawalVaultBalanceWei = 0n,
+      elRewardsVaultBalanceWei = 0n,
+      sharesRequestedToBurn = 0n,
+      depositsWei = 0n,
+      withdrawalsVaultTransferWei = 0n,
+    }: {
+      timeElapsed?: bigint;
+      preValidatorsWei?: bigint;
+      prePendingWei?: bigint;
+      postValidatorsWei?: bigint;
+      postPendingWei?: bigint;
+      withdrawalVaultBalanceWei?: bigint;
+      elRewardsVaultBalanceWei?: bigint;
+      sharesRequestedToBurn?: bigint;
+      depositsWei?: bigint;
+      withdrawalsVaultTransferWei?: bigint;
+    },
+  ) =>
+    sanityChecker
+      .connect(accountingSigner)
+      .checkAccountingOracleReport(
+        timeElapsed,
+        preValidatorsWei,
+        prePendingWei,
+        postValidatorsWei,
+        postPendingWei,
+        withdrawalVaultBalanceWei,
+        elRewardsVaultBalanceWei,
+        sharesRequestedToBurn,
+        depositsWei,
+        withdrawalsVaultTransferWei,
+      );
+
   before(async () => {
     [deployer, admin, manager, elRewardsVault] = await ethers.getSigners();
 
@@ -167,6 +289,251 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     await expect(checker.checkModuleAndCLBalancesChangeRates([], [], [], 0n, 0n, 0n, 0n, ONE_DAY)).not.to.be.reverted;
   });
 
+  it("skips module-specific checks for the first report of a newly added module", async () => {
+    const { checkerWithRouter, moduleIds } = await deployCheckerWithRouterModules();
+    const [moduleId] = moduleIds;
+    const firstReportTotalBalanceGwei = ether("120") / ONE_GWEI;
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleId],
+        [firstReportTotalBalanceGwei],
+        [0n],
+        firstReportTotalBalanceGwei,
+        firstReportTotalBalanceGwei,
+        firstReportTotalBalanceGwei,
+        0n,
+        ONE_DAY,
+      ),
+    ).not.to.be.reverted;
+  });
+
+  it("applies module-specific checks after the first report seeds non-zero module state", async () => {
+    const { checkerWithRouter, stakingRouterHarness, moduleIds } = await deployCheckerWithRouterModules();
+    const [moduleId] = moduleIds;
+    const expectedLimitPerDay =
+      (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
+    const firstValidatorsBalanceGwei = ether("100") / ONE_GWEI;
+    const firstPendingBalanceGwei = ether("120") / ONE_GWEI;
+    const secondValidatorsBalanceGwei = ether("211") / ONE_GWEI;
+    const secondPendingBalanceGwei = ether("20") / ONE_GWEI;
+    const firstTotalClBalanceGwei = firstValidatorsBalanceGwei + firstPendingBalanceGwei;
+    const secondTotalClBalanceGwei = secondValidatorsBalanceGwei + secondPendingBalanceGwei;
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleId],
+        [firstValidatorsBalanceGwei],
+        [firstPendingBalanceGwei],
+        firstTotalClBalanceGwei,
+        firstTotalClBalanceGwei,
+        firstValidatorsBalanceGwei,
+        firstPendingBalanceGwei,
+        ONE_DAY,
+      ),
+    ).not.to.be.reverted;
+
+    await stakingRouterHarness
+      .connect(admin)
+      .reportValidatorBalancesByStakingModule([moduleId], [firstValidatorsBalanceGwei], [firstPendingBalanceGwei]);
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleId],
+        [secondValidatorsBalanceGwei],
+        [secondPendingBalanceGwei],
+        firstTotalClBalanceGwei,
+        secondTotalClBalanceGwei,
+        secondValidatorsBalanceGwei,
+        secondPendingBalanceGwei,
+        ONE_DAY,
+      ),
+    )
+      .to.be.revertedWithCustomError(checkerWithRouter, "AppearedEthAmountPerDayLimitExceeded")
+      .withArgs(expectedLimitPerDay, ether("111"));
+  });
+
+  it("supports cold-start onboarding across the global path and module bootstrap flow", async () => {
+    const { checkerWithRouter, stakingRouterHarness, moduleIds } = await deployCheckerWithRouterModules();
+    const [moduleId] = moduleIds;
+    const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+    const depositedWei = ether("200");
+    const depositedPendingBalanceGwei = depositedWei / ONE_GWEI;
+    const activatedValidatorsWei = ether("100");
+    const remainingPendingWei = depositedWei - activatedValidatorsWei;
+    const activatedValidatorsBalanceGwei = activatedValidatorsWei / ONE_GWEI;
+    const remainingPendingBalanceGwei = remainingPendingWei / ONE_GWEI;
+
+    await expect(
+      checkGlobalReport(checkerWithRouter, accountingSigner, {
+        postPendingWei: depositedWei,
+        depositsWei: depositedWei,
+      }),
+    ).not.to.be.reverted;
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleId],
+        [0n],
+        [depositedPendingBalanceGwei],
+        depositedPendingBalanceGwei,
+        depositedPendingBalanceGwei,
+        0n,
+        depositedPendingBalanceGwei,
+        ONE_DAY,
+      ),
+    ).not.to.be.reverted;
+
+    await stakingRouterHarness
+      .connect(admin)
+      .reportValidatorBalancesByStakingModule([moduleId], [0n], [depositedPendingBalanceGwei]);
+
+    await expect(
+      checkGlobalReport(checkerWithRouter, accountingSigner, {
+        prePendingWei: depositedWei,
+        postValidatorsWei: activatedValidatorsWei,
+        postPendingWei: remainingPendingWei,
+      }),
+    ).not.to.be.reverted;
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleId],
+        [activatedValidatorsBalanceGwei],
+        [remainingPendingBalanceGwei],
+        depositedPendingBalanceGwei,
+        depositedPendingBalanceGwei,
+        activatedValidatorsBalanceGwei,
+        remainingPendingBalanceGwei,
+        ONE_DAY,
+      ),
+    ).not.to.be.reverted;
+  });
+
+  it("supports cold-start onboarding across multiple new modules", async () => {
+    const { checkerWithRouter, stakingRouterHarness, moduleIds } = await deployCheckerWithRouterModules(2);
+    const [moduleOneId, moduleTwoId] = moduleIds;
+    const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+    const moduleOneInitialPendingWei = ether("120");
+    const moduleTwoInitialPendingWei = ether("80");
+    const totalInitialPendingWei = moduleOneInitialPendingWei + moduleTwoInitialPendingWei;
+    const moduleOneActivatedValidatorsWei = ether("60");
+    const moduleTwoActivatedValidatorsWei = ether("40");
+    const moduleOneRemainingPendingWei = moduleOneInitialPendingWei - moduleOneActivatedValidatorsWei;
+    const moduleTwoRemainingPendingWei = moduleTwoInitialPendingWei - moduleTwoActivatedValidatorsWei;
+    const totalActivatedValidatorsWei = moduleOneActivatedValidatorsWei + moduleTwoActivatedValidatorsWei;
+    const totalRemainingPendingWei = moduleOneRemainingPendingWei + moduleTwoRemainingPendingWei;
+
+    await expect(
+      checkGlobalReport(checkerWithRouter, accountingSigner, {
+        postPendingWei: totalInitialPendingWei,
+        depositsWei: totalInitialPendingWei,
+      }),
+    ).not.to.be.reverted;
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleOneId, moduleTwoId],
+        [0n, 0n],
+        [moduleOneInitialPendingWei / ONE_GWEI, moduleTwoInitialPendingWei / ONE_GWEI],
+        totalInitialPendingWei / ONE_GWEI,
+        totalInitialPendingWei / ONE_GWEI,
+        0n,
+        totalInitialPendingWei / ONE_GWEI,
+        ONE_DAY,
+      ),
+    ).not.to.be.reverted;
+
+    await stakingRouterHarness
+      .connect(admin)
+      .reportValidatorBalancesByStakingModule(
+        [moduleOneId, moduleTwoId],
+        [0n, 0n],
+        [moduleOneInitialPendingWei / ONE_GWEI, moduleTwoInitialPendingWei / ONE_GWEI],
+      );
+
+    await expect(
+      checkGlobalReport(checkerWithRouter, accountingSigner, {
+        prePendingWei: totalInitialPendingWei,
+        postValidatorsWei: totalActivatedValidatorsWei,
+        postPendingWei: totalRemainingPendingWei,
+      }),
+    ).not.to.be.reverted;
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleOneId, moduleTwoId],
+        [moduleOneActivatedValidatorsWei / ONE_GWEI, moduleTwoActivatedValidatorsWei / ONE_GWEI],
+        [moduleOneRemainingPendingWei / ONE_GWEI, moduleTwoRemainingPendingWei / ONE_GWEI],
+        totalInitialPendingWei / ONE_GWEI,
+        totalInitialPendingWei / ONE_GWEI,
+        totalActivatedValidatorsWei / ONE_GWEI,
+        totalRemainingPendingWei / ONE_GWEI,
+        ONE_DAY,
+      ),
+    ).not.to.be.reverted;
+  });
+
+  it("supports cold-start onboarding with timeElapsed = 0 under allowance and rate-normalization fallbacks", async () => {
+    const { checkerWithRouter, stakingRouterHarness, moduleIds } = await deployCheckerWithRouterModules();
+    const [moduleId] = moduleIds;
+    const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+    const zeroTimeElapsed = 0n;
+    const initialPendingWei = ether("10");
+    const expectedModulePerDayLimitWei =
+      (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
+    const maxModuleActivationGwei = expectedModulePerDayLimitWei / ONE_DAY / ONE_GWEI;
+    const maxModuleActivationWei = maxModuleActivationGwei * ONE_GWEI;
+    const remainingPendingWei = initialPendingWei - maxModuleActivationWei;
+
+    await expect(
+      checkGlobalReport(checkerWithRouter, accountingSigner, {
+        timeElapsed: zeroTimeElapsed,
+        postPendingWei: initialPendingWei,
+        depositsWei: initialPendingWei,
+      }),
+    ).not.to.be.reverted;
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleId],
+        [0n],
+        [initialPendingWei / ONE_GWEI],
+        initialPendingWei / ONE_GWEI,
+        initialPendingWei / ONE_GWEI,
+        0n,
+        initialPendingWei / ONE_GWEI,
+        zeroTimeElapsed,
+      ),
+    ).not.to.be.reverted;
+
+    await stakingRouterHarness
+      .connect(admin)
+      .reportValidatorBalancesByStakingModule([moduleId], [0n], [initialPendingWei / ONE_GWEI]);
+
+    await expect(
+      checkGlobalReport(checkerWithRouter, accountingSigner, {
+        timeElapsed: zeroTimeElapsed,
+        prePendingWei: initialPendingWei,
+        postValidatorsWei: maxModuleActivationWei,
+        postPendingWei: remainingPendingWei,
+      }),
+    ).not.to.be.reverted;
+
+    await expect(
+      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
+        [moduleId],
+        [maxModuleActivationGwei],
+        [remainingPendingWei / ONE_GWEI],
+        initialPendingWei / ONE_GWEI,
+        initialPendingWei / ONE_GWEI,
+        maxModuleActivationGwei,
+        remainingPendingWei / ONE_GWEI,
+        zeroTimeElapsed,
+      ),
+    ).not.to.be.reverted;
+  });
+
   it("reverts with InvalidClBalancesData on array length mismatch", async () => {
     await expect(
       checker.checkModuleAndCLBalancesChangeRates([1n], [1n], [], 0n, 1n, 1n, 0n, ONE_DAY),
@@ -199,18 +566,15 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     ).not.to.be.reverted;
   });
 
-  it("reverts with AppearedEthAmountPerDayLimitExceeded after pending balance sanity passes", async () => {
-    const currentIncreasePerDay = ether("120");
-    const expectedLimitPerDay =
-      (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
+  it("reverts with IncorrectModulePendingBalance when a module pending balance exceeds its corridor", async () => {
+    const previousPendingWei = ether("10");
+    const reportedPendingWei = previousPendingWei + ether("1");
 
-    // Keep 60 ETH on the pending side so the report can spend it into validators first,
-    // then hit the per-day validators increase limit.
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("60") }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: previousPendingWei }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: currentIncreasePerDay, pendingWei: 0n }]))
-      .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
-      .withArgs(expectedLimitPerDay, currentIncreasePerDay);
+    await expect(check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: reportedPendingWei }]))
+      .to.be.revertedWithCustomError(checker, "IncorrectModulePendingBalance")
+      .withArgs(1n, 0n, toGwei(previousPendingWei), toGwei(reportedPendingWei));
   });
 
   it("allows pending-to-validators activation within a module when module total is unchanged", async () => {
@@ -253,6 +617,44 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .withArgs(expectedLimitPerDay, totalIncreasePerDay);
   });
 
+  it("reverts with IncorrectTotalActiveAppearedEth when consumed pending exceeds the global appeared limit", async () => {
+    const perDayAppearedLimitGwei = toGwei(ether("100"));
+    const totalConsumedPendingGwei = toGwei(ether("120"));
+
+    await seedPreviousBalances([
+      { id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("60") },
+      { id: 2n, validatorsBalanceWei: 0n, pendingWei: ether("60") },
+    ]);
+
+    await expect(
+      check([
+        { id: 1n, validatorsBalanceWei: 0n, pendingWei: 0n },
+        { id: 2n, validatorsBalanceWei: 0n, pendingWei: 0n },
+      ]),
+    )
+      .to.be.revertedWithCustomError(checker, "IncorrectTotalActiveAppearedEth")
+      .withArgs(perDayAppearedLimitGwei, totalConsumedPendingGwei);
+  });
+
+  it("reverts with IncorrectTotalCLBalanceIncrease when reported CL growth exceeds consumed pending", async () => {
+    const consumedPendingGwei = toGwei(ether("20"));
+    const reportedTotalGrowthGwei = toGwei(ether("40"));
+
+    await seedPreviousBalances([
+      { id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
+      { id: 2n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
+    ]);
+
+    await expect(
+      check([
+        { id: 1n, validatorsBalanceWei: ether("30"), pendingWei: ether("20") },
+        { id: 2n, validatorsBalanceWei: ether("30"), pendingWei: ether("20") },
+      ]),
+    )
+      .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
+      .withArgs(consumedPendingGwei, reportedTotalGrowthGwei);
+  });
+
   it("allows an exact module increase at the appeared+consolidation limit", async () => {
     const exactIncrease = (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
@@ -264,7 +666,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .reverted;
   });
 
-  it("does not apply total CL increase limit in module/consistency path", async () => {
+  it("allows validator growth funded by existing pending when total CL is unchanged", async () => {
     await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("5"), pendingWei: ether("100") }]);
 
     await expect(check([{ id: 1n, validatorsBalanceWei: ether("105"), pendingWei: 0n }])).not.to.be.reverted;

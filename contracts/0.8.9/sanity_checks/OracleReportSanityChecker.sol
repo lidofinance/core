@@ -42,6 +42,8 @@ interface IBaseOracle {
 }
 
 interface IStakingRouter {
+    function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
+
     function getStakingModuleStateAccounting(uint256 _stakingModuleId)
         external
         view
@@ -505,7 +507,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             .getBalanceStats();
         uint256 migrationCLBalance = migrationCLValidatorsBalance + migrationCLPendingBalance;
         uint256 migrationCLWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
-
         // Initialize vault state: vault is not drained during migration,
         // so after-transfer balance equals current vault balance
         _lastVaultBalanceAfterTransfer = LIDO_LOCATOR.withdrawalVault().balance;
@@ -897,9 +898,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) internal view returns (uint256 moduleBalanceIncreasePerDay) {
         uint256 validatorsBalanceIncrease;
         for (uint256 i = 0; i < _stakingModuleIdsWithUpdatedBalance.length;) {
-            // TODO: what if it is new module without previous balance?
-            (uint64 previousValidatorsBalanceGwei, , ) =
-                _stakingRouter.getStakingModuleStateAccounting(_stakingModuleIdsWithUpdatedBalance[i]);
+            (bool hasPreviousAccounting, uint64 previousValidatorsBalanceGwei, , ) =
+                _getModuleAccountingState(_stakingRouter, _stakingModuleIdsWithUpdatedBalance[i]);
+            if (!hasPreviousAccounting) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
 
             uint256 previousValidatorsBalanceWei = uint256(previousValidatorsBalanceGwei) * 1 gwei;
             uint256 currentValidatorsBalanceWei = _validatorBalancesGweiByStakingModule[i] * 1 gwei;
@@ -1071,8 +1077,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _annualBalanceIncreaseMultiplier,
         uint256 _appearedLimitPerPeriodGwei
     ) internal view returns (uint256 activeAppearedEthGwei) {
-        (uint64 previousValidatorsBalanceGweiRaw, uint64 pendingBalanceBeforeReportGwei, ) =
-            _stakingRouter.getStakingModuleStateAccounting(_moduleId);
+        (bool hasPreviousAccounting, uint64 previousValidatorsBalanceGweiRaw, uint64 pendingBalanceBeforeReportGwei, ) =
+            _getModuleAccountingState(_stakingRouter, _moduleId);
+        if (!hasPreviousAccounting) {
+            return 0;
+        }
 
         // The module pending balance immediately before the current report is applied.
         // It is seeded by the previous report via `reportValidatorBalancesByStakingModule(...)` and then
@@ -1097,6 +1106,32 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                 _currentPendingBalanceGwei
             );
         }
+    }
+
+    function _getModuleAccountingState(
+        IStakingRouter _stakingRouter,
+        uint256 _moduleId
+    )
+        internal
+        view
+        returns (
+            bool hasPreviousAccounting,
+            uint64 previousValidatorsBalanceGwei,
+            uint64 previousPendingBalanceGwei,
+            uint64 exitedValidatorsCount
+        )
+    {
+        if (!_stakingRouter.hasStakingModule(_moduleId)) {
+            return (false, 0, 0, 0);
+        }
+
+        (previousValidatorsBalanceGwei, previousPendingBalanceGwei, exitedValidatorsCount) =
+            _stakingRouter.getStakingModuleStateAccounting(_moduleId);
+
+        hasPreviousAccounting =
+            previousValidatorsBalanceGwei != 0 ||
+            previousPendingBalanceGwei != 0 ||
+            exitedValidatorsCount != 0;
     }
 
     // `totalActiveAppearedEth` is the total pending balance consumed by modules into active validators
