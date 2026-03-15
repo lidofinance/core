@@ -972,6 +972,20 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         (allocated,, allocations) = SRLib._getDepositAllocations(_getConfig(), _depositAmount, true);
     }
 
+    /// @notice Returns new deposits allocation after the distribution of the `_depositAmount` deposits.
+    /// @param _depositAmount The maximum ETH amount of deposits to be allocated.
+    /// @param _isTopUp Whether the allocation is requested for top-up (true) or initial deposits (false).
+    /// @return totalAllocated - amount actually allocated
+    /// @return allocated - Array of newly allocated amounts for each module
+    /// @return newAllocations - Array of new allocation amounts for each module
+    function getDepositAllocations(uint256 _depositAmount, bool _isTopUp)
+        public
+        view
+        returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
+    {
+        return SRLib._getDepositAllocations(_getConfig(), _depositAmount, _isTopUp);
+    }
+
     /// @notice Invokes a deposit call to the official Deposit contract.
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @param _depositCalldata Staking module calldata.
