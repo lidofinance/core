@@ -52,6 +52,7 @@ interface ISRBase {
     error ZeroAddress();
     error ZeroArgument();
     error ArraysLengthMismatch();
+    error OracleExtraDataNotSubmitted();
 
     // Oracle report
     error InvalidReportData(uint256 code);
