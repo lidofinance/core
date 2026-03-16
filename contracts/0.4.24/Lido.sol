@@ -15,9 +15,6 @@ import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from ".
 import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
-interface IBurnerMigration {
-    function migrate(address _oldBurner) external;
-}
 
 interface IStakingRouter {
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
@@ -36,9 +33,7 @@ interface IStakingRouter {
 
 interface IWithdrawalQueue {
     function unfinalizedStETH() external view returns (uint256);
-
     function isBunkerModeActive() external view returns (bool);
-
     function finalize(uint256 _lastIdToFinalize, uint256 _maxShareRate) external payable;
 }
 
@@ -51,7 +46,7 @@ interface IWithdrawalVault {
 }
 
 interface IAccountingOracle {
-    ///@dev replace return struct with multiple return values to avoid memory struct allocation
+    /// @dev returns a tuple instead of a structure to avoid allocating memory
     function getProcessingState()
         external
         view
