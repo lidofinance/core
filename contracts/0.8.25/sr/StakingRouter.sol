@@ -954,22 +954,16 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
     /// @notice Returns new deposits allocation after the distribution of the `_depositAmount` deposits.
     /// @param _depositAmount The maximum ETH amount of deposits to be allocated.
-    /// @return allocated Number of deposits allocated to the staking modules.
-    /// @return allocations Array of new deposits allocation to the staking modules.
-    function getDepositsAllocation(uint256 _depositAmount)
-        external
+    /// @param _isTopUp Whether the allocation is requested for top-up (true) or initial deposits (false).
+    /// @return totalAllocated - amount actually allocated
+    /// @return allocated - Array of newly allocated amounts for each module
+    /// @return newAllocations - Array of new allocation amounts for each module
+    function getDepositAllocations(uint256 _depositAmount, bool _isTopUp)
+        public
         view
-        returns (uint256 allocated, uint256[] memory allocations)
+        returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
     {
-        (allocated,, allocations) = SRLib._getDepositAllocations(_getConfig(), _depositAmount, false);
-    }
-
-    function getTopUpAllocation(uint256 _depositAmount)
-        external
-        view
-        returns (uint256 allocated, uint256[] memory allocations)
-    {
-        (allocated,, allocations) = SRLib._getDepositAllocations(_getConfig(), _depositAmount, true);
+        (totalAllocated, allocated, newAllocations) = SRLib._getDepositAllocations(_getConfig(), _depositAmount, _isTopUp);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.

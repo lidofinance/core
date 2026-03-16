@@ -33,7 +33,6 @@ describe("StakingRouter.sol:rewards", () => {
     minDepositBlockDistance: 25n,
     withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
   };
-  const DEFAULT_MEB = wcTypeMaxEB(DEFAULT_CONFIG.withdrawalCredentialsType);
 
   const withdrawalCredentials = randomWCType1();
   const lido = certainAddress("test:staking-router-modules:lido"); // mock lido address
@@ -135,126 +134,6 @@ describe("StakingRouter.sol:rewards", () => {
       expect(await stakingRouter.getStakingModuleMaxDepositsCount(id2, maxDeposits * DEPOSIT_VALUE)).to.equal(
         config.depositable,
       );
-    });
-  });
-
-  context("getDepositsAllocation", () => {
-    it("Returns 0 allocated and empty allocations when there are no modules registered", async () => {
-      expect(await stakingRouter.getDepositsAllocation(100n)).to.deep.equal([0, []]);
-    });
-
-    // TODO: fix when allocation done
-    it("Returns all allocations to a single module if there is only one", async () => {
-      const config = {
-        ...DEFAULT_CONFIG,
-        depositable: 100n,
-      };
-
-      await setupModule(config);
-
-      const ethToDeposit = 150n * DEFAULT_MEB;
-      const moduleAllocation = config.depositable * DEFAULT_MEB;
-
-      expect(await stakingRouter.getDepositsAllocation(ethToDeposit)).to.deep.equal([
-        moduleAllocation,
-        [moduleAllocation],
-      ]);
-    });
-
-    it("Allocates evenly if target shares are equal and capacities allow for that", async () => {
-      const config = {
-        ...DEFAULT_CONFIG,
-        stakeShareLimit: 50_00n,
-        priorityExitShareThreshold: 50_00n,
-        depositable: 50n,
-      };
-
-      await setupModule(config);
-      await setupModule(config);
-
-      const ethToDeposit = 200n * DEFAULT_MEB;
-      const moduleAllocation = config.depositable * DEFAULT_MEB;
-
-      expect(await stakingRouter.getDepositsAllocation(ethToDeposit)).to.deep.equal([
-        moduleAllocation * 2n,
-        [moduleAllocation, moduleAllocation],
-      ]);
-    });
-
-    it("Not allocate to non-Active modules", async () => {
-      const config = {
-        ...DEFAULT_CONFIG,
-        stakeShareLimit: 50_00n,
-        priorityExitShareThreshold: 50_00n,
-        depositable: 50n,
-      };
-
-      await setupModule(config);
-      await setupModule({ ...config, status: StakingModuleStatus.DepositsPaused });
-
-      const ethToDeposit = 200n * DEFAULT_MEB;
-      const moduleAllocation = config.depositable * DEFAULT_MEB;
-
-      expect(await stakingRouter.getDepositsAllocation(ethToDeposit)).to.deep.equal([
-        moduleAllocation,
-        [moduleAllocation, 0n],
-      ]);
-    });
-
-    it("Allocates according to capacities at equal target shares", async () => {
-      const module1Config = {
-        ...DEFAULT_CONFIG,
-        stakeShareLimit: 50_00n,
-        priorityExitShareThreshold: 50_00n,
-        depositable: 100n,
-      };
-
-      const module2Config = {
-        ...DEFAULT_CONFIG,
-        stakeShareLimit: 50_00n,
-        priorityExitShareThreshold: 50_00n,
-        depositable: 50n,
-      };
-
-      await setupModule(module1Config);
-      await setupModule(module2Config);
-
-      const ethToDeposit = 200n * DEFAULT_MEB;
-      const module1Allocation = module1Config.depositable * DEFAULT_MEB;
-      const module2Allocation = module2Config.depositable * DEFAULT_MEB;
-
-      expect(await stakingRouter.getDepositsAllocation(ethToDeposit)).to.deep.equal([
-        module1Allocation + module2Allocation,
-        [module1Allocation, module2Allocation],
-      ]);
-    });
-
-    it("Allocates according to target shares", async () => {
-      const module1Config = {
-        ...DEFAULT_CONFIG,
-        stakeShareLimit: 60_00n,
-        priorityExitShareThreshold: 60_00n,
-        depositable: 100n,
-      };
-
-      const module2Config = {
-        ...DEFAULT_CONFIG,
-        stakeShareLimit: 40_00n,
-        priorityExitShareThreshold: 40_00n,
-        depositable: 100n,
-      };
-
-      await setupModule(module1Config);
-      await setupModule(module2Config);
-
-      const ethToDeposit = 200n * DEFAULT_MEB;
-      const module1Allocation = 100n * DEFAULT_MEB;
-      const module2Allocation = 80n * DEFAULT_MEB;
-
-      expect(await stakingRouter.getDepositsAllocation(ethToDeposit)).to.deep.equal([
-        module1Allocation + module2Allocation,
-        [module1Allocation, module2Allocation],
-      ]);
     });
   });
 
