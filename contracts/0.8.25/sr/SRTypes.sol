@@ -14,7 +14,7 @@ interface ILido {
 }
 
 interface IAccountingOracle {
-    ///@dev replace return struct with multiple return values to avoid memory struct allocation
+    ///@dev returns a tuple instead of a structure to avoid allocating memory
     function getProcessingState()
         external
         view

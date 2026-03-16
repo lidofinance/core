@@ -15,9 +15,6 @@ import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from ".
 import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
-interface IBurnerMigration {
-    function migrate(address _oldBurner) external;
-}
 
 interface IStakingRouter {
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
@@ -36,9 +33,7 @@ interface IStakingRouter {
 
 interface IWithdrawalQueue {
     function unfinalizedStETH() external view returns (uint256);
-
     function isBunkerModeActive() external view returns (bool);
-
     function finalize(uint256 _lastIdToFinalize, uint256 _maxShareRate) external payable;
 }
 
@@ -48,6 +43,25 @@ interface ILidoExecutionLayerRewardsVault {
 
 interface IWithdrawalVault {
     function withdrawWithdrawals(uint256 _amount) external;
+}
+
+interface IAccountingOracle {
+    /// @dev returns a tuple instead of a structure to avoid allocating memory
+    function getProcessingState()
+        external
+        view
+        returns (
+            uint256 currentFrameRefSlot,
+            uint256 processingDeadlineTime,
+            bytes32 mainDataHash,
+            bool mainDataSubmitted,
+            bytes32 extraDataHash,
+            uint256 extraDataFormat,
+            bool extraDataSubmitted,
+            uint256 extraDataItemsCount,
+            uint256 extraDataItemsSubmitted
+        );
+    function getLastProcessingRefSlot() external view returns (uint256);
 }
 
 /**
@@ -716,7 +730,24 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev Depends on the bunker mode and protocol pause state
      */
     function canDeposit() public view returns (bool) {
-        return !_withdrawalQueue().isBunkerModeActive() && !isStopped();
+        return !_withdrawalQueue().isBunkerModeActive() && !isStopped() && _isOracleReportSubmitted();
+    }
+
+    /// @notice Check if the last oracle report was submitted
+    /// @dev Since deposits at the module level are not tracked separately between Oracle reports but are only
+    ///      accounted for as part of `pendingDeposits`, which are then used in `sanityChecks` when processing
+    ///      a new report, it is necessary to ensure that they remain unchanged from the beginning of a new
+    ///      frame until a new report is received
+     function _isOracleReportSubmitted() internal view returns (bool isSubmitted) {
+        IAccountingOracle oracle = IAccountingOracle(_getLidoLocator().accountingOracle());
+        /// @dev get mainDataSubmitted flag from oracle processing state
+        (,,, isSubmitted,,,,,) = oracle.getProcessingState();
+        if (!isSubmitted) {
+            /// @dev allow deposits in case of initial deploy
+            ///      this flow will not be triggered onchain in most cases, so
+            ///      no worry about gas consumption on 2nd call
+            return oracle.getLastProcessingRefSlot() == 0;
+        }
     }
 
     /**
