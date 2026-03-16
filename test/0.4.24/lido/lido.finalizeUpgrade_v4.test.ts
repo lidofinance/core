@@ -53,7 +53,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("UNEXPECTED_CONTRACT_VERSION");
     });
 
-    it("Sets contract version to 3 and max external ratio to 10", async () => {
+    it("Sets contract version to 4 and max external ratio to 10", async () => {
       await expect(lido.finalizeUpgrade_v4()).to.emit(lido, "ContractVersionSet").withArgs(finalizeVersion);
       expect(await lido.getContractVersion()).to.equal(finalizeVersion);
     });
