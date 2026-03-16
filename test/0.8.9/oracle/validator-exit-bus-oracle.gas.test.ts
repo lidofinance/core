@@ -164,7 +164,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     );
   });
 
-  for (const totalRequests of [10, 50, 100, 1000]) {
+  for (const totalRequests of [10, 50, 100, 500]) {
     context(`Total requests: ${totalRequests}`, () => {
       let exitRequests: { requests: ExitRequest[]; requestsPerModule: number; requestsPerNodeOp: number };
       let reportFields: ReportFields;

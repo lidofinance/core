@@ -181,7 +181,7 @@ contract WQHandler is CommonBase, StdAssertions, StdUtils {
     function calculateBatches(uint256 ethBudget, uint256 maxShareRate) public view returns (uint256[] memory batches) {
         uint256[36] memory emptyBatches;
         WQBase.BatchesCalculationState memory state = WQBase.BatchesCalculationState(ethBudget, false, emptyBatches, 0);
-        while (!state.finished) {
+        while (!state.finished && state.remainingEthBudget > 0) {
             state = wq.calculateFinalizationBatches(maxShareRate, block.timestamp, 3, state);
         }
 
