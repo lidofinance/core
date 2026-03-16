@@ -963,7 +963,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         view
         returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
     {
-        return SRLib._getDepositAllocations(_getConfig(), _depositAmount, _isTopUp);
+        (totalAllocated, allocated, newAllocations) = SRLib._getDepositAllocations(_getConfig(), _depositAmount, _isTopUp);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
