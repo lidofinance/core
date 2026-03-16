@@ -27,7 +27,7 @@ interface ITriggerableWithdrawalsGateway {
 
 /// @notice New interface for staking modules (CSM, CuratedV2)
 /// @dev Returns only pubkeys
-interface INewStakingModule {
+interface IUnifiedStakingModule {
     /// @dev It also works for legacy staking modules (NOR, SDVT) where `getSigningKeys` returns different
     ///      tuple `(bytes memory pubkeys, bytes memory signatures, bool[] memory used)`.
     ///      The trick: `abi.decode(returndata, (bytes))` will decode only the first tuple element.
@@ -39,20 +39,13 @@ interface INewStakingModule {
     ) external view returns (bytes memory);
 }
 
-interface INodeOperatorsRegistry {
-    function getSigningKey(
-        uint256 _nodeOperatorId,
-        uint256 _index
-    ) external view returns (bytes memory key, bytes memory depositSignature, bool used);
-}
-
 interface IStakingRouter {
     struct ModuleStateConfig {
         address moduleAddress;
         uint16 moduleFee;
         uint16 treasuryFee;
-        uint16 depositTargetShare;
-        uint16 withdrawalProtectShare;
+        uint16 stakeShareLimit;
+        uint16 priorityExitShareThreshold;
         uint8 status;
         uint8 withdrawalCredentialsType;
     }
@@ -960,7 +953,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             newModuleAddress = IStakingRouter(LOCATOR.stakingRouter()).getStakingModuleStateConfig(moduleId).moduleAddress;
         }
 
-        bytes memory retrievedKeys = INewStakingModule(newModuleAddress)
+        bytes memory retrievedKeys = IUnifiedStakingModule(newModuleAddress)
             .getSigningKeys(
                 nodeOpId,
                 keyIndex, // startIndex

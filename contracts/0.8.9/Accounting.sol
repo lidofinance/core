@@ -103,9 +103,6 @@ contract Accounting {
         uint256 treasurySharesToMint;
     }
 
-    /// @notice deposit size in wei (for pre-maxEB accounting)
-    uint256 private constant DEPOSIT_SIZE = 32 ether;
-
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 

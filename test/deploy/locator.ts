@@ -113,6 +113,7 @@ async function getLocatorConfig(locatorAddress: string): Promise<LidoLocator.Con
     "oracleDaemonConfig",
     "validatorExitDelayVerifier",
     "triggerableWithdrawalsGateway",
+    "consolidationGateway",
     "accounting",
     "predepositGuarantee",
     "wstETH",

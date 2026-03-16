@@ -59,8 +59,8 @@ contract StakingRouter__MockForValidatorsExitBus is IStakingRouter {
                 moduleAddress: data.stakingModuleAddress,
                 moduleFee: data.stakingModuleFee,
                 treasuryFee: data.treasuryFee,
-                depositTargetShare: data.stakeShareLimit,
-                withdrawalProtectShare: data.priorityExitShareThreshold,
+                stakeShareLimit: data.stakeShareLimit,
+                priorityExitShareThreshold: data.priorityExitShareThreshold,
                 status: data.status,
                 withdrawalCredentialsType: data.withdrawalCredentialsType
             });
