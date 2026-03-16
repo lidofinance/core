@@ -379,10 +379,54 @@ library SRLib {
         allocation = allocated[moduleIdx];
     }
 
-    /// @notice calculate allocation amounts for all modules
-    /// @dev If `_isTopUp` is `true`, allocation is performed for top-up deposits targeting
-    ///      WC type `0x02` validators. In this case, `_cfg.maxEBType2` used
-    ///      to correctly calculate the module's capacity.
+    /**
+     * @notice calculate allocation amounts for all modules
+     * @dev If `_isTopUp` is `true`, allocation is performed for top-up deposits targeting
+     *      WC type `0x02` validators. In this case, `_cfg.maxEBType2` used
+     *      to correctly calculate the module's capacity.
+     *
+     * @dev The Allocation logic must preserve the same priority between modules
+     *      regardless of the allocation type or amount (initial seed deposits or top-ups).
+     *
+     *      For seed deposits this is straightforward. Both regular modules (0x01)
+     *      and modules with keys 0x02 use the same depositableValidatorsCount metric,
+     *      so the allocation priority is naturally consistent.
+     *
+     *      Top-up allocation is less obvious and requires additional considerations.
+     *
+     *      Important facts:
+     *
+     *      1. Top-ups are only possible for modules with keys type 0x02.
+     *      2. The total top-up amount is limited by the unused capacity of already active keys.
+     *      3. The method call with the flag `isTopUp = true` is used only when calculating
+     *         top-up allocations. In other words, the values returned for modules 0x01
+     *         are ignored by the caller.
+     *
+     *      Since allocation uses the MinFirstAllocationStrategy, we must not exclude
+     *      modules 0x01 from the selection during top-up calculations (for example,
+     *      by setting their capacity to zero). If we did, the algorithm would attempt
+     *      to distribute the entire available amount only across modules 0x02.
+     *
+     *      This would incorrectly increase the priority of deposits into modules 0x02
+     *      relative to modules 0x01.
+     *
+     *      Therefore the following approach is used:
+     *
+     *      - For modules 0x01 we keep the same capacity as for regular seed deposits.
+     *        Formally, these modules cannot receive top-ups, but they must remain
+     *        visible to the allocation strategy to preserve priority ordering.
+     *
+     *      - For modules 0x02 the capacity is set only to the remaining unused capacity
+     *        of already active keys.
+     *
+     *      At first glance this may appear to prioritize deposits into modules 0x01.
+     *      However, taking fact #3 into account, the returned allocations for modules
+     *      0x01 are never used. They are only an artifact of the MinFirstAllocationStrategy.
+     *
+     *      This design preserves the correct global priority between modules while
+     *      still allowing the system to fully utilize the available top-up capacity
+     *      of modules with keys type 0x02.
+     */
     function _getModulesAllocationAndCapacity(Config calldata _cfg, uint256 depositsToAllocate, bool _isTopUp)
         internal
         view
