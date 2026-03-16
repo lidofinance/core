@@ -14,6 +14,7 @@ import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MODULE_ID = NOR_MODULE_ID;
 const NUM_NEWLY_EXITED_VALIDATORS = 1n;
+const MAIN_REPORT_EFFECTIVE_CL_REWARD = ether("1");
 const MAINNET_NOR_ADDRESS = "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5".toLowerCase();
 
 describe("Integration: AccountingOracle extra data", () => {
@@ -112,7 +113,16 @@ describe("Integration: AccountingOracle extra data", () => {
     // Add total exited validators for both entries
     const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
 
-    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData);
+    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData, {
+      // This scenario expects the main report to mint module rewards and move modules to
+      // TransferredToModule before extra data processing starts.
+      //
+      // Historically reportWithoutExtraData() inherited report()'s default clDiff=ether("0.01"),
+      // so these tests got a small implicit positive rebase. After the pending-deposits sanity
+      // check refactor, report() defaults to clDiff=depositedSinceLastReport instead, which makes
+      // this report path neutral here. Keep a small explicit positive delta to force onRewardsMinted().
+      effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
+    });
   }
 
   it("should accept report with multiple keys per node operator (single chunk)", async () => {
@@ -170,6 +180,8 @@ describe("Integration: AccountingOracle extra data", () => {
     const { accountingOracle } = ctx.contracts;
 
     const { submitter, extraDataChunks } = await submitMainReport();
+    // Make the main-report transition explicit before extra data starts changing module state further.
+    await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
     // Submit first chunk of extra data
     await accountingOracle.connect(submitter).submitReportExtraDataList(hexToBytes(extraDataChunks[0]));
@@ -196,6 +208,8 @@ describe("Integration: AccountingOracle extra data", () => {
     const { accountingOracle } = ctx.contracts;
 
     const { submitter, extraDataChunks } = await submitMainReport();
+    // Make the main-report transition explicit before extra data starts changing module state further.
+    await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
     // Submit first chunk of extra data
     await accountingOracle.connect(submitter).submitReportExtraDataList(hexToBytes(extraDataChunks[0]));

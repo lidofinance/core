@@ -9,7 +9,7 @@ contract OracleReportSanityChecker__MockForAccounting {
     bool private checkSimulatedShareRateReverts;
     uint256 private _withdrawals;
     uint256 private _elRewards;
-    uint256 private _simulatedSharesToBurn;
+    uint256 private _sharesFromWQToBurn;
     uint256 private _sharesToBurn;
 
     error CheckAccountingOracleReportReverts();
@@ -18,8 +18,10 @@ contract OracleReportSanityChecker__MockForAccounting {
 
     function checkAccountingOracleReport(
         uint256, //_timeElapsed,
-        uint256, //_preCLBalance,
-        uint256, //_postCLBalance,
+        uint256, //_preCLValidatorsBalance,
+        uint256, //_preCLPendingBalance,
+        uint256, //_postCLValidatorsBalance,
+        uint256, //_postCLPendingBalance,
         uint256, //_withdrawalVaultBalance,
         uint256, //_elRewardsVaultBalance,
         uint256, //_sharesRequestedToBurn,
@@ -37,31 +39,27 @@ contract OracleReportSanityChecker__MockForAccounting {
     }
 
     function smoothenTokenRebase(
-        uint256, // _preTotalPooledEther,
-        uint256, // _preTotalShares,
+        uint256, // _preInternalEther,
+        uint256, // _preInternalShares,
         uint256, // _preCLBalance,
         uint256, // _postCLBalance,
         uint256, // _withdrawalVaultBalance,
         uint256, // _elRewardsVaultBalance,
         uint256, // _sharesRequestedToBurn,
-        uint256, // _etherToLockForWithdrawals,
-        uint256 // _newSharesToBurnForWithdrawals
-    )
-        external
-        view
-        returns (uint256 withdrawals, uint256 elRewards, uint256 simulatedSharesToBurn, uint256 sharesToBurn)
-    {
+        uint256, // _etherToFinalizeWithdrawals,
+        uint256 // _sharesToBurnFromWithdrawalQueue
+    ) external view returns (uint256 withdrawals, uint256 elRewards, uint256 sharesFromWQToBurn, uint256 sharesToBurn) {
         withdrawals = _withdrawals;
         elRewards = _elRewards;
-        simulatedSharesToBurn = _simulatedSharesToBurn;
+        sharesFromWQToBurn = _sharesFromWQToBurn;
         sharesToBurn = _sharesToBurn;
     }
 
     function checkSimulatedShareRate(
-        uint256, // _postTotalPooledEther,
-        uint256, // _postTotalShares,
-        uint256, // _etherLockedOnWithdrawalQueue,
-        uint256, // _sharesBurntDueToWithdrawals,
+        uint256, // _postInternalEther,
+        uint256, // _postInternalShares,
+        uint256, // _etherToFinalizeWithdrawals,
+        uint256, // _sharesToBurnFromWithdrawalQueue,
         uint256 // _simulatedShareRate
     ) external view {
         if (checkSimulatedShareRateReverts) revert CheckSimulatedShareRateReverts();
@@ -84,12 +82,12 @@ contract OracleReportSanityChecker__MockForAccounting {
     function mock__smoothenTokenRebaseReturn(
         uint256 withdrawals,
         uint256 elRewards,
-        uint256 simulatedSharesToBurn,
+        uint256 sharesFromWQToBurn,
         uint256 sharesToBurn
     ) external {
         _withdrawals = withdrawals;
         _elRewards = elRewards;
-        _simulatedSharesToBurn = simulatedSharesToBurn;
+        _sharesFromWQToBurn = sharesFromWQToBurn;
         _sharesToBurn = sharesToBurn;
     }
 }

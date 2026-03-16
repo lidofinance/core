@@ -28,6 +28,7 @@ import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MIN_KEYS_PER_OPERATOR = 5n;
 const MIN_OPERATORS_COUNT = 30n;
+const MAIN_REPORT_EFFECTIVE_CL_REWARD = ether("1");
 
 class ListKeyMapHelper<ValueType> {
   private map: Map<string, ValueType> = new Map();
@@ -242,8 +243,19 @@ describe("Integration: AccountingOracle extra data full items", () => {
         numExitedValidatorsByStakingModule,
         modulesWithExited,
         extraData,
+        {
+          // This scenario expects the main report to mint module rewards and move modules to
+          // TransferredToModule before extra data processing starts.
+          //
+          // Historically reportWithoutExtraData() inherited report()'s default clDiff=ether("0.01"),
+          // so these tests got a small implicit positive rebase. After the pending-deposits sanity
+          // check refactor, report() defaults to clDiff=depositedSinceLastReport instead, which makes
+          // this report path neutral here. Keep a small explicit positive delta to force onRewardsMinted().
+          effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
+        },
       );
 
+      // Make the main-report transition explicit before extra data finalization moves modules to ReadyForDistribution.
       await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
       for (let i = 0; i < extraDataChunks.length; i++) {

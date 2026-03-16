@@ -349,8 +349,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await waitNextAvailableReportTime(ctx);
 
       // Get current protocol state
-      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
-      const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
+      const { clValidatorsBalanceAtLastReport } = await lido.getBalanceStats();
       const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
       const { secondsPerSlot } = await hashConsensus.getChainConfig();
       const { currentFrameRefSlot } = await accountingOracle.getProcessingState();
@@ -362,29 +361,29 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Calculate time elapsed for one frame
       const timeElapsed = slotElapsed * secondsPerSlot;
 
-      // Calculate balance increase that exceeds the limit
-      // The check is: (365 days * 10000 * balanceIncrease / preCLBalance) / timeElapsed > limit
-      // Solving : balanceIncrease > ((limit + 1) * preCLBalance * timeElapsed - 1) / (365 days * 10000)
+      // Positive CL growth is now capped first by the pending-balance sanity, which derives the
+      // additional allowance from the previous validators balance rather than total CL balance.
       const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
       const MAX_BASIS_POINTS = 10000n;
       const maxBalanceIncrease =
-        ((annualBalanceIncreaseBPLimit + 1n) * preCLBalance * timeElapsed - 1n) / (SECONDS_PER_YEAR * MAX_BASIS_POINTS);
+        (annualBalanceIncreaseBPLimit * clValidatorsBalanceAtLastReport * timeElapsed) /
+        (SECONDS_PER_YEAR * MAX_BASIS_POINTS);
 
       const stateBefore = await captureState();
       expect(stateBefore.badDebtToInternalize).to.equal(badDebtShares, "Bad debt should be queued");
 
-      // Report should revert - CL increase exceeds the limit
-      // Bad debt being queued does NOT compensate for the excess
+      // Positive CL growth is now bounded by the pending-balance sanity before the annual
+      // total-balance check, but bad debt still must not compensate an over-limit report.
       await expect(
         report(ctx, {
-          clDiff: maxBalanceIncrease + 10n ** 9n, // + 1 gwei to exceed limit
+          clDiff: maxBalanceIncrease + 10n ** 9n,
           excludeVaultsBalances: true,
           skipWithdrawals: true,
           waitNextReportTime: false,
         }),
       ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease");
 
-      // Now report exactly at the limit. Should pass despite bad debt internalization
+      // Report exactly at the limit should pass despite bad debt internalization
       await report(ctx, {
         clDiff: maxBalanceIncrease,
         excludeVaultsBalances: true,

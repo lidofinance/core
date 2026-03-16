@@ -6,6 +6,7 @@ pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
+import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
@@ -27,6 +28,8 @@ interface IOracleReportSanityChecker {
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _validatorBalancesGweiByStakingModule,
         uint256[] calldata _pendingBalancesGweiByStakingModule,
+        uint256 _preCLValidatorsBalanceGwei,
+        uint256 _postCLValidatorsBalanceGwei,
         uint256 _clValidatorsBalanceGwei,
         uint256 _clPendingBalanceGwei,
         uint256 _timeElapsed
@@ -61,6 +64,8 @@ interface IStakingRouter {
     ) external;
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
+
+    function getTotalStakingModulesBalance() external view returns (uint256);
 }
 
 interface IWithdrawalQueue {
@@ -503,15 +508,7 @@ contract AccountingOracle is BaseOracle {
         IWithdrawalQueue withdrawalQueue = IWithdrawalQueue(LOCATOR.withdrawalQueue());
         IOracleReportSanityChecker sanityChecker = IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker());
 
-        sanityChecker.checkModuleAndCLBalancesChangeRates(
-            data.stakingModuleIdsWithUpdatedBalance,
-            data.validatorBalancesGweiByStakingModule,
-            data.pendingBalancesGweiByStakingModule,
-            data.clValidatorsBalanceGwei,
-            data.clPendingBalanceGwei,
-            timeElapsed
-        );
-
+        _checkStakingRouterModuleBalances(sanityChecker, data, timeElapsed);
         _processStakingRouterExitedValidatorsByModule(
             stakingRouter,
             sanityChecker,
@@ -727,6 +724,26 @@ contract AccountingOracle is BaseOracle {
         }
 
         emit ExtraDataSubmitted(procState.refSlot, procState.itemsProcessed, procState.itemsCount);
+    }
+
+    function _checkStakingRouterModuleBalances(
+        IOracleReportSanityChecker sanityChecker,
+        ReportData calldata data,
+        uint256 timeElapsed
+    ) internal view {
+        // This check must run before `reportValidatorBalancesByStakingModule(...)` mutates the router state,
+        // because it compares the report against the previous per-module validators/pending balances in StakingRouter.
+        (uint256 preCLValidatorsBalanceGwei, , ) = ILido(LOCATOR.lido()).getBalanceStats();
+        sanityChecker.checkModuleAndCLBalancesChangeRates(
+            data.stakingModuleIdsWithUpdatedBalance,
+            data.validatorBalancesGweiByStakingModule,
+            data.pendingBalancesGweiByStakingModule,
+            preCLValidatorsBalanceGwei,
+            data.clValidatorsBalanceGwei,
+            data.clValidatorsBalanceGwei,
+            data.clPendingBalanceGwei,
+            timeElapsed
+        );
     }
 
     function _processExtraDataItems(bytes calldata data, ExtraDataIterState memory iter) internal {
