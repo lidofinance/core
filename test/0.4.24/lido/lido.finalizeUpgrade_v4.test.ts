@@ -5,10 +5,15 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Lido__HarnessForFinalizeUpgradeV4 } from "typechain-types";
+import {
+  AccountingOracle__MockForStakingRouter,
+  Lido__HarnessForFinalizeUpgradeV4,
+  LidoLocator,
+} from "typechain-types";
 
 import { ether, getStorageAtPositionAsUint128Pair, proxify } from "lib";
 
+import { deployLidoLocator } from "test/deploy/locator";
 import { Snapshot } from "test/suite";
 
 describe("Lido.sol:finalizeUpgrade_v4", () => {
@@ -16,6 +21,8 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
 
   let impl: Lido__HarnessForFinalizeUpgradeV4;
   let lido: Lido__HarnessForFinalizeUpgradeV4;
+  let accountingOracle: AccountingOracle__MockForStakingRouter;
+  let locator: LidoLocator;
 
   const initialValue = 1n;
   const finalizeVersion = 4n;
@@ -28,6 +35,8 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       signer: deployer,
     });
     [lido] = await proxify({ impl, admin: deployer });
+    accountingOracle = await ethers.deployContract("AccountingOracle__MockForStakingRouter", deployer);
+    locator = await deployLidoLocator({ lido, accountingOracle }, deployer);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -41,7 +50,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
     before(async () => {
       const latestBlock = BigInt(await time.latestBlock());
 
-      await lido.connect(deployer).harness_initialize_v3({ value: initialValue });
+      await lido.connect(deployer).harness_initialize_v3(locator, { value: initialValue });
 
       expect(await impl.getInitializationBlock()).to.equal(MaxUint256);
       expect(await lido.getInitializationBlock()).to.equal(latestBlock + 1n);
@@ -53,12 +62,20 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("UNEXPECTED_CONTRACT_VERSION");
     });
 
-    it("Sets contract version to 3 and max external ratio to 10", async () => {
+    it("Sets contract version to 4", async () => {
       await expect(lido.finalizeUpgrade_v4()).to.emit(lido, "ContractVersionSet").withArgs(finalizeVersion);
       expect(await lido.getContractVersion()).to.equal(finalizeVersion);
     });
 
-    it("Migrates storage successfully", async () => {
+    it("Reverts upgrade if occurred before report", async () => {
+      // simulate no report
+      await accountingOracle.mock_setProcessingState(1, false, false);
+      await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("NO_REPORT");
+    });
+
+    it("Migrates storage successfully after report and before next frame", async () => {
+      // simulate report
+      await accountingOracle.mock_setProcessingState(1, true, true);
       const { low: bufferedEther, high: depositedValidators } = await getStorageAtPositionAsUint128Pair(
         lido,
         "lido.Lido.bufferedEtherAndDepositedValidators",
