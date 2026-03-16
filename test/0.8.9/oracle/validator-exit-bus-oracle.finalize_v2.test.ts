@@ -15,6 +15,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
   let locator: LidoLocator;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
+  const NEW_CONSENSUS_VERSION = 42n;
 
   before(async () => {
     locator = await deployLidoLocator();
@@ -57,7 +58,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
 
   // contract version
   it("should revert if set wrong version", async () => {
-    await expect(oracle.finalizeUpgrade_v3(10, 100n, 32n, 48)).to.be.revertedWithCustomError(
+    await expect(oracle.finalizeUpgrade_v3(10, 100n, 32n, 48, NEW_CONSENSUS_VERSION)).to.be.revertedWithCustomError(
       oracle,
       "InvalidContractVersionIncrement",
     );
@@ -73,9 +74,16 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
     const maxValidatorsPerReport = 15;
     const frameDuration = 48;
 
-    await oracle.finalizeUpgrade_v3(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDuration);
+    await oracle.finalizeUpgrade_v3(
+      maxValidatorsPerReport,
+      maxExitBalanceEth,
+      balancePerFrameEth,
+      frameDuration,
+      NEW_CONSENSUS_VERSION,
+    );
 
     expect(await oracle.getContractVersion()).to.equal(3);
+    expect(await oracle.getConsensusVersion()).to.equal(NEW_CONSENSUS_VERSION);
 
     const exitRequestLimitData = await oracle.getExitRequestLimitFullInfo();
     expect(exitRequestLimitData.maxExitBalanceEth).to.equal(maxExitBalanceEth);
@@ -84,8 +92,8 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
 
     expect(await oracle.getMaxValidatorsPerReport()).to.equal(maxValidatorsPerReport);
 
-    // should not allow to run finalizeUpgrade_v4 again
-    await expect(oracle.finalizeUpgrade_v3(10, 100, 1, 48)).to.be.revertedWithCustomError(
+    // should not allow finalizeUpgrade_v3 to run again
+    await expect(oracle.finalizeUpgrade_v3(10, 100, 1, 48, NEW_CONSENSUS_VERSION + 1n)).to.be.revertedWithCustomError(
       oracle,
       "InvalidContractVersionIncrement",
     );
