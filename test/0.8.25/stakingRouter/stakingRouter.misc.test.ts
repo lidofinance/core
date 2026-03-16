@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { LidoLocator, StakingRouter__Harness } from "typechain-types";
+import { AccountingOracle__MockForStakingRouter, LidoLocator, StakingRouter__Harness } from "typechain-types";
 
 import { certainAddress, ether, randomAddress, randomBytes32, randomWCType1 } from "lib";
 
@@ -17,7 +17,7 @@ describe("StakingRouter.sol:misc", () => {
   let stakingRouterAdmin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let locator: LidoLocator;
-
+  let accountingOracle: AccountingOracle__MockForStakingRouter;
   let stakingRouter: StakingRouter__Harness;
   let impl: StakingRouter__Harness;
 
@@ -26,13 +26,13 @@ describe("StakingRouter.sol:misc", () => {
   const lido = certainAddress("test:staking-router:lido");
   const topUpGateway = certainAddress("test:staking-router:topUpGateway");
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
-  const accountingOracle = certainAddress("test:staking-router:accountingOracle");
   const accounting = certainAddress("test:staking-router:accounting");
   const withdrawalCredentials = randomWCType1();
 
   before(async () => {
     [deployer, admin, stakingRouterAdmin, user] = await ethers.getSigners();
 
+    accountingOracle = await ethers.deployContract("AccountingOracle__MockForStakingRouter", deployer);
     locator = await deployLidoLocator({
       lido,
       topUpGateway,
@@ -129,10 +129,21 @@ describe("StakingRouter.sol:misc", () => {
       await stakingRouter.testing_grantRoleOld(STAKING_MODULE_MANAGE_ROLE, stakingRouterAdmin.address);
       await stakingRouter.testing_grantRoleOld(REPORT_EXITED_VALIDATORS_ROLE, accountingOracle);
       await stakingRouter.testing_grantRoleOld(REPORT_REWARDS_MINTED_ROLE, accounting);
+
+      // simulate oracle report
+      await accountingOracle.mock_setProcessingState(1, true, true);
     });
 
     it("fails with InvalidInitialization error when called on implementation", async () => {
       await expect(impl.finalizeUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
+    });
+
+    it("revert migration if oracle extra data was not submitted yet", async () => {
+      await accountingOracle.mock_setProcessingState(1, true, false);
+      await expect(stakingRouter.finalizeUpgrade_v4()).to.be.revertedWithCustomError(
+        stakingRouter,
+        "OracleExtraDataNotSubmitted",
+      );
     });
 
     it("sets correct contract version, withdrawal credentials and admin role", async () => {

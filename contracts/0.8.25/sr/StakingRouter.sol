@@ -123,6 +123,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
     function finalizeUpgrade_v4() external reinitializer(4) {
         // migrate current modules to new storage
+        (, bool extraDataSubmitted) = _getOracleProcessingState();
+        if (!extraDataSubmitted) revert OracleExtraDataNotSubmitted();
         SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
 
         /// @dev migrate OZ roles
@@ -685,20 +687,28 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         return hasStakingModule(_stakingModuleId) && _canDeposit(_stakingModuleId);
     }
 
+    /// @notice check if oracle report's extra data was submitted
     function _canDeposit(uint256 _moduleId) internal view returns (bool) {
         if (_moduleId.getModuleState().config.status == StakingModuleStatus.Active) {
-            IAccountingOracle oracle = IAccountingOracle(_getAccountingOracle());
-            (,,,,,, bool extraDataSubmitted,,) = oracle.getProcessingState();
-            if (!extraDataSubmitted) {
-                /// @dev allow deposits in case of initial deploy
-                ///      this flow will not be triggered onchain in most cases, so
-                ///      no worry about gas consumption on 2nd call
-                uint256 lastProcessingRefSlot = oracle.getLastProcessingRefSlot();
-                return lastProcessingRefSlot == 0;
-            }
-            return true;
+            (, bool extraDataSubmitted) = _getOracleProcessingState();
+            return extraDataSubmitted;
         }
         return false;
+    }
+
+    /// @notice get mainDataSubmitted and extraDataSubmitted flags from oracle processing state
+    /// @dev simulates submitted report in case of initial deploy
+    function _getOracleProcessingState() internal view returns (bool mainDataSubmitted, bool extraDataSubmitted) {
+        IAccountingOracle oracle = IAccountingOracle(_getAccountingOracle());
+        (,,, mainDataSubmitted,,, extraDataSubmitted,,) = oracle.getProcessingState();
+        if (!mainDataSubmitted) {
+            /// @dev allow deposits in case of initial deploy
+            ///      this flow will not be triggered onchain in most cases, so
+            ///      no worry about gas consumption on 2nd call
+            if (oracle.getLastProcessingRefSlot() == 0) {
+                return (true, true);
+            }
+        }
     }
 
     /**
@@ -963,7 +973,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         view
         returns (uint256 totalAllocated, uint256[] memory allocated, uint256[] memory newAllocations)
     {
-        (totalAllocated, allocated, newAllocations) = SRLib._getDepositAllocations(_getConfig(), _depositAmount, _isTopUp);
+        (totalAllocated, allocated, newAllocations) =
+            SRLib._getDepositAllocations(_getConfig(), _depositAmount, _isTopUp);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
