@@ -68,13 +68,14 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
     });
 
     it("Reverts upgrade if occurred before report", async () => {
+      // simulate no report
       await accountingOracle.mock_setProcessingState(1, false, false);
       await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("NO_REPORT");
     });
 
     it("Migrates storage successfully after report and before next frame", async () => {
       // simulate report
-
+      await accountingOracle.mock_setProcessingState(1, true, true);
       const { low: bufferedEther, high: depositedValidators } = await getStorageAtPositionAsUint128Pair(
         lido,
         "lido.Lido.bufferedEtherAndDepositedValidators",
