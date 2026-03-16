@@ -293,6 +293,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     function _migrateStorage_v3_to_v4() internal {
+        /// @dev prevent migration if the last oracle report wasn't submitted, otherwise deposits
+        ///      made after refSlot and before migration (and report's tx) will be lost
+        require(_isOracleReportSubmitted(), "NO_REPORT");
+
         /// @dev storage slots used in v3
         // keccak256("lido.Lido.clBalanceAndClValidators")
         bytes32 CL_BALANCE_AND_CL_VALIDATORS_POSITION =
