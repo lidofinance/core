@@ -413,7 +413,8 @@ contract DepositSecurityModule {
      *   - the staking module is active;
      *   - the guardian quorum is not set to zero;
      *   - the deposit distance is greater than the minimum required;
-     *   - LIDO.canDeposit() returns true.
+     *   - LIDO.canDeposit() returns true;
+     *   - STAKING_ROUTER.canDeposit returns true.
      */
     function canDeposit(uint256 stakingModuleId) external view returns (bool) {
         if (!STAKING_ROUTER.canDeposit(stakingModuleId)) return false;
