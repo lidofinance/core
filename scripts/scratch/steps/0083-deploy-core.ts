@@ -17,6 +17,8 @@ import {
   deployWithoutProxy,
   makeTx,
 } from "lib/deploy";
+import { EIP7002_ADDRESS } from "lib/eips/eip7002";
+import { EIP7251_ADDRESS } from "lib/eips/eip7251";
 import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 import { en0x } from "lib/string";
@@ -497,6 +499,8 @@ export async function main() {
     treasuryAddress,
     triggerableWithdrawalsGateway.address,
     consolidationGateway.address,
+    EIP7002_ADDRESS,
+    EIP7251_ADDRESS,
   ]);
 
   await makeTx(withdrawalsManagerProxy, "proxy_upgradeTo", [withdrawalVaultImpl.address, "0x"], { from: deployer });

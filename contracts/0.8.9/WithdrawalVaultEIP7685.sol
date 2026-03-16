@@ -14,14 +14,15 @@ pragma solidity 0.8.9;
  *      - EIP-7251: Consolidation requests
  */
 abstract contract WithdrawalVaultEIP7685 {
-    address public constant WITHDRAWAL_REQUEST = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
-    address public constant CONSOLIDATION_REQUEST = 0x0000BBdDc7CE488642fb579F8B00f3a590007251;
+    address public immutable WITHDRAWAL_REQUEST;
+    address public immutable CONSOLIDATION_REQUEST;
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     event WithdrawalRequestAdded(bytes request);
     event ConsolidationRequestAdded(bytes request);
 
+    error ZeroAddress();
     error ZeroArgument(string name);
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
     error FeeReadFailed();
@@ -29,6 +30,14 @@ abstract contract WithdrawalVaultEIP7685 {
     error IncorrectFee(uint256 requiredFee, uint256 providedFee);
     error RequestAdditionFailed(bytes callData);
     error InvalidPublicKeyLength(bytes pubkey);
+
+    constructor(address _withdrawalRequest, address _consolidationRequest) {
+        _onlyNonZeroAddress(_withdrawalRequest);
+        _onlyNonZeroAddress(_consolidationRequest);
+
+        WITHDRAWAL_REQUEST = _withdrawalRequest;
+        CONSOLIDATION_REQUEST = _consolidationRequest;
+    }
 
     function _addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) internal {
         uint256 requestsCount = pubkeys.length;
@@ -115,5 +124,9 @@ abstract contract WithdrawalVaultEIP7685 {
         if (requiredFee != msg.value) {
             revert IncorrectFee(requiredFee, msg.value);
         }
+    }
+
+    function _onlyNonZeroAddress(address _address) internal pure {
+        if (_address == address(0)) revert ZeroAddress();
     }
 }

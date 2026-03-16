@@ -78,7 +78,14 @@ describe("WithdrawalVault.sol", () => {
 
     impl = await ethers.deployContract(
       "WithdrawalVault__Harness",
-      [lidoAddress, treasury.address, triggerableWithdrawalsGateway.address, consolidationGateway.address],
+      [
+        lidoAddress,
+        treasury.address,
+        triggerableWithdrawalsGateway.address,
+        consolidationGateway.address,
+        EIP7002_ADDRESS,
+        EIP7251_ADDRESS,
+      ],
       owner,
     );
 
@@ -99,6 +106,8 @@ describe("WithdrawalVault.sol", () => {
           treasury.address,
           triggerableWithdrawalsGateway.address,
           consolidationGateway.address,
+          EIP7002_ADDRESS,
+          EIP7251_ADDRESS,
         ]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
@@ -110,6 +119,8 @@ describe("WithdrawalVault.sol", () => {
           ZeroAddress,
           triggerableWithdrawalsGateway.address,
           consolidationGateway.address,
+          EIP7002_ADDRESS,
+          EIP7251_ADDRESS,
         ]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
@@ -121,6 +132,8 @@ describe("WithdrawalVault.sol", () => {
           treasury.address,
           ZeroAddress,
           consolidationGateway.address,
+          EIP7002_ADDRESS,
+          EIP7251_ADDRESS,
         ]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
@@ -131,6 +144,34 @@ describe("WithdrawalVault.sol", () => {
           lidoAddress,
           treasury.address,
           triggerableWithdrawalsGateway.address,
+          ZeroAddress,
+          EIP7002_ADDRESS,
+          EIP7251_ADDRESS,
+        ]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
+    });
+
+    it("Reverts if the withdrawal request address is zero", async () => {
+      await expect(
+        ethers.deployContract("WithdrawalVault", [
+          lidoAddress,
+          treasury.address,
+          triggerableWithdrawalsGateway.address,
+          consolidationGateway.address,
+          ZeroAddress,
+          EIP7251_ADDRESS,
+        ]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
+    });
+
+    it("Reverts if the consolidation request address is zero", async () => {
+      await expect(
+        ethers.deployContract("WithdrawalVault", [
+          lidoAddress,
+          treasury.address,
+          triggerableWithdrawalsGateway.address,
+          consolidationGateway.address,
+          EIP7002_ADDRESS,
           ZeroAddress,
         ]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
@@ -147,6 +188,8 @@ describe("WithdrawalVault.sol", () => {
         consolidationGateway.address,
         "Consolidation Gateway address",
       );
+      expect(await vault.WITHDRAWAL_REQUEST()).to.equal(EIP7002_ADDRESS, "Withdrawal Request address");
+      expect(await vault.CONSOLIDATION_REQUEST()).to.equal(EIP7251_ADDRESS, "Consolidation Request address");
     });
 
     it("Petrifies the implementation", async () => {
