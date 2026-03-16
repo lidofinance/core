@@ -11,10 +11,6 @@ contract Lido__MockForAccounting {
     uint256 public reportClPendingBalance;
     uint256 public depositedBalance;
 
-    // Emitted when validators number delivered by the oracle
-    // @deprecated This event is deprecated. Use CLBalancesUpdated instead for balance-based accounting
-    event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
-
     // Emitted when CL balances are updated by the oracle
     event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
     event Mock__CollectRewardsAndProcessWithdrawals(
