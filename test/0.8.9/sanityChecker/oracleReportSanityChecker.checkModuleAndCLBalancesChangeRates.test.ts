@@ -91,16 +91,20 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
   const check = async (modules: ModuleBalance[], timeElapsed = ONE_DAY) => {
     const input = toModuleInput(modules);
-    // Mirror AccountingOracle: compare the reported current total CL balance against
-    // the previous total CL balance stored in StakingRouter before balances are updated.
-    const preCLBalanceGwei = (await stakingRouter.getTotalStakingModulesBalance()) / ONE_GWEI;
-    const postCLBalanceGwei = input.clValidatorsBalanceGwei + input.clPendingBalanceGwei;
+    const previousModuleStates = await Promise.all(
+      input.ids.map((id) => stakingRouter.getStakingModuleStateAccounting(id)),
+    );
+    const preCLValidatorsBalanceGwei = previousModuleStates.reduce(
+      (sum, [validatorsBalanceGwei]) => sum + validatorsBalanceGwei,
+      0n,
+    );
+    const postCLValidatorsBalanceGwei = input.clValidatorsBalanceGwei;
     return checker.checkModuleAndCLBalancesChangeRates(
       input.ids,
       input.validatorBalancesGweiByStakingModule,
       input.pendingBalancesGwei,
-      preCLBalanceGwei,
-      postCLBalanceGwei,
+      preCLValidatorsBalanceGwei,
+      postCLValidatorsBalanceGwei,
       input.clValidatorsBalanceGwei,
       input.clPendingBalanceGwei,
       timeElapsed,
@@ -313,20 +317,17 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const [moduleId] = moduleIds;
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
-    const firstValidatorsBalanceGwei = ether("100") / ONE_GWEI;
+    const firstValidatorsBalanceGwei = ether("40150") / ONE_GWEI;
     const firstPendingBalanceGwei = ether("120") / ONE_GWEI;
-    const secondValidatorsBalanceGwei = ether("211") / ONE_GWEI;
+    const secondValidatorsBalanceGwei = firstValidatorsBalanceGwei + ether("111") / ONE_GWEI;
     const secondPendingBalanceGwei = ether("20") / ONE_GWEI;
-    const firstTotalClBalanceGwei = firstValidatorsBalanceGwei + firstPendingBalanceGwei;
-    const secondTotalClBalanceGwei = secondValidatorsBalanceGwei + secondPendingBalanceGwei;
-
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
         [moduleId],
         [firstValidatorsBalanceGwei],
         [firstPendingBalanceGwei],
-        firstTotalClBalanceGwei,
-        firstTotalClBalanceGwei,
+        firstValidatorsBalanceGwei,
+        firstValidatorsBalanceGwei,
         firstValidatorsBalanceGwei,
         firstPendingBalanceGwei,
         ONE_DAY,
@@ -342,8 +343,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         [moduleId],
         [secondValidatorsBalanceGwei],
         [secondPendingBalanceGwei],
-        firstTotalClBalanceGwei,
-        secondTotalClBalanceGwei,
+        firstValidatorsBalanceGwei,
+        secondValidatorsBalanceGwei,
         secondValidatorsBalanceGwei,
         secondPendingBalanceGwei,
         ONE_DAY,
@@ -376,8 +377,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         [moduleId],
         [0n],
         [depositedPendingBalanceGwei],
-        depositedPendingBalanceGwei,
-        depositedPendingBalanceGwei,
+        0n,
+        0n,
         0n,
         depositedPendingBalanceGwei,
         ONE_DAY,
@@ -401,8 +402,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         [moduleId],
         [activatedValidatorsBalanceGwei],
         [remainingPendingBalanceGwei],
-        depositedPendingBalanceGwei,
-        depositedPendingBalanceGwei,
+        0n,
+        activatedValidatorsBalanceGwei,
         activatedValidatorsBalanceGwei,
         remainingPendingBalanceGwei,
         ONE_DAY,
@@ -436,8 +437,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         [moduleOneId, moduleTwoId],
         [0n, 0n],
         [moduleOneInitialPendingWei / ONE_GWEI, moduleTwoInitialPendingWei / ONE_GWEI],
-        totalInitialPendingWei / ONE_GWEI,
-        totalInitialPendingWei / ONE_GWEI,
+        0n,
+        0n,
         0n,
         totalInitialPendingWei / ONE_GWEI,
         ONE_DAY,
@@ -465,8 +466,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         [moduleOneId, moduleTwoId],
         [moduleOneActivatedValidatorsWei / ONE_GWEI, moduleTwoActivatedValidatorsWei / ONE_GWEI],
         [moduleOneRemainingPendingWei / ONE_GWEI, moduleTwoRemainingPendingWei / ONE_GWEI],
-        totalInitialPendingWei / ONE_GWEI,
-        totalInitialPendingWei / ONE_GWEI,
+        0n,
+        totalActivatedValidatorsWei / ONE_GWEI,
         totalActivatedValidatorsWei / ONE_GWEI,
         totalRemainingPendingWei / ONE_GWEI,
         ONE_DAY,
@@ -499,8 +500,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         [moduleId],
         [0n],
         [initialPendingWei / ONE_GWEI],
-        initialPendingWei / ONE_GWEI,
-        initialPendingWei / ONE_GWEI,
+        0n,
+        0n,
         0n,
         initialPendingWei / ONE_GWEI,
         zeroTimeElapsed,
@@ -525,8 +526,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         [moduleId],
         [maxModuleActivationGwei],
         [remainingPendingWei / ONE_GWEI],
-        initialPendingWei / ONE_GWEI,
-        initialPendingWei / ONE_GWEI,
+        0n,
+        maxModuleActivationGwei,
         maxModuleActivationGwei,
         remainingPendingWei / ONE_GWEI,
         zeroTimeElapsed,
@@ -541,13 +542,13 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("reverts with InconsistentValidatorsBalanceByModule when validators balance sum mismatches", async () => {
-    await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 0n, 33n, 40n, 3n, ONE_DAY))
+    await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 0n, 30n, 40n, 3n, ONE_DAY))
       .to.be.revertedWithCustomError(checker, "InconsistentValidatorsBalanceByModule")
       .withArgs(40n, 30n);
   });
 
   it("reverts with InconsistentPendingBalanceByModule when pending sum mismatches", async () => {
-    await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 0n, 33n, 30n, 4n, ONE_DAY))
+    await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], [1n, 2n], 0n, 30n, 30n, 4n, ONE_DAY))
       .to.be.revertedWithCustomError(checker, "InconsistentPendingBalanceByModule")
       .withArgs(4n, 3n);
   });
@@ -584,33 +585,35 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("reverts with AppearedEthAmountPerDayLimitExceeded when module increase exceeds appeared+consolidation", async () => {
+    const previousValidatorsWei = ether("219000");
     const currentIncreasePerDay = ether("120");
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("60") }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: ether("60") }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: currentIncreasePerDay, pendingWei: 0n }]))
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: previousValidatorsWei + currentIncreasePerDay, pendingWei: 0n }]),
+    )
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, currentIncreasePerDay);
   });
 
   it("sums module increases across modules before checking appeared limit", async () => {
+    const previousModuleValidatorsWei = ether("109500");
     const totalIncreasePerDay = ether("120");
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
     await seedPreviousBalances([
-      // Split the baseline pending evenly so the new total CL growth gate is satisfied
-      // and the test still reaches the summed per-day validators increase check.
-      { id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
-      { id: 2n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
+      { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei, pendingWei: ether("30") },
+      { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei, pendingWei: ether("30") },
     ]);
 
     await expect(
       check([
-        { id: 1n, validatorsBalanceWei: ether("60"), pendingWei: 0n },
-        { id: 2n, validatorsBalanceWei: ether("60"), pendingWei: 0n },
+        { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei + ether("60"), pendingWei: 0n },
+        { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei + ether("60"), pendingWei: 0n },
       ]),
     )
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
@@ -636,9 +639,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .withArgs(perDayAppearedLimitGwei, totalConsumedPendingGwei);
   });
 
-  it("reverts with IncorrectTotalCLBalanceIncrease when reported CL growth exceeds consumed pending", async () => {
+  it("reverts with IncorrectTotalCLBalanceIncrease when reported validators balance growth exceeds consumed pending", async () => {
     const consumedPendingGwei = toGwei(ether("20"));
-    const reportedTotalGrowthGwei = toGwei(ether("40"));
+    const reportedValidatorsGrowthGwei = toGwei(ether("60"));
 
     await seedPreviousBalances([
       { id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
@@ -652,18 +655,70 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       ]),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
-      .withArgs(consumedPendingGwei, reportedTotalGrowthGwei);
+      .withArgs(consumedPendingGwei, reportedValidatorsGrowthGwei);
+  });
+
+  it("allows reported validators balance growth above consumed pending within safetyCap", async () => {
+    const previousValidatorsWei = ether("3650");
+    const previousPendingWei = ether("10");
+    const consumedPendingWei = ether("9");
+    const safetyCapWei = ether("1");
+    const maxAllowedValidatorsGrowthWei = consumedPendingWei + safetyCapWei;
+    const currentPendingWei = previousPendingWei - consumedPendingWei;
+    const requiredValidatorsIncreaseWei = maxAllowedValidatorsGrowthWei;
+
+    await seedPreviousBalances([
+      { id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: previousPendingWei },
+    ]);
+
+    await expect(
+      check([
+        {
+          id: 1n,
+          validatorsBalanceWei: previousValidatorsWei + requiredValidatorsIncreaseWei,
+          pendingWei: currentPendingWei,
+        },
+      ]),
+    ).not.to.be.reverted;
+  });
+
+  it("reverts when reported validators balance growth exceeds consumed pending plus safetyCap by an explicit overflow", async () => {
+    const previousValidatorsWei = ether("3650");
+    const previousPendingWei = ether("10");
+    const consumedPendingWei = ether("9");
+    const safetyCapWei = ether("1");
+    const safetyCapOverflowWei = ether("1");
+    const maxAllowedValidatorsGrowthWei = consumedPendingWei + safetyCapWei;
+    const reportedValidatorsGrowthWei = maxAllowedValidatorsGrowthWei + safetyCapOverflowWei;
+    const currentPendingWei = previousPendingWei - consumedPendingWei;
+    const requiredValidatorsIncreaseWei = reportedValidatorsGrowthWei;
+
+    await seedPreviousBalances([
+      { id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: previousPendingWei },
+    ]);
+
+    await expect(
+      check([
+        {
+          id: 1n,
+          validatorsBalanceWei: previousValidatorsWei + requiredValidatorsIncreaseWei,
+          pendingWei: currentPendingWei,
+        },
+      ]),
+    )
+      .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
+      .withArgs(toGwei(maxAllowedValidatorsGrowthWei), toGwei(reportedValidatorsGrowthWei));
   });
 
   it("allows an exact module increase at the appeared+consolidation limit", async () => {
+    const previousValidatorsWei = ether("36500");
     const exactIncrease = (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    // 55 ETH of previous pending lets the module grow validators by the full 110 ETH/day limit
-    // while the total CL increase only grows by 55 ETH.
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("90"), pendingWei: ether("55") }]);
+    // 100 ETH of consumed pending plus a 10 ETH safetyCap funds the exact 110 ETH validators increase.
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: ether("100") }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("90") + exactIncrease, pendingWei: 0n }])).not.to.be
-      .reverted;
+    await expect(check([{ id: 1n, validatorsBalanceWei: previousValidatorsWei + exactIncrease, pendingWei: 0n }])).not
+      .to.be.reverted;
   });
 
   it("allows validator growth funded by existing pending when total CL is unchanged", async () => {
@@ -686,18 +741,21 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("normalizes module increases by a non-zero elapsed time", async () => {
+    const previousValidatorsWei = ether("43800");
     const halfDay = ONE_DAY / 2n;
     const expectedLimitPerDay =
       (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    // At half-day, 50 ETH is the largest pending baseline that still allows `pending = 0`
-    // to stay inside the lower bound of the pending corridor.
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("100"), pendingWei: ether("50") }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: ether("50") }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("155"), pendingWei: 0n }], halfDay)).not.to.be.reverted;
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: previousValidatorsWei + ether("55"), pendingWei: 0n }], halfDay),
+    ).not.to.be.reverted;
 
     const normalizedIncreasePerDay = ether("56") * 2n;
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("156"), pendingWei: 0n }], halfDay))
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: previousValidatorsWei + ether("56"), pendingWei: 0n }], halfDay),
+    )
       .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
       .withArgs(expectedLimitPerDay, normalizedIncreasePerDay);
   });
