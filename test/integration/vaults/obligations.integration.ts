@@ -751,13 +751,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
     });
 
     it("Reverts when trying to withdraw redemption shares", async () => {
-<<<<<<< HEAD
       const withdrawableValue = await vaultHub.withdrawableValue(stakingVault);
       expect(withdrawableValue).to.equal(ether("2") - (await calculateLockedValue(ctx, stakingVault)));
-=======
-      const withdrawableValue = await vaultHub.withdrawableValue(stakingVaultAddress);
-      expect(withdrawableValue).to.equal(0n);
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
 
       await expect(dashboard.withdraw(stranger, 100n))
         .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
@@ -765,7 +760,6 @@ describe("Integration: Vault redemptions and fees obligations", () => {
     });
 
     it("Works when trying to withdraw all the withdrawable balance", async () => {
-<<<<<<< HEAD
       const totalValue = await vaultHub.totalValue(stakingVault);
       const locked = await vaultHub.locked(stakingVault);
       expect(totalValue).to.approximately(locked, 2n);
@@ -776,39 +770,18 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       const overfunding = ether("0.1");
       await dashboard.fund({ value: overfunding });
       expect(await vaultHub.withdrawableValue(stakingVault)).to.approximately(overfunding, 2n);
-=======
-      const totalValue = await vaultHub.totalValue(stakingVaultAddress);
-      const locked = await vaultHub.locked(stakingVaultAddress);
-      expect(totalValue).to.equal(locked);
-
-      let withdrawableValue = await vaultHub.withdrawableValue(stakingVaultAddress);
-      expect(withdrawableValue).to.equal(0n);
-
-      const overfunding = ether("0.1");
-      await dashboard.fund({ value: overfunding });
-      expect(await vaultHub.withdrawableValue(stakingVaultAddress)).to.equal(overfunding);
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
 
       await expect(dashboard.withdraw(stranger, overfunding))
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(stranger, overfunding);
 
-<<<<<<< HEAD
       withdrawableValue = await vaultHub.withdrawableValue(stakingVault);
       expect(withdrawableValue).to.approximately(0n, 2n);
-=======
-      withdrawableValue = await vaultHub.withdrawableValue(stakingVaultAddress);
-      expect(withdrawableValue).to.equal(0n);
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
 
       const expectedRebalance = await lido.getPooledEthBySharesRoundUp(redemptionShares);
       await expect(dashboard.rebalanceVaultWithShares(redemptionShares))
         .to.emit(vaultHub, "VaultRebalanced")
-<<<<<<< HEAD
         .withArgs(stakingVault, redemptionShares, expectedRebalance)
-=======
-        .withArgs(stakingVaultAddress, redemptionShares, await lido.getPooledEthBySharesRoundUp(redemptionShares))
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, 0n);
 
@@ -817,13 +790,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       // report the vault data to unlock the locked value
       await reportVaultDataWithProof(ctx, stakingVault);
 
-<<<<<<< HEAD
       expect(await vaultHub.locked(stakingVault)).to.equal(await calculateLockedValue(ctx, stakingVault)); // connection deposit
       expect(await vaultHub.totalValue(stakingVault)).to.approximately(ether("2") - expectedRebalance, 2n);
-=======
-      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(ether("1")); // connection deposit
-      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(ether("1"));
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
     });
   });
 
@@ -839,13 +807,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       // will revert because of the unsettled obligations event trying to settle using the connection deposit
       await expect(dashboard.voluntaryDisconnect())
-<<<<<<< HEAD
         .to.be.revertedWithCustomError(vaultHub, "NoUnsettledLidoFeesShouldBeLeft")
         .withArgs(stakingVault, ether("1.1"));
-=======
-        .to.be.revertedWithCustomError(vaultHub, "UnsettledObligationsExceedsAllowance")
-        .withArgs(stakingVaultAddress, ether("1"), 0);
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
 
       expect(obligations.cumulativeLidoFees).to.equal(ether("1.1"));
       expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("1"));
@@ -860,11 +823,6 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         .withArgs(stakingVault, ether("1.1"), ether("1.1"), ether("1.1"));
 
       await expect(dashboard.voluntaryDisconnect())
-<<<<<<< HEAD
-=======
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, ether("1.1"), 0n, 0n, ether("1.1"))
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(stakingVaultAddress);
     });
@@ -893,74 +851,11 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       const totalValue = await vaultHub.totalValue(stakingVaultAddress);
       await dashboard.voluntaryDisconnect();
 
-<<<<<<< HEAD
       // we forgive the last fees
       await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue, cumulativeLidoFees: ether("1.1") })).not.to
         .be.reverted;
 
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
-=======
-      // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue, cumulativeLidoFees: ether("1.1") }))
-        .to.be.revertedWithCustomError(vaultHub, "UnsettledObligationsExceedsAllowance")
-        .withArgs(stakingVaultAddress, ether("0.1"), 0);
-    });
-
-    it("Should take last fees from the post disconnect report with direct transfer", async () => {
-      // 1 ether of the connection deposit will be settled to the treasury
-      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") });
-
-      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
-
-      // successfully disconnect
-      await dashboard.voluntaryDisconnect();
-
-      // adding 1 ether to cover the exit fees
-      await owner.sendTransaction({ to: stakingVaultAddress, value: ether("1") });
-
-      // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
-      await expect(
-        await reportVaultDataWithProof(ctx, stakingVault, {
-          totalValue: totalValueOnRefSlot,
-          cumulativeLidoFees: ether("1.1"),
-        }),
-      )
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, ether("0.1"), 0n, 0n, ether("1.1"))
-        .to.emit(vaultHub, "VaultDisconnectCompleted")
-        .withArgs(stakingVaultAddress);
-
-      // 0.9 ether should be left in the vault
-      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("0.9"));
-    });
-
-    it("Should take last fees from the post disconnect report with fund", async () => {
-      // 1 ether of the connection deposit will be settled to the treasury
-      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") });
-
-      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
-
-      // successfully disconnect
-      await dashboard.voluntaryDisconnect();
-
-      // adding 1 ether to cover the exit fees
-      await dashboard.fund({ value: ether("1") });
-
-      // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
-      await expect(
-        await reportVaultDataWithProof(ctx, stakingVault, {
-          totalValue: totalValueOnRefSlot,
-          cumulativeLidoFees: ether("1.1"),
-        }),
-      )
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, ether("0.1"), 0n, 0n, ether("1.1"))
-        .to.emit(vaultHub, "VaultDisconnectCompleted")
-        .withArgs(stakingVaultAddress);
-
-      // 0.9 ether should be left in the vault
-      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("0.9"));
->>>>>>> 4e4576f48 (feat: restore certora configs, fuzz tests, and workflows from merge-fixes-pr15)
     });
   });
 });
