@@ -7,7 +7,6 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import "hardhat/console.sol";
 
-
 contract LazyOracle__MockForVaultHub {
     uint256 public latestReportTimestamp;
 

@@ -37,8 +37,6 @@ env:
     certora/confs/vaults/immutable-ratio.conf
     certora/confs/vaults/VaultHub-obligatedVaultIsConnected.conf
 
-    
-
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -57,7 +55,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          
+
       - name: yarn install
         run: |
           corepack enable
@@ -77,7 +75,3 @@ jobs:
           certora-key: ${{ secrets.CERTORAKEY }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          
-      
-  
