@@ -3,9 +3,6 @@ name: Foundry Fuzz Tests
 on:
   - pull_request
 
-env:
-  FOUNDRY_PROFILE: ci
-
 jobs:
   fuzz-tests:
     runs-on: ubuntu-latest
