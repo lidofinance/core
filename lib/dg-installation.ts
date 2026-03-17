@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { runCommand } from "./subprocess";
 
 const DG_REPOSITORY_URL = "https://github.com/lidofinance/dual-governance.git";
-const DG_REPOSITORY_BRANCH = "feature/scratch-deploy-support"; // TODO: use release branch
+const DG_REPOSITORY_REF = "v1.1.0";
 const DG_INSTALL_DIR = `${process.cwd()}/dg`;
 
 async function main() {
@@ -12,7 +12,7 @@ async function main() {
 
   console.log("Clone DG repo to", DG_INSTALL_DIR);
   await runCommand(
-    `git clone --branch ${DG_REPOSITORY_BRANCH} --single-branch ${DG_REPOSITORY_URL} ${DG_INSTALL_DIR}`,
+    `git clone --branch ${DG_REPOSITORY_REF} --single-branch ${DG_REPOSITORY_URL} ${DG_INSTALL_DIR}`,
     process.cwd(),
   );
 
