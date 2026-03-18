@@ -1,515 +1,203 @@
-# Lido V3 Staking Vaults - Formal Verification
-
-1. [General information](#general-information)
-2. [System overview](#system-overview)
-3. [Lido spec](#lido-spec)
-4. [Core specs](#core-specs)
-5. [Miscellaneous specs](#miscellaneous-specs)
-6. [Vaults](#vaults)
-7. [Lazy oracle](#lazy-oracle)
-8. [Predeposit guarantee](#predeposit-guarantee)
-9. [Additional specs not in CI](#additional-specs-not-in-ci)
+# Certora Formal Verification: Lido Staking Vaults
 
-## General information
+This directory contains Certora's formal verification of the Lido protocol, focussing on the Staking Vaults. The verification covers the staking vaults infrastructure, including vault management, operator management, oracle functionality, and core Lido accounting.
 
-- Client repository: <https://github.com/lidofinance/core>
-- Certora development branch is `certora-fv` (since `certora` was taken)
-- CI Configuration: `.github/workflows/certora.yml`
+## Directory Structure
 
-## System overview
+### `specs/`
 
-```mermaid
-graph TB
-  classDef utilityContract fill:#333,font-size:10pt;
-  classDef SubGraph font-size:16pt,color:#aff;
+The CVL (Certora Verification Language) specification files, organized by domain.
 
-  %% OracleReportSanityChecker utility class
-  OracleReportSanityChecker(OracleReportSanityChecker)
-  class OracleReportSanityChecker utilityContract
+- `specs/common/`: Shared summaries, ghost variables, and ERC20 specifications used across all specs.
+  - `ERC20Standard.spec`, `ERC20Params.spec`, `ERC20Storage.spec`: Standard ERC20 properties.
+  - `erc20-summary.spec`: ERC20 function summaries.
+  - `lido-storage-ghost.spec`: Ghost variables for tracking Lido state across rules.
+  - `lido-summaries.spec`: Summaries for Lido functions.
+  - `StakingRouter-summary.spec`, `WithdrawalQueue-summary.spec`, `smoothen-summary.spec`: Dependency summaries.
+- `specs/vaults/`: Vault-level specifications.
+  - `VaultHub.spec`: Core VaultHub invariants (connectivity, liability bounds, reserve ratios, redemption shares).
+  - `VaultHub_health.spec`: Vault health preservation across operations.
+  - `vaults-array.spec`: Proves the vaults array is a proper set with correct index mappings.
+  - `predeposit.spec`: Validator predeposit state machine transitions.
+  - `lazy-oracle.spec`: LazyOracle quarantine integrity and state consistency.
+  - `shortfall.spec`: Vault shortfall analysis.
+  - `immutable-ratio.spec`: Analysis assuming constant share-to-ETH ratio.
+  - `approximated-VaultHub.spec`: Approximated VaultHub analysis.
+  - `lido-mock.spec`: Lido mock summaries for share-ETH conversions.
+- `specs/core/`: Core protocol specifications.
+  - `Accounting.spec`: Accounting oracle report integrity, fee calculations, and revert conditions.
+  - `Accounting-burnlimit.spec`: Positive token rebase limiter burn limits.
+  - `Accounting-fees-as-frac.spec`: Fee calculations as fractional amounts.
+  - `Accounting-summarized.spec`: Summarized accounting verification.
+  - `Lido_and_VaultHub.spec`: Integration properties between Lido and VaultHub.
+  - `comprehensive-setup.spec`: Full integration of Lido, VaultHub, and Accounting.
+- `specs/lido/`: Lido contract specifications.
+  - `Lido.spec`: Share transitions, buffered ETH accounting, staking limits, and access control.
+- `specs/misc/`: Miscellaneous contract specifications.
+  - `burner.spec`: Burner contract invariants and share burning integrity.
+  - `node_operators.spec`: Node operators registry properties.
+- `specs/setup/`: Sanity checks and dispatching specs for component setup verification.
+  - `sanity_*.spec`: Sanity check specifications per contract.
+  - `dispatching_*.spec`: Method dispatching specifications per contract.
+  - `snippet_*.spec`: Snippet specifications for specific components.
 
-  subgraph CoreIn [Core in scope]
-	  LidoLocator(LidoLocator)
-	  NodeOperatorsRegistry
-	  AccountingOracle --> Accounting
-		Accounting --> OracleReportSanityChecker
-	  Accounting --> Lido
-	  Accounting --> Burner
-  end
+### `confs/`
 
-  subgraph CoreOut [Core]
-	  WithdrawalQueue
-	  StakingRouter
-  end
+Certora Prover configuration files, organized to mirror the spec structure.
 
-	Accounting --> WithdrawalQueue
-	Accounting --> StakingRouter
+- `confs/vaults/`: Vault-related configurations including partitioned health checks (`VaultHub_health_part1.conf` through `VaultHub_health_part6.conf`).
+- `confs/core/`: Core protocol configurations for Accounting and integrated Lido+VaultHub verification.
+- `confs/lido/`: Lido-specific configurations (`Base.conf`, `Lido_shares.conf`, `Lido_eth.conf`, `Lido_staking.conf`).
+- `confs/misc/`: Burner and node operators configurations.
+- `confs/setup/`: Sanity and autocvl configurations.
 
-  subgraph StVaults [Staking Vaults]
-    LazyOracle --> VaultHub
-    VaultHub --> OperatorsGrid
-    VaultHub --> StakingVault1
-    VaultHub --> StakingVault2
-  end
+### `harness/`
 
-  AccountingOracle --> LazyOracle
-  Accounting --> VaultHub
-  OracleReportSanityChecker --> StakingRouter
+Harness contracts that extend the original contracts to expose internal state and helper functions for verification.
 
-	%% Invisible links to change position
-	Lido ~~~ OracleReportSanityChecker
+- `VaultHubHarness.sol`: Exposes VaultHub internal state including vault records, connections, deltas, and calculations.
+- `LidoHarness.sol`: Exposes Lido share rate calculations and storage.
+- `AccountingHarness.sol`: Exposes Accounting contract internals.
+- `LazyOracleHarness.sol`: Exposes LazyOracle quarantine info and vault data.
+- `BurnerHarness.sol`: Exposes Burner contract state.
+- `NativeTransferFuncs.sol`: Utility functions for native ETH transfers.
 
-  %% Set sub graphs styles
-  class CoreIn,CoreOut,StVaults SubGraph;
-```
+### `mocks/`
 
-### Lido
+Mock implementations of external dependencies for isolated verification.
 
-- Lido is a staking pool
-- To stake a user calls `submit` (or just transfers ETH),
-  in return the user receives shares in `Lido` (equivalent to `StEth`).
-  Note these are _internal shares_.
-  Users of external `StakingVault`s can mint _external shares_.
-- Uses a very old compiler version - 0.4.24
+- `ILidoMock.sol`: Mock Lido interface with share-to-ETH conversion helpers.
+- `IHashConsensusMock.sol`: Mock beacon chain consensus contract.
+- `IDepositContractMock.sol`: Mock Ethereum 2.0 deposit contract.
+- `StorageExtension*.sol`: Storage extensions enabling property verification on internal storage slots for VaultHub, LazyOracle, OperatorGrid, StakingVault, PredepositGuarantee, and NodeOperatorsRegistry.
 
-#### Lido staking limits
+### `patches/`
 
-The _rate_ at which staking is done is limited. A description is available
-in the documentation of `Lido.setStakingLimit`, see also
-`StakeLimitUtils.calculateCurrentStakeLimit` (from `contracts/0.4.24/lib/StakeLimitUtils.sol`).
+Code modification scripts and patch files. These make internal functions accessible to the Prover by widening their visibility.
 
-### VaultHub
+- `patch.sh` / `patch-undo.sh` (via `scripts/`): Apply and revert all patches.
+- `Makefile`: Build automation for patch application.
+- `patch-strategy-lib.patch`: Changes `MinFirstAllocationStrategy.allocate()` visibility for Certora access.
+- `patch-total-shares-access.patch`: Adds storage access helpers for total shares.
 
-The `VaultHub` connects the staking vaults to Lido protocol, allowing them to use their
-balance to mint shares in Lido (and thereby use StEth). It is tasked with maintaining
-the health of the staking vaults and ensuring their reserve ratios are kept.
+> [!NOTE]
+> The patches are applied as git patches and must be kept in sync with the source code. If the patched files change, the patch scripts will fail to apply and verification will not run.
 
-### LazyOracle
+## Certora Prover
 
-This is the oracle for the staking vaults. It is "lazy" in the sense that it doesn't
-actively update the `VaultHub` regarding all staking vaults. Instead updating a
-staking vault's data requires a call to `updateVaultData`.
+The Certora Prover is a formal verification tool for smart contracts. It statically proves or disproves properties expressed as rules and invariants in the Certora Verification Language (CVL).
 
-The `LazyOracle` quarantines some amounts reported for the staking vaults, if those
-amount changes are deemed too large.
+## Running Instructions
 
----
+0. Install the latest Certora Prover by following the [installation guide](https://docs.certora.com/en/latest/docs/user-guide/install.html).
 
-## Lido spec
+1. From the repository root, apply the patches:
 
-- **File:** `certora/specs/lido/Lido.spec`
-- **Config:** `certora/confs/lido/Base.conf` (and variants)
-- **Status:** ✅ Verified in CI
-- **Note:** Uses `--prover_version master` override in some configs
+    ```sh
+    sh certora/scripts/patch.sh
+    ```
 
-### Summaries
+    This only needs to be done once per working copy. **Do not commit the patched files.**
 
-The spec summarizes functions that contain "muldiv" operations to avoid timeouts:
+2. Run the desired verification job from the repository root (see table below for all properties). Example:
 
-- `getSharesByPooledEth`
-- `getPooledEthBySharesRoundUp`
+    ```sh
+    certoraRun certora/confs/vaults/VaultHub.conf
+    ```
 
-### Lido main rules
+3. To revert patches:
 
-1. **Invariant `bufferedEthBackedByBalance`** - the value of the buffered ETH (in the storage) is
-   backed by the native ETH balance of the `Lido` contract.
+    ```sh
+    sh certora/scripts/patch-undo.sh
+    ```
 
-2. **Rule `sharesTransition`** - a simple parametric rule verifying the relations between
-   external shares, internal shares and the total shares.
+## High-Level Properties
 
-3. **Invariant `prevLimitLessThanMax`** - the `prevStakeLimit` is the limit at a certain period
-   in the past. It must never surpass the maximal stake limit, which is what this
-   invariant verifies. See [Lido staking limits](#lido-staking-limits).
+See the doc-comments in each spec file for detailed descriptions of individual rules.
 
-4. **Rule `prevStakingBlockNumberIncreasing`** - the block numbers for the previous stake
-   limit should be weakly monotonically increasing.
+### VaultHub (`specs/vaults/VaultHub.spec`, `confs/vaults/VaultHub.conf`)
 
-5. **Rule `stakingLimitsUnchangedIfStaking`** - the maximal staking limit cannot change
-   when someone is staking.
+- **Obligated Vault Is Connected** (`obligatedVaultIsConnected`): a vault with obligations must be connected.
+- **Disconnected Vault Has No Liability** (`disconnectedVaultHasNoLiability`): disconnected vaults have zero liability shares.
+- **Disconnected Vault Has No Locked** (`disconnectedVaultHasNoLocked`): a vault with locked value must be connected.
+- **Vault Locked Covers Liability and Reserve** (`vaultLockedCoversLiabilityAndReserve`): the locked amount of a vault covers its shares and reserve.
+- **Reserve Ratio Not Big** (`reserveRatioNotBig`): a vault's reserve ratio is at most 100%.
+- **Tier Reserve Ratio Bounded** (`tierReserveRatioLeqOne`): reserve ratio for tiers is at most 100%.
+- **Tier Reserve Ratio Exceeds Threshold** (`tierReserveRatioGeThreshold`): for each tier, the reserve ratio is greater than the force rebalance threshold.
+- **Vault Reserve Ratio Exceeds Threshold** (`vaultReserveRatioGeThreshold`): for every vault, its reserve ratio is greater than its force rebalance threshold.
+- **Max Liability Shares Bound** (`maxLiabilitySharesGeqLiabilityShares`): max liability shares is greater than or equal to liability shares.
+- **Redemption Shares Bound** (`redemptionSharesLeqLiabilityShares`): redemption shares are less than or equal to liability shares.
+- **Pending Has No Shares** (`pendingHasNoShares`): pending disconnect vaults have no shares.
+- **Every Non-Default Tier Has Group** (`everyNonDefaultTierHasGroup`): every non-default tier has a group.
+- **Can Increase Total Value** (`canIncreaseTotalValue`): which functions can increase a vault's total value.
+- **Redemptions Increase** (`redemptionsIncrease`): fees can only be increased by `applyVaultReport`.
 
-6. **Rule `stakingLimitsAreKept`** - a parametric rule stating various
-   [staking limits](#lido-staking-limits) are kept.
+### Vault Health (`specs/vaults/VaultHub_health.spec`, `confs/vaults/VaultHub_health*.conf`)
 
-   This rule is **violated** for `rebalanceExternalEtherToInternal()`, see
-   [Issue 1320](https://github.com/lidofinance/core/issues/1320).
+- **Vault Is Healthy Until Report** (`vaultIsHealtyhUntilReport`): a healthy vault remains healthy until a new report is produced, with the exception of settling fees.
+- **Summary Correct** (`summaryCorrect`): correctness of summary in terms of functional equivalence.
 
-7. **Rule `totalSharesCanOnlyBeChangedBy`** - the functions that can increase or decrease
-   the total amount of shares.
+### Vaults Array (`specs/vaults/vaults-array.spec`, `confs/vaults/VaultHub.conf`)
 
-8. **Rule `bufferedEthCanOnlyBeChangedBy`** - the functions that can change the buffered
-   ETH value.
+- **Vaults Array Is Never Empty** (`vaultsArrayIsNeverEmpty`): the `vaults` array in `VaultHub` has address 0 at index 0 after initialization.
+- **Index to Vault Is Correct** (`indexToVaultIsCorrect`): array index to vault mapping is correct.
+- **Vault to Index Is Correct** (`vaultToIndexIsCorrect`): vault to index mapping is correct.
+- **Disconnected Vault Is Not Pending** (`disconnectedVaultIsNotPending`): a vault that is pending disconnect must be connected.
 
-9. **Rule `depositedValidatorsOnlyIncreasing`** - the number of deposited validators
-   is weakly monotonic increasing.
+### Predeposit (`specs/vaults/predeposit.spec`, `confs/vaults/predeposit.conf`)
 
----
+- **Validator Status Transitions** (`validatorStatusTransitions`): valid state transitions for validator predeposit stages: NONE -> PREDEPOSITED -> PROVEN -> ACTIVATED (or COMPENSATED).
 
-## Core specs
+### Lazy Oracle (`specs/vaults/lazy-oracle.spec`, `confs/vaults/lazy-oracle.conf`)
 
-These specs are mainly about the `Accounting` contract and therefore the handling of
-the oracle report.
+- **Quarantine Integrity** (`quarantineIntegrity`): basic integrity for quarantines.
+- **Quarantine State Consistency** (`quarantineStateConsistency`): quarantine state consistency.
+- **Handle Sanity Checks Revert Conditions** (`handleSanityChecksRevertConditions`): revert conditions for `_handleSanityChecks`.
+- **Quarantine Expiry** (`quarantineExpiry`): once a quarantine expires it cannot be reused.
 
-### Comprehensive setup spec
+### Accounting (`specs/core/Accounting.spec`, `confs/core/Accounting.conf`)
 
-- **File:** `certora/specs/core/comprehensive-setup.spec`
-- **Config:** `certora/confs/core/comprehensive-setup.conf`
-- **Status:** ✅ Verified in CI
+- **Fees Mint Shares** (`feesMintShares`): rewards are shares minted as fees and `Lido` balance increase.
+- **Report Not Reverts By Deposit** (`reportNotRevertsByDeposit`): a deposit done after a report was computed but before it was applied will not cause a revert.
+- **Report Not Reverts By Submit** (`reportNotRevertsBySubmit`): a `submit` done after a report was computed but before it was applied will not cause a revert.
+- **Handle Oracle Report Revert Conditions** (`handleOracleReportRevertConditions`): revert conditions for `handleOracleReport`.
 
-The rules here simply verify a couple of summaries.
+### Accounting - Burn Limit (`specs/core/Accounting-burnlimit.spec`, `confs/core/Accounting-burnlimit.conf`)
 
-### Main accounting spec
+- **Burn Limit Integrity**: positive token rebase limiter burn limits are correctly enforced.
 
-- **Files:**
-  1. `certora/specs/core/Accounting.spec` - the main file containing the rules
-  2. `certora/specs/core/Accounting-summarized.spec` - imports `Accounting.spec` and summarizes
-     `OracleReportSanityChecker.smoothenTokenRebase`. The specs were constructed
-     this way to facilitate different summaries.
-- **Config:** `certora/confs/core/Accounting.conf`
-- **Status:** ✅ Verified in CI (specific rules only)
+### Lido and VaultHub Integration (`specs/core/Lido_and_VaultHub.spec`, `confs/core/Lido_and_VaultHub.conf`)
 
-#### Accounting main rules
+- **Only Called By VaultHub** (`verifyOnlyCalledByVaultHub`): verifies the `Lido` functions that can only be called by `VaultHub`.
+- **Only Called By Accounting** (`verifyOnlyCalledByAccounting`): verifies functions that can only be called by `Accounting`.
+- **Disconnected Vault Has No Liability** (`disconnectedVaultHasNoLiability`): disconnected vaults have no liability shares.
+- **External Shares At Most Sum Liability Shares** (`externalSharesAtMostSumLiabilityShares`): external shares are at most the sum of liability shares plus internalized bad debt.
+- **External Shares Liability Shares Change Together** (`externalSharesLiabilitySharesChangeTogether`): external shares and liability shares increase/decrease together.
 
-1. **Rule `feesMintShares`** - shares minted as fees and balance increase do not exceed
-   the rewards from the oracle report. Note that the spec `Accounting-fees-as-frac.spec`
-   below complements this rule.
-   - Run in CI with: `--rule handleOracleReportRevertConditions feesMintShares`
+### Lido (`specs/lido/Lido.spec`, `confs/lido/`)
 
-2. **Rule `handleOracleReportRevertConditions`** - revert conditions for
-   `Accounting.handleOracleReport`.
+- **Buffered ETH Backed By Balance** (`bufferedEthBackedByBalance`): buffered ETH is backed by contract balance.
+- **Shares Transition** (`sharesTransition`): relations between total, external, and internal shares.
+- **Total Shares Change Control** (`totalSharesCanOnlyBeChangedBy`): determines the functions that can increase or decrease total shares.
+- **Buffered ETH Change Control** (`bufferedEthCanOnlyBeChangedBy`): determines the functions that can change the buffered ETH.
+- **Deposited Validators Only Increasing** (`depositedValidatorsOnlyIncreasing`): deposited validators count only increases.
+- **Staking Limits Are Kept** (`stakingLimitsAreKept`): internal ETH and shares increase cannot violate the staking limits.
+- **Staking Limits Unchanged If Staking** (`stakingLimitsUnchangedIfStaking`): staking limits cannot change in the same function that stakes.
+- **Previous Staking Block Number Increasing** (`prevStakingBlockNumberIncreasing`): previous staking block number is weakly monotonically increasing.
 
-The following two rules verify that specific actions performed between the time an
-oracle report was calculated and the time it was handled, would not cause a revert.
-Both rules **time-out** - it is unlikely this can be resolved.
+### Burner (`specs/misc/burner.spec`, `confs/misc/burner.conf`)
 
-- **Rule `reportNotRevertsByDeposit`**
-- **Rule `reportNotRevertsBySubmit`**
+- **Burner Does Not Approve** (`burnerDoesNotApprove`): the `Burner` contract gives no allowance to any address.
+- **Burner Shares Only Burnt** (`burnerSharesOnlyBurnt`): `Burner` shares can only be reduced by burning (excluding excess shares).
+- **Burner Does Not Affect Third-Party Shares** (`burnerDoesNotAffectThirdPartyShares`): burner does not affect unrelated parties' shares.
+- **Burn Requests Integrity** (`burnRequestsIntegrity`): integrity of request burn methods.
+- **Commit Burn Integrity** (`commitBurnIntergrity`): integrity of `commitSharesToBurn`.
 
-### Accounting - fees as fraction spec
+## General Assumptions
 
-- **File:** `certora/specs/core/Accounting-fees-as-frac.spec`
-- **Config:** `certora/confs/core/Accounting-fees-as-frac.conf`
-- **Status:** ✅ Verified in CI
-
-This spec was created for a single rule `feesAreFraction` which
-verifies that when `Accounting.handleOracleReport` is called, the
-fees minted as shares are the correct fraction of the rewards.
-The rule simply checks the internal function
-`Accounting._calculateTotalProtocolFeeShares`, since verifying
-it using `Accounting.handleOracleReport` causes timeouts.
-
-1. **Rule `feesAreFraction`** - is violated and acknowledged by Lido team, see [Issue 1457](https://github.com/lidofinance/core/issues/1457).
-2. **Rule `feesAreTooLowExample`** - serves as a more realistic example that the fees may be
-   too low.
-
-### Accounting - shares burn limit
-
-- **File:** `certora/specs/core/Accounting-burnlimit.spec`
-- **Config:** `certora/confs/core/Accounting-burnlimit.conf`
-- **Note:** This spec is not part of the CI
-
----
-
-## Miscellaneous specs
-
-### Burner spec
-
-- **File:** `certora/specs/misc/burner.spec`
-- **Config:** `certora/confs/misc/burner.conf`
-- **Status:** ✅ Verified in CI
-
-#### Burner main rules
-
-The following rules prove that `Burner` shares can only be burnt, never transferred:
-
-1. **Invariant `burnerDoesNotApprove`** - `Burner` contract never approves other
-   addresses for using its shares.
-
-2. **Rule `burnerSharesOnlyBurnt`** - Lido shares of `Burner` can only be reduced by burning.
-
-Other rules:
-
-1. **Rule `burnerDoesNotAffectThirdPartyShares`** - third parties should not be affected by the
-   `Burner`.
-
-   This rule is **violated**. See [Issue 1399](https://github.com/lidofinance/core/issues/1399)
-   and its duplicate [Issue 796](https://github.com/lidofinance/core/issues/796).
-
-2. **Rule `burnRequestsIntegrity`** - basic integrity of the five burn request methods.
-
-3. **Rule `commitBurnIntergrity`** - basic integrity of `Burner.commitSharesToBurn` method.
-
-### NodeOperatorsRegistry spec
-
-- **File:** `certora/specs/misc/node_operators.spec`
-- **Config:** `certora/confs/misc/node_operators.conf`
-- **Status:** ✅ Verified in CI
-
-1. This spec has a single rule **`operatorsCountIsIncreasing`** showing the number of
-   operators is weakly monotonic increasing.
-   - This rule requires the following munge to work: `certora/munges/munge-strategy-lib.patch`
-     without it the call to `allocate` would havoc the main contract.
-
----
-
-## Vaults
-
-### Vaults array
-
-- **File:** `certora/specs/vaults/vaults-array.spec`
-- This file contains a setup for the `VaultHub` contract and some basic invariants about
-  the array of vaults it contains. These invariants are used in `VaultHub.spec` by running `VaultHub.conf`.
-
-The four invariants in this spec prove the following property: the `vaults` array of
-addresses is a _set_ of addresses of connected vaults. Note that:
-
-- The index of a vault `v` in the array is given by `connections[v].vaultIndex`.
-- If the index of a vault is zero, it is not in the set.
-
-1. **Invariant `disconnectedVaultIsNotPending`** - a staking vault that is pending disconnect
-   is still connected, i.e. it has a non-zero index.
-   - ✅ Verified in CI
-
-2. **Invariant `vaultsArrayIsNeverEmpty`** - the array `vaults` has length greater than zero
-   _after initialization_.
-   - ✅ Verified in CI
-
-3. **Invariant `indexToVaultIsCorrect`** - basically `connections[vaults[i]].vaultIndex == i`.
-
-4. **Invariant `vaultToIndexIsCorrect`** - basically `vaults[connections[v].vaultIndex] == v`.
-   - ✅ Verified in CI
-
-### VaultHub spec
-
-- **File:** `certora/specs/vaults/VaultHub.spec`
-- **Config:** `certora/confs/vaults/VaultHub.conf`
-- **Status:** ✅ Multiple rules verified in CI
-- **Note:** Uses `--prover_version master` override
-
-#### Invariants about vault connection and locked value
-
-1. **Invariant `obligatedVaultIsConnected`** - a vault having Lido shares or unsettled Lido
-   fees is connected.
-   - ✅ Verified in CI
-
-2. **Invariant `disconnectedVaultHasNoLiability`** - a disconnected vault cannot hold shares.
-   - ✅ Verified in CI
-
-3. **Invariant `disconnectedVaultHasNoLocked`** - a disconnected vault cannot have non-zero
-   locked ETH.
-   - ✅ Verified in CI
-
-4. **Invariant `vaultLockedCoversLiabilityAndReserve`** - the locked amount of a vault
-   covers its shares and reserve ratio. Used to be **violated**, see
-   [Issue 1272](https://github.com/lidofinance/core/issues/1272) and
-   [Issue 1309](https://github.com/lidofinance/core/issues/1309). Not in CI but manually verified and tested using fuzzing.
-
-#### Rules for tiers and reserve ratios
-
-**Note:** The tiers group vaults with same configuration. The tiers are managed by
-the `OperatorGrid` contract.
-
-1. **Invariant `tierReserveRatioLeqOne`** - every tier's reserve ratio is at most 1 (100%).
-   - ✅ Verified in CI
-
-2. **Invariant `reserveRatioNotBig`** - vault reserve ratios are bounded.
-   - ✅ Verified in CI
-
-3. **Invariant `tierReserveRatioGeThreshold`** - every tier's reserve ratio is at
-   least that tier's force rebalance threshold. This invariant was previously **violated**,
-   see [Issue 1291](https://github.com/lidofinance/core/issues/1291).
-   - ✅ Verified in CI
-
-4. **Invariant `vaultReserveRatioGeThreshold`** - similar to the invariant above,
-   but for every vault.
-   - ✅ Verified in CI
-
-#### Liability and shares invariants
-
-1. **Invariant `maxLiabilitySharesGeqLiabilityShares`** - max liability shares are always
-   greater than or equal to current liability shares.
-   - ✅ Verified in CI
-
-2. **Invariant `redemptionSharesLeqLiabilityShares`** - redemption shares cannot exceed
-   liability shares.
-   - ✅ Verified in CI
-
-#### Miscellaneous rules and invariants
-
-1. **Invariant `pendingHasNoShares`** - a vault that is pending disconnect cannot have shares.
-   This invariant is used in `canIncreaseTotalValue` rule.
-   - ✅ Verified in CI
-
-2. **Rule `canIncreaseTotalValue`** - functions that can increase a vault's total value.
-   Previously this rule was **violated**, see
-   [Issue 1298](https://github.com/lidofinance/core/issues/1298).
-   - ✅ Verified in CI
-
-3. **Rule `redemptionsIncrease`** - redemptions can only be increased by `applyVaultReport`.
-   Previously **violated**, see [Issue 1321](https://github.com/lidofinance/core/issues/1321).
-   - ✅ Verified in CI
-
-#### Vault health rules
-
-- **Spec File:** `certora/specs/vaults/VaultHub_health.spec`
-- **Configs:**
-  - `certora/confs/vaults/VaultHub_health_part1.conf`
-  - `certora/confs/vaults/VaultHub_health_part2.conf`
-  - `certora/confs/vaults/VaultHub_health_part3.conf`
-- **Status:** ✅ Verified in CI (parts 1-3 only)
-
-1. **Rule `vaultIsHealtyhUntilReport`** - only an oracle report can cause a vault to
-   become unhealthy. Previously **violated**, see
-   [Issue 1262](https://github.com/lidofinance/core/issues/1262).
-
-   This rule is split across multiple configurations to handle different methods:
-   - **Part 1:** Tests various connection and governance methods
-   - **Part 2:** Tests `updateConnection`, `transferAndBurnShares`, `voluntaryDisconnect`, `triggerValidatorWithdrawals`
-   - **Part 3:** Tests `forceValidatorExit`, `burnShares`
-
-   **Note:** Additional parts 4-6 exist in the repository but are not included in CI:
-   - Part 4: Tests `settleLidoFees`, `withdraw`, `mintShares`
-   - Part 5: Tests `rebalance`, `burnShares`, `disconnect`, `forceRebalance`
-   - Part 6: Tests `fund`
-
----
-
-## Lazy oracle
-
-- **File:** `certora/specs/vaults/lazy-oracle.spec`
-- **Config:** `certora/confs/vaults/lazy-oracle.conf`
-- **Status:** ✅ Verified in CI
-- **Note:** Uses `--prover_version master` override
-
-1. **Rule `quarantineIntegrity`** - basic integrity for quarantine of vault amounts.
-
-2. **Invariant `startBeforeEnd`** - quarantine start time is before its end time.
-
-3. **Rule `handleSanityChecksRevertConditions`** - revert conditions for `_handleSanityChecks`
-   function (which verifies the oracle report).
-
-4. **Rule `quarantineExpiry`** - an expired quarantine cannot be reused.
-
----
-
-## Predeposit guarantee
-
-- **File:** `certora/specs/vaults/predeposit.spec`
-- **Config:** `certora/confs/vaults/predeposit.conf`
-- **Status:** ✅ Verified in CI
-- **Note:** Currently uses experimental prover version `abakst/cert-9655` (TODO: update to stable)
-
-A basic spec with a single rule regarding the states of the pre-deposit.
-
----
-
-## Additional specs not in CI
-
-The following specifications exist in the repository but are not currently part of the CI pipeline:
-
-### Immutable ratio spec
-
-- **File:** `certora/specs/vaults/immutable-ratio.spec`
-- **Config:** `certora/confs/vaults/immutable-ratio.conf`
-- **Purpose:** Properties related to immutable conversion ratios
-
-### Shortfall spec
-
-- **File:** `certora/specs/vaults/shortfall.spec`
-- **Config:** `certora/confs/vaults/shortfall.conf`
-- **Purpose:** Advanced shortfall integrity rules
-
-This spec contains detailed rules about health shortfall:
-
-1. **Rule `unhealthyVaultIffShortfallNonzero`** - a vault is unhealthy if and only if its
-   shortfall is non-zero. Previously failed,
-   see [Issue 1305](https://github.com/lidofinance/core/issues/1305).
-
-2. **Rule `nonZeroShortfallIsUnhealthy`** - a vault with non-zero health shortfall shares
-   is unhealthy.
-
-3. **Rule `shortfallValueIsSufficient`** - rebalancing to the amount of the shortfall makes
-   a vault healthy. Previously **violated**, see
-   [Issue 1305](https://github.com/lidofinance/core/issues/1305).
-
-4. **Rule `shortfallValueIsMinimal`** - the health shortfall value is the minimal amount
-   that will make a vault healthy by rebalancing. Previously **violated**, see
-   [Issue 1305](https://github.com/lidofinance/core/issues/1305).
-
-Note: These specs are not in CI due to timeout but were manually verified and tested using fuzzing.
-
-### Approximated VaultHub spec
-
-- **File:** `certora/specs/vaults/approximated-VaultHub.spec`
-- **Config:** `certora/confs/vaults/approximated-VaultHub.conf`
-- **Purpose:** Alternative verification approach with approximations
-
-### Alternative Accounting configs
-
-- **Config:** `certora/confs/core/Accounting-unsummarized.conf`
-- **Purpose:** Accounting verification without certain function summaries
-
-- **Config:** `certora/confs/core/Lido_and_VaultHub.conf`
-- **Spec:** `certora/specs/core/Lido_and_VaultHub.spec`
-- **Purpose:** Integration properties between Lido and VaultHub
-
-### Sanity checks
-
-Located in `certora/confs/setup/` and `certora/specs/setup/`:
-
-- Sanity configurations for all major contracts (VaultHub, LazyOracle, StakingVault, etc.)
-- Dispatching specs for testing function resolution
-
----
-
-## Running the specs
-
-To run all CI specs:
-
-```bash
-./certora/scripts/munge.sh
-# Then run the configs listed in .github/workflows/certora.yml
-```
-
-To run a specific configuration:
-
-```bash
-certoraRun certora/confs/vaults/VaultHub.conf --rule <rule_name>
-```
-
----
-
-
-## Fuzzing Tests - Complementary Verification
-
-For properties where formal verification times out, we use extensive Foundry fuzzing tests as complementary verification:
-
-### VaultHub Health Invariant
-
-- **File:** `test/0.8.25/vaults/vaulthub/VaultHubHealthInvariant.t.sol`
-- **Property:** Healthy vault remains healthy until oracle report (excludes `settleLidoFees`)
-- **Runs:** 20k invariant runs + 200k fuzz runs
-
-### VaultHub Shortfall Calculation
-
-- **File:** `test/0.8.25/vaults/vaulthub/VaultHubShortfallFuzz.t.sol`
-- **Property:** Rebalancing by `healthShortfallShares()` makes vault healthy
-- **Runs:** 1 million fuzz runs
-
-### Locked Covers Liability and Reserve
-
-- **File:** `test/0.8.25/vaults/vaulthub/VaultHubInvariantLockedCoversLiabilityAndReserve.t.sol`
-- **Property:** `locked * (TOTAL_BP - reserveRatioBP) >= liabilityEth * TOTAL_BP`
-- **Runs:** 10k invariant runs
-
-**To run all fuzzing tests:**
-
-```bash
-forge test --match-path "test/0.8.25/vaults/vaulthub/VaultHub*" -vvv
-```
-
----
-
-## Notes
-
-- Many configs use `--prover_version master` for stability
-- The `certora/munges/` directory contains patches applied before verification
-- Run `./certora/scripts/unmunge.sh` to revert patches after verification
+- **Loop unrolling.** All specs use `optimistic_loop: true`. `loop_iter` is set to 2 to keep verification tractable.
+- **Optimistic fallback.** Specs use `optimistic_fallback: true` for calls to unresolved external functions.
+- **Optimistic hashing.** `optimistic_hashing: true` is used to simplify hash-related reasoning.
+- **Hashing length bound.** `hashing_length_bound` ranges from 98 to 500 depending on the configuration.
+- **Summarization.** Complex operations (BLS, SSZ, cryptography) are summarized as `NONDET` for tractability.
+- **Partitioned verification.** Complex specs like `VaultHub_health` are split into multiple parts (`part1` through `part6`) to manage solver complexity.
