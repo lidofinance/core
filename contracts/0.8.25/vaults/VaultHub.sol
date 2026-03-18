@@ -907,7 +907,7 @@ contract VaultHub is PausableUntilWithRoles {
             ///      forceful validator exits required for rebalancing the vault. Partial withdrawals only allowed if
             ///      the requested amount of withdrawals is enough to cover the uncovered obligations.
             uint256 obligationsShortfallAmount = _obligationsShortfallValue(_vault, connection, record);
-            if (obligationsShortfallAmount > 0 && minPartialAmountInGwei * 1e9 < obligationsShortfallAmount) {
+            if (obligationsShortfallAmount > 0) {
                 revert PartialValidatorWithdrawalNotAllowed();
             }
         }
