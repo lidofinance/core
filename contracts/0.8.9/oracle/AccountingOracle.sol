@@ -13,7 +13,7 @@ import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 
-import {BaseOracle} from "./BaseOracle.sol";
+import {BaseOracle, IHashConsensus} from "./BaseOracle.sol";
 
 interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
@@ -194,7 +194,7 @@ contract AccountingOracle is BaseOracle {
         /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,
         /// excluding pending deposits, as observed at the reference slot.
         uint256[] validatorBalancesGweiByStakingModule;
-        /// @dev Sum of consensus-layer pending deposits balances 
+        /// @dev Sum of consensus-layer pending deposits balances
         /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,
         /// as observed at the reference slot.
         uint256[] pendingBalancesGweiByStakingModule;
@@ -447,6 +447,27 @@ contract AccountingOracle is BaseOracle {
         result.extraDataSubmitted = extraState.submitted;
         result.extraDataItemsCount = extraState.itemsCount;
         result.extraDataItemsSubmitted = extraState.itemsProcessed;
+    }
+
+    /// @notice Returns the number of frames skipped since the last processed report.
+    /// @dev Returns zero when the current frame is the same as, or the immediate successor of,
+    ///      the frame for which processing was last started.
+    function getRelativeFrameId() external view returns (uint256) {
+        IHashConsensus consensusContract = IHashConsensus(CONSENSUS_CONTRACT_POSITION.getStorageAddress());
+        (uint256 currentFrameRefSlot, ) = consensusContract.getCurrentFrame();
+        uint256 lastReportRefSlot = LAST_PROCESSING_REF_SLOT_POSITION.getStorageUint256();
+        if (currentFrameRefSlot <= lastReportRefSlot) {
+            return 0;
+        }
+        (uint256 slotsPerEpoch,,) = consensusContract.getChainConfig();
+        (, uint256 epochsPerFrame,) = consensusContract.getFrameConfig();
+
+        uint256 framesSinceLastReport = (currentFrameRefSlot - lastReportRefSlot) / (slotsPerEpoch * epochsPerFrame);
+        if (framesSinceLastReport == 0) {
+            return 0;
+        }
+
+        return framesSinceLastReport - 1;
     }
 
     ///
