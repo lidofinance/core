@@ -4,15 +4,15 @@
 pragma solidity 0.8.25;
 
 import {GIndex} from "contracts/common/lib/GIndex.sol";
-import {CLTopUpVerifier} from "contracts/0.8.25/CLTopUpVerifier.sol";
+import {CLValidatorVerifier} from "contracts/0.8.25/CLValidatorVerifier.sol";
 import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
 
-contract CLTopUpVerifier__Harness is CLTopUpVerifier {
+contract CLValidatorVerifier__Harness is CLValidatorVerifier {
     constructor(
         GIndex _gIFirstValidatorPrev,
         GIndex _gIFirstValidatorCurr,
         uint64 _pivotSlot
-    ) CLTopUpVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {}
+    ) CLValidatorVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {}
 
     function TEST_verifyValidator(
         BeaconRootData calldata beaconData,
