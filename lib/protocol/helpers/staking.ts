@@ -1,6 +1,15 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import { BigIntMath, certainAddress, ether, impersonate, log, StakingModuleStatus, TOTAL_BASIS_POINTS } from "lib";
+import {
+  BigIntMath,
+  certainAddress,
+  ether,
+  impersonate,
+  log,
+  ONE_GWEI,
+  StakingModuleStatus,
+  TOTAL_BASIS_POINTS,
+} from "lib";
 
 import { ZERO_HASH } from "test/suite";
 
@@ -9,6 +18,11 @@ import { ProtocolContext } from "../types";
 import { report } from "./accounting";
 
 const DEPOSIT_SIZE = ether("32");
+
+export type StakingModuleBalances = {
+  validatorsBalanceGwei: bigint;
+  pendingBalanceGwei: bigint;
+};
 
 export const unpauseStaking = async (ctx: ProtocolContext) => {
   const { lido } = ctx.contracts;
@@ -45,6 +59,16 @@ export const getStakingModuleManagerSigner = async (ctx: ProtocolContext) => {
   }
 
   return await impersonate(await stakingRouter.getRoleMember(role, 0n), ether("100000"));
+};
+
+export const getStakingModuleBalances = async (
+  ctx: ProtocolContext,
+  moduleId: bigint,
+): Promise<StakingModuleBalances> => {
+  const [validatorsBalanceGwei, pendingBalanceGwei] =
+    await ctx.contracts.stakingRouter.getStakingModuleStateAccounting(moduleId);
+
+  return { validatorsBalanceGwei, pendingBalanceGwei };
 };
 
 export const setModuleStakeShareLimit = async (ctx: ProtocolContext, moduleId: bigint, stakeShareLimit: bigint) => {
@@ -124,13 +148,86 @@ export const ensureCanDeposit = async (ctx: ProtocolContext) => {
   }
 };
 
+const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
+  const { depositSecurityModule, stakingRouter } = ctx.contracts;
+
+  const managerSigner = await getStakingModuleManagerSigner(ctx);
+  if (!managerSigner) {
+    throw new Error("staking module manager signer is required for deposit setup");
+  }
+
+  const moduleConfig = await stakingRouter.getStakingModule(moduleId);
+  const shouldRestoreMaxDepositsPerBlock = moduleConfig.maxDepositsPerBlock > depositsCount;
+
+  if (shouldRestoreMaxDepositsPerBlock) {
+    await stakingRouter
+      .connect(managerSigner)
+      .updateStakingModule(
+        moduleId,
+        moduleConfig.stakeShareLimit,
+        moduleConfig.priorityExitShareThreshold,
+        moduleConfig.stakingModuleFee,
+        moduleConfig.treasuryFee,
+        depositsCount,
+        moduleConfig.minDepositBlockDistance,
+      );
+  }
+
+  try {
+    const dsmSigner = await impersonate(await depositSecurityModule.getAddress(), ether("1"));
+    await stakingRouter.connect(dsmSigner).deposit(moduleId, ZERO_HASH);
+  } finally {
+    if (shouldRestoreMaxDepositsPerBlock) {
+      await stakingRouter
+        .connect(managerSigner)
+        .updateStakingModule(
+          moduleId,
+          moduleConfig.stakeShareLimit,
+          moduleConfig.priorityExitShareThreshold,
+          moduleConfig.stakingModuleFee,
+          moduleConfig.treasuryFee,
+          moduleConfig.maxDepositsPerBlock,
+          moduleConfig.minDepositBlockDistance,
+        );
+    }
+  }
+};
+
+export const depositValidatorsWithoutReport = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
+  const { lido } = ctx.contracts;
+
+  const ethToDeposit = depositsCount * DEPOSIT_SIZE;
+  const depositableEther = await lido.getDepositableEther();
+  if (depositableEther < ethToDeposit) {
+    throw new Error(`Not enough depositable ether for staking module ${moduleId}`);
+  }
+
+  await ensureCanDeposit(ctx);
+  await setModuleStakeShareLimit(ctx, moduleId, TOTAL_BASIS_POINTS);
+
+  const { pendingBalanceGwei: pendingBefore } = await getStakingModuleBalances(ctx, moduleId);
+  const depositedBefore = (await lido.getBalanceStats()).depositedSinceLastReport;
+
+  await depositValidatorsViaRouter(ctx, moduleId, depositsCount);
+
+  const { pendingBalanceGwei: pendingAfter } = await getStakingModuleBalances(ctx, moduleId);
+  const { depositedSinceLastReport } = await lido.getBalanceStats();
+
+  if (depositedSinceLastReport - depositedBefore !== ethToDeposit) {
+    throw new Error(`Deposited ${depositedSinceLastReport - depositedBefore} wei, expected ${ethToDeposit}`);
+  }
+
+  if (pendingAfter - pendingBefore !== ethToDeposit / ONE_GWEI) {
+    throw new Error(`Pending increased by ${pendingAfter - pendingBefore} gwei, expected ${ethToDeposit / ONE_GWEI}`);
+  }
+};
+
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
-  const { lido, depositSecurityModule, withdrawalQueue, stakingRouter } = ctx.contracts;
+  const { lido, withdrawalQueue, stakingRouter } = ctx.contracts;
 
   const ethToDeposit = depositsCount * DEPOSIT_SIZE;
   const submitValue = (await withdrawalQueue.unfinalizedStETH()) + ethToDeposit;
   const ethHolder = await impersonate(certainAddress("provision:eth:whale"), submitValue + ether("1"));
-  const dsmSigner = await impersonate(depositSecurityModule.address, ether("100000"));
   const managerSigner = await getStakingModuleManagerSigner(ctx);
 
   await lido.connect(ethHolder).submit(ZeroAddress, { value: submitValue });
@@ -163,27 +260,6 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     throw new Error(`Not enough max deposits count for staking module ${moduleId}`);
   }
 
-  // Save original maxDepositsPerBlock and temporarily set it to depositsCount
-  // This is needed because the new deposit() signature calculates deposit count internally
-  // based on maxDepositsPerBlock from module config
-  const module = await stakingRouter.getStakingModule(moduleId);
-  const originalMaxDepositsPerBlock = module.maxDepositsPerBlock;
-
-  // Temporarily limit maxDepositsPerBlock to expected depositsCount
-  if (originalMaxDepositsPerBlock > depositsCount) {
-    await stakingRouter
-      .connect(managerSigner)
-      .updateStakingModule(
-        moduleId,
-        module.stakeShareLimit,
-        module.priorityExitShareThreshold,
-        module.stakingModuleFee,
-        module.treasuryFee,
-        depositsCount,
-        module.minDepositBlockDistance,
-      );
-  }
-
   const getTotalDepositedValidators = async () => {
     const moduleDigests = await stakingRouter.getAllStakingModuleDigests();
     return moduleDigests.reduce((sum, digest) => sum + digest.summary.totalDepositedValidators, 0n);
@@ -194,24 +270,9 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   await ensureCanDeposit(ctx);
 
   // Deposit validators via StakingRouter (DSM calls SR which pulls ETH from Lido)
-  await stakingRouter.connect(dsmSigner).deposit(moduleId, ZERO_HASH);
+  await depositValidatorsViaRouter(ctx, moduleId, depositsCount);
 
   const numDepositedAfter = await getTotalDepositedValidators();
-
-  // Restore original maxDepositsPerBlock
-  if (originalMaxDepositsPerBlock > depositsCount) {
-    await stakingRouter
-      .connect(managerSigner)
-      .updateStakingModule(
-        moduleId,
-        module.stakeShareLimit,
-        module.priorityExitShareThreshold,
-        module.stakingModuleFee,
-        module.treasuryFee,
-        originalMaxDepositsPerBlock,
-        module.minDepositBlockDistance,
-      );
-  }
 
   if (numDepositedAfter !== numDepositedBefore + depositsCount) {
     throw new Error(`Deposited ${numDepositedAfter} validators, expected ${numDepositedBefore + depositsCount}`);

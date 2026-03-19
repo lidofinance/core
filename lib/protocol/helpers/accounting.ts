@@ -527,6 +527,22 @@ export const getReportTimeElapsed = async (ctx: ProtocolContext) => {
   };
 };
 
+export const getNextReportContext = async (
+  ctx: ProtocolContext,
+): Promise<{ nextReportRefSlot: bigint; reportTimeElapsed: bigint }> => {
+  const { accountingOracle, hashConsensus } = ctx.contracts;
+
+  const lastProcessingRefSlot = await accountingOracle.getLastProcessingRefSlot();
+  const currentFrame = await hashConsensus.getCurrentFrame();
+  const frameConfig = await hashConsensus.getFrameConfig();
+  const chainConfig = await hashConsensus.getChainConfig();
+
+  const nextReportRefSlot = currentFrame.refSlot + frameConfig.epochsPerFrame * chainConfig.slotsPerEpoch;
+  const reportTimeElapsed = (nextReportRefSlot - lastProcessingRefSlot) * chainConfig.secondsPerSlot;
+
+  return { nextReportRefSlot, reportTimeElapsed };
+};
+
 /**
  * Wait for the next available report time.
  * Returns the report timestamp and the ref slot of the next frame.
@@ -806,6 +822,23 @@ type OracleReportSubmitResult = {
   data: AccountingOracle.ReportDataStruct;
   reportTx: ContractTransactionResponse;
   extraDataTx: ContractTransactionResponse;
+};
+
+export const submitReportDataWithConsensus = async (
+  ctx: ProtocolContext,
+  data: AccountingOracle.ReportDataStruct,
+): Promise<ContractTransactionResponse> => {
+  const { accountingOracle } = ctx.contracts;
+
+  const reportHash = calcReportDataHash(getReportDataItems(data));
+  const submitter = await reachConsensus(ctx, {
+    refSlot: BigInt(data.refSlot),
+    reportHash,
+    consensusVersion: BigInt(data.consensusVersion),
+  });
+  const oracleVersion = await accountingOracle.getContractVersion();
+
+  return accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
 };
 
 /**
