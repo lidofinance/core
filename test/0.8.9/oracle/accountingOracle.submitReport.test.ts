@@ -10,6 +10,7 @@ import {
   Accounting__MockForAccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
+  Lido__MockForAccounting,
   OracleReportSanityChecker,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForAccountingOracle,
@@ -47,6 +48,7 @@ describe("AccountingOracle.sol:submitReport", () => {
   let extraDataItems: string[];
   let oracleVersion: bigint;
   let deadline: BigNumberish;
+  let mockLido: Lido__MockForAccounting;
   let mockStakingRouter: StakingRouter__MockForAccountingOracle;
   let extraData: ExtraDataType;
   let mockAccounting: Accounting__MockForAccountingOracle;
@@ -108,6 +110,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
     oracle = deployed.oracle;
     consensus = deployed.consensus;
+    mockLido = deployed.lido;
     mockStakingRouter = deployed.stakingRouter;
     mockAccounting = deployed.accounting;
     sanityChecker = deployed.oracleReportSanityChecker;
@@ -699,6 +702,8 @@ describe("AccountingOracle.sol:submitReport", () => {
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         // Seed the previous router balances to the target values; this case checks zero pending itself, not one-frame growth.
         await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [1000n * ONE_GWEI], [0n]);
+        await mockLido.mock__setClValidatorsBalance(1000n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(0n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -718,6 +723,8 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [60000n * ONE_GWEI], [5000n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(60000n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(5000n * 10n ** 18n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -814,6 +821,8 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [30000n * ONE_GWEI], [1000n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(30000n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(1000n * 10n ** 18n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
