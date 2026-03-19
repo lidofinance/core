@@ -892,14 +892,15 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 minPartialAmountInGwei = type(uint256).max;
+        bool hasPartialWithdrawals = false;
         for (uint256 i = 0; i < _amountsInGwei.length; i++) {
-            if (_amountsInGwei[i] > 0 && _amountsInGwei[i] < minPartialAmountInGwei) {
-                minPartialAmountInGwei = _amountsInGwei[i];
+            if (_amountsInGwei[i] > 0) {
+                hasPartialWithdrawals = true;
+                break;
             }
         }
 
-        if (minPartialAmountInGwei < type(uint256).max) {
+        if (hasPartialWithdrawals) {
             _requireFreshReport(_vault, record);
 
             /// @dev NB: Disallow partial withdrawals when the vault has obligations shortfall in order to prevent the
