@@ -666,17 +666,35 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       ).to.be.revertedWithCustomError(consolidationBus, "BatchNotFound");
     });
 
-    it("Should revert addConsolidationRequests if batch size exceeds limit", async () => {
+    it("Should revert addConsolidationRequests if too many groups", async () => {
       const agentSigner = await ctx.getSigner("agent");
 
-      // Set a very small batch size limit on ConsolidationBus
-      await consolidationBus.connect(agentSigner).setBatchSize(1);
+      // Set maxGroupsInBatch to 1
+      await consolidationBus.connect(agentSigner).setMaxGroupsInBatch(1);
 
-      // Try to submit batch with 2 validators (exceeds limit of 1)
+      // Try to submit batch with 2 groups (exceeds maxGroupsInBatch of 1)
       await expect(
         consolidationMigrator
           .connect(submitter)
           .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [[0n], [1n]], [0n, 1n]),
+      )
+        .to.be.revertedWithCustomError(consolidationBus, "TooManyGroups")
+        .withArgs(2, 1);
+    });
+
+    it("Should revert addConsolidationRequests if batch size exceeds limit", async () => {
+      const agentSigner = await ctx.getSigner("agent");
+
+      // Set batchSize to 1 (single group with 2 sources will exceed it)
+      // Must reduce maxGroupsInBatch first, since batchSize must be >= maxGroupsInBatch
+      await consolidationBus.connect(agentSigner).setMaxGroupsInBatch(1);
+      await consolidationBus.connect(agentSigner).setBatchSize(1);
+
+      // Try to submit 1 group with 2 source keys (total count 2 exceeds batchSize of 1)
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [[0n, 1n]], [0n]),
       )
         .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
         .withArgs(2, 1);
