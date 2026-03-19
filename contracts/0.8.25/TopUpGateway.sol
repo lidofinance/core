@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {TopUpData, BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
-import {CLTopUpVerifier} from "./CLTopUpVerifier.sol";
+import {CLValidatorVerifier} from "./CLValidatorVerifier.sol";
 import {AccessControlEnumerableUpgradeable} from
     "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {GIndex} from "contracts/common/lib/GIndex.sol";
@@ -37,7 +37,7 @@ interface ILido {
  * @author Lido
  * @notice TopUpGateway is a contract that serves as the entry point for validator top-ups
  */
-contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
+contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable {
     using WithdrawalCredentials for bytes32;
 
     ILidoLocator internal immutable LOCATOR;
@@ -69,7 +69,7 @@ contract TopUpGateway is CLTopUpVerifier, AccessControlEnumerableUpgradeable {
         GIndex _gIFirstValidatorCurr,
         uint64 _pivotSlot,
         uint256 _slotsPerEpoch
-    ) CLTopUpVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
+    ) CLValidatorVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
         LOCATOR = ILidoLocator(_lidoLocator);
         SLOTS_PER_EPOCH = _slotsPerEpoch;
         _disableInitializers();
