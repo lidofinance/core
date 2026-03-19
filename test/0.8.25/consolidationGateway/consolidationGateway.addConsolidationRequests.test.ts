@@ -135,6 +135,27 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       .withArgs("sourcePubkeysGroups");
   });
 
+  it("should revert with EmptyGroup error if a source group is empty", async () => {
+    // Second group is empty
+    await expect(
+      consolidationGateway
+        .connect(authorizedEntity)
+        .addConsolidationRequests([[PUBKEYS[0]], []], [PUBKEYS[1], PUBKEYS[2]], ZERO_ADDRESS, { value: 10 }),
+    )
+      .to.be.revertedWithCustomError(consolidationGateway, "EmptyGroup")
+      .withArgs(1);
+  });
+
+  it("should revert with EmptyGroup at first index if first group is empty", async () => {
+    await expect(
+      consolidationGateway
+        .connect(authorizedEntity)
+        .addConsolidationRequests([[], [PUBKEYS[0]]], [PUBKEYS[1], PUBKEYS[2]], ZERO_ADDRESS, { value: 10 }),
+    )
+      .to.be.revertedWithCustomError(consolidationGateway, "EmptyGroup")
+      .withArgs(0);
+  });
+
   it("should revert with ArraysLengthMismatch error if arrays have different lengths", async () => {
     await expect(
       consolidationGateway

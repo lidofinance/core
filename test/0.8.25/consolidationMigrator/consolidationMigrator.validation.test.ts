@@ -109,6 +109,23 @@ describe("ConsolidationMigrator.sol: validation", () => {
         .withArgs(2, 1);
     });
 
+    it("should revert if a source group is empty", async () => {
+      // Second group is empty
+      await expect(
+        consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0], []], [0, 1]),
+      )
+        .to.be.revertedWithCustomError(consolidationMigrator, "EmptyGroup")
+        .withArgs(1);
+    });
+
+    it("should revert with EmptyGroup at first index if first group is empty", async () => {
+      await expect(
+        consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[], [0]], [0, 1]),
+      )
+        .to.be.revertedWithCustomError(consolidationMigrator, "EmptyGroup")
+        .withArgs(0);
+    });
+
     it("should revert if pair is not allowed", async () => {
       const unknownSourceOpId = 999;
       const unknownTargetOpId = 888;

@@ -109,6 +109,25 @@ describe("ConsolidationBus.sol: publisher", () => {
         .withArgs(1, 2);
     });
 
+    it("should revert if a source group is empty", async () => {
+      // First group is non-empty, second group is empty
+      const sourcePubkeysGroups = [[PUBKEYS[0]], []];
+      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+        .to.be.revertedWithCustomError(consolidationBus, "EmptyGroup")
+        .withArgs(1);
+    });
+
+    it("should revert with EmptyGroup at first index if first group is empty", async () => {
+      const sourcePubkeysGroups = [[], [PUBKEYS[0]]];
+      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+        .to.be.revertedWithCustomError(consolidationBus, "EmptyGroup")
+        .withArgs(0);
+    });
+
     it("should revert if batch size exceeds limit", async () => {
       // Create a batch larger than the limit (10)
       const sourcePubkeysGroups = Array(11).fill([PUBKEYS[0]]);
