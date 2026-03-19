@@ -1,6 +1,5 @@
 /foundry
 /contracts
-/certora
 
 .gitignore
 .prettierignore
