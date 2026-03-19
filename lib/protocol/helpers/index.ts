@@ -1,14 +1,21 @@
-export { depositAndReportValidators, ensureStakeLimit, unpauseStaking } from "./staking";
+export {
+  depositAndReportValidators,
+  depositValidatorsWithoutReport,
+  ensureStakeLimit,
+  getStakingModuleBalances,
+  unpauseStaking,
+} from "./staking";
 
 export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal";
 
-export { setMaxPositiveTokenRebase } from "./sanity-checker";
+export { setMaxPositiveTokenRebase, updateOracleReportLimits } from "./sanity-checker";
 
 export {
   calcReportDataHash,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
   getReportDataItems,
+  getNextReportContext,
   getReportTimeElapsed,
   waitNextAvailableReportTime,
   handleOracleReport,
@@ -17,6 +24,7 @@ export {
   report,
   reportWithEffectiveClDiff,
   resetCLBalanceDecreaseWindow,
+  submitReportDataWithConsensus,
   getDepositedSinceLastReport,
 } from "./accounting";
 

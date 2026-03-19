@@ -734,12 +734,12 @@ contract AccountingOracle is BaseOracle {
     ) internal view {
         // This check must run before `reportValidatorBalancesByStakingModule(...)` mutates the router state,
         // because it compares the report against the previous per-module validators/pending balances in StakingRouter.
-        (uint256 preCLValidatorsBalanceGwei, , ) = ILido(LOCATOR.lido()).getBalanceStats();
+        (uint256 preCLValidatorsBalanceWei, , ) = ILido(LOCATOR.lido()).getBalanceStats();
         sanityChecker.checkModuleAndCLBalancesChangeRates(
             data.stakingModuleIdsWithUpdatedBalance,
             data.validatorBalancesGweiByStakingModule,
             data.pendingBalancesGweiByStakingModule,
-            preCLValidatorsBalanceGwei,
+            preCLValidatorsBalanceWei / 1 gwei,
             data.clValidatorsBalanceGwei,
             data.clValidatorsBalanceGwei,
             data.clPendingBalanceGwei,
