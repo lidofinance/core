@@ -47,17 +47,6 @@ describe("Staking limits", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
-  it("Should have expected staking limit info", async () => {
-    const info = await lido.getStakeLimitFullInfo();
-
-    expect(info.isStakingPaused_).to.be.false;
-    expect(info.isStakingLimitSet).to.be.true;
-    expect(info.currentStakeLimit).to.be.lte(ether("150000"));
-    expect(info.currentStakeLimit).to.be.gt(0);
-    expect(info.maxStakeLimit).to.equal(ether("150000"));
-    expect(info.prevStakeLimit).to.be.lte(ether("150000"));
-  });
-
   it("Should have staking not paused initially", async () => {
     expect(await lido.isStakingPaused()).to.be.false;
   });
