@@ -35,6 +35,7 @@ describe("ConsolidationBus.sol: management", () => {
       admin.address,
       await consolidationGateway.getAddress(),
       100,
+      100,
     ]);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
@@ -64,8 +65,44 @@ describe("ConsolidationBus.sol: management", () => {
         .withArgs("batchSizeLimit");
     });
 
+    it("should revert if new batch size is less than current maxGroupsInBatch", async () => {
+      // maxGroupsInBatch is 100, try to set batchSize to 50
+      await expect(consolidationBus.connect(manager).setBatchSize(50))
+        .to.be.revertedWithCustomError(consolidationBus, "MaxGroupsExceedsBatchSize")
+        .withArgs(100, 50);
+    });
+
     it("should revert if caller does not have MANAGE_ROLE", async () => {
       await expect(consolidationBus.connect(stranger).setBatchSize(200))
+        .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger.address, MANAGE_ROLE);
+    });
+  });
+
+  context("setMaxGroupsInBatch", () => {
+    it("should set max groups in batch", async () => {
+      await expect(consolidationBus.connect(manager).setMaxGroupsInBatch(50))
+        .to.emit(consolidationBus, "MaxGroupsInBatchUpdated")
+        .withArgs(50);
+
+      expect(await consolidationBus.maxGroupsInBatch()).to.equal(50);
+    });
+
+    it("should revert setting max groups in batch to zero", async () => {
+      await expect(consolidationBus.connect(manager).setMaxGroupsInBatch(0))
+        .to.be.revertedWithCustomError(consolidationBus, "ZeroArgument")
+        .withArgs("maxGroupsInBatchLimit");
+    });
+
+    it("should revert if maxGroupsInBatch exceeds batchSize", async () => {
+      // batchSize is 100, try to set maxGroupsInBatch to 200
+      await expect(consolidationBus.connect(manager).setMaxGroupsInBatch(200))
+        .to.be.revertedWithCustomError(consolidationBus, "MaxGroupsExceedsBatchSize")
+        .withArgs(200, 100);
+    });
+
+    it("should revert if caller does not have MANAGE_ROLE", async () => {
+      await expect(consolidationBus.connect(stranger).setMaxGroupsInBatch(50))
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
         .withArgs(stranger.address, MANAGE_ROLE);
     });

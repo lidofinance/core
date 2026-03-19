@@ -63,6 +63,20 @@ contract ConsolidationBus is AccessControlEnumerable {
     error BatchTooLarge(uint256 size, uint256 limit);
 
     /**
+     * @notice Thrown when the number of groups in a batch exceeds the limit
+     * @param groupsCount Actual number of groups
+     * @param limit Maximum allowed number of groups
+     */
+    error TooManyGroups(uint256 groupsCount, uint256 limit);
+
+    /**
+     * @notice Thrown when maxGroupsInBatch exceeds batchSize
+     * @param maxGroupsInBatch The max groups in batch value
+     * @param batchSizeLimit The batch size limit value
+     */
+    error MaxGroupsExceedsBatchSize(uint256 maxGroupsInBatch, uint256 batchSizeLimit);
+
+    /**
      * @notice Thrown when attempting to add a batch that is already pending execution
      * @param batchHash Hash of the batch that already exists in the pending queue
      */
@@ -85,6 +99,12 @@ contract ConsolidationBus is AccessControlEnumerable {
      * @param newLimit New batch size limit
      */
     event BatchLimitUpdated(uint256 newLimit);
+
+    /**
+     * @notice Emitted when the max groups in batch limit is updated
+     * @param newLimit New max groups in batch limit
+     */
+    event MaxGroupsInBatchUpdated(uint256 newLimit);
 
     /**
      * @notice Emitted when consolidation requests are added
@@ -114,18 +134,21 @@ contract ConsolidationBus is AccessControlEnumerable {
     IConsolidationGateway internal immutable CONSOLIDATION_GATEWAY;
 
     uint256 internal _batchSize;
+    uint256 internal _maxGroupsInBatch;
     mapping(bytes32 batchHash => address publisher) internal _pendingBatches;
 
     constructor(
         address admin,
         address consolidationGateway,
-        uint256 initialBatchSize
+        uint256 initialBatchSize,
+        uint256 initialMaxGroupsInBatch
     ) {
         if (admin == address(0)) revert AdminCannotBeZero();
         if (consolidationGateway == address(0)) revert ZeroArgument("consolidationGateway");
 
         CONSOLIDATION_GATEWAY = IConsolidationGateway(consolidationGateway);
         _setBatchSize(initialBatchSize);
+        _setMaxGroupsInBatch(initialMaxGroupsInBatch);
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(MANAGE_ROLE, admin);
         _grantRole(REMOVE_ROLE, admin);
@@ -138,6 +161,15 @@ contract ConsolidationBus is AccessControlEnumerable {
      */
     function setBatchSize(uint256 limit) external onlyRole(MANAGE_ROLE) {
         _setBatchSize(limit);
+    }
+
+    /**
+     * @notice Sets the maximum number of groups allowed in a batch
+     * @param limit New max groups in batch limit
+     * @dev Reverts if caller does not have MANAGE_ROLE
+     */
+    function setMaxGroupsInBatch(uint256 limit) external onlyRole(MANAGE_ROLE) {
+        _setMaxGroupsInBatch(limit);
     }
 
     /**
@@ -167,6 +199,14 @@ contract ConsolidationBus is AccessControlEnumerable {
      */
     function batchSize() external view returns (uint256) {
         return _batchSize;
+    }
+
+    /**
+     * @notice Returns the maximum number of groups allowed in a batch
+     * @return Current max groups in batch limit
+     */
+    function maxGroupsInBatch() external view returns (uint256) {
+        return _maxGroupsInBatch;
     }
 
     /**
@@ -211,6 +251,9 @@ contract ConsolidationBus is AccessControlEnumerable {
         uint256 groupsCount = sourcePubkeysGroups.length;
         if (groupsCount == 0) revert EmptyBatch();
         if (groupsCount != targetPubkeys.length) revert ArraysLengthMismatch(groupsCount, targetPubkeys.length);
+
+        uint256 maxGroups = _maxGroupsInBatch;
+        if (groupsCount > maxGroups) revert TooManyGroups(groupsCount, maxGroups);
 
         uint256 totalCount = 0;
         for (uint256 i = 0; i < groupsCount; ++i) {
@@ -292,7 +335,17 @@ contract ConsolidationBus is AccessControlEnumerable {
 
     function _setBatchSize(uint256 limit) internal {
         if (limit == 0) revert ZeroArgument("batchSizeLimit");
+        uint256 maxGroups = _maxGroupsInBatch;
+        if (maxGroups > limit) revert MaxGroupsExceedsBatchSize(maxGroups, limit);
         _batchSize = limit;
         emit BatchLimitUpdated(limit);
+    }
+
+    function _setMaxGroupsInBatch(uint256 limit) internal {
+        if (limit == 0) revert ZeroArgument("maxGroupsInBatchLimit");
+        uint256 currentBatchSize = _batchSize;
+        if (limit > currentBatchSize) revert MaxGroupsExceedsBatchSize(limit, currentBatchSize);
+        _maxGroupsInBatch = limit;
+        emit MaxGroupsInBatchUpdated(limit);
     }
 }

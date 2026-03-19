@@ -109,6 +109,7 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
       admin.address,
       await consolidationGateway.getAddress(),
       200,
+      200,
     ]);
 
     // 8. Set up roles

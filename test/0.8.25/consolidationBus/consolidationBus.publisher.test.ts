@@ -35,6 +35,7 @@ describe("ConsolidationBus.sol: publisher", () => {
       admin.address,
       await consolidationGateway.getAddress(),
       10, // batch size limit
+      10, // max groups in batch
     ]);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
@@ -129,13 +130,14 @@ describe("ConsolidationBus.sol: publisher", () => {
     });
 
     it("should revert if batch size exceeds limit", async () => {
-      // Create a batch larger than the limit (10)
-      const sourcePubkeysGroups = Array(11).fill([PUBKEYS[0]]);
-      const targetPubkeys = Array(11).fill(PUBKEYS[1]);
+      // Create a batch with total source pubkeys exceeding the limit (10)
+      // Use fewer groups but with multiple source keys each to avoid TooManyGroups
+      const sourcePubkeysGroups = [Array(6).fill(PUBKEYS[0]), Array(6).fill(PUBKEYS[0])];
+      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
 
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
         .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
-        .withArgs(11, 10);
+        .withArgs(12, 10);
     });
 
     it("should allow batch at exact limit", async () => {
@@ -144,6 +146,49 @@ describe("ConsolidationBus.sol: publisher", () => {
 
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys)).to
         .not.be.reverted;
+    });
+
+    it("should revert if groups count exceeds max groups in batch", async () => {
+      // Set maxGroupsInBatch to 3 (batchSize stays at 10)
+      await consolidationBus.connect(manager).setMaxGroupsInBatch(3);
+
+      // Create 4 groups, each with 1 source pubkey (total size 4 <= batchSize 10, but groups 4 > maxGroups 3)
+      const sourcePubkeysGroups = Array(4).fill([PUBKEYS[0]]);
+      const targetPubkeys = Array(4).fill(PUBKEYS[1]);
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+        .to.be.revertedWithCustomError(consolidationBus, "TooManyGroups")
+        .withArgs(4, 3);
+    });
+
+    it("should allow batch at exact max groups limit", async () => {
+      // Set maxGroupsInBatch to 3
+      await consolidationBus.connect(manager).setMaxGroupsInBatch(3);
+
+      const sourcePubkeysGroups = Array(3).fill([PUBKEYS[0]]);
+      const targetPubkeys = Array(3).fill(PUBKEYS[1]);
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys)).to
+        .not.be.reverted;
+    });
+
+    it("should check both batch size and max groups limits independently", async () => {
+      // Set maxGroupsInBatch to 5, batchSize stays at 10
+      await consolidationBus.connect(manager).setMaxGroupsInBatch(5);
+
+      // 3 groups with 4 source pubkeys each = 12 total > batchSize 10
+      // but groups 3 <= maxGroups 5
+      // TooManyGroups check comes first, but this should pass it and fail on BatchTooLarge
+      const sourcePubkeysGroups = [
+        [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]],
+        [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]],
+        [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]],
+      ];
+      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]];
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+        .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
+        .withArgs(12, 10);
     });
 
     it("should revert if batch already added", async () => {

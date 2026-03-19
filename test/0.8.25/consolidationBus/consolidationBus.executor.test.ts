@@ -38,6 +38,7 @@ describe("ConsolidationBus.sol: executor", () => {
       admin.address,
       await consolidationGateway.getAddress(),
       100,
+      100,
     ]);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();

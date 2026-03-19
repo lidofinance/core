@@ -401,6 +401,7 @@ export async function main() {
     admin,
     consolidationGateway_.address,
     200, // initialBatchSize
+    10, // initialMaxGroupsInBatch
   ]);
 
   const consolidationBus = await loadContract<ConsolidationBus>("ConsolidationBus", consolidationBus_.address);
