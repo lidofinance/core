@@ -108,7 +108,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should be able to add consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
     });
 
@@ -260,7 +260,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -274,7 +274,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -286,7 +286,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseUntil: should allow consolidation requests immediately after resuming", async () => {
@@ -299,7 +299,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseFor: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -312,7 +312,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseUntil: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -327,7 +327,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
     });
   });

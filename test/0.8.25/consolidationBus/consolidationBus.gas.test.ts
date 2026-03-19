@@ -47,14 +47,14 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     return "0x" + hex;
   }
 
-  function generateBatch(size: number): { sources: string[]; targets: string[] } {
-    const sources: string[] = [];
+  function generateBatch(size: number): { sourcePubkeysGroups: string[][]; targets: string[] } {
+    const sourcePubkeysGroups: string[][] = [];
     const targets: string[] = [];
     for (let i = 0; i < size; i++) {
-      sources.push(generatePubkey(i * 2));
+      sourcePubkeysGroups.push([generatePubkey(i * 2)]);
       targets.push(generatePubkey(i * 2 + 1));
     }
-    return { sources, targets };
+    return { sourcePubkeysGroups, targets };
   }
 
   before(async () => {
@@ -127,17 +127,17 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
   after(async () => await Snapshot.restore(originalState));
 
   it(`should execute batch of ${BATCH_SIZE} requests within gas limit`, async () => {
-    const { sources, targets } = generateBatch(BATCH_SIZE);
+    const { sourcePubkeysGroups, targets } = generateBatch(BATCH_SIZE);
 
     // Add batch to bus
-    const addTx = await consolidationBus.connect(publisher).addConsolidationRequests(sources, targets);
+    const addTx = await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targets);
     const addReceipt = await addTx.wait();
 
     // Calculate total fee
     const totalFee = FEE * BigInt(BATCH_SIZE);
 
     // Execute batch through full stack
-    const executeTx = await consolidationBus.connect(executor).executeConsolidation(sources, targets, {
+    const executeTx = await consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targets, {
       value: totalFee,
     });
     const executeReceipt = await executeTx.wait();

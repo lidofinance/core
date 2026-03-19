@@ -62,9 +62,15 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     error ConsolidationRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
     /**
-     * @notice Thrown when source and target arrays have different lengths
+     * @notice Thrown when source groups and target arrays have different lengths
      */
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
+
+    /**
+     * @notice Thrown when a source group has zero elements
+     * @param groupIndex Index of the empty group
+     */
+    error EmptyGroup(uint256 groupIndex);
 
     /**
      * @notice Thrown when DSM deposits are paused
@@ -146,10 +152,11 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     }
 
     /**
-     * @dev Submits Consolidation Requests to the Withdrawal Vault
-     *      for the specified validator public keys.
-     * @param sourcePubkeys An array of 48-byte public keys corresponding to validators requesting the consolidation.
-     * @param targetPubkeys An array of 48-byte public keys corresponding to validators receiving the consolidation.
+     * @dev Submits grouped Consolidation Requests to the Withdrawal Vault.
+     *      Each group represents multiple source validators consolidating into a single target.
+     * @param sourcePubkeysGroups An array of groups, where each group is an array of 48-byte source public keys
+     *        consolidating to the corresponding target.
+     * @param targetPubkeys An array of 48-byte target public keys, one per group.
      * @param refundRecipient The address that will receive any excess ETH sent for fees.
      *
      * @notice Reverts if:
@@ -158,15 +165,23 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
     function addConsolidationRequests(
-        bytes[] calldata sourcePubkeys,
+        bytes[][] calldata sourcePubkeysGroups,
         bytes[] calldata targetPubkeys,
         address refundRecipient
     ) external payable onlyRole(ADD_CONSOLIDATION_REQUEST_ROLE) preservesEthBalance whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        uint256 requestsCount = sourcePubkeys.length;
-        if (requestsCount == 0) revert ZeroArgument("sourcePubkeys");
-        if (requestsCount != targetPubkeys.length) {
-            revert ArraysLengthMismatch(requestsCount, targetPubkeys.length);
+        uint256 groupsCount = sourcePubkeysGroups.length;
+        if (groupsCount == 0) revert ZeroArgument("sourcePubkeysGroups");
+        if (groupsCount != targetPubkeys.length) {
+            revert ArraysLengthMismatch(groupsCount, targetPubkeys.length);
+        }
+
+        // Count total individual requests across all groups
+        uint256 requestsCount = 0;
+        for (uint256 i = 0; i < groupsCount; ++i) {
+            uint256 groupSize = sourcePubkeysGroups[i].length;
+            if (groupSize == 0) revert EmptyGroup(i);
+            requestsCount += groupSize;
         }
 
         _ensureDSMDepositsNotPaused();
@@ -178,7 +193,9 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
         uint256 totalFee = requestsCount * fee;
         uint256 refund = _checkFee(totalFee);
 
-        withdrawalVault.addConsolidationRequests{value: totalFee}(sourcePubkeys, targetPubkeys);
+        // Expand grouped requests into flat pairs for WithdrawalVault
+        (bytes[] memory flatSources, bytes[] memory flatTargets) = _expandGroups(sourcePubkeysGroups, targetPubkeys, requestsCount);
+        withdrawalVault.addConsolidationRequests{value: totalFee}(flatSources, flatTargets);
 
         _refundFee(refund, refundRecipient);
     }
@@ -298,5 +315,34 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
         CONSOLIDATION_LIMIT_POSITION.setStorageLimit(
             limitData.updatePrevLimit(limit - requestsCount, _getTimestamp())
         );
+    }
+
+    /**
+     * @dev Expands grouped consolidation requests into flat parallel arrays
+     *      for WithdrawalVault compatibility.
+     * @param sourcePubkeysGroups Grouped source pubkeys
+     * @param targetPubkeys Target pubkeys (one per group)
+     * @param totalCount Total number of individual requests
+     * @return flatSources Flat array of source pubkeys
+     * @return flatTargets Flat array of target pubkeys (repeated per group)
+     */
+    function _expandGroups(
+        bytes[][] calldata sourcePubkeysGroups,
+        bytes[] calldata targetPubkeys,
+        uint256 totalCount
+    ) internal pure returns (bytes[] memory flatSources, bytes[] memory flatTargets) {
+        flatSources = new bytes[](totalCount);
+        flatTargets = new bytes[](totalCount);
+
+        uint256 idx = 0;
+        for (uint256 i = 0; i < sourcePubkeysGroups.length; ++i) {
+            bytes[] calldata group = sourcePubkeysGroups[i];
+            bytes calldata target = targetPubkeys[i];
+            for (uint256 j = 0; j < group.length; ++j) {
+                flatSources[idx] = group[j];
+                flatTargets[idx] = target;
+                ++idx;
+            }
+        }
     }
 }

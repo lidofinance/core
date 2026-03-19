@@ -5,7 +5,7 @@ pragma solidity 0.8.25;
 
 contract ConsolidationGateway__MockForConsolidationBus {
     event AddConsolidationRequestsCalled(
-        bytes[] sourcePubkeys,
+        bytes[][] sourcePubkeysGroups,
         bytes[] targetPubkeys,
         address refundRecipient,
         uint256 value
@@ -20,7 +20,7 @@ contract ConsolidationGateway__MockForConsolidationBus {
     }
 
     function addConsolidationRequests(
-        bytes[] calldata sourcePubkeys,
+        bytes[][] calldata sourcePubkeysGroups,
         bytes[] calldata targetPubkeys,
         address refundRecipient
     ) external payable {
@@ -28,10 +28,14 @@ contract ConsolidationGateway__MockForConsolidationBus {
             revert(_revertReason);
         }
 
-        emit AddConsolidationRequestsCalled(sourcePubkeys, targetPubkeys, refundRecipient, msg.value);
+        emit AddConsolidationRequestsCalled(sourcePubkeysGroups, targetPubkeys, refundRecipient, msg.value);
 
-        // Simulate refund if excess ETH was sent
-        uint256 totalFee = sourcePubkeys.length * _fee;
+        // Count total requests and simulate refund if excess ETH was sent
+        uint256 totalRequests = 0;
+        for (uint256 i = 0; i < sourcePubkeysGroups.length; ++i) {
+            totalRequests += sourcePubkeysGroups[i].length;
+        }
+        uint256 totalFee = totalRequests * _fee;
         if (msg.value > totalFee) {
             (bool success, ) = refundRecipient.call{value: msg.value - totalFee}("");
             require(success, "Refund failed");

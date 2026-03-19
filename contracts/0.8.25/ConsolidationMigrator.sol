@@ -64,7 +64,7 @@ interface IUnifiedStakingModule {
  */
 interface IConsolidationBus {
     function addConsolidationRequests(
-        bytes[] calldata sourcePubkeys,
+        bytes[][] calldata sourcePubkeysGroups,
         bytes[] calldata targetPubkeys
     ) external;
 }
@@ -89,8 +89,9 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     error AdminCannotBeZero();
     error PairNotAllowed(uint256 sourceOperatorId, uint256 targetOperatorId);
     error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
-    error ArraysLengthMismatch(uint256 sourceLength, uint256 targetLength);
+    error ArraysLengthMismatch(uint256 sourceGroupsLength, uint256 targetLength);
     error EmptyBatch();
+    error EmptyGroup(uint256 groupIndex);
     error KeyNotDeposited(uint256 moduleId, uint256 operatorId, uint256 keyIndex);
     error NotAuthorized(address caller, uint256 sourceOperatorId, uint256 targetOperatorId);
 
@@ -103,7 +104,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     event ConsolidationSubmitted(
         uint256 indexed sourceOperatorId,
         uint256 indexed targetOperatorId,
-        uint256[] sourceValidatorIndices,
+        uint256[][] sourceValidatorIndicesPerTarget,
         uint256[] targetValidatorIndices
     );
 
@@ -281,24 +282,24 @@ contract ConsolidationMigrator is AccessControlEnumerable {
      * @notice Validates a consolidation batch without modifying state
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
-     * @param sourceValidatorIndices Indices of source validators (must be deposited/used)
+     * @param sourceValidatorIndicesPerTarget Groups of source validator indices, one group per target
      * @param targetValidatorIndices Indices of target validators (must be deposited - active validators)
      * @dev Reverts with specific error if validation fails
      */
     function validateConsolidationBatch(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
-        uint256[] calldata sourceValidatorIndices,
+        uint256[][] calldata sourceValidatorIndicesPerTarget,
         uint256[] calldata targetValidatorIndices
     ) external view {
-        _validateBatch(sourceOperatorId, targetOperatorId, sourceValidatorIndices, targetValidatorIndices);
+        _validateBatch(sourceOperatorId, targetOperatorId, sourceValidatorIndicesPerTarget, targetValidatorIndices);
     }
 
     /**
      * @notice Submits a consolidation batch after validation
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
-     * @param sourceValidatorIndices Indices of source validators (must be deposited/used)
+     * @param sourceValidatorIndicesPerTarget Groups of source validator indices, one group per target
      * @param targetValidatorIndices Indices of target validators (must be deposited - active validators)
      * @dev Caller must be the designated submitter for this pair (set via allowPair)
      * @dev Forwards the validated batch to ConsolidationBus
@@ -306,7 +307,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     function submitConsolidationBatch(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
-        uint256[] calldata sourceValidatorIndices,
+        uint256[][] calldata sourceValidatorIndicesPerTarget,
         uint256[] calldata targetValidatorIndices
     ) external {
         // Check authorization: caller must be the designated submitter for this pair
@@ -316,20 +317,20 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         }
 
         // Validate the batch and get pubkeys
-        (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) = _validateBatch(
+        (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) = _validateBatch(
             sourceOperatorId,
             targetOperatorId,
-            sourceValidatorIndices,
+            sourceValidatorIndicesPerTarget,
             targetValidatorIndices
         );
 
         // Submit to ConsolidationBus
-        CONSOLIDATION_BUS.addConsolidationRequests(sourcePubkeys, targetPubkeys);
+        CONSOLIDATION_BUS.addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
 
         emit ConsolidationSubmitted(
             sourceOperatorId,
             targetOperatorId,
-            sourceValidatorIndices,
+            sourceValidatorIndicesPerTarget,
             targetValidatorIndices
         );
     }
@@ -339,19 +340,24 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     // ==================
 
     /**
-     * @dev Validates a consolidation batch and returns the extracted pubkeys
+     * @dev Validates a consolidation batch and returns the extracted pubkeys in grouped form
      */
     function _validateBatch(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
-        uint256[] calldata sourceValidatorIndices,
+        uint256[][] calldata sourceValidatorIndicesPerTarget,
         uint256[] calldata targetValidatorIndices
-    ) internal view returns (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) {
+    ) internal view returns (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) {
         // Check array lengths
-        uint256 count = sourceValidatorIndices.length;
-        if (count == 0) revert EmptyBatch();
-        if (count != targetValidatorIndices.length) {
-            revert ArraysLengthMismatch(count, targetValidatorIndices.length);
+        uint256 groupsCount = targetValidatorIndices.length;
+        if (groupsCount == 0) revert EmptyBatch();
+        if (sourceValidatorIndicesPerTarget.length != groupsCount) {
+            revert ArraysLengthMismatch(sourceValidatorIndicesPerTarget.length, groupsCount);
+        }
+
+        // Validate no empty groups
+        for (uint256 i = 0; i < groupsCount; ++i) {
+            if (sourceValidatorIndicesPerTarget[i].length == 0) revert EmptyGroup(i);
         }
 
         // Check if pair is allowed
@@ -359,11 +365,16 @@ contract ConsolidationMigrator is AccessControlEnumerable {
             revert PairNotAllowed(sourceOperatorId, targetOperatorId);
         }
 
-        // Validate keys and extract pubkeys
-        sourcePubkeys = _validateAndExtractKeys(SOURCE_MODULE_ID, sourceOperatorId, sourceValidatorIndices);
+        // Validate target keys and extract pubkeys
         targetPubkeys = _validateAndExtractKeys(TARGET_MODULE_ID, targetOperatorId, targetValidatorIndices);
 
-        return (sourcePubkeys, targetPubkeys);
+        // Validate source keys and extract pubkeys for each group
+        sourcePubkeysGroups = new bytes[][](groupsCount);
+        for (uint256 i = 0; i < groupsCount; ++i) {
+            sourcePubkeysGroups[i] = _validateAndExtractKeys(SOURCE_MODULE_ID, sourceOperatorId, sourceValidatorIndicesPerTarget[i]);
+        }
+
+        return (sourcePubkeysGroups, targetPubkeys);
     }
 
     /**

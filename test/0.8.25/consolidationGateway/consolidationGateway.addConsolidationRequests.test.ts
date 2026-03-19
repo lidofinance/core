@@ -109,7 +109,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     await expect(
       consolidationGateway
         .connect(stranger)
-        .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+        .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
     )
       .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")
       .withArgs(stranger.address, role);
@@ -119,27 +119,27 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     await expect(
       consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 0 }),
+        .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 0 }),
     )
       .to.be.revertedWithCustomError(consolidationGateway, "ZeroArgument")
       .withArgs("msg.value");
   });
 
-  it("should revert with ZeroArgument error if sourcePubkeys count is zero", async () => {
+  it("should revert with ZeroArgument error if sourcePubkeysGroups count is zero", async () => {
     await expect(
       consolidationGateway
         .connect(authorizedEntity)
         .addConsolidationRequests([], [PUBKEYS[1]], ZERO_ADDRESS, { value: 10 }),
     )
       .to.be.revertedWithCustomError(consolidationGateway, "ZeroArgument")
-      .withArgs("sourcePubkeys");
+      .withArgs("sourcePubkeysGroups");
   });
 
   it("should revert with ArraysLengthMismatch error if arrays have different lengths", async () => {
     await expect(
       consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1], PUBKEYS[2]], ZERO_ADDRESS, { value: 10 }),
+        .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1], PUBKEYS[2]], ZERO_ADDRESS, { value: 10 }),
     )
       .to.be.revertedWithCustomError(consolidationGateway, "ArraysLengthMismatch")
       .withArgs(1, 2);
@@ -151,7 +151,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     await expect(
       consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+        .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
     ).to.be.revertedWithCustomError(consolidationGateway, "DSMDepositsPaused");
   });
 
@@ -160,7 +160,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
     const tx = await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+      .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
 
     await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled");
   });
@@ -169,7 +169,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     await expect(
       consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([PUBKEYS[0], PUBKEYS[1]], [PUBKEYS[1], PUBKEYS[2]], ZERO_ADDRESS, { value: 1 }),
+        .addConsolidationRequests([[PUBKEYS[0], PUBKEYS[1]]], [PUBKEYS[2]], ZERO_ADDRESS, { value: 1 }),
     )
       .to.be.revertedWithCustomError(consolidationGateway, "InsufficientFee")
       .withArgs(2, 1);
@@ -191,26 +191,30 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
   });
 
   it("should trigger consolidation request", async () => {
-    const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1]];
-    const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
+    // Grouped: [source0, source1] -> target1, i.e. two sources to one target
+    const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]]];
+    const targetPubkeys = [PUBKEYS[2]];
 
     const tx = await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests(sourcePubkeys, targetPubkeys, ZERO_ADDRESS, { value: 3 });
+      .addConsolidationRequests(sourcePubkeysGroups, targetPubkeys, ZERO_ADDRESS, { value: 3 });
 
-    // Check that the withdrawal vault was called with correct parameters
-    await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled").withArgs(sourcePubkeys, targetPubkeys);
+    // Check that the withdrawal vault was called with expanded flat pairs
+    const flatSources = [PUBKEYS[0], PUBKEYS[1]];
+    const flatTargets = [PUBKEYS[2], PUBKEYS[2]];
+    await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled").withArgs(flatSources, flatTargets);
   });
 
   it("should check current consolidation limit", async () => {
     await expectLimitData(consolidationGateway, 100, 1, 48, 100, 100);
 
-    const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1]];
-    const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
+    // 2 total requests: [source0, source1] -> target2
+    const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]]];
+    const targetPubkeys = [PUBKEYS[2]];
 
     await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests(sourcePubkeys, targetPubkeys, ZERO_ADDRESS, { value: 3 });
+      .addConsolidationRequests(sourcePubkeysGroups, targetPubkeys, ZERO_ADDRESS, { value: 3 });
 
     await expectLimitData(consolidationGateway, 100, 1, 48, 98, 98);
 
@@ -223,13 +227,14 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     await grantLimitManagerRole(consolidationGateway, authorizedEntity);
     await setConsolidationLimit(consolidationGateway, authorizedEntity, 2, 1, 48);
 
-    const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]];
-    const targetPubkeys = [PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]];
+    // 3 total requests across groups
+    const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]], [PUBKEYS[2]]];
+    const targetPubkeys = [PUBKEYS[2], PUBKEYS[0]];
 
     await expect(
       consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests(sourcePubkeys, targetPubkeys, ZERO_ADDRESS, { value: 4 }),
+        .addConsolidationRequests(sourcePubkeysGroups, targetPubkeys, ZERO_ADDRESS, { value: 4 }),
     )
       .to.be.revertedWithCustomError(consolidationGateway, "ConsolidationRequestsLimitExceeded")
       .withArgs(3, 2);
@@ -239,37 +244,38 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     await grantLimitManagerRole(consolidationGateway, authorizedEntity);
     await setConsolidationLimit(consolidationGateway, authorizedEntity, 3, 1, 48);
 
-    const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]];
-    const targetPubkeys = [PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]];
+    // 3 total requests: [source0, source1] -> target2, [source2] -> target0
+    const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]], [PUBKEYS[2]]];
+    const targetPubkeys = [PUBKEYS[2], PUBKEYS[0]];
 
     const tx = await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests(sourcePubkeys, targetPubkeys, ZERO_ADDRESS, { value: 4 });
+      .addConsolidationRequests(sourcePubkeysGroups, targetPubkeys, ZERO_ADDRESS, { value: 4 });
 
-    // Check that the withdrawal vault was called with correct parameters
-    await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled").withArgs(sourcePubkeys, targetPubkeys);
+    // Check that the withdrawal vault was called with expanded flat pairs
+    const flatSources = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]];
+    const flatTargets = [PUBKEYS[2], PUBKEYS[2], PUBKEYS[0]];
+    await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled").withArgs(flatSources, flatTargets);
 
     await expect(
       consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests(sourcePubkeys, targetPubkeys, ZERO_ADDRESS, { value: 4 }),
+        .addConsolidationRequests(sourcePubkeysGroups, targetPubkeys, ZERO_ADDRESS, { value: 4 }),
     )
       .to.be.revertedWithCustomError(consolidationGateway, "ConsolidationRequestsLimitExceeded")
       .withArgs(3, 0);
 
     await advanceChainTime(48n * 3n);
 
-    await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled").withArgs(sourcePubkeys, targetPubkeys);
+    await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled").withArgs(flatSources, flatTargets);
   });
 
   it("should refund fee to recipient address", async () => {
     const prevBalance = await ethers.provider.getBalance(stranger);
-    const sourcePubkeys = [PUBKEYS[0]];
-    const targetPubkeys = [PUBKEYS[1]];
 
     await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests(sourcePubkeys, targetPubkeys, stranger, { value: 1 + 7 });
+      .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], stranger, { value: 1 + 7 });
 
     const newBalance = await ethers.provider.getBalance(stranger);
 
@@ -280,12 +286,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     const SENDER_ADDR = authorizedEntity.address;
     const prevBalance = await ethers.provider.getBalance(SENDER_ADDR);
 
-    const sourcePubkeys = [PUBKEYS[0]];
-    const targetPubkeys = [PUBKEYS[1]];
-
     const tx = await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests(sourcePubkeys, targetPubkeys, ZERO_ADDRESS, { value: 1 + 7 });
+      .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 1 + 7 });
 
     const receipt = await tx.wait();
     const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
@@ -299,7 +302,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
     await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+      .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
 
     const balanceAfter = await ethers.provider.getBalance(consolidationGateway);
     expect(balanceAfter).to.equal(balanceBefore);
@@ -310,7 +313,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
     await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], stranger, { value: 1 });
+      .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], stranger, { value: 1 });
 
     const recipientBalanceAfter = await ethers.provider.getBalance(stranger);
     expect(recipientBalanceAfter).to.equal(recipientBalanceBefore);
@@ -321,7 +324,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
     await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], stranger, { value: 5 });
+      .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], stranger, { value: 5 });
 
     const recipientBalanceAfter = await ethers.provider.getBalance(stranger);
     expect(recipientBalanceAfter).to.equal(recipientBalanceBefore + 4n); // 5 - 1 fee = 4 refund
@@ -336,9 +339,10 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
   });
 
   it("should allow unlimited consolidation requests when limit is 0", async () => {
-    const sourcePubkeys = Array(10)
+    // 10 total requests grouped into pairs
+    const sourcePubkeysGroups = Array(10)
       .fill(0)
-      .map((_, i) => PUBKEYS[i % 3]);
+      .map((_, i) => [PUBKEYS[i % 3]]);
     const targetPubkeys = Array(10)
       .fill(0)
       .map((_, i) => PUBKEYS[(i + 1) % 3]);
@@ -346,7 +350,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     // Should not revert even with many requests when limit is 0 (unlimited)
     await consolidationGateway
       .connect(authorizedEntity)
-      .addConsolidationRequests(sourcePubkeys, targetPubkeys, ZERO_ADDRESS, { value: 15 });
+      .addConsolidationRequests(sourcePubkeysGroups, targetPubkeys, ZERO_ADDRESS, { value: 15 });
   });
 
   it("should not allow to set consolidationsPerFrame bigger than maxConsolidationRequestsLimit", async () => {

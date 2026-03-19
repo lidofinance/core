@@ -83,14 +83,14 @@ describe("ConsolidationMigrator.sol: validation", () => {
     });
 
     it("should validate a correct batch", async () => {
-      const sourceIndices = [0, 1];
+      const sourceIndicesPerTarget = [[0], [1]];
       const targetIndices = [0, 1];
 
       // Should not revert - both source and target are deposited
       await consolidationMigrator.validateConsolidationBatch(
         SOURCE_OPERATOR_ID,
         TARGET_OPERATOR_ID,
-        sourceIndices,
+        sourceIndicesPerTarget,
         targetIndices,
       );
     });
@@ -103,7 +103,7 @@ describe("ConsolidationMigrator.sol: validation", () => {
 
     it("should revert if arrays have different lengths", async () => {
       await expect(
-        consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0, 1], [0]),
+        consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0], [1]], [0]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "ArraysLengthMismatch")
         .withArgs(2, 1);
@@ -113,7 +113,7 @@ describe("ConsolidationMigrator.sol: validation", () => {
       const unknownSourceOpId = 999;
       const unknownTargetOpId = 888;
 
-      await expect(consolidationMigrator.validateConsolidationBatch(unknownSourceOpId, unknownTargetOpId, [0], [0]))
+      await expect(consolidationMigrator.validateConsolidationBatch(unknownSourceOpId, unknownTargetOpId, [[0]], [0]))
         .to.be.revertedWithCustomError(consolidationMigrator, "PairNotAllowed")
         .withArgs(unknownSourceOpId, unknownTargetOpId);
     });
@@ -124,7 +124,7 @@ describe("ConsolidationMigrator.sol: validation", () => {
       // Add more target keys and make index 2 deposited
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 3, [PUBKEYS[2], PUBKEYS[3], PUBKEYS[0]]);
 
-      await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2], [2]))
+      await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[2]], [2]))
         .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
         .withArgs(SOURCE_MODULE_ID, SOURCE_OPERATOR_ID, 2);
     });
@@ -133,7 +133,7 @@ describe("ConsolidationMigrator.sol: validation", () => {
       // totalDepositedValidators = 1, so key at index 0 is deposited, but index 1 is NOT
       await targetModule.mock__setOperatorData(TARGET_OPERATOR_ID, 1, [PUBKEYS[2], PUBKEYS[3]]);
 
-      await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [1]))
+      await expect(consolidationMigrator.validateConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [1]))
         .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
         .withArgs(TARGET_MODULE_ID, TARGET_OPERATOR_ID, 1);
     });
@@ -141,14 +141,14 @@ describe("ConsolidationMigrator.sol: validation", () => {
     it("should allow multiple source validators to consolidate to the same target index", async () => {
       // This is a valid scenario - multiple source validators can consolidate to same target
       // The contract does not check for target uniqueness (by design, per spec)
-      const sourceIndices = [0, 1];
-      const targetIndices = [0, 0]; // Same target for both sources (both deposited)
+      const sourceIndicesPerTarget = [[0, 1]];
+      const targetIndices = [0]; // Same target for both sources (both deposited)
 
       // Should not revert
       await consolidationMigrator.validateConsolidationBatch(
         SOURCE_OPERATOR_ID,
         TARGET_OPERATOR_ID,
-        sourceIndices,
+        sourceIndicesPerTarget,
         targetIndices,
       );
     });

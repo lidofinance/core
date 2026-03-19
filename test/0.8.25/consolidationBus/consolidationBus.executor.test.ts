@@ -56,19 +56,19 @@ describe("ConsolidationBus.sol: executor", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("executeConsolidation", () => {
-    let sourcePubkeys: string[];
+    let sourcePubkeysGroups: string[][];
     let targetPubkeys: string[];
     let batchHash: string;
 
     beforeEach(async () => {
-      sourcePubkeys = [PUBKEYS[0]];
+      sourcePubkeysGroups = [[PUBKEYS[0]]];
       targetPubkeys = [PUBKEYS[1]];
 
       // Add a batch
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
 
       batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [sourcePubkeys, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
       );
     });
 
@@ -76,7 +76,7 @@ describe("ConsolidationBus.sol: executor", () => {
       const fee = 10n;
 
       await expect(
-        consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: fee }),
+        consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: fee }),
       )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash, fee);
@@ -89,24 +89,26 @@ describe("ConsolidationBus.sol: executor", () => {
       const fee = 10n;
 
       await expect(
-        consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: fee }),
+        consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: fee }),
       )
         .to.emit(consolidationGateway, "AddConsolidationRequestsCalled")
-        .withArgs(sourcePubkeys, targetPubkeys, executor.address, fee);
+        .withArgs(sourcePubkeysGroups, targetPubkeys, executor.address, fee);
     });
 
     it("should revert if caller does not have EXECUTE_ROLE", async () => {
-      await expect(consolidationBus.connect(stranger).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
+      await expect(
+        consolidationBus.connect(stranger).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 10 }),
+      )
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
         .withArgs(stranger.address, EXECUTE_ROLE);
     });
 
     it("should revert if batch not found", async () => {
-      const fakeSources = [PUBKEYS[2]];
+      const fakeSources = [[PUBKEYS[2]]];
       const fakeTargets = [PUBKEYS[0]];
 
       const fakeBatchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [fakeSources, fakeTargets]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [fakeSources, fakeTargets]),
       );
 
       await expect(consolidationBus.connect(executor).executeConsolidation(fakeSources, fakeTargets, { value: 10 }))
@@ -116,10 +118,12 @@ describe("ConsolidationBus.sol: executor", () => {
 
     it("should revert if batch already executed", async () => {
       // Execute first time
-      await consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 });
+      await consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 10 });
 
       // Try to execute again — batch was deleted, so it's not found
-      await expect(consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
+      await expect(
+        consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 10 }),
+      )
         .to.be.revertedWithCustomError(consolidationBus, "BatchNotFound")
         .withArgs(batchHash);
     });
@@ -130,36 +134,42 @@ describe("ConsolidationBus.sol: executor", () => {
       await consolidationBus.connect(manager).removeBatches([batchHash]);
 
       // Try to execute
-      await expect(consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
+      await expect(
+        consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 10 }),
+      )
         .to.be.revertedWithCustomError(consolidationBus, "BatchNotFound")
         .withArgs(batchHash);
     });
 
     it("should execute multiple batches sequentially", async () => {
       // Add second batch
-      const sourcePubkeys2 = [PUBKEYS[1]];
+      const sourcePubkeysGroups2 = [[PUBKEYS[1]]];
       const targetPubkeys2 = [PUBKEYS[2]];
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys2, targetPubkeys2);
+      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups2, targetPubkeys2);
 
       const batchHash2 = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [sourcePubkeys2, targetPubkeys2]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups2, targetPubkeys2]),
       );
 
       // Execute first batch
-      await expect(consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
+      await expect(
+        consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 10 }),
+      )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash, 10);
 
       // Execute second batch
       await expect(
-        consolidationBus.connect(executor).executeConsolidation(sourcePubkeys2, targetPubkeys2, { value: 15 }),
+        consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups2, targetPubkeys2, { value: 15 }),
       )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash2, 15);
     });
 
     it("should work with zero value (if gateway allows)", async () => {
-      await expect(consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 0 }))
+      await expect(
+        consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 0 }),
+      )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash, 0);
     });
@@ -168,29 +178,33 @@ describe("ConsolidationBus.sol: executor", () => {
       const exactValue = 12345n;
 
       await expect(
-        consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: exactValue }),
+        consolidationBus
+          .connect(executor)
+          .executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: exactValue }),
       )
         .to.emit(consolidationGateway, "AddConsolidationRequestsCalled")
-        .withArgs(sourcePubkeys, targetPubkeys, executor.address, exactValue);
+        .withArgs(sourcePubkeysGroups, targetPubkeys, executor.address, exactValue);
     });
 
     it("should pass executor as refundRecipient", async () => {
-      await expect(consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 }))
+      await expect(
+        consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 10 }),
+      )
         .to.emit(consolidationGateway, "AddConsolidationRequestsCalled")
-        .withArgs(sourcePubkeys, targetPubkeys, executor.address, 10);
+        .withArgs(sourcePubkeysGroups, targetPubkeys, executor.address, 10);
     });
   });
 
   context("ETH balance", () => {
     it("should not hold ETH after execution", async () => {
-      const sourcePubkeys = [PUBKEYS[0]];
+      const sourcePubkeysGroups = [[PUBKEYS[0]]];
       const targetPubkeys = [PUBKEYS[1]];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
 
       const balanceBefore = await ethers.provider.getBalance(await consolidationBus.getAddress());
 
-      await consolidationBus.connect(executor).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 100 });
+      await consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 100 });
 
       const balanceAfter = await ethers.provider.getBalance(await consolidationBus.getAddress());
 
