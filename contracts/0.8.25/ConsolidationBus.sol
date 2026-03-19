@@ -6,11 +6,13 @@ pragma solidity 0.8.25;
 
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
 
+import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
+
 interface IConsolidationGateway {
     function addConsolidationRequests(
         bytes[][] calldata sourcePubkeysGroups,
-        bytes[] calldata targetPubkeys,
-        address refundRecipient
+        address refundRecipient,
+        IPredepositGuarantee.ValidatorWitness[] calldata witnesses
     ) external payable;
 }
 
@@ -291,7 +293,7 @@ contract ConsolidationBus is AccessControlEnumerable {
     /**
      * @notice Executes a batch of grouped consolidation requests
      * @param sourcePubkeysGroups Array of groups of 48-byte source validator public keys
-     * @param targetPubkeys Array of 48-byte target validator public keys, one per group
+     * @param witnesses Array of ValidatorWitness structs, one per group; each witness.pubkey is the target pubkey
      * @dev Forwards the batch to ConsolidationGateway with msg.value as fee
      * @dev Reverts if:
      *      - Caller does not have EXECUTE_ROLE
@@ -299,9 +301,14 @@ contract ConsolidationBus is AccessControlEnumerable {
      */
     function executeConsolidation(
         bytes[][] calldata sourcePubkeysGroups,
-        bytes[] calldata targetPubkeys
+        IPredepositGuarantee.ValidatorWitness[] calldata witnesses
     ) external payable onlyRole(EXECUTE_ROLE) {
-        bytes32 batchHash = _computeBatchHash(sourcePubkeysGroups, targetPubkeys);
+        bytes[] memory targetPubkeys = new bytes[](witnesses.length);
+        for (uint256 i = 0; i < witnesses.length; ++i) {
+            targetPubkeys[i] = witnesses[i].pubkey;
+        }
+
+        bytes32 batchHash = keccak256(abi.encode(sourcePubkeysGroups, targetPubkeys));
 
         if (_pendingBatches[batchHash] == address(0)) revert BatchNotFound(batchHash);
 
@@ -309,8 +316,8 @@ contract ConsolidationBus is AccessControlEnumerable {
 
         CONSOLIDATION_GATEWAY.addConsolidationRequests{value: msg.value}(
             sourcePubkeysGroups,
-            targetPubkeys,
-            msg.sender
+            msg.sender,
+            witnesses
         );
 
         emit RequestsExecuted(batchHash, msg.value);

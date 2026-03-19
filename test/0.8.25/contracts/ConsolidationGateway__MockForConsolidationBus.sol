@@ -3,13 +3,10 @@
 
 pragma solidity 0.8.25;
 
+import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
+
 contract ConsolidationGateway__MockForConsolidationBus {
-    event AddConsolidationRequestsCalled(
-        bytes[][] sourcePubkeysGroups,
-        bytes[] targetPubkeys,
-        address refundRecipient,
-        uint256 value
-    );
+    event AddConsolidationRequestsCalled(bytes[][] sourcePubkeysGroups, address refundRecipient, uint256 value);
 
     uint256 internal _fee;
     bool internal _shouldRevert;
@@ -21,14 +18,14 @@ contract ConsolidationGateway__MockForConsolidationBus {
 
     function addConsolidationRequests(
         bytes[][] calldata sourcePubkeysGroups,
-        bytes[] calldata targetPubkeys,
-        address refundRecipient
+        address refundRecipient,
+        IPredepositGuarantee.ValidatorWitness[] calldata /* _witnesses */
     ) external payable {
         if (_shouldRevert) {
             revert(_revertReason);
         }
 
-        emit AddConsolidationRequestsCalled(sourcePubkeysGroups, targetPubkeys, refundRecipient, msg.value);
+        emit AddConsolidationRequestsCalled(sourcePubkeysGroups, refundRecipient, msg.value);
 
         // Count total requests and simulate refund if excess ETH was sent
         uint256 totalRequests = 0;

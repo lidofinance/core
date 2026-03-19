@@ -379,17 +379,26 @@ export async function main() {
   // Deploy Consolidation Gateway
   //
 
-  const consolidationGateway_ = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
-    admin,
-    locator.address,
-    // ToDo: Replace dummy parameters with real ones
-    10, // maxConsolidationRequestsLimit,
-    1, // consolidationsPerFrame,
-    60, // frameDurationInSec
-  ]);
+  const consolidationGateway_ = await deployWithoutProxy(
+    Sk.consolidationGateway,
+    "ConsolidationGateway__HarnessForTests",
+    deployer,
+    [
+      admin,
+      locator.address,
+      // ToDo: Replace dummy parameters with real ones
+      10, // maxConsolidationRequestsLimit,
+      1, // consolidationsPerFrame,
+      60, // frameDurationInSec
+      topUpGatewayParams.gIFirstValidatorPrev, // gIFirstValidatorPrev
+      topUpGatewayParams.gIFirstValidatorCurr, // gIFirstValidatorCurr
+      topUpGatewayParams.pivotSlot, // pivotSlot
+      ethers.ZeroHash, // withdrawalCredentials (dummy for scratch deploy)
+    ],
+  );
 
   const consolidationGateway = await loadContract<ConsolidationGateway>(
-    "ConsolidationGateway",
+    "ConsolidationGateway__HarnessForTests",
     consolidationGateway_.address,
   );
 

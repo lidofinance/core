@@ -320,6 +320,10 @@ export async function main() {
     10, // maxConsolidationRequestsLimit,
     1, // consolidationsPerFrame,
     60, // frameDurationInSec
+    pdgDeployParams.gIndex, // gIFirstValidatorPrev
+    pdgDeployParams.gIndexAfterChange, // gIFirstValidatorCurr
+    pdgDeployParams.changeSlot, // pivotSlot
+    ethers.ZeroHash, // withdrawalCredentials (placeholder)
   ]);
 
   console.log("ConsolidationGateway address", await consolidationGateway.getAddress());

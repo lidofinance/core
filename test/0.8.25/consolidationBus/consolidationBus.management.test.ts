@@ -7,6 +7,16 @@ import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from 
 
 import { Snapshot } from "test/suite";
 
+const witnessesForTargets = (targets: string[]) =>
+  targets.map((pubkey) => ({
+    proof: [],
+    pubkey,
+    validatorIndex: 0,
+    childBlockTimestamp: 0,
+    slot: 0,
+    proposerIndex: 0,
+  }));
+
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -163,7 +173,9 @@ describe("ConsolidationBus.sol: management", () => {
       const sourcePubkeysGroups = [[PUBKEYS[0]]];
       const targetPubkeys = [PUBKEYS[1]];
 
-      await consolidationBus.connect(manager).executeConsolidation(sourcePubkeysGroups, targetPubkeys, { value: 10 });
+      await consolidationBus
+        .connect(manager)
+        .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 });
 
       // Try to remove the executed batch — batch was deleted, so it's not found
       await expect(consolidationBus.connect(manager).removeBatches([batchHash]))

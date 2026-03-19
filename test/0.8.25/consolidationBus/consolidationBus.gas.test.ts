@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ConsolidationBus, ConsolidationGateway, WithdrawalVault } from "typechain-types";
+import { ConsolidationBus, ConsolidationGateway__HarnessForTests, WithdrawalVault } from "typechain-types";
 
 import { EIP7002_ADDRESS, EIP7251_ADDRESS, proxify } from "lib";
 
@@ -28,7 +28,7 @@ import { Snapshot } from "test/suite";
  */
 describe("ConsolidationBus.sol: gas limit (full stack)", () => {
   let consolidationBus: ConsolidationBus;
-  let consolidationGateway: ConsolidationGateway;
+  let consolidationGateway: ConsolidationGateway__HarnessForTests;
   let withdrawalVault: WithdrawalVault;
 
   let admin: HardhatEthersSigner;
@@ -39,6 +39,19 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
   const MAX_BLOCK_GAS = 16_000_000n;
   const BATCH_SIZE = 200;
   const FEE = 1n;
+
+  const DUMMY_GI = "0x0000000000000000000000000000000000000000000000000096000000000028";
+  const DUMMY_WC = "0x010000000000000000000000b9d7934878b5fb9610b3fe8a5e441e8fad7e293f";
+
+  const witnessesForTargets = (targets: string[]) =>
+    targets.map((pubkey) => ({
+      proof: [],
+      pubkey,
+      validatorIndex: 0,
+      childBlockTimestamp: 0,
+      slot: 0,
+      proposerIndex: 0,
+    }));
 
   let originalState: string;
 
@@ -78,12 +91,16 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     const dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
 
     // 4. Deploy ConsolidationGateway
-    consolidationGateway = await ethers.deployContract("ConsolidationGateway", [
+    consolidationGateway = await ethers.deployContract("ConsolidationGateway__HarnessForTests", [
       admin.address,
       locatorAddress,
       10000, // maxConsolidationRequestsLimit
       10000, // consolidationsPerFrame
       86400, // frameDurationInSec
+      DUMMY_GI,
+      DUMMY_GI,
+      0,
+      DUMMY_WC,
     ]);
 
     // 5. Deploy real WithdrawalVault
@@ -138,9 +155,11 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     const totalFee = FEE * BigInt(BATCH_SIZE);
 
     // Execute batch through full stack
-    const executeTx = await consolidationBus.connect(executor).executeConsolidation(sourcePubkeysGroups, targets, {
-      value: totalFee,
-    });
+    const executeTx = await consolidationBus
+      .connect(executor)
+      .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targets), {
+        value: totalFee,
+      });
     const executeReceipt = await executeTx.wait();
 
     expect(addReceipt!.gasUsed).to.be.lessThan(MAX_BLOCK_GAS);

@@ -18,6 +18,16 @@ import { LoadedContract } from "lib/protocol/types";
 
 import { Snapshot } from "test/suite";
 
+const witnessesForTargets = (targets: string[]) =>
+  targets.map((pubkey) => ({
+    proof: [],
+    pubkey,
+    validatorIndex: 0,
+    childBlockTimestamp: 0,
+    slot: 0,
+    proposerIndex: 0,
+  }));
+
 /**
  * Integration test for the full consolidation migration flow using real NOR modules.
  *
@@ -188,7 +198,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       const tx = await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee });
+        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+          value: fee,
+        });
 
       const receipt = await tx.wait();
       const consolidationEvents = findEventsWithInterfaces(receipt!, "ConsolidationRequestAdded", [
@@ -233,9 +245,13 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       const tx = await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1], [SOURCE_PUBKEY_2]], [TARGET_PUBKEY_1, TARGET_PUBKEY_2], {
-          value: totalFee,
-        });
+        .executeConsolidation(
+          [[SOURCE_PUBKEY_1], [SOURCE_PUBKEY_2]],
+          witnessesForTargets([TARGET_PUBKEY_1, TARGET_PUBKEY_2]),
+          {
+            value: totalFee,
+          },
+        );
 
       // Step 4: Verify batch is removed from storage after execution
       expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
@@ -283,7 +299,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const fakePubkey = "0x" + "ff".repeat(48);
 
       await expect(
-        consolidationBus.connect(executor).executeConsolidation([[fakePubkey]], [fakePubkey], { value: 1n }),
+        consolidationBus
+          .connect(executor)
+          .executeConsolidation([[fakePubkey]], witnessesForTargets([fakePubkey]), { value: 1n }),
       ).to.be.revertedWithCustomError(consolidationBus, "BatchNotFound");
     });
 
@@ -295,7 +313,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       // Try to execute with insufficient fee (0)
       await expect(
-        consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: 0n }),
+        consolidationBus
+          .connect(executor)
+          .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+            value: 0n,
+          }),
       ).to.be.reverted; // The actual error comes from WithdrawalVault
     });
 
@@ -308,7 +330,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const EXECUTE_ROLE = await consolidationBus.EXECUTE_ROLE();
 
       await expect(
-        consolidationBus.connect(stranger).executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: 1n }),
+        consolidationBus
+          .connect(stranger)
+          .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+            value: 1n,
+          }),
       )
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
         .withArgs(stranger.address, EXECUTE_ROLE);
@@ -327,11 +353,17 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       // Execute first time
       await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee });
+        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+          value: fee,
+        });
 
       // Try to execute again
       await expect(
-        consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee }),
+        consolidationBus
+          .connect(executor)
+          .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+            value: fee,
+          }),
       ).to.be.revertedWithCustomError(consolidationBus, "BatchNotFound");
     });
   });
@@ -384,7 +416,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
       await expect(
-        consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee }),
+        consolidationBus
+          .connect(executor)
+          .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+            value: fee,
+          }),
       ).to.not.be.reverted;
     });
 
@@ -434,11 +470,15 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       // Execute both batches
       await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee });
+        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+          value: fee,
+        });
 
       await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_2]], [TARGET_PUBKEY_3], { value: fee });
+        .executeConsolidation([[SOURCE_PUBKEY_2]], witnessesForTargets([TARGET_PUBKEY_3]), {
+          value: fee,
+        });
     });
   });
 
@@ -538,7 +578,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       // Try to execute - should revert because gateway is paused
       await expect(
-        consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee }),
+        consolidationBus
+          .connect(executor)
+          .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+            value: fee,
+          }),
       ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
     });
 
@@ -561,7 +605,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       // Execute first batch - this should consume the limit
       await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee });
+        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+          value: fee,
+        });
 
       // Submit second batch
       await consolidationMigrator
@@ -570,7 +616,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       // Execute second batch - should fail due to rate limit
       await expect(
-        consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_2]], [TARGET_PUBKEY_2], { value: fee }),
+        consolidationBus
+          .connect(executor)
+          .executeConsolidation([[SOURCE_PUBKEY_2]], witnessesForTargets([TARGET_PUBKEY_2]), {
+            value: fee,
+          }),
       ).to.be.revertedWithCustomError(consolidationGateway, "ConsolidationRequestsLimitExceeded");
     });
 
@@ -589,7 +639,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       const tx = await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: excessFee });
+        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+          value: excessFee,
+        });
 
       const receipt = await tx.wait();
       const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
@@ -622,7 +674,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       // Execute first batch
       await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee });
+        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+          value: fee,
+        });
 
       // Verify first batch is executed
       const batchHash1 = ethers.keccak256(
@@ -633,7 +687,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       // Execute second batch
       await consolidationBus
         .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_2]], [TARGET_PUBKEY_2], { value: fee });
+        .executeConsolidation([[SOURCE_PUBKEY_2]], witnessesForTargets([TARGET_PUBKEY_2]), {
+          value: fee,
+        });
 
       // Verify second batch is executed
       const batchHash2 = ethers.keccak256(
@@ -662,7 +718,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       // Try to execute removed batch
       await expect(
-        consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1], { value: fee }),
+        consolidationBus
+          .connect(executor)
+          .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
+            value: fee,
+          }),
       ).to.be.revertedWithCustomError(consolidationBus, "BatchNotFound");
     });
 

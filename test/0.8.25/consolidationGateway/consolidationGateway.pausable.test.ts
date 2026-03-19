@@ -21,6 +21,18 @@ const PUBKEYS = [
 ];
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
+const DUMMY_GI = "0x0000000000000000000000000000000000000000000000000096000000000028";
+const DUMMY_WC = "0x010000000000000000000000b9d7934878b5fb9610b3fe8a5e441e8fad7e293f";
+
+const witnessesForTargets = (targets: string[]) =>
+  targets.map((pubkey) => ({
+    proof: [],
+    pubkey,
+    validatorIndex: 0,
+    childBlockTimestamp: 0,
+    slot: 0,
+    proposerIndex: 0,
+  }));
 
 describe("ConsolidationGateway.sol: pausable", () => {
   let consolidationGateway: ConsolidationGateway;
@@ -49,7 +61,17 @@ describe("ConsolidationGateway.sol: pausable", () => {
       depositSecurityModule: await dsm.getAddress(),
     });
 
-    consolidationGateway = await ethers.deployContract("ConsolidationGateway", [admin, locatorAddr, 100, 1, 48]);
+    consolidationGateway = await ethers.deployContract("ConsolidationGateway__HarnessForTests", [
+      admin,
+      locatorAddr,
+      100,
+      1,
+      48,
+      DUMMY_GI,
+      DUMMY_GI,
+      0,
+      DUMMY_WC,
+    ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
     await consolidationGateway.grantRole(role, authorizedEntity);
@@ -108,7 +130,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should be able to add consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], ZERO_ADDRESS, witnessesForTargets([PUBKEYS[1]]), { value: 2 });
       });
     });
 
@@ -260,7 +282,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests([[PUBKEYS[0]]], ZERO_ADDRESS, witnessesForTargets([PUBKEYS[1]]), { value: 2 }),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -274,7 +296,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests([[PUBKEYS[0]]], ZERO_ADDRESS, witnessesForTargets([PUBKEYS[1]]), { value: 2 }),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -286,7 +308,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], ZERO_ADDRESS, witnessesForTargets([PUBKEYS[1]]), { value: 2 });
       });
 
       it("pauseUntil: should allow consolidation requests immediately after resuming", async () => {
@@ -299,7 +321,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], ZERO_ADDRESS, witnessesForTargets([PUBKEYS[1]]), { value: 2 });
       });
 
       it("pauseFor: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -312,7 +334,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], ZERO_ADDRESS, witnessesForTargets([PUBKEYS[1]]), { value: 2 });
       });
 
       it("pauseUntil: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -327,7 +349,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], ZERO_ADDRESS, witnessesForTargets([PUBKEYS[1]]), { value: 2 });
       });
     });
   });
