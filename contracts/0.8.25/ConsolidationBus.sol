@@ -23,7 +23,7 @@ interface IConsolidationGateway {
  * The workflow:
  * 1. Admins register/unregister publishers via grant/revoke PUBLISH_ROLE
  * 2. Registered publishers add consolidation requests (PUBLISH_ROLE)
- * 3. Executor bot executes batches, paying the required ETH fee (EXECUTE_ROLE)
+ * 3. Executor bot executes batches, paying the required ETH fee
  *    The bus forwards the batch to ConsolidationGateway
  * 4. Optional REMOVE_ROLE can remove batches from the pending queue
  */
@@ -130,7 +130,6 @@ contract ConsolidationBus is AccessControlEnumerable {
 
     bytes32 public constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
     bytes32 public constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
-    bytes32 public constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
     bytes32 public constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
 
     IConsolidationGateway internal immutable CONSOLIDATION_GATEWAY;
@@ -296,13 +295,12 @@ contract ConsolidationBus is AccessControlEnumerable {
      * @param targetWitnesses Array of ValidatorWitness structs, one per group; each witness.pubkey is the target pubkey
      * @dev Forwards the batch to ConsolidationGateway with msg.value as fee
      * @dev Reverts if:
-     *      - Caller does not have EXECUTE_ROLE
      *      - Batch was not added or was already executed/removed
      */
     function executeConsolidation(
         bytes[][] calldata sourcePubkeysGroups,
         IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses
-    ) external payable onlyRole(EXECUTE_ROLE) {
+    ) external payable {
         bytes[] memory targetPubkeys = new bytes[](targetWitnesses.length);
         for (uint256 i = 0; i < targetWitnesses.length; ++i) {
             targetPubkeys[i] = targetWitnesses[i].pubkey;

@@ -165,9 +165,6 @@ describe("ConsolidationBus.sol: management", () => {
     });
 
     it("should revert if batch already executed", async () => {
-      // Grant executor role and execute the batch
-      const EXECUTE_ROLE = await consolidationBus.EXECUTE_ROLE();
-      await consolidationBus.connect(admin).grantRole(EXECUTE_ROLE, manager.address);
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
 
       const sourcePubkeysGroups = [[PUBKEYS[0]]];

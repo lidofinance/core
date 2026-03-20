@@ -33,7 +33,6 @@ describe("ConsolidationBus.sol: executor", () => {
   let stranger: HardhatEthersSigner;
 
   let MANAGE_ROLE: string;
-  let EXECUTE_ROLE: string;
   let PUBLISH_ROLE: string;
   let REMOVE_ROLE: string;
 
@@ -52,13 +51,11 @@ describe("ConsolidationBus.sol: executor", () => {
     ]);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
-    EXECUTE_ROLE = await consolidationBus.EXECUTE_ROLE();
     PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();
     REMOVE_ROLE = await consolidationBus.REMOVE_ROLE();
 
     // Grant roles
     await consolidationBus.connect(admin).grantRole(MANAGE_ROLE, manager.address);
-    await consolidationBus.connect(admin).grantRole(EXECUTE_ROLE, executor.address);
     await consolidationBus.connect(admin).grantRole(PUBLISH_ROLE, publisher.address);
   });
 
@@ -110,14 +107,16 @@ describe("ConsolidationBus.sol: executor", () => {
         .withArgs(sourcePubkeysGroups, executor.address, fee);
     });
 
-    it("should revert if caller does not have EXECUTE_ROLE", async () => {
+    it("should allow anyone to execute consolidation", async () => {
+      const fee = 10n;
+
       await expect(
         consolidationBus
           .connect(stranger)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 }),
+          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: fee }),
       )
-        .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, EXECUTE_ROLE);
+        .to.emit(consolidationBus, "RequestsExecuted")
+        .withArgs(batchHash, fee);
     });
 
     it("should revert if batch not found", async () => {
@@ -219,14 +218,14 @@ describe("ConsolidationBus.sol: executor", () => {
         .withArgs(sourcePubkeysGroups, executor.address, exactValue);
     });
 
-    it("should pass executor as refundRecipient", async () => {
+    it("should pass caller as refundRecipient", async () => {
       await expect(
         consolidationBus
-          .connect(executor)
+          .connect(stranger)
           .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 }),
       )
         .to.emit(consolidationGateway, "AddConsolidationRequestsCalled")
-        .withArgs(sourcePubkeysGroups, executor.address, 10);
+        .withArgs(sourcePubkeysGroups, stranger.address, 10);
     });
   });
 

@@ -132,7 +132,6 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
 
     // 8. Set up roles
     await consolidationBus.connect(admin).grantRole(await consolidationBus.MANAGE_ROLE(), admin.address);
-    await consolidationBus.connect(admin).grantRole(await consolidationBus.EXECUTE_ROLE(), executor.address);
     await consolidationBus.connect(admin).grantRole(await consolidationBus.PUBLISH_ROLE(), publisher.address);
 
     // Grant ADD_CONSOLIDATION_REQUEST_ROLE to ConsolidationBus
