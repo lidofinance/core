@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="5964"  lines-covered="5698"  line-rate="0.9554"  branches-valid="2770"  branches-covered="2499"  branch-rate="0.9022"  timestamp="1774007844195" complexity="0" version="0.1">
+<coverage lines-valid="5960"  lines-covered="5694"  line-rate="0.9554"  branches-valid="2770"  branches-covered="2499"  branch-rate="0.9022"  timestamp="1774011741305" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1860,7 +1860,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25"  line-rate="0.985"  branch-rate="0.8649" >
+	<package name="0.8.25"  line-rate="0.9848"  branch-rate="0.8649" >
 	<classes>
 		<class name="CLValidatorVerifier.sol"  filename="contracts/0.8.25/CLValidatorVerifier.sol"  line-rate="0.9706"  branch-rate="0.5" >
 		<methods>
@@ -2198,10 +2198,7 @@
 				<lines><line number="397"  hits="21" /></lines>
 			</method>
 			<method name="_getModule"  hits="21"  signature="()V" >
-				<lines><line number="424"  hits="21" /></lines>
-			</method>
-			<method name="_extractPubkey"  hits="21"  signature="()V" >
-				<lines><line number="435"  hits="21" /></lines>
+				<lines><line number="425"  hits="21" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2257,13 +2254,9 @@
 			<line number="413"  hits="4"  branch="false" />
 			<line number="416"  hits="21"  branch="false" />
 			<line number="417"  hits="21"  branch="false" />
-			<line number="425"  hits="21"  branch="false" />
+			<line number="418"  hits="21"  branch="false" />
 			<line number="426"  hits="21"  branch="false" />
-			<line number="436"  hits="21"  branch="false" />
-			<line number="437"  hits="21"  branch="false" />
-			<line number="439"  hits="21"  branch="false" />
-			<line number="440"  hits="21"  branch="false" />
-			<line number="443"  hits="21"  branch="false" />
+			<line number="427"  hits="21"  branch="false" />
 		</lines>
 		</class>
 		<class name="TopUpGateway.sol"  filename="contracts/0.8.25/TopUpGateway.sol"  line-rate="0.9795999999999999"  branch-rate="0.7564" >
@@ -4599,10 +4592,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="19"  branch="false" />
-			<line number="173"  hits="19"  branch="false" />
-			<line number="175"  hits="19"  branch="false" />
-			<line number="176"  hits="19"  branch="false" />
+			<line number="172"  hits="27"  branch="false" />
+			<line number="173"  hits="27"  branch="false" />
+			<line number="175"  hits="27"  branch="false" />
+			<line number="176"  hits="27"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
