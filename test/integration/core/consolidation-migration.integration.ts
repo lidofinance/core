@@ -230,7 +230,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           ],
         ),
       );
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(await consolidationMigrator.getAddress());
+      expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.equal(
+        await consolidationMigrator.getAddress(),
+      );
 
       // Step 3: Executor calls executeConsolidation
       const fee = await withdrawalVault.getConsolidationRequestFee();
@@ -250,7 +252,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
         );
 
       // Step 4: Verify batch is removed from storage after execution
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.equal(ethers.ZeroAddress);
 
       // Step 5: Verify ConsolidationGateway rate limit was consumed
       const finalLimit = (await consolidationGateway.getConsolidationRequestLimitFullInfo())
@@ -358,12 +360,12 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [[[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1]]),
       );
 
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.not.equal(ethers.ZeroAddress);
 
       // Manager removes the batch
       await consolidationBus.connect(agentSigner).removeBatches([batchHash]);
 
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.equal(ethers.ZeroAddress);
     });
   });
 
@@ -659,7 +661,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const batchHash1 = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [[[SOURCE_PUBKEY_1]], [TARGET_PUBKEY_1]]),
       );
-      expect(await consolidationBus.getBatchPublisher(batchHash1)).to.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash1)).publisher).to.equal(ethers.ZeroAddress);
 
       // Execute second batch
       await consolidationBus
@@ -672,7 +674,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const batchHash2 = ethers.keccak256(
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [[[SOURCE_PUBKEY_2]], [TARGET_PUBKEY_2]]),
       );
-      expect(await consolidationBus.getBatchPublisher(batchHash2)).to.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash2)).publisher).to.equal(ethers.ZeroAddress);
     });
 
     it("Should revert executeConsolidation if batch was removed", async () => {

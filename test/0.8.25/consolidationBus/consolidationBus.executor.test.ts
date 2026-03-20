@@ -48,6 +48,7 @@ describe("ConsolidationBus.sol: executor", () => {
       await consolidationGateway.getAddress(),
       100,
       100,
+      0, // execution delay
     ]);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
@@ -92,7 +93,9 @@ describe("ConsolidationBus.sol: executor", () => {
         .withArgs(batchHash, fee);
 
       // Verify batch is removed from storage after execution
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
+      const batchInfo = await consolidationBus.getBatchInfo(batchHash);
+      expect(batchInfo.publisher).to.equal(ethers.ZeroAddress);
+      expect(batchInfo.addedAt).to.equal(0);
     });
 
     it("should forward call to ConsolidationGateway", async () => {

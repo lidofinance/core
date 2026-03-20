@@ -36,6 +36,7 @@ describe("ConsolidationBus.sol: publisher", () => {
       await consolidationGateway.getAddress(),
       10, // batch size limit
       10, // max groups in batch
+      0, // execution delay
     ]);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
@@ -65,7 +66,9 @@ describe("ConsolidationBus.sol: publisher", () => {
         .to.emit(consolidationBus, "RequestsAdded")
         .withArgs(publisher.address, batchData);
 
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(publisher.address);
+      const batchInfo = await consolidationBus.getBatchInfo(batchHash);
+      expect(batchInfo.publisher).to.equal(publisher.address);
+      expect(batchInfo.addedAt).to.be.greaterThan(0);
     });
 
     it("should add multiple requests in a batch", async () => {
@@ -82,7 +85,8 @@ describe("ConsolidationBus.sol: publisher", () => {
         .to.emit(consolidationBus, "RequestsAdded")
         .withArgs(publisher.address, batchData);
 
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
+      const batchInfo = await consolidationBus.getBatchInfo(batchHash);
+      expect(batchInfo.publisher).to.not.equal(ethers.ZeroAddress);
     });
 
     it("should revert if caller does not have PUBLISH_ROLE", async () => {
@@ -247,15 +251,17 @@ describe("ConsolidationBus.sol: publisher", () => {
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups2, targetPubkeys2]),
       );
 
-      expect(await consolidationBus.getBatchPublisher(batchHash1)).to.equal(publisher.address);
-      expect(await consolidationBus.getBatchPublisher(batchHash2)).to.equal(publisher2.address);
+      expect((await consolidationBus.getBatchInfo(batchHash1)).publisher).to.equal(publisher.address);
+      expect((await consolidationBus.getBatchInfo(batchHash2)).publisher).to.equal(publisher2.address);
     });
   });
 
   context("view methods", () => {
-    it("getBatchPublisher should return zero address for non-existent batch", async () => {
+    it("getBatchInfo should return zero values for non-existent batch", async () => {
       const fakeBatchHash = ethers.keccak256(ethers.toUtf8Bytes("fake"));
-      expect(await consolidationBus.getBatchPublisher(fakeBatchHash)).to.equal(ethers.ZeroAddress);
+      const batchInfo = await consolidationBus.getBatchInfo(fakeBatchHash);
+      expect(batchInfo.publisher).to.equal(ethers.ZeroAddress);
+      expect(batchInfo.addedAt).to.equal(0);
     });
   });
 });

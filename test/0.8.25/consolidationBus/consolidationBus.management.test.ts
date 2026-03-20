@@ -46,6 +46,7 @@ describe("ConsolidationBus.sol: management", () => {
       await consolidationGateway.getAddress(),
       100,
       100,
+      0, // execution delay
     ]);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
@@ -139,13 +140,15 @@ describe("ConsolidationBus.sol: management", () => {
 
     it("should remove batches", async () => {
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.not.equal(ethers.ZeroAddress);
 
       await expect(consolidationBus.connect(manager).removeBatches([batchHash]))
         .to.emit(consolidationBus, "BatchesRemoved")
         .withArgs([batchHash]);
 
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
+      const batchInfo = await consolidationBus.getBatchInfo(batchHash);
+      expect(batchInfo.publisher).to.equal(ethers.ZeroAddress);
+      expect(batchInfo.addedAt).to.equal(0);
     });
 
     it("should revert if caller does not have REMOVE_ROLE", async () => {
@@ -196,8 +199,8 @@ describe("ConsolidationBus.sol: management", () => {
         .to.emit(consolidationBus, "BatchesRemoved")
         .withArgs([batchHash, batchHash2]);
 
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
-      expect(await consolidationBus.getBatchPublisher(batchHash2)).to.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash2)).publisher).to.equal(ethers.ZeroAddress);
     });
   });
 });

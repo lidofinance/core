@@ -97,6 +97,13 @@ contract ConsolidationBus is AccessControlEnumerable {
     error SourceEqualsTarget(uint256 index);
 
     /**
+     * @notice Thrown when attempting to execute a batch before the execution delay has passed
+     * @param currentTime Current block timestamp
+     * @param executeAfter Earliest timestamp at which the batch can be executed
+     */
+    error ExecutionDelayNotPassed(uint256 currentTime, uint256 executeAfter);
+
+    /**
      * @notice Emitted when the batch size limit is updated
      * @param newLimit New batch size limit
      */
@@ -128,21 +135,34 @@ contract ConsolidationBus is AccessControlEnumerable {
      */
     event BatchesRemoved(bytes32[] batchHashes);
 
+    /**
+     * @notice Emitted when the execution delay is updated
+     * @param newDelay New execution delay in seconds
+     */
+    event ExecutionDelayUpdated(uint256 newDelay);
+
     bytes32 public constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
     bytes32 public constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
     bytes32 public constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
+
+    struct BatchInfo {
+        address publisher;
+        uint64 addedAt;
+    }
 
     IConsolidationGateway internal immutable CONSOLIDATION_GATEWAY;
 
     uint256 internal _batchSize;
     uint256 internal _maxGroupsInBatch;
-    mapping(bytes32 batchHash => address publisher) internal _pendingBatches;
+    uint256 internal _executionDelay;
+    mapping(bytes32 batchHash => BatchInfo info) internal _pendingBatches;
 
     constructor(
         address admin,
         address consolidationGateway,
         uint256 initialBatchSize,
-        uint256 initialMaxGroupsInBatch
+        uint256 initialMaxGroupsInBatch,
+        uint256 initialExecutionDelay
     ) {
         if (admin == address(0)) revert AdminCannotBeZero();
         if (consolidationGateway == address(0)) revert ZeroArgument("consolidationGateway");
@@ -150,6 +170,7 @@ contract ConsolidationBus is AccessControlEnumerable {
         CONSOLIDATION_GATEWAY = IConsolidationGateway(consolidationGateway);
         _setBatchSize(initialBatchSize);
         _setMaxGroupsInBatch(initialMaxGroupsInBatch);
+        _setExecutionDelay(initialExecutionDelay);
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(MANAGE_ROLE, admin);
         _grantRole(REMOVE_ROLE, admin);
@@ -174,6 +195,15 @@ contract ConsolidationBus is AccessControlEnumerable {
     }
 
     /**
+     * @notice Sets the execution delay in seconds between adding and executing a batch
+     * @param delay New execution delay in seconds (0 means no delay)
+     * @dev Reverts if caller does not have MANAGE_ROLE
+     */
+    function setExecutionDelay(uint256 delay) external onlyRole(MANAGE_ROLE) {
+        _setExecutionDelay(delay);
+    }
+
+    /**
      * @notice Removes batches from the queue
      * @param batchHashes Array of batch hashes to remove
      * @dev Reverts if caller does not have REMOVE_ROLE
@@ -183,7 +213,7 @@ contract ConsolidationBus is AccessControlEnumerable {
         for (uint256 i = 0; i < batchHashes.length; ++i) {
             bytes32 batchHash = batchHashes[i];
 
-            if (_pendingBatches[batchHash] == address(0)) revert BatchNotFound(batchHash);
+            if (_pendingBatches[batchHash].publisher == address(0)) revert BatchNotFound(batchHash);
 
             delete _pendingBatches[batchHash];
         }
@@ -211,6 +241,14 @@ contract ConsolidationBus is AccessControlEnumerable {
     }
 
     /**
+     * @notice Returns the current execution delay in seconds
+     * @return Current execution delay
+     */
+    function executionDelay() external view returns (uint256) {
+        return _executionDelay;
+    }
+
+    /**
      * @notice Returns the address of the ConsolidationGateway
      * @return Address of the ConsolidationGateway contract
      */
@@ -219,11 +257,11 @@ contract ConsolidationBus is AccessControlEnumerable {
     }
 
     /**
-     * @notice Returns the publisher address for a pending batch, or zero address if batch is not in queue
+     * @notice Returns the batch info for a pending batch
      * @param batchHash Hash of the batch to check
-     * @return Address of the publisher who added the batch, or zero address if not in queue
+     * @return Batch info struct with publisher address and addedAt timestamp (zero values if batch is not in queue)
      */
-    function getBatchPublisher(bytes32 batchHash) external view returns (address) {
+    function getBatchInfo(bytes32 batchHash) external view returns (BatchInfo memory) {
         return _pendingBatches[batchHash];
     }
 
@@ -278,9 +316,9 @@ contract ConsolidationBus is AccessControlEnumerable {
 
         bytes32 batchHash = _computeBatchHash(sourcePubkeysGroups, targetPubkeys);
 
-        if (_pendingBatches[batchHash] != address(0)) revert BatchAlreadyPending(batchHash);
+        if (_pendingBatches[batchHash].publisher != address(0)) revert BatchAlreadyPending(batchHash);
 
-        _pendingBatches[batchHash] = msg.sender;
+        _pendingBatches[batchHash] = BatchInfo(msg.sender, uint64(block.timestamp));
 
         emit RequestsAdded(msg.sender, abi.encode(sourcePubkeysGroups, targetPubkeys));
     }
@@ -308,7 +346,11 @@ contract ConsolidationBus is AccessControlEnumerable {
 
         bytes32 batchHash = keccak256(abi.encode(sourcePubkeysGroups, targetPubkeys));
 
-        if (_pendingBatches[batchHash] == address(0)) revert BatchNotFound(batchHash);
+        BatchInfo memory batch = _pendingBatches[batchHash];
+        if (batch.publisher == address(0)) revert BatchNotFound(batchHash);
+
+        uint256 executeAfter = uint256(batch.addedAt) + _executionDelay;
+        if (block.timestamp < executeAfter) revert ExecutionDelayNotPassed(block.timestamp, executeAfter);
 
         delete _pendingBatches[batchHash];
 
@@ -352,5 +394,10 @@ contract ConsolidationBus is AccessControlEnumerable {
         if (limit > currentBatchSize) revert MaxGroupsExceedsBatchSize(limit, currentBatchSize);
         _maxGroupsInBatch = limit;
         emit MaxGroupsInBatchUpdated(limit);
+    }
+
+    function _setExecutionDelay(uint256 delay) internal {
+        _executionDelay = delay;
+        emit ExecutionDelayUpdated(delay);
     }
 }

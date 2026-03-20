@@ -14,7 +14,7 @@ describe("ConsolidationBus.sol: deployment", () => {
     const [admin] = await ethers.getSigners();
     const gatewayAddr = await consolidationGateway.getAddress();
 
-    const bus = await ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 100, 100]);
+    const bus = await ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 100, 100, 0]);
 
     const adminRole = await bus.DEFAULT_ADMIN_ROLE();
     expect(await bus.hasRole(adminRole, admin.address)).to.be.true;
@@ -27,14 +27,14 @@ describe("ConsolidationBus.sol: deployment", () => {
     const gatewayAddr = await consolidationGateway.getAddress();
 
     await expect(
-      ethers.deployContract("ConsolidationBus", [ethers.ZeroAddress, gatewayAddr, 100, 100]),
+      ethers.deployContract("ConsolidationBus", [ethers.ZeroAddress, gatewayAddr, 100, 100, 0]),
     ).to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationBus"), "AdminCannotBeZero");
   });
 
   it("should revert if consolidationGateway is zero address", async () => {
     const [admin] = await ethers.getSigners();
 
-    await expect(ethers.deployContract("ConsolidationBus", [admin.address, ethers.ZeroAddress, 100, 100]))
+    await expect(ethers.deployContract("ConsolidationBus", [admin.address, ethers.ZeroAddress, 100, 100, 0]))
       .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationBus"), "ZeroArgument")
       .withArgs("consolidationGateway");
   });
@@ -43,7 +43,7 @@ describe("ConsolidationBus.sol: deployment", () => {
     const [admin] = await ethers.getSigners();
     const gatewayAddr = await consolidationGateway.getAddress();
 
-    await expect(ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 0, 100]))
+    await expect(ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 0, 100, 0]))
       .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationBus"), "ZeroArgument")
       .withArgs("batchSizeLimit");
   });
@@ -52,7 +52,7 @@ describe("ConsolidationBus.sol: deployment", () => {
     const [admin] = await ethers.getSigners();
     const gatewayAddr = await consolidationGateway.getAddress();
 
-    await expect(ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 100, 0]))
+    await expect(ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 100, 0, 0]))
       .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationBus"), "ZeroArgument")
       .withArgs("maxGroupsInBatchLimit");
   });
@@ -61,7 +61,7 @@ describe("ConsolidationBus.sol: deployment", () => {
     const [admin] = await ethers.getSigners();
     const gatewayAddr = await consolidationGateway.getAddress();
 
-    await expect(ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 10, 20]))
+    await expect(ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 10, 20, 0]))
       .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationBus"), "MaxGroupsExceedsBatchSize")
       .withArgs(20, 10);
   });
