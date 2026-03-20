@@ -785,7 +785,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     it("Should revert submitConsolidationBatch with EmptyBatch if arrays are empty", async () => {
       await expect(
         consolidationMigrator.connect(submitter).submitConsolidationBatch(sourceOperatorId, targetOperatorId, [], []),
-      ).to.be.revertedWithCustomError(consolidationMigrator, "EmptyBatch");
+      ).to.be.revertedWithCustomError(consolidationBus, "EmptyBatch");
     });
 
     it("Should revert submitConsolidationBatch with ArraysLengthMismatch if arrays have different lengths", async () => {
@@ -795,6 +795,47 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
           .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [[0n], [1n]], [0n]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "ArraysLengthMismatch")
+        .withArgs(2, 1);
+    });
+
+    it("Should revert submitConsolidationBatch with EmptyGroup if a source group is empty", async () => {
+      // Second group is empty — ConsolidationBus catches this after migrator passes it through
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [[0n], []], [0n, 1n]),
+      )
+        .to.be.revertedWithCustomError(consolidationBus, "EmptyGroup")
+        .withArgs(1);
+    });
+
+    it("Should revert submitConsolidationBatch with TooManyGroups if groups exceed maxGroupsInBatch", async () => {
+      const agentSigner = await ctx.getSigner("agent");
+
+      await consolidationBus.connect(agentSigner).setMaxGroupsInBatch(1);
+
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [[0n], [1n]], [0n, 1n]),
+      )
+        .to.be.revertedWithCustomError(consolidationBus, "TooManyGroups")
+        .withArgs(2, 1);
+    });
+
+    it("Should revert submitConsolidationBatch with BatchTooLarge if total keys exceed batchSize", async () => {
+      const agentSigner = await ctx.getSigner("agent");
+
+      // Reduce limits so a single group with 2 source keys exceeds the batch size
+      await consolidationBus.connect(agentSigner).setMaxGroupsInBatch(1);
+      await consolidationBus.connect(agentSigner).setBatchSize(1);
+
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [[0n, 1n]], [0n]),
+      )
+        .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
         .withArgs(2, 1);
     });
   });

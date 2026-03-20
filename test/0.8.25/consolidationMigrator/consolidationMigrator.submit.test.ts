@@ -141,14 +141,6 @@ describe("ConsolidationMigrator.sol: submit", () => {
         .withArgs(submitter.address, SOURCE_OPERATOR_ID, unknownTargetOpId);
     });
 
-    it("should revert if batch is empty", async () => {
-      await expect(
-        consolidationMigrator
-          .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [], []),
-      ).to.be.revertedWithCustomError(consolidationMigrator, "EmptyBatch");
-    });
-
     it("should revert if arrays have different lengths", async () => {
       await expect(
         consolidationMigrator

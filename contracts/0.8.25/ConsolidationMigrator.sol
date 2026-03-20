@@ -90,8 +90,6 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     error PairNotAllowed(uint256 sourceOperatorId, uint256 targetOperatorId);
     error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
     error ArraysLengthMismatch(uint256 sourceGroupsLength, uint256 targetLength);
-    error EmptyBatch();
-    error EmptyGroup(uint256 groupIndex);
     error KeyNotDeposited(uint256 moduleId, uint256 operatorId, uint256 keyIndex);
     error NotAuthorized(address caller, uint256 sourceOperatorId, uint256 targetOperatorId);
 
@@ -104,8 +102,8 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     event ConsolidationSubmitted(
         uint256 indexed sourceOperatorId,
         uint256 indexed targetOperatorId,
-        uint256[][] sourceValidatorIndicesPerTarget,
-        uint256[] targetValidatorIndices
+        uint256[][] sourceKeyIndicesGroups,
+        uint256[] targetKeyIndices
     );
 
     // ==========
@@ -279,36 +277,43 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     // =========================
 
     /**
-     * @notice Validates a consolidation batch without modifying state
+     * @notice Validates consolidation eligibility for a batch without state changes
+     * @dev Ensures:
+     *      - Operator pair is allowlisted
+     *      - All keys are deposited
+     *
+     *      Does NOT validate batch structure or constraints enforced by ConsolidationBus.
+     *
+     *      Reverts on any failed check.
+     *
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
-     * @param sourceValidatorIndicesPerTarget Groups of source validator indices, one group per target
-     * @param targetValidatorIndices Indices of target validators (must be deposited - active validators)
-     * @dev Reverts with specific error if validation fails
+     * @param sourceKeyIndicesGroups Source key indices grouped per target
+     * @param targetKeyIndices Target key indices
      */
     function validateConsolidationBatch(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
-        uint256[][] calldata sourceValidatorIndicesPerTarget,
-        uint256[] calldata targetValidatorIndices
+        uint256[][] calldata sourceKeyIndicesGroups,
+        uint256[] calldata targetKeyIndices
     ) external view {
-        _validateBatch(sourceOperatorId, targetOperatorId, sourceValidatorIndicesPerTarget, targetValidatorIndices);
+        _validateConsolidationEligibility(sourceOperatorId, targetOperatorId, sourceKeyIndicesGroups, targetKeyIndices);
     }
 
     /**
      * @notice Submits a consolidation batch after validation
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
-     * @param sourceValidatorIndicesPerTarget Groups of source validator indices, one group per target
-     * @param targetValidatorIndices Indices of target validators (must be deposited - active validators)
+     * @param sourceKeyIndicesGroups Groups of source key indices, one group per target
+     * @param targetKeyIndices Indices of target keys
      * @dev Caller must be the designated submitter for this pair (set via allowPair)
      * @dev Forwards the validated batch to ConsolidationBus
      */
     function submitConsolidationBatch(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
-        uint256[][] calldata sourceValidatorIndicesPerTarget,
-        uint256[] calldata targetValidatorIndices
+        uint256[][] calldata sourceKeyIndicesGroups,
+        uint256[] calldata targetKeyIndices
     ) external {
         // Check authorization: caller must be the designated submitter for this pair
         address submitter = _submitters[sourceOperatorId][targetOperatorId];
@@ -317,11 +322,11 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         }
 
         // Validate the batch and get pubkeys
-        (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) = _validateBatch(
+        (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) = _validateConsolidationEligibility(
             sourceOperatorId,
             targetOperatorId,
-            sourceValidatorIndicesPerTarget,
-            targetValidatorIndices
+            sourceKeyIndicesGroups,
+            targetKeyIndices
         );
 
         // Submit to ConsolidationBus
@@ -330,8 +335,8 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         emit ConsolidationSubmitted(
             sourceOperatorId,
             targetOperatorId,
-            sourceValidatorIndicesPerTarget,
-            targetValidatorIndices
+            sourceKeyIndicesGroups,
+            targetKeyIndices
         );
     }
 
@@ -340,24 +345,29 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     // ==================
 
     /**
-     * @dev Validates a consolidation batch and returns the extracted pubkeys in grouped form
+     * @dev Ensures consolidation eligibility and returns pubkeys.
+     *      Checks:
+     *
+     *      - Operator pair is allowlisted
+     *      - All keys are deposited
+     *
+     *      Does NOT validate batch structure or constraints enforced by ConsolidationBus.
+     *
+     *      Reverts on any failed check.
+     *
+     *      @return sourcePubkeysGroups Source pubkeys grouped per target
+     *      @return targetPubkeys Target pubkeys
      */
-    function _validateBatch(
+    function _validateConsolidationEligibility(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
-        uint256[][] calldata sourceValidatorIndicesPerTarget,
-        uint256[] calldata targetValidatorIndices
+        uint256[][] calldata sourceKeyIndicesGroups,
+        uint256[] calldata targetKeyIndices
     ) internal view returns (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) {
         // Check array lengths
-        uint256 groupsCount = targetValidatorIndices.length;
-        if (groupsCount == 0) revert EmptyBatch();
-        if (sourceValidatorIndicesPerTarget.length != groupsCount) {
-            revert ArraysLengthMismatch(sourceValidatorIndicesPerTarget.length, groupsCount);
-        }
-
-        // Validate no empty groups
-        for (uint256 i = 0; i < groupsCount; ++i) {
-            if (sourceValidatorIndicesPerTarget[i].length == 0) revert EmptyGroup(i);
+        uint256 groupsCount = targetKeyIndices.length;
+        if (sourceKeyIndicesGroups.length != groupsCount) {
+            revert ArraysLengthMismatch(sourceKeyIndicesGroups.length, groupsCount);
         }
 
         // Check if pair is allowed
@@ -366,12 +376,12 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         }
 
         // Validate target keys and extract pubkeys
-        targetPubkeys = _validateAndExtractKeys(TARGET_MODULE_ID, targetOperatorId, targetValidatorIndices);
+        targetPubkeys = _validateAndExtractKeys(TARGET_MODULE_ID, targetOperatorId, targetKeyIndices);
 
         // Validate source keys and extract pubkeys for each group
         sourcePubkeysGroups = new bytes[][](groupsCount);
         for (uint256 i = 0; i < groupsCount; ++i) {
-            sourcePubkeysGroups[i] = _validateAndExtractKeys(SOURCE_MODULE_ID, sourceOperatorId, sourceValidatorIndicesPerTarget[i]);
+            sourcePubkeysGroups[i] = _validateAndExtractKeys(SOURCE_MODULE_ID, sourceOperatorId, sourceKeyIndicesGroups[i]);
         }
 
         return (sourcePubkeysGroups, targetPubkeys);
@@ -381,23 +391,23 @@ contract ConsolidationMigrator is AccessControlEnumerable {
      * @dev Validates that all keys are deposited and extracts their pubkeys
      * @param moduleId The staking module ID (for error reporting)
      * @param operatorId The node operator ID
-     * @param validatorIndices Indices of validators to validate
+     * @param keyIndices Indices of keys to validate
      * @return pubkeys Array of extracted 48-byte pubkeys
      */
     function _validateAndExtractKeys(
         uint256 moduleId,
         uint256 operatorId,
-        uint256[] calldata validatorIndices
+        uint256[] calldata keyIndices
     ) internal view returns (bytes[] memory pubkeys) {
         IUnifiedStakingModule module = _getModule(moduleId);
 
         (,,,,,, uint256 totalDeposited,) = module.getNodeOperatorSummary(operatorId);
 
-        uint256 count = validatorIndices.length;
+        uint256 count = keyIndices.length;
         pubkeys = new bytes[](count);
 
         for (uint256 i = 0; i < count; ++i) {
-            uint256 keyIndex = validatorIndices[i];
+            uint256 keyIndex = keyIndices[i];
 
             if (keyIndex >= totalDeposited) {
                 revert KeyNotDeposited(moduleId, operatorId, keyIndex);
