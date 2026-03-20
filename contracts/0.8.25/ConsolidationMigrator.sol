@@ -272,33 +272,10 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         return TARGET_MODULE_ID;
     }
 
-    // =========================
-    //  Validation and Submit
-    // =========================
+    // ============
+    //    Submit
+    // ============
 
-    /**
-     * @notice Validates consolidation eligibility for a batch without state changes
-     * @dev Ensures:
-     *      - Operator pair is allowlisted
-     *      - All keys are deposited
-     *
-     *      Does NOT validate batch structure or constraints enforced by ConsolidationBus.
-     *
-     *      Reverts on any failed check.
-     *
-     * @param sourceOperatorId ID of the source operator
-     * @param targetOperatorId ID of the target operator
-     * @param sourceKeyIndicesGroups Source key indices grouped per target
-     * @param targetKeyIndices Target key indices
-     */
-    function validateConsolidationBatch(
-        uint256 sourceOperatorId,
-        uint256 targetOperatorId,
-        uint256[][] calldata sourceKeyIndicesGroups,
-        uint256[] calldata targetKeyIndices
-    ) external view {
-        _validateConsolidationEligibility(sourceOperatorId, targetOperatorId, sourceKeyIndicesGroups, targetKeyIndices);
-    }
 
     /**
      * @notice Submits a consolidation batch after validation
@@ -329,7 +306,6 @@ contract ConsolidationMigrator is AccessControlEnumerable {
             targetKeyIndices
         );
 
-        // Submit to ConsolidationBus
         CONSOLIDATION_BUS.addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
 
         emit ConsolidationSubmitted(
@@ -351,8 +327,6 @@ contract ConsolidationMigrator is AccessControlEnumerable {
      *      - Operator pair is allowlisted
      *      - All keys are deposited
      *
-     *      Does NOT validate batch structure or constraints enforced by ConsolidationBus.
-     *
      *      Reverts on any failed check.
      *
      *      @return sourcePubkeysGroups Source pubkeys grouped per target
@@ -364,36 +338,27 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         uint256[][] calldata sourceKeyIndicesGroups,
         uint256[] calldata targetKeyIndices
     ) internal view returns (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) {
-        // Check array lengths
         uint256 groupsCount = targetKeyIndices.length;
         if (sourceKeyIndicesGroups.length != groupsCount) {
             revert ArraysLengthMismatch(sourceKeyIndicesGroups.length, groupsCount);
         }
 
-        // Check if pair is allowed
         if (!_allowedPairs[sourceOperatorId].contains(targetOperatorId)) {
             revert PairNotAllowed(sourceOperatorId, targetOperatorId);
         }
 
-        // Validate target keys and extract pubkeys
-        targetPubkeys = _validateAndExtractKeys(TARGET_MODULE_ID, targetOperatorId, targetKeyIndices);
-
-        // Validate source keys and extract pubkeys for each group
         sourcePubkeysGroups = new bytes[][](groupsCount);
         for (uint256 i = 0; i < groupsCount; ++i) {
-            sourcePubkeysGroups[i] = _validateAndExtractKeys(SOURCE_MODULE_ID, sourceOperatorId, sourceKeyIndicesGroups[i]);
-        }
+            sourcePubkeysGroups[i] = _validateAndExtractKeys(
+                SOURCE_MODULE_ID, sourceOperatorId, sourceKeyIndicesGroups[i]
+            );
+        }   
+
+        targetPubkeys = _validateAndExtractKeys(TARGET_MODULE_ID, targetOperatorId, targetKeyIndices);
 
         return (sourcePubkeysGroups, targetPubkeys);
     }
 
-    /**
-     * @dev Validates that all keys are deposited and extracts their pubkeys
-     * @param moduleId The staking module ID (for error reporting)
-     * @param operatorId The node operator ID
-     * @param keyIndices Indices of keys to validate
-     * @return pubkeys Array of extracted 48-byte pubkeys
-     */
     function _validateAndExtractKeys(
         uint256 moduleId,
         uint256 operatorId,
@@ -419,11 +384,9 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         }
     }
 
-    /**
-     * @dev Returns a staking module interface from StakingRouter by module ID
-     */
     function _getModule(uint256 moduleId) internal view returns (IUnifiedStakingModule) {
         IStakingRouter.StakingModule memory sm = STAKING_ROUTER.getStakingModule(moduleId);
         return IUnifiedStakingModule(sm.stakingModuleAddress);
     }
+
 }
