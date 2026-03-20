@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   ConsolidationGateway,
   DepositSecurityModule__MockForConsolidationGateway,
+  Lido__MockForConsolidationGateway,
   WithdrawalVault__MockForConsolidationGateway,
 } from "typechain-types";
 
@@ -80,6 +81,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
   let consolidationGateway: ConsolidationGateway;
   let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
   let dsm: DepositSecurityModule__MockForConsolidationGateway;
+  let lido: Lido__MockForConsolidationGateway;
   let admin: HardhatEthersSigner;
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -94,10 +96,12 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
     withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForConsolidationGateway");
     dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
+    lido = await ethers.deployContract("Lido__MockForConsolidationGateway");
 
     await updateLidoLocatorImplementation(locatorAddr, {
       withdrawalVault: await withdrawalVault.getAddress(),
       depositSecurityModule: await dsm.getAddress(),
+      lido: await lido.getAddress(),
     });
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway__HarnessForTests", [
@@ -198,8 +202,19 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     ).to.be.revertedWithCustomError(consolidationGateway, "DSMDepositsPaused");
   });
 
-  it("should not revert when DSM deposits are not paused", async () => {
+  it("should revert with LidoDepositsPaused error if Lido deposits are paused", async () => {
+    await lido.mock__setCanDeposit(false);
+
+    await expect(
+      consolidationGateway
+        .connect(authorizedEntity)
+        .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 }),
+    ).to.be.revertedWithCustomError(consolidationGateway, "LidoDepositsPaused");
+  });
+
+  it("should not revert when DSM deposits are not paused and Lido deposits are enabled", async () => {
     await dsm.mock__setDepositsPaused(false);
+    await lido.mock__setCanDeposit(true);
 
     const tx = await consolidationGateway
       .connect(authorizedEntity)

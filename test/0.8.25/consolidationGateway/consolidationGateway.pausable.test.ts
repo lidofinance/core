@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   ConsolidationGateway,
   DepositSecurityModule__MockForConsolidationGateway,
+  Lido__MockForConsolidationGateway,
   WithdrawalVault__MockForConsolidationGateway,
 } from "typechain-types";
 
@@ -55,10 +56,12 @@ describe("ConsolidationGateway.sol: pausable", () => {
 
     withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForConsolidationGateway");
     dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
+    const lido: Lido__MockForConsolidationGateway = await ethers.deployContract("Lido__MockForConsolidationGateway");
 
     await updateLidoLocatorImplementation(locatorAddr, {
       withdrawalVault: await withdrawalVault.getAddress(),
       depositSecurityModule: await dsm.getAddress(),
+      lido: await lido.getAddress(),
     });
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway__HarnessForTests", [

@@ -16,6 +16,10 @@ interface IDepositSecurityModule {
     function isDepositsPaused() external view returns (bool);
 }
 
+interface ILido {
+    function canDeposit() external view returns (bool);
+}
+
 interface IWithdrawalVault {
     function addConsolidationRequests(
         bytes[] calldata sourcePubkeys,
@@ -79,6 +83,11 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
      * @notice Thrown when DSM deposits are paused
      */
     error DSMDepositsPaused();
+
+    /**
+     * @notice Thrown when Lido deposits are paused (Lido stopped or bunker mode)
+     */
+    error LidoDepositsPaused();
 
     /**
      * @notice Emitted when limits configs are set.
@@ -200,7 +209,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
             _validateTargetWitness(targetWitnesses[i]);
         }
 
-        _ensureDSMDepositsNotPaused();
+        _checkConsolidationPreconditions();
 
         _consumeConsolidationRequestLimit(requestsCount);
 
@@ -262,11 +271,18 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
 
     /// Internal functions
 
-    function _ensureDSMDepositsNotPaused() internal view {
-        // If the DSM has stopped deposits, some validators may have non-Lido withdrawal credentials.
-        // In that case, processing of all new consolidation requests should be paused.
+    function _checkConsolidationPreconditions() internal view {
+        // If DSM paused deposits, some validators may not belong to Lido
+        // and can therefore have non-Lido withdrawal credentials.
+        // To avoid accepting consolidations into such validators, new consolidation requests are blocked.
+        // This acts as an additional safety check on top of validator proof verification.
         if (IDepositSecurityModule(LOCATOR.depositSecurityModule()).isDepositsPaused()) {
             revert DSMDepositsPaused();
+        }
+
+        // If Lido stopped or bunker mode is active, new consolidation requests must also be blocked.
+        if (!ILido(LOCATOR.lido()).canDeposit()) {
+            revert LidoDepositsPaused();
         }
     }
 

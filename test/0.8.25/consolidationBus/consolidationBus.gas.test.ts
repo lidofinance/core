@@ -80,14 +80,14 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     const eip7251 = await ethers.getContractAt("EIP7251ConsolidationRequest__Mock", EIP7251_ADDRESS);
     await eip7251.mock__setFee(FEE);
 
-    // 2. Deploy Lido mock
-    const lido = await ethers.deployContract("Lido__MockForWithdrawalVault");
+    // 2. Deploy Lido mock (needs canDeposit for _checkConsolidationPreconditions)
+    const lido = await ethers.deployContract("Lido__MockForConsolidationGateway");
 
     // 3. Deploy LidoLocator
     const locator = await deployLidoLocator();
     const locatorAddress = await locator.getAddress();
 
-    // 3a. Deploy DSM mock (needed for _ensureDSMDepositsNotPaused check in ConsolidationGateway)
+    // 3a. Deploy DSM mock (needed for _checkConsolidationPreconditions check in ConsolidationGateway)
     const dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
 
     // 4. Deploy ConsolidationGateway
@@ -115,10 +115,11 @@ describe("ConsolidationBus.sol: gas limit (full stack)", () => {
     const [vault] = await proxify({ impl: vaultImpl, admin });
     withdrawalVault = vault as unknown as WithdrawalVault;
 
-    // 6. Update LidoLocator to point to real WithdrawalVault and DSM mock
+    // 6. Update LidoLocator to point to real WithdrawalVault, DSM mock, and Lido mock
     await updateLidoLocatorImplementation(locatorAddress, {
       withdrawalVault: await withdrawalVault.getAddress(),
       depositSecurityModule: await dsm.getAddress(),
+      lido: await lido.getAddress(),
     });
 
     // 7. Deploy ConsolidationBus
