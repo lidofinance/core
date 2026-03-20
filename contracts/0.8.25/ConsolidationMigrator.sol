@@ -413,8 +413,9 @@ contract ConsolidationMigrator is AccessControlEnumerable {
                 revert KeyNotDeposited(moduleId, operatorId, keyIndex);
             }
 
-            bytes memory keys = module.getSigningKeys(operatorId, keyIndex, 1);
-            pubkeys[i] = _extractPubkey(keys, 0);
+            bytes memory key = module.getSigningKeys(operatorId, keyIndex, 1);
+            assert(key.length == PUBKEY_LENGTH); // Should always be 48 bytes for a single key
+            pubkeys[i] = key;
         }
     }
 
@@ -424,22 +425,5 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     function _getModule(uint256 moduleId) internal view returns (IUnifiedStakingModule) {
         IStakingRouter.StakingModule memory sm = STAKING_ROUTER.getStakingModule(moduleId);
         return IUnifiedStakingModule(sm.stakingModuleAddress);
-    }
-
-    /**
-     * @dev Extracts a single 48-byte pubkey from concatenated pubkeys
-     * @param pubkeys Concatenated pubkeys (48 bytes each)
-     * @param index Index of the key to extract (0-based)
-     * @return The extracted 48-byte pubkey
-     */
-    function _extractPubkey(bytes memory pubkeys, uint256 index) internal pure returns (bytes memory) {
-        bytes memory key = new bytes(PUBKEY_LENGTH);
-        uint256 offset = index * PUBKEY_LENGTH;
-
-        for (uint256 i = 0; i < PUBKEY_LENGTH; ++i) {
-            key[i] = pubkeys[offset + i];
-        }
-
-        return key;
     }
 }
