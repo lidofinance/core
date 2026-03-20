@@ -18,8 +18,8 @@ contract ConsolidationGateway__MockForConsolidationBus {
 
     function addConsolidationRequests(
         bytes[][] calldata sourcePubkeysGroups,
-        address refundRecipient,
-        IPredepositGuarantee.ValidatorWitness[] calldata /* _witnesses */
+        IPredepositGuarantee.ValidatorWitness[] calldata /* _witnesses */,
+        address refundRecipient
     ) external payable {
         if (_shouldRevert) {
             revert(_revertReason);

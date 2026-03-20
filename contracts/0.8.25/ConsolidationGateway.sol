@@ -167,9 +167,9 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
      *      Each group represents multiple source validators consolidating into a single target.
      * @param sourcePubkeysGroups An array of groups, where each group is an array of 48-byte source public keys
      *        consolidating to the corresponding target.
-     * @param refundRecipient The address that will receive any excess ETH sent for fees.
-     * @param witnesses An array of validator witnesses (one per group), each containing a target pubkey
+     * @param targetWitnesses An array of validator targetWitnesses (one per group), each containing a target pubkey
      *        and a CL proof of withdrawal credentials.
+     * @param refundRecipient The address that will receive any excess ETH sent for fees.
      *
      * @notice Reverts if:
      *     - The caller does not have the `ADD_CONSOLIDATION_REQUEST_ROLE`
@@ -178,14 +178,14 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
      */
     function addConsolidationRequests(
         bytes[][] calldata sourcePubkeysGroups,
-        address refundRecipient,
-        IPredepositGuarantee.ValidatorWitness[] calldata witnesses
+        IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses,
+        address refundRecipient
     ) external payable onlyRole(ADD_CONSOLIDATION_REQUEST_ROLE) preservesEthBalance whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         uint256 groupsCount = sourcePubkeysGroups.length;
         if (groupsCount == 0) revert ZeroArgument("sourcePubkeysGroups");
-        if (groupsCount != witnesses.length) {
-            revert ArraysLengthMismatch(groupsCount, witnesses.length);
+        if (groupsCount != targetWitnesses.length) {
+            revert ArraysLengthMismatch(groupsCount, targetWitnesses.length);
         }
 
         // Count total individual requests across all groups
@@ -197,7 +197,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         }
 
         for (uint256 i = 0; i < groupsCount; ++i) {
-            _validateTargetWitness(witnesses[i]);
+            _validateTargetWitness(targetWitnesses[i]);
         }
 
         _ensureDSMDepositsNotPaused();
@@ -210,7 +210,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 refund = _checkFee(totalFee);
 
         // Expand grouped requests into flat pairs for WithdrawalVault
-        (bytes[] memory flatSources, bytes[] memory flatTargets) = _expandGroups(sourcePubkeysGroups, witnesses, requestsCount);
+        (bytes[] memory flatSources, bytes[] memory flatTargets) = _expandGroups(sourcePubkeysGroups, targetWitnesses, requestsCount);
         withdrawalVault.addConsolidationRequests{value: totalFee}(flatSources, flatTargets);
 
         _refundFee(refund, refundRecipient);
@@ -337,14 +337,14 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
      * @dev Expands grouped consolidation requests into flat parallel arrays
      *      for WithdrawalVault compatibility.
      * @param sourcePubkeysGroups Grouped source pubkeys
-     * @param witnesses Validator witnesses (one per group), target pubkey is extracted from each witness
+     * @param targetWitnesses Validator targetWitnesses (one per group), target pubkey is extracted from each witness
      * @param totalCount Total number of individual requests
      * @return flatSources Flat array of source pubkeys
      * @return flatTargets Flat array of target pubkeys (repeated per group)
      */
     function _expandGroups(
         bytes[][] calldata sourcePubkeysGroups,
-        IPredepositGuarantee.ValidatorWitness[] calldata witnesses,
+        IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses,
         uint256 totalCount
     ) internal pure returns (bytes[] memory flatSources, bytes[] memory flatTargets) {
         flatSources = new bytes[](totalCount);
@@ -353,7 +353,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 idx = 0;
         for (uint256 i = 0; i < sourcePubkeysGroups.length; ++i) {
             bytes[] calldata group = sourcePubkeysGroups[i];
-            bytes calldata target = witnesses[i].pubkey;
+            bytes calldata target = targetWitnesses[i].pubkey;
             for (uint256 j = 0; j < group.length; ++j) {
                 flatSources[idx] = group[j];
                 flatTargets[idx] = target;
