@@ -404,7 +404,7 @@ export async function main() {
   const consolidationBus_ = await deployWithoutProxy(Sk.consolidationBus, "ConsolidationBus", deployer, [
     admin,
     consolidationGateway_.address,
-    200, // initialBatchSize
+    350, // initialBatchSize
     10, // initialMaxGroupsInBatch
     0, // initialExecutionDelay
   ]);
