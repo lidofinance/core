@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
 
 import { certainAddress, findEventsWithInterfaces } from "lib";
+import { LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   depositAndReportValidators,
@@ -59,6 +60,12 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
   let SOURCE_PUBKEY_2: string;
   let TARGET_PUBKEY_1: string;
   let TARGET_PUBKEY_2: string;
+
+  let merkleTree: LocalMerkleTree;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let targetWitness1: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let targetWitness2: any;
 
   let globalSnapshot: string;
   let testSnapshot: string;
@@ -151,6 +158,39 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     expect(targetKey2.used).to.be.true;
 
     // =========================================
+    // Setup CL proof merkle tree for target witnesses
+    // =========================================
+    merkleTree = await prepareLocalMerkleTree();
+
+    const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
+    const makeValidatorContainer = (pubkey: string) => ({
+      pubkey,
+      withdrawalCredentials: ethers.ZeroHash,
+      effectiveBalance: 32_000_000_000n,
+      slashed: false,
+      activationEligibilityEpoch: 0,
+      activationEpoch: 0,
+      exitEpoch: FAR_FUTURE_EPOCH,
+      withdrawableEpoch: FAR_FUTURE_EPOCH,
+    });
+
+    const { validatorIndex: vi1 } = await merkleTree.addValidator(makeValidatorContainer(TARGET_PUBKEY_1));
+    const { validatorIndex: vi2 } = await merkleTree.addValidator(makeValidatorContainer(TARGET_PUBKEY_2));
+    const { childBlockTimestamp, beaconBlockHeader } = await merkleTree.commitChangesToBeaconRoot();
+
+    const buildWitness = async (pubkey: string, validatorIndex: number) => ({
+      proof: await merkleTree.buildProof(validatorIndex, beaconBlockHeader),
+      pubkey,
+      validatorIndex,
+      childBlockTimestamp,
+      slot: beaconBlockHeader.slot,
+      proposerIndex: beaconBlockHeader.proposerIndex,
+    });
+
+    targetWitness1 = await buildWitness(TARGET_PUBKEY_1, vi1);
+    targetWitness2 = await buildWitness(TARGET_PUBKEY_2, vi2);
+
+    // =========================================
     // Setup roles
     // =========================================
 
@@ -192,11 +232,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
-      const tx = await consolidationBus
-        .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
-          value: fee,
-        });
+      const tx = await consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [targetWitness1], {
+        value: fee,
+      });
 
       const receipt = await tx.wait();
       const consolidationEvents = findEventsWithInterfaces(receipt!, "ConsolidationRequestAdded", [
@@ -243,13 +281,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       const tx = await consolidationBus
         .connect(executor)
-        .executeConsolidation(
-          [[SOURCE_PUBKEY_1], [SOURCE_PUBKEY_2]],
-          witnessesForTargets([TARGET_PUBKEY_1, TARGET_PUBKEY_2]),
-          {
-            value: totalFee,
-          },
-        );
+        .executeConsolidation([[SOURCE_PUBKEY_1], [SOURCE_PUBKEY_2]], [targetWitness1, targetWitness2], {
+          value: totalFee,
+        });
 
       // Step 4: Verify batch is removed from storage after execution
       expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.equal(ethers.ZeroAddress);
@@ -330,11 +364,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
       // Execute first time
-      await consolidationBus
-        .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
-          value: fee,
-        });
+      await consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [targetWitness1], {
+        value: fee,
+      });
 
       // Try to execute again
       await expect(
@@ -395,11 +427,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
       await expect(
-        consolidationBus
-          .connect(executor)
-          .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
-            value: fee,
-          }),
+        consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [targetWitness1], {
+          value: fee,
+        }),
       ).to.not.be.reverted;
     });
 
@@ -429,6 +459,28 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const targetKey3 = await nor.getSigningKey(targetOperatorId2, 0);
       const TARGET_PUBKEY_3 = targetKey3.key;
 
+      // Build valid CL proof witness for TARGET_PUBKEY_3
+      const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
+      const { validatorIndex: vi3 } = await merkleTree.addValidator({
+        pubkey: TARGET_PUBKEY_3,
+        withdrawalCredentials: ethers.ZeroHash,
+        effectiveBalance: 32_000_000_000n,
+        slashed: false,
+        activationEligibilityEpoch: 0,
+        activationEpoch: 0,
+        exitEpoch: FAR_FUTURE_EPOCH,
+        withdrawableEpoch: FAR_FUTURE_EPOCH,
+      });
+      const { childBlockTimestamp: cbt3, beaconBlockHeader: bbh3 } = await merkleTree.commitChangesToBeaconRoot();
+      const targetWitness3 = {
+        proof: await merkleTree.buildProof(vi3, bbh3),
+        pubkey: TARGET_PUBKEY_3,
+        validatorIndex: vi3,
+        childBlockTimestamp: cbt3,
+        slot: bbh3.slot,
+        proposerIndex: bbh3.proposerIndex,
+      };
+
       // Allow second pair with the same submitter
       await consolidationMigrator
         .connect(agentSigner)
@@ -447,17 +499,13 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
       // Execute both batches
-      await consolidationBus
-        .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
-          value: fee,
-        });
+      await consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [targetWitness1], {
+        value: fee,
+      });
 
-      await consolidationBus
-        .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_2]], witnessesForTargets([TARGET_PUBKEY_3]), {
-          value: fee,
-        });
+      await consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_2]], [targetWitness3], {
+        value: fee,
+      });
     });
   });
 
@@ -582,11 +630,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
       // Execute first batch - this should consume the limit
-      await consolidationBus
-        .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
-          value: fee,
-        });
+      await consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [targetWitness1], {
+        value: fee,
+      });
 
       // Submit second batch
       await consolidationMigrator
@@ -595,11 +641,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       // Execute second batch - should fail due to rate limit
       await expect(
-        consolidationBus
-          .connect(executor)
-          .executeConsolidation([[SOURCE_PUBKEY_2]], witnessesForTargets([TARGET_PUBKEY_2]), {
-            value: fee,
-          }),
+        consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_2]], [targetWitness2], {
+          value: fee,
+        }),
       ).to.be.revertedWithCustomError(consolidationGateway, "ConsolidationRequestsLimitExceeded");
     });
 
@@ -616,11 +660,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
       const executorBalanceBefore = await ethers.provider.getBalance(executor.address);
 
-      const tx = await consolidationBus
-        .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
-          value: excessFee,
-        });
+      const tx = await consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [targetWitness1], {
+        value: excessFee,
+      });
 
       const receipt = await tx.wait();
       const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
@@ -651,11 +693,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const fee = await withdrawalVault.getConsolidationRequestFee();
 
       // Execute first batch
-      await consolidationBus
-        .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_1]], witnessesForTargets([TARGET_PUBKEY_1]), {
-          value: fee,
-        });
+      await consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_1]], [targetWitness1], {
+        value: fee,
+      });
 
       // Verify first batch is executed
       const batchHash1 = ethers.keccak256(
@@ -664,11 +704,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       expect((await consolidationBus.getBatchInfo(batchHash1)).publisher).to.equal(ethers.ZeroAddress);
 
       // Execute second batch
-      await consolidationBus
-        .connect(executor)
-        .executeConsolidation([[SOURCE_PUBKEY_2]], witnessesForTargets([TARGET_PUBKEY_2]), {
-          value: fee,
-        });
+      await consolidationBus.connect(executor).executeConsolidation([[SOURCE_PUBKEY_2]], [targetWitness2], {
+        value: fee,
+      });
 
       // Verify second batch is executed
       const batchHash2 = ethers.keccak256(

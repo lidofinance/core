@@ -10,7 +10,13 @@ import {
   WithdrawalVault__MockForConsolidationGateway,
 } from "typechain-types";
 
-import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
+import {
+  addressToWC,
+  advanceChainTime,
+  generateValidator,
+  getCurrentBlockTimestamp,
+  prepareLocalMerkleTree,
+} from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -22,8 +28,6 @@ const PUBKEYS = [
 ];
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
-const DUMMY_GI = "0x0000000000000000000000000000000000000000000000000096000000000028";
-const DUMMY_WC = "0x010000000000000000000000b9d7934878b5fb9610b3fe8a5e441e8fad7e293f";
 
 const witnessesForTargets = (targets: string[]) =>
   targets.map((pubkey) => ({
@@ -46,6 +50,16 @@ describe("ConsolidationGateway.sol: pausable", () => {
   let PAUSE_ROLE: string;
   let RESUME_ROLE: string;
 
+  // Pre-built valid witnesses with CL proofs for target validators
+  let validWitnesses: {
+    proof: string[];
+    pubkey: string;
+    validatorIndex: number;
+    childBlockTimestamp: number;
+    slot: number;
+    proposerIndex: number;
+  }[];
+
   let originalState: string;
 
   before(async () => {
@@ -64,16 +78,40 @@ describe("ConsolidationGateway.sol: pausable", () => {
       lido: await lido.getAddress(),
     });
 
-    consolidationGateway = await ethers.deployContract("ConsolidationGateway__HarnessForTests", [
+    // Set up merkle tree for CL proof verification
+    const localMerkle = await prepareLocalMerkleTree();
+    const withdrawalCredentials = addressToWC(admin.address, 1);
+
+    // Generate a validator with matching withdrawal credentials
+    const validator = generateValidator(withdrawalCredentials);
+    const { validatorIndex } = await localMerkle.addValidator(validator.container);
+
+    // Commit merkle tree to beacon block root
+    const { childBlockTimestamp, beaconBlockHeader } = await localMerkle.commitChangesToBeaconRoot();
+
+    // Build valid witness
+    const proof = await localMerkle.buildProof(validatorIndex, beaconBlockHeader);
+    validWitnesses = [
+      {
+        proof,
+        pubkey: String(validator.container.pubkey),
+        validatorIndex,
+        childBlockTimestamp,
+        slot: beaconBlockHeader.slot as number,
+        proposerIndex: beaconBlockHeader.proposerIndex as number,
+      },
+    ];
+
+    consolidationGateway = await ethers.deployContract("ConsolidationGateway", [
       admin,
       locatorAddr,
       100,
       1,
       48,
-      DUMMY_GI,
-      DUMMY_GI,
+      localMerkle.gIFirstValidator,
+      localMerkle.gIFirstValidator,
       0,
-      DUMMY_WC,
+      withdrawalCredentials,
     ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
@@ -133,7 +171,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should be able to add consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
       });
     });
 
@@ -311,7 +349,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseUntil: should allow consolidation requests immediately after resuming", async () => {
@@ -324,7 +362,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseFor: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -337,7 +375,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
       });
 
       it("pauseUntil: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -352,7 +390,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
       });
     });
   });
