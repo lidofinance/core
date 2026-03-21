@@ -206,7 +206,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         }
 
         for (uint256 i = 0; i < groupsCount; ++i) {
-            _validateTargetWitness(targetWitnesses[i]);
+            _validatePubKeyWCProof(targetWitnesses[i], WITHDRAWAL_CREDENTIALS);
         }
 
         _checkConsolidationPreconditions();
@@ -376,11 +376,5 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
                 ++idx;
             }
         }
-    }
-
-    function _validateTargetWitness(
-        IPredepositGuarantee.ValidatorWitness calldata _witness
-    ) internal virtual view {
-        _validatePubKeyWCProof(_witness, WITHDRAWAL_CREDENTIALS);
     }
 }
