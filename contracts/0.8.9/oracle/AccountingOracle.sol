@@ -24,12 +24,12 @@ interface IOracleReportSanityChecker {
     ) external view;
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _validatorBalancesGweiByStakingModule,
-        uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _preCLValidatorsBalanceGwei,
-        uint256 _postCLValidatorsBalanceGwei,
-        uint256 _clValidatorsBalanceGwei,
-        uint256 _clPendingBalanceGwei,
+        uint256[] calldata _validatorBalancesWeiByStakingModule,
+        uint256 _preCLValidatorsBalanceWei,
+        uint256 _preCLPendingBalanceWei,
+        uint256 _postCLValidatorsBalanceWei,
+        uint256 _postCLPendingBalanceWei,
+        uint256 _depositsWei,
         uint256 _timeElapsed
     ) external view;
 
@@ -737,16 +737,26 @@ contract AccountingOracle is BaseOracle {
         uint256 timeElapsed
     ) internal view {
         // This check must run before `reportValidatorBalancesByStakingModule(...)` mutates the router state,
-        // because it compares the report against the previous per-module validators/pending balances in StakingRouter.
-        (uint256 preCLValidatorsBalanceWei, , ) = ILido(LOCATOR.lido()).getBalanceStats();
+        // because it compares the report against the previous per-module validators balances in StakingRouter
+        // and the pre-report protocol pending/deposits snapshot in Lido.
+        uint256[] memory validatorBalancesWeiByStakingModule = new uint256[](data.validatorBalancesGweiByStakingModule.length);
+        for (uint256 i = 0; i < validatorBalancesWeiByStakingModule.length; ) {
+            validatorBalancesWeiByStakingModule[i] = data.validatorBalancesGweiByStakingModule[i] * 1 gwei;
+            unchecked {
+                ++i;
+            }
+        }
+
+        (uint256 preCLValidatorsBalanceWei, uint256 preCLPendingBalanceWei, uint256 depositsWei) =
+            ILido(LOCATOR.lido()).getBalanceStats();
         sanityChecker.checkModuleAndCLBalancesChangeRates(
             data.stakingModuleIdsWithUpdatedBalance,
-            data.validatorBalancesGweiByStakingModule,
-            data.pendingBalancesGweiByStakingModule,
-            preCLValidatorsBalanceWei / 1 gwei,
-            data.clValidatorsBalanceGwei,
-            data.clValidatorsBalanceGwei,
-            data.clPendingBalanceGwei,
+            validatorBalancesWeiByStakingModule,
+            preCLValidatorsBalanceWei,
+            preCLPendingBalanceWei,
+            data.clValidatorsBalanceGwei * 1 gwei,
+            data.clPendingBalanceGwei * 1 gwei,
+            depositsWei,
             timeElapsed
         );
     }
