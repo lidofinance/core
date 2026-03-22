@@ -754,16 +754,7 @@ describe("Lido.sol:misc", () => {
       );
     });
 
-    it("Reverts if the report not submitted yet", async () => {
-      const oneDepositWorthOfEther = ether("32.0");
-      await lido.submit(ZeroAddress, { value: oneDepositWorthOfEther });
-      await accountingOracle.mock_setProcessingState(1, false, false);
-      await expect(
-        lido.connect(stakingRouterSigner).withdrawDepositableEther(oneDepositWorthOfEther, 1n),
-      ).to.be.revertedWith("CAN_NOT_DEPOSIT");
-    });
-
-    it("Emits `Unbuffered`, `DepositedValidatorsChanged` and `DepositedPostReportUpdated` events when withdrawing ether", async () => {
+    it("Emits `Unbuffered`, `DepositedValidatorsChanged` events when withdrawing ether", async () => {
       const depositAmount = ether("32.0");
       // top up Lido buffer enough for deposit
       await lido.submit(ZeroAddress, { value: depositAmount });
@@ -785,9 +776,7 @@ describe("Lido.sol:misc", () => {
         .to.emit(lido, "Unbuffered")
         .withArgs(amountToWithdraw)
         .and.to.emit(lido, "DepositedValidatorsChanged")
-        .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n)
-        .and.to.emit(lido, "DepositedPostReportUpdated")
-        .withArgs(beforeDeposit.balanceStats.depositedSinceLastReport + amountToWithdraw);
+        .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n);
 
       const afterDeposit = await batch({
         lidoBalance: ethers.provider.getBalance(lido),

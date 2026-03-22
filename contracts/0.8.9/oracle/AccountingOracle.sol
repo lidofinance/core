@@ -64,8 +64,6 @@ interface IStakingRouter {
     ) external;
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
-
-    function getTotalStakingModulesBalance() external view returns (uint256);
 }
 
 interface IWithdrawalQueue {
@@ -449,25 +447,9 @@ contract AccountingOracle is BaseOracle {
         result.extraDataItemsSubmitted = extraState.itemsProcessed;
     }
 
-    /// @notice Returns the number of frames skipped since the last processed report.
-    /// @dev Returns zero when the current frame is the same as, or the immediate successor of,
-    ///      the frame for which processing was last started.
-    function getRelativeFrameId() external view returns (uint256) {
-        IHashConsensus consensusContract = IHashConsensus(CONSENSUS_CONTRACT_POSITION.getStorageAddress());
-        (uint256 currentFrameRefSlot, ) = consensusContract.getCurrentFrame();
-        uint256 lastReportRefSlot = LAST_PROCESSING_REF_SLOT_POSITION.getStorageUint256();
-        if (currentFrameRefSlot <= lastReportRefSlot) {
-            return 0;
-        }
-        (uint256 slotsPerEpoch,,) = consensusContract.getChainConfig();
-        (, uint256 epochsPerFrame,) = consensusContract.getFrameConfig();
-
-        uint256 framesSinceLastReport = (currentFrameRefSlot - lastReportRefSlot) / (slotsPerEpoch * epochsPerFrame);
-        if (framesSinceLastReport == 0) {
-            return 0;
-        }
-
-        return framesSinceLastReport - 1;
+    function getCurrentFrame() external view returns (uint256 refSlot, uint256 refSlotTimestamp) {
+        refSlot = _getCurrentRefSlot();
+        refSlotTimestamp = _getSlotTimestamp(refSlot);
     }
 
     ///
@@ -552,13 +534,13 @@ contract AccountingOracle is BaseOracle {
 
         withdrawalQueue.onOracleReport(
             data.isBunkerMode,
-            GENESIS_TIME + prevRefSlot * SECONDS_PER_SLOT,
-            GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT
+            _getSlotTimestamp(prevRefSlot),
+            _getSlotTimestamp(data.refSlot)
         );
 
         IReportReceiver(LOCATOR.accounting()).handleOracleReport(
             ReportValues(
-                GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+                _getSlotTimestamp(data.refSlot),
                 timeElapsed,
                 data.clValidatorsBalanceGwei * 1e9,
                 data.clPendingBalanceGwei * 1e9,
@@ -571,7 +553,7 @@ contract AccountingOracle is BaseOracle {
         );
 
         ILazyOracle(LOCATOR.lazyOracle()).updateReportData(
-            GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+            _getSlotTimestamp(data.refSlot),
             data.refSlot,
             data.vaultsDataTreeRoot,
             data.vaultsDataTreeCid
@@ -586,6 +568,10 @@ contract AccountingOracle is BaseOracle {
             itemsProcessed: 0,
             lastSortingKey: 0
         });
+    }
+
+    function _getSlotTimestamp(uint256 slot) internal view returns (uint256) {
+        return GENESIS_TIME + (slot * SECONDS_PER_SLOT);
     }
 
     function _processStakingRouterExitedValidatorsByModule(
@@ -603,7 +589,7 @@ contract AccountingOracle is BaseOracle {
             return;
         }
 
-        for (uint256 i = 1; i < stakingModuleIds.length; ) {
+        for (uint256 i = 1; i < stakingModuleIds.length;) {
             if (stakingModuleIds[i] <= stakingModuleIds[i - 1]) {
                 revert InvalidExitedValidatorsData();
             }
@@ -612,7 +598,7 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
-        for (uint256 i = 0; i < stakingModuleIds.length; ) {
+        for (uint256 i = 0; i < stakingModuleIds.length;) {
             if (numExitedValidatorsByStakingModule[i] == 0) {
                 revert InvalidExitedValidatorsData();
             }
@@ -755,7 +741,7 @@ contract AccountingOracle is BaseOracle {
     ) internal view {
         // This check must run before `reportValidatorBalancesByStakingModule(...)` mutates the router state,
         // because it compares the report against the previous per-module validators/pending balances in StakingRouter.
-        (uint256 preCLValidatorsBalanceGwei, , ) = ILido(LOCATOR.lido()).getBalanceStats();
+        (uint256 preCLValidatorsBalanceGwei,,) = ILido(LOCATOR.lido()).getBalanceStats();
         sanityChecker.checkModuleAndCLBalancesChangeRates(
             data.stakingModuleIdsWithUpdatedBalance,
             data.validatorBalancesGweiByStakingModule,

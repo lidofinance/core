@@ -146,7 +146,7 @@ contract Accounting {
 
     /// @dev reads the current state of the protocol to the memory
     function _snapshotPreReportState(Contracts memory _contracts, bool isSimulation) internal view returns (PreReportState memory pre) {
-        (pre.clValidatorsBalance, pre.clPendingBalance, pre.depositedBalance) = LIDO.getBalanceStats();
+        (pre.clValidatorsBalance, pre.clPendingBalance,, pre.depositedBalance) = LIDO.getBalanceStats();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
