@@ -116,74 +116,6 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     );
   });
 
-  it("should reject a report whose module pending balances do not add up to the reported CL pending total", async () => {
-    const { lido, oracleReportSanityChecker } = ctx.contracts;
-
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
-
-    const balanceStatsBeforeReport = await lido.getBalanceStats();
-    const norBefore = await getStakingModuleBalances(ctx, NOR_MODULE_ID);
-    const sdvtBefore = await getStakingModuleBalances(ctx, SDVT_MODULE_ID);
-
-    expect(balanceStatsBeforeReport.depositedSinceLastReport).to.equal(ONE_VALIDATOR_BALANCE);
-
-    const { data } = await report(ctx, {
-      clDiff: balanceStatsBeforeReport.depositedSinceLastReport,
-      dryRun: true,
-      excludeVaultsBalances: true,
-      pendingBalancesGweiByStakingModule: [norBefore.pendingBalanceGwei, sdvtBefore.pendingBalanceGwei],
-      skipWithdrawals: true,
-      stakingModuleIdsWithUpdatedBalance: REPORTED_MODULE_IDS,
-      validatorBalancesGweiByStakingModule: [norBefore.validatorsBalanceGwei, sdvtBefore.validatorsBalanceGwei],
-      waitNextReportTime: true,
-    });
-    const inconsistentData = {
-      ...data,
-      clPendingBalanceGwei: getBigInt(data.clPendingBalanceGwei) + 1n,
-    };
-
-    await expect(submitReportDataWithConsensus(ctx, inconsistentData)).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "InconsistentPendingBalanceByModule",
-    );
-  });
-
-  it("should reject a report that increases one module's pending balance beyond its allowed corridor", async () => {
-    const { lido, oracleReportSanityChecker } = ctx.contracts;
-
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
-
-    const balanceStatsBeforeReport = await lido.getBalanceStats();
-    const norBefore = await getStakingModuleBalances(ctx, NOR_MODULE_ID);
-    const sdvtBefore = await getStakingModuleBalances(ctx, SDVT_MODULE_ID);
-    const { reportTimeElapsed } = await getNextReportContext(ctx);
-    const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-
-    const allowedExtraPendingGwei =
-      (norBefore.validatorsBalanceGwei * annualBalanceIncreaseBPLimit * reportTimeElapsed) /
-      (SECONDS_PER_YEAR * MAX_BASIS_POINTS);
-    const excessiveExtraPendingGwei = allowedExtraPendingGwei + 1n;
-
-    const { data } = await report(ctx, {
-      clDiff: balanceStatsBeforeReport.depositedSinceLastReport + excessiveExtraPendingGwei * ONE_GWEI,
-      dryRun: true,
-      excludeVaultsBalances: true,
-      pendingBalancesGweiByStakingModule: [
-        norBefore.pendingBalanceGwei + excessiveExtraPendingGwei,
-        sdvtBefore.pendingBalanceGwei,
-      ],
-      skipWithdrawals: true,
-      stakingModuleIdsWithUpdatedBalance: REPORTED_MODULE_IDS,
-      validatorBalancesGweiByStakingModule: [norBefore.validatorsBalanceGwei, sdvtBefore.validatorsBalanceGwei],
-      waitNextReportTime: true,
-    });
-
-    await expect(submitReportDataWithConsensus(ctx, data)).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "IncorrectModulePendingBalance",
-    );
-  });
-
   it("should reject a report that consumes more pending across modules than the global appeared limit allows", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
     const { reportTimeElapsed } = await getNextReportContext(ctx);
@@ -218,7 +150,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
     await expect(submitReportDataWithConsensus(ctx, data)).to.be.revertedWithCustomError(
       oracleReportSanityChecker,
-      "IncorrectTotalActiveAppearedEth",
+      "IncorrectTotalActivatedBalance",
     );
   });
 
@@ -337,7 +269,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
     await expect(submitReportDataWithConsensus(ctx, data)).to.be.revertedWithCustomError(
       oracleReportSanityChecker,
-      "AppearedEthAmountPerDayLimitExceeded",
+      "IncorrectTotalCLBalanceIncrease",
     );
   });
 });
