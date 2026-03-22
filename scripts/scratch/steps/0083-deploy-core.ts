@@ -379,16 +379,16 @@ export async function main() {
   // Deploy Consolidation Gateway
   //
 
+  const consolidationGatewayParams = state[Sk.consolidationGateway].deployParameters;
   const consolidationGateway_ = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
     admin,
     locator.address,
-    // ToDo: Replace dummy parameters with real ones
-    10, // maxConsolidationRequestsLimit,
-    1, // consolidationsPerFrame,
-    60, // frameDurationInSec
-    topUpGatewayParams.gIFirstValidatorPrev, // gIFirstValidatorPrev
-    topUpGatewayParams.gIFirstValidatorCurr, // gIFirstValidatorCurr
-    topUpGatewayParams.pivotSlot, // pivotSlot
+    consolidationGatewayParams.maxConsolidationRequestsLimit,
+    consolidationGatewayParams.consolidationsPerFrame,
+    consolidationGatewayParams.frameDurationInSec,
+    consolidationGatewayParams.gIFirstValidatorPrev,
+    consolidationGatewayParams.gIFirstValidatorCurr,
+    consolidationGatewayParams.pivotSlot,
   ]);
 
   const consolidationGateway = await loadContract<ConsolidationGateway>(

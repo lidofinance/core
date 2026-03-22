@@ -176,6 +176,9 @@ frameDurationInSec = 48               # Duration of each processing frame in sec
 maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 48               # Duration of each processing frame in seconds
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
+gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
+pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
 # Predeposit guarantee configuration for validator deposit guarantees
 [predepositGuarantee]

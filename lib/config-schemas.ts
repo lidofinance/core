@@ -84,6 +84,9 @@ const ConsolidationGatewaySchema = z.object({
   maxConsolidationRequestsLimit: PositiveIntSchema,
   consolidationsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
+  gIFirstValidatorPrev: HexStringSchema,
+  gIFirstValidatorCurr: HexStringSchema,
+  pivotSlot: NonNegativeIntSchema,
 });
 
 // Top-up gateway schema
