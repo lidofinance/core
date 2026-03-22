@@ -293,6 +293,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     function _migrateStorage_v3_to_v4() internal {
+        /// @dev prevent migration if the last oracle report wasn't submitted, otherwise deposits
+        ///      made after refSlot and before migration (and report's tx) will be lost
+        require(_isOracleMainDataSubmitted(), "NO_REPORT");
+
         /// @dev storage slots used in v3
         // keccak256("lido.Lido.clBalanceAndClValidators")
         bytes32 CL_BALANCE_AND_CL_VALIDATORS_POSITION =
@@ -730,7 +734,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev Depends on the bunker mode and protocol pause state
      */
     function canDeposit() public view returns (bool) {
-        return !_withdrawalQueue().isBunkerModeActive() && !isStopped() && _isOracleReportSubmitted();
+        return !_withdrawalQueue().isBunkerModeActive() && !isStopped() && _isOracleMainDataSubmitted();
     }
 
     /// @notice Check if the last oracle report was submitted
@@ -738,11 +742,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///      accounted for as part of `pendingDeposits`, which are then used in `sanityChecks` when processing
     ///      a new report, it is necessary to ensure that they remain unchanged from the beginning of a new
     ///      frame until a new report is received
-     function _isOracleReportSubmitted() internal view returns (bool isSubmitted) {
+     function _isOracleMainDataSubmitted() internal view returns (bool mainDataSubmitted) {
         IAccountingOracle oracle = IAccountingOracle(_getLidoLocator().accountingOracle());
         /// @dev get mainDataSubmitted flag from oracle processing state
-        (,,, isSubmitted,,,,,) = oracle.getProcessingState();
-        if (!isSubmitted) {
+        (,,, mainDataSubmitted,,,,,) = oracle.getProcessingState();
+        if (!mainDataSubmitted) {
             /// @dev allow deposits in case of initial deploy
             ///      this flow will not be triggered onchain in most cases, so
             ///      no worry about gas consumption on 2nd call
