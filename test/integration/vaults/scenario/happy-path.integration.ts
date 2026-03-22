@@ -21,6 +21,7 @@ import {
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 import {
   calculateLockedValue,
+  depositValidatorsWithoutReport,
   ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   getReportTimeElapsed,
@@ -118,6 +119,63 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // Use beacon balance to calculate the vault value
     return vault101Balance + stakingVaultCLBalance;
+  }
+
+  async function seedProtocolPendingBaselineForAprReport() {
+    const { lido, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
+
+    const grossProtocolRewardBP = (TARGET_APR * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - PROTOCOL_FEE);
+    // The APR scenario is still meant to model protocol CL rewards. Under the new
+    // sanity path those rewards must be backed by protocol pending, so derive the
+    // minimal pending baseline from the live cap formula instead of guessing a seed.
+    const pendingBalanceRequiredForApr =
+      (grossProtocolRewardBP * (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) +
+        (annualBalanceIncreaseBPLimit - grossProtocolRewardBP) -
+        1n) /
+      (annualBalanceIncreaseBPLimit - grossProtocolRewardBP);
+    const pendingValidatorsRequired = (pendingBalanceRequiredForApr + ether("32") - 1n) / ether("32");
+    const pendingSeedAmount = pendingValidatorsRequired * ether("32");
+    const norPendingValidators = await stakingRouter.getStakingModuleMaxDepositsCount(1n, pendingSeedAmount);
+    const norPendingValidatorsToDeposit =
+      norPendingValidators < pendingValidatorsRequired ? norPendingValidators : pendingValidatorsRequired;
+
+    if (norPendingValidatorsToDeposit > 0n) {
+      await depositValidatorsWithoutReport(ctx, 1n, norPendingValidatorsToDeposit);
+    }
+
+    const remainingPendingValidators = pendingValidatorsRequired - norPendingValidatorsToDeposit;
+    if (remainingPendingValidators > 0n) {
+      await depositValidatorsWithoutReport(ctx, 2n, remainingPendingValidators);
+    }
+
+    const { depositedSinceLastReport } = await lido.getBalanceStats();
+    const stakingModuleIds = await stakingRouter.getStakingModuleIds();
+    const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
+    const validatorBalancesGweiByStakingModule: bigint[] = [];
+    const pendingBalancesGweiByStakingModule: bigint[] = [];
+
+    for (const moduleId of stakingModuleIds) {
+      const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+      if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
+
+      stakingModuleIdsWithUpdatedBalance.push(moduleId);
+      validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
+      pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
+    }
+
+    // Snapshot the freshly created pending balance into Lido's previous report state
+    // before sending the APR-bearing report. This preserves the original APR intent
+    // and avoids weakening the scenario into a neutral report.
+    await report(ctx, {
+      clDiff: depositedSinceLastReport,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+      stakingModuleIdsWithUpdatedBalance,
+      validatorBalancesGweiByStakingModule,
+      pendingBalancesGweiByStakingModule,
+    });
   }
 
   it("Should have vaults factory deployed and adopted by DAO", async () => {
@@ -319,6 +377,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should rebase simulating 3% stETH APR", async () => {
     const { vaultHub } = ctx.contracts;
 
+    await seedProtocolPendingBaselineForAprReport();
+
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward);
 
@@ -378,14 +438,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await lido.connect(owner).approve(dashboard, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
     await dashboard.connect(owner).burnShares(stakingVaultMaxMintingShares);
 
-    const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
+    const { elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value after validator exit
 
     const params = {
-      clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
     } as OracleReportParams;
 
+    // This test is about burn -> zero liability shares on the next vault report, not
+    // about a protocol CL reward. Keep the follow-up report neutral so we don't add
+    // an unrelated pending-backed APR setup to a burn-flow assertion.
     await report(ctx, params);
 
     await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });
