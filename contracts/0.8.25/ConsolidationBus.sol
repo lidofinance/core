@@ -215,6 +215,9 @@ contract ConsolidationBus is AccessControlEnumerable {
      * @notice Sets the execution delay in seconds between adding and executing a batch
      * @param delay New execution delay in seconds (0 means no delay)
      * @dev Reverts if caller does not have MANAGE_ROLE
+     * @dev The execution delay is not snapshotted per batch
+     *      Changes to this parameter apply retroactively to all pending batches
+     *      MANAGE_ROLE holders are trusted
      */
     function setExecutionDelay(uint256 delay) external onlyRole(MANAGE_ROLE) {
         _setExecutionDelay(delay);
