@@ -253,6 +253,41 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     ).to.be.revertedWithCustomError(consolidationGateway, "LidoDepositsPaused");
   });
 
+  it("should revert with RootNotFound when validator witness beacon root is missing", async () => {
+    await expect(
+      consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
+        [[PUBKEYS[0]]],
+        [
+          {
+            ...validWitnesses[0],
+            childBlockTimestamp: validWitnesses[0].childBlockTimestamp + 1,
+          },
+        ],
+        ZERO_ADDRESS,
+        { value: 2 },
+      ),
+    ).to.be.revertedWithCustomError(consolidationGateway, "RootNotFound");
+  });
+
+  it("should revert with InvalidProof when validator witness proof is malformed", async () => {
+    await expect(
+      consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
+        [[PUBKEYS[0]]],
+        [
+          {
+            ...validWitnesses[0],
+            proof: [
+              "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+              ...validWitnesses[0].proof.slice(1),
+            ],
+          },
+        ],
+        ZERO_ADDRESS,
+        { value: 2 },
+      ),
+    ).to.be.reverted;
+  });
+
   it("should not revert when DSM deposits are not paused and Lido deposits are enabled", async () => {
     await dsm.mock__setDepositsPaused(false);
     await lido.mock__setCanDeposit(true);
@@ -395,6 +430,54 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
     const newBalance = await ethers.provider.getBalance(SENDER_ADDR);
     expect(newBalance).to.equal(prevBalance - gasUsed - 1n);
+  });
+
+  it("should revert with FeeRefundFailed if refund recipient refuses ETH", async () => {
+    const refundReverter = await ethers.deployContract("RefundReverter");
+
+    await expect(
+      consolidationGateway
+        .connect(authorizedEntity)
+        .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], await refundReverter.getAddress(), {
+          value: 2,
+        }),
+    ).to.be.revertedWithCustomError(consolidationGateway, "FeeRefundFailed");
+  });
+
+  it("should use the current consolidation fee for insufficient fee checks", async () => {
+    await withdrawalVault.mock__setFee(3);
+
+    await expect(
+      consolidationGateway
+        .connect(authorizedEntity)
+        .addConsolidationRequests([[PUBKEYS[0], PUBKEYS[1]]], [validWitnesses[0]], ZERO_ADDRESS, {
+          value: 5,
+        }),
+    )
+      .to.be.revertedWithCustomError(consolidationGateway, "InsufficientFee")
+      .withArgs(6, 5);
+  });
+
+  it("should forward the configured consolidation fee and refund the remainder", async () => {
+    await withdrawalVault.mock__setFee(4);
+
+    const withdrawalVaultBalanceBefore = await ethers.provider.getBalance(withdrawalVault);
+    const recipientBalanceBefore = await ethers.provider.getBalance(stranger);
+
+    await consolidationGateway
+      .connect(authorizedEntity)
+      .addConsolidationRequests(
+        [[PUBKEYS[0], PUBKEYS[1]], [PUBKEYS[2]]],
+        [validWitnesses[0], validWitnesses[1]],
+        stranger,
+        { value: 15 },
+      );
+
+    const withdrawalVaultBalanceAfter = await ethers.provider.getBalance(withdrawalVault);
+    const recipientBalanceAfter = await ethers.provider.getBalance(stranger);
+
+    expect(withdrawalVaultBalanceAfter).to.equal(withdrawalVaultBalanceBefore + 12n);
+    expect(recipientBalanceAfter).to.equal(recipientBalanceBefore + 3n);
   });
 
   it("preserves eth balance when calling addConsolidationRequests", async () => {
