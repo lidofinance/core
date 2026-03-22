@@ -230,6 +230,27 @@ describe("ConsolidationBus.sol: publisher", () => {
         .withArgs(1);
     });
 
+    it("should revert if target pubkey length is not 48 bytes", async () => {
+      const invalidTargetPubkey = "0x1234";
+      const sourcePubkeysGroups = [[PUBKEYS[0]]];
+
+      await expect(
+        consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, [invalidTargetPubkey]),
+      )
+        .to.be.revertedWithCustomError(consolidationBus, "InvalidTargetPubkeyLength")
+        .withArgs(0, 2);
+    });
+
+    it("should revert if source pubkey length is not 48 bytes", async () => {
+      const invalidSourcePubkey = "0x1234";
+      const sourcePubkeysGroups = [[invalidSourcePubkey]];
+      const targetPubkeys = [PUBKEYS[1]];
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+        .to.be.revertedWithCustomError(consolidationBus, "InvalidSourcePubkeyLength")
+        .withArgs(0, 0, 2);
+    });
+
     it("should allow different publishers to add different batches", async () => {
       // Register another publisher
       const [, , , , publisher2] = await ethers.getSigners();

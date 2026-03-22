@@ -28,6 +28,8 @@ interface IConsolidationGateway {
  * 4. Optional REMOVE_ROLE can remove batches from the pending queue
  */
 contract ConsolidationBus is AccessControlEnumerable {
+    uint256 internal constant PUBKEY_LENGTH = 48;
+
     /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
@@ -95,6 +97,21 @@ contract ConsolidationBus is AccessControlEnumerable {
      * @param index Index of the invalid pair in the batch
      */
     error SourceEqualsTarget(uint256 index);
+
+    /**
+     * @notice Thrown when target pubkey length is invalid
+     * @param groupIndex Index of the group with invalid target pubkey
+     * @param length Actual pubkey length in bytes
+     */
+    error InvalidTargetPubkeyLength(uint256 groupIndex, uint256 length);
+
+    /**
+     * @notice Thrown when source pubkey length is invalid
+     * @param groupIndex Index of the group with invalid source pubkey
+     * @param sourceIndex Index of the source pubkey inside the group
+     * @param length Actual pubkey length in bytes
+     */
+    error InvalidSourcePubkeyLength(uint256 groupIndex, uint256 sourceIndex, uint256 length);
 
     /**
      * @notice Thrown when attempting to execute a batch before the execution delay has passed
@@ -280,6 +297,7 @@ contract ConsolidationBus is AccessControlEnumerable {
      *      - Batch is empty
      *      - Any group is empty
      *      - Total batch size exceeds limit
+     *      - Any source or target pubkey length is not 48 bytes
      *      - Any source pubkey equals its corresponding target pubkey
      *      - Batch already exists
      */
@@ -305,10 +323,20 @@ contract ConsolidationBus is AccessControlEnumerable {
         if (totalCount > limit) revert BatchTooLarge(totalCount, limit);
 
         for (uint256 i = 0; i < groupsCount; ++i) {
-            bytes32 targetHash = keccak256(targetPubkeys[i]);
+            bytes calldata targetPubkey = targetPubkeys[i];
+            if (targetPubkey.length != PUBKEY_LENGTH) {
+                revert InvalidTargetPubkeyLength(i, targetPubkey.length);
+            }
+
+            bytes32 targetHash = keccak256(targetPubkey);
             bytes[] calldata group = sourcePubkeysGroups[i];
             for (uint256 j = 0; j < group.length; ++j) {
-                if (keccak256(group[j]) == targetHash) {
+                bytes calldata sourcePubkey = group[j];
+                if (sourcePubkey.length != PUBKEY_LENGTH) {
+                    revert InvalidSourcePubkeyLength(i, j, sourcePubkey.length);
+                }
+
+                if (keccak256(sourcePubkey) == targetHash) {
                     revert SourceEqualsTarget(i);
                 }
             }
