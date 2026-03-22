@@ -18,10 +18,11 @@ import {
   RewardDistributionState,
   setAnnualBalanceIncreaseLimit,
 } from "lib";
-import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, report, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
 import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
+import { depositValidatorsWithoutReport } from "lib/protocol/helpers/staking";
 import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
@@ -143,7 +144,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
     csmExitedItems: number;
   }) {
     return async () => {
-      const { accountingOracle, nor, sdvt, csm } = ctx.contracts;
+      const { accountingOracle, lido, nor, sdvt, csm, stakingRouter } = ctx.contracts;
 
       const modules = [
         { moduleId: NOR_MODULE_ID, module: nor },
@@ -238,19 +239,51 @@ describe("Integration: AccountingOracle extra data full items", () => {
         );
       }
 
+      // This suite also relies on the reward-bearing main report to enter
+      // TransferredToModule before extra-data finalization. Seed one validator
+      // into protocol pending first so the new sanity path accepts that reward.
+      await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
+
+      const { depositedSinceLastReport } = await lido.getBalanceStats();
+      const stakingModuleIds = await stakingRouter.getStakingModuleIds();
+      const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
+      const validatorBalancesGweiByStakingModule: bigint[] = [];
+      const pendingBalancesGweiByStakingModule: bigint[] = [];
+
+      for (const moduleId of stakingModuleIds) {
+        const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+        if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
+
+        stakingModuleIdsWithUpdatedBalance.push(moduleId);
+        validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
+        pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
+      }
+
+      // Snapshot protocol pending into the previous report before replaying the
+      // original reward-bearing main report. The goal is to preserve the module
+      // state machine, not to replace it with a neutral path.
+      await report(ctx, {
+        clDiff: depositedSinceLastReport,
+        excludeVaultsBalances: true,
+        skipWithdrawals: true,
+        stakingModuleIdsWithUpdatedBalance,
+        validatorBalancesGweiByStakingModule,
+        pendingBalancesGweiByStakingModule,
+      });
+
+      // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
+      // safety cap enough elapsed time after snapshotting the pending baseline.
+      await advanceChainTime(15n * 24n * 60n * 60n);
+
       const { submitter, extraDataChunks } = await reportWithoutExtraData(
         ctx,
         numExitedValidatorsByStakingModule,
         modulesWithExited,
         extraData,
         {
-          // This scenario expects the main report to mint module rewards and move modules to
-          // TransferredToModule before extra data processing starts.
-          //
-          // Historically reportWithoutExtraData() inherited report()'s default clDiff=ether("0.01"),
-          // so these tests got a small implicit positive rebase. After the pending-deposits sanity
-          // check refactor, report() defaults to clDiff=depositedSinceLastReport instead, which makes
-          // this report path neutral here. Keep a small explicit positive delta to force onRewardsMinted().
+          // Snapshot protocol pending into the previous report first, then run the original
+          // reward-bearing main report so this suite still exercises
+          // TransferredToModule -> ReadyForDistribution -> Distributed.
           effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
         },
       );

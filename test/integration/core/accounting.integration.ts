@@ -6,7 +6,15 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
-import { getProtocolContext, getReportTimeElapsed, ProtocolContext, removeStakingLimit, report } from "lib/protocol";
+import {
+  depositValidatorsWithoutReport,
+  getProtocolContext,
+  getReportTimeElapsed,
+  ProtocolContext,
+  removeStakingLimit,
+  report,
+} from "lib/protocol";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
@@ -263,7 +271,7 @@ describe("Integration: Accounting", () => {
         reportBurner: false,
         skipWithdrawals: true,
       }),
-    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease");
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
   });
 
   it("Should account correctly with no CL rebase", async () => {
@@ -396,24 +404,43 @@ describe("Integration: Accounting", () => {
   });
 
   it("Should account correctly with positive CL rebase close to the limits", async () => {
-    const { lido, oracleReportSanityChecker } = ctx.contracts;
+    const { lido, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
+
+    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
+
+    const { depositedSinceLastReport } = await lido.getBalanceStats();
+    const stakingModuleIds = await stakingRouter.getStakingModuleIds();
+    const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
+    const validatorBalancesGweiByStakingModule: bigint[] = [];
+    const pendingBalancesGweiByStakingModule: bigint[] = [];
+
+    for (const moduleId of stakingModuleIds) {
+      const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+      if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
+
+      stakingModuleIdsWithUpdatedBalance.push(moduleId);
+      validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
+      pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
+    }
+
+    await report(ctx, {
+      clDiff: depositedSinceLastReport,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+      stakingModuleIdsWithUpdatedBalance,
+      validatorBalancesGweiByStakingModule,
+      pendingBalancesGweiByStakingModule,
+    });
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
-    const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
+    const { clPendingBalanceAtLastReport } = await lido.getBalanceStats();
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
-    // To calculate the rebase amount close to the annual increase limit
-    // we use (ONE_DAY + 1n) to slightly underperform for the daily limit
-    // This ensures we're testing a scenario very close to, but not exceeding, the annual limit
-    const time = timeElapsed + 1n;
-    let rebaseAmount = (clBalance * annualBalanceIncreaseBPLimit * time) / (365n * ONE_DAY) / MAX_BASIS_POINTS;
+    let rebaseAmount =
+      (clPendingBalanceAtLastReport * annualBalanceIncreaseBPLimit * timeElapsed) / (365n * ONE_DAY) / MAX_BASIS_POINTS;
     rebaseAmount = roundToGwei(rebaseAmount);
 
-    // At this point, rebaseAmount represents a positive CL rebase that is
-    // just slightly below the maximum allowed daily increase, testing the system's
-    // behavior near its operational limits
     const beforeState = await readState();
 
     // Report
