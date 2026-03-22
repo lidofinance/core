@@ -180,6 +180,16 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
+[consolidationBus]
+initialBatchSize = 350                # Max number of requests in a batch
+initialMaxGroupsInBatch = 10          # Max source groups in a batch
+initialExecutionDelay = 0             # Delay before pending batch execution
+
+[consolidationMigrator]
+sourceModuleId = 1                    # Source staking module ID
+targetModuleId = 1                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
+
+
 # Predeposit guarantee configuration for validator deposit guarantees
 [predepositGuarantee]
 gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification

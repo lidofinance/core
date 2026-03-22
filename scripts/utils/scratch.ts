@@ -118,6 +118,12 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     consolidationGateway: {
       deployParameters: params.consolidationGateway,
     },
+    consolidationBus: {
+      deployParameters: params.consolidationBus,
+    },
+    consolidationMigrator: {
+      deployParameters: params.consolidationMigrator,
+    },
     predepositGuarantee: {
       deployParameters: params.predepositGuarantee,
     },

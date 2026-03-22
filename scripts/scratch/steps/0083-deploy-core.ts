@@ -400,12 +400,13 @@ export async function main() {
   // Deploy Consolidation Bus
   //
 
+  const consolidationBusParams = state[Sk.consolidationBus].deployParameters;
   const consolidationBus_ = await deployWithoutProxy(Sk.consolidationBus, "ConsolidationBus", deployer, [
     admin,
     consolidationGateway_.address,
-    350, // initialBatchSize
-    10, // initialMaxGroupsInBatch
-    0, // initialExecutionDelay
+    consolidationBusParams.initialBatchSize,
+    consolidationBusParams.initialMaxGroupsInBatch,
+    consolidationBusParams.initialExecutionDelay,
   ]);
 
   const consolidationBus = await loadContract<ConsolidationBus>("ConsolidationBus", consolidationBus_.address);
@@ -432,18 +433,14 @@ export async function main() {
   //
   // Deploy Consolidation Migrator
   //
-  // Note: Uses NOR module ID (1) for both source and target for testing purposes.
-  // The actual module IDs will be set after StakingRouter has modules registered (step 0140).
-  // For scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-
-  const NOR_MODULE_ID = 1;
+  const consolidationMigratorParams = state[Sk.consolidationMigrator].deployParameters;
 
   const consolidationMigrator_ = await deployWithoutProxy(Sk.consolidationMigrator, "ConsolidationMigrator", deployer, [
     admin,
     stakingRouter_.address,
     consolidationBus_.address,
-    NOR_MODULE_ID, // sourceModuleId
-    NOR_MODULE_ID, // targetModuleId (same module for testing)
+    consolidationMigratorParams.sourceModuleId,
+    consolidationMigratorParams.targetModuleId,
   ]);
 
   const consolidationMigrator = await loadContract<ConsolidationMigrator>(
