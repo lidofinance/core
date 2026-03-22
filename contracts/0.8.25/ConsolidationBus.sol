@@ -302,6 +302,7 @@ contract ConsolidationBus is AccessControlEnumerable {
      * @param sourcePubkeysGroups Array of groups, where each group is an array of 48-byte source validator public keys
      *        consolidating to the corresponding target
      * @param targetPubkeys Array of 48-byte target validator public keys, one per group
+     * @dev The same batch can be submitted again after it has been executed.
      * @dev Reverts if:
      *      - Caller does not have PUBLISH_ROLE
      *      - Arrays have different lengths
