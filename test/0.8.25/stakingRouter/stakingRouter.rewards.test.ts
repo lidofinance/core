@@ -1,18 +1,19 @@
 import { expect } from "chai";
-import { randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { LidoLocator, StakingModule__MockForStakingRouter, StakingRouter__Harness } from "typechain-types";
+import { LidoLocator, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, randomWCType1, wcTypeMaxEB } from "lib";
-import { StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
+import { certainAddress, ether, randomWCType1 } from "lib";
+import { StakingModuleStatus, WithdrawalCredentialsType } from "lib/constants";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter";
+
+import { CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers";
 
 describe("StakingRouter.sol:rewards", () => {
   let deployer: HardhatEthersSigner;
@@ -23,16 +24,9 @@ describe("StakingRouter.sol:rewards", () => {
 
   let originalState: string;
 
+  let ctx: CtxConfig;
+
   const DEPOSIT_VALUE = ether("32.0");
-  const DEFAULT_CONFIG: ModuleConfig = {
-    stakeShareLimit: TOTAL_BASIS_POINTS,
-    priorityExitShareThreshold: TOTAL_BASIS_POINTS,
-    moduleFee: 5_00n,
-    treasuryFee: 5_00n,
-    maxDepositsPerBlock: 150n,
-    minDepositBlockDistance: 25n,
-    withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
-  };
 
   const withdrawalCredentials = randomWCType1();
   const lido = certainAddress("test:staking-router-modules:lido"); // mock lido address
@@ -57,6 +51,12 @@ describe("StakingRouter.sol:rewards", () => {
     // grant roles
 
     await Promise.all([stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin)]);
+
+    ctx = {
+      deployer,
+      admin,
+      stakingRouter,
+    };
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -79,7 +79,7 @@ describe("StakingRouter.sol:rewards", () => {
         depositable: 100n,
       };
 
-      const [, id] = await setupModule(config);
+      const [, id] = await setupModule(ctx, config);
 
       expect(await stakingRouter.getStakingModuleMaxDepositsCount(id, maxDeposits * DEPOSIT_VALUE)).to.equal(
         config.depositable,
@@ -95,7 +95,7 @@ describe("StakingRouter.sol:rewards", () => {
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       };
 
-      const [, id] = await setupModule(config);
+      const [, id] = await setupModule(ctx, config);
 
       expect(await stakingRouter.getStakingModuleMaxDepositsCount(id, maxDeposits * DEPOSIT_VALUE)).to.equal(
         config.depositable,
@@ -110,8 +110,8 @@ describe("StakingRouter.sol:rewards", () => {
         depositable: 150n,
       };
 
-      const [, id] = await setupModule(config);
-      await setupModule({ ...config, status: StakingModuleStatus.DepositsPaused });
+      const [, id] = await setupModule(ctx, config);
+      await setupModule(ctx, { ...config, status: StakingModuleStatus.DepositsPaused });
 
       expect(await stakingRouter.getStakingModuleMaxDepositsCount(id, depositableEther)).to.equal(100n);
     });
@@ -125,8 +125,8 @@ describe("StakingRouter.sol:rewards", () => {
         depositable: 50n,
       };
 
-      const [, id1] = await setupModule(config);
-      const [, id2] = await setupModule(config);
+      const [, id1] = await setupModule(ctx, config);
+      const [, id2] = await setupModule(ctx, config);
 
       expect(await stakingRouter.getStakingModuleMaxDepositsCount(id1, maxDeposits * DEPOSIT_VALUE)).to.equal(
         config.depositable,
@@ -149,7 +149,7 @@ describe("StakingRouter.sol:rewards", () => {
     });
 
     it("Returns empty values if there are modules but no active validators", async () => {
-      await setupModule(DEFAULT_CONFIG);
+      await setupModule(ctx, DEFAULT_CONFIG);
 
       expect(await stakingRouter.getStakingRewardsDistribution()).to.deep.equal([
         [],
@@ -166,7 +166,7 @@ describe("StakingRouter.sol:rewards", () => {
         deposited: 1000n,
       };
 
-      const [module, id] = await setupModule(config);
+      const [module, id] = await setupModule(ctx, config);
 
       const precision = await stakingRouter.FEE_PRECISION_POINTS();
       const basisPoints = await stakingRouter.TOTAL_BASIS_POINTS();
@@ -189,8 +189,8 @@ describe("StakingRouter.sol:rewards", () => {
         deposited: 1000n,
       };
 
-      const [module1, id1] = await setupModule(config);
-      const [module2, id2] = await setupModule(config);
+      const [module1, id1] = await setupModule(ctx, config);
+      const [module2, id2] = await setupModule(ctx, config);
 
       const precision = await stakingRouter.FEE_PRECISION_POINTS();
       const basisPoints = await stakingRouter.TOTAL_BASIS_POINTS();
@@ -224,8 +224,8 @@ describe("StakingRouter.sol:rewards", () => {
         deposited: 0n,
       };
 
-      const [module1, id1] = await setupModule(module1Config);
-      await setupModule(module2Config);
+      const [module1, id1] = await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       const precision = await stakingRouter.FEE_PRECISION_POINTS();
       const basisPoints = await stakingRouter.TOTAL_BASIS_POINTS();
@@ -250,7 +250,7 @@ describe("StakingRouter.sol:rewards", () => {
         status: StakingModuleStatus.Stopped,
       };
 
-      const [module, id] = await setupModule(config);
+      const [module, id] = await setupModule(ctx, config);
 
       const precision = await stakingRouter.FEE_PRECISION_POINTS();
       const basisPoints = await stakingRouter.TOTAL_BASIS_POINTS();
@@ -284,8 +284,8 @@ describe("StakingRouter.sol:rewards", () => {
         deposited: 1000n,
       };
 
-      const [module1, id1] = await setupModule(module1Config);
-      const [module2, id2] = await setupModule(module2Config);
+      const [module1, id1] = await setupModule(ctx, module1Config);
+      const [module2, id2] = await setupModule(ctx, module2Config);
 
       const precision = await stakingRouter.FEE_PRECISION_POINTS();
       const basisPoints = await stakingRouter.TOTAL_BASIS_POINTS();
@@ -335,8 +335,8 @@ describe("StakingRouter.sol:rewards", () => {
         deposited: 1000n,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       const precision = await stakingRouter.FEE_PRECISION_POINTS();
 
@@ -372,8 +372,8 @@ describe("StakingRouter.sol:rewards", () => {
         deposited: 1000n,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       expect(await stakingRouter.getStakingFeeAggregateDistributionE4Precision()).to.deep.equal([500n, 500n]);
     });
@@ -394,71 +394,9 @@ describe("StakingRouter.sol:rewards", () => {
         deposited: 1000n,
       };
 
-      await setupModule(module1Config);
+      await setupModule(ctx, module1Config);
 
       expect(await stakingRouter.getTotalFeeE4Precision()).to.equal(10_00n);
     });
   });
-
-  async function setupModule({
-    stakeShareLimit,
-    priorityExitShareThreshold,
-    moduleFee,
-    treasuryFee,
-    maxDepositsPerBlock,
-    minDepositBlockDistance,
-    exited = 0n,
-    deposited = 0n,
-    depositable = 0n,
-    status = StakingModuleStatus.Active,
-    withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
-    validatorsBalanceGwei = 0n,
-  }: ModuleConfig): Promise<[StakingModule__MockForStakingRouter, bigint]> {
-    const modulesCount = await stakingRouter.getStakingModulesCount();
-    const module = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
-
-    const stakingModuleConfig = {
-      stakeShareLimit,
-      priorityExitShareThreshold,
-      stakingModuleFee: moduleFee,
-      treasuryFee,
-      maxDepositsPerBlock,
-      minDepositBlockDistance,
-      withdrawalCredentialsType,
-    };
-
-    await stakingRouter
-      .connect(admin)
-      .addStakingModule(randomBytes(8).toString(), await module.getAddress(), stakingModuleConfig);
-
-    const moduleId = modulesCount + 1n;
-    expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
-
-    await module.mock__getStakingModuleSummary(exited, deposited, depositable);
-    if (validatorsBalanceGwei == 0n && deposited > 0n) {
-      validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
-    }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, exited);
-
-    if (status != StakingModuleStatus.Active) {
-      await stakingRouter.setStakingModuleStatus(moduleId, status);
-    }
-
-    return [module, moduleId];
-  }
 });
-
-interface ModuleConfig {
-  stakeShareLimit: bigint;
-  priorityExitShareThreshold: bigint;
-  moduleFee: bigint;
-  treasuryFee: bigint;
-  maxDepositsPerBlock: bigint;
-  minDepositBlockDistance: bigint;
-  withdrawalCredentialsType: WithdrawalCredentialsType;
-  exited?: bigint;
-  deposited?: bigint;
-  depositable?: bigint;
-  status?: StakingModuleStatus;
-  validatorsBalanceGwei?: bigint;
-}

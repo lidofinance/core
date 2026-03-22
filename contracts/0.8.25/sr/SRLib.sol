@@ -354,7 +354,7 @@ library SRLib {
         // If no deposits to allocate, return current state
         if (depositsToAllocate > 0) {
             // Use MinFirstAllocationStrategy to allocate deposits
-            /// @dev due to library is external, the `allocated` array is not modified
+            /// @dev due to library is external, the `allocated` array is not mutated
             (totalAllocated, newAllocations) =
                 MinFirstAllocationStrategy.allocate(allocated, capacities, depositsToAllocate);
             // Convert allocated validators and allocations per module back to Ether amounts

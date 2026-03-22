@@ -338,7 +338,13 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
         exitDeadlineThreshold__mocked = _threshold;
     }
 
+    uint256 private totalModuleStake_mocked;
+
     function getTotalModuleStake() external view returns (uint256) {
-        return 1000000000000000000;
+        return totalModuleStake_mocked;
+    }
+
+    function mock__getTotalModuleStake(uint256 _totalModuleStake) external {
+        totalModuleStake_mocked = _totalModuleStake;
     }
 }

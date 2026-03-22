@@ -126,15 +126,21 @@ describe("OracleReportSanityChecker.sol", () => {
 
   const deployCheckerWithLidoStats = async (
     contractVersion: bigint,
-    balanceStats: { clActive: bigint; clPending: bigint; deposits: bigint } = {
+    balanceStats: { clActive: bigint; clPending: bigint; deposits: bigint; depositsCurrent: bigint } = {
       clActive: ether("100"),
       clPending: ether("7"),
       deposits: ether("3"),
+      depositsCurrent: ether("3"),
     },
   ) => {
     const lido = await ethers.deployContract("Lido__MockForSanityChecker");
     await lido.mock__setContractVersion(contractVersion);
-    await lido.mock__setBalanceStats(balanceStats.clActive, balanceStats.clPending, balanceStats.deposits);
+    await lido.mock__setBalanceStats(
+      balanceStats.clActive,
+      balanceStats.clPending,
+      balanceStats.deposits,
+      balanceStats.depositsCurrent,
+    );
 
     const migrationLocator = await ethers.deployContract("LidoLocator__MockForSanityChecker", [
       {
@@ -1797,12 +1803,14 @@ describe("OracleReportSanityChecker.sol", () => {
     it("uses migrated bootstrap flows in first CL decrease window check", async () => {
       const migratedCLBalance = ether("107000");
       const migrationDeposits = ether("3");
+      const migrationDepositsCur = ether("3");
       const reportDecrease = ether("2500");
 
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n, {
         clActive: ether("100000"),
         clPending: ether("7000"),
         deposits: migrationDeposits,
+        depositsCurrent: migrationDepositsCur,
       });
 
       await migrationChecker.connect(admin).grantRole(await migrationChecker.MIGRATION_MANAGER_ROLE(), manager.address);

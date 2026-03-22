@@ -210,7 +210,6 @@ describe("StakingRouter.sol:module-management", () => {
         MIN_DEPOSIT_BLOCK_DISTANCE,
         WithdrawalCredentialsType.WC0x01,
         0,
-        0,
       ]);
     });
   });

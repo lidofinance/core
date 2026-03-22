@@ -10,7 +10,6 @@ import {
   Lido__MockForStakingRouter,
   LidoLocator,
   StakingModule__MockForStakingRouter,
-  StakingModuleV2__MockForStakingRouter,
   StakingRouter__Harness,
 } from "typechain-types";
 import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
@@ -145,7 +144,7 @@ describe("StakingRouter.sol:module-sync", () => {
       bigint,
       bigint,
       number,
-      bigint
+      bigint,
     ];
 
     // module mock state
@@ -202,7 +201,7 @@ describe("StakingRouter.sol:module-sync", () => {
         maxDepositsPerBlock,
         minDepositBlockDistance,
         WithdrawalCredentialsType.WC0x01,
-        balance
+        balance,
       ];
 
       // mocking module state

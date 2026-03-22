@@ -673,28 +673,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             && _stakingModuleId.getModuleState().config.status == StakingModuleStatus.Active;
     }
 
-    /// @notice get mainDataSubmitted and extraDataSubmitted flags from oracle processing state
-    /// @dev simulates submitted report in case of initial deploy
-    function _getOracleProcessingState() internal view returns (bool mainDataSubmitted, bool extraDataSubmitted) {
-        IAccountingOracle oracle = IAccountingOracle(_getAccountingOracle());
-        (,,, mainDataSubmitted,,, extraDataSubmitted,,) = oracle.getProcessingState();
-        if (!mainDataSubmitted) {
-            /// @dev allow deposits in case of initial deploy
-            ///      this flow will not be triggered onchain in most cases, so
-            ///      no worry about gas consumption on 2nd call
-            if (oracle.getLastProcessingRefSlot() == 0) {
-                return (true, true);
-            }
-        }
-    }
-
-    function _getOracleFrameId() internal view returns (uint64) {
-        IAccountingOracle oracle = IAccountingOracle(_getAccountingOracle());
-        uint256 frameId = oracle.getRelativeFrameId();
-        /// @dev due to nature of relative id, its safe to cast to uint64
-        return uint64(frameId);
-    }
-
     /**
      * @notice A payable function for depositable eth acquisition. Can be called only by `Lido`
      */

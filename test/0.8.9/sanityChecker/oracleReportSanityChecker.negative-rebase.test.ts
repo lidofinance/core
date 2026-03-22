@@ -1149,8 +1149,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       const clActive = ether("10000000");
       const clPending = ether("500000");
       const deposits = ether("320000");
+      const depositsCur = ether("320000");
       await lido.mock__setContractVersion(4);
-      await lido.mock__setBalanceStats(clActive, clPending, deposits);
+      await lido.mock__setBalanceStats(clActive, clPending, deposits, depositsCur);
 
       const expectedCLBalance = clActive + clPending;
 
@@ -1178,7 +1179,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await checker.grantRole(role, deployer.address);
 
       await lido.mock__setContractVersion(4);
-      await lido.mock__setBalanceStats(ether("10000000"), ether("500000"), ether("320000"));
+      await lido.mock__setBalanceStats(ether("10000000"), ether("500000"), ether("320000"), ether("320000"));
 
       await checker.migrateBaselineSnapshot();
       await expect(checker.migrateBaselineSnapshot()).to.be.revertedWithCustomError(checker, "MigrationAlreadyDone");
@@ -1191,8 +1192,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       const clActive = ether("10000000");
       const clPending = ether("500000");
       const migrationDeposits = ether("320000");
+      const migrationDepositsCur = ether("320000");
       await lido.mock__setContractVersion(4);
-      await lido.mock__setBalanceStats(clActive, clPending, migrationDeposits);
+      await lido.mock__setBalanceStats(clActive, clPending, migrationDeposits, migrationDepositsCur);
 
       await checker.migrateBaselineSnapshot();
 

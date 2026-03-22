@@ -138,14 +138,6 @@ describe("StakingRouter.sol:misc", () => {
       await expect(impl.finalizeUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
     });
 
-    it("revert migration if oracle extra data was not submitted yet", async () => {
-      await accountingOracle.mock_setProcessingState(1, true, false);
-      await expect(stakingRouter.finalizeUpgrade_v4()).to.be.revertedWithCustomError(
-        stakingRouter,
-        "OracleExtraDataNotSubmitted",
-      );
-    });
-
     it("sets correct contract version, withdrawal credentials and admin role", async () => {
       // OZ Initializable slot is 0 before migration (old Versioned used a different slot)
       expect(await stakingRouter.getContractVersion()).to.equal(0);

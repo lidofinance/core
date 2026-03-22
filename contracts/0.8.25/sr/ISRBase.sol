@@ -69,7 +69,6 @@ interface ISRBase {
     error ExitedValidatorsCountCannotDecrease();
 
     // Deposits
-    error CannotDeposit();
     error DirectETHTransfer();
     error ModuleReturnExceedTarget();
     error StakingModuleStatusTheSame();
