@@ -7,7 +7,6 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate, LIMITER_PRECISION_BASE, ONE_GWEI } from "lib";
 import {
-  depositValidatorsWithoutReport,
   getNextReportContext,
   getProtocolContext,
   ProtocolContext,
@@ -16,6 +15,7 @@ import {
   report,
   reportWithEffectiveClDiff,
   resetCLBalanceDecreaseWindow,
+  seedProtocolPendingBaseline,
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
@@ -277,7 +277,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       const stateBefore = await captureState();
 
       // Queue bad debt internalization
-      const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
+      await setupVaultWithBadDebt(ctx, owner, nodeOperator);
 
       // Small negative CL diff (within allowed limits)
       const smallDecrease = ether("-1");
@@ -344,33 +344,9 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // so even with bad debt queued, a report exceeding the pending-backed
       // CL increase budget should revert.
 
-      const { oracleReportSanityChecker, lido, stakingRouter } = ctx.contracts;
+      const { oracleReportSanityChecker, lido } = ctx.contracts;
 
-      await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
-
-      const { depositedSinceLastReport } = await lido.getBalanceStats();
-      const stakingModuleIds = await stakingRouter.getStakingModuleIds();
-      const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
-      const validatorBalancesGweiByStakingModule: bigint[] = [];
-      const pendingBalancesGweiByStakingModule: bigint[] = [];
-
-      for (const moduleId of stakingModuleIds) {
-        const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-        if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
-
-        stakingModuleIdsWithUpdatedBalance.push(moduleId);
-        validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
-        pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
-      }
-
-      await report(ctx, {
-        clDiff: depositedSinceLastReport,
-        excludeVaultsBalances: true,
-        skipWithdrawals: true,
-        stakingModuleIdsWithUpdatedBalance,
-        validatorBalancesGweiByStakingModule,
-        pendingBalancesGweiByStakingModule,
-      });
+      await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
       const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
       await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);

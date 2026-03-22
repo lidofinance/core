@@ -24,6 +24,12 @@ export type StakingModuleBalances = {
   pendingBalanceGwei: bigint;
 };
 
+export type ModuleAccountingReportParams = {
+  stakingModuleIdsWithUpdatedBalance: bigint[];
+  validatorBalancesGweiByStakingModule: bigint[];
+  pendingBalancesGweiByStakingModule: bigint[];
+};
+
 export const unpauseStaking = async (ctx: ProtocolContext) => {
   const { lido } = ctx.contracts;
   if (await lido.isStakingPaused()) {
@@ -220,6 +226,49 @@ export const depositValidatorsWithoutReport = async (ctx: ProtocolContext, modul
   if (pendingAfter - pendingBefore !== ethToDeposit / ONE_GWEI) {
     throw new Error(`Pending increased by ${pendingAfter - pendingBefore} gwei, expected ${ethToDeposit / ONE_GWEI}`);
   }
+};
+
+export const getCurrentModuleAccountingReportParams = async (
+  ctx: ProtocolContext,
+): Promise<ModuleAccountingReportParams> => {
+  const { stakingRouter } = ctx.contracts;
+
+  const stakingModuleIds = await stakingRouter.getStakingModuleIds();
+  const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
+  const validatorBalancesGweiByStakingModule: bigint[] = [];
+  const pendingBalancesGweiByStakingModule: bigint[] = [];
+
+  for (const moduleId of stakingModuleIds) {
+    const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+    if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
+
+    stakingModuleIdsWithUpdatedBalance.push(moduleId);
+    validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
+    pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
+  }
+
+  return {
+    stakingModuleIdsWithUpdatedBalance,
+    validatorBalancesGweiByStakingModule,
+    pendingBalancesGweiByStakingModule,
+  };
+};
+
+export const seedProtocolPendingBaseline = async (
+  ctx: ProtocolContext,
+  moduleId: bigint,
+  depositsCount: bigint = 1n,
+) => {
+  await depositValidatorsWithoutReport(ctx, moduleId, depositsCount);
+
+  const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
+
+  return report(ctx, {
+    clDiff: depositedSinceLastReport,
+    excludeVaultsBalances: true,
+    skipWithdrawals: true,
+    ...(await getCurrentModuleAccountingReportParams(ctx)),
+  });
 };
 
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
