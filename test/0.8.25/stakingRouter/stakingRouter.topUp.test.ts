@@ -340,7 +340,6 @@ describe("StakingRouter.sol:topUp", () => {
     status = StakingModuleStatus.Active,
     withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
     validatorsBalanceGwei = 0n,
-    pendingBalanceGwei = 0n,
   }: ModuleConfig): Promise<[StakingModuleV2__MockForStakingRouter, bigint]> {
     const modulesCount = await stakingRouter.getStakingModulesCount();
     const module = await ethers.deployContract("StakingModuleV2__MockForStakingRouter", deployer);
@@ -366,7 +365,7 @@ describe("StakingRouter.sol:topUp", () => {
     if (validatorsBalanceGwei == 0n && deposited > 0n) {
       validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
     }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, pendingBalanceGwei, exited);
+    await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, exited);
 
     if (status != StakingModuleStatus.Active) {
       await stakingRouter.setStakingModuleStatus(moduleId, status);
@@ -389,5 +388,4 @@ interface ModuleConfig {
   depositable?: bigint;
   status?: StakingModuleStatus;
   validatorsBalanceGwei?: bigint;
-  pendingBalanceGwei?: bigint;
 }

@@ -63,9 +63,7 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
     uint256 private nodeOperatorNodeOperatorTotalDepositedValidators__mocked;
     uint256 private nodeOperatorNodeOperatorDepositableValidatorsCount__mocked;
 
-    function getNodeOperatorSummary(
-        uint256
-    )
+    function getNodeOperatorSummary(uint256)
         external
         view
         returns (
@@ -340,9 +338,7 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
         exitDeadlineThreshold__mocked = _threshold;
     }
 
-    event Mock__OperatorBalancesUpdated(bytes operatorIds, bytes totalBalancesGwei);
-
-    function updateOperatorBalances(bytes calldata operatorIds, bytes calldata totalBalancesGwei) external {
-        emit Mock__OperatorBalancesUpdated(operatorIds, totalBalancesGwei);
+    function getTotalModuleStake() external view returns (uint256) {
+        return 1000000000000000000;
     }
 }

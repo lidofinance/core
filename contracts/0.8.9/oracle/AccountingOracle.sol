@@ -10,10 +10,8 @@ import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
-
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
-
-import {BaseOracle, IHashConsensus} from "./BaseOracle.sol";
+import {BaseOracle} from "./BaseOracle.sol";
 
 interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
@@ -47,8 +45,7 @@ interface IStakingRouter {
 
     function reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _validatorBalancesGwei,
-        uint256[] calldata _pendingBalancesGwei
+        uint256[] calldata _validatorBalancesGwei
     ) external;
 
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
@@ -641,7 +638,7 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
-        stakingRouter.reportValidatorBalancesByStakingModule(stakingModuleIds, validatorBalancesGwei, pendingBalancesGwei);
+        stakingRouter.reportValidatorBalancesByStakingModule(stakingModuleIds, validatorBalancesGwei);
     }
 
     function _submitReportExtraDataEmpty() internal {
@@ -741,7 +738,7 @@ contract AccountingOracle is BaseOracle {
     ) internal view {
         // This check must run before `reportValidatorBalancesByStakingModule(...)` mutates the router state,
         // because it compares the report against the previous per-module validators/pending balances in StakingRouter.
-        (uint256 preCLValidatorsBalanceGwei,,) = ILido(LOCATOR.lido()).getBalanceStats();
+        (uint256 preCLValidatorsBalanceGwei,,,) = ILido(LOCATOR.lido()).getBalanceStats();
         sanityChecker.checkModuleAndCLBalancesChangeRates(
             data.stakingModuleIdsWithUpdatedBalance,
             data.validatorBalancesGweiByStakingModule,
@@ -891,13 +888,11 @@ contract AccountingOracle is BaseOracle {
             revert InvalidExtraDataItem(iter.index);
         }
 
+        // todo do we need routing?
         // Route to appropriate StakingRouter function based on item type
         if (iter.itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
             IStakingRouter(iter.stakingRouter)
                 .reportStakingModuleExitedValidatorsCountByNodeOperator(moduleId, nodeOpIds, payload);
-        } else if (iter.itemType == EXTRA_DATA_TYPE_OPERATOR_BALANCES) {
-            IStakingRouter(iter.stakingRouter)
-                .reportStakingModuleOperatorBalances(moduleId, nodeOpIds, payload);
         }
 
         iter.dataOffset = dataOffset;

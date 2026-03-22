@@ -628,16 +628,16 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       const ETH32 = 32n * 10n ** 18n;
       const toValidatorETH = (balance: bigint) => ((balance + ETH32 - 1n) / ETH32) * ETH32;
 
-      const moduleBalance1 = await stakingRouter.getStakingModuleBalance(1);
+      const moduleBalance1 = await stakingRouter.getModuleValidatorsBalance(1);
       expect(result.newAllocations[0]).to.equal(toValidatorETH(moduleBalance1));
 
-      const moduleBalance2 = await stakingRouter.getStakingModuleBalance(2);
+      const moduleBalance2 = await stakingRouter.getModuleValidatorsBalance(2);
       expect(result.newAllocations[1]).to.equal(toValidatorETH(moduleBalance2));
 
-      const moduleBalance3 = await stakingRouter.getStakingModuleBalance(3);
+      const moduleBalance3 = await stakingRouter.getModuleValidatorsBalance(3);
       expect(result.newAllocations[2]).to.equal(toValidatorETH(moduleBalance3));
 
-      const moduleBalance4 = await stakingRouter.getStakingModuleBalance(4);
+      const moduleBalance4 = await stakingRouter.getModuleValidatorsBalance(4);
       expect(result.newAllocations[3]).to.equal(toValidatorETH(moduleBalance4));
 
       // all allocated deltas should be 0
@@ -790,7 +790,6 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
     status = StakingModuleStatus.Active,
     withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
     validatorsBalanceGwei = 0n,
-    pendingBalanceGwei = 0n,
   }: ModuleConfig): Promise<[StakingModule__MockForStakingRouter | StakingModuleV2__MockForStakingRouter, bigint]> {
     const modulesCount = await stakingRouter.getStakingModulesCount();
 
@@ -820,7 +819,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
     if (validatorsBalanceGwei == 0n && deposited > 0n) {
       validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / GWEI;
     }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, pendingBalanceGwei, exited);
+    await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, exited);
 
     if (status != StakingModuleStatus.Active) {
       await stakingRouter.setStakingModuleStatus(moduleId, status);
@@ -843,5 +842,4 @@ interface ModuleConfig {
   depositable?: bigint;
   status?: StakingModuleStatus;
   validatorsBalanceGwei?: bigint;
-  pendingBalanceGwei?: bigint;
 }

@@ -30,6 +30,7 @@ interface IAccountingOracle {
             uint256 extraDataItemsSubmitted
         );
     function getLastProcessingRefSlot() external view returns (uint256);
+    function getRelativeFrameId() external view returns (uint256);
 }
 
 /// @dev Since `enum` is `uint8` by nature, so the `status` is stored as `uint8` to avoid
@@ -111,9 +112,7 @@ struct StakingModule {
     uint8 withdrawalCredentialsType;
     /// @notice total actual balance of validators for module in Gwei.
     uint64 validatorsBalanceGwei;
-    /// @notice total pending balance of validators for module in Gwei.
-    uint64 pendingBalanceGwei;
-}
+ }
 
 /// @dev 1 storage slot
 struct ModuleStateConfig {
@@ -132,8 +131,8 @@ struct ModuleStateConfig {
     StakingModuleStatus status;
     /// @notice Withdrawal credentials type (0x01/0x02)
     uint8 withdrawalCredentialsType;
-    // uint8 _reserved1;
-    // uint8 _reserved2;
+    // uint8 _reserved;
+    // uint8 _reserved;
 }
 
 /// @dev 1 storage slot
@@ -158,21 +157,18 @@ struct ModuleStateDeposits {
 struct ModuleStateAccounting {
     /// @notice total actual balance of validators for module in Gwei.
     uint64 validatorsBalanceGwei;
-    /// @notice total pending balance of validators for module in Gwei.
-    uint64 pendingBalanceGwei;
     /// @notice Cumulative number of exited validators for module
     uint64 exitedValidatorsCount;
-    /// @notice total deposited balance since last report for module in Gwei.
-    // uint64 depositedBalanceGwei;
+    // uint64 _reserved;
+    // uint64 _reserved;
 }
 
 struct RouterStateAccounting {
     /// @notice total actual balance of validators in Gwei.
     uint64 validatorsBalanceGwei;
-    /// @notice total pending balance of validators in Gwei.
-    uint64 pendingBalanceGwei;
-    /// @notice total deposited balance since last report in Gwei.
-    // uint64 depositedBalanceGwei;
+    // uint64 _reserved;
+    // uint64 _reserved;
+    // uint64 _reserved;
 }
 
 struct ModuleState {

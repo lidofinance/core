@@ -126,7 +126,7 @@ const seedPendingBaselineForPositiveCLDelta = async (
     return;
   }
 
-  const previousReportTotalCLGwei = (await stakingRouter.getTotalStakingModulesBalance()) / ONE_GWEI;
+  const previousReportTotalCLGwei = (await stakingRouter.getTotalModulesValidatorsBalance()) / ONE_GWEI;
   if (currentReportTotalCLGwei <= previousReportTotalCLGwei) {
     return;
   }
@@ -153,7 +153,7 @@ const seedPendingBaselineForPositiveCLDelta = async (
   const seededPendingBalancesGwei: bigint[] = [];
 
   for (const moduleId of stakingModuleIdsWithUpdatedBalance) {
-    const [previousValidatorsBalanceGwei, previousPendingBalanceGwei] =
+    const [previousValidatorsBalanceGwei] =
       await stakingRouter.getStakingModuleStateAccounting(moduleId);
 
     if (previousValidatorsBalanceGwei === 0n) {
@@ -194,7 +194,7 @@ const seedPendingBaselineForPositiveCLDelta = async (
   const accountingOracleSigner = await impersonate(await accountingOracle.getAddress(), ether("1"));
   await stakingRouter
     .connect(accountingOracleSigner)
-    .reportValidatorBalancesByStakingModule(seededModuleIds, seededValidatorBalancesGwei, seededPendingBalancesGwei);
+    .reportValidatorBalancesByStakingModule(seededModuleIds, seededValidatorBalancesGwei);
 };
 
 /**
@@ -344,7 +344,7 @@ export const report = async (
 
     const modulesWithBalance: StakingModuleWithBalanceGwei[] = [];
     for (const moduleId of moduleIds) {
-      const moduleBalance = await ctx.contracts.stakingRouter.getStakingModuleBalance(moduleId);
+      const moduleBalance = await ctx.contracts.stakingRouter.getModuleValidatorsBalance(moduleId);
       if (moduleBalance > 0n) {
         modulesWithBalance.push({ moduleId, moduleBalanceGwei: moduleBalance / ONE_GWEI });
       }

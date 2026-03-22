@@ -66,14 +66,13 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
 
     function reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _validatorBalancesGwei,
-        uint256[] calldata _pendingBalancesGwei
+        uint256[] calldata _validatorBalancesGwei
     ) external {
         uint256 totalBalance = _totalStakingModulesBalanceWei;
         for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
             uint256 moduleId = _stakingModuleIds[i];
             uint256 previousBalance = _moduleBalancesWei[moduleId];
-            uint256 currentBalance = (_validatorBalancesGwei[i] + _pendingBalancesGwei[i]) * 1 gwei;
+            uint256 currentBalance = (_validatorBalancesGwei[i]) * 1 gwei;
 
             if (currentBalance >= previousBalance) {
                 totalBalance += currentBalance - previousBalance;
@@ -83,7 +82,6 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
 
             _moduleBalancesWei[moduleId] = currentBalance;
             _validatorBalancesGweiByModuleId[moduleId] = uint64(_validatorBalancesGwei[i]);
-            _pendingBalancesGweiByModuleId[moduleId] = uint64(_pendingBalancesGwei[i]);
             _moduleExistsById[moduleId] = true;
         }
         _totalStakingModulesBalanceWei = totalBalance;
@@ -117,7 +115,7 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         ++totalCalls_onValidatorsCountsByNodeOperatorReportingFinished;
     }
 
-    function getStakingModuleBalance(uint256 moduleId) external view returns (uint256) {
+    function getModuleValidatorsBalance(uint256 moduleId) external view returns (uint256) {
         return _moduleBalancesWei[moduleId];
     }
 
@@ -125,17 +123,15 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         return _moduleExistsById[moduleId];
     }
 
-    function getStakingModuleStateAccounting(
-        uint256 moduleId
-    ) external view returns (uint64 validatorsBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount) {
-        return (
-            _validatorBalancesGweiByModuleId[moduleId],
-            _pendingBalancesGweiByModuleId[moduleId],
-            uint64(_exitedKeysCountsByModuleId[moduleId])
-        );
+    function getStakingModuleStateAccounting(uint256 moduleId)
+        external
+        view
+        returns (uint64 validatorsBalanceGwei, uint64 exitedValidatorsCount)
+    {
+        return (_validatorBalancesGweiByModuleId[moduleId], uint64(_exitedKeysCountsByModuleId[moduleId]));
     }
 
-    function getTotalStakingModulesBalance() external view returns (uint256) {
+    function getTotalModulesValidatorsBalance() external view returns (uint256) {
         return _totalStakingModulesBalanceWei;
     }
 }

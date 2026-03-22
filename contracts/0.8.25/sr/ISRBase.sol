@@ -84,10 +84,12 @@ interface ISRBase {
     error StakingModulesLimitExceeded();
     error StakingModuleWrongName();
     error StakingModuleUnregistered();
+    error StakingModuleNotActive();
     error WrongWithdrawalCredentialsType();
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
+    error UnexpectedModuleId(uint256 expectedId, uint256 actualId);
 }

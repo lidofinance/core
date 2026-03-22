@@ -84,8 +84,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const input = toModuleInput(modules);
     await stakingRouter.reportValidatorBalancesByStakingModule(
       input.ids,
-      input.validatorBalancesGweiByStakingModule,
-      input.pendingBalancesGwei,
+      input.validatorBalancesGweiByStakingModule
     );
   };
 

@@ -49,7 +49,6 @@ interface IStakingRouter {
         view
         returns (
             uint64 validatorsBalanceGwei,
-            uint64 pendingBalanceGwei,
             uint64 exitedValidatorsCount
         );
 }
@@ -503,7 +502,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 lidoVersion = IVersioned(lidoAddr).getContractVersion();
         if (lidoVersion != 4) revert UnexpectedLidoVersion(lidoVersion, 4);
 
-        (uint256 migrationCLValidatorsBalance, uint256 migrationCLPendingBalance, uint256 migrationDeposits) = ILido(lidoAddr)
+        (uint256 migrationCLValidatorsBalance, uint256 migrationCLPendingBalance,, uint256 migrationDeposits) = ILido(lidoAddr)
             .getBalanceStats();
         uint256 migrationCLBalance = migrationCLValidatorsBalance + migrationCLPendingBalance;
         uint256 migrationCLWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
@@ -1149,7 +1148,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             return (false, 0, 0, 0);
         }
 
-        (previousValidatorsBalanceGwei, previousPendingBalanceGwei, exitedValidatorsCount) =
+        (previousValidatorsBalanceGwei, exitedValidatorsCount) =
             _stakingRouter.getStakingModuleStateAccounting(_moduleId);
 
         hasPreviousAccounting =

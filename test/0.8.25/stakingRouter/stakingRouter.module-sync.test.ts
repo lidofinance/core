@@ -10,6 +10,7 @@ import {
   Lido__MockForStakingRouter,
   LidoLocator,
   StakingModule__MockForStakingRouter,
+  StakingModuleV2__MockForStakingRouter,
   StakingRouter__Harness,
 } from "typechain-types";
 import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
@@ -144,8 +145,7 @@ describe("StakingRouter.sol:module-sync", () => {
       bigint,
       bigint,
       number,
-      bigint,
-      bigint,
+      bigint
     ];
 
     // module mock state
@@ -165,7 +165,6 @@ describe("StakingRouter.sol:module-sync", () => {
     const stakingModuleAccounting: Parameters<StakingRouter__Harness["testing_setStakingModuleAccounting"]> = [
       0n, // moduleId
       balance, // effectiveBalanceGwei
-      balance, // pendingBalanceGwei
       exitedValidators, // exitedValidators
     ];
 
@@ -203,8 +202,7 @@ describe("StakingRouter.sol:module-sync", () => {
         maxDepositsPerBlock,
         minDepositBlockDistance,
         WithdrawalCredentialsType.WC0x01,
-        balance,
-        balance,
+        balance
       ];
 
       // mocking module state
@@ -711,7 +709,6 @@ describe("StakingRouter.sol:module-sync", () => {
       await stakingRouter.testing_setStakingModuleAccounting(
         moduleId,
         balance,
-        balance,
         moduleSummary.totalExitedValidators,
       );
 
@@ -956,7 +953,7 @@ describe("StakingRouter.sol:module-sync", () => {
         WithdrawalCredentialsType.WC0x01,
         100n, // active validators
       );
-      await stakingRouter.testing_setStakingModuleAccounting(moduleId, balance, balance, 0);
+      await stakingRouter.testing_setStakingModuleAccounting(moduleId, balance, 0);
     });
 
     it("Reverts if the caller is not DSM", async () => {
@@ -971,7 +968,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
       await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
-        "CannotDeposit",
+        "StakingModuleNotActive",
       );
     });
 
@@ -994,7 +991,7 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Successfully deposits for module type 0x02 (New)", async () => {
       const stakingRouterAsAdmin = stakingRouter.connect(admin);
 
-      const newStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
+      const newStakingModule = await ethers.deployContract("StakingModuleV2__MockForStakingRouter", deployer);
       const newStakingModuleAddress = await newStakingModule.getAddress();
       const withdrawalCredentialsType = WithdrawalCredentialsType.WC0x02;
       const stakingModuleConfigNew = {
@@ -1021,7 +1018,7 @@ describe("StakingRouter.sol:module-sync", () => {
         depositableValidators,
       ); // 10 depositable validators
       const validatorsBalanceGwei = _getBalanceByValidatorsCount(withdrawalCredentialsType, depositedValidators);
-      await stakingRouter.testing_setStakingModuleAccounting(newModuleId, validatorsBalanceGwei, 0n, exitedValidators);
+      await stakingRouter.testing_setStakingModuleAccounting(newModuleId, validatorsBalanceGwei, exitedValidators);
 
       await expect(stakingRouter.connect(dsmSigner).deposit(newModuleId, "0x")).to.emit(
         depositContract,
