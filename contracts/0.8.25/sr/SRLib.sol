@@ -198,9 +198,10 @@ library SRLib {
 
         // Check for duplicate module address
         /// @dev due to small number of modules, we can afford to do this check on add
-        uint256[] memory moduleIds = SRStorage.getModuleIds();
-        for (uint256 i; i < moduleIds.length; ++i) {
-            if (_moduleAddress == moduleIds[i].getModuleState().config.moduleAddress) {
+        uint256 modulesCount = SRStorage.getModulesCount();
+        for (uint256 i; i < modulesCount; ++i) {
+            uint256 moduleId = SRStorage.getModuleIdAt(i);
+            if (_moduleAddress == moduleId.getModuleState().config.moduleAddress) {
                 revert ISRBase.StakingModuleAddressExists();
             }
         }
@@ -592,10 +593,10 @@ library SRLib {
     ///
     /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
     function _onValidatorsCountsByNodeOperatorReportingFinished() public {
-        uint256[] memory _stakingModuleIds = SRStorage.getModuleIds();
+        uint256 modulesCount = SRStorage.getModulesCount();
 
-        for (uint256 i; i < _stakingModuleIds.length; ++i) {
-            uint256 moduleId = _stakingModuleIds[i];
+        for (uint256 i; i < modulesCount; ++i) {
+            uint256 moduleId = SRStorage.getModuleIdAt(i);
             ModuleState storage state = moduleId.getModuleState();
             IStakingModule stakingModule = state.getIStakingModule();
 
@@ -832,10 +833,10 @@ library SRLib {
     }
 
     function _notifyStakingModulesOfWithdrawalCredentialsChange() public {
-        uint256[] memory _stakingModuleIds = SRStorage.getModuleIds();
+        uint256 modulesCount = SRStorage.getModulesCount();
 
-        for (uint256 i; i < _stakingModuleIds.length; ++i) {
-            uint256 moduleId = _stakingModuleIds[i];
+        for (uint256 i; i < modulesCount; ++i) {
+            uint256 moduleId = SRStorage.getModuleIdAt(i);
 
             try moduleId.getIStakingModule().onWithdrawalCredentialsChanged() {}
             catch (bytes memory lowLevelRevertData) {

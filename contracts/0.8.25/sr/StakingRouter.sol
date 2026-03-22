@@ -375,11 +375,11 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @notice Returns all registered staking modules.
     /// @return moduleStates Array of staking modules.
     function getStakingModules() external view returns (StakingModule[] memory) {
-        uint256[] memory moduleIds = SRStorage.getModuleIds();
-        StakingModule[] memory moduleStates = new StakingModule[](moduleIds.length);
+        uint256 modulesCount = SRStorage.getModulesCount();
+        StakingModule[] memory moduleStates = new StakingModule[](modulesCount);
 
-        for (uint256 i; i < moduleIds.length; ++i) {
-            moduleStates[i] = _getModuleStateCompat(moduleIds[i]);
+        for (uint256 i; i < modulesCount; ++i) {
+            moduleStates[i] = _getModuleStateCompat(SRStorage.getModuleIdAt(i));
         }
         return moduleStates;
     }
@@ -841,8 +841,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     {
         uint256 totalValidatorsBalance = SRUtils._getTotalModulesValidatorsBalance();
 
-        uint256[] memory moduleIds = SRStorage.getModuleIds();
-        uint256 stakingModulesCount = totalValidatorsBalance == 0 ? 0 : moduleIds.length;
+        uint256 modulesCount = SRStorage.getModulesCount();
+        uint256 stakingModulesCount = totalValidatorsBalance == 0 ? 0 : modulesCount;
 
         stakingModuleIds = new uint256[](stakingModulesCount);
         recipients = new address[](stakingModulesCount);
@@ -857,7 +857,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         uint256 rewardedStakingModulesCount = 0;
 
         for (uint256 i; i < stakingModulesCount; ++i) {
-            uint256 moduleId = moduleIds[i];
+            uint256 moduleId = SRStorage.getModuleIdAt(i);
             uint256 allocation = SRUtils._getModuleValidatorsBalance(moduleId);
 
             /// @dev Skip staking modules which have no active balance.
