@@ -1,7 +1,9 @@
 export {
   depositAndReportValidators,
+  getCurrentModuleAccountingReportParams,
   depositValidatorsWithoutReport,
   ensureStakeLimit,
+  seedProtocolPendingBaseline,
   getStakingModuleBalances,
   unpauseStaking,
 } from "./staking";

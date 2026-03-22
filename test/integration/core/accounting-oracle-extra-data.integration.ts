@@ -6,9 +6,8 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
 import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
-import { getProtocolContext, OracleReportParams, ProtocolContext, report } from "lib/protocol";
+import { getProtocolContext, OracleReportParams, ProtocolContext, report, seedProtocolPendingBaseline } from "lib/protocol";
 import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting";
-import { depositValidatorsWithoutReport } from "lib/protocol/helpers/staking";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
@@ -91,7 +90,7 @@ describe("Integration: AccountingOracle extra data", () => {
   }
 
   async function submitMainReport() {
-    const { lido, nor, stakingRouter } = ctx.contracts;
+    const { nor } = ctx.contracts;
     // Split exitedKeys into two separate entries for different node operators to test chunking
     const firstExitedKeys = {
       moduleId: Number(MODULE_ID),
@@ -115,36 +114,9 @@ describe("Integration: AccountingOracle extra data", () => {
     const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
 
     // The main report in this suite must stay reward-bearing because it drives the
-    // TransferredToModule -> ReadyForDistribution state machine. Under the new
-    // sanity path that reward now needs a protocol-level pending baseline first.
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
-
-    const { depositedSinceLastReport } = await lido.getBalanceStats();
-    const stakingModuleIds = await stakingRouter.getStakingModuleIds();
-    const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
-    const validatorBalancesGweiByStakingModule: bigint[] = [];
-    const pendingBalancesGweiByStakingModule: bigint[] = [];
-
-    for (const moduleId of stakingModuleIds) {
-      const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-      if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
-
-      stakingModuleIdsWithUpdatedBalance.push(moduleId);
-      validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
-      pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
-    }
-
-    // Snapshot protocol pending into the previous report before the original 1 ETH
-    // reward-bearing main report runs. This keeps the test on the same phase path
-    // instead of weakening it into a neutral report.
-    await report(ctx, {
-      clDiff: depositedSinceLastReport,
-      excludeVaultsBalances: true,
-      skipWithdrawals: true,
-      stakingModuleIdsWithUpdatedBalance,
-      validatorBalancesGweiByStakingModule,
-      pendingBalancesGweiByStakingModule,
-    });
+    // TransferredToModule -> ReadyForDistribution state machine. Snapshot protocol
+    // pending first so the original 1 ETH main report still reaches that phase path.
+    await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
     // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
     // safety cap enough elapsed time after snapshotting the pending baseline.

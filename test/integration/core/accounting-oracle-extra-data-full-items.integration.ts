@@ -18,11 +18,10 @@ import {
   RewardDistributionState,
   setAnnualBalanceIncreaseLimit,
 } from "lib";
-import { getProtocolContext, ProtocolContext, report, withCSM } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, seedProtocolPendingBaseline, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
 import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
-import { depositValidatorsWithoutReport } from "lib/protocol/helpers/staking";
 import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
@@ -144,7 +143,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
     csmExitedItems: number;
   }) {
     return async () => {
-      const { accountingOracle, lido, nor, sdvt, csm, stakingRouter } = ctx.contracts;
+      const { accountingOracle, nor, sdvt, csm } = ctx.contracts;
 
       const modules = [
         { moduleId: NOR_MODULE_ID, module: nor },
@@ -240,36 +239,9 @@ describe("Integration: AccountingOracle extra data full items", () => {
       }
 
       // This suite also relies on the reward-bearing main report to enter
-      // TransferredToModule before extra-data finalization. Seed one validator
-      // into protocol pending first so the new sanity path accepts that reward.
-      await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
-
-      const { depositedSinceLastReport } = await lido.getBalanceStats();
-      const stakingModuleIds = await stakingRouter.getStakingModuleIds();
-      const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
-      const validatorBalancesGweiByStakingModule: bigint[] = [];
-      const pendingBalancesGweiByStakingModule: bigint[] = [];
-
-      for (const moduleId of stakingModuleIds) {
-        const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-        if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
-
-        stakingModuleIdsWithUpdatedBalance.push(moduleId);
-        validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
-        pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
-      }
-
-      // Snapshot protocol pending into the previous report before replaying the
-      // original reward-bearing main report. The goal is to preserve the module
-      // state machine, not to replace it with a neutral path.
-      await report(ctx, {
-        clDiff: depositedSinceLastReport,
-        excludeVaultsBalances: true,
-        skipWithdrawals: true,
-        stakingModuleIdsWithUpdatedBalance,
-        validatorBalancesGweiByStakingModule,
-        pendingBalancesGweiByStakingModule,
-      });
+      // TransferredToModule before extra-data finalization. Snapshot protocol
+      // pending first so the original reward-bearing path remains reachable.
+      await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
       // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
       // safety cap enough elapsed time after snapshotting the pending baseline.

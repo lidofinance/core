@@ -7,12 +7,12 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
 import {
-  depositValidatorsWithoutReport,
   getProtocolContext,
   getReportTimeElapsed,
   ProtocolContext,
   removeStakingLimit,
   report,
+  seedProtocolPendingBaseline,
 } from "lib/protocol";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
@@ -404,33 +404,9 @@ describe("Integration: Accounting", () => {
   });
 
   it("Should account correctly with positive CL rebase close to the limits", async () => {
-    const { lido, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
 
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
-
-    const { depositedSinceLastReport } = await lido.getBalanceStats();
-    const stakingModuleIds = await stakingRouter.getStakingModuleIds();
-    const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
-    const validatorBalancesGweiByStakingModule: bigint[] = [];
-    const pendingBalancesGweiByStakingModule: bigint[] = [];
-
-    for (const moduleId of stakingModuleIds) {
-      const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-      if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
-
-      stakingModuleIdsWithUpdatedBalance.push(moduleId);
-      validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
-      pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
-    }
-
-    await report(ctx, {
-      clDiff: depositedSinceLastReport,
-      excludeVaultsBalances: true,
-      skipWithdrawals: true,
-      stakingModuleIdsWithUpdatedBalance,
-      validatorBalancesGweiByStakingModule,
-      pendingBalancesGweiByStakingModule,
-    });
+    await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
     const { clPendingBalanceAtLastReport } = await lido.getBalanceStats();
