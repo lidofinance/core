@@ -1240,12 +1240,17 @@ describe("OracleReportSanityChecker.sol", () => {
       const preCLPendingBalance = 1_000n;
       const postCLBalance = preCLBalance + preCLPendingBalance + 1n;
       const postCLPendingBalance = 0n;
-      const allowedIncrease = preCLPendingBalance + (preCLPendingBalance / 3650n);
+      const allowedIncrease = preCLPendingBalance + preCLPendingBalance / 3650n;
       const clIncrease = preCLPendingBalance + 1n;
 
       await expect(
         checker.connect(accountingSigner).checkAccountingOracleReport(
-          ...report({ preCLBalance: preCLBalance + preCLPendingBalance, preCLPendingBalance, postCLBalance, postCLPendingBalance }),
+          ...report({
+            preCLBalance: preCLBalance + preCLPendingBalance,
+            preCLPendingBalance,
+            postCLBalance,
+            postCLPendingBalance,
+          }),
         ),
       )
         .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
@@ -1562,16 +1567,14 @@ describe("OracleReportSanityChecker.sol", () => {
         .checkAccountingOracleReport(...report({ preCLBalance: ether("100000"), postCLBalance: ether("100000") }));
       // This intermediate increase is meant to exercise the decrease window, so it needs a matching
       // pending-funded activation budget and must not fail earlier in the global CL growth check.
-      await checker
-        .connect(accountingSigner)
-        .checkAccountingOracleReport(
-          ...report({
-            preCLBalance: ether("100020"),
-            preCLPendingBalance: ether("20"),
-            postCLBalance: ether("100020"),
-            postCLPendingBalance: 0n,
-          }),
-        );
+      await checker.connect(accountingSigner).checkAccountingOracleReport(
+        ...report({
+          preCLBalance: ether("100020"),
+          preCLPendingBalance: ether("20"),
+          postCLBalance: ether("100020"),
+          postCLPendingBalance: 0n,
+        }),
+      );
 
       await expect(
         checker
