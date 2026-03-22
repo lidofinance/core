@@ -6,7 +6,6 @@ import { WithdrawalVault__MockForConsolidationGateway } from "typechain-types";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 
 const DUMMY_GI = "0x0000000000000000000000000000000000000000000000000096000000000028";
-const DUMMY_WC = "0x010000000000000000000000b9d7934878b5fb9610b3fe8a5e441e8fad7e293f";
 
 describe("ConsolidationGateway.sol: deployment", () => {
   let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
@@ -35,7 +34,6 @@ describe("ConsolidationGateway.sol: deployment", () => {
       DUMMY_GI,
       DUMMY_GI,
       0,
-      DUMMY_WC,
     ]);
 
     const adminRole = await gateway.DEFAULT_ADMIN_ROLE();
@@ -55,7 +53,6 @@ describe("ConsolidationGateway.sol: deployment", () => {
         DUMMY_GI,
         DUMMY_GI,
         0,
-        DUMMY_WC,
       ]),
     ).to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationGateway"), "AdminCannotBeZero");
   });

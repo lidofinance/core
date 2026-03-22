@@ -323,7 +323,6 @@ export async function main() {
     pdgDeployParams.gIndex, // gIFirstValidatorPrev
     pdgDeployParams.gIndexAfterChange, // gIFirstValidatorCurr
     pdgDeployParams.changeSlot, // pivotSlot
-    ethers.ZeroHash, // withdrawalCredentials (placeholder)
   ]);
 
   console.log("ConsolidationGateway address", await consolidationGateway.getAddress());

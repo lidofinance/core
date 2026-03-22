@@ -80,7 +80,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
 
     // Set up merkle tree for CL proof verification
     const localMerkle = await prepareLocalMerkleTree();
-    const withdrawalCredentials = addressToWC(admin.address, 1);
+    const withdrawalCredentials = addressToWC(await withdrawalVault.getAddress(), 2);
 
     // Generate a validator with matching withdrawal credentials
     const validator = generateValidator(withdrawalCredentials);
@@ -111,7 +111,6 @@ describe("ConsolidationGateway.sol: pausable", () => {
       localMerkle.gIFirstValidator,
       localMerkle.gIFirstValidator,
       0,
-      withdrawalCredentials,
     ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();

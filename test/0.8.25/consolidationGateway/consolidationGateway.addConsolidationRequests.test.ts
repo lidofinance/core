@@ -115,7 +115,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
     // Set up merkle tree for CL proof verification
     const localMerkle = await prepareLocalMerkleTree();
-    const withdrawalCredentials = addressToWC(admin.address, 1);
+    const withdrawalCredentials = addressToWC(await withdrawalVault.getAddress(), 2);
 
     // Generate 3 validators with matching withdrawal credentials
     const validators = [];
@@ -155,7 +155,6 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       localMerkle.gIFirstValidator,
       localMerkle.gIFirstValidator,
       0,
-      withdrawalCredentials,
     ]);
 
     await grantConsolidationRequestRole(consolidationGateway, authorizedEntity);

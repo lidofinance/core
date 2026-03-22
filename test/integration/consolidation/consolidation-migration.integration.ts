@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
 
-import { certainAddress, findEventsWithInterfaces } from "lib";
+import { addressToWC, certainAddress, findEventsWithInterfaces } from "lib";
 import { LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
@@ -163,9 +163,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     merkleTree = await prepareLocalMerkleTree();
 
     const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
+    const withdrawalVaultAddress = await ctx.contracts.withdrawalVault.getAddress();
+    const withdrawalCredentials = addressToWC(withdrawalVaultAddress, 2);
     const makeValidatorContainer = (pubkey: string) => ({
       pubkey,
-      withdrawalCredentials: ethers.ZeroHash,
+      withdrawalCredentials,
       effectiveBalance: 32_000_000_000n,
       slashed: false,
       activationEligibilityEpoch: 0,
@@ -463,7 +465,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
       const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
       const { validatorIndex: vi3 } = await merkleTree.addValidator({
         pubkey: TARGET_PUBKEY_3,
-        withdrawalCredentials: ethers.ZeroHash,
+        withdrawalCredentials: addressToWC(await ctx.contracts.withdrawalVault.getAddress(), 2),
         effectiveBalance: 32_000_000_000n,
         slashed: false,
         activationEligibilityEpoch: 0,

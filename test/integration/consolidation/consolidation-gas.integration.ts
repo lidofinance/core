@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
 
-import { certainAddress } from "lib";
+import { addressToWC, certainAddress } from "lib";
 import { LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
@@ -210,10 +210,11 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
     const merkleTree: LocalMerkleTree = await prepareLocalMerkleTree();
 
     const validatorIndices: number[] = [];
+    const withdrawalCredentials = addressToWC(await ctx.contracts.withdrawalVault.getAddress(), 2);
     for (const pubkey of targetPubkeys) {
       const { validatorIndex } = await merkleTree.addValidator({
         pubkey,
-        withdrawalCredentials: ethers.ZeroHash,
+        withdrawalCredentials,
         effectiveBalance: 32_000_000_000n,
         slashed: false,
         activationEligibilityEpoch: 0,

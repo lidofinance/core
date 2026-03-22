@@ -389,7 +389,6 @@ export async function main() {
     topUpGatewayParams.gIFirstValidatorPrev, // gIFirstValidatorPrev
     topUpGatewayParams.gIFirstValidatorCurr, // gIFirstValidatorCurr
     topUpGatewayParams.pivotSlot, // pivotSlot
-    ethers.ZeroHash, // withdrawalCredentials (dummy for scratch deploy)
   ]);
 
   const consolidationGateway = await loadContract<ConsolidationGateway>(

@@ -108,10 +108,9 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
 
     bytes32 public constant CONSOLIDATION_LIMIT_POSITION = keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
 
-    ILidoLocator internal immutable LOCATOR;
+    uint256 internal constant COMPOUNDING_PREFIX = uint256(0x02) << 248;
 
-    /// @notice Withdrawal credentials that target validators must have
-    bytes32 public immutable WITHDRAWAL_CREDENTIALS;
+    ILidoLocator internal immutable LOCATOR;
 
     /// @dev Ensures the contract's ETH balance is unchanged.
     modifier preservesEthBalance() {
@@ -128,13 +127,11 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 frameDurationInSec,
         GIndex _gIFirstValidatorPrev,
         GIndex _gIFirstValidatorCurr,
-        uint64 _pivotSlot,
-        bytes32 _withdrawalCredentials
+        uint64 _pivotSlot
     ) CLProofVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
         if (admin == address(0)) revert AdminCannotBeZero();
         if (lidoLocator == address(0)) revert ZeroArgument("lidoLocator");
         LOCATOR = ILidoLocator(lidoLocator);
-        WITHDRAWAL_CREDENTIALS = _withdrawalCredentials;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _setConsolidationRequestLimit(maxConsolidationRequestsLimit, consolidationsPerFrame, frameDurationInSec);
@@ -205,22 +202,23 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
             requestsCount += groupSize;
         }
 
+        (IWithdrawalVault withdrawalVault, bytes32 withdrawalCredentials) = _getWithdrawalVaultData();
+
         for (uint256 i = 0; i < groupsCount; ++i) {
-            _validatePubKeyWCProof(targetWitnesses[i], WITHDRAWAL_CREDENTIALS);
+            _validatePubKeyWCProof(targetWitnesses[i], withdrawalCredentials);
         }
 
         _checkConsolidationPreconditions();
 
         _consumeConsolidationRequestLimit(requestsCount);
 
-        IWithdrawalVault withdrawalVault = IWithdrawalVault(LOCATOR.withdrawalVault());
         uint256 fee = withdrawalVault.getConsolidationRequestFee();
         uint256 totalFee = requestsCount * fee;
         uint256 refund = _checkFee(totalFee);
 
         // Expand grouped requests into flat pairs for WithdrawalVault
-        (bytes[] memory flatSources, bytes[] memory flatTargets) = _expandGroups(sourcePubkeysGroups, targetWitnesses, requestsCount);
-        withdrawalVault.addConsolidationRequests{value: totalFee}(flatSources, flatTargets);
+        (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) = prepareConsolidationPairs(sourcePubkeysGroups, targetWitnesses, requestsCount);
+        withdrawalVault.addConsolidationRequests{value: totalFee}(sourcePubkeys, targetPubkeys);
 
         _refundFee(refund, refundRecipient);
     }
@@ -349,32 +347,33 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         );
     }
 
-    /**
-     * @dev Expands grouped consolidation requests into flat parallel arrays
-     *      for WithdrawalVault compatibility.
-     * @param sourcePubkeysGroups Grouped source pubkeys
-     * @param targetWitnesses Validator targetWitnesses (one per group), target pubkey is extracted from each witness
-     * @param totalCount Total number of individual requests
-     * @return flatSources Flat array of source pubkeys
-     * @return flatTargets Flat array of target pubkeys (repeated per group)
-     */
-    function _expandGroups(
+    /// Flattens grouped source pubkeys and repeats each group's target pubkey.
+    function prepareConsolidationPairs(
         bytes[][] calldata sourcePubkeysGroups,
         IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses,
         uint256 totalCount
-    ) internal pure returns (bytes[] memory flatSources, bytes[] memory flatTargets) {
-        flatSources = new bytes[](totalCount);
-        flatTargets = new bytes[](totalCount);
+    ) internal pure returns (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) {
+        sourcePubkeys = new bytes[](totalCount);
+        targetPubkeys = new bytes[](totalCount);
 
         uint256 idx = 0;
         for (uint256 i = 0; i < sourcePubkeysGroups.length; ++i) {
             bytes[] calldata group = sourcePubkeysGroups[i];
             bytes calldata target = targetWitnesses[i].pubkey;
             for (uint256 j = 0; j < group.length; ++j) {
-                flatSources[idx] = group[j];
-                flatTargets[idx] = target;
+                sourcePubkeys[idx] = group[j];
+                targetPubkeys[idx] = target;
                 ++idx;
             }
         }
+    }
+
+    /// Returns the withdrawal vault and its 0x02 withdrawal credentials.
+    function _getWithdrawalVaultData() internal view returns (IWithdrawalVault withdrawalVault, bytes32 withdrawalCredentials) {
+        address vaultAddress = LOCATOR.withdrawalVault();
+        withdrawalVault = IWithdrawalVault(vaultAddress);
+        
+        // withdrawalCredentials = 0x02 || 11 zero bytes || 20-byte vault address
+        withdrawalCredentials = bytes32(COMPOUNDING_PREFIX | uint160(vaultAddress));
     }
 }
