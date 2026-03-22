@@ -54,6 +54,11 @@ contract ConsolidationBus is AccessControlEnumerable {
     error EmptyBatch();
 
     /**
+     * @notice Thrown when attempting to remove an empty list of batch hashes
+     */
+    error EmptyBatchHashes();
+
+    /**
      * @notice Thrown when a source group has zero elements
      * @param groupIndex Index of the empty group
      */
@@ -227,9 +232,12 @@ contract ConsolidationBus is AccessControlEnumerable {
      * @notice Removes batches from the queue
      * @param batchHashes Array of batch hashes to remove
      * @dev Reverts if caller does not have REMOVE_ROLE
+     * @dev Reverts if batchHashes is empty
      * @dev Reverts if any batch is not found or already executed
      */
     function removeBatches(bytes32[] calldata batchHashes) external onlyRole(REMOVE_ROLE) {
+        if (batchHashes.length == 0) revert EmptyBatchHashes();
+
         for (uint256 i = 0; i < batchHashes.length; ++i) {
             bytes32 batchHash = batchHashes[i];
 

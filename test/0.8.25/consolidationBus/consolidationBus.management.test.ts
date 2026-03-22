@@ -167,6 +167,15 @@ describe("ConsolidationBus.sol: management", () => {
         .withArgs(fakeBatchHash);
     });
 
+    it("should revert if batchHashes is empty", async () => {
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
+
+      await expect(consolidationBus.connect(manager).removeBatches([])).to.be.revertedWithCustomError(
+        consolidationBus,
+        "EmptyBatchHashes",
+      );
+    });
+
     it("should revert if batch already executed", async () => {
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
 
