@@ -87,7 +87,6 @@ contract ConsolidationMigrator is AccessControlEnumerable {
 
     error ZeroArgument(string name);
     error AdminCannotBeZero();
-    error PairNotAllowed(uint256 sourceOperatorId, uint256 targetOperatorId);
     error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
     error ArraysLengthMismatch(uint256 sourceGroupsLength, uint256 targetLength);
     error KeyNotDeposited(uint256 moduleId, uint256 operatorId, uint256 keyIndex);
@@ -292,8 +291,12 @@ contract ConsolidationMigrator is AccessControlEnumerable {
             revert NotAuthorized(msg.sender, sourceOperatorId, targetOperatorId);
         }
 
+        if (sourceKeyIndicesGroups.length != targetKeyIndices.length) {
+            revert ArraysLengthMismatch(sourceKeyIndicesGroups.length, targetKeyIndices.length);
+        }
+
         // Validate the batch and get pubkeys
-        (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) = _validateConsolidationEligibility(
+        (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) = _getValidatedConsolidationPubkeys(
             sourceOperatorId,
             targetOperatorId,
             sourceKeyIndicesGroups,
@@ -310,31 +313,16 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     // ==================
 
     /**
-     * @dev Ensures consolidation eligibility and returns pubkeys.
-     *      Checks:
-     *
-     *      - Operator pair is allowlisted
-     *      - All keys are deposited
-     *
-     *      Reverts on any failed check.
-     *
-     *      @return sourcePubkeysGroups Source pubkeys grouped per target
-     *      @return targetPubkeys Target pubkeys
+     * @dev Validates consolidation key sets and returns corresponding pubkeys.
+     *      Ensures all referenced keys are deposited.
      */
-    function _validateConsolidationEligibility(
+    function _getValidatedConsolidationPubkeys(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
         uint256[][] calldata sourceKeyIndicesGroups,
         uint256[] calldata targetKeyIndices
     ) internal view returns (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) {
         uint256 groupsCount = targetKeyIndices.length;
-        if (sourceKeyIndicesGroups.length != groupsCount) {
-            revert ArraysLengthMismatch(sourceKeyIndicesGroups.length, groupsCount);
-        }
-
-        if (!_allowedPairs[sourceOperatorId].contains(targetOperatorId)) {
-            revert PairNotAllowed(sourceOperatorId, targetOperatorId);
-        }
 
         sourcePubkeysGroups = new bytes[][](groupsCount);
         for (uint256 i = 0; i < groupsCount; ++i) {
