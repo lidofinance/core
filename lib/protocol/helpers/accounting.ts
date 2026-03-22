@@ -112,91 +112,6 @@ const buildConservedModuleBalancesGwei = (
 
 const sumBigints = (values: bigint[]): bigint => values.reduce((sum, value) => sum + value, 0n);
 
-// Scratch reports can synthesize positive CL growth without consuming previous pending.
-// Seed the router baseline so such reports satisfy the same invariant as production reports.
-const seedPendingBaselineForPositiveCLDelta = async (
-  ctx: ProtocolContext,
-  stakingModuleIdsWithUpdatedBalance: bigint[],
-  pendingBalancesGweiByStakingModule: bigint[],
-  currentReportTotalCLGwei: bigint,
-) => {
-  const { stakingRouter, accountingOracle } = ctx.contracts;
-
-  if (stakingModuleIdsWithUpdatedBalance.length === 0) {
-    return;
-  }
-
-  const previousReportTotalCLGwei = (await stakingRouter.getTotalModulesValidatorsBalance()) / ONE_GWEI;
-  if (currentReportTotalCLGwei <= previousReportTotalCLGwei) {
-    return;
-  }
-
-  let alreadyBackedByPendingGwei = 0n;
-  for (let index = 0; index < stakingModuleIdsWithUpdatedBalance.length; ++index) {
-    const moduleId = stakingModuleIdsWithUpdatedBalance[index];
-    const [, previousPendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-    const currentPendingBalanceGwei = pendingBalancesGweiByStakingModule[index];
-
-    if (previousPendingBalanceGwei > currentPendingBalanceGwei) {
-      alreadyBackedByPendingGwei += previousPendingBalanceGwei - currentPendingBalanceGwei;
-    }
-  }
-
-  const requiredPendingBaselineGwei = currentReportTotalCLGwei - previousReportTotalCLGwei;
-  if (alreadyBackedByPendingGwei >= requiredPendingBaselineGwei) {
-    return;
-  }
-
-  let missingPendingBaselineGwei = requiredPendingBaselineGwei - alreadyBackedByPendingGwei;
-  const seededModuleIds: bigint[] = [];
-  const seededValidatorBalancesGwei: bigint[] = [];
-  const seededPendingBalancesGwei: bigint[] = [];
-
-  for (const moduleId of stakingModuleIdsWithUpdatedBalance) {
-    const [previousValidatorsBalanceGwei] =
-      await stakingRouter.getStakingModuleStateAccounting(moduleId);
-
-    if (previousValidatorsBalanceGwei === 0n) {
-      continue;
-    }
-
-    const pendingShiftGwei =
-      previousValidatorsBalanceGwei > missingPendingBaselineGwei
-        ? missingPendingBaselineGwei
-        : previousValidatorsBalanceGwei;
-
-    if (pendingShiftGwei === 0n) {
-      continue;
-    }
-
-    seededModuleIds.push(moduleId);
-    seededValidatorBalancesGwei.push(previousValidatorsBalanceGwei - pendingShiftGwei);
-    seededPendingBalancesGwei.push(previousPendingBalanceGwei + pendingShiftGwei);
-
-    missingPendingBaselineGwei -= pendingShiftGwei;
-    if (missingPendingBaselineGwei === 0n) {
-      break;
-    }
-  }
-
-  if (missingPendingBaselineGwei > 0n) {
-    throw new Error(
-      `Failed to seed pending baseline for positive CL delta: missing ${missingPendingBaselineGwei} gwei`,
-    );
-  }
-
-  log.debug("Seeding pending baseline for positive CL delta", {
-    "Current report total CL balance (gwei)": currentReportTotalCLGwei,
-    "Previous report total CL balance (gwei)": previousReportTotalCLGwei,
-    "Seeded pending baseline (gwei)": requiredPendingBaselineGwei - alreadyBackedByPendingGwei,
-  });
-
-  const accountingOracleSigner = await impersonate(await accountingOracle.getAddress(), ether("1"));
-  await stakingRouter
-    .connect(accountingOracleSigner)
-    .reportValidatorBalancesByStakingModule(seededModuleIds, seededValidatorBalancesGwei);
-};
-
 /**
  * Prepare and push oracle report.
  */
@@ -468,13 +383,6 @@ export async function reportWithoutExtraData(
     reportHash: hash,
     consensusVersion: BigInt(data.consensusVersion),
   });
-
-  await seedPendingBaselineForPositiveCLDelta(
-    ctx,
-    data.stakingModuleIdsWithUpdatedBalance.map((value) => getBigInt(value)),
-    data.pendingBalancesGweiByStakingModule.map((value) => getBigInt(value)),
-    getBigInt(data.clValidatorsBalanceGwei) + getBigInt(data.clPendingBalanceGwei),
-  );
 
   const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
   log.debug("Pushed oracle report main data", {
@@ -931,13 +839,6 @@ const submitReport = async (
     reportHash: hash,
     consensusVersion,
   });
-
-  await seedPendingBaselineForPositiveCLDelta(
-    ctx,
-    stakingModuleIdsWithUpdatedBalance,
-    pendingBalancesGweiByStakingModule,
-    clBalanceGwei,
-  );
 
   log.debug("Pushed oracle report for reached consensus", data);
 
