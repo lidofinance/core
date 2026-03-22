@@ -21,10 +21,7 @@ interface ILido {
 }
 
 interface IWithdrawalVault {
-    function addConsolidationRequests(
-        bytes[] calldata sourcePubkeys,
-        bytes[] calldata targetPubkeys
-    ) external payable;
+    function addConsolidationRequests(bytes[] calldata sourcePubkeys, bytes[] calldata targetPubkeys) external payable;
 
     function getConsolidationRequestFee() external view returns (uint256);
 }
@@ -95,7 +92,11 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
      * @param consolidationsPerFrame The number of consolidations that can be restored per frame.
      * @param frameDurationInSec The duration of each frame, in seconds, after which `consolidationsPerFrame` consolidations can be restored.
      */
-    event ConsolidationRequestsLimitSet(uint256 maxConsolidationRequestsLimit, uint256 consolidationsPerFrame, uint256 frameDurationInSec);
+    event ConsolidationRequestsLimitSet(
+        uint256 maxConsolidationRequestsLimit,
+        uint256 consolidationsPerFrame,
+        uint256 frameDurationInSec
+    );
 
     /// @notice role that allows to pause the contract
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
@@ -106,7 +107,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 public constant EXIT_LIMIT_MANAGER_ROLE = keccak256("EXIT_LIMIT_MANAGER_ROLE");
 
-    bytes32 public constant CONSOLIDATION_LIMIT_POSITION = keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
+    bytes32 public constant CONSOLIDATION_LIMIT_POSITION =
+        keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
 
     uint256 internal constant COMPOUNDING_PREFIX = uint256(0x02) << 248;
 
@@ -217,7 +219,11 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 refund = _checkFee(totalFee);
 
         // Expand grouped requests into flat pairs for WithdrawalVault
-        (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) = prepareConsolidationPairs(sourcePubkeysGroups, targetWitnesses, requestsCount);
+        (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) = prepareConsolidationPairs(
+            sourcePubkeysGroups,
+            targetWitnesses,
+            requestsCount
+        );
         withdrawalVault.addConsolidationRequests{value: totalFee}(sourcePubkeys, targetPubkeys);
 
         _refundFee(refund, refundRecipient);
@@ -300,7 +306,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
                 recipient = msg.sender;
             }
 
-            (bool success,) = recipient.call{value: refund}("");
+            (bool success, ) = recipient.call{value: refund}("");
             if (!success) {
                 revert FeeRefundFailed();
             }
@@ -342,9 +348,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
             revert ConsolidationRequestsLimitExceeded(requestsCount, limit);
         }
 
-        CONSOLIDATION_LIMIT_POSITION.setStorageLimit(
-            limitData.updatePrevLimit(limit - requestsCount, _getTimestamp())
-        );
+        CONSOLIDATION_LIMIT_POSITION.setStorageLimit(limitData.updatePrevLimit(limit - requestsCount, _getTimestamp()));
     }
 
     /// Flattens grouped source pubkeys and repeats each group's target pubkey.
@@ -369,10 +373,14 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     }
 
     /// Returns the withdrawal vault and its 0x02 withdrawal credentials.
-    function _getWithdrawalVaultData() internal view returns (IWithdrawalVault withdrawalVault, bytes32 withdrawalCredentials) {
+    function _getWithdrawalVaultData()
+        internal
+        view
+        returns (IWithdrawalVault withdrawalVault, bytes32 withdrawalCredentials)
+    {
         address vaultAddress = LOCATOR.withdrawalVault();
         withdrawalVault = IWithdrawalVault(vaultAddress);
-        
+
         // withdrawalCredentials = 0x02 || 11 zero bytes || 20-byte vault address
         withdrawalCredentials = bytes32(COMPOUNDING_PREFIX | uint160(vaultAddress));
     }

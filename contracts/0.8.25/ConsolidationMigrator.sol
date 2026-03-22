@@ -47,26 +47,26 @@ interface IUnifiedStakingModule {
 
     function getNodeOperatorSummary(
         uint256 _nodeOperatorId
-    ) external view returns (
-        uint256 targetLimitMode,
-        uint256 targetValidatorsCount,
-        uint256 stuckValidatorsCount,
-        uint256 refundedValidatorsCount,
-        uint256 stuckPenaltyEndTimestamp,
-        uint256 totalExitedValidators,
-        uint256 totalDepositedValidators,
-        uint256 depositableValidatorsCount
-    );
+    )
+        external
+        view
+        returns (
+            uint256 targetLimitMode,
+            uint256 targetValidatorsCount,
+            uint256 stuckValidatorsCount,
+            uint256 refundedValidatorsCount,
+            uint256 stuckPenaltyEndTimestamp,
+            uint256 totalExitedValidators,
+            uint256 totalDepositedValidators,
+            uint256 depositableValidatorsCount
+        );
 }
 
 /**
  * @dev Interface for ConsolidationBus to submit consolidation requests
  */
 interface IConsolidationBus {
-    function addConsolidationRequests(
-        bytes[][] calldata sourcePubkeysGroups,
-        bytes[] calldata targetPubkeys
-    ) external;
+    function addConsolidationRequests(bytes[][] calldata sourcePubkeysGroups, bytes[] calldata targetPubkeys) external;
 }
 
 /**
@@ -97,7 +97,11 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     //  Events
     // ==========
 
-    event ConsolidationPairAllowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId, address indexed submitter);
+    event ConsolidationPairAllowed(
+        uint256 indexed sourceOperatorId,
+        uint256 indexed targetOperatorId,
+        address indexed submitter
+    );
     event ConsolidationPairDisallowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId);
     event ConsolidationSubmitted(
         uint256 indexed sourceOperatorId,
@@ -189,10 +193,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
      * @param targetOperatorId ID of the target operator
      * @dev Reverts if caller does not have ALLOW_PAIR_ROLE
      */
-    function disallowPair(
-        uint256 sourceOperatorId,
-        uint256 targetOperatorId
-    ) external onlyRole(ALLOW_PAIR_ROLE) {
+    function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external onlyRole(ALLOW_PAIR_ROLE) {
         bool removed = _allowedPairs[sourceOperatorId].remove(targetOperatorId);
         if (!removed) revert PairNotInAllowlist(sourceOperatorId, targetOperatorId);
 
@@ -211,10 +212,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
      * @param targetOperatorId ID of the target operator
      * @return True if the pair is allowed
      */
-    function isPairAllowed(
-        uint256 sourceOperatorId,
-        uint256 targetOperatorId
-    ) external view returns (bool) {
+    function isPairAllowed(uint256 sourceOperatorId, uint256 targetOperatorId) external view returns (bool) {
         return _allowedPairs[sourceOperatorId].contains(targetOperatorId);
     }
 
@@ -233,10 +231,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
      * @param targetOperatorId ID of the target operator
      * @return Address authorized to submit consolidation batches, or address(0) if pair not allowed
      */
-    function getSubmitter(
-        uint256 sourceOperatorId,
-        uint256 targetOperatorId
-    ) external view returns (address) {
+    function getSubmitter(uint256 sourceOperatorId, uint256 targetOperatorId) external view returns (address) {
         return _submitters[sourceOperatorId][targetOperatorId];
     }
 
@@ -276,7 +271,6 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     //    Submit
     // ============
 
-
     /**
      * @notice Submits a consolidation batch after validation
      * @param sourceOperatorId ID of the source operator
@@ -308,12 +302,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
 
         CONSOLIDATION_BUS.addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
 
-        emit ConsolidationSubmitted(
-            sourceOperatorId,
-            targetOperatorId,
-            sourceKeyIndicesGroups,
-            targetKeyIndices
-        );
+        emit ConsolidationSubmitted(sourceOperatorId, targetOperatorId, sourceKeyIndicesGroups, targetKeyIndices);
     }
 
     // ==================
@@ -350,9 +339,11 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         sourcePubkeysGroups = new bytes[][](groupsCount);
         for (uint256 i = 0; i < groupsCount; ++i) {
             sourcePubkeysGroups[i] = _validateAndExtractKeys(
-                SOURCE_MODULE_ID, sourceOperatorId, sourceKeyIndicesGroups[i]
+                SOURCE_MODULE_ID,
+                sourceOperatorId,
+                sourceKeyIndicesGroups[i]
             );
-        }   
+        }
 
         targetPubkeys = _validateAndExtractKeys(TARGET_MODULE_ID, targetOperatorId, targetKeyIndices);
 
@@ -366,7 +357,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     ) internal view returns (bytes[] memory pubkeys) {
         IUnifiedStakingModule module = _getModule(moduleId);
 
-        (,,,,,, uint256 totalDeposited,) = module.getNodeOperatorSummary(operatorId);
+        (, , , , , , uint256 totalDeposited, ) = module.getNodeOperatorSummary(operatorId);
 
         uint256 count = keyIndices.length;
         pubkeys = new bytes[](count);
@@ -388,5 +379,4 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         IStakingRouter.StakingModule memory sm = STAKING_ROUTER.getStakingModule(moduleId);
         return IUnifiedStakingModule(sm.stakingModuleAddress);
     }
-
 }
