@@ -682,6 +682,8 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [64n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(64n * 10n ** 18n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -744,6 +746,8 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [500n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(500n * 10n ** 18n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
@@ -763,6 +767,8 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [456n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(456n * 10n ** 18n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
