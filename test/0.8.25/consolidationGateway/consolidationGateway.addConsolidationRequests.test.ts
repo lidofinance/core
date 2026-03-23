@@ -258,6 +258,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     });
 
     it("should revert with InvalidProof when validator witness proof is malformed", async () => {
+      // InvalidProof is defined in the SSZ library , not on ConsolidationGateway itself.
+      // The CLProofVerifier calls SSZ.verifyProof() which reverts with SSZ.InvalidProof(),
+      // but since the error is on the library, it doesn't appear in ConsolidationGateway's ABI.
       await expect(
         consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
           [[PUBKEYS[0]]],
@@ -273,7 +276,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
           ZERO_ADDRESS,
           { value: 2 },
         ),
-      ).to.be.reverted;
+      ).to.be.revertedWithCustomError({ interface: ethers.Interface.from(["error InvalidProof()"]) }, "InvalidProof");
     });
   });
 
