@@ -7,11 +7,7 @@ import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from 
 
 import { Snapshot } from "test/suite";
 
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-];
+import { PUBKEYS } from "../consolidation-helpers";
 
 describe("ConsolidationBus.sol: publisher", () => {
   let consolidationBus: ConsolidationBus;
@@ -228,6 +224,68 @@ describe("ConsolidationBus.sol: publisher", () => {
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
         .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
         .withArgs(1);
+    });
+
+    it("should revert if any source in a multi-source group equals the target", async () => {
+      // Group has multiple sources, one of which matches the target
+      const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]]];
+      const targetPubkeys = [PUBKEYS[1]]; // PUBKEYS[1] is both source and target
+
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+        .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
+        .withArgs(0);
+    });
+
+    it("should allow re-adding batch after removal", async () => {
+      const REMOVE_ROLE = await consolidationBus.REMOVE_ROLE();
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
+
+      const sourcePubkeysGroups = [[PUBKEYS[0]]];
+      const targetPubkeys = [PUBKEYS[1]];
+
+      // Add first time
+      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+
+      const batchHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
+      );
+
+      // Remove
+      await consolidationBus.connect(manager).removeBatches([batchHash]);
+
+      // Batch should be cleared
+      const batchInfo = await consolidationBus.getBatchInfo(batchHash);
+      expect(batchInfo.publisher).to.equal(ethers.ZeroAddress);
+
+      // Re-add should succeed
+      await expect(
+        consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys),
+      ).to.emit(consolidationBus, "RequestsAdded");
+    });
+
+    it("should allow re-adding batch after execution", async () => {
+      const sourcePubkeysGroups = [[PUBKEYS[0]]];
+      const targetPubkeys = [PUBKEYS[1]];
+
+      // Add first time
+      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+
+      const witnesses = targetPubkeys.map((pubkey) => ({
+        proof: [],
+        pubkey,
+        validatorIndex: 0,
+        childBlockTimestamp: 0,
+        slot: 0,
+        proposerIndex: 0,
+      }));
+
+      // Execute
+      await consolidationBus.executeConsolidation(sourcePubkeysGroups, witnesses, { value: 10 });
+
+      // Re-add should succeed
+      await expect(
+        consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys),
+      ).to.emit(consolidationBus, "RequestsAdded");
     });
 
     it("should revert if target pubkey length is not 48 bytes", async () => {

@@ -21,7 +21,7 @@ describe("ConsolidationGateway.sol: deployment", () => {
     });
   });
 
-  it("should deploy successfully with valid admin", async () => {
+  it("should deploy successfully with valid admin and verify initial state", async () => {
     const [admin] = await ethers.getSigners();
     const locatorAddr = (await deployLidoLocator()).getAddress();
 
@@ -40,6 +40,49 @@ describe("ConsolidationGateway.sol: deployment", () => {
     expect(await gateway.hasRole(adminRole, admin.address)).to.be.true;
   });
 
+  it("should initialize rate limit config during deployment", async () => {
+    const [admin] = await ethers.getSigners();
+    const locatorAddr = (await deployLidoLocator()).getAddress();
+
+    const gateway = await ethers.deployContract("ConsolidationGateway", [
+      admin.address,
+      locatorAddr,
+      50,
+      5,
+      100,
+      DUMMY_GI,
+      DUMMY_GI,
+      0,
+    ]);
+
+    const data = await gateway.getConsolidationRequestLimitFullInfo();
+    expect(data[0]).to.equal(50); // maxConsolidationRequestsLimit
+    expect(data[1]).to.equal(5); // consolidationsPerFrame
+    expect(data[2]).to.equal(100); // frameDurationInSec
+    expect(data[3]).to.equal(50); // prevConsolidationRequestsLimit
+    expect(data[4]).to.equal(50); // currentConsolidationRequestsLimit
+  });
+
+  it("should emit ConsolidationRequestsLimitSet during deployment", async () => {
+    const [admin] = await ethers.getSigners();
+    const locatorAddr = (await deployLidoLocator()).getAddress();
+
+    const gateway = await ethers.deployContract("ConsolidationGateway", [
+      admin.address,
+      locatorAddr,
+      100,
+      1,
+      48,
+      DUMMY_GI,
+      DUMMY_GI,
+      0,
+    ]);
+
+    await expect(gateway.deploymentTransaction())
+      .to.emit(gateway, "ConsolidationRequestsLimitSet")
+      .withArgs(100, 1, 48);
+  });
+
   it("should revert if admin is zero address", async () => {
     const locatorAddr = (await deployLidoLocator()).getAddress();
 
@@ -55,5 +98,24 @@ describe("ConsolidationGateway.sol: deployment", () => {
         0,
       ]),
     ).to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationGateway"), "AdminCannotBeZero");
+  });
+
+  it("should revert if lidoLocator is zero address", async () => {
+    const [admin] = await ethers.getSigners();
+
+    await expect(
+      ethers.deployContract("ConsolidationGateway", [
+        admin.address,
+        ethers.ZeroAddress,
+        100,
+        1,
+        48,
+        DUMMY_GI,
+        DUMMY_GI,
+        0,
+      ]),
+    )
+      .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationGateway"), "ZeroArgument")
+      .withArgs("lidoLocator");
   });
 });

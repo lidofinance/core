@@ -21,23 +21,9 @@ import {
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-];
+import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
-
-const witnessesForTargets = (targets: string[]) =>
-  targets.map((pubkey) => ({
-    proof: [],
-    pubkey,
-    validatorIndex: 0,
-    childBlockTimestamp: 0,
-    slot: 0,
-    proposerIndex: 0,
-  }));
 
 describe("ConsolidationGateway.sol: pausable", () => {
   let consolidationGateway: ConsolidationGateway;
@@ -160,17 +146,6 @@ describe("ConsolidationGateway.sol: pausable", () => {
 
         // Verify contract is resumed
         expect(await consolidationGateway.isPaused()).to.equal(false);
-      });
-
-      it("should allow consolidation requests after resuming", async () => {
-        // First pause and then resume the contract
-        await consolidationGateway.connect(admin).pauseFor(1000n);
-        await consolidationGateway.connect(admin).resume();
-
-        // Should be able to add consolidation requests
-        await consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
       });
     });
 

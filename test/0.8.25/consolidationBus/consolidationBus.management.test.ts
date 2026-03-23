@@ -7,20 +7,7 @@ import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from 
 
 import { Snapshot } from "test/suite";
 
-const witnessesForTargets = (targets: string[]) =>
-  targets.map((pubkey) => ({
-    proof: [],
-    pubkey,
-    validatorIndex: 0,
-    childBlockTimestamp: 0,
-    slot: 0,
-    proposerIndex: 0,
-  }));
-
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-];
+import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
 
 describe("ConsolidationBus.sol: management", () => {
   let consolidationBus: ConsolidationBus;

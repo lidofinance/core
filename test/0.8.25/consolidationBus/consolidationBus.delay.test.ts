@@ -9,22 +9,7 @@ import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
 
 import { Snapshot } from "test/suite";
 
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-];
-
-const witnessesForTargets = (targets: string[]) =>
-  targets.map((pubkey) => ({
-    proof: [],
-    pubkey,
-    validatorIndex: 0,
-    childBlockTimestamp: 0,
-    slot: 0,
-    proposerIndex: 0,
-  }));
+import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
 
 describe("ConsolidationBus.sol: execution delay", () => {
   let consolidationBus: ConsolidationBus;
