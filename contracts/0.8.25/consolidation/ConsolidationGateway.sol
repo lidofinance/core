@@ -204,13 +204,13 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
             requestsCount += groupSize;
         }
 
+        _checkConsolidationPreconditions();
+
         (IWithdrawalVault withdrawalVault, bytes32 withdrawalCredentials) = _getWithdrawalVaultData();
 
         for (uint256 i = 0; i < groupsCount; ++i) {
             _validatePubKeyWCProof(targetWitnesses[i], withdrawalCredentials);
         }
-
-        _checkConsolidationPreconditions();
 
         _consumeConsolidationRequestLimit(requestsCount);
 
