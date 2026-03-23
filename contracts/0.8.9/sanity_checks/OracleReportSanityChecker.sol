@@ -1011,7 +1011,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) internal view returns (uint256 totalActivatedInClByModules) {
         uint256 modulesCount = _stakingModuleIdsWithUpdatedBalance.length;
         for (uint256 i = 0; i < modulesCount;) {
-            (bool hasPreviousAccounting, uint64 previousModuleValidatorsBalanceGwei, , ) =
+            (bool hasPreviousAccounting, uint64 previousModuleValidatorsBalanceGwei,) =
                 _getModuleAccountingState(_stakingRouter, _stakingModuleIdsWithUpdatedBalance[i]);
             uint256 previousModuleValidatorsBalanceWei = uint256(previousModuleValidatorsBalanceGwei) * 1 gwei;
             // Skip module-delta aggregation until the module has previous accounting baseline.
@@ -1034,7 +1034,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _moduleId Staking module id.
     /// @return hasPreviousAccounting True if previous accounting baseline is available for sanity checks.
     /// @return previousValidatorsBalanceGwei Previous module validators balance in gwei.
-    /// @return previousPendingBalanceGwei Previous module pending balance in gwei.
     /// @return exitedValidatorsCount Previous module exited validators count.
     function _getModuleAccountingState(
         IStakingRouter _stakingRouter,
@@ -1045,12 +1044,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         returns (
             bool hasPreviousAccounting,
             uint64 previousValidatorsBalanceGwei,
-            uint64 previousPendingBalanceGwei,
             uint64 exitedValidatorsCount
         )
     {
         if (!_stakingRouter.hasStakingModule(_moduleId)) {
-            return (false, 0, 0, 0);
+            return (false, 0, 0);
         }
 
         (previousValidatorsBalanceGwei, exitedValidatorsCount) =
@@ -1058,7 +1056,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         hasPreviousAccounting =
             previousValidatorsBalanceGwei != 0 ||
-            previousPendingBalanceGwei != 0 ||
             exitedValidatorsCount != 0;
     }
 
