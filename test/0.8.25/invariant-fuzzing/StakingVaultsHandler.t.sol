@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity ^0.8.25;
+pragma solidity 0.8.25;
 
 // External dependencies
 import {CommonBase} from "forge-std/Base.sol";
@@ -209,7 +209,8 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         uint256 obligationsShortfallValue = vaultHub.obligationsShortfallValue(address(stakingVault));
         if (obligationsShortfallValue == 0) return;
 
-        bytes memory pubkeys = new bytes(0);
+        // 48-byte dummy pubkey for a single validator
+        bytes memory pubkeys = new bytes(48);
         vm.prank(rootAccount);
         try
             vaultHub.forceValidatorExit{value: Constants.WITHDRAWAL_FEE}(address(stakingVault), pubkeys, userAccount)

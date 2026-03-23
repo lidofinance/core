@@ -237,6 +237,26 @@ contract PredepositGuaranteeMock {
     }
 }
 
+/// @notice Minimal mock of the EIP-7002 withdrawal request predeploy (0x00000961Ef480Eb55e80D19ad83579A64c007002)
+contract EIP7002WithdrawalRequestMock {
+    uint256 public fee;
+
+    constructor(uint256 _fee) {
+        fee = _fee;
+    }
+
+    fallback() external payable {
+        if (msg.data.length == 0) {
+            // Return fee as a big-endian 32-byte value (matches EIP-7002 spec)
+            bytes memory result = abi.encode(fee);
+            assembly {
+                return(add(result, 32), 32)
+            }
+        }
+        // For withdrawal requests (56 bytes), just succeed
+    }
+}
+
 contract PinnedBeaconProxyMock is ERC1967Proxy, IPinnedBeaconProxy {
     constructor(address _impl, bytes memory _data) ERC1967Proxy(_impl, _data) {}
 

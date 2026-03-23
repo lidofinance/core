@@ -448,9 +448,6 @@ contract OperatorGridMock is AccessControlEnumerableUpgradeable {
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         VaultHub vaultHub = _vaultHub();
-        bool isVaultConnected = vaultHub.isVaultConnected(_vault);
-
-        address vaultOwner = isVaultConnected ? vaultHub.vaultConnection(_vault).owner : IStakingVault(_vault).owner();
 
         address nodeOperator = IStakingVault(_vault).nodeOperator();
 

@@ -16,7 +16,12 @@ import {Constants} from "./StakingVaultConstants.sol";
 
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {OperatorGridMock, TierParams} from "./mocks/OperatorGridMock.sol";
-import {PinnedBeaconProxyMock, VaultFactoryMock, PredepositGuaranteeMock} from "./mocks/CommonMocks.sol";
+import {
+    PinnedBeaconProxyMock,
+    VaultFactoryMock,
+    PredepositGuaranteeMock,
+    EIP7002WithdrawalRequestMock
+} from "./mocks/CommonMocks.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 contract MultiStakingVaultsTest is Test {
@@ -25,8 +30,7 @@ contract MultiStakingVaultsTest is Test {
 
     OperatorGridMock operatorGridProxy;
 
-    //uint256[2] groupShareLimit = [1000 ether, 500 ether];
-    uint256[2] groupShareLimit = [1000, 500];
+    uint256[2] groupShareLimit = [1000 ether, 500 ether];
     MultiStakingVaultHandler msvHandler;
 
     address private rootAccount = makeAddr("rootAccount");
@@ -86,6 +90,13 @@ contract MultiStakingVaultsTest is Test {
         deployCodeTo("CommonMocks.sol:VaultFactoryMock", "", vaultFactory_addr);
 
         deployCodeTo("CommonMocks.sol:PredepositGuaranteeMock", "", pdg_addr);
+
+        //Deploy EIP-7002 withdrawal request predeploy mock
+        deployCodeTo(
+            "CommonMocks.sol:EIP7002WithdrawalRequestMock",
+            abi.encode(uint256(1)),
+            0x00000961Ef480Eb55e80D19ad83579A64c007002
+        );
 
         //Deploy LidoLocatorMock
         deployCodeTo(

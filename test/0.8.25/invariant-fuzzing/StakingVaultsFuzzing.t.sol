@@ -17,7 +17,7 @@ import {RefSlotCache, DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0
 
 import {StakingVaultsHandler} from "./StakingVaultsHandler.t.sol";
 import {Constants} from "./StakingVaultConstants.sol";
-import {PinnedBeaconProxyMock} from "./mocks/CommonMocks.sol";
+import {PinnedBeaconProxyMock, EIP7002WithdrawalRequestMock} from "./mocks/CommonMocks.sol";
 
 contract StakingVaultsTest is Test {
     using RefSlotCache for RefSlotCache.Uint104WithCache;
@@ -85,6 +85,13 @@ contract StakingVaultsTest is Test {
 
         //Deploy PredepositGuaranteeMock
         deployCodeTo("CommonMocks.sol:PredepositGuaranteeMock", "", pdg_addr);
+
+        //Deploy EIP-7002 withdrawal request predeploy mock
+        deployCodeTo(
+            "CommonMocks.sol:EIP7002WithdrawalRequestMock",
+            abi.encode(uint256(1)),
+            0x00000961Ef480Eb55e80D19ad83579A64c007002
+        );
 
         //Deploy LidoLocatorMock
         deployCodeTo(

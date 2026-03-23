@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity ^0.8.25;
+pragma solidity 0.8.25;
 
 import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
@@ -312,6 +312,18 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
 
         vm.prank(userAccount[id]);
         try vaultHub.voluntaryDisconnect(address(stakingVaults[id])) {
+            // Recompute vault report after burn/disconnect so _batchReport uses fresh data
+            address _vault = address(stakingVaults[id]);
+            VaultHub.VaultRecord memory vaultRecord = vaultHub.vaultRecord(_vault);
+            uint256 liabilityShares = vaultHub.liabilityShares(_vault);
+            vaultReports[id] = VaultReport({
+                totalValue: _vault.balance,
+                cumulativeLidoFees: vaultRecord.cumulativeLidoFees + vaultRecord.settledLidoFees + 1,
+                liabilityShares: liabilityShares,
+                maxLiabilityShares: Math256.max(vaultRecord.maxLiabilityShares, liabilityShares),
+                reportTimestamp: uint64(block.timestamp)
+            });
+
             // Complete disconnect by submitting one more report (single vault)
             uint256[] memory singleId = new uint256[](1);
             singleId[0] = id;
@@ -375,7 +387,8 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         uint256 obligationsShortfall = vaultHub.obligationsShortfallValue(address(stakingVaults[id]));
         if (obligationsShortfall == 0) return;
 
-        bytes memory pubkeys = new bytes(0);
+        // 48-byte dummy pubkey for a single validator
+        bytes memory pubkeys = new bytes(48);
         vm.prank(rootAccount);
         try
             vaultHub.forceValidatorExit{value: Constants.WITHDRAWAL_FEE}(
