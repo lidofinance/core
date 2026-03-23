@@ -354,13 +354,15 @@ contract ConsolidationBus is AccessControlEnumerable {
             }
         }
 
-        bytes32 batchHash = _computeBatchHash(sourcePubkeysGroups, targetPubkeys);
+        bytes memory encodedBatch = abi.encode(sourcePubkeysGroups, targetPubkeys);
+
+        bytes32 batchHash = keccak256(encodedBatch);
 
         if (_pendingBatches[batchHash].publisher != address(0)) revert BatchAlreadyPending(batchHash);
 
         _pendingBatches[batchHash] = BatchInfo(msg.sender, uint64(block.timestamp));
 
-        emit RequestsAdded(msg.sender, abi.encode(sourcePubkeysGroups, targetPubkeys));
+        emit RequestsAdded(msg.sender, encodedBatch);
     }
 
     // ==============
@@ -406,19 +408,6 @@ contract ConsolidationBus is AccessControlEnumerable {
     // ==================
     //  Internal methods
     // ==================
-
-    /**
-     * @dev Computes the hash of a batch from grouped source and target pubkeys
-     * @param sourcePubkeysGroups Array of groups of source validator public keys
-     * @param targetPubkeys Array of target validator public keys
-     * @return Hash of the encoded batch data
-     */
-    function _computeBatchHash(
-        bytes[][] calldata sourcePubkeysGroups,
-        bytes[] calldata targetPubkeys
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encode(sourcePubkeysGroups, targetPubkeys));
-    }
 
     function _setBatchSize(uint256 limit) internal {
         if (limit == 0) revert ZeroArgument("batchSizeLimit");
