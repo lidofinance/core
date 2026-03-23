@@ -227,7 +227,7 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
       await grantLimitManagerRole(consolidationGateway, authorizedEntity);
       await setConsolidationLimit(consolidationGateway, authorizedEntity, 0, 0, 48);
 
-      // 10 total requests grouped into pairs
+      // 3 total requests grouped into pairs
       const sourcePubkeysGroups = Array(3)
         .fill(0)
         .map((_, i) => [PUBKEYS[i % 3]]);

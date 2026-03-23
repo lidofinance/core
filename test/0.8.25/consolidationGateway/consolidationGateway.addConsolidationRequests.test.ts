@@ -349,7 +349,13 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       // Restore limit after frame advancement
       await advanceChainTime(48n * 3n);
 
-      await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled").withArgs(flatSources, flatTargets);
+      await expect(
+        consolidationGateway
+          .connect(authorizedEntity)
+          .addConsolidationRequests(sourcePubkeysGroups, witnesses, ZERO_ADDRESS, { value: 4 }),
+      )
+        .to.emit(withdrawalVault, "AddConsolidationRequestsCalled")
+        .withArgs(flatSources, flatTargets);
     });
   });
 
