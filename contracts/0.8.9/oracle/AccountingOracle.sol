@@ -747,7 +747,7 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
-        (uint256 preCLValidatorsBalanceWei, uint256 preCLPendingBalanceWei, uint256 depositsWei) =
+        (uint256 preCLValidatorsBalanceWei, uint256 preCLPendingBalanceWei,, uint256 depositsWei) =
             ILido(LOCATOR.lido()).getBalanceStats();
         sanityChecker.checkModuleAndCLBalancesChangeRates(
             data.stakingModuleIdsWithUpdatedBalance,
