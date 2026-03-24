@@ -705,11 +705,7 @@ describe("StakingRouter.sol:module-sync", () => {
         WithdrawalCredentialsType.WC0x01,
         moduleSummary.totalDepositedValidators - moduleSummary.totalExitedValidators,
       );
-      await stakingRouter.testing_setStakingModuleAccounting(
-        moduleId,
-        balance,
-        moduleSummary.totalExitedValidators,
-      );
+      await stakingRouter.testing_setStakingModuleAccounting(moduleId, balance, moduleSummary.totalExitedValidators);
 
       const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
         operatorSummary.targetLimitMode,

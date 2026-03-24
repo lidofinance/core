@@ -341,8 +341,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
   describe("Annual balance increase check with bad debt internalization", () => {
     it("CL balance increase over limit reverts, bad debt does not compensate", async () => {
       // Bad debt internalization does not affect positive CL growth checks,
-      // so even with bad debt queued, a report exceeding the pending-backed
-      // CL increase budget should revert.
+      // so even with bad debt queued, a report exceeding the activated-pending
+      // plus validators-based safety cap should revert.
 
       const { oracleReportSanityChecker, lido } = ctx.contracts;
 
@@ -352,13 +352,13 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
 
       // Get current protocol state
-      const { clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
       const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
       const { reportTimeElapsed } = await getNextReportContext(ctx);
       const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
       const MAX_BASIS_POINTS = 10000n;
       const maxBalanceIncrease =
-        ((annualBalanceIncreaseBPLimit * clPendingBalanceAtLastReport * reportTimeElapsed) /
+        ((annualBalanceIncreaseBPLimit * clValidatorsBalanceAtLastReport * reportTimeElapsed) /
           (SECONDS_PER_YEAR * MAX_BASIS_POINTS) /
           ONE_GWEI) *
         ONE_GWEI;
@@ -366,8 +366,10 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       const stateBefore = await captureState();
       expect(stateBefore.badDebtToInternalize).to.equal(badDebtShares, "Bad debt should be queued");
 
-      // Positive CL growth is bounded first by the pending-backed budget, and bad debt
-      // still must not compensate an over-limit report.
+      // `report()` consumes the seeded pending baseline inside the same report, so the
+      // raw CL delta under test is just the validators-based safety-cap component.
+      // Bad debt still must not compensate an over-limit report.
+      expect(clPendingBalanceAtLastReport).to.be.gt(0n, "test precondition failed: pending baseline must be non-zero");
       await expect(
         report(ctx, {
           clDiff: maxBalanceIncrease + ONE_GWEI,

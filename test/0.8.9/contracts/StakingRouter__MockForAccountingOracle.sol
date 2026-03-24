@@ -123,11 +123,9 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         return _moduleExistsById[moduleId];
     }
 
-    function getStakingModuleStateAccounting(uint256 moduleId)
-        external
-        view
-        returns (uint64 validatorsBalanceGwei, uint64 exitedValidatorsCount)
-    {
+    function getStakingModuleStateAccounting(
+        uint256 moduleId
+    ) external view returns (uint64 validatorsBalanceGwei, uint64 exitedValidatorsCount) {
         return (_validatorBalancesGweiByModuleId[moduleId], uint64(_exitedKeysCountsByModuleId[moduleId]));
     }
 

@@ -260,15 +260,19 @@ export const report = async (
     const modulesWithBalance: StakingModuleWithBalanceGwei[] = [];
     for (const moduleId of moduleIds) {
       const moduleBalance = await ctx.contracts.stakingRouter.getModuleValidatorsBalance(moduleId);
-      if (moduleBalance > 0n) {
-        modulesWithBalance.push({ moduleId, moduleBalanceGwei: moduleBalance / ONE_GWEI });
-      }
+      modulesWithBalance.push({ moduleId, moduleBalanceGwei: moduleBalance / ONE_GWEI });
     }
 
-    const modulesWithReportedBalance = buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, modulesWithBalance);
-    for (const { moduleId, moduleReportedBalanceGwei } of modulesWithReportedBalance) {
+    const activeModulesWithBalance = modulesWithBalance.filter(({ moduleBalanceGwei }) => moduleBalanceGwei > 0n);
+    const modulesWithReportedBalance = new Map(
+      buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, activeModulesWithBalance).map(
+        ({ moduleId, moduleReportedBalanceGwei }) => [moduleId, moduleReportedBalanceGwei],
+      ),
+    );
+
+    for (const { moduleId } of modulesWithBalance) {
       stakingModuleIdsWithUpdatedBalance.push(moduleId);
-      validatorBalancesGweiByStakingModule.push(moduleReportedBalanceGwei);
+      validatorBalancesGweiByStakingModule.push(modulesWithReportedBalance.get(moduleId) ?? 0n);
       pendingBalancesGweiByStakingModule.push(0n);
     }
   }
@@ -747,6 +751,26 @@ export const submitReportDataWithConsensus = async (
   const oracleVersion = await accountingOracle.getContractVersion();
 
   return accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
+};
+
+export const submitReportDataWithConsensusAndEmptyExtraData = async (
+  ctx: ProtocolContext,
+  data: AccountingOracle.ReportDataStruct,
+): Promise<{ reportTx: ContractTransactionResponse; extraDataTx: ContractTransactionResponse }> => {
+  const { accountingOracle } = ctx.contracts;
+
+  const reportHash = calcReportDataHash(getReportDataItems(data));
+  const submitter = await reachConsensus(ctx, {
+    refSlot: BigInt(data.refSlot),
+    reportHash,
+    consensusVersion: BigInt(data.consensusVersion),
+  });
+  const oracleVersion = await accountingOracle.getContractVersion();
+
+  const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
+  const extraDataTx = await accountingOracle.connect(submitter).submitReportExtraDataEmpty();
+
+  return { reportTx, extraDataTx };
 };
 
 /**

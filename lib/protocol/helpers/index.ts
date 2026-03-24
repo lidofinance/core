@@ -27,6 +27,7 @@ export {
   reportWithEffectiveClDiff,
   resetCLBalanceDecreaseWindow,
   submitReportDataWithConsensus,
+  submitReportDataWithConsensusAndEmptyExtraData,
   getDepositedSinceLastReport,
 } from "./accounting";
 

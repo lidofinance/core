@@ -104,7 +104,6 @@ contract StakingRouter__Harness is StakingRouter {
 
         uint64 totalValidatorsBalanceGwei = routerAcc.validatorsBalanceGwei;
 
-
         // update totals incrementally as we iterate through the part of modules in general case
         // 1. subtract old values
         unchecked {

@@ -63,7 +63,9 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
     uint256 private nodeOperatorNodeOperatorTotalDepositedValidators__mocked;
     uint256 private nodeOperatorNodeOperatorDepositableValidatorsCount__mocked;
 
-    function getNodeOperatorSummary(uint256)
+    function getNodeOperatorSummary(
+        uint256
+    )
         external
         view
         returns (

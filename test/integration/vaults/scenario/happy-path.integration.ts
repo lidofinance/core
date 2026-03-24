@@ -23,6 +23,7 @@ import {
   calculateLockedValue,
   depositValidatorsWithoutReport,
   ensurePredepositGuaranteeUnpaused,
+  getCurrentModuleAccountingReportParams,
   getProtocolContext,
   getReportTimeElapsed,
   OracleReportParams,
@@ -30,6 +31,7 @@ import {
   report,
   reportVaultDataWithProof,
   setupLidoForVaults,
+  submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
@@ -151,30 +153,23 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     }
 
     const { depositedSinceLastReport } = await lido.getBalanceStats();
-    const stakingModuleIds = await stakingRouter.getStakingModuleIds();
-    const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
-    const validatorBalancesGweiByStakingModule: bigint[] = [];
-    const pendingBalancesGweiByStakingModule: bigint[] = [];
-
-    for (const moduleId of stakingModuleIds) {
-      const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-      if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
-
-      stakingModuleIdsWithUpdatedBalance.push(moduleId);
-      validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
-      pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
-    }
 
     // Snapshot the freshly created pending balance into Lido's previous report state
     // before sending the APR-bearing report. This preserves the original APR intent
     // and avoids weakening the scenario into a neutral report.
-    await report(ctx, {
+    const { data } = await report(ctx, {
       clDiff: depositedSinceLastReport,
+      dryRun: true,
       excludeVaultsBalances: true,
       skipWithdrawals: true,
-      stakingModuleIdsWithUpdatedBalance,
-      validatorBalancesGweiByStakingModule,
-      pendingBalancesGweiByStakingModule,
+      ...(await getCurrentModuleAccountingReportParams(ctx)),
+    });
+
+    const pendingBaselineGwei = depositedSinceLastReport / 10n ** 9n;
+    await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
+      ...data,
+      clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei,
+      clPendingBalanceGwei: pendingBaselineGwei,
     });
   }
 

@@ -387,9 +387,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       ),
     ).not.to.be.reverted;
 
-    await stakingRouterHarness
-      .connect(admin)
-      .reportValidatorBalancesByStakingModule([moduleId], [0n]);
+    await stakingRouterHarness.connect(admin).reportValidatorBalancesByStakingModule([moduleId], [0n]);
 
     await expect(
       checkGlobalReport(checkerWithRouter, accountingSigner, {
@@ -506,9 +504,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       ),
     ).not.to.be.reverted;
 
-    await stakingRouterHarness
-      .connect(admin)
-      .reportValidatorBalancesByStakingModule([moduleId], [0n]);
+    await stakingRouterHarness.connect(admin).reportValidatorBalancesByStakingModule([moduleId], [0n]);
 
     await expect(
       checkGlobalReport(checkerWithRouter, accountingSigner, {
@@ -599,9 +595,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const expectedValidatorsGrowthLimitWei =
       previousPendingWei + (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
 
-    await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
-    ]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei }]);
 
     await expect(
       check([{ id: 1n, validatorsBalanceWei: previousValidatorsWei + currentIncreasePerDay, pendingWei: 0n }], {
@@ -628,12 +622,19 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     ]);
 
     await expect(
-      check([
-        { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei + totalPositiveModuleIncreaseWei, pendingWei: 0n },
-        { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei - ether("71"), pendingWei: 0n },
-      ], {
-        preCLPendingBalanceWei: previousPendingWei,
-      }),
+      check(
+        [
+          {
+            id: 1n,
+            validatorsBalanceWei: previousModuleValidatorsWei + totalPositiveModuleIncreaseWei,
+            pendingWei: 0n,
+          },
+          { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei - ether("71"), pendingWei: 0n },
+        ],
+        {
+          preCLPendingBalanceWei: previousPendingWei,
+        },
+      ),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalModuleValidatorsBalanceIncrease")
       .withArgs(expectedModuleIncreaseLimitWei, totalPositiveModuleIncreaseWei);
@@ -649,12 +650,15 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     ]);
 
     await expect(
-      check([
-        { id: 1n, validatorsBalanceWei: 0n, pendingWei: 0n },
-        { id: 2n, validatorsBalanceWei: 0n, pendingWei: 0n },
-      ], {
-        preCLPendingBalanceWei: totalConsumedPendingWei,
-      }),
+      check(
+        [
+          { id: 1n, validatorsBalanceWei: 0n, pendingWei: 0n },
+          { id: 2n, validatorsBalanceWei: 0n, pendingWei: 0n },
+        ],
+        {
+          preCLPendingBalanceWei: totalConsumedPendingWei,
+        },
+      ),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
       .withArgs(appearedLimitPerPeriodWei, totalConsumedPendingWei);
@@ -671,12 +675,15 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     ]);
 
     await expect(
-      check([
-        { id: 1n, validatorsBalanceWei: ether("30"), pendingWei: ether("20") },
-        { id: 2n, validatorsBalanceWei: ether("30"), pendingWei: ether("20") },
-      ], {
-        preCLPendingBalanceWei: ether("60"),
-      }),
+      check(
+        [
+          { id: 1n, validatorsBalanceWei: ether("30"), pendingWei: ether("20") },
+          { id: 2n, validatorsBalanceWei: ether("30"), pendingWei: ether("20") },
+        ],
+        {
+          preCLPendingBalanceWei: ether("60"),
+        },
+      ),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
       .withArgs(expectedValidatorsGrowthLimitWei, reportedValidatorsGrowthWei);
@@ -691,20 +698,21 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const currentPendingWei = previousPendingWei - consumedPendingWei;
     const requiredValidatorsIncreaseWei = maxAllowedValidatorsGrowthWei;
 
-    await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
-    ]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei }]);
 
     await expect(
-      check([
+      check(
+        [
+          {
+            id: 1n,
+            validatorsBalanceWei: previousValidatorsWei + requiredValidatorsIncreaseWei,
+            pendingWei: currentPendingWei,
+          },
+        ],
         {
-          id: 1n,
-          validatorsBalanceWei: previousValidatorsWei + requiredValidatorsIncreaseWei,
-          pendingWei: currentPendingWei,
+          preCLPendingBalanceWei: previousPendingWei,
         },
-      ], {
-        preCLPendingBalanceWei: previousPendingWei,
-      }),
+      ),
     ).not.to.be.reverted;
   });
 
@@ -719,20 +727,21 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const currentPendingWei = previousPendingWei - consumedPendingWei;
     const requiredValidatorsIncreaseWei = reportedValidatorsGrowthWei;
 
-    await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
-    ]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei }]);
 
     await expect(
-      check([
+      check(
+        [
+          {
+            id: 1n,
+            validatorsBalanceWei: previousValidatorsWei + requiredValidatorsIncreaseWei,
+            pendingWei: currentPendingWei,
+          },
+        ],
         {
-          id: 1n,
-          validatorsBalanceWei: previousValidatorsWei + requiredValidatorsIncreaseWei,
-          pendingWei: currentPendingWei,
+          preCLPendingBalanceWei: previousPendingWei,
         },
-      ], {
-        preCLPendingBalanceWei: previousPendingWei,
-      }),
+      ),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
       .withArgs(maxAllowedValidatorsGrowthWei, reportedValidatorsGrowthWei);
@@ -744,20 +753,21 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const activatedWei = ether("100");
     const exactIncrease = (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
-    ]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei }]);
 
     await expect(
-      check([
+      check(
+        [
+          {
+            id: 1n,
+            validatorsBalanceWei: previousValidatorsWei + exactIncrease,
+            pendingWei: previousPendingWei - activatedWei,
+          },
+        ],
         {
-          id: 1n,
-          validatorsBalanceWei: previousValidatorsWei + exactIncrease,
-          pendingWei: previousPendingWei - activatedWei,
+          preCLPendingBalanceWei: previousPendingWei,
         },
-      ], {
-        preCLPendingBalanceWei: previousPendingWei,
-      }),
+      ),
     ).not.to.be.reverted;
   });
 
@@ -796,9 +806,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit * halfDay) / (365n * ONE_DAY * 10_000n);
     const allowedValidatorsGrowthWei = activatedWei + safetyCapWei;
 
-    await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
-    ]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei }]);
 
     await expect(
       check(

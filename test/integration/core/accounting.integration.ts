@@ -409,20 +409,23 @@ describe("Integration: Accounting", () => {
     await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-    const { clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const { clValidatorsBalanceAtLastReport } = await lido.getBalanceStats();
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
+    // `report()` submits the raw post-vs-pre CL delta. In this seeded scenario the
+    // pending baseline is activated inside the same report, so the raw boundary is
+    // the validators-based safety-cap component rather than `pending + safetyCap`.
     let rebaseAmount =
-      (clPendingBalanceAtLastReport * annualBalanceIncreaseBPLimit * timeElapsed) / (365n * ONE_DAY) / MAX_BASIS_POINTS;
+      (clValidatorsBalanceAtLastReport * annualBalanceIncreaseBPLimit * timeElapsed) /
+      (365n * ONE_DAY) /
+      MAX_BASIS_POINTS;
     rebaseAmount = roundToGwei(rebaseAmount);
 
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: rebaseAmount, excludeVaultsBalances: true };
-
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await report(ctx, { clDiff: rebaseAmount, excludeVaultsBalances: true })) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };

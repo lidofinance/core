@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { advanceChainTime, batch, ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
 import {
   finalizeWQViaElVault,
+  getCurrentModuleAccountingReportParams,
   getProtocolContext,
   norSdvtEnsureOperators,
   OracleReportParams,
@@ -14,6 +15,7 @@ import {
   removeStakingLimit,
   report,
   setStakingLimit,
+  submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
 
 import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
@@ -310,32 +312,22 @@ describe("Scenario: Protocol Happy Path", () => {
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
 
     const { depositedSinceLastReport } = await lido.getBalanceStats();
-    const stakingModuleIds = await stakingRouter.getStakingModuleIds();
-    const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
-    const validatorBalancesGweiByStakingModule: bigint[] = [];
-    const pendingBalancesGweiByStakingModule: bigint[] = [];
-
-    for (const moduleId of stakingModuleIds) {
-      const [validatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-      const pendingBalanceGwei = moduleId === 1n ? norPendingDepositsGwei : 0n;
-      if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
-
-      stakingModuleIdsWithUpdatedBalance.push(moduleId);
-      validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
-      pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
-    }
 
     // Deposit() moved ETH into protocol pending, but the new sanity path takes its
     // baseline from the previous Lido report snapshot rather than router-only state.
     // Submit a neutral report first so the next reward-bearing report stays on the
     // original "deposits activated + tiny positive CL reward" happy path.
-    await report(ctx, {
+    const { data: pendingBaselineData } = await report(ctx, {
       clDiff: depositedSinceLastReport,
+      dryRun: true,
       excludeVaultsBalances: true,
       skipWithdrawals: true,
-      stakingModuleIdsWithUpdatedBalance,
-      validatorBalancesGweiByStakingModule,
-      pendingBalancesGweiByStakingModule,
+      ...(await getCurrentModuleAccountingReportParams(ctx)),
+    });
+    await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
+      ...pendingBaselineData,
+      clValidatorsBalanceGwei: BigInt(pendingBaselineData.clValidatorsBalanceGwei) - norPendingDepositsGwei,
+      clPendingBalanceGwei: norPendingDepositsGwei,
     });
 
     const reportData: Partial<OracleReportParams> = {

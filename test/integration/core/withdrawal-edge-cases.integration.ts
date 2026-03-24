@@ -11,6 +11,7 @@ import {
   finalizeWQViaSubmit,
   getProtocolContext,
   ProtocolContext,
+  report,
   reportWithEffectiveClDiff,
   resetCLBalanceDecreaseWindow,
 } from "lib/protocol";
@@ -48,20 +49,16 @@ describe("Integration: Withdrawal edge cases", () => {
   const getModuleAccountingReportParams = async (postCLBalanceWei: bigint) => {
     const { stakingRouter } = ctx.contracts;
     const stakingModuleIds = await stakingRouter.getStakingModuleIds();
-    const modules: { moduleId: bigint; validatorsBalanceGwei: bigint; pendingBalanceGwei: bigint }[] = [];
+    const modules: { moduleId: bigint; validatorsBalanceGwei: bigint }[] = [];
     let totalValidatorsBalanceGwei = 0n;
-    let totalPendingBalanceGwei = 0n;
 
     for (const moduleId of stakingModuleIds) {
-      const [validatorsBalanceGwei, pendingBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-      if (validatorsBalanceGwei === 0n && pendingBalanceGwei === 0n) continue;
-
-      modules.push({ moduleId, validatorsBalanceGwei, pendingBalanceGwei });
+      const [validatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+      modules.push({ moduleId, validatorsBalanceGwei });
       totalValidatorsBalanceGwei += validatorsBalanceGwei;
-      totalPendingBalanceGwei += pendingBalanceGwei;
     }
 
-    const totalReportedValidatorsBalanceGwei = postCLBalanceWei / ONE_GWEI - totalPendingBalanceGwei;
+    const totalReportedValidatorsBalanceGwei = postCLBalanceWei / ONE_GWEI;
     const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
     const validatorBalancesGweiByStakingModule: bigint[] = [];
     const pendingBalancesGweiByStakingModule: bigint[] = [];
@@ -69,7 +66,7 @@ describe("Integration: Withdrawal edge cases", () => {
     let remainingValidatorsBalanceGwei = totalValidatorsBalanceGwei;
 
     for (let index = 0; index < modules.length; ++index) {
-      const { moduleId, validatorsBalanceGwei, pendingBalanceGwei } = modules[index];
+      const { moduleId, validatorsBalanceGwei } = modules[index];
       const isLastModule = index === modules.length - 1;
       const reportedValidatorsBalanceGwei =
         isLastModule || remainingValidatorsBalanceGwei === 0n
@@ -78,7 +75,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
       stakingModuleIdsWithUpdatedBalance.push(moduleId);
       validatorBalancesGweiByStakingModule.push(reportedValidatorsBalanceGwei);
-      pendingBalancesGweiByStakingModule.push(pendingBalanceGwei);
+      pendingBalancesGweiByStakingModule.push(0n);
 
       remainingReportedValidatorsBalanceGwei -= reportedValidatorsBalanceGwei;
       remainingValidatorsBalanceGwei -= validatorsBalanceGwei;
@@ -91,7 +88,10 @@ describe("Integration: Withdrawal edge cases", () => {
     };
   };
 
-  const reportWithEffectiveClDiffPreservingPending = async (effectiveClDiff: bigint, skipWithdrawals = false) => {
+  const reportWithEffectiveClDiffUsingCurrentModuleBalances = async (
+    effectiveClDiff: bigint,
+    skipWithdrawals = false,
+  ) => {
     const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
       await ctx.contracts.lido.getBalanceStats();
     const postCLBalanceWei =
@@ -104,9 +104,29 @@ describe("Integration: Withdrawal edge cases", () => {
     });
   };
 
-  const seedProtocolPendingBaseline = async (depositsCount: bigint) => {
+  const activateDepositedValidators = async (depositsCount: bigint) => {
     await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, depositsCount);
-    await reportWithEffectiveClDiffPreservingPending(0n, true);
+
+    const { stakingRouter, lido: lidoContract } = ctx.contracts;
+    const stakingModuleIds = [...(await stakingRouter.getStakingModuleIds())];
+    const { depositedSinceLastReport } = await lidoContract.getBalanceStats();
+    const depositedValidatorsBalanceGwei = depositedSinceLastReport / ONE_GWEI;
+
+    await report(ctx, {
+      clDiff: depositedSinceLastReport,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+      stakingModuleIdsWithUpdatedBalance: stakingModuleIds,
+      validatorBalancesGweiByStakingModule: await Promise.all(
+        stakingModuleIds.map(async (moduleId) => {
+          const [validatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+          return moduleId === NOR_MODULE_ID
+            ? validatorsBalanceGwei + depositedValidatorsBalanceGwei
+            : validatorsBalanceGwei;
+        }),
+      ),
+      pendingBalancesGweiByStakingModule: stakingModuleIds.map(() => 0n),
+    });
   };
 
   before(async () => {
@@ -142,11 +162,11 @@ describe("Integration: Withdrawal edge cases", () => {
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
       await assertBufferAllocationInvariants();
 
-      await seedProtocolPendingBaseline(1n);
+      await activateDepositedValidators(1n);
 
       const stethInitialBalance = await lido.balanceOf(holder.address);
 
-      await reportWithEffectiveClDiffPreservingPending(ether("-1"));
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("-1"));
       await assertBufferAllocationInvariants();
 
       const stethFirstNegativeReportBalance = await lido.balanceOf(holder.address);
@@ -160,7 +180,7 @@ describe("Integration: Withdrawal edge cases", () => {
       const [firstRequestEvent] = findEventsWithInterfaces(firstRequestReceipt!, "WithdrawalRequested", [wq.interface]);
       const firstRequestId = firstRequestEvent!.args.requestId;
 
-      await reportWithEffectiveClDiffPreservingPending(ether("-0.1"));
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("-0.1"));
       await assertBufferAllocationInvariants();
 
       const stethSecondNegativeReportBalance = await lido.balanceOf(holder.address);
@@ -184,7 +204,7 @@ describe("Integration: Withdrawal edge cases", () => {
       expect(firstStatus.amountOfStETH).to.equal(secondStatus.amountOfStETH);
       expect(firstStatus.amountOfShares).to.be.lt(secondStatus.amountOfShares);
 
-      await reportWithEffectiveClDiffPreservingPending(ether("0.0001"));
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.0001"));
       await assertBufferAllocationInvariants();
 
       expect(await wq.isBunkerModeActive()).to.be.false;
@@ -220,8 +240,8 @@ describe("Integration: Withdrawal edge cases", () => {
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
       await assertBufferAllocationInvariants();
 
-      await seedProtocolPendingBaseline(3n);
-      await reportWithEffectiveClDiffPreservingPending(ether("0.001"));
+      await activateDepositedValidators(3n);
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.001"));
       await assertBufferAllocationInvariants();
 
       // Create withdrawal request
@@ -243,7 +263,7 @@ describe("Integration: Withdrawal edge cases", () => {
       expect(status.isFinalized).to.be.false;
 
       // Submit next report to finalize request
-      await reportWithEffectiveClDiffPreservingPending(ether("0.001"));
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.001"));
       await assertBufferAllocationInvariants();
 
       // Verify request finalized
@@ -282,8 +302,8 @@ describe("Integration: Withdrawal edge cases", () => {
       await assertBufferAllocationInvariants();
 
       // First rebase - positive
-      await seedProtocolPendingBaseline(1n);
-      await reportWithEffectiveClDiffPreservingPending(ether("0.0000001"));
+      await activateDepositedValidators(1n);
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.0000001"));
       await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.false;
 
@@ -296,7 +316,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle second (negative) rebase correctly", async () => {
       // Second rebase - negative
-      await reportWithEffectiveClDiffPreservingPending(ether("-0.1"));
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("-0.1"));
       await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.true;
 
@@ -315,7 +335,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle third (negative) rebase correctly", async () => {
       // Third rebase - negative
-      await reportWithEffectiveClDiffPreservingPending(ether("-0.1"));
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("-0.1"));
       await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.true;
 
@@ -328,7 +348,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle fourth (positive) rebase correctly", async () => {
       // Fourth rebase - positive
-      await reportWithEffectiveClDiffPreservingPending(ether("0.0000001"));
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.0000001"));
       await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.false;
 
