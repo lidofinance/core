@@ -220,8 +220,8 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     const { reportTimeElapsed } = await getNextReportContext(ctx);
     const totalPendingBalanceBeforeWei = balanceStatsBeforeReport.depositedSinceLastReport;
     const totalPendingBalanceBeforeGwei = totalPendingBalanceBeforeWei / ONE_GWEI;
-    const appearedLimitEthPerDay = ((totalPendingBalanceBeforeWei / ONE_ETH) * ONE_DAY + reportTimeElapsed - 1n) /
-      reportTimeElapsed;
+    const appearedLimitEthPerDay =
+      ((totalPendingBalanceBeforeWei / ONE_ETH) * ONE_DAY + reportTimeElapsed - 1n) / reportTimeElapsed;
 
     await updateOracleReportLimits(ctx, {
       annualBalanceIncreaseBPLimit: 0n,
@@ -259,10 +259,8 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       clPendingBalanceGwei: 0n,
     });
 
-    await expect(submitReportDataWithConsensus(ctx, data)).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "IncorrectTotalModuleValidatorsBalanceIncrease",
-    )
+    await expect(submitReportDataWithConsensus(ctx, data))
+      .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalModuleValidatorsBalanceIncrease")
       .withArgs(totalPendingBalanceBeforeWei, totalPendingBalanceBeforeWei + ONE_ETH);
   });
 
