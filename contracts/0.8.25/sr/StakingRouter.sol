@@ -33,8 +33,7 @@ import {
     ModuleStateConfig,
     ModuleStateDeposits,
     ModuleStateAccounting,
-    ILido,
-    IAccountingOracle
+    ILido
 } from "./SRTypes.sol";
 
 contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {

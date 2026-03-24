@@ -1109,7 +1109,7 @@ describe("OracleReportSanityChecker.sol", () => {
           ),
         )
           .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
-          .withArgs(0n, excessiveActivationWei);
+          .withArgs(ether("1"), excessiveActivationWei);
       });
 
       it("reverts with InvalidClBalancesData when CL withdrawals exceed previous validators balance", async () => {
@@ -1238,10 +1238,10 @@ describe("OracleReportSanityChecker.sol", () => {
     it("reverts when positive CL increase exceeds the pending-backed one-day allowance", async () => {
       const preCLBalance = 3_650_000n;
       const preCLPendingBalance = 1_000n;
-      const postCLBalance = preCLBalance + preCLPendingBalance + 1n;
       const postCLPendingBalance = 0n;
-      const allowedIncrease = preCLPendingBalance + preCLPendingBalance / 3650n;
-      const clIncrease = preCLPendingBalance + 1n;
+      const allowedIncrease = preCLPendingBalance + preCLBalance / 3650n;
+      const clIncrease = allowedIncrease + 1n;
+      const postCLBalance = preCLBalance + clIncrease;
 
       await expect(
         checker.connect(accountingSigner).checkAccountingOracleReport(
@@ -1260,9 +1260,10 @@ describe("OracleReportSanityChecker.sol", () => {
     it("reverts when a one-day positive CL increase exceeds the pending-backed allowance", async () => {
       const preCLBalance = ether("1000000");
       const preCLPendingBalance = ether("100");
-      const postCLBalance = preCLBalance + preCLPendingBalance + ether("1");
       const postCLPendingBalance = 0n;
-      const clIncrease = ether("101");
+      const allowedIncrease = preCLPendingBalance + preCLBalance / 3650n;
+      const clIncrease = allowedIncrease + 1n;
+      const postCLBalance = preCLBalance + clIncrease;
 
       await expect(
         checker.connect(accountingSigner).checkAccountingOracleReport(
@@ -1276,11 +1277,11 @@ describe("OracleReportSanityChecker.sol", () => {
         ),
       )
         .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
-        .withArgs(ether("100") + ether("100") / 3650n, clIncrease);
+        .withArgs(allowedIncrease, clIncrease);
     });
 
     it("passes with valid report", async () => {
-      // A valid positive validators delta must now be explicitly funded by protocol pending.
+      // This scenario uses 1 wei of pending explicitly, though positive growth can also be covered by the validators-based safety cap.
       await expect(
         checker.connect(accountingSigner).checkAccountingOracleReport(
           ...report({

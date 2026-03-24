@@ -67,36 +67,40 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   const toModuleInput = (modules: ModuleBalance[]) => {
     const ids = modules.map((m) => m.id);
     const validatorBalancesGweiByStakingModule = modules.map((m) => toGwei(m.validatorsBalanceWei));
-    const pendingBalancesGwei = modules.map((m) => toGwei(m.pendingWei ?? 0n));
-    const clValidatorsBalanceGwei = validatorBalancesGweiByStakingModule.reduce((sum, val) => sum + val, 0n);
-    const clPendingBalanceGwei = pendingBalancesGwei.reduce((sum, val) => sum + val, 0n);
 
     return {
       ids,
       validatorBalancesGweiByStakingModule,
-      pendingBalancesGwei,
-      clValidatorsBalanceGwei,
-      clPendingBalanceGwei,
     };
   };
 
   const seedPreviousBalances = async (modules: ModuleBalance[]) => {
     const input = toModuleInput(modules);
+    // Router state seeds validators balance only; pending budget is passed to the checker explicitly.
     await stakingRouter.reportValidatorBalancesByStakingModule(input.ids, input.validatorBalancesGweiByStakingModule);
   };
 
-  const check = async (modules: ModuleBalance[], timeElapsed = ONE_DAY) => {
+  const check = async (
+    modules: ModuleBalance[],
+    {
+      preCLPendingBalanceWei = 0n,
+      // Module fixtures carry only post-report pending; router state itself no longer stores module pending.
+      postCLPendingBalanceWei = modules.reduce((sum, m) => sum + (m.pendingWei ?? 0n), 0n),
+      depositsWei = 0n,
+      timeElapsed = ONE_DAY,
+    }: {
+      preCLPendingBalanceWei?: bigint;
+      postCLPendingBalanceWei?: bigint;
+      depositsWei?: bigint;
+      timeElapsed?: bigint;
+    } = {},
+  ) => {
     const ids = modules.map((m) => m.id);
     const validatorBalancesWeiByStakingModule = modules.map((m) => m.validatorsBalanceWei);
     const postCLValidatorsBalanceWei = validatorBalancesWeiByStakingModule.reduce((sum, val) => sum + val, 0n);
-    const postCLPendingBalanceWei = modules.reduce((sum, m) => sum + (m.pendingWei ?? 0n), 0n);
     const previousModuleStates = await Promise.all(ids.map((id) => stakingRouter.getStakingModuleStateAccounting(id)));
     const preCLValidatorsBalanceWei = previousModuleStates.reduce(
       (sum, [validatorsBalanceGwei]) => sum + validatorsBalanceGwei * ONE_GWEI,
-      0n,
-    );
-    const preCLPendingBalanceWei = previousModuleStates.reduce(
-      (sum, [, pendingBalanceGwei]) => sum + pendingBalanceGwei * ONE_GWEI,
       0n,
     );
     return checker.checkModuleAndCLBalancesChangeRates(
@@ -106,7 +110,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       preCLPendingBalanceWei,
       postCLValidatorsBalanceWei,
       postCLPendingBalanceWei,
-      0n,
+      depositsWei,
       timeElapsed,
     );
   };
@@ -317,11 +321,12 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const [moduleId] = moduleIds;
     const firstValidatorsBalanceWei = ether("40150");
     const firstPendingBalanceWei = ether("120");
-    const secondValidatorsBalanceWei = firstValidatorsBalanceWei + ether("111");
+    const secondValidatorsGrowthWei = ether("112");
+    const secondValidatorsBalanceWei = firstValidatorsBalanceWei + secondValidatorsGrowthWei;
     const secondPendingBalanceWei = ether("20");
     const activatedBalanceWei = firstPendingBalanceWei - secondPendingBalanceWei;
     const expectedValidatorsGrowthLimitWei =
-      activatedBalanceWei + (firstPendingBalanceWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+      activatedBalanceWei + (firstValidatorsBalanceWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
         [moduleId],
@@ -337,15 +342,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
     await stakingRouterHarness
       .connect(admin)
-      // TODO fix test
-      // .reportValidatorBalancesByStakingModule(
-      //   [moduleId],
-      //   [firstValidatorsBalanceWei / ONE_GWEI],
-      //   [firstPendingBalanceWei / ONE_GWEI],
-      // );
       .reportValidatorBalancesByStakingModule([moduleId], [firstValidatorsBalanceWei / ONE_GWEI]);
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await expect(
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
         [moduleId],
@@ -359,7 +357,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       ),
     )
       .to.be.revertedWithCustomError(checkerWithRouter, "IncorrectTotalCLBalanceIncrease")
-      .withArgs(expectedValidatorsGrowthLimitWei, ether("111"));
+      .withArgs(expectedValidatorsGrowthLimitWei, secondValidatorsGrowthWei);
   });
 
   it("supports cold-start onboarding across the global path and module bootstrap flow", async () => {
@@ -391,8 +389,6 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
     await stakingRouterHarness
       .connect(admin)
-      // TODO fix test
-      // .reportValidatorBalancesByStakingModule([moduleId], [0n], [depositedPendingBalanceGwei]);
       .reportValidatorBalancesByStakingModule([moduleId], [0n]);
 
     await expect(
@@ -453,12 +449,6 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
     await stakingRouterHarness
       .connect(admin)
-      // TODO fix test
-      // .reportValidatorBalancesByStakingModule(
-      //   [moduleOneId, moduleTwoId],
-      //   [0n, 0n],
-      //   [moduleOneInitialPendingWei / ONE_GWEI, moduleTwoInitialPendingWei / ONE_GWEI],
-      // );
       .reportValidatorBalancesByStakingModule([moduleOneId, moduleTwoId], [0n, 0n]);
 
     await expect(
@@ -518,8 +508,6 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
     await stakingRouterHarness
       .connect(admin)
-      // TODO fix test
-      // .reportValidatorBalancesByStakingModule([moduleId], [0n], [initialPendingWei / ONE_GWEI]);
       .reportValidatorBalancesByStakingModule([moduleId], [0n]);
 
     await expect(
@@ -557,60 +545,68 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       .withArgs(40n, 30n);
   });
 
-  it("reverts with InconsistentPendingBalanceByModule when pending sum mismatches", async () => {
-    // See docs/module-sanity-check-test-failures-report.md:331-346.
+  it("reverts with IncorrectTotalPendingBalance when reported pending exceeds funded protocol pending", async () => {
     await expect(checker.checkModuleAndCLBalancesChangeRates([1n, 2n], [10n, 20n], 0n, 0n, 30n, 4n, 0n, ONE_DAY))
       .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
       .withArgs(0n, 4n);
   });
 
   it("allows redistribution between modules when total CL balance is unchanged", async () => {
+    const redistributionWei = limits.consolidationEthAmountPerDayLimit * ether("1");
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: ether("100") },
-      { id: 2n, validatorsBalanceWei: ether("100"), pendingWei: ether("100") },
+      { id: 1n, validatorsBalanceWei: redistributionWei },
+      { id: 2n, validatorsBalanceWei: redistributionWei },
     ]);
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await expect(
       check([
-        { id: 1n, validatorsBalanceWei: 0n }, // -100 ETH
-        { id: 2n, validatorsBalanceWei: ether("200") }, // +100 ETH
+        { id: 1n, validatorsBalanceWei: 0n },
+        { id: 2n, validatorsBalanceWei: redistributionWei * 2n },
       ]),
     ).not.to.be.reverted;
   });
 
-  it("reverts with IncorrectModulePendingBalance when a module pending balance exceeds its corridor", async () => {
+  it("reverts with IncorrectTotalPendingBalance when a module reports more pending than the protocol funded", async () => {
     const previousPendingWei = ether("10");
     const reportedPendingWei = previousPendingWei + ether("1");
 
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: previousPendingWei }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n }]);
 
-    // See docs/module-sanity-check-test-failures-report.md:331-346.
-    await expect(check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: reportedPendingWei }]))
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: reportedPendingWei }], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
+    )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
       .withArgs(previousPendingWei, reportedPendingWei);
   });
 
   it("allows pending-to-validators activation within a module when module total is unchanged", async () => {
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("100") }]);
+    const previousPendingWei = ether("100");
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("100"), pendingWei: 0n }])).not.to.be.reverted;
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: ether("100"), pendingWei: 0n }], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
+    ).not.to.be.reverted;
   });
 
-  it("reverts with AppearedEthAmountPerDayLimitExceeded when module increase exceeds appeared+consolidation", async () => {
+  it("reverts with IncorrectTotalCLBalanceIncrease when module increase exceeds the global activation budget", async () => {
     const previousValidatorsWei = ether("219000");
-    const currentIncreasePerDay = ether("120");
+    const currentIncreasePerDay = ether("121");
     const previousPendingWei = ether("60");
     const expectedValidatorsGrowthLimitWei =
-      previousPendingWei + (previousPendingWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+      previousPendingWei + (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
 
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: previousPendingWei },
+      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
     ]);
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await expect(
-      check([{ id: 1n, validatorsBalanceWei: previousValidatorsWei + currentIncreasePerDay, pendingWei: 0n }]),
+      check([{ id: 1n, validatorsBalanceWei: previousValidatorsWei + currentIncreasePerDay, pendingWei: 0n }], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
       .withArgs(expectedValidatorsGrowthLimitWei, currentIncreasePerDay);
@@ -619,43 +615,46 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   it("sums module increases across modules before checking appeared limit", async () => {
     const previousModuleValidatorsWei = ether("109500");
     const previousPendingWei = ether("60");
-    const totalPositiveModuleIncreaseWei = ether("120");
+    const totalPreviousValidatorsWei = previousModuleValidatorsWei * 2n;
+    const totalPositiveModuleIncreaseWei = ether("131");
     const expectedModuleIncreaseLimitWei =
       previousPendingWei +
-      (previousPendingWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n) +
+      (totalPreviousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n) +
       limits.consolidationEthAmountPerDayLimit * ether("1");
 
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei, pendingWei: previousPendingWei },
+      { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei },
       { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei },
     ]);
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await expect(
       check([
-        { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei + ether("120"), pendingWei: 0n },
-        { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei - ether("60"), pendingWei: 0n },
-      ]),
+        { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei + totalPositiveModuleIncreaseWei, pendingWei: 0n },
+        { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei - ether("71"), pendingWei: 0n },
+      ], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalModuleValidatorsBalanceIncrease")
       .withArgs(expectedModuleIncreaseLimitWei, totalPositiveModuleIncreaseWei);
   });
 
-  it("reverts with IncorrectTotalActiveAppearedEth when consumed pending exceeds the global appeared limit", async () => {
+  it("reverts with IncorrectTotalActivatedBalance when consumed pending exceeds the global appeared limit", async () => {
     const appearedLimitPerPeriodWei = limits.appearedEthAmountPerDayLimit * ether("1");
     const totalConsumedPendingWei = ether("120");
 
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("60") },
-      { id: 2n, validatorsBalanceWei: 0n, pendingWei: ether("60") },
+      { id: 1n, validatorsBalanceWei: 0n },
+      { id: 2n, validatorsBalanceWei: 0n },
     ]);
 
-    // See docs/module-sanity-check-test-failures-report.md:331-346.
     await expect(
       check([
         { id: 1n, validatorsBalanceWei: 0n, pendingWei: 0n },
         { id: 2n, validatorsBalanceWei: 0n, pendingWei: 0n },
-      ]),
+      ], {
+        preCLPendingBalanceWei: totalConsumedPendingWei,
+      }),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
       .withArgs(appearedLimitPerPeriodWei, totalConsumedPendingWei);
@@ -664,20 +663,20 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   it("reverts with IncorrectTotalCLBalanceIncrease when reported validators balance growth exceeds consumed pending", async () => {
     const consumedPendingWei = ether("20");
     const reportedValidatorsGrowthWei = ether("60");
-    const expectedValidatorsGrowthLimitWei =
-      consumedPendingWei + (ether("60") * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+    const expectedValidatorsGrowthLimitWei = consumedPendingWei;
 
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
-      { id: 2n, validatorsBalanceWei: 0n, pendingWei: ether("30") },
+      { id: 1n, validatorsBalanceWei: 0n },
+      { id: 2n, validatorsBalanceWei: 0n },
     ]);
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await expect(
       check([
         { id: 1n, validatorsBalanceWei: ether("30"), pendingWei: ether("20") },
         { id: 2n, validatorsBalanceWei: ether("30"), pendingWei: ether("20") },
-      ]),
+      ], {
+        preCLPendingBalanceWei: ether("60"),
+      }),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
       .withArgs(expectedValidatorsGrowthLimitWei, reportedValidatorsGrowthWei);
@@ -687,16 +686,15 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const previousValidatorsWei = ether("3650");
     const previousPendingWei = ether("10");
     const consumedPendingWei = ether("9");
-    const safetyCapWei = (previousPendingWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+    const safetyCapWei = (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
     const maxAllowedValidatorsGrowthWei = consumedPendingWei + safetyCapWei;
     const currentPendingWei = previousPendingWei - consumedPendingWei;
     const requiredValidatorsIncreaseWei = maxAllowedValidatorsGrowthWei;
 
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: previousPendingWei },
+      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
     ]);
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await expect(
       check([
         {
@@ -704,7 +702,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
           validatorsBalanceWei: previousValidatorsWei + requiredValidatorsIncreaseWei,
           pendingWei: currentPendingWei,
         },
-      ]),
+      ], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
     ).not.to.be.reverted;
   });
 
@@ -712,7 +712,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const previousValidatorsWei = ether("3650");
     const previousPendingWei = ether("10");
     const consumedPendingWei = ether("9");
-    const safetyCapWei = (previousPendingWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+    const safetyCapWei = (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
     const safetyCapOverflowWei = ether("1");
     const maxAllowedValidatorsGrowthWei = consumedPendingWei + safetyCapWei;
     const reportedValidatorsGrowthWei = maxAllowedValidatorsGrowthWei + safetyCapOverflowWei;
@@ -720,10 +720,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const requiredValidatorsIncreaseWei = reportedValidatorsGrowthWei;
 
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: previousPendingWei },
+      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
     ]);
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await expect(
       check([
         {
@@ -731,7 +730,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
           validatorsBalanceWei: previousValidatorsWei + requiredValidatorsIncreaseWei,
           pendingWei: currentPendingWei,
         },
-      ]),
+      ], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
       .withArgs(maxAllowedValidatorsGrowthWei, reportedValidatorsGrowthWei);
@@ -743,9 +744,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const activatedWei = ether("100");
     const exactIncrease = (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: previousPendingWei },
+      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
     ]);
 
     await expect(
@@ -755,24 +755,34 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
           validatorsBalanceWei: previousValidatorsWei + exactIncrease,
           pendingWei: previousPendingWei - activatedWei,
         },
-      ]),
+      ], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
     ).not.to.be.reverted;
   });
 
   it("allows validator growth funded by existing pending when total CL is unchanged", async () => {
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("5"), pendingWei: ether("100") }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: ether("5") }]);
 
-    await expect(check([{ id: 1n, validatorsBalanceWei: ether("105"), pendingWei: 0n }])).not.to.be.reverted;
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: ether("105"), pendingWei: 0n }], {
+        preCLPendingBalanceWei: ether("100"),
+      }),
+    ).not.to.be.reverted;
   });
 
   it("uses timeElapsed in per-day normalization (timeElapsed = 0 path)", async () => {
     const activatedWei = ether("5");
     const appearedLimitForZeroElapsedWei = (limits.appearedEthAmountPerDayLimit * ether("1")) / 24n;
 
-    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: activatedWei }]);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n }]);
 
-    // See docs/module-sanity-check-test-failures-report.md:363-375.
-    await expect(check([{ id: 1n, validatorsBalanceWei: activatedWei, pendingWei: 0n }], 0n))
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: activatedWei, pendingWei: 0n }], {
+        preCLPendingBalanceWei: activatedWei,
+        timeElapsed: 0n,
+      }),
+    )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
       .withArgs(appearedLimitForZeroElapsedWei, activatedWei);
   });
@@ -783,14 +793,13 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const halfDay = ONE_DAY / 2n;
     const activatedWei = ether("50");
     const safetyCapWei =
-      (previousPendingWei * limits.annualBalanceIncreaseBPLimit * halfDay) / (365n * ONE_DAY * 10_000n);
+      (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit * halfDay) / (365n * ONE_DAY * 10_000n);
     const allowedValidatorsGrowthWei = activatedWei + safetyCapWei;
 
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: previousValidatorsWei, pendingWei: previousPendingWei },
+      { id: 1n, validatorsBalanceWei: previousValidatorsWei },
     ]);
 
-    // See docs/module-sanity-check-test-failures-report.md:363-375.
     await expect(
       check(
         [
@@ -800,7 +809,10 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
             pendingWei: previousPendingWei - activatedWei,
           },
         ],
-        halfDay,
+        {
+          preCLPendingBalanceWei: previousPendingWei,
+          timeElapsed: halfDay,
+        },
       ),
     ).not.to.be.reverted;
 
@@ -814,7 +826,10 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
             pendingWei: previousPendingWei - activatedWei,
           },
         ],
-        halfDay,
+        {
+          preCLPendingBalanceWei: previousPendingWei,
+          timeElapsed: halfDay,
+        },
       ),
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
@@ -822,19 +837,19 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("allows redistribution between modules even when maxCLBalanceDecreaseBP is zero", async () => {
+    const redistributionWei = limits.consolidationEthAmountPerDayLimit * ether("1");
     await seedPreviousBalances([
-      { id: 1n, validatorsBalanceWei: ether("100") },
-      { id: 2n, validatorsBalanceWei: ether("100"), pendingWei: ether("100") },
+      { id: 1n, validatorsBalanceWei: redistributionWei },
+      { id: 2n, validatorsBalanceWei: redistributionWei },
     ]);
 
     await checker.connect(admin).grantRole(await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE(), manager.address);
     await checker.connect(manager).setMaxCLBalanceDecreaseBP(0n);
 
-    // See docs/module-sanity-check-test-failures-report.md:348-361.
     await expect(
       check([
         { id: 1n, validatorsBalanceWei: 0n },
-        { id: 2n, validatorsBalanceWei: ether("200") },
+        { id: 2n, validatorsBalanceWei: redistributionWei * 2n },
       ]),
     ).not.to.be.reverted;
   });

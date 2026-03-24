@@ -900,11 +900,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return (_amountPerDay * _effectiveTimeElapsed) / SECONDS_PER_DAY;
     }
 
-    function _calculatePendingBalanceAdditionalLimit(
-        uint256 _previousBalance,
+    function _calculateAprAndGiftSafetyCap(
+        uint256 _preCLValidatorsBalance,
         uint256 _annualBalanceIncreaseMultiplier
     ) internal pure returns (uint256) {
-        return (_previousBalance * _annualBalanceIncreaseMultiplier) / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
+        return (_preCLValidatorsBalance * _annualBalanceIncreaseMultiplier) / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
     }
 
     function _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(
@@ -929,8 +929,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         result.activatedBalanceWithGap =
             activatedBalance +
-            _calculatePendingBalanceAdditionalLimit(
-                _checkParams.preCLPendingBalance,
+            _calculateAprAndGiftSafetyCap(
+                _checkParams.preCLValidatorsBalance,
                 uint256(_limitsList.annualBalanceIncreaseBPLimit) * result.effectiveTimeElapsed
             );
     }
