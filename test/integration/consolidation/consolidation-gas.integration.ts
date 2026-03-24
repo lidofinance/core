@@ -181,7 +181,9 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
 
     // Allow pair in ConsolidationMigrator
     const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
+    const DISALLOW_PAIR_ROLE = await consolidationMigrator.DISALLOW_PAIR_ROLE();
     await consolidationMigrator.connect(agentSigner).grantRole(ALLOW_PAIR_ROLE, agentSigner.address);
+    await consolidationMigrator.connect(agentSigner).grantRole(DISALLOW_PAIR_ROLE, agentSigner.address);
     await consolidationMigrator.connect(agentSigner).allowPair(sourceOperatorId, targetOperatorId, submitter.address);
 
     // Increase ConsolidationBus batch size to accommodate 315 requests in 5 groups

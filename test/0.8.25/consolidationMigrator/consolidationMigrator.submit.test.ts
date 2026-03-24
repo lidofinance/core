@@ -56,7 +56,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
     ]);
 
     const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
+    const DISALLOW_PAIR_ROLE = await consolidationMigrator.DISALLOW_PAIR_ROLE();
     await consolidationMigrator.connect(admin).grantRole(ALLOW_PAIR_ROLE, allowPairManager.address);
+    await consolidationMigrator.connect(admin).grantRole(DISALLOW_PAIR_ROLE, allowPairManager.address);
 
     // Allow the test pair with submitter
     await consolidationMigrator

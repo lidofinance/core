@@ -74,8 +74,8 @@ interface IConsolidationBus {
  * @notice Validates and submits consolidation requests from source module to target module.
  *
  * The workflow:
- * 1. Governance (or EOA with ALLOW_PAIR_ROLE) allows specific operator pairs
- * 2. Authorized operators (reward address) submit consolidation batches
+ * 1. Allows the consolidation manager to submit consolidation requests for operator pairs
+ * 2. Consolidation manager submit consolidation batches
  * 3. Contract validates keys and forwards to ConsolidationBus
  */
 contract ConsolidationMigrator is AccessControlEnumerable {
@@ -114,6 +114,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     // ==========
 
     bytes32 public constant ALLOW_PAIR_ROLE = keccak256("ALLOW_PAIR_ROLE");
+    bytes32 public constant DISALLOW_PAIR_ROLE = keccak256("DISALLOW_PAIR_ROLE");
 
     // ==========
     //  Immutables
@@ -190,9 +191,9 @@ contract ConsolidationMigrator is AccessControlEnumerable {
      * @notice Disallows a consolidation pair and removes the submitter
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
-     * @dev Reverts if caller does not have ALLOW_PAIR_ROLE
+     * @dev Reverts if caller does not have DISALLOW_PAIR_ROLE
      */
-    function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external onlyRole(ALLOW_PAIR_ROLE) {
+    function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external onlyRole(DISALLOW_PAIR_ROLE) {
         bool removed = _allowedPairs[sourceOperatorId].remove(targetOperatorId);
         if (!removed) revert PairNotInAllowlist(sourceOperatorId, targetOperatorId);
 

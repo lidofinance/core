@@ -202,9 +202,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     await consolidationBus.connect(agentSigner).grantRole(MANAGE_ROLE, agentSigner.address);
     await consolidationBus.connect(agentSigner).grantRole(REMOVE_ROLE, agentSigner.address);
 
-    // Grant ALLOW_PAIR_ROLE on ConsolidationMigrator to agent
+    // Grant ALLOW_PAIR_ROLE and DISALLOW_PAIR_ROLE on ConsolidationMigrator to agent
     const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
+    const DISALLOW_PAIR_ROLE = await consolidationMigrator.DISALLOW_PAIR_ROLE();
     await consolidationMigrator.connect(agentSigner).grantRole(ALLOW_PAIR_ROLE, agentSigner.address);
+    await consolidationMigrator.connect(agentSigner).grantRole(DISALLOW_PAIR_ROLE, agentSigner.address);
 
     // Allow the consolidation pair with submitter
     await consolidationMigrator.connect(agentSigner).allowPair(sourceOperatorId, targetOperatorId, submitter.address);
