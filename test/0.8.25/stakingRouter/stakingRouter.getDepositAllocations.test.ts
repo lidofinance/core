@@ -10,7 +10,7 @@ import {
   StakingRouter__Harness,
 } from "typechain-types";
 
-import { ether, randomWCType1 } from "lib";
+import { randomWCType1 } from "lib";
 import { ONE_GWEI, StakingModuleStatus, WithdrawalCredentialsType } from "lib/constants";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
