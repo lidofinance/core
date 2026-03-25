@@ -901,6 +901,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         if (hasPartialWithdrawals) {
+            if (_operatorGrid().isVaultInJail(_vault)) revert PartialValidatorWithdrawalNotAllowed();
             _requireFreshReport(_vault, record);
 
             /// @dev NB: Disallow partial withdrawals when the vault has obligations shortfall in order to prevent the
