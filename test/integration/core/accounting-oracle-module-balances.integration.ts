@@ -11,6 +11,7 @@ import {
   ProtocolContext,
   report,
   submitReportDataWithConsensus,
+  submitReportDataWithConsensusAndEmptyExtraData,
   updateOracleReportLimits,
 } from "lib/protocol";
 import { NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
@@ -35,7 +36,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    await report(ctx);
+    await submitModuleBalancesSanityBaseline();
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -101,6 +102,16 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       clValidatorsBalanceGwei: totalClBalanceGwei - clPendingBalanceGwei,
       clPendingBalanceGwei,
     };
+  };
+
+  const submitModuleBalancesSanityBaseline = async () => {
+    const { data } = await report(ctx, {
+      dryRun: true,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+    });
+
+    await submitReportDataWithConsensusAndEmptyExtraData(ctx, data);
   };
 
   it("should accept a report that moves one module's pending balance into validators", async () => {

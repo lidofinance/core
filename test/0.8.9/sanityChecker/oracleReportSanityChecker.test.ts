@@ -763,6 +763,7 @@ describe("OracleReportSanityChecker.sol", () => {
         await accounting.getAddress(),
         admin.address,
         defaultLimits,
+        true,
       ])) as OracleReportSanityCheckerWrapper;
 
       const maxPackedLimits = {
@@ -810,6 +811,7 @@ describe("OracleReportSanityChecker.sol", () => {
         await accounting.getAddress(),
         admin.address,
         defaultLimits,
+        true,
       ])) as OracleReportSanityCheckerWrapper;
 
       await wrapper.packAndStore();
@@ -886,6 +888,7 @@ describe("OracleReportSanityChecker.sol", () => {
         await accounting.getAddress(),
         admin.address,
         defaultLimits,
+        true,
       ])) as OracleReportSanityCheckerWrapper;
 
       const malformedLimits = {

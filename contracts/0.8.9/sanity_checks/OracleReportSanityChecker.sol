@@ -240,6 +240,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ///      It is advanced by `_timeElapsed` on each accounting report.
     uint256 private _lastReportTimestamp;
 
+    /// @dev Migration flag: false until the first successful accounting report after migration.
+    ///      The per-module validators balance increase check is skipped while the flag is false.
+    bool private _isPostMigrationFirstReportDone;
+
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _accounting address of the Accounting instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
@@ -673,7 +677,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             decreaseCheckParams.postCLBalance,
             _checkParams.timeElapsed
         );
-        _shiftLastVaultBalanceAfterTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
+        _finalizePostReportState(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
     }
 
     /// @notice Check total pending CL balance from the current report against protocol state and growth limits.
@@ -734,6 +738,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _validatorBalancesWeiByStakingModule,
             checkParams.postCLValidatorsBalance
         );
+
+        // StakingRouter migration seeds per-module validators balances from active validators count
+        // using the max effective balance, so those migration values may be higher than the first
+        // oracle-reported balances. Skip the module validators balance increase check until the
+        // first report overwrites the migrated accounting state with the actual per-module values.
+        if (!_isPostMigrationFirstReportDone) {
+            return;
+        }
 
         _checkModuleValidatorsBalanceIncrease(
             IStakingRouter(LIDO_LOCATOR.stakingRouter()),
@@ -1171,11 +1183,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _shiftLastVaultBalanceAfterTransfer(
+    /// @notice Finalizes sanity-check state after a successful accounting report.
+    /// @dev Stores the withdrawals vault balance after the current report transfer so the next report can derive
+    ///      actual CL withdrawals as `current vault balance - last vault balance after transfer`.
+    /// @dev Marks the post-migration first report as completed so subsequent reports stop skipping
+    ///      `_checkModuleValidatorsBalanceIncrease(...)`; this is needed because StakingRouter migration can seed
+    ///      per-module validators balances above the first oracle-reported values.
+    /// @param _withdrawalVaultBalance Withdrawal vault balance reported for the current report, before transfer.
+    /// @param _withdrawalsVaultTransfer ETH amount transferred from the withdrawal vault during the current report.
+    function _finalizePostReportState(
         uint256 _withdrawalVaultBalance,
         uint256 _withdrawalsVaultTransfer
     ) internal {
         _lastVaultBalanceAfterTransfer = _withdrawalVaultBalance - _withdrawalsVaultTransfer;
+        _isPostMigrationFirstReportDone = true;
     }
 
     function _calcWindowDiff(

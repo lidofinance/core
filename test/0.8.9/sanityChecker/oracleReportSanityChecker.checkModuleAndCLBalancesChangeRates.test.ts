@@ -8,7 +8,7 @@ import {
   AccountingOracle__MockForSanityChecker,
   Burner__MockForSanityChecker,
   LidoLocator__MockForSanityChecker,
-  OracleReportSanityChecker,
+  OracleReportSanityCheckerWrapper,
   StakingModule__MockForStakingRouter,
   StakingRouter__Harness,
   StakingRouter__MockForAccountingOracle,
@@ -47,7 +47,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     exitedValidatorEthAmountLimit: 1n,
   };
 
-  let checker: OracleReportSanityChecker;
+  let checker: OracleReportSanityCheckerWrapper;
   let locator: LidoLocator__MockForSanityChecker;
   let burner: Burner__MockForSanityChecker;
   let accounting: Accounting__MockForSanityChecker;
@@ -115,7 +115,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     );
   };
 
-  const deployCheckerWithRouterModules = async (modulesCount = 1) => {
+  const deployCheckerWithRouterModules = async (modulesCount = 1, postMigrationFirstReportDone = true) => {
     const routerHarness = (await deployStakingRouter({ deployer, admin }, {})) as {
       stakingRouter: StakingRouter__Harness;
     };
@@ -178,11 +178,12 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       },
     ]);
 
-    const checkerWithRouter = await ethers.deployContract("OracleReportSanityChecker", [
+    const checkerWithRouter = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
       await locatorWithRouter.getAddress(),
       await accounting.getAddress(),
       admin.address,
       limits,
+      postMigrationFirstReportDone,
     ]);
 
     return {
@@ -193,7 +194,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   };
 
   const checkGlobalReport = (
-    sanityChecker: OracleReportSanityChecker,
+    sanityChecker: OracleReportSanityCheckerWrapper,
     accountingSigner: HardhatEthersSigner,
     {
       timeElapsed = ONE_DAY,
@@ -277,11 +278,12 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
       },
     ]);
 
-    checker = await ethers.deployContract("OracleReportSanityChecker", [
+    checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
       await locator.getAddress(),
       await accounting.getAddress(),
       admin.address,
       limits,
+      true,
     ]);
   });
 
@@ -316,48 +318,49 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     ).not.to.be.reverted;
   });
 
-  it("applies module-specific checks after the first report seeds non-zero module state", async () => {
-    const { checkerWithRouter, stakingRouterHarness, moduleIds } = await deployCheckerWithRouterModules();
+  it("skips the module validators balance increase check on the first post-migration report and applies it on the second", async () => {
+    const { checkerWithRouter, stakingRouterHarness, moduleIds } = await deployCheckerWithRouterModules(1, false);
     const [moduleId] = moduleIds;
-    const firstValidatorsBalanceWei = ether("40150");
-    const firstPendingBalanceWei = ether("120");
-    const secondValidatorsGrowthWei = ether("112");
-    const secondValidatorsBalanceWei = firstValidatorsBalanceWei + secondValidatorsGrowthWei;
-    const secondPendingBalanceWei = ether("20");
-    const activatedBalanceWei = firstPendingBalanceWei - secondPendingBalanceWei;
+    const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+    const previousValidatorsBalanceWei = ether("40150");
+    const prePendingBalanceWei = ether("120");
+    const excessiveValidatorsGrowthWei = ether("112");
+    const postValidatorsBalanceWei = previousValidatorsBalanceWei + excessiveValidatorsGrowthWei;
+    const postPendingBalanceWei = ether("20");
+    const activatedBalanceWei = prePendingBalanceWei - postPendingBalanceWei;
     const expectedValidatorsGrowthLimitWei =
-      activatedBalanceWei + (firstValidatorsBalanceWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
-    await expect(
+      activatedBalanceWei + (previousValidatorsBalanceWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+
+    const problematicModuleReport = () =>
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
         [moduleId],
-        [firstValidatorsBalanceWei],
-        firstValidatorsBalanceWei,
-        firstPendingBalanceWei,
-        firstValidatorsBalanceWei,
-        firstPendingBalanceWei,
+        [postValidatorsBalanceWei],
+        previousValidatorsBalanceWei,
+        prePendingBalanceWei,
+        postValidatorsBalanceWei,
+        postPendingBalanceWei,
         0n,
         ONE_DAY,
-      ),
-    ).not.to.be.reverted;
+      );
 
     await stakingRouterHarness
       .connect(admin)
-      .reportValidatorBalancesByStakingModule([moduleId], [firstValidatorsBalanceWei / ONE_GWEI]);
+      .reportValidatorBalancesByStakingModule([moduleId], [previousValidatorsBalanceWei / ONE_GWEI]);
+
+    await expect(problematicModuleReport()).not.to.be.reverted;
 
     await expect(
-      checkerWithRouter.checkModuleAndCLBalancesChangeRates(
-        [moduleId],
-        [secondValidatorsBalanceWei],
-        firstValidatorsBalanceWei,
-        firstPendingBalanceWei,
-        secondValidatorsBalanceWei,
-        secondPendingBalanceWei,
-        0n,
-        ONE_DAY,
-      ),
-    )
+      checkGlobalReport(checkerWithRouter, accountingSigner, {
+        preValidatorsWei: previousValidatorsBalanceWei,
+        prePendingWei: prePendingBalanceWei,
+        postValidatorsWei: previousValidatorsBalanceWei,
+        postPendingWei: prePendingBalanceWei,
+      }),
+    ).not.to.be.reverted;
+
+    await expect(problematicModuleReport())
       .to.be.revertedWithCustomError(checkerWithRouter, "IncorrectTotalCLBalanceIncrease")
-      .withArgs(expectedValidatorsGrowthLimitWei, secondValidatorsGrowthWei);
+      .withArgs(expectedValidatorsGrowthLimitWei, excessiveValidatorsGrowthWei);
   });
 
   it("supports cold-start onboarding across the global path and module bootstrap flow", async () => {
