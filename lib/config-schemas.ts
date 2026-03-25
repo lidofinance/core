@@ -84,6 +84,20 @@ const ConsolidationGatewaySchema = z.object({
   maxConsolidationRequestsLimit: PositiveIntSchema,
   consolidationsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
+  gIFirstValidatorPrev: HexStringSchema,
+  gIFirstValidatorCurr: HexStringSchema,
+  pivotSlot: NonNegativeIntSchema,
+});
+
+const ConsolidationBusSchema = z.object({
+  initialBatchSize: PositiveIntSchema,
+  initialMaxGroupsInBatch: PositiveIntSchema,
+  initialExecutionDelay: NonNegativeIntSchema,
+});
+
+const ConsolidationMigratorSchema = z.object({
+  sourceModuleId: PositiveIntSchema,
+  targetModuleId: PositiveIntSchema,
 });
 
 // Top-up gateway schema
@@ -307,6 +321,8 @@ export const ScratchParametersSchema = z.object({
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   consolidationGateway: ConsolidationGatewaySchema,
+  consolidationBus: ConsolidationBusSchema,
+  consolidationMigrator: ConsolidationMigratorSchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
   topUpGateway: TopUpGatewaySchema,

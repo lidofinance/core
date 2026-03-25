@@ -13,13 +13,7 @@ import {
 
 import { Snapshot } from "test/suite";
 
-// Sample 48-byte pubkeys for testing
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-];
+import { PUBKEYS } from "../consolidation-helpers";
 
 describe("ConsolidationMigrator.sol: submit", () => {
   let consolidationMigrator: ConsolidationMigrator;
@@ -62,7 +56,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
     ]);
 
     const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
+    const DISALLOW_PAIR_ROLE = await consolidationMigrator.DISALLOW_PAIR_ROLE();
     await consolidationMigrator.connect(admin).grantRole(ALLOW_PAIR_ROLE, allowPairManager.address);
+    await consolidationMigrator.connect(admin).grantRole(DISALLOW_PAIR_ROLE, allowPairManager.address);
 
     // Allow the test pair with submitter
     await consolidationMigrator
@@ -84,33 +80,33 @@ describe("ConsolidationMigrator.sol: submit", () => {
     });
 
     it("should submit consolidation batch from designated submitter", async () => {
-      const sourceIndices = [0, 1];
+      const sourceIndicesPerTarget = [[0], [1]];
       const targetIndices = [0, 1];
 
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices),
       )
         .to.emit(consolidationMigrator, "ConsolidationSubmitted")
-        .withArgs(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices);
+        .withArgs(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices);
 
       // Verify ConsolidationBus was called
       expect(await consolidationBus.callCount()).to.equal(1);
       expect(await consolidationBus.lastCaller()).to.equal(await consolidationMigrator.getAddress());
-      expect(await consolidationBus.getLastBatchSize()).to.equal(2);
+      expect(await consolidationBus.getLastTotalPairsCount()).to.equal(2);
     });
 
     it("should forward correct pubkeys to ConsolidationBus", async () => {
-      const sourceIndices = [0];
+      const sourceIndicesPerTarget = [[0]];
       const targetIndices = [0];
 
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices);
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices);
 
       // Verify the pubkeys
-      const sourcePubkey = await consolidationBus.getLastSourcePubkey(0);
+      const sourcePubkey = await consolidationBus.getLastSourcePubkeyFromGroup(0, 0);
       const targetPubkey = await consolidationBus.getLastTargetPubkey(0);
 
       expect(sourcePubkey.toLowerCase()).to.equal(PUBKEYS[0].toLowerCase());
@@ -121,7 +117,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(stranger)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
         .withArgs(stranger.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
@@ -135,25 +131,17 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, unknownTargetOpId, [0], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, unknownTargetOpId, [[0]], [0]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
         .withArgs(submitter.address, SOURCE_OPERATOR_ID, unknownTargetOpId);
-    });
-
-    it("should revert if batch is empty", async () => {
-      await expect(
-        consolidationMigrator
-          .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [], []),
-      ).to.be.revertedWithCustomError(consolidationMigrator, "EmptyBatch");
     });
 
     it("should revert if arrays have different lengths", async () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0, 1], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0], [1]], [0]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "ArraysLengthMismatch")
         .withArgs(2, 1);
@@ -168,7 +156,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [2], [2]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[2]], [2]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
         .withArgs(SOURCE_MODULE_ID, SOURCE_OPERATOR_ID, 2);
@@ -181,7 +169,7 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [1]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [1]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
         .withArgs(TARGET_MODULE_ID, TARGET_OPERATOR_ID, 1);
@@ -191,22 +179,22 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [0], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
       ).to.emit(consolidationBus, "AddConsolidationRequestsCalled");
     });
 
     it("should handle multiple validators in a batch", async () => {
-      const sourceIndices = [0, 1];
+      const sourceIndicesPerTarget = [[0], [1]];
       const targetIndices = [0, 1];
 
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndices, targetIndices);
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices);
 
-      expect(await consolidationBus.getLastBatchSize()).to.equal(2);
+      expect(await consolidationBus.getLastTotalPairsCount()).to.equal(2);
 
-      const sourcePubkey0 = await consolidationBus.getLastSourcePubkey(0);
-      const sourcePubkey1 = await consolidationBus.getLastSourcePubkey(1);
+      const sourcePubkey0 = await consolidationBus.getLastSourcePubkeyFromGroup(0, 0);
+      const sourcePubkey1 = await consolidationBus.getLastSourcePubkeyFromGroup(1, 0);
       const targetPubkey0 = await consolidationBus.getLastTargetPubkey(0);
       const targetPubkey1 = await consolidationBus.getLastTargetPubkey(1);
 
@@ -214,6 +202,66 @@ describe("ConsolidationMigrator.sol: submit", () => {
       expect(sourcePubkey1.toLowerCase()).to.equal(PUBKEYS[1].toLowerCase());
       expect(targetPubkey0.toLowerCase()).to.equal(PUBKEYS[2].toLowerCase());
       expect(targetPubkey1.toLowerCase()).to.equal(PUBKEYS[3].toLowerCase());
+    });
+
+    it("should handle multi-source group consolidation (multiple sources to one target)", async () => {
+      // Two source keys consolidated to one target
+      const sourceIndicesPerTarget = [[0, 1]];
+      const targetIndices = [0];
+
+      await consolidationMigrator
+        .connect(submitter)
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices);
+
+      // Should produce 2 pairs in 1 group
+      expect(await consolidationBus.getLastTotalPairsCount()).to.equal(2);
+      expect(await consolidationBus.getLastGroupsCount()).to.equal(1);
+      expect(await consolidationBus.getLastGroupSize(0)).to.equal(2);
+
+      const sourcePubkey0 = await consolidationBus.getLastSourcePubkeyFromGroup(0, 0);
+      const sourcePubkey1 = await consolidationBus.getLastSourcePubkeyFromGroup(0, 1);
+      const targetPubkey = await consolidationBus.getLastTargetPubkey(0);
+
+      expect(sourcePubkey0.toLowerCase()).to.equal(PUBKEYS[0].toLowerCase());
+      expect(sourcePubkey1.toLowerCase()).to.equal(PUBKEYS[1].toLowerCase());
+      expect(targetPubkey.toLowerCase()).to.equal(PUBKEYS[2].toLowerCase());
+    });
+
+    it("should allow new submitter to submit after allowPair update", async () => {
+      // Update the pair with a new submitter (stranger)
+      await consolidationMigrator
+        .connect(allowPairManager)
+        .allowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, stranger.address);
+
+      // Old submitter should now fail
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
+      )
+        .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
+        .withArgs(submitter.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
+
+      // New submitter should succeed
+      await expect(
+        consolidationMigrator
+          .connect(stranger)
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
+      ).to.emit(consolidationMigrator, "ConsolidationSubmitted");
+    });
+
+    it("should revert after pair is disallowed", async () => {
+      // Disallow the pair
+      await consolidationMigrator.connect(allowPairManager).disallowPair(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
+
+      // Submitter should no longer be able to submit
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
+      )
+        .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
+        .withArgs(submitter.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
     });
   });
 });

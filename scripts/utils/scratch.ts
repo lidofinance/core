@@ -115,6 +115,15 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     triggerableWithdrawalsGateway: {
       deployParameters: params.triggerableWithdrawalsGateway,
     },
+    consolidationGateway: {
+      deployParameters: params.consolidationGateway,
+    },
+    consolidationBus: {
+      deployParameters: params.consolidationBus,
+    },
+    consolidationMigrator: {
+      deployParameters: params.consolidationMigrator,
+    },
     predepositGuarantee: {
       deployParameters: params.predepositGuarantee,
     },

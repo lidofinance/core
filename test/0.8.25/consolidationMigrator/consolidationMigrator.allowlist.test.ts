@@ -17,15 +17,17 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
   let consolidationBus: ConsolidationBus__MockForConsolidationMigrator;
   let admin: HardhatEthersSigner;
   let allowPairManager: HardhatEthersSigner;
+  let disallowPairManager: HardhatEthersSigner;
   let submitter: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let ALLOW_PAIR_ROLE: string;
+  let DISALLOW_PAIR_ROLE: string;
 
   let originalState: string;
 
   before(async () => {
-    [admin, allowPairManager, submitter, stranger] = await ethers.getSigners();
+    [admin, allowPairManager, disallowPairManager, submitter, stranger] = await ethers.getSigners();
 
     stakingRouter = await ethers.deployContract("StakingRouter__MockForConsolidationMigrator");
     consolidationBus = await ethers.deployContract("ConsolidationBus__MockForConsolidationMigrator");
@@ -39,9 +41,11 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
     ]);
 
     ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
+    DISALLOW_PAIR_ROLE = await consolidationMigrator.DISALLOW_PAIR_ROLE();
 
-    // Grant role
+    // Grant roles
     await consolidationMigrator.connect(admin).grantRole(ALLOW_PAIR_ROLE, allowPairManager.address);
+    await consolidationMigrator.connect(admin).grantRole(DISALLOW_PAIR_ROLE, disallowPairManager.address);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -128,7 +132,7 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
       // Verify submitter is set before disallow
       expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(submitter.address);
 
-      await expect(consolidationMigrator.connect(allowPairManager).disallowPair(sourceOpId, targetOpId))
+      await expect(consolidationMigrator.connect(disallowPairManager).disallowPair(sourceOpId, targetOpId))
         .to.emit(consolidationMigrator, "ConsolidationPairDisallowed")
         .withArgs(sourceOpId, targetOpId);
 
@@ -136,17 +140,23 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
       expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(ethers.ZeroAddress);
     });
 
-    it("should revert if caller does not have ALLOW_PAIR_ROLE", async () => {
+    it("should revert if caller does not have DISALLOW_PAIR_ROLE", async () => {
       await expect(consolidationMigrator.connect(stranger).disallowPair(1, 10))
         .to.be.revertedWithCustomError(consolidationMigrator, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger.address, ALLOW_PAIR_ROLE);
+        .withArgs(stranger.address, DISALLOW_PAIR_ROLE);
+    });
+
+    it("should revert if caller has ALLOW_PAIR_ROLE but not DISALLOW_PAIR_ROLE", async () => {
+      await expect(consolidationMigrator.connect(allowPairManager).disallowPair(1, 10))
+        .to.be.revertedWithCustomError(consolidationMigrator, "AccessControlUnauthorizedAccount")
+        .withArgs(allowPairManager.address, DISALLOW_PAIR_ROLE);
     });
 
     it("should revert if pair not in allowlist", async () => {
       const sourceOpId = 999;
       const targetOpId = 888;
 
-      await expect(consolidationMigrator.connect(allowPairManager).disallowPair(sourceOpId, targetOpId))
+      await expect(consolidationMigrator.connect(disallowPairManager).disallowPair(sourceOpId, targetOpId))
         .to.be.revertedWithCustomError(consolidationMigrator, "PairNotInAllowlist")
         .withArgs(sourceOpId, targetOpId);
     });
@@ -176,7 +186,7 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
       let targets = await consolidationMigrator.getAllowedTargets(sourceOpId);
       expect(targets.length).to.equal(3);
 
-      await consolidationMigrator.connect(allowPairManager).disallowPair(sourceOpId, 20);
+      await consolidationMigrator.connect(disallowPairManager).disallowPair(sourceOpId, 20);
 
       targets = await consolidationMigrator.getAllowedTargets(sourceOpId);
       expect(targets.length).to.equal(2);

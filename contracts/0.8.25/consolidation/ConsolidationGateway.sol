@@ -8,16 +8,20 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {LimitData, RateLimitStorage, RateLimit} from "contracts/common/lib/RateLimit.sol";
 import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+import {GIndex} from "contracts/common/lib/GIndex.sol";
+import {CLProofVerifier} from "contracts/0.8.25/vaults/predeposit_guarantee/CLProofVerifier.sol";
+import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 
 interface IDepositSecurityModule {
     function isDepositsPaused() external view returns (bool);
 }
 
+interface ILido {
+    function canDeposit() external view returns (bool);
+}
+
 interface IWithdrawalVault {
-    function addConsolidationRequests(
-        bytes[] calldata sourcePubkeys,
-        bytes[] calldata targetPubkeys
-    ) external payable;
+    function addConsolidationRequests(bytes[] calldata sourcePubkeys, bytes[] calldata targetPubkeys) external payable;
 
     function getConsolidationRequestFee() external view returns (uint256);
 }
@@ -27,7 +31,7 @@ interface IWithdrawalVault {
  * @notice ConsolidationGateway contract is one entrypoint for all consolidation requests in protocol.
  * This contract is responsible for limiting consolidation requests, checking ADD_CONSOLIDATION_REQUEST_ROLE role before it gets to Withdrawal Vault.
  */
-contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
+contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProofVerifier {
     using RateLimitStorage for bytes32;
     using RateLimit for LimitData;
 
@@ -62,9 +66,15 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     error ConsolidationRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
     /**
-     * @notice Thrown when source and target arrays have different lengths
+     * @notice Thrown when source groups and target arrays have different lengths
      */
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
+
+    /**
+     * @notice Thrown when a source group has zero elements
+     * @param groupIndex Index of the empty group
+     */
+    error EmptyGroup(uint256 groupIndex);
 
     /**
      * @notice Thrown when DSM deposits are paused
@@ -72,12 +82,21 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     error DSMDepositsPaused();
 
     /**
+     * @notice Thrown when Lido deposits are paused (Lido stopped or bunker mode)
+     */
+    error LidoDepositsPaused();
+
+    /**
      * @notice Emitted when limits configs are set.
      * @param maxConsolidationRequestsLimit The maximum number of consolidation requests.
      * @param consolidationsPerFrame The number of consolidations that can be restored per frame.
      * @param frameDurationInSec The duration of each frame, in seconds, after which `consolidationsPerFrame` consolidations can be restored.
      */
-    event ConsolidationRequestsLimitSet(uint256 maxConsolidationRequestsLimit, uint256 consolidationsPerFrame, uint256 frameDurationInSec);
+    event ConsolidationRequestsLimitSet(
+        uint256 maxConsolidationRequestsLimit,
+        uint256 consolidationsPerFrame,
+        uint256 frameDurationInSec
+    );
 
     /// @notice role that allows to pause the contract
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
@@ -88,7 +107,10 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 public constant EXIT_LIMIT_MANAGER_ROLE = keccak256("EXIT_LIMIT_MANAGER_ROLE");
 
-    bytes32 public constant CONSOLIDATION_LIMIT_POSITION = keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
+    bytes32 public constant CONSOLIDATION_LIMIT_POSITION =
+        keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
+
+    uint256 internal constant COMPOUNDING_PREFIX = uint256(0x02) << 248;
 
     ILidoLocator internal immutable LOCATOR;
 
@@ -104,8 +126,11 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
         address lidoLocator,
         uint256 maxConsolidationRequestsLimit,
         uint256 consolidationsPerFrame,
-        uint256 frameDurationInSec
-    ) {
+        uint256 frameDurationInSec,
+        GIndex _gIFirstValidatorPrev,
+        GIndex _gIFirstValidatorCurr,
+        uint64 _pivotSlot
+    ) CLProofVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
         if (admin == address(0)) revert AdminCannotBeZero();
         if (lidoLocator == address(0)) revert ZeroArgument("lidoLocator");
         LOCATOR = ILidoLocator(lidoLocator);
@@ -146,10 +171,12 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
     }
 
     /**
-     * @dev Submits Consolidation Requests to the Withdrawal Vault
-     *      for the specified validator public keys.
-     * @param sourcePubkeys An array of 48-byte public keys corresponding to validators requesting the consolidation.
-     * @param targetPubkeys An array of 48-byte public keys corresponding to validators receiving the consolidation.
+     * @dev Submits grouped Consolidation Requests to the Withdrawal Vault.
+     *      Each group represents multiple source validators consolidating into a single target.
+     * @param sourcePubkeysGroups An array of groups, where each group is an array of 48-byte source public keys
+     *        consolidating to the corresponding target.
+     * @param targetWitnesses An array of validator targetWitnesses (one per group), each containing a target pubkey
+     *        and a CL proof of withdrawal credentials.
      * @param refundRecipient The address that will receive any excess ETH sent for fees.
      *
      * @notice Reverts if:
@@ -158,26 +185,45 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
     function addConsolidationRequests(
-        bytes[] calldata sourcePubkeys,
-        bytes[] calldata targetPubkeys,
+        bytes[][] calldata sourcePubkeysGroups,
+        IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses,
         address refundRecipient
     ) external payable onlyRole(ADD_CONSOLIDATION_REQUEST_ROLE) preservesEthBalance whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        uint256 requestsCount = sourcePubkeys.length;
-        if (requestsCount == 0) revert ZeroArgument("sourcePubkeys");
-        if (requestsCount != targetPubkeys.length) {
-            revert ArraysLengthMismatch(requestsCount, targetPubkeys.length);
+        uint256 groupsCount = sourcePubkeysGroups.length;
+        if (groupsCount == 0) revert ZeroArgument("sourcePubkeysGroups");
+        if (groupsCount != targetWitnesses.length) {
+            revert ArraysLengthMismatch(groupsCount, targetWitnesses.length);
         }
 
-        _ensureDSMDepositsNotPaused();
+        // Count total individual requests across all groups
+        uint256 requestsCount = 0;
+        for (uint256 i = 0; i < groupsCount; ++i) {
+            uint256 groupSize = sourcePubkeysGroups[i].length;
+            if (groupSize == 0) revert EmptyGroup(i);
+            requestsCount += groupSize;
+        }
+
+        _checkConsolidationPreconditions();
+
+        (IWithdrawalVault withdrawalVault, bytes32 withdrawalCredentials) = _getWithdrawalVaultData();
+
+        for (uint256 i = 0; i < groupsCount; ++i) {
+            _validatePubKeyWCProof(targetWitnesses[i], withdrawalCredentials);
+        }
 
         _consumeConsolidationRequestLimit(requestsCount);
 
-        IWithdrawalVault withdrawalVault = IWithdrawalVault(LOCATOR.withdrawalVault());
         uint256 fee = withdrawalVault.getConsolidationRequestFee();
         uint256 totalFee = requestsCount * fee;
         uint256 refund = _checkFee(totalFee);
 
+        // Expand grouped requests into flat pairs for WithdrawalVault
+        (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) = prepareConsolidationPairs(
+            sourcePubkeysGroups,
+            targetWitnesses,
+            requestsCount
+        );
         withdrawalVault.addConsolidationRequests{value: totalFee}(sourcePubkeys, targetPubkeys);
 
         _refundFee(refund, refundRecipient);
@@ -229,11 +275,18 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
 
     /// Internal functions
 
-    function _ensureDSMDepositsNotPaused() internal view {
-        // If the DSM has stopped deposits, some validators may have non-Lido withdrawal credentials.
-        // In that case, processing of all new consolidation requests should be paused.
+    function _checkConsolidationPreconditions() internal view {
+        // If DSM paused deposits, some validators may not belong to Lido
+        // and can therefore have non-Lido withdrawal credentials.
+        // To avoid accepting consolidations into such validators, new consolidation requests are blocked.
+        // This acts as an additional safety check on top of validator proof verification.
         if (IDepositSecurityModule(LOCATOR.depositSecurityModule()).isDepositsPaused()) {
             revert DSMDepositsPaused();
+        }
+
+        // If Lido stopped or bunker mode is active, new consolidation requests must also be blocked.
+        if (!ILido(LOCATOR.lido()).canDeposit()) {
+            revert LidoDepositsPaused();
         }
     }
 
@@ -253,7 +306,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
                 recipient = msg.sender;
             }
 
-            (bool success,) = recipient.call{value: refund}("");
+            (bool success, ) = recipient.call{value: refund}("");
             if (!success) {
                 revert FeeRefundFailed();
             }
@@ -295,8 +348,40 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil {
             revert ConsolidationRequestsLimitExceeded(requestsCount, limit);
         }
 
-        CONSOLIDATION_LIMIT_POSITION.setStorageLimit(
-            limitData.updatePrevLimit(limit - requestsCount, _getTimestamp())
-        );
+        CONSOLIDATION_LIMIT_POSITION.setStorageLimit(limitData.updatePrevLimit(limit - requestsCount, _getTimestamp()));
+    }
+
+    /// Flattens grouped source pubkeys and repeats each group's target pubkey.
+    function prepareConsolidationPairs(
+        bytes[][] calldata sourcePubkeysGroups,
+        IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses,
+        uint256 totalCount
+    ) internal pure returns (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) {
+        sourcePubkeys = new bytes[](totalCount);
+        targetPubkeys = new bytes[](totalCount);
+
+        uint256 idx = 0;
+        for (uint256 i = 0; i < sourcePubkeysGroups.length; ++i) {
+            bytes[] calldata group = sourcePubkeysGroups[i];
+            bytes calldata target = targetWitnesses[i].pubkey;
+            for (uint256 j = 0; j < group.length; ++j) {
+                sourcePubkeys[idx] = group[j];
+                targetPubkeys[idx] = target;
+                ++idx;
+            }
+        }
+    }
+
+    /// Returns the withdrawal vault and its 0x02 withdrawal credentials.
+    function _getWithdrawalVaultData()
+        internal
+        view
+        returns (IWithdrawalVault withdrawalVault, bytes32 withdrawalCredentials)
+    {
+        address vaultAddress = LOCATOR.withdrawalVault();
+        withdrawalVault = IWithdrawalVault(vaultAddress);
+
+        // withdrawalCredentials = 0x02 || 11 zero bytes || 20-byte vault address
+        withdrawalCredentials = bytes32(COMPOUNDING_PREFIX | uint160(vaultAddress));
     }
 }
