@@ -4,7 +4,9 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.25;
 
-import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+import {
+    AccessControlEnumerableUpgradeable
+} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 
@@ -27,7 +29,7 @@ interface IConsolidationGateway {
  *    The bus forwards the batch to ConsolidationGateway
  * 4. Optional REMOVE_ROLE can remove batches from the pending queue
  */
-contract ConsolidationBus is AccessControlEnumerable {
+contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     uint256 internal constant PUBKEY_LENGTH = 48;
 
     /**
@@ -179,23 +181,32 @@ contract ConsolidationBus is AccessControlEnumerable {
     uint256 internal _executionDelay;
     mapping(bytes32 batchHash => BatchInfo info) internal _pendingBatches;
 
-    constructor(
-        address admin,
-        address consolidationGateway,
-        uint256 initialBatchSize,
-        uint256 initialMaxGroupsInBatch,
-        uint256 initialExecutionDelay
-    ) {
-        if (admin == address(0)) revert AdminCannotBeZero();
+    constructor(address consolidationGateway) {
         if (consolidationGateway == address(0)) revert ZeroArgument("consolidationGateway");
 
         CONSOLIDATION_GATEWAY = IConsolidationGateway(consolidationGateway);
-        _setBatchSize(initialBatchSize);
-        _setMaxGroupsInBatch(initialMaxGroupsInBatch);
-        _setExecutionDelay(initialExecutionDelay);
+
+        _disableInitializers();
+    }
+
+    /// @notice Initializes the contract.
+    /// @param admin Lido DAO Aragon agent contract address.
+    /// @dev Proxy initialization method.
+    function initialize(
+        address admin,
+        uint256 initialBatchSize,
+        uint256 initialMaxGroupsInBatch,
+        uint256 initialExecutionDelay
+    ) external initializer {
+        if (admin == address(0)) revert AdminCannotBeZero();
+
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(MANAGE_ROLE, admin);
         _grantRole(REMOVE_ROLE, admin);
+
+        _setBatchSize(initialBatchSize);
+        _setMaxGroupsInBatch(initialMaxGroupsInBatch);
+        _setExecutionDelay(initialExecutionDelay);
     }
 
     /**

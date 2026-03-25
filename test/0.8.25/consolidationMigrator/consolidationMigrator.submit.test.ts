@@ -11,6 +11,8 @@ import {
   TargetModule__MockForConsolidationMigrator,
 } from "typechain-types";
 
+import { proxify } from "lib/proxy";
+
 import { Snapshot } from "test/suite";
 
 import { PUBKEYS } from "../consolidation-helpers";
@@ -47,13 +49,14 @@ describe("ConsolidationMigrator.sol: submit", () => {
     await stakingRouter.mock__setStakingModule(TARGET_MODULE_ID, await targetModule.getAddress());
 
     // Deploy ConsolidationMigrator
-    consolidationMigrator = await ethers.deployContract("ConsolidationMigrator", [
-      admin.address,
+    const impl = await ethers.deployContract("ConsolidationMigrator", [
       await stakingRouter.getAddress(),
       await consolidationBus.getAddress(),
       SOURCE_MODULE_ID,
       TARGET_MODULE_ID,
     ]);
+    [consolidationMigrator] = await proxify({ impl, admin });
+    await consolidationMigrator.initialize(admin.address);
 
     const ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
     const DISALLOW_PAIR_ROLE = await consolidationMigrator.DISALLOW_PAIR_ROLE();

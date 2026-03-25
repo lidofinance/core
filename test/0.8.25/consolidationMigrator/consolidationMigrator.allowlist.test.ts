@@ -9,6 +9,8 @@ import {
   StakingRouter__MockForConsolidationMigrator,
 } from "typechain-types";
 
+import { proxify } from "lib/proxy";
+
 import { Snapshot } from "test/suite";
 
 describe("ConsolidationMigrator.sol: allowlist", () => {
@@ -32,13 +34,14 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
     stakingRouter = await ethers.deployContract("StakingRouter__MockForConsolidationMigrator");
     consolidationBus = await ethers.deployContract("ConsolidationBus__MockForConsolidationMigrator");
 
-    consolidationMigrator = await ethers.deployContract("ConsolidationMigrator", [
-      admin.address,
+    const impl = await ethers.deployContract("ConsolidationMigrator", [
       await stakingRouter.getAddress(),
       await consolidationBus.getAddress(),
       1, // sourceModuleId
       2, // targetModuleId
     ]);
+    [consolidationMigrator] = await proxify({ impl, admin });
+    await consolidationMigrator.initialize(admin.address);
 
     ALLOW_PAIR_ROLE = await consolidationMigrator.ALLOW_PAIR_ROLE();
     DISALLOW_PAIR_ROLE = await consolidationMigrator.DISALLOW_PAIR_ROLE();
