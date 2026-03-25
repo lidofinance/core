@@ -101,7 +101,11 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         uint256 indexed targetOperatorId,
         address indexed submitter
     );
-    event ConsolidationPairDisallowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId);
+    event ConsolidationPairDisallowed(
+        uint256 indexed sourceOperatorId,
+        uint256 indexed targetOperatorId,
+        address indexed submitter
+    );
     event ConsolidationSubmitted(
         uint256 indexed sourceOperatorId,
         uint256 indexed targetOperatorId,
@@ -197,9 +201,29 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         bool removed = _allowedPairs[sourceOperatorId].remove(targetOperatorId);
         if (!removed) revert PairNotInAllowlist(sourceOperatorId, targetOperatorId);
 
+        address submitter = _submitters[sourceOperatorId][targetOperatorId];
         delete _submitters[sourceOperatorId][targetOperatorId];
 
-        emit ConsolidationPairDisallowed(sourceOperatorId, targetOperatorId);
+        emit ConsolidationPairDisallowed(sourceOperatorId, targetOperatorId, submitter);
+    }
+
+    /**
+     * @notice Allows a submitter to disallow their own pair (permissionless)
+     * @param sourceOperatorId ID of the source operator
+     * @param targetOperatorId ID of the target operator
+     * @dev Caller must be the designated submitter for the pair
+     * @dev Reverts if caller is not the submitter
+     */
+    function selfDisallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external {
+        address submitter = _submitters[sourceOperatorId][targetOperatorId];
+        if (msg.sender != submitter) {
+            revert NotAuthorized(msg.sender, sourceOperatorId, targetOperatorId);
+        }
+
+        _allowedPairs[sourceOperatorId].remove(targetOperatorId);
+        delete _submitters[sourceOperatorId][targetOperatorId];
+
+        emit ConsolidationPairDisallowed(sourceOperatorId, targetOperatorId, msg.sender);
     }
 
     // ==============

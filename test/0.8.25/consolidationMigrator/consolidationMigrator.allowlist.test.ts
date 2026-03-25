@@ -134,7 +134,7 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
 
       await expect(consolidationMigrator.connect(disallowPairManager).disallowPair(sourceOpId, targetOpId))
         .to.emit(consolidationMigrator, "ConsolidationPairDisallowed")
-        .withArgs(sourceOpId, targetOpId);
+        .withArgs(sourceOpId, targetOpId, submitter.address);
 
       expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId)).to.be.false;
       expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(ethers.ZeroAddress);
@@ -159,6 +159,75 @@ describe("ConsolidationMigrator.sol: allowlist", () => {
       await expect(consolidationMigrator.connect(disallowPairManager).disallowPair(sourceOpId, targetOpId))
         .to.be.revertedWithCustomError(consolidationMigrator, "PairNotInAllowlist")
         .withArgs(sourceOpId, targetOpId);
+    });
+  });
+
+  context("selfDisallowPair", () => {
+    const sourceOpId = 1;
+    const targetOpId = 10;
+
+    beforeEach(async () => {
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, targetOpId, submitter.address);
+    });
+
+    it("should allow submitter to self-disallow their pair", async () => {
+      expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId)).to.be.true;
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(submitter.address);
+
+      await expect(consolidationMigrator.connect(submitter).selfDisallowPair(sourceOpId, targetOpId))
+        .to.emit(consolidationMigrator, "ConsolidationPairDisallowed")
+        .withArgs(sourceOpId, targetOpId, submitter.address);
+
+      expect(await consolidationMigrator.isPairAllowed(sourceOpId, targetOpId)).to.be.false;
+      expect(await consolidationMigrator.getSubmitter(sourceOpId, targetOpId)).to.equal(ethers.ZeroAddress);
+    });
+
+    it("should revert if caller is not the submitter", async () => {
+      await expect(consolidationMigrator.connect(stranger).selfDisallowPair(sourceOpId, targetOpId))
+        .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
+        .withArgs(stranger.address, sourceOpId, targetOpId);
+    });
+
+    it("should revert if pair does not exist", async () => {
+      const unknownSourceOpId = 999;
+      const unknownTargetOpId = 888;
+
+      await expect(consolidationMigrator.connect(submitter).selfDisallowPair(unknownSourceOpId, unknownTargetOpId))
+        .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
+        .withArgs(submitter.address, unknownSourceOpId, unknownTargetOpId);
+    });
+
+    it("should remove pair from getAllowedTargets", async () => {
+      // Add another pair
+      await consolidationMigrator.connect(allowPairManager).allowPair(sourceOpId, 20, submitter.address);
+
+      let targets = await consolidationMigrator.getAllowedTargets(sourceOpId);
+      expect(targets.length).to.equal(2);
+
+      await consolidationMigrator.connect(submitter).selfDisallowPair(sourceOpId, targetOpId);
+
+      targets = await consolidationMigrator.getAllowedTargets(sourceOpId);
+      expect(targets.length).to.equal(1);
+      expect(targets[0]).to.be.equal(20n);
+    });
+
+    it("should revert if called twice for the same pair", async () => {
+      await consolidationMigrator.connect(submitter).selfDisallowPair(sourceOpId, targetOpId);
+
+      await expect(consolidationMigrator.connect(submitter).selfDisallowPair(sourceOpId, targetOpId))
+        .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
+        .withArgs(submitter.address, sourceOpId, targetOpId);
+    });
+
+    it("should not require any role", async () => {
+      // submitter has no roles granted, but is the designated submitter for the pair
+      expect(await consolidationMigrator.hasRole(ALLOW_PAIR_ROLE, submitter.address)).to.be.false;
+      expect(await consolidationMigrator.hasRole(DISALLOW_PAIR_ROLE, submitter.address)).to.be.false;
+
+      await expect(consolidationMigrator.connect(submitter).selfDisallowPair(sourceOpId, targetOpId)).to.emit(
+        consolidationMigrator,
+        "ConsolidationPairDisallowed",
+      );
     });
   });
 
