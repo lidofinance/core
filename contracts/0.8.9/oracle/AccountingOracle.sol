@@ -54,12 +54,6 @@ interface IStakingRouter {
         bytes calldata _exitedValidatorsCounts
     ) external;
 
-    function reportStakingModuleOperatorBalances(
-        uint256 _stakingModuleId,
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _totalBalancesGwei
-    ) external;
-
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
 }
 
@@ -321,7 +315,6 @@ contract AccountingOracle is BaseOracle {
 
     uint256 public constant EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1;
     uint256 public constant EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2;
-    uint256 public constant EXTRA_DATA_TYPE_OPERATOR_BALANCES = 3;
 
     /// @notice The extra data format used to signify that the oracle report contains no extra data.
     ///
@@ -801,7 +794,7 @@ contract AccountingOracle is BaseOracle {
 
             uint256 nodeOpsProcessed;
 
-            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS || itemType == EXTRA_DATA_TYPE_OPERATOR_BALANCES) {
+            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
                 nodeOpsProcessed = _processExtraDataItem(data, iter);
             } else {
                 revert UnsupportedExtraDataType(index, itemType);
