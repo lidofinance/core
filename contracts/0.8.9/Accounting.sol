@@ -325,7 +325,7 @@ contract Accounting {
 
         uint256 totalModuleFeeShares = 0;
 
-        for (uint256 i; i < stakingModuleFees.length; ++i) {
+        for (uint256 i; i < length; ++i) {
             uint256 moduleFee = stakingModuleFees[i];
             if (moduleFee > 0) {
                 uint256 moduleFeeShares = (_totalSharesToMintAsFees * moduleFee) / _totalFee;

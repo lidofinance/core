@@ -90,5 +90,6 @@ interface ISRBase {
     error InvalidMaxDepositPerBlockValue();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
+    error InconsistentFeeSum();
     error UnexpectedModuleId(uint256 expectedId, uint256 actualId);
 }
