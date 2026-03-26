@@ -15,7 +15,6 @@ import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from ".
 import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
-
 interface IStakingRouter {
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
 
@@ -746,15 +745,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         depositedSinceLastReport = _getDepositedPostReport();
         (depositedForCurrentReport,) = _getDepositedNextReportAdjusted();
-        /// @dev workaround for edge cases:
-        ///      1) protocol scratch deploy
-        ///      2) post upgrade/migration state
-        ///      2) all deposits are made strictly within report frame, and report applied
-        ///         right after the frame changes
-        if (depositedSinceLastReport != depositedForCurrentReport) {
-            /// @dev depositedNextReport is always less than depositedPostReport, so we can safely subtract
-            depositedForCurrentReport = depositedSinceLastReport - depositedForCurrentReport;
-        }
+        /// @dev depositedNextReport is always less than depositedPostReport, so we can safely subtract
+        depositedForCurrentReport = depositedSinceLastReport - depositedForCurrentReport;
     }
 
     /**
@@ -793,7 +785,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         (depositedNextReport, lastNonce) = _getDepositedNextReportAndLastDepositNonce();
         (curNonce,) = _getCurrentFrame(); // get current refSlot
         if (curNonce != lastNonce) {
-            // treating  all unsettled amounts as belonging to previous periods (aka nonces),
+            // treating all unsettled amounts as belonging to previous periods (aka nonces),
             // i.e., as already settled (accounted in upcoming report)
             depositedNextReport = 0;
         }
