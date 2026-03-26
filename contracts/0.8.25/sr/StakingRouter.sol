@@ -182,17 +182,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         /// @dev Simulate last deposit state to prevent real deposits into the new ModuleState via
         ///      DepositSecurityModule just after the addition.
         _updateModuleLastDepositState(newModuleId, 0);
-        emit StakingModuleAdded(newModuleId, _stakingModuleAddress, _name, _msgSender());
-
-        _emitUpdateModuleParamsEvents(
-            newModuleId,
-            _stakingModuleConfig.stakeShareLimit,
-            _stakingModuleConfig.priorityExitShareThreshold,
-            _stakingModuleConfig.stakingModuleFee,
-            _stakingModuleConfig.treasuryFee,
-            _stakingModuleConfig.maxDepositsPerBlock,
-            _stakingModuleConfig.minDepositBlockDistance
-        );
     }
 
     /// @notice Updates staking module params.
@@ -218,32 +207,17 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             _maxDepositsPerBlock,
             _minDepositBlockDistance
         );
-
-        _emitUpdateModuleParamsEvents(
-            _stakingModuleId,
-            _stakeShareLimit,
-            _priorityExitShareThreshold,
-            _stakingModuleFee,
-            _treasuryFee,
-            _maxDepositsPerBlock,
-            _minDepositBlockDistance
-        );
     }
 
-    function _emitUpdateModuleParamsEvents(
-        uint256 _moduleId,
-        uint256 _stakeShareLimit,
-        uint256 _priorityExitShareThreshold,
-        uint256 _stakingModuleFee,
-        uint256 _treasuryFee,
-        uint256 _maxDepositsPerBlock,
-        uint256 _minDepositBlockDistance
-    ) internal {
-        address setBy = _msgSender();
-        emit StakingModuleShareLimitSet(_moduleId, _stakeShareLimit, _priorityExitShareThreshold, setBy);
-        emit StakingModuleFeesSet(_moduleId, _stakingModuleFee, _treasuryFee, setBy);
-        emit StakingModuleMaxDepositsPerBlockSet(_moduleId, _maxDepositsPerBlock, setBy);
-        emit StakingModuleMinDepositBlockDistanceSet(_moduleId, _minDepositBlockDistance, setBy);
+    /// @notice Updates fees for all staking modules in a single atomic operation.
+    /// @param _stakingModuleFees New staking module fee values in the current module iteration order (returned by `getStakingModuleIds()`).
+    /// @param _treasuryFees New treasury fee values in the current module iteration order.
+    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
+    function updateAllStakingModulesFees(uint256[] calldata _stakingModuleFees, uint256[] calldata _treasuryFees)
+        external
+        onlyRole(STAKING_MODULE_MANAGE_ROLE)
+    {
+        SRLib._updateAllModuleFees(_stakingModuleFees, _treasuryFees);
     }
 
     /// @notice Updates staking module share params.
@@ -257,8 +231,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     {
         SRUtils._requireModuleIdExists(_stakingModuleId);
         SRLib._updateModuleShares(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold);
-
-        emit StakingModuleShareLimitSet(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold, _msgSender());
     }
 
     /// @notice Updates the limit of the validators that can be used for deposit.
@@ -817,9 +789,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         )
     {
         uint256 totalValidatorsBalance = SRUtils._getTotalModulesValidatorsBalance();
-
-        uint256 modulesCount = SRStorage.getModulesCount();
-        uint256 stakingModulesCount = totalValidatorsBalance == 0 ? 0 : modulesCount;
+        uint256 stakingModulesCount = totalValidatorsBalance == 0 ? 0 : SRStorage.getModulesCount();
 
         stakingModuleIds = new uint256[](stakingModulesCount);
         recipients = new address[](stakingModulesCount);

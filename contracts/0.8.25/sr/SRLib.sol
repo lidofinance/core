@@ -216,6 +216,8 @@ library SRLib {
         moduleState.config.withdrawalCredentialsType = uint8(_moduleConfig.withdrawalCredentialsType);
         moduleState.name = _moduleName;
 
+        emit ISRBase.StakingModuleAdded(newModuleId, _moduleAddress, _moduleName, msg.sender);
+
         _updateModuleParams(
             newModuleId,
             _moduleConfig.stakeShareLimit,
@@ -255,6 +257,7 @@ library SRLib {
     ) public {
         _validateShareParams(_stakeShareLimit, _priorityExitShareThreshold);
         if (_moduleFee + _treasuryFee > SRUtils.TOTAL_BASIS_POINTS) revert ISRBase.InvalidFeeSum();
+        _requireConsistentFeeSum(_moduleId, _moduleFee, _treasuryFee);
         if (_minDepositBlockDistance == 0 || _minDepositBlockDistance > type(uint64).max) {
             revert ISRBase.InvalidMinDepositBlockDistance();
         }
@@ -277,17 +280,67 @@ library SRLib {
         // forge-lint: disable-end(unsafe-typecast)
         // 1 SSTORE
         _moduleId.getModuleState().deposits = stateDeposits;
+
+        address setBy = msg.sender;
+        emit ISRBase.StakingModuleShareLimitSet(_moduleId, _stakeShareLimit, _priorityExitShareThreshold, setBy);
+        emit ISRBase.StakingModuleFeesSet(_moduleId, _moduleFee, _treasuryFee, setBy);
+        emit ISRBase.StakingModuleMaxDepositsPerBlockSet(_moduleId, _maxDepositsPerBlock, setBy);
+        emit ISRBase.StakingModuleMinDepositBlockDistanceSet(_moduleId, _minDepositBlockDistance, setBy);
+    }
+
+    function _requireConsistentFeeSum(uint256 _moduleId, uint256 _moduleFee, uint256 _treasuryFee) internal view {
+        uint256 feeSum = _moduleFee + _treasuryFee;
+        uint256 modulesCount = SRStorage.getModulesCount();
+
+        for (uint256 i; i < modulesCount; ++i) {
+            uint256 moduleId = SRStorage.getModuleIdAt(i);
+            if (moduleId == _moduleId) continue;
+
+            ModuleStateConfig memory stateConfig = moduleId.getModuleState().config;
+            if (uint256(stateConfig.moduleFee) + uint256(stateConfig.treasuryFee) != feeSum) {
+                revert ISRBase.InconsistentFeeSum();
+            }
+        }
+    }
+
+    function _updateAllModuleFees(uint256[] calldata _moduleFees, uint256[] calldata _treasuryFees) public {
+        uint256 modulesCount = SRStorage.getModulesCount();
+        if (_moduleFees.length != modulesCount || _treasuryFees.length != modulesCount) {
+            revert ISRBase.ArraysLengthMismatch();
+        }
+        if (modulesCount == 0) {
+            return;
+        }
+
+        uint256 expectedFeeSum = _moduleFees[0] + _treasuryFees[0];
+        if (expectedFeeSum > SRUtils.TOTAL_BASIS_POINTS) revert ISRBase.InvalidFeeSum();
+
+        for (uint256 i = 1; i < modulesCount; ++i) {
+            uint256 feeSum = _moduleFees[i] + _treasuryFees[i];
+            if (feeSum > SRUtils.TOTAL_BASIS_POINTS) revert ISRBase.InvalidFeeSum();
+            if (feeSum != expectedFeeSum) revert ISRBase.InconsistentFeeSum();
+        }
+
+        address setBy = msg.sender;
+        for (uint256 i; i < modulesCount; ++i) {
+            uint256 moduleId = SRStorage.getModuleIdAt(i);
+            ModuleStateConfig memory stateConfig = moduleId.getModuleState().config;
+            // forge-lint: disable-start(unsafe-typecast)
+            stateConfig.moduleFee = uint16(_moduleFees[i]);
+            stateConfig.treasuryFee = uint16(_treasuryFees[i]);
+            // forge-lint: disable-end(unsafe-typecast)
+            moduleId.getModuleState().config = stateConfig;
+            emit ISRBase.StakingModuleFeesSet(moduleId, _moduleFees[i], _treasuryFees[i], setBy);
+        }
     }
 
     /// @notice Updates only the share-related params of a staking module.
     /// @param _moduleId Id of the staking module.
     /// @param _stakeShareLimit New stake share limit (in basis points).
     /// @param _priorityExitShareThreshold New priority exit share threshold (in basis points).
-    function _updateModuleShares(
-        uint256 _moduleId,
-        uint256 _stakeShareLimit,
-        uint256 _priorityExitShareThreshold
-    ) public {
+    function _updateModuleShares(uint256 _moduleId, uint256 _stakeShareLimit, uint256 _priorityExitShareThreshold)
+        public
+    {
         _validateShareParams(_stakeShareLimit, _priorityExitShareThreshold);
 
         // 1 SLOAD
@@ -300,6 +353,8 @@ library SRLib {
 
         // 1 SSTORE
         _moduleId.getModuleState().config = stateConfig;
+
+        emit ISRBase.StakingModuleShareLimitSet(_moduleId, _stakeShareLimit, _priorityExitShareThreshold, msg.sender);
     }
 
     /// @dev module state helpers
