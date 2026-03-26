@@ -5,6 +5,8 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types";
 
+import { proxify } from "lib/proxy";
+
 import { Snapshot } from "test/suite";
 
 import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
@@ -29,13 +31,9 @@ describe("ConsolidationBus.sol: executor", () => {
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway__MockForConsolidationBus");
 
-    consolidationBus = await ethers.deployContract("ConsolidationBus", [
-      admin.address,
-      await consolidationGateway.getAddress(),
-      100,
-      100,
-      0, // execution delay
-    ]);
+    const impl = await ethers.deployContract("ConsolidationBus", [await consolidationGateway.getAddress()]);
+    [consolidationBus] = await proxify({ impl, admin });
+    await consolidationBus.initialize(admin.address, 100, 100, 0);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
     PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();

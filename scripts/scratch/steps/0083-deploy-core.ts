@@ -401,15 +401,27 @@ export async function main() {
   //
 
   const consolidationBusParams = state[Sk.consolidationBus].deployParameters;
-  const consolidationBus_ = await deployWithoutProxy(Sk.consolidationBus, "ConsolidationBus", deployer, [
-    admin,
-    consolidationGateway_.address,
-    consolidationBusParams.initialBatchSize,
-    consolidationBusParams.initialMaxGroupsInBatch,
-    consolidationBusParams.initialExecutionDelay,
-  ]);
+  const consolidationBus_ = await deployBehindOssifiableProxy(
+    Sk.consolidationBus,
+    "ConsolidationBus",
+    proxyContractsOwner,
+    deployer,
+    [consolidationGateway_.address],
+  );
 
   const consolidationBus = await loadContract<ConsolidationBus>("ConsolidationBus", consolidationBus_.address);
+
+  await makeTx(
+    consolidationBus,
+    "initialize",
+    [
+      admin,
+      consolidationBusParams.initialBatchSize,
+      consolidationBusParams.initialMaxGroupsInBatch,
+      consolidationBusParams.initialExecutionDelay,
+    ],
+    { from: deployer },
+  );
 
   // Grant MANAGE_ROLE to deployer for testing
   await makeTx(consolidationBus, "grantRole", [await consolidationBus.MANAGE_ROLE(), deployer], { from: deployer });
@@ -435,18 +447,25 @@ export async function main() {
   //
   const consolidationMigratorParams = state[Sk.consolidationMigrator].deployParameters;
 
-  const consolidationMigrator_ = await deployWithoutProxy(Sk.consolidationMigrator, "ConsolidationMigrator", deployer, [
-    admin,
-    stakingRouter_.address,
-    consolidationBus_.address,
-    consolidationMigratorParams.sourceModuleId,
-    consolidationMigratorParams.targetModuleId,
-  ]);
+  const consolidationMigrator_ = await deployBehindOssifiableProxy(
+    Sk.consolidationMigrator,
+    "ConsolidationMigrator",
+    proxyContractsOwner,
+    deployer,
+    [
+      stakingRouter_.address,
+      consolidationBus_.address,
+      consolidationMigratorParams.sourceModuleId,
+      consolidationMigratorParams.targetModuleId,
+    ],
+  );
 
   const consolidationMigrator = await loadContract<ConsolidationMigrator>(
     "ConsolidationMigrator",
     consolidationMigrator_.address,
   );
+
+  await makeTx(consolidationMigrator, "initialize", [admin], { from: deployer });
 
   // Grant ALLOW_PAIR_ROLE to deployer for testing
   await makeTx(consolidationMigrator, "grantRole", [await consolidationMigrator.ALLOW_PAIR_ROLE(), deployer], {

@@ -5,7 +5,9 @@
 pragma solidity 0.8.25;
 
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
-import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+import {
+    AccessControlEnumerableUpgradeable
+} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 /**
  * @dev Minimal interface for StakingRouter to get module addresses
@@ -78,7 +80,7 @@ interface IConsolidationBus {
  * 2. Consolidation manager submit consolidation batches
  * 3. Contract validates keys and forwards to ConsolidationBus
  */
-contract ConsolidationMigrator is AccessControlEnumerable {
+contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     using EnumerableSet for EnumerableSet.UintSet;
 
     // ==========
@@ -101,7 +103,11 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         uint256 indexed targetOperatorId,
         address indexed submitter
     );
-    event ConsolidationPairDisallowed(uint256 indexed sourceOperatorId, uint256 indexed targetOperatorId);
+    event ConsolidationPairDisallowed(
+        uint256 indexed sourceOperatorId,
+        uint256 indexed targetOperatorId,
+        address indexed submitter
+    );
     event ConsolidationSubmitted(
         uint256 indexed sourceOperatorId,
         uint256 indexed targetOperatorId,
@@ -141,14 +147,7 @@ contract ConsolidationMigrator is AccessControlEnumerable {
     //  Constructor
     // ==========
 
-    constructor(
-        address admin,
-        address stakingRouter,
-        address consolidationBus,
-        uint256 _sourceModuleId,
-        uint256 _targetModuleId
-    ) {
-        if (admin == address(0)) revert AdminCannotBeZero();
+    constructor(address stakingRouter, address consolidationBus, uint256 _sourceModuleId, uint256 _targetModuleId) {
         if (stakingRouter == address(0)) revert ZeroArgument("stakingRouter");
         if (consolidationBus == address(0)) revert ZeroArgument("consolidationBus");
         if (_sourceModuleId == 0) revert ZeroArgument("sourceModuleId");
@@ -158,6 +157,15 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         CONSOLIDATION_BUS = IConsolidationBus(consolidationBus);
         SOURCE_MODULE_ID = _sourceModuleId;
         TARGET_MODULE_ID = _targetModuleId;
+
+        _disableInitializers();
+    }
+
+    /// @notice Initializes the contract.
+    /// @param admin Lido DAO Aragon agent contract address.
+    /// @dev Proxy initialization method.
+    function initialize(address admin) external initializer {
+        if (admin == address(0)) revert AdminCannotBeZero();
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
@@ -197,9 +205,29 @@ contract ConsolidationMigrator is AccessControlEnumerable {
         bool removed = _allowedPairs[sourceOperatorId].remove(targetOperatorId);
         if (!removed) revert PairNotInAllowlist(sourceOperatorId, targetOperatorId);
 
+        address submitter = _submitters[sourceOperatorId][targetOperatorId];
         delete _submitters[sourceOperatorId][targetOperatorId];
 
-        emit ConsolidationPairDisallowed(sourceOperatorId, targetOperatorId);
+        emit ConsolidationPairDisallowed(sourceOperatorId, targetOperatorId, submitter);
+    }
+
+    /**
+     * @notice Allows a submitter to disallow their own pair (permissionless)
+     * @param sourceOperatorId ID of the source operator
+     * @param targetOperatorId ID of the target operator
+     * @dev Caller must be the designated submitter for the pair
+     * @dev Reverts if caller is not the submitter
+     */
+    function selfDisallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external {
+        address submitter = _submitters[sourceOperatorId][targetOperatorId];
+        if (msg.sender != submitter) {
+            revert NotAuthorized(msg.sender, sourceOperatorId, targetOperatorId);
+        }
+
+        _allowedPairs[sourceOperatorId].remove(targetOperatorId);
+        delete _submitters[sourceOperatorId][targetOperatorId];
+
+        emit ConsolidationPairDisallowed(sourceOperatorId, targetOperatorId, msg.sender);
     }
 
     // ==============

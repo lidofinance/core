@@ -104,8 +104,8 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     stakingVaultBeacon: config[Sk.stakingVaultBeacon].address,
     operatorGrid: config[Sk.operatorGrid].proxy.address,
     validatorConsolidationRequests: config[Sk.validatorConsolidationRequests].address,
-    consolidationBus: config[Sk.consolidationBus].address,
-    consolidationMigrator: config[Sk.consolidationMigrator].address,
+    consolidationBus: config[Sk.consolidationBus].proxy.address,
+    consolidationMigrator: config[Sk.consolidationMigrator].proxy.address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }

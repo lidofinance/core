@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types";
 
 import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
+import { proxify } from "lib/proxy";
 
 import { Snapshot } from "test/suite";
 
@@ -32,13 +33,9 @@ describe("ConsolidationBus.sol: execution delay", () => {
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway__MockForConsolidationBus");
 
-    consolidationBus = await ethers.deployContract("ConsolidationBus", [
-      admin.address,
-      await consolidationGateway.getAddress(),
-      100,
-      100,
-      EXECUTION_DELAY,
-    ]);
+    const impl = await ethers.deployContract("ConsolidationBus", [await consolidationGateway.getAddress()]);
+    [consolidationBus] = await proxify({ impl, admin });
+    await consolidationBus.initialize(admin.address, 100, 100, EXECUTION_DELAY);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
     PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();
@@ -56,20 +53,23 @@ describe("ConsolidationBus.sol: execution delay", () => {
       expect(await consolidationBus.executionDelay()).to.equal(EXECUTION_DELAY);
     });
 
-    it("should emit ExecutionDelayUpdated during construction", async () => {
+    it("should emit ExecutionDelayUpdated during initialization", async () => {
       const gatewayAddr = await consolidationGateway.getAddress();
 
-      const tx = await (
-        await ethers.getContractFactory("ConsolidationBus")
-      ).deploy(admin.address, gatewayAddr, 100, 100, 7200);
+      const impl = await ethers.deployContract("ConsolidationBus", [gatewayAddr]);
+      const [bus] = await proxify({ impl, admin });
 
-      await expect(tx.deploymentTransaction()).to.emit(tx, "ExecutionDelayUpdated").withArgs(7200);
+      await expect(bus.initialize(admin.address, 100, 100, 7200))
+        .to.emit(bus, "ExecutionDelayUpdated")
+        .withArgs(7200);
     });
 
-    it("should allow zero execution delay in constructor", async () => {
+    it("should allow zero execution delay in initializer", async () => {
       const gatewayAddr = await consolidationGateway.getAddress();
 
-      const bus = await ethers.deployContract("ConsolidationBus", [admin.address, gatewayAddr, 100, 100, 0]);
+      const impl = await ethers.deployContract("ConsolidationBus", [gatewayAddr]);
+      const [bus] = await proxify({ impl, admin });
+      await bus.initialize(admin.address, 100, 100, 0);
       expect(await bus.executionDelay()).to.equal(0);
     });
   });

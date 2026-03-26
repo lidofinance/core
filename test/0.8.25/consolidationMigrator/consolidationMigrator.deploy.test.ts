@@ -6,6 +6,8 @@ import {
   StakingRouter__MockForConsolidationMigrator,
 } from "typechain-types";
 
+import { proxify } from "lib/proxy";
+
 describe("ConsolidationMigrator.sol: deployment", () => {
   let stakingRouter: StakingRouter__MockForConsolidationMigrator;
   let consolidationBus: ConsolidationBus__MockForConsolidationMigrator;
@@ -15,18 +17,14 @@ describe("ConsolidationMigrator.sol: deployment", () => {
     consolidationBus = await ethers.deployContract("ConsolidationBus__MockForConsolidationMigrator");
   });
 
-  it("should deploy successfully with valid parameters", async () => {
+  it("should deploy and initialize successfully with valid parameters", async () => {
     const [admin] = await ethers.getSigners();
     const stakingRouterAddr = await stakingRouter.getAddress();
     const consolidationBusAddr = await consolidationBus.getAddress();
 
-    const migrator = await ethers.deployContract("ConsolidationMigrator", [
-      admin.address,
-      stakingRouterAddr,
-      consolidationBusAddr,
-      1, // sourceModuleId
-      2, // targetModuleId
-    ]);
+    const impl = await ethers.deployContract("ConsolidationMigrator", [stakingRouterAddr, consolidationBusAddr, 1, 2]);
+    const [migrator] = await proxify({ impl, admin });
+    await migrator.initialize(admin.address);
 
     const adminRole = await migrator.DEFAULT_ADMIN_ROLE();
     expect(await migrator.hasRole(adminRole, admin.address)).to.be.true;
@@ -36,76 +34,60 @@ describe("ConsolidationMigrator.sol: deployment", () => {
     expect(await migrator.targetModuleId()).to.equal(2);
   });
 
-  it("should revert if admin is zero address", async () => {
+  it("should revert if admin is zero address on initialize", async () => {
+    const [admin] = await ethers.getSigners();
     const stakingRouterAddr = await stakingRouter.getAddress();
     const consolidationBusAddr = await consolidationBus.getAddress();
 
-    await expect(
-      ethers.deployContract("ConsolidationMigrator", [
-        ethers.ZeroAddress,
-        stakingRouterAddr,
-        consolidationBusAddr,
-        1,
-        2,
-      ]),
-    ).to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationMigrator"), "AdminCannotBeZero");
+    const impl = await ethers.deployContract("ConsolidationMigrator", [stakingRouterAddr, consolidationBusAddr, 1, 2]);
+    const [migrator] = await proxify({ impl, admin });
+
+    await expect(migrator.initialize(ethers.ZeroAddress)).to.be.revertedWithCustomError(migrator, "AdminCannotBeZero");
   });
 
   it("should revert if stakingRouter is zero address", async () => {
-    const [admin] = await ethers.getSigners();
     const consolidationBusAddr = await consolidationBus.getAddress();
 
-    await expect(
-      ethers.deployContract("ConsolidationMigrator", [admin.address, ethers.ZeroAddress, consolidationBusAddr, 1, 2]),
-    )
+    await expect(ethers.deployContract("ConsolidationMigrator", [ethers.ZeroAddress, consolidationBusAddr, 1, 2]))
       .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationMigrator"), "ZeroArgument")
       .withArgs("stakingRouter");
   });
 
   it("should revert if consolidationBus is zero address", async () => {
-    const [admin] = await ethers.getSigners();
     const stakingRouterAddr = await stakingRouter.getAddress();
 
-    await expect(
-      ethers.deployContract("ConsolidationMigrator", [admin.address, stakingRouterAddr, ethers.ZeroAddress, 1, 2]),
-    )
+    await expect(ethers.deployContract("ConsolidationMigrator", [stakingRouterAddr, ethers.ZeroAddress, 1, 2]))
       .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationMigrator"), "ZeroArgument")
       .withArgs("consolidationBus");
   });
 
   it("should revert if sourceModuleId is zero", async () => {
-    const [admin] = await ethers.getSigners();
     const stakingRouterAddr = await stakingRouter.getAddress();
     const consolidationBusAddr = await consolidationBus.getAddress();
 
-    await expect(
-      ethers.deployContract("ConsolidationMigrator", [
-        admin.address,
-        stakingRouterAddr,
-        consolidationBusAddr,
-        0, // zero sourceModuleId
-        2,
-      ]),
-    )
+    await expect(ethers.deployContract("ConsolidationMigrator", [stakingRouterAddr, consolidationBusAddr, 0, 2]))
       .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationMigrator"), "ZeroArgument")
       .withArgs("sourceModuleId");
   });
 
   it("should revert if targetModuleId is zero", async () => {
+    const stakingRouterAddr = await stakingRouter.getAddress();
+    const consolidationBusAddr = await consolidationBus.getAddress();
+
+    await expect(ethers.deployContract("ConsolidationMigrator", [stakingRouterAddr, consolidationBusAddr, 1, 0]))
+      .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationMigrator"), "ZeroArgument")
+      .withArgs("targetModuleId");
+  });
+
+  it("should revert on double initialization", async () => {
     const [admin] = await ethers.getSigners();
     const stakingRouterAddr = await stakingRouter.getAddress();
     const consolidationBusAddr = await consolidationBus.getAddress();
 
-    await expect(
-      ethers.deployContract("ConsolidationMigrator", [
-        admin.address,
-        stakingRouterAddr,
-        consolidationBusAddr,
-        1,
-        0, // zero targetModuleId
-      ]),
-    )
-      .to.be.revertedWithCustomError(await ethers.getContractFactory("ConsolidationMigrator"), "ZeroArgument")
-      .withArgs("targetModuleId");
+    const impl = await ethers.deployContract("ConsolidationMigrator", [stakingRouterAddr, consolidationBusAddr, 1, 2]);
+    const [migrator] = await proxify({ impl, admin });
+    await migrator.initialize(admin.address);
+
+    await expect(migrator.initialize(admin.address)).to.be.revertedWithCustomError(migrator, "InvalidInitialization");
   });
 });
