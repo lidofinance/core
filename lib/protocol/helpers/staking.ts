@@ -26,7 +26,6 @@ export type StakingModuleBalances = {
 export type ModuleAccountingReportParams = {
   stakingModuleIdsWithUpdatedBalance: bigint[];
   validatorBalancesGweiByStakingModule: bigint[];
-  pendingBalancesGweiByStakingModule: bigint[];
 };
 
 export const unpauseStaking = async (ctx: ProtocolContext) => {
@@ -86,22 +85,18 @@ const buildModuleAccountingReportParams = async (
 
   const stakingModuleIds = await stakingRouter.getStakingModuleIds();
   // Router balance reporting now requires all registered modules in router order.
-  // Pending-by-module semantics are removed in scratch helpers, so this is zero padding only.
   const stakingModuleIdsWithUpdatedBalance = [...stakingModuleIds];
   const validatorBalancesGweiByStakingModule: bigint[] = [];
-  const pendingBalancesGweiByStakingModule: bigint[] = [];
 
   for (const moduleId of stakingModuleIds) {
     const [currentValidatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
     const validatorsBalanceGwei = currentValidatorsBalanceGwei + (validatorsDeltaGweiByModule.get(moduleId) ?? 0n);
     validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
-    pendingBalancesGweiByStakingModule.push(0n);
   }
 
   return {
     stakingModuleIdsWithUpdatedBalance,
     validatorBalancesGweiByStakingModule,
-    pendingBalancesGweiByStakingModule,
   };
 };
 

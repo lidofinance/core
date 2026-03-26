@@ -87,9 +87,9 @@ describe("Integration: AccountingOracle module balances sanity", () => {
   }) => {
     const { data } = await report(ctx, {
       clDiff,
+      clPendingBalanceGwei,
       dryRun: true,
       excludeVaultsBalances: true,
-      pendingBalancesGweiByStakingModule: stakingModuleIdsWithUpdatedBalance.map(() => 0n),
       skipWithdrawals: true,
       stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule,

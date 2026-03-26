@@ -69,7 +69,6 @@ describe("AccountingOracle.sol:submitReport", () => {
     numExitedValidatorsByStakingModule: [3],
     stakingModuleIdsWithUpdatedBalance: [1],
     validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
-    pendingBalancesGweiByStakingModule: [20n * ONE_GWEI],
     withdrawalVaultBalance: ether("1"),
     elRewardsVaultBalance: ether("2"),
     sharesRequestedToBurn: ether("3"),
@@ -691,7 +690,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 64n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [0n],
-            pendingBalancesGweiByStakingModule: [64n * ONE_GWEI],
           }),
         );
 
@@ -713,7 +711,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 1000n * ONE_GWEI,
             clPendingBalanceGwei: 0n,
             validatorBalancesGweiByStakingModule: [1000n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [0n],
           }),
         );
 
@@ -734,7 +731,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 60000n * ONE_GWEI,
             clPendingBalanceGwei: 5000n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [60000n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [5000n * ONE_GWEI],
           }),
         );
 
@@ -755,7 +751,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 100n * ONE_GWEI,
             clPendingBalanceGwei: 500n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [100n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [500n * ONE_GWEI],
           }),
         );
 
@@ -776,7 +771,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 123n * ONE_GWEI,
             clPendingBalanceGwei: 456n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [123n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [456n * ONE_GWEI],
           }),
         );
 
@@ -797,7 +791,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 0n,
             validatorBalancesGweiByStakingModule: [0n],
-            pendingBalancesGweiByStakingModule: [0n],
           }),
         );
 
@@ -815,7 +808,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 1n,
             clPendingBalanceGwei: 1n,
             validatorBalancesGweiByStakingModule: [1n],
-            pendingBalancesGweiByStakingModule: [1n],
           }),
         );
 
@@ -836,7 +828,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 30000n * ONE_GWEI,
             clPendingBalanceGwei: 1000n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [30000n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [1000n * ONE_GWEI],
           }),
         );
 

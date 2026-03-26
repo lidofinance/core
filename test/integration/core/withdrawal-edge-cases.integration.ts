@@ -61,7 +61,6 @@ describe("Integration: Withdrawal edge cases", () => {
     const totalReportedValidatorsBalanceGwei = postCLBalanceWei / ONE_GWEI;
     const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
     const validatorBalancesGweiByStakingModule: bigint[] = [];
-    const pendingBalancesGweiByStakingModule: bigint[] = [];
     let remainingReportedValidatorsBalanceGwei = totalReportedValidatorsBalanceGwei;
     let remainingValidatorsBalanceGwei = totalValidatorsBalanceGwei;
 
@@ -75,7 +74,6 @@ describe("Integration: Withdrawal edge cases", () => {
 
       stakingModuleIdsWithUpdatedBalance.push(moduleId);
       validatorBalancesGweiByStakingModule.push(reportedValidatorsBalanceGwei);
-      pendingBalancesGweiByStakingModule.push(0n);
 
       remainingReportedValidatorsBalanceGwei -= reportedValidatorsBalanceGwei;
       remainingValidatorsBalanceGwei -= validatorsBalanceGwei;
@@ -84,7 +82,6 @@ describe("Integration: Withdrawal edge cases", () => {
     return {
       stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule,
-      pendingBalancesGweiByStakingModule,
     };
   };
 
@@ -125,7 +122,6 @@ describe("Integration: Withdrawal edge cases", () => {
             : validatorsBalanceGwei;
         }),
       ),
-      pendingBalancesGweiByStakingModule: stakingModuleIds.map(() => 0n),
     });
   };
 

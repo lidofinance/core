@@ -183,11 +183,6 @@ contract AccountingOracle is BaseOracle {
         /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,
         /// excluding pending deposits, as observed at the reference slot.
         uint256[] validatorBalancesGweiByStakingModule;
-        /// @dev Sum of consensus-layer pending deposits balances
-        /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,
-        /// as observed at the reference slot.
-        uint256[] pendingBalancesGweiByStakingModule;
-        ///
         /// EL values
         ///
 
@@ -518,8 +513,7 @@ contract AccountingOracle is BaseOracle {
         _processStakingRouterValidatorBalancesByModule(
             stakingRouter,
             data.stakingModuleIdsWithUpdatedBalance,
-            data.validatorBalancesGweiByStakingModule,
-            data.pendingBalancesGweiByStakingModule
+            data.validatorBalancesGweiByStakingModule
         );
 
         withdrawalQueue.onOracleReport(
@@ -611,11 +605,10 @@ contract AccountingOracle is BaseOracle {
     function _processStakingRouterValidatorBalancesByModule(
         IStakingRouter stakingRouter,
         uint256[] calldata stakingModuleIds,
-        uint256[] calldata validatorBalancesGwei,
-        uint256[] calldata pendingBalancesGwei
+        uint256[] calldata validatorBalancesGwei
     ) internal {
         uint256 numModules = stakingModuleIds.length;
-        if (numModules != validatorBalancesGwei.length || numModules != pendingBalancesGwei.length) {
+        if (numModules != validatorBalancesGwei.length) {
             revert InvalidClBalancesData();
         }
         if (numModules == 0) {
