@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -8,16 +7,16 @@ import {
   AccountingOracle__MockForStakingRouter,
   Lido__MockForStakingRouter,
   LidoLocator,
-  StakingModule__MockForStakingRouter,
-  StakingModuleV2__MockForStakingRouter,
   StakingRouter__Harness,
 } from "typechain-types";
 
-import { randomWCType1, wcTypeMaxEB } from "lib";
-import { StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
+import { randomWCType1 } from "lib";
+import { ONE_GWEI, StakingModuleStatus, WithdrawalCredentialsType } from "lib/constants";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
+
+import { CtxConfig, DEFAULT_CONFIG, DEFAULT_MEB, setupModule } from "./helpers";
 
 describe("StakingRouter.sol:getDepositAllocations", () => {
   let deployer: HardhatEthersSigner;
@@ -30,18 +29,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
   let originalState: string;
 
-  const GWEI = 1_000_000_000n;
-
-  const DEFAULT_CONFIG: ModuleConfig = {
-    stakeShareLimit: TOTAL_BASIS_POINTS,
-    priorityExitShareThreshold: TOTAL_BASIS_POINTS,
-    moduleFee: 5_00n,
-    treasuryFee: 5_00n,
-    maxDepositsPerBlock: 150n,
-    minDepositBlockDistance: 25n,
-    withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
-  };
-  const DEFAULT_MEB = wcTypeMaxEB(DEFAULT_CONFIG.withdrawalCredentialsType);
+  let ctx: CtxConfig;
 
   const withdrawalCredentials = randomWCType1();
   const depositSecurityModule = "0x0000000000000000000000000000000000000002";
@@ -63,6 +51,12 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());
     await stakingRouter.initialize(admin, withdrawalCredentials);
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);
+
+    ctx = {
+      deployer,
+      admin,
+      stakingRouter,
+    };
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -83,7 +77,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 100n,
       };
 
-      await setupModule(config);
+      await setupModule(ctx, config);
 
       const ethToDeposit = 150n * DEFAULT_MEB;
       const moduleAllocation = config.depositable * DEFAULT_MEB;
@@ -102,8 +96,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 50n,
       };
 
-      await setupModule(config);
-      await setupModule(config);
+      await setupModule(ctx, config);
+      await setupModule(ctx, config);
 
       const ethToDeposit = 200n * DEFAULT_MEB;
       const moduleAllocation = config.depositable * DEFAULT_MEB;
@@ -122,8 +116,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 50n,
       };
 
-      await setupModule(config);
-      await setupModule({ ...config, status: StakingModuleStatus.DepositsPaused });
+      await setupModule(ctx, config);
+      await setupModule(ctx, { ...config, status: StakingModuleStatus.DepositsPaused });
 
       const ethToDeposit = 200n * DEFAULT_MEB;
       const moduleAllocation = config.depositable * DEFAULT_MEB;
@@ -149,8 +143,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 50n,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       const ethToDeposit = 200n * DEFAULT_MEB;
       const module1Allocation = module1Config.depositable * DEFAULT_MEB;
@@ -177,8 +171,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 100n,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       const ethToDeposit = 200n * DEFAULT_MEB;
       const module1Allocation = 100n * DEFAULT_MEB;
@@ -204,8 +198,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 200n,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       // totalValidators = 0 + 0 + 200 = 200
       // Module 1 target: (10000 * 200) / 10000 = 200, cap = min(200, 200) = 200
@@ -241,8 +235,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         deposited: 50n,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       // totalValidators = 50 + 50 + 200 = 300
       // Module 1 target: (10000 * 300) / 10000 = 300, cap = min(300, 150) = 150
@@ -267,7 +261,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 50n,
       };
 
-      await setupModule(config);
+      await setupModule(ctx, config);
 
       const result = await stakingRouter.getDepositAllocations(0n, false);
       expect(result.totalAllocated).to.equal(0n);
@@ -293,10 +287,10 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         ...DEFAULT_CONFIG,
         deposited,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: deposited * 32n * GWEI, // each validator at initial 32 ETH
+        validatorsBalanceGwei: deposited * 32n * ONE_GWEI, // each validator at initial 32 ETH
       };
 
-      await setupModule(config);
+      await setupModule(ctx, config);
 
       // capacity_equiv = 10 * 2048/32 = 640, current_equiv = 10, room = 630
       const ethToDeposit = 631n * DEFAULT_MEB;
@@ -316,11 +310,11 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 50_00n,
         deposited,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: deposited * 32n * GWEI,
+        validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
-      await setupModule(config);
-      await setupModule(config);
+      await setupModule(ctx, config);
+      await setupModule(ctx, config);
 
       // capacity_equiv = 1 * 2048/32 = 64, current_equiv = 1, room = 63
       const ethToDeposit = 50n * DEFAULT_MEB;
@@ -340,11 +334,11 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 50_00n,
         deposited,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: deposited * 32n * GWEI,
+        validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
-      await setupModule(config);
-      await setupModule({ ...config, status: StakingModuleStatus.DepositsPaused });
+      await setupModule(ctx, config);
+      await setupModule(ctx, { ...config, status: StakingModuleStatus.DepositsPaused });
 
       // Module 1: capacity_equiv = 1 * 2048/32 = 64, current_equiv = 1, room = 63
       const ethToDeposit = 200n * DEFAULT_MEB;
@@ -364,7 +358,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 50_00n,
         deposited: 10n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: 10n * 32n * GWEI,
+        validatorsBalanceGwei: 10n * 32n * ONE_GWEI,
       };
 
       const module2Config = {
@@ -373,11 +367,11 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 50_00n,
         deposited: 2n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: 2n * 32n * GWEI,
+        validatorsBalanceGwei: 2n * 32n * ONE_GWEI,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       // Module 1: capacity_equiv = 10 * 2048/32 = 640, current_equiv = 10, room = 630
       // Module 2: capacity_equiv = 2 * 2048/32 = 128, current_equiv = 2, room = 126
@@ -410,7 +404,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 60_00n,
         deposited,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: deposited * 32n * GWEI,
+        validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
       const module2Config = {
@@ -419,11 +413,11 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 40_00n,
         deposited,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: deposited * 32n * GWEI,
+        validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       // total = 10+10+80 = 100
       // target1 = 60, target2 = 40, cap_raw = 10*64=640 each
@@ -449,7 +443,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 100_00n,
         deposited,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: deposited * 32n * GWEI,
+        validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
       const module2Config = {
@@ -458,11 +452,11 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 20_00n,
         deposited,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: deposited * 32n * GWEI,
+        validatorsBalanceGwei: deposited * 32n * ONE_GWEI,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       // Each module: cap_raw = 10 * 2048/32 = 640 equiv validators
       // Current: 10 equiv each
@@ -490,7 +484,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 100_00n,
         deposited: 10n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: 10n * 32n * GWEI,
+        validatorsBalanceGwei: 10n * 32n * ONE_GWEI,
       };
 
       const module2Config = {
@@ -499,11 +493,11 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         priorityExitShareThreshold: 20_00n,
         deposited: 1n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: 1n * 32n * GWEI,
+        validatorsBalanceGwei: 1n * 32n * ONE_GWEI,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       // Module 1: cap_raw = 10 * 64 = 640, current = 10
       // Module 2: cap_raw = 1 * 64 = 64, current = 1
@@ -527,7 +521,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       };
 
-      await setupModule(config);
+      await setupModule(ctx, config);
 
       const result = await stakingRouter.getDepositAllocations(0n, true);
       expect(result.totalAllocated).to.equal(0n);
@@ -537,10 +531,10 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
   context("multi-module top-up scenarios", () => {
     // Module balances from SR accounting (wei)
-    const MODULE_1_BALANCE_GWEI = 960_006_155_190_000_000_000n / GWEI; // ~960.006 ETH ~ 31 validators
+    const MODULE_1_BALANCE_GWEI = 960_006_155_190_000_000_000n / ONE_GWEI; // ~960.006 ETH ~ 31 validators
     const MODULE_2_BALANCE_GWEI = 0n;
-    const MODULE_3_BALANCE_GWEI = 1_600_010_258_650_000_000_000n / GWEI; // ~1600.01 ETH ~ 51 validators
-    const MODULE_4_BALANCE_GWEI = 1_988_080_734_502_000_000_000n / GWEI; // ~1988.08 ETH ~ 63 validators
+    const MODULE_3_BALANCE_GWEI = 1_600_010_258_650_000_000_000n / ONE_GWEI; // ~1600.01 ETH ~ 51 validators
+    const MODULE_4_BALANCE_GWEI = 1_988_080_734_502_000_000_000n / ONE_GWEI; // ~1988.08 ETH ~ 63 validators
     // in total 145 validators
 
     const BUFFER = 5_552_649_867_953_000_000_001n; // ~5552.65 ETH
@@ -555,7 +549,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       shares: Map<number, { stakeShareLimit: bigint; priorityExitShareThreshold: bigint }> = sharesDefault,
     ) {
       // Module 1: Curated (0x01, 100% share limit, 30 deposited, 0 depositable)
-      await setupModule({
+      await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         stakeShareLimit: shares.get(1)!.stakeShareLimit,
         priorityExitShareThreshold: shares.get(1)!.priorityExitShareThreshold,
@@ -567,7 +561,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       });
 
       // Module 2: SimpleDVT (0x01, 4% share limit, 0 deposited, 0 depositable)
-      await setupModule({
+      await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         stakeShareLimit: shares.get(2)!.stakeShareLimit,
         priorityExitShareThreshold: shares.get(2)!.priorityExitShareThreshold,
@@ -581,7 +575,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       });
 
       // Module 3: Community Staking (0x01, 20% share limit, 50 deposited, 0 depositable)
-      await setupModule({
+      await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         stakeShareLimit: shares.get(3)!.stakeShareLimit,
         priorityExitShareThreshold: shares.get(3)!.priorityExitShareThreshold,
@@ -596,7 +590,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       });
 
       // Module 4: curated-onchain-v2 (0x02, variable share limit, 25 deposited, 0 depositable)
-      await setupModule({
+      await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         stakeShareLimit: shares.get(4)!.stakeShareLimit,
         priorityExitShareThreshold: shares.get(4)!.priorityExitShareThreshold,
@@ -608,6 +602,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         exited: 0n,
         depositable: 0n,
         validatorsBalanceGwei: MODULE_4_BALANCE_GWEI,
+        totalModuleStake: MODULE_4_BALANCE_GWEI * ONE_GWEI,
       });
     }
 
@@ -624,21 +619,14 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       // verify it has an entry per module
       expect(result.newAllocations.length).to.equal(4);
 
-      // newAllocations[i] = ceilDiv(moduleBalance, 32 ETH) * 32 ETH
       const ETH32 = 32n * 10n ** 18n;
+      // for type2 modules: newAllocations[i] = ceilDiv(totalModuleStake, 32 ETH) * 32 ETH
       const toValidatorETH = (balance: bigint) => ((balance + ETH32 - 1n) / ETH32) * ETH32;
 
-      const moduleBalance1 = await stakingRouter.getStakingModuleBalance(1);
-      expect(result.newAllocations[0]).to.equal(toValidatorETH(moduleBalance1));
-
-      const moduleBalance2 = await stakingRouter.getStakingModuleBalance(2);
-      expect(result.newAllocations[1]).to.equal(toValidatorETH(moduleBalance2));
-
-      const moduleBalance3 = await stakingRouter.getStakingModuleBalance(3);
-      expect(result.newAllocations[2]).to.equal(toValidatorETH(moduleBalance3));
-
-      const moduleBalance4 = await stakingRouter.getStakingModuleBalance(4);
-      expect(result.newAllocations[3]).to.equal(toValidatorETH(moduleBalance4));
+      expect(result.newAllocations[0]).to.equal(30n * ETH32);
+      expect(result.newAllocations[1]).to.equal(0n);
+      expect(result.newAllocations[2]).to.equal(50n * ETH32);
+      expect(result.newAllocations[3]).to.equal(toValidatorETH(MODULE_4_BALANCE_GWEI * ONE_GWEI));
 
       // all allocated deltas should be 0
       for (const a of result.allocated) {
@@ -651,11 +639,11 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
 
       // to make some top up in 4 module -> it should have 64 validators
       // 64 * 32 = X * 32 * 20/100 -> X = 320 validators in total
-      // already have 145 validators
-      // need 175 validators = 320 - 145
-      // 560 eth - minimum buffer
+      // already have 143 validators (30 + 50 + 63)
+      // need 177 validators = 320 - 143
+      // 177*32 = 5664 eth - minimum buffer
 
-      const INCREASED_BUFFER = 5600n * 10n ** 18n;
+      const INCREASED_BUFFER = 5670n * 10n ** 18n;
 
       // Snapshot current state for comparison
       const resultBefore = await stakingRouter.getDepositAllocations(BUFFER, true);
@@ -695,8 +683,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 50n,
       };
 
-      await setupModule(config);
-      await setupModule(config);
+      await setupModule(ctx, config);
+      await setupModule(ctx, config);
 
       const ethToDeposit = 200n * DEFAULT_MEB;
 
@@ -724,8 +712,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 0n,
       };
 
-      await setupModule(module1Config);
-      await setupModule(module2Config);
+      await setupModule(ctx, module1Config);
+      await setupModule(ctx, module2Config);
 
       const ethToDeposit = 200n * DEFAULT_MEB;
 
@@ -742,7 +730,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         deposited: 100n,
       };
 
-      await setupModule(config);
+      await setupModule(ctx, config);
 
       const ethToDeposit = 50n * DEFAULT_MEB;
 
@@ -762,8 +750,8 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
         depositable: 50n,
       };
 
-      await setupModule(config);
-      await setupModule(config);
+      await setupModule(ctx, config);
+      await setupModule(ctx, config);
 
       const ethToDeposit = 200n * DEFAULT_MEB;
 
@@ -776,72 +764,4 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
       expect(allocatedSum).to.equal(result.totalAllocated);
     });
   });
-
-  async function setupModule({
-    stakeShareLimit,
-    priorityExitShareThreshold,
-    moduleFee,
-    treasuryFee,
-    maxDepositsPerBlock,
-    minDepositBlockDistance,
-    exited = 0n,
-    deposited = 0n,
-    depositable = 0n,
-    status = StakingModuleStatus.Active,
-    withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
-    validatorsBalanceGwei = 0n,
-    pendingBalanceGwei = 0n,
-  }: ModuleConfig): Promise<[StakingModule__MockForStakingRouter | StakingModuleV2__MockForStakingRouter, bigint]> {
-    const modulesCount = await stakingRouter.getStakingModulesCount();
-
-    const isV2 = withdrawalCredentialsType === WithdrawalCredentialsType.WC0x02;
-    const module = isV2
-      ? await ethers.deployContract("StakingModuleV2__MockForStakingRouter", deployer)
-      : await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
-
-    const stakingModuleConfig = {
-      stakeShareLimit,
-      priorityExitShareThreshold,
-      stakingModuleFee: moduleFee,
-      treasuryFee,
-      maxDepositsPerBlock,
-      minDepositBlockDistance,
-      withdrawalCredentialsType,
-    };
-
-    await stakingRouter
-      .connect(admin)
-      .addStakingModule(randomBytes(8).toString(), await module.getAddress(), stakingModuleConfig);
-
-    const moduleId = modulesCount + 1n;
-    expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
-
-    await module.mock__getStakingModuleSummary(exited, deposited, depositable);
-    if (validatorsBalanceGwei == 0n && deposited > 0n) {
-      validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / GWEI;
-    }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, pendingBalanceGwei, exited);
-
-    if (status != StakingModuleStatus.Active) {
-      await stakingRouter.setStakingModuleStatus(moduleId, status);
-    }
-
-    return [module, moduleId];
-  }
 });
-
-interface ModuleConfig {
-  stakeShareLimit: bigint;
-  priorityExitShareThreshold: bigint;
-  moduleFee: bigint;
-  treasuryFee: bigint;
-  maxDepositsPerBlock: bigint;
-  minDepositBlockDistance: bigint;
-  withdrawalCredentialsType: WithdrawalCredentialsType;
-  exited?: bigint;
-  deposited?: bigint;
-  depositable?: bigint;
-  status?: StakingModuleStatus;
-  validatorsBalanceGwei?: bigint;
-  pendingBalanceGwei?: bigint;
-}

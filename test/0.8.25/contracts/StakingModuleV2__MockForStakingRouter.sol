@@ -340,9 +340,13 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
         exitDeadlineThreshold__mocked = _threshold;
     }
 
-    event Mock__OperatorBalancesUpdated(bytes operatorIds, bytes totalBalancesGwei);
+    uint256 private totalModuleStake_mocked;
 
-    function updateOperatorBalances(bytes calldata operatorIds, bytes calldata totalBalancesGwei) external {
-        emit Mock__OperatorBalancesUpdated(operatorIds, totalBalancesGwei);
+    function getTotalModuleStake() external view returns (uint256) {
+        return totalModuleStake_mocked;
+    }
+
+    function mock__getTotalModuleStake(uint256 _totalModuleStake) external {
+        totalModuleStake_mocked = _totalModuleStake;
     }
 }

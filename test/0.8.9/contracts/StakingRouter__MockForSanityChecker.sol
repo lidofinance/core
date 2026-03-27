@@ -28,8 +28,7 @@ contract StakingRouter__MockForSanityChecker {
             0,
             0,
             0,
-            1,
-            0,
+            1, // wcType
             0
         );
         modules[moduleId] = module;

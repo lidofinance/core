@@ -6,7 +6,13 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
 import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
-import { getProtocolContext, OracleReportParams, ProtocolContext, report } from "lib/protocol";
+import {
+  getProtocolContext,
+  OracleReportParams,
+  ProtocolContext,
+  report,
+  seedProtocolPendingBaseline,
+} from "lib/protocol";
 import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
@@ -113,14 +119,19 @@ describe("Integration: AccountingOracle extra data", () => {
     // Add total exited validators for both entries
     const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
 
+    // The main report in this suite must stay reward-bearing because it drives the
+    // TransferredToModule -> ReadyForDistribution state machine. Snapshot protocol
+    // pending first so the original 1 ETH main report still reaches that phase path.
+    await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
+
+    // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
+    // safety cap enough elapsed time after snapshotting the pending baseline.
+    await advanceChainTime(15n * 24n * 60n * 60n);
+
     return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData, {
-      // This scenario expects the main report to mint module rewards and move modules to
-      // TransferredToModule before extra data processing starts.
-      //
-      // Historically reportWithoutExtraData() inherited report()'s default clDiff=ether("0.01"),
-      // so these tests got a small implicit positive rebase. After the pending-deposits sanity
-      // check refactor, report() defaults to clDiff=depositedSinceLastReport instead, which makes
-      // this report path neutral here. Keep a small explicit positive delta to force onRewardsMinted().
+      // Snapshot protocol pending into the previous report first, then run the original
+      // reward-bearing main report so this suite still exercises
+      // TransferredToModule -> ReadyForDistribution.
       effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
     });
   }

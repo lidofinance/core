@@ -9,6 +9,9 @@ contract AccountingOracle__MockForStakingRouter {
     bool mainDataSubmitted;
     bool extraDataSubmitted;
 
+    uint256 public constant SECONDS_PER_SLOT = 4;
+    uint256 public constant GENESIS_TIME = 100;
+
     constructor() {
         currentFrameRefSlot = 0;
         mainDataSubmitted = false;
@@ -35,6 +38,11 @@ contract AccountingOracle__MockForStakingRouter {
 
     function getLastProcessingRefSlot() external view returns (uint256) {
         return lastProcessingRefSlot;
+    }
+
+    function getCurrentFrame() external view returns (uint256 refSlot, uint256 refSlotTimestamp) {
+        refSlot = currentFrameRefSlot;
+        refSlotTimestamp = GENESIS_TIME + refSlot * SECONDS_PER_SLOT;
     }
 
     function mock_setProcessingState(uint256 _refSlot, bool _mainDataSubmitted, bool _extraDataSubmitted) external {

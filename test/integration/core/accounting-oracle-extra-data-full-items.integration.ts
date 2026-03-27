@@ -18,7 +18,7 @@ import {
   RewardDistributionState,
   setAnnualBalanceIncreaseLimit,
 } from "lib";
-import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, seedProtocolPendingBaseline, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
 import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
@@ -238,19 +238,24 @@ describe("Integration: AccountingOracle extra data full items", () => {
         );
       }
 
+      // This suite also relies on the reward-bearing main report to enter
+      // TransferredToModule before extra-data finalization. Snapshot protocol
+      // pending first so the original reward-bearing path remains reachable.
+      await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
+
+      // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
+      // safety cap enough elapsed time after snapshotting the pending baseline.
+      await advanceChainTime(15n * 24n * 60n * 60n);
+
       const { submitter, extraDataChunks } = await reportWithoutExtraData(
         ctx,
         numExitedValidatorsByStakingModule,
         modulesWithExited,
         extraData,
         {
-          // This scenario expects the main report to mint module rewards and move modules to
-          // TransferredToModule before extra data processing starts.
-          //
-          // Historically reportWithoutExtraData() inherited report()'s default clDiff=ether("0.01"),
-          // so these tests got a small implicit positive rebase. After the pending-deposits sanity
-          // check refactor, report() defaults to clDiff=depositedSinceLastReport instead, which makes
-          // this report path neutral here. Keep a small explicit positive delta to force onRewardsMinted().
+          // Snapshot protocol pending into the previous report first, then run the original
+          // reward-bearing main report so this suite still exercises
+          // TransferredToModule -> ReadyForDistribution -> Distributed.
           effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
         },
       );
