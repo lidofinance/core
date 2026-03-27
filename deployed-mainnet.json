@@ -409,7 +409,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/LazyOracle.sol",
-      "address": "0x47f3a6b1E70F7Ec7dBC3CB510B1fdB948C863a5B",
+      "address": "0x96c9a897D116ef660086d3aA67b3af653324aB37",
       "constructorArgs": ["0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"]
     }
   },
@@ -736,7 +736,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/VaultHub.sol",
-      "address": "0x7c7d957D0752AB732E73400624C4a1eb1cb6CF50",
+      "address": "0x77c017EBB74037E593F3552596dEb75565F01294",
       "constructorArgs": [
         "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
         "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
