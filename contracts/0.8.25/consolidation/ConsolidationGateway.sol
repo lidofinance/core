@@ -66,11 +66,6 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     error ConsolidationRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
     /**
-     * @notice Thrown when source groups and target arrays have different lengths
-     */
-    error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
-
-    /**
      * @notice Thrown when a source group has zero elements
      * @param groupIndex Index of the empty group
      */
@@ -111,6 +106,11 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         keccak256("lido.ConsolidationGateway.maxConsolidationRequestLimit");
 
     uint256 internal constant COMPOUNDING_PREFIX = uint256(0x02) << 248;
+
+    struct ConsolidationWitnessGroup {
+        bytes[] sourcePubkeys;
+        IPredepositGuarantee.ValidatorWitness targetWitness;
+    }
 
     ILidoLocator internal immutable LOCATOR;
 
@@ -173,10 +173,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     /**
      * @dev Submits grouped Consolidation Requests to the Withdrawal Vault.
      *      Each group represents multiple source validators consolidating into a single target.
-     * @param sourcePubkeysGroups An array of groups, where each group is an array of 48-byte source public keys
-     *        consolidating to the corresponding target.
-     * @param targetWitnesses An array of validator targetWitnesses (one per group), each containing a target pubkey
-     *        and a CL proof of withdrawal credentials.
+     * @param groups An array of consolidation groups, where each group contains source public keys
+     *        and a target validator witness with a CL proof of withdrawal credentials.
      * @param refundRecipient The address that will receive any excess ETH sent for fees.
      *
      * @notice Reverts if:
@@ -185,21 +183,17 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
     function addConsolidationRequests(
-        bytes[][] calldata sourcePubkeysGroups,
-        IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses,
+        ConsolidationWitnessGroup[] calldata groups,
         address refundRecipient
     ) external payable onlyRole(ADD_CONSOLIDATION_REQUEST_ROLE) preservesEthBalance whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        uint256 groupsCount = sourcePubkeysGroups.length;
-        if (groupsCount == 0) revert ZeroArgument("sourcePubkeysGroups");
-        if (groupsCount != targetWitnesses.length) {
-            revert ArraysLengthMismatch(groupsCount, targetWitnesses.length);
-        }
+        uint256 groupsCount = groups.length;
+        if (groupsCount == 0) revert ZeroArgument("groups");
 
         // Count total individual requests across all groups
         uint256 requestsCount = 0;
         for (uint256 i = 0; i < groupsCount; ++i) {
-            uint256 groupSize = sourcePubkeysGroups[i].length;
+            uint256 groupSize = groups[i].sourcePubkeys.length;
             if (groupSize == 0) revert EmptyGroup(i);
             requestsCount += groupSize;
         }
@@ -209,7 +203,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         (IWithdrawalVault withdrawalVault, bytes32 withdrawalCredentials) = _getWithdrawalVaultData();
 
         for (uint256 i = 0; i < groupsCount; ++i) {
-            _validatePubKeyWCProof(targetWitnesses[i], withdrawalCredentials);
+            _validatePubKeyWCProof(groups[i].targetWitness, withdrawalCredentials);
         }
 
         _consumeConsolidationRequestLimit(requestsCount);
@@ -219,9 +213,8 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
         uint256 refund = _checkFee(totalFee);
 
         // Expand grouped requests into flat pairs for WithdrawalVault
-        (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) = prepareConsolidationPairs(
-            sourcePubkeysGroups,
-            targetWitnesses,
+        (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) = _prepareConsolidationPairs(
+            groups,
             requestsCount
         );
         withdrawalVault.addConsolidationRequests{value: totalFee}(sourcePubkeys, targetPubkeys);
@@ -352,18 +345,17 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     }
 
     /// Flattens grouped source pubkeys and repeats each group's target pubkey.
-    function prepareConsolidationPairs(
-        bytes[][] calldata sourcePubkeysGroups,
-        IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses,
+    function _prepareConsolidationPairs(
+        ConsolidationWitnessGroup[] calldata groups,
         uint256 totalCount
     ) internal pure returns (bytes[] memory sourcePubkeys, bytes[] memory targetPubkeys) {
         sourcePubkeys = new bytes[](totalCount);
         targetPubkeys = new bytes[](totalCount);
 
         uint256 idx = 0;
-        for (uint256 i = 0; i < sourcePubkeysGroups.length; ++i) {
-            bytes[] calldata group = sourcePubkeysGroups[i];
-            bytes calldata target = targetWitnesses[i].pubkey;
+        for (uint256 i = 0; i < groups.length; ++i) {
+            bytes[] calldata group = groups[i].sourcePubkeys;
+            bytes calldata target = groups[i].targetWitness.pubkey;
             for (uint256 j = 0; j < group.length; ++j) {
                 sourcePubkeys[idx] = group[j];
                 targetPubkeys[idx] = target;

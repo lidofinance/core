@@ -9,7 +9,7 @@ import { proxify } from "lib/proxy";
 
 import { Snapshot } from "test/suite";
 
-import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
+import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers";
 
 describe("ConsolidationBus.sol: executor", () => {
   let consolidationBus: ConsolidationBus;
@@ -58,10 +58,12 @@ describe("ConsolidationBus.sol: executor", () => {
       targetPubkeys = [PUBKEYS[1]];
 
       // Add a batch
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
+
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups]),
       );
     });
 
@@ -71,7 +73,7 @@ describe("ConsolidationBus.sol: executor", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: fee }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: fee }),
       )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash, fee);
@@ -88,10 +90,10 @@ describe("ConsolidationBus.sol: executor", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: fee }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: fee }),
       )
         .to.emit(consolidationGateway, "AddConsolidationRequestsCalled")
-        .withArgs(sourcePubkeysGroups, executor.address, fee);
+        .withArgs(sourcePubkeysGroups.length, executor.address, fee);
     });
 
     it("should allow anyone to execute consolidation", async () => {
@@ -100,7 +102,7 @@ describe("ConsolidationBus.sol: executor", () => {
       await expect(
         consolidationBus
           .connect(stranger)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: fee }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: fee }),
       )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash, fee);
@@ -111,13 +113,16 @@ describe("ConsolidationBus.sol: executor", () => {
       const fakeTargets = [PUBKEYS[0]];
 
       const fakeBatchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [fakeSources, fakeTargets]),
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"],
+          [[{ sourcePubkeys: [PUBKEYS[2]], targetPubkey: PUBKEYS[0] }]],
+        ),
       );
 
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(fakeSources, witnessesForTargets(fakeTargets), { value: 10 }),
+          .executeConsolidation(buildWitnessGroups(fakeSources, fakeTargets), { value: 10 }),
       )
         .to.be.revertedWithCustomError(consolidationBus, "BatchNotFound")
         .withArgs(fakeBatchHash);
@@ -127,13 +132,13 @@ describe("ConsolidationBus.sol: executor", () => {
       // Execute first time
       await consolidationBus
         .connect(executor)
-        .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 });
+        .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 10 });
 
       // Try to execute again — batch was deleted, so it's not found
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 10 }),
       )
         .to.be.revertedWithCustomError(consolidationBus, "BatchNotFound")
         .withArgs(batchHash);
@@ -148,7 +153,7 @@ describe("ConsolidationBus.sol: executor", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 10 }),
       )
         .to.be.revertedWithCustomError(consolidationBus, "BatchNotFound")
         .withArgs(batchHash);
@@ -158,17 +163,19 @@ describe("ConsolidationBus.sol: executor", () => {
       // Add second batch
       const sourcePubkeysGroups2 = [[PUBKEYS[1]]];
       const targetPubkeys2 = [PUBKEYS[2]];
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups2, targetPubkeys2);
+      const groups2 = [{ sourcePubkeys: [PUBKEYS[1]], targetPubkey: PUBKEYS[2] }];
+
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups2);
 
       const batchHash2 = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups2, targetPubkeys2]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups2]),
       );
 
       // Execute first batch
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 10 }),
       )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash, 10);
@@ -177,7 +184,7 @@ describe("ConsolidationBus.sol: executor", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups2, witnessesForTargets(targetPubkeys2), { value: 15 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups2, targetPubkeys2), { value: 15 }),
       )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash2, 15);
@@ -187,7 +194,7 @@ describe("ConsolidationBus.sol: executor", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 0 }),
       )
         .to.emit(consolidationBus, "RequestsExecuted")
         .withArgs(batchHash, 0);
@@ -199,20 +206,20 @@ describe("ConsolidationBus.sol: executor", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: exactValue }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: exactValue }),
       )
         .to.emit(consolidationGateway, "AddConsolidationRequestsCalled")
-        .withArgs(sourcePubkeysGroups, executor.address, exactValue);
+        .withArgs(sourcePubkeysGroups.length, executor.address, exactValue);
     });
 
     it("should pass caller as refundRecipient", async () => {
       await expect(
         consolidationBus
           .connect(stranger)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 10 }),
       )
         .to.emit(consolidationGateway, "AddConsolidationRequestsCalled")
-        .withArgs(sourcePubkeysGroups, stranger.address, 10);
+        .withArgs(sourcePubkeysGroups.length, stranger.address, 10);
     });
   });
 
@@ -220,14 +227,15 @@ describe("ConsolidationBus.sol: executor", () => {
     it("should not hold ETH after execution", async () => {
       const sourcePubkeysGroups = [[PUBKEYS[0]]];
       const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       const balanceBefore = await ethers.provider.getBalance(await consolidationBus.getAddress());
 
       await consolidationBus
         .connect(executor)
-        .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 100 });
+        .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 100 });
 
       const balanceAfter = await ethers.provider.getBalance(await consolidationBus.getAddress());
 

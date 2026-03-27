@@ -83,16 +83,22 @@ describe("ConsolidationMigrator.sol: submit", () => {
     });
 
     it("should submit consolidation batch from designated submitter", async () => {
-      const sourceIndicesPerTarget = [[0], [1]];
-      const targetIndices = [0, 1];
+      const groups = [
+        { sourceKeyIndices: [0], targetKeyIndex: 0 },
+        { sourceKeyIndices: [1], targetKeyIndex: 1 },
+      ];
 
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, groups),
       )
         .to.emit(consolidationMigrator, "ConsolidationSubmitted")
-        .withArgs(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices);
+        .withArgs(
+          SOURCE_OPERATOR_ID,
+          TARGET_OPERATOR_ID,
+          groups.map((g) => [g.sourceKeyIndices, g.targetKeyIndex]),
+        );
 
       // Verify ConsolidationBus was called
       expect(await consolidationBus.callCount()).to.equal(1);
@@ -101,12 +107,11 @@ describe("ConsolidationMigrator.sol: submit", () => {
     });
 
     it("should forward correct pubkeys to ConsolidationBus", async () => {
-      const sourceIndicesPerTarget = [[0]];
-      const targetIndices = [0];
+      const groups = [{ sourceKeyIndices: [0], targetKeyIndex: 0 }];
 
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices);
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, groups);
 
       // Verify the pubkeys
       const sourcePubkey = await consolidationBus.getLastSourcePubkeyFromGroup(0, 0);
@@ -120,7 +125,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(stranger)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [
+            { sourceKeyIndices: [0], targetKeyIndex: 0 },
+          ]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
         .withArgs(stranger.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
@@ -134,20 +141,12 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, unknownTargetOpId, [[0]], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, unknownTargetOpId, [
+            { sourceKeyIndices: [0], targetKeyIndex: 0 },
+          ]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
         .withArgs(submitter.address, SOURCE_OPERATOR_ID, unknownTargetOpId);
-    });
-
-    it("should revert if arrays have different lengths", async () => {
-      await expect(
-        consolidationMigrator
-          .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0], [1]], [0]),
-      )
-        .to.be.revertedWithCustomError(consolidationMigrator, "ArraysLengthMismatch")
-        .withArgs(2, 1);
     });
 
     it("should revert if source key is not deposited", async () => {
@@ -159,7 +158,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[2]], [2]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [
+            { sourceKeyIndices: [2], targetKeyIndex: 2 },
+          ]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
         .withArgs(SOURCE_MODULE_ID, SOURCE_OPERATOR_ID, 2);
@@ -172,7 +173,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [1]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [
+            { sourceKeyIndices: [0], targetKeyIndex: 1 },
+          ]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "KeyNotDeposited")
         .withArgs(TARGET_MODULE_ID, TARGET_OPERATOR_ID, 1);
@@ -182,17 +185,21 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [
+            { sourceKeyIndices: [0], targetKeyIndex: 0 },
+          ]),
       ).to.emit(consolidationBus, "AddConsolidationRequestsCalled");
     });
 
     it("should handle multiple validators in a batch", async () => {
-      const sourceIndicesPerTarget = [[0], [1]];
-      const targetIndices = [0, 1];
+      const groups = [
+        { sourceKeyIndices: [0], targetKeyIndex: 0 },
+        { sourceKeyIndices: [1], targetKeyIndex: 1 },
+      ];
 
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices);
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, groups);
 
       expect(await consolidationBus.getLastTotalPairsCount()).to.equal(2);
 
@@ -209,12 +216,11 @@ describe("ConsolidationMigrator.sol: submit", () => {
 
     it("should handle multi-source group consolidation (multiple sources to one target)", async () => {
       // Two source keys consolidated to one target
-      const sourceIndicesPerTarget = [[0, 1]];
-      const targetIndices = [0];
+      const groups = [{ sourceKeyIndices: [0, 1], targetKeyIndex: 0 }];
 
       await consolidationMigrator
         .connect(submitter)
-        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, sourceIndicesPerTarget, targetIndices);
+        .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, groups);
 
       // Should produce 2 pairs in 1 group
       expect(await consolidationBus.getLastTotalPairsCount()).to.equal(2);
@@ -240,7 +246,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [
+            { sourceKeyIndices: [0], targetKeyIndex: 0 },
+          ]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
         .withArgs(submitter.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);
@@ -249,7 +257,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(stranger)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [
+            { sourceKeyIndices: [0], targetKeyIndex: 0 },
+          ]),
       ).to.emit(consolidationMigrator, "ConsolidationSubmitted");
     });
 
@@ -261,7 +271,9 @@ describe("ConsolidationMigrator.sol: submit", () => {
       await expect(
         consolidationMigrator
           .connect(submitter)
-          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [[0]], [0]),
+          .submitConsolidationBatch(SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID, [
+            { sourceKeyIndices: [0], targetKeyIndex: 0 },
+          ]),
       )
         .to.be.revertedWithCustomError(consolidationMigrator, "NotAuthorized")
         .withArgs(submitter.address, SOURCE_OPERATOR_ID, TARGET_OPERATOR_ID);

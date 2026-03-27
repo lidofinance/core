@@ -21,7 +21,16 @@ import {
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
+import { PUBKEYS } from "../consolidation-helpers";
+
+const dummyWitness = (pubkey: string) => ({
+  proof: [] as string[],
+  pubkey,
+  validatorIndex: 0,
+  childBlockTimestamp: 0,
+  slot: 0,
+  proposerIndex: 0,
+});
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
 
@@ -297,7 +306,11 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests(
+              [{ sourcePubkeys: [PUBKEYS[0]], targetWitness: dummyWitness(PUBKEYS[1]) }],
+              ZERO_ADDRESS,
+              { value: 2 },
+            ),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -311,7 +324,11 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests(
+              [{ sourcePubkeys: [PUBKEYS[0]], targetWitness: dummyWitness(PUBKEYS[1]) }],
+              ZERO_ADDRESS,
+              { value: 2 },
+            ),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -323,7 +340,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          });
       });
 
       it("pauseUntil: should allow consolidation requests immediately after resuming", async () => {
@@ -336,7 +355,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          });
       });
 
       it("pauseFor: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -349,7 +370,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          });
       });
 
       it("pauseUntil: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -364,7 +387,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          });
       });
     });
   });

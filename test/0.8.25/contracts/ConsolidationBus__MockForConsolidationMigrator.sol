@@ -7,37 +7,38 @@ pragma solidity 0.8.25;
  * @dev Mock for ConsolidationBus for ConsolidationMigrator tests
  */
 contract ConsolidationBus__MockForConsolidationMigrator {
-    event AddConsolidationRequestsCalled(bytes[][] sourcePubkeysGroups, bytes[] targetPubkeys, address caller);
+    struct ConsolidationGroup {
+        bytes[] sourcePubkeys;
+        bytes targetPubkey;
+    }
 
-    bytes[][] public lastSourcePubkeysGroups;
-    bytes[] public lastTargetPubkeys;
+    event AddConsolidationRequestsCalled(uint256 groupsCount, address caller);
+
+    ConsolidationGroup[] internal _lastGroups;
     address public lastCaller;
     uint256 public callCount;
 
     bool internal _shouldRevert;
     string internal _revertReason;
 
-    function addConsolidationRequests(bytes[][] calldata sourcePubkeysGroups, bytes[] calldata targetPubkeys) external {
+    function addConsolidationRequests(ConsolidationGroup[] calldata groups) external {
         if (_shouldRevert) {
             revert(_revertReason);
         }
 
-        delete lastSourcePubkeysGroups;
-        delete lastTargetPubkeys;
+        delete _lastGroups;
 
-        for (uint256 i = 0; i < sourcePubkeysGroups.length; ++i) {
-            lastSourcePubkeysGroups.push();
-            for (uint256 j = 0; j < sourcePubkeysGroups[i].length; ++j) {
-                lastSourcePubkeysGroups[i].push(sourcePubkeysGroups[i][j]);
+        for (uint256 i = 0; i < groups.length; ++i) {
+            _lastGroups.push();
+            _lastGroups[i].targetPubkey = groups[i].targetPubkey;
+            for (uint256 j = 0; j < groups[i].sourcePubkeys.length; ++j) {
+                _lastGroups[i].sourcePubkeys.push(groups[i].sourcePubkeys[j]);
             }
-        }
-        for (uint256 i = 0; i < targetPubkeys.length; ++i) {
-            lastTargetPubkeys.push(targetPubkeys[i]);
         }
         lastCaller = msg.sender;
         callCount++;
 
-        emit AddConsolidationRequestsCalled(sourcePubkeysGroups, targetPubkeys, msg.sender);
+        emit AddConsolidationRequestsCalled(groups.length, msg.sender);
     }
 
     function mock__setRevert(bool shouldRevert, string calldata reason) external {
@@ -46,25 +47,25 @@ contract ConsolidationBus__MockForConsolidationMigrator {
     }
 
     function getLastSourcePubkeyFromGroup(uint256 groupIndex, uint256 keyIndex) external view returns (bytes memory) {
-        return lastSourcePubkeysGroups[groupIndex][keyIndex];
+        return _lastGroups[groupIndex].sourcePubkeys[keyIndex];
     }
 
     function getLastTargetPubkey(uint256 index) external view returns (bytes memory) {
-        return lastTargetPubkeys[index];
+        return _lastGroups[index].targetPubkey;
     }
 
     function getLastGroupsCount() external view returns (uint256) {
-        return lastSourcePubkeysGroups.length;
+        return _lastGroups.length;
     }
 
     function getLastGroupSize(uint256 groupIndex) external view returns (uint256) {
-        return lastSourcePubkeysGroups[groupIndex].length;
+        return _lastGroups[groupIndex].sourcePubkeys.length;
     }
 
     function getLastTotalPairsCount() external view returns (uint256) {
         uint256 total = 0;
-        for (uint256 i = 0; i < lastSourcePubkeysGroups.length; ++i) {
-            total += lastSourcePubkeysGroups[i].length;
+        for (uint256 i = 0; i < _lastGroups.length; ++i) {
+            total += _lastGroups[i].sourcePubkeys.length;
         }
         return total;
     }

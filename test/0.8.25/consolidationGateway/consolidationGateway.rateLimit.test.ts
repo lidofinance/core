@@ -173,7 +173,11 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
       // Consume some limit
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ethers.ZeroAddress, { value: 2 });
+        .addConsolidationRequests(
+          [{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }],
+          ethers.ZeroAddress,
+          { value: 2 },
+        );
 
       // Decrease limit — should succeed
       await setConsolidationLimit(consolidationGateway, authorizedEntity, 10, 1, 48);
@@ -188,11 +192,13 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
 
     it("should reflect limit consumption after requests", async () => {
       // 2 total requests: [source0, source1] -> target0
-      const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]]];
-
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests(sourcePubkeysGroups, [validWitnesses[0]], ethers.ZeroAddress, { value: 3 });
+        .addConsolidationRequests(
+          [{ sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] }],
+          ethers.ZeroAddress,
+          { value: 3 },
+        );
 
       await expectLimitData(consolidationGateway, 100, 1, 48, 98, 98);
     });
@@ -201,7 +207,11 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
       // Consume 2
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([[PUBKEYS[0], PUBKEYS[1]]], [validWitnesses[0]], ethers.ZeroAddress, { value: 3 });
+        .addConsolidationRequests(
+          [{ sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] }],
+          ethers.ZeroAddress,
+          { value: 3 },
+        );
 
       await expectLimitData(consolidationGateway, 100, 1, 48, 98, 98);
 
@@ -228,17 +238,14 @@ describe("ConsolidationGateway.sol: rate limit management", () => {
       await setConsolidationLimit(consolidationGateway, authorizedEntity, 0, 0, 48);
 
       // 3 total requests grouped into pairs
-      const sourcePubkeysGroups = Array(3)
+      const groups = Array(3)
         .fill(0)
-        .map((_, i) => [PUBKEYS[i % 3]]);
-      const witnesses = Array(3)
-        .fill(0)
-        .map((_, i) => validWitnesses[i % 3]);
+        .map((_, i) => ({ sourcePubkeys: [PUBKEYS[i % 3]], targetWitness: validWitnesses[i % 3] }));
 
       // Should not revert even with many requests when limit is 0 (unlimited)
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests(sourcePubkeysGroups, witnesses, ethers.ZeroAddress, { value: 10 });
+        .addConsolidationRequests(groups, ethers.ZeroAddress, { value: 10 });
     });
   });
 });

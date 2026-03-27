@@ -68,7 +68,12 @@ interface IUnifiedStakingModule {
  * @dev Interface for ConsolidationBus to submit consolidation requests
  */
 interface IConsolidationBus {
-    function addConsolidationRequests(bytes[][] calldata sourcePubkeysGroups, bytes[] calldata targetPubkeys) external;
+    struct ConsolidationGroup {
+        bytes[] sourcePubkeys;
+        bytes targetPubkey;
+    }
+
+    function addConsolidationRequests(ConsolidationGroup[] calldata groups) external;
 }
 
 /**
@@ -90,7 +95,6 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     error ZeroArgument(string name);
     error AdminCannotBeZero();
     error PairNotInAllowlist(uint256 sourceOperatorId, uint256 targetOperatorId);
-    error ArraysLengthMismatch(uint256 sourceGroupsLength, uint256 targetLength);
     error KeyNotDeposited(uint256 moduleId, uint256 operatorId, uint256 keyIndex);
     error NotAuthorized(address caller, uint256 sourceOperatorId, uint256 targetOperatorId);
 
@@ -111,9 +115,17 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     event ConsolidationSubmitted(
         uint256 indexed sourceOperatorId,
         uint256 indexed targetOperatorId,
-        uint256[][] sourceKeyIndicesGroups,
-        uint256[] targetKeyIndices
+        ConsolidationIndexGroup[] groups
     );
+
+    // ==========
+    //  Structs
+    // ==========
+
+    struct ConsolidationIndexGroup {
+        uint256[] sourceKeyIndices;
+        uint256 targetKeyIndex;
+    }
 
     // ==========
     //  Roles
@@ -303,16 +315,14 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
      * @notice Submits a consolidation batch after validation
      * @param sourceOperatorId ID of the source operator
      * @param targetOperatorId ID of the target operator
-     * @param sourceKeyIndicesGroups Groups of source key indices, one group per target
-     * @param targetKeyIndices Indices of target keys
+     * @param groups Array of consolidation index groups, each containing source key indices and a target key index
      * @dev Caller must be the designated submitter for this pair (set via allowPair)
      * @dev Forwards the validated batch to ConsolidationBus
      */
     function submitConsolidationBatch(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
-        uint256[][] calldata sourceKeyIndicesGroups,
-        uint256[] calldata targetKeyIndices
+        ConsolidationIndexGroup[] calldata groups
     ) external {
         // Check authorization: caller must be the designated submitter for this pair
         address submitter = _submitters[sourceOperatorId][targetOperatorId];
@@ -320,21 +330,16 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
             revert NotAuthorized(msg.sender, sourceOperatorId, targetOperatorId);
         }
 
-        if (sourceKeyIndicesGroups.length != targetKeyIndices.length) {
-            revert ArraysLengthMismatch(sourceKeyIndicesGroups.length, targetKeyIndices.length);
-        }
-
         // Validate the batch and get pubkeys
-        (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) = _getValidatedConsolidationPubkeys(
+        IConsolidationBus.ConsolidationGroup[] memory pubkeyGroups = _getValidatedConsolidationPubkeys(
             sourceOperatorId,
             targetOperatorId,
-            sourceKeyIndicesGroups,
-            targetKeyIndices
+            groups
         );
 
-        CONSOLIDATION_BUS.addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+        CONSOLIDATION_BUS.addConsolidationRequests(pubkeyGroups);
 
-        emit ConsolidationSubmitted(sourceOperatorId, targetOperatorId, sourceKeyIndicesGroups, targetKeyIndices);
+        emit ConsolidationSubmitted(sourceOperatorId, targetOperatorId, groups);
     }
 
     // ==================
@@ -348,33 +353,24 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     function _getValidatedConsolidationPubkeys(
         uint256 sourceOperatorId,
         uint256 targetOperatorId,
-        uint256[][] calldata sourceKeyIndicesGroups,
-        uint256[] calldata targetKeyIndices
-    ) internal view returns (bytes[][] memory sourcePubkeysGroups, bytes[] memory targetPubkeys) {
-        uint256 groupsCount = targetKeyIndices.length;
+        ConsolidationIndexGroup[] calldata groups
+    ) internal view returns (IConsolidationBus.ConsolidationGroup[] memory pubkeyGroups) {
+        uint256 groupsCount = groups.length;
 
-        sourcePubkeysGroups = new bytes[][](groupsCount);
+        pubkeyGroups = new IConsolidationBus.ConsolidationGroup[](groupsCount);
         for (uint256 i = 0; i < groupsCount; ++i) {
-            sourcePubkeysGroups[i] = _validateAndExtractKeys(
-                SOURCE_MODULE_ID,
-                sourceOperatorId,
-                sourceKeyIndicesGroups[i]
-            );
+            pubkeyGroups[i].sourcePubkeys = _validateAndExtractSourceKeys(sourceOperatorId, groups[i].sourceKeyIndices);
+            pubkeyGroups[i].targetPubkey = _validateAndExtractTargetKey(targetOperatorId, groups[i].targetKeyIndex);
         }
-
-        targetPubkeys = _validateAndExtractKeys(TARGET_MODULE_ID, targetOperatorId, targetKeyIndices);
-
-        return (sourcePubkeysGroups, targetPubkeys);
     }
 
-    function _validateAndExtractKeys(
-        uint256 moduleId,
+    function _validateAndExtractSourceKeys(
         uint256 operatorId,
         uint256[] calldata keyIndices
     ) internal view returns (bytes[] memory pubkeys) {
-        IUnifiedStakingModule module = _getModule(moduleId);
+        IUnifiedStakingModule module = _getModule(SOURCE_MODULE_ID);
 
-        (, , , , , , uint256 totalDeposited, ) = module.getNodeOperatorSummary(operatorId);
+        uint256 totalDeposited = _getDepositedValidatorsCount(module, operatorId);
 
         uint256 count = keyIndices.length;
         pubkeys = new bytes[](count);
@@ -383,7 +379,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
             uint256 keyIndex = keyIndices[i];
 
             if (keyIndex >= totalDeposited) {
-                revert KeyNotDeposited(moduleId, operatorId, keyIndex);
+                revert KeyNotDeposited(SOURCE_MODULE_ID, operatorId, keyIndex);
             }
 
             bytes memory key = module.getSigningKeys(operatorId, keyIndex, 1);
@@ -392,8 +388,32 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
         }
     }
 
+    function _validateAndExtractTargetKey(
+        uint256 operatorId,
+        uint256 keyIndex
+    ) internal view returns (bytes memory pubkey) {
+        IUnifiedStakingModule module = _getModule(TARGET_MODULE_ID);
+
+        uint256 totalDeposited = _getDepositedValidatorsCount(module, operatorId);
+
+        if (keyIndex >= totalDeposited) {
+            revert KeyNotDeposited(TARGET_MODULE_ID, operatorId, keyIndex);
+        }
+
+        bytes memory key = module.getSigningKeys(operatorId, keyIndex, 1);
+        assert(key.length == PUBKEY_LENGTH); // Should always be 48 bytes for a single key
+        pubkey = key;
+    }
+
     function _getModule(uint256 moduleId) internal view returns (IUnifiedStakingModule) {
         IStakingRouter.StakingModule memory sm = STAKING_ROUTER.getStakingModule(moduleId);
         return IUnifiedStakingModule(sm.stakingModuleAddress);
+    }
+
+    function _getDepositedValidatorsCount(
+        IUnifiedStakingModule module,
+        uint256 operatorId
+    ) internal view returns (uint256 totalDeposited) {
+        (, , , , , , totalDeposited, ) = module.getNodeOperatorSummary(operatorId);
     }
 }

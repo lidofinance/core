@@ -9,7 +9,7 @@ import { proxify } from "lib/proxy";
 
 import { Snapshot } from "test/suite";
 
-import { PUBKEYS } from "../consolidation-helpers";
+import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers";
 
 describe("ConsolidationBus.sol: publisher", () => {
   let consolidationBus: ConsolidationBus;
@@ -47,16 +47,15 @@ describe("ConsolidationBus.sol: publisher", () => {
 
   context("addConsolidationRequests", () => {
     it("should add consolidation requests", async () => {
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
       const batchData = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["bytes[][]", "bytes[]"],
-        [sourcePubkeysGroups, targetPubkeys],
+        ["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"],
+        [groups],
       );
       const batchHash = ethers.keccak256(batchData);
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.emit(consolidationBus, "RequestsAdded")
         .withArgs(publisher.address, batchData);
 
@@ -66,16 +65,18 @@ describe("ConsolidationBus.sol: publisher", () => {
     });
 
     it("should add multiple requests in a batch", async () => {
-      const sourcePubkeysGroups = [[PUBKEYS[0]], [PUBKEYS[1]]];
-      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
+      const groups = [
+        { sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] },
+        { sourcePubkeys: [PUBKEYS[1]], targetPubkey: PUBKEYS[2] },
+      ];
 
       const batchData = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["bytes[][]", "bytes[]"],
-        [sourcePubkeysGroups, targetPubkeys],
+        ["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"],
+        [groups],
       );
       const batchHash = ethers.keccak256(batchData);
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.emit(consolidationBus, "RequestsAdded")
         .withArgs(publisher.address, batchData);
 
@@ -84,45 +85,39 @@ describe("ConsolidationBus.sol: publisher", () => {
     });
 
     it("should revert if caller does not have PUBLISH_ROLE", async () => {
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
-      await expect(consolidationBus.connect(stranger).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(stranger).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
         .withArgs(stranger.address, PUBLISH_ROLE);
     });
 
     it("should revert if batch is empty", async () => {
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests([], [])).to.be.revertedWithCustomError(
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests([])).to.be.revertedWithCustomError(
         consolidationBus,
         "EmptyBatch",
       );
     });
 
-    it("should revert if arrays have different lengths", async () => {
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
-
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
-        .to.be.revertedWithCustomError(consolidationBus, "ArraysLengthMismatch")
-        .withArgs(1, 2);
-    });
-
     it("should revert if a source group is empty", async () => {
       // First group is non-empty, second group is empty
-      const sourcePubkeysGroups = [[PUBKEYS[0]], []];
-      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
+      const groups = [
+        { sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] },
+        { sourcePubkeys: [] as string[], targetPubkey: PUBKEYS[2] },
+      ];
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "EmptyGroup")
         .withArgs(1);
     });
 
     it("should revert with EmptyGroup at first index if first group is empty", async () => {
-      const sourcePubkeysGroups = [[], [PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
+      const groups = [
+        { sourcePubkeys: [] as string[], targetPubkey: PUBKEYS[1] },
+        { sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[2] },
+      ];
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "EmptyGroup")
         .withArgs(0);
     });
@@ -130,20 +125,20 @@ describe("ConsolidationBus.sol: publisher", () => {
     it("should revert if batch size exceeds limit", async () => {
       // Create a batch with total source pubkeys exceeding the limit (10)
       // Use fewer groups but with multiple source keys each to avoid TooManyGroups
-      const sourcePubkeysGroups = [Array(6).fill(PUBKEYS[0]), Array(6).fill(PUBKEYS[0])];
-      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
+      const groups = [
+        { sourcePubkeys: Array(6).fill(PUBKEYS[0]), targetPubkey: PUBKEYS[1] },
+        { sourcePubkeys: Array(6).fill(PUBKEYS[0]), targetPubkey: PUBKEYS[2] },
+      ];
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
         .withArgs(12, 10);
     });
 
     it("should allow batch at exact limit", async () => {
-      const sourcePubkeysGroups = Array(10).fill([PUBKEYS[0]]);
-      const targetPubkeys = Array(10).fill(PUBKEYS[1]);
+      const groups = Array(10).fill({ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] });
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys)).to
-        .not.be.reverted;
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.reverted;
     });
 
     it("should revert if groups count exceeds max groups in batch", async () => {
@@ -151,10 +146,9 @@ describe("ConsolidationBus.sol: publisher", () => {
       await consolidationBus.connect(manager).setMaxGroupsInBatch(3);
 
       // Create 4 groups, each with 1 source pubkey (total size 4 <= batchSize 10, but groups 4 > maxGroups 3)
-      const sourcePubkeysGroups = Array(4).fill([PUBKEYS[0]]);
-      const targetPubkeys = Array(4).fill(PUBKEYS[1]);
+      const groups = Array(4).fill({ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] });
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "TooManyGroups")
         .withArgs(4, 3);
     });
@@ -163,11 +157,9 @@ describe("ConsolidationBus.sol: publisher", () => {
       // Set maxGroupsInBatch to 3
       await consolidationBus.connect(manager).setMaxGroupsInBatch(3);
 
-      const sourcePubkeysGroups = Array(3).fill([PUBKEYS[0]]);
-      const targetPubkeys = Array(3).fill(PUBKEYS[1]);
+      const groups = Array(3).fill({ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] });
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys)).to
-        .not.be.reverted;
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.reverted;
     });
 
     it("should check both batch size and max groups limits independently", async () => {
@@ -177,59 +169,61 @@ describe("ConsolidationBus.sol: publisher", () => {
       // 3 groups with 4 source pubkeys each = 12 total > batchSize 10
       // but groups 3 <= maxGroups 5
       // TooManyGroups check comes first, but this should pass it and fail on BatchTooLarge
-      const sourcePubkeysGroups = [
-        [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]],
-        [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]],
-        [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]],
+      const groups = [
+        { sourcePubkeys: [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]], targetPubkey: PUBKEYS[1] },
+        { sourcePubkeys: [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]], targetPubkey: PUBKEYS[2] },
+        { sourcePubkeys: [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]], targetPubkey: PUBKEYS[0] },
       ];
-      const targetPubkeys = [PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]];
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
         .withArgs(12, 10);
     });
 
     it("should revert if batch already added", async () => {
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
       // Add first time
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       const batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups]),
       );
 
       // Try to add again
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyPending")
         .withArgs(batchHash);
     });
 
     it("should revert if source equals target pubkey", async () => {
       const samePubkey = PUBKEYS[0];
+      const groups = [{ sourcePubkeys: [samePubkey], targetPubkey: samePubkey }];
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests([[samePubkey]], [samePubkey]))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
         .withArgs(0);
     });
 
     it("should revert if source equals target pubkey at any index", async () => {
       // First group is valid, second group has source == target
-      const sourcePubkeysGroups = [[PUBKEYS[0]], [PUBKEYS[1]]];
-      const targetPubkeys = [PUBKEYS[2], PUBKEYS[1]]; // PUBKEYS[1] == PUBKEYS[1] at group index 1
+      const groups = [
+        { sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[2] },
+        { sourcePubkeys: [PUBKEYS[1]], targetPubkey: PUBKEYS[1] }, // PUBKEYS[1] == PUBKEYS[1] at group index 1
+      ];
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
         .withArgs(1);
     });
 
     it("should revert if any source in a multi-source group equals the target", async () => {
       // Group has multiple sources, one of which matches the target
-      const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]]];
-      const targetPubkeys = [PUBKEYS[1]]; // PUBKEYS[1] is both source and target
+      const groups = [
+        { sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetPubkey: PUBKEYS[1] }, // PUBKEYS[1] is both source and target
+      ];
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
         .withArgs(0);
     });
@@ -238,14 +232,13 @@ describe("ConsolidationBus.sol: publisher", () => {
       const REMOVE_ROLE = await consolidationBus.REMOVE_ROLE();
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
 
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
       // Add first time
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       const batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups]),
       );
 
       // Remove
@@ -256,53 +249,44 @@ describe("ConsolidationBus.sol: publisher", () => {
       expect(batchInfo.publisher).to.equal(ethers.ZeroAddress);
 
       // Re-add should succeed
-      await expect(
-        consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys),
-      ).to.emit(consolidationBus, "RequestsAdded");
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.emit(
+        consolidationBus,
+        "RequestsAdded",
+      );
     });
 
     it("should allow re-adding batch after execution", async () => {
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
       // Add first time
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
-
-      const witnesses = targetPubkeys.map((pubkey) => ({
-        proof: [],
-        pubkey,
-        validatorIndex: 0,
-        childBlockTimestamp: 0,
-        slot: 0,
-        proposerIndex: 0,
-      }));
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       // Execute
-      await consolidationBus.executeConsolidation(sourcePubkeysGroups, witnesses, { value: 10 });
+      await consolidationBus.executeConsolidation(buildWitnessGroups([[PUBKEYS[0]]], [PUBKEYS[1]]), {
+        value: 10,
+      });
 
       // Re-add should succeed
-      await expect(
-        consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys),
-      ).to.emit(consolidationBus, "RequestsAdded");
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.emit(
+        consolidationBus,
+        "RequestsAdded",
+      );
     });
 
     it("should revert if target pubkey length is not 48 bytes", async () => {
       const invalidTargetPubkey = "0x1234";
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: invalidTargetPubkey }];
 
-      await expect(
-        consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, [invalidTargetPubkey]),
-      )
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "InvalidTargetPubkeyLength")
         .withArgs(0, 2);
     });
 
     it("should revert if source pubkey length is not 48 bytes", async () => {
       const invalidSourcePubkey = "0x1234";
-      const sourcePubkeysGroups = [[invalidSourcePubkey]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [invalidSourcePubkey], targetPubkey: PUBKEYS[1] }];
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys))
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "InvalidSourcePubkeyLength")
         .withArgs(0, 0, 2);
     });
@@ -312,20 +296,17 @@ describe("ConsolidationBus.sol: publisher", () => {
       const [, , , , publisher2] = await ethers.getSigners();
       await consolidationBus.connect(admin).grantRole(PUBLISH_ROLE, publisher2.address);
 
-      const sourcePubkeysGroups1 = [[PUBKEYS[0]]];
-      const targetPubkeys1 = [PUBKEYS[1]];
+      const groups1 = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
+      const groups2 = [{ sourcePubkeys: [PUBKEYS[1]], targetPubkey: PUBKEYS[2] }];
 
-      const sourcePubkeysGroups2 = [[PUBKEYS[1]]];
-      const targetPubkeys2 = [PUBKEYS[2]];
-
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups1, targetPubkeys1);
-      await consolidationBus.connect(publisher2).addConsolidationRequests(sourcePubkeysGroups2, targetPubkeys2);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups1);
+      await consolidationBus.connect(publisher2).addConsolidationRequests(groups2);
 
       const batchHash1 = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups1, targetPubkeys1]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups1]),
       );
       const batchHash2 = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups2, targetPubkeys2]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups2]),
       );
 
       expect((await consolidationBus.getBatchInfo(batchHash1)).publisher).to.equal(publisher.address);
