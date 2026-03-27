@@ -1142,15 +1142,12 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
     const setRefSlot = (slot: bigint) => accountingOracle.setLastProcessingRefSlot(slot);
 
-    it("requires MIGRATION_MANAGER_ROLE", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await expect(checker.migrateBaselineSnapshot()).to.be.revertedWithOZAccessControlError(deployer.address, role);
+    it("is permissionless before migration completes", async () => {
+      await lido.mock__setContractVersion(4);
+      await expect(checker.migrateBaselineSnapshot()).not.to.be.reverted;
     });
 
     it("reverts with UnexpectedLidoVersion when version != 4", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await checker.grantRole(role, deployer.address);
-
       await lido.mock__setContractVersion(3);
       await expect(checker.migrateBaselineSnapshot())
         .to.be.revertedWithCustomError(checker, "UnexpectedLidoVersion")
@@ -1158,9 +1155,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     });
 
     it("seeds baseline and bootstrap entries in reportData and emits event", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await checker.grantRole(role, deployer.address);
-
       const clActive = ether("10000000");
       const clPending = ether("500000");
       const deposits = ether("320000");
@@ -1190,9 +1184,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     });
 
     it("reverts with MigrationAlreadyDone on second call", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await checker.grantRole(role, deployer.address);
-
       await lido.mock__setContractVersion(4);
       await lido.mock__setBalanceStats(ether("10000000"), ether("500000"), ether("320000"), ether("320000"));
 
@@ -1201,9 +1192,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     });
 
     it("after migration, decrease within limit passes", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await checker.grantRole(role, deployer.address);
-
       const clActive = ether("10000000");
       const clPending = ether("500000");
       const migrationDeposits = ether("320000");

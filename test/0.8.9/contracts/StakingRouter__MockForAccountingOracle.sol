@@ -6,6 +6,8 @@ pragma solidity 0.8.9;
 import {IStakingRouter} from "contracts/0.8.9/oracle/AccountingOracle.sol";
 
 contract StakingRouter__MockForAccountingOracle is IStakingRouter {
+    error InvalidValidatorBalancesReport();
+
     struct UpdateExitedKeysByModuleCallData {
         uint256[] moduleIds;
         uint256[] exitedKeysCounts;
@@ -23,6 +25,7 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
     mapping(uint256 => uint64) internal _validatorBalancesGweiByModuleId;
     mapping(uint256 => uint64) internal _pendingBalancesGweiByModuleId;
     mapping(uint256 => bool) internal _moduleExistsById;
+    uint256[] internal _registeredModuleIds;
 
     uint256 internal _totalStakingModulesBalanceWei;
 
@@ -43,6 +46,15 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
     ///
     /// IStakingRouter
     ///
+
+    function mock__registerStakingModule(uint256 moduleId) external {
+        if (_moduleExistsById[moduleId]) {
+            return;
+        }
+
+        _moduleExistsById[moduleId] = true;
+        _registeredModuleIds.push(moduleId);
+    }
 
     function updateExitedValidatorsCountByStakingModule(
         uint256[] calldata moduleIds,
@@ -68,6 +80,8 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _validatorBalancesGwei
     ) external {
+        this.validateReportValidatorBalancesByStakingModule(_stakingModuleIds, _validatorBalancesGwei);
+
         uint256 totalBalance = _totalStakingModulesBalanceWei;
         for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
             uint256 moduleId = _stakingModuleIds[i];
@@ -85,6 +99,25 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
             _moduleExistsById[moduleId] = true;
         }
         _totalStakingModulesBalanceWei = totalBalance;
+    }
+
+    function validateReportValidatorBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _validatorBalancesGwei
+    ) external view {
+        uint256 modulesCount = _registeredModuleIds.length;
+        if (_stakingModuleIds.length != modulesCount || _validatorBalancesGwei.length != modulesCount) {
+            revert InvalidValidatorBalancesReport();
+        }
+
+        for (uint256 i = 0; i < modulesCount; ++i) {
+            if (_stakingModuleIds[i] != _registeredModuleIds[i]) {
+                revert InvalidValidatorBalancesReport();
+            }
+            if (_validatorBalancesGwei[i] > type(uint64).max) {
+                revert InvalidValidatorBalancesReport();
+            }
+        }
     }
 
     function getDepositAmountFromLastSlot(uint256) external view returns (uint256) {

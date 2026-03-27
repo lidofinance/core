@@ -482,6 +482,49 @@ describe("StakingRouter.sol:module-sync", () => {
     });
   });
 
+  context("validateReportValidatorBalancesByStakingModule", () => {
+    it("reverts if the report does not include all registered modules", async () => {
+      const secondStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
+      await stakingRouter.addStakingModule(name + "-2", await secondStakingModule.getAddress(), {
+        stakeShareLimit,
+        priorityExitShareThreshold,
+        stakingModuleFee,
+        treasuryFee,
+        maxDepositsPerBlock,
+        minDepositBlockDistance,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+      });
+
+      await expect(
+        stakingRouter.validateReportValidatorBalancesByStakingModule([moduleId], [1n]),
+      ).to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch");
+    });
+
+    it("reverts if the report module ids are not in router order", async () => {
+      const secondStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
+      await stakingRouter.addStakingModule(name + "-2", await secondStakingModule.getAddress(), {
+        stakeShareLimit,
+        priorityExitShareThreshold,
+        stakingModuleFee,
+        treasuryFee,
+        maxDepositsPerBlock,
+        minDepositBlockDistance,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+      });
+      const secondModuleId = await stakingRouter.getStakingModulesCount();
+
+      await expect(stakingRouter.validateReportValidatorBalancesByStakingModule([secondModuleId, moduleId], [1n, 2n]))
+        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedModuleId")
+        .withArgs(moduleId, secondModuleId);
+    });
+
+    it("reverts if a reported balance exceeds the allowed gwei range", async () => {
+      await expect(
+        stakingRouter.validateReportValidatorBalancesByStakingModule([moduleId], [10n ** 27n]),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidAmountGwei");
+    });
+  });
+
   context("updateExitedValidatorsCountByStakingModule", () => {
     it("Reverts if the caller does not have the role", async () => {
       await expect(stakingRouter.connect(user).updateExitedValidatorsCountByStakingModule([moduleId], [0n]))

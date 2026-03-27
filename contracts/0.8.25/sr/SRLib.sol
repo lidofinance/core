@@ -851,24 +851,37 @@ library SRLib {
     }
 
     /// @dev report MUST include all modules in the same order as they are registered in the SR
-    function _reportValidatorBalancesByStakingModule(
+    function _validateReportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _validatorBalancesGwei
-    ) public {
+    ) public view {
         uint256 n = SRStorage.getModulesCount();
 
         if (_stakingModuleIds.length != n || _validatorBalancesGwei.length != n) {
             revert ISRBase.ArraysLengthMismatch();
         }
 
-        uint64 totalValidatorsBalanceGwei; // = routerAcc.validatorsBalanceGwei;
         for (uint256 i = 0; i < n; ++i) {
             uint256 moduleId = SRStorage.getModuleIdAt(i);
             if (moduleId != _stakingModuleIds[i]) revert ISRBase.UnexpectedModuleId(moduleId, _stakingModuleIds[i]);
 
+            SRUtils._ensureAmountGwei(_validatorBalancesGwei[i]);
+        }
+    }
+
+    /// @dev report MUST include all modules in the same order as they are registered in the SR
+    function _reportValidatorBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _validatorBalancesGwei
+    ) public {
+        _validateReportValidatorBalancesByStakingModule(_stakingModuleIds, _validatorBalancesGwei);
+
+        uint256 n = _stakingModuleIds.length;
+        uint64 totalValidatorsBalanceGwei;
+        for (uint256 i = 0; i < n; ++i) {
+            uint256 moduleId = _stakingModuleIds[i];
             ModuleStateAccounting storage moduleAcc = moduleId.getModuleState().accounting;
-            // validate and save new values
-            uint64 validatorsBalanceGwei = SRUtils._ensureAmountGwei(_validatorBalancesGwei[i]);
+            uint64 validatorsBalanceGwei = uint64(_validatorBalancesGwei[i]);
 
             moduleAcc.validatorsBalanceGwei = validatorsBalanceGwei;
 
