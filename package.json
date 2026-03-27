@@ -44,6 +44,7 @@
     "typecheck": "tsc --noEmit",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
+    "deploy:v3.0.2": "STEPS_FILE=upgrade/steps-deploy-v3-02.json hardhat run scripts/utils/migrate.ts",
     "postinstall": "husky"
   },
   "lint-staged": {
