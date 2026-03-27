@@ -1785,19 +1785,15 @@ describe("OracleReportSanityChecker.sol", () => {
   context("migrateBaselineSnapshot", () => {
     const MIGRATION_WITHDRAWALS = ether("57600");
 
-    it("reverts if called by non-manager", async () => {
+    it("is permissionless before migration completes", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
 
-      await expect(migrationChecker.connect(stranger).migrateBaselineSnapshot()).to.be.revertedWithOZAccessControlError(
-        stranger.address,
-        await migrationChecker.MIGRATION_MANAGER_ROLE(),
-      );
+      await expect(migrationChecker.connect(stranger).migrateBaselineSnapshot()).not.to.be.reverted;
     });
 
     it("reverts on unexpected Lido version", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(3n);
 
-      await migrationChecker.connect(admin).grantRole(await migrationChecker.MIGRATION_MANAGER_ROLE(), manager.address);
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot())
         .to.be.revertedWithCustomError(migrationChecker, "UnexpectedLidoVersion")
         .withArgs(3n, 4n);
@@ -1806,7 +1802,6 @@ describe("OracleReportSanityChecker.sol", () => {
     it("seeds baseline and bootstrap report snapshots", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
 
-      await migrationChecker.connect(admin).grantRole(await migrationChecker.MIGRATION_MANAGER_ROLE(), manager.address);
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot())
         .to.emit(migrationChecker, "BaselineSnapshotMigrated")
         .withArgs(ether("107"), ether("3"), MIGRATION_WITHDRAWALS);
@@ -1840,7 +1835,6 @@ describe("OracleReportSanityChecker.sol", () => {
         depositsCurrent: migrationDepositsCur,
       });
 
-      await migrationChecker.connect(admin).grantRole(await migrationChecker.MIGRATION_MANAGER_ROLE(), manager.address);
       await migrationChecker.connect(manager).migrateBaselineSnapshot();
 
       const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
@@ -1873,7 +1867,6 @@ describe("OracleReportSanityChecker.sol", () => {
     it("reverts when migration is called more than once", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
 
-      await migrationChecker.connect(admin).grantRole(await migrationChecker.MIGRATION_MANAGER_ROLE(), manager.address);
       await migrationChecker.connect(manager).migrateBaselineSnapshot();
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot()).to.be.revertedWithCustomError(
         migrationChecker,

@@ -207,8 +207,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     bytes32 public constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
     bytes32 public constant MAX_CL_BALANCE_DECREASE_MANAGER_ROLE =
         keccak256("MAX_CL_BALANCE_DECREASE_MANAGER_ROLE");
-    bytes32 public constant MIGRATION_MANAGER_ROLE = keccak256("MIGRATION_MANAGER_ROLE");
-
     uint256 private constant DEFAULT_TIME_ELAPSED = 1 hours;
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
@@ -511,7 +509,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice One-time migration: seeds initial snapshots into reportData
     ///     so that the sliding-window CL decrease check has a valid starting point.
-    function migrateBaselineSnapshot() external onlyRole(MIGRATION_MANAGER_ROLE) {
+    /// @dev Permissionless by design: after the first successful call, further calls revert.
+    function migrateBaselineSnapshot() external {
         if (reportData.length != 0) revert MigrationAlreadyDone();
 
         address lidoAddr = LIDO_LOCATOR.lido();
