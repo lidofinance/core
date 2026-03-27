@@ -933,7 +933,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return (_preCLValidatorsBalance * _annualBalanceIncreaseMultiplier) / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
     }
 
-    function _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(CheckParams memory $)
+    function _calculateAndCheckActivatedBalanceWithGap(CheckParams memory $)
         internal
         pure
         returns (uint256 effectiveTimeElapsed, uint256 activatedBalanceWithGap)
@@ -955,7 +955,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     function _checkCLPendingBalanceIncrease(CheckParams memory $) internal pure {
-        (, uint256 activatedBalanceWithGap) = _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap($);
+        (, uint256 activatedBalanceWithGap) = _calculateAndCheckActivatedBalanceWithGap($);
         uint256 preCLValidatorsBalanceAfterWithdrawals = $.preCLValidatorsBalance - $.clWithdrawals;
 
         if ($.postCLValidatorsBalance > preCLValidatorsBalanceAfterWithdrawals) {
@@ -971,8 +971,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _validatorBalancesWeiByStakingModule
     ) internal view {
-        (uint256 effectiveTimeElapsed, uint256 activatedBalanceWithGap) =
-            _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap($);
+        (uint256 effectiveTimeElapsed, uint256 activatedBalanceWithGap) = _calculateAndCheckActivatedBalanceWithGap($);
 
         if ($.postCLValidatorsBalance > $.preCLValidatorsBalance) {
             uint256 validatorsBalanceIncrease = $.postCLValidatorsBalance - $.preCLValidatorsBalance;
