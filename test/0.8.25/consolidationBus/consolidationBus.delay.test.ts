@@ -10,7 +10,7 @@ import { proxify } from "lib/proxy";
 
 import { Snapshot } from "test/suite";
 
-import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
+import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers";
 
 describe("ConsolidationBus.sol: execution delay", () => {
   let consolidationBus: ConsolidationBus;
@@ -105,10 +105,12 @@ describe("ConsolidationBus.sol: execution delay", () => {
       sourcePubkeysGroups = [[PUBKEYS[0]]];
       targetPubkeys = [PUBKEYS[1]];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
+
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups]),
       );
     });
 
@@ -119,7 +121,7 @@ describe("ConsolidationBus.sol: execution delay", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 0 }),
       )
         .to.be.revertedWithCustomError(consolidationBus, "ExecutionDelayNotPassed")
         .withArgs((await getCurrentBlockTimestamp()) + 1n, executeAfter);
@@ -131,7 +133,7 @@ describe("ConsolidationBus.sol: execution delay", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 0 }),
       ).to.emit(consolidationBus, "RequestsExecuted");
     });
 
@@ -145,7 +147,7 @@ describe("ConsolidationBus.sol: execution delay", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 0 }),
       ).to.emit(consolidationBus, "RequestsExecuted");
     });
 
@@ -155,7 +157,7 @@ describe("ConsolidationBus.sol: execution delay", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 0 }),
       ).to.emit(consolidationBus, "RequestsExecuted");
     });
 
@@ -165,7 +167,9 @@ describe("ConsolidationBus.sol: execution delay", () => {
 
       const sourcePubkeysGroups2 = [[PUBKEYS[2]]];
       const targetPubkeys2 = [PUBKEYS[3]];
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups2, targetPubkeys2);
+      await consolidationBus
+        .connect(publisher)
+        .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[2]], targetPubkey: PUBKEYS[3] }]);
 
       // Advance enough for batch 1 but not batch 2
       await advanceChainTime(BigInt(EXECUTION_DELAY / 2));
@@ -174,14 +178,14 @@ describe("ConsolidationBus.sol: execution delay", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 0 }),
       ).to.emit(consolidationBus, "RequestsExecuted");
 
       // Batch 2 should still be blocked
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups2, witnessesForTargets(targetPubkeys2), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups2, targetPubkeys2), { value: 0 }),
       ).to.be.revertedWithCustomError(consolidationBus, "ExecutionDelayNotPassed");
     });
 
@@ -197,7 +201,7 @@ describe("ConsolidationBus.sol: execution delay", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 0 }),
       ).to.be.revertedWithCustomError(consolidationBus, "ExecutionDelayNotPassed");
 
       // Advance the remaining time
@@ -207,7 +211,7 @@ describe("ConsolidationBus.sol: execution delay", () => {
       await expect(
         consolidationBus
           .connect(executor)
-          .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 }),
+          .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 0 }),
       ).to.emit(consolidationBus, "RequestsExecuted");
     });
   });
@@ -221,13 +225,12 @@ describe("ConsolidationBus.sol: execution delay", () => {
     });
 
     it("should return correct info after adding batch", async () => {
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       const batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups]),
       );
 
       const batchInfo = await consolidationBus.getBatchInfo(batchHash);
@@ -237,13 +240,12 @@ describe("ConsolidationBus.sol: execution delay", () => {
     });
 
     it("should return zero values after batch is executed", async () => {
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       const batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups]),
       );
 
       // Advance past delay
@@ -251,7 +253,7 @@ describe("ConsolidationBus.sol: execution delay", () => {
 
       await consolidationBus
         .connect(executor)
-        .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 0 });
+        .executeConsolidation(buildWitnessGroups([[PUBKEYS[0]]], [PUBKEYS[1]]), { value: 0 });
 
       const batchInfo = await consolidationBus.getBatchInfo(batchHash);
       expect(batchInfo.publisher).to.equal(ethers.ZeroAddress);

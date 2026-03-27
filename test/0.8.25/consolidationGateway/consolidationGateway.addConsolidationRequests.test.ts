@@ -15,9 +15,19 @@ import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTre
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
+import { PUBKEYS } from "../consolidation-helpers";
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
+
+// Helper to create a dummy witness (no real CL proof) for tests that don't need proof verification
+const dummyWitness = (pubkey: string) => ({
+  proof: [] as string[],
+  pubkey,
+  validatorIndex: 0,
+  childBlockTimestamp: 0,
+  slot: 0,
+  proposerIndex: 0,
+});
 
 // Helper functions
 const grantConsolidationRequestRole = async (
@@ -141,7 +151,11 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await expect(
         consolidationGateway
           .connect(stranger)
-          .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 2 }),
+          .addConsolidationRequests(
+            [{ sourcePubkeys: [PUBKEYS[0]], targetWitness: dummyWitness(PUBKEYS[1]) }],
+            ZERO_ADDRESS,
+            { value: 2 },
+          ),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "AccessControlUnauthorizedAccount")
         .withArgs(stranger.address, role);
@@ -153,30 +167,35 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await expect(
         consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 0 }),
+          .addConsolidationRequests(
+            [{ sourcePubkeys: [PUBKEYS[0]], targetWitness: dummyWitness(PUBKEYS[1]) }],
+            ZERO_ADDRESS,
+            { value: 0 },
+          ),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "ZeroArgument")
         .withArgs("msg.value");
     });
 
-    it("should revert with ZeroArgument error if sourcePubkeysGroups count is zero", async () => {
+    it("should revert with ZeroArgument error if groups count is zero", async () => {
       await expect(
-        consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests([], witnessesForTargets([PUBKEYS[1]]), ZERO_ADDRESS, { value: 10 }),
+        consolidationGateway.connect(authorizedEntity).addConsolidationRequests([], ZERO_ADDRESS, { value: 10 }),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "ZeroArgument")
-        .withArgs("sourcePubkeysGroups");
+        .withArgs("groups");
     });
 
     it("should revert with EmptyGroup error if a source group is empty", async () => {
       // Second group is empty
       await expect(
-        consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]], []], witnessesForTargets([PUBKEYS[1], PUBKEYS[2]]), ZERO_ADDRESS, {
-            value: 10,
-          }),
+        consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
+          [
+            { sourcePubkeys: [PUBKEYS[0]], targetWitness: dummyWitness(PUBKEYS[1]) },
+            { sourcePubkeys: [], targetWitness: dummyWitness(PUBKEYS[2]) },
+          ],
+          ZERO_ADDRESS,
+          { value: 10 },
+        ),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "EmptyGroup")
         .withArgs(1);
@@ -184,26 +203,17 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
     it("should revert with EmptyGroup at first index if first group is empty", async () => {
       await expect(
-        consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests([[], [PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1], PUBKEYS[2]]), ZERO_ADDRESS, {
-            value: 10,
-          }),
+        consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
+          [
+            { sourcePubkeys: [], targetWitness: dummyWitness(PUBKEYS[1]) },
+            { sourcePubkeys: [PUBKEYS[0]], targetWitness: dummyWitness(PUBKEYS[2]) },
+          ],
+          ZERO_ADDRESS,
+          { value: 10 },
+        ),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "EmptyGroup")
         .withArgs(0);
-    });
-
-    it("should revert with ArraysLengthMismatch error if arrays have different lengths", async () => {
-      await expect(
-        consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], witnessesForTargets([PUBKEYS[1], PUBKEYS[2]]), ZERO_ADDRESS, {
-            value: 10,
-          }),
-      )
-        .to.be.revertedWithCustomError(consolidationGateway, "ArraysLengthMismatch")
-        .withArgs(1, 2);
     });
   });
 
@@ -214,7 +224,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await expect(
         consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 }),
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          }),
       ).to.be.revertedWithCustomError(consolidationGateway, "DSMDepositsPaused");
     });
 
@@ -224,7 +236,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await expect(
         consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 }),
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          }),
       ).to.be.revertedWithCustomError(consolidationGateway, "LidoDepositsPaused");
     });
 
@@ -234,7 +248,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
       const tx = await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
+        .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+          value: 2,
+        });
 
       await expect(tx).to.emit(withdrawalVault, "AddConsolidationRequestsCalled");
     });
@@ -244,11 +260,13 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     it("should revert with RootNotFound when validator witness beacon root is missing", async () => {
       await expect(
         consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
-          [[PUBKEYS[0]]],
           [
             {
-              ...validWitnesses[0],
-              childBlockTimestamp: validWitnesses[0].childBlockTimestamp + 1,
+              sourcePubkeys: [PUBKEYS[0]],
+              targetWitness: {
+                ...validWitnesses[0],
+                childBlockTimestamp: validWitnesses[0].childBlockTimestamp + 1,
+              },
             },
           ],
           ZERO_ADDRESS,
@@ -263,14 +281,16 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       // but since the error is on the library, it doesn't appear in ConsolidationGateway's ABI.
       await expect(
         consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
-          [[PUBKEYS[0]]],
           [
             {
-              ...validWitnesses[0],
-              proof: [
-                "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-                ...validWitnesses[0].proof.slice(1),
-              ],
+              sourcePubkeys: [PUBKEYS[0]],
+              targetWitness: {
+                ...validWitnesses[0],
+                proof: [
+                  "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                  ...validWitnesses[0].proof.slice(1),
+                ],
+              },
             },
           ],
           ZERO_ADDRESS,
@@ -286,11 +306,13 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       expect(dataBefore[4]).to.equal(100); // currentConsolidationRequestsLimit
 
       // 2 total requests: [source0, source1] -> target0
-      const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]]];
-
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests(sourcePubkeysGroups, [validWitnesses[0]], ZERO_ADDRESS, { value: 3 });
+        .addConsolidationRequests(
+          [{ sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] }],
+          ZERO_ADDRESS,
+          { value: 3 },
+        );
 
       const dataAfter = await consolidationGateway.getConsolidationRequestLimitFullInfo();
       expect(dataAfter[3]).to.equal(98); // prevConsolidationRequestsLimit
@@ -308,14 +330,15 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await setConsolidationLimit(consolidationGateway, authorizedEntity, 2, 1, 48);
 
       // 3 total requests across groups
-      const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]], [PUBKEYS[2]]];
-
       await expect(
-        consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests(sourcePubkeysGroups, [validWitnesses[0], validWitnesses[1]], ZERO_ADDRESS, {
-            value: 4,
-          }),
+        consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
+          [
+            { sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] },
+            { sourcePubkeys: [PUBKEYS[2]], targetWitness: validWitnesses[1] },
+          ],
+          ZERO_ADDRESS,
+          { value: 4 },
+        ),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "ConsolidationRequestsLimitExceeded")
         .withArgs(3, 2);
@@ -326,12 +349,14 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await setConsolidationLimit(consolidationGateway, authorizedEntity, 3, 1, 48);
 
       // 3 total requests: [source0, source1] -> target0, [source2] -> target1
-      const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]], [PUBKEYS[2]]];
-      const witnesses = [validWitnesses[0], validWitnesses[1]];
+      const groups = [
+        { sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] },
+        { sourcePubkeys: [PUBKEYS[2]], targetWitness: validWitnesses[1] },
+      ];
 
       const tx = await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests(sourcePubkeysGroups, witnesses, ZERO_ADDRESS, { value: 4 });
+        .addConsolidationRequests(groups, ZERO_ADDRESS, { value: 4 });
 
       const flatSources = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]];
       const flatTargets = [validatorPubkeys[0], validatorPubkeys[0], validatorPubkeys[1]];
@@ -339,9 +364,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
       // Limit fully consumed — next request should fail
       await expect(
-        consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests(sourcePubkeysGroups, witnesses, ZERO_ADDRESS, { value: 4 }),
+        consolidationGateway.connect(authorizedEntity).addConsolidationRequests(groups, ZERO_ADDRESS, { value: 4 }),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "ConsolidationRequestsLimitExceeded")
         .withArgs(3, 0);
@@ -350,9 +373,7 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await advanceChainTime(48n * 3n);
 
       await expect(
-        consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests(sourcePubkeysGroups, witnesses, ZERO_ADDRESS, { value: 4 }),
+        consolidationGateway.connect(authorizedEntity).addConsolidationRequests(groups, ZERO_ADDRESS, { value: 4 }),
       )
         .to.emit(withdrawalVault, "AddConsolidationRequestsCalled")
         .withArgs(flatSources, flatTargets);
@@ -364,9 +385,11 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await expect(
         consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0], PUBKEYS[1]]], [validWitnesses[0]], ZERO_ADDRESS, {
-            value: 1,
-          }),
+          .addConsolidationRequests(
+            [{ sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] }],
+            ZERO_ADDRESS,
+            { value: 1 },
+          ),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "InsufficientFee")
         .withArgs(2, 1);
@@ -378,9 +401,11 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await expect(
         consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0], PUBKEYS[1]]], [validWitnesses[0]], ZERO_ADDRESS, {
-            value: 5,
-          }),
+          .addConsolidationRequests(
+            [{ sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] }],
+            ZERO_ADDRESS,
+            { value: 5 },
+          ),
       )
         .to.be.revertedWithCustomError(consolidationGateway, "InsufficientFee")
         .withArgs(6, 5);
@@ -392,14 +417,14 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       const withdrawalVaultBalanceBefore = await ethers.provider.getBalance(withdrawalVault);
       const recipientBalanceBefore = await ethers.provider.getBalance(stranger);
 
-      await consolidationGateway
-        .connect(authorizedEntity)
-        .addConsolidationRequests(
-          [[PUBKEYS[0], PUBKEYS[1]], [PUBKEYS[2]]],
-          [validWitnesses[0], validWitnesses[1]],
-          stranger,
-          { value: 15 },
-        );
+      await consolidationGateway.connect(authorizedEntity).addConsolidationRequests(
+        [
+          { sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] },
+          { sourcePubkeys: [PUBKEYS[2]], targetWitness: validWitnesses[1] },
+        ],
+        stranger,
+        { value: 15 },
+      );
 
       const withdrawalVaultBalanceAfter = await ethers.provider.getBalance(withdrawalVault);
       const recipientBalanceAfter = await ethers.provider.getBalance(stranger);
@@ -413,7 +438,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 2 });
+        .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+          value: 2,
+        });
 
       const balanceAfter = await ethers.provider.getBalance(consolidationGateway);
       expect(balanceAfter).to.equal(balanceBefore);
@@ -424,7 +451,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], stranger, { value: 1 + 7 });
+        .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], stranger, {
+          value: 1 + 7,
+        });
 
       const newBalance = await ethers.provider.getBalance(stranger);
 
@@ -437,7 +466,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
       const tx = await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], ZERO_ADDRESS, { value: 1 + 7 });
+        .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+          value: 1 + 7,
+        });
 
       const receipt = await tx.wait();
       const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
@@ -452,9 +483,11 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
       await expect(
         consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], await refundReverter.getAddress(), {
-            value: 2,
-          }),
+          .addConsolidationRequests(
+            [{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }],
+            await refundReverter.getAddress(),
+            { value: 2 },
+          ),
       ).to.be.revertedWithCustomError(consolidationGateway, "FeeRefundFailed");
     });
 
@@ -463,7 +496,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], stranger, { value: 1 });
+        .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], stranger, {
+          value: 1,
+        });
 
       const recipientBalanceAfter = await ethers.provider.getBalance(stranger);
       expect(recipientBalanceAfter).to.equal(recipientBalanceBefore);
@@ -474,7 +509,9 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
 
       await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests([[PUBKEYS[0]]], [validWitnesses[0]], stranger, { value: 5 });
+        .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], stranger, {
+          value: 5,
+        });
 
       const recipientBalanceAfter = await ethers.provider.getBalance(stranger);
       expect(recipientBalanceAfter).to.equal(recipientBalanceBefore + 4n); // 5 - 1 fee = 4 refund
@@ -484,11 +521,13 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
   context("request forwarding", () => {
     it("should expand grouped sources to flat source-target pairs", async () => {
       // Grouped: [source0, source1] -> target0, i.e. two sources to one target
-      const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]]];
-
       const tx = await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests(sourcePubkeysGroups, [validWitnesses[0]], ZERO_ADDRESS, { value: 3 });
+        .addConsolidationRequests(
+          [{ sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] }],
+          ZERO_ADDRESS,
+          { value: 3 },
+        );
 
       const flatSources = [PUBKEYS[0], PUBKEYS[1]];
       const flatTargets = [validatorPubkeys[0], validatorPubkeys[0]];
@@ -498,12 +537,14 @@ describe("ConsolidationGateway.sol: addConsolidationRequests", () => {
     it("should expand multiple groups with multiple sources each", async () => {
       // Group 0: [source0, source1] -> target0 (2 pairs)
       // Group 1: [source2] -> target1 (1 pair)
-      const sourcePubkeysGroups = [[PUBKEYS[0], PUBKEYS[1]], [PUBKEYS[2]]];
-      const witnesses = [validWitnesses[0], validWitnesses[1]];
+      const groups = [
+        { sourcePubkeys: [PUBKEYS[0], PUBKEYS[1]], targetWitness: validWitnesses[0] },
+        { sourcePubkeys: [PUBKEYS[2]], targetWitness: validWitnesses[1] },
+      ];
 
       const tx = await consolidationGateway
         .connect(authorizedEntity)
-        .addConsolidationRequests(sourcePubkeysGroups, witnesses, ZERO_ADDRESS, { value: 4 });
+        .addConsolidationRequests(groups, ZERO_ADDRESS, { value: 4 });
 
       const flatSources = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]];
       const flatTargets = [validatorPubkeys[0], validatorPubkeys[0], validatorPubkeys[1]];

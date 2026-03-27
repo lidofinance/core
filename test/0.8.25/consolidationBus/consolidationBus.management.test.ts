@@ -9,7 +9,7 @@ import { proxify } from "lib/proxy";
 
 import { Snapshot } from "test/suite";
 
-import { PUBKEYS, witnessesForTargets } from "../consolidation-helpers";
+import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers";
 
 describe("ConsolidationBus.sol: management", () => {
   let consolidationBus: ConsolidationBus;
@@ -112,14 +112,13 @@ describe("ConsolidationBus.sol: management", () => {
       await consolidationBus.connect(admin).grantRole(PUBLISH_ROLE, publisher.address);
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, publisher.address);
 
-      const sourcePubkeysGroups = [[PUBKEYS[0]]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       // Compute batch hash
       batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups]),
       );
     });
 
@@ -169,7 +168,7 @@ describe("ConsolidationBus.sol: management", () => {
 
       await consolidationBus
         .connect(manager)
-        .executeConsolidation(sourcePubkeysGroups, witnessesForTargets(targetPubkeys), { value: 10 });
+        .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 10 });
 
       // Try to remove the executed batch — batch was deleted, so it's not found
       await expect(consolidationBus.connect(manager).removeBatches([batchHash]))
@@ -179,14 +178,13 @@ describe("ConsolidationBus.sol: management", () => {
 
     it("should remove multiple batches", async () => {
       // Add another batch
-      const sourcePubkeysGroups2 = [[PUBKEYS[1]]];
-      const targetPubkeys2 = [PUBKEYS[0]];
+      const groups2 = [{ sourcePubkeys: [PUBKEYS[1]], targetPubkey: PUBKEYS[0] }];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeysGroups2, targetPubkeys2);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups2);
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
 
       const batchHash2 = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[][]", "bytes[]"], [sourcePubkeysGroups2, targetPubkeys2]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups2]),
       );
 
       await expect(consolidationBus.connect(manager).removeBatches([batchHash, batchHash2]))

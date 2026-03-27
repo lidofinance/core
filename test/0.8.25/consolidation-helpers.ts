@@ -10,7 +10,7 @@ export const PUBKEYS = [
   "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 ];
 
-/** Creates dummy (empty-proof) validator witnesses for use in ConsolidationBus/Gateway tests. */
+/** Creates dummy (empty-proof) validator witnesses for use in ConsolidationGateway tests. */
 export const witnessesForTargets = (targets: string[]) =>
   targets.map((pubkey) => ({
     proof: [] as string[],
@@ -19,4 +19,18 @@ export const witnessesForTargets = (targets: string[]) =>
     childBlockTimestamp: 0,
     slot: 0,
     proposerIndex: 0,
+  }));
+
+/** Creates ConsolidationWitnessGroup[] for ConsolidationBus.executeConsolidation */
+export const buildWitnessGroups = (sourcePubkeysGroups: string[][], targetPubkeys: string[]) =>
+  sourcePubkeysGroups.map((sourcePubkeys, i) => ({
+    sourcePubkeys,
+    targetWitness: {
+      proof: [] as string[],
+      pubkey: targetPubkeys[i],
+      validatorIndex: 0,
+      childBlockTimestamp: 0,
+      slot: 0,
+      proposerIndex: 0,
+    },
   }));

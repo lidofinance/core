@@ -11,9 +11,13 @@ import {
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 
 interface IConsolidationGateway {
+    struct ConsolidationWitnessGroup {
+        bytes[] sourcePubkeys;
+        IPredepositGuarantee.ValidatorWitness targetWitness;
+    }
+
     function addConsolidationRequests(
-        bytes[][] calldata sourcePubkeysGroups,
-        IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses,
+        ConsolidationWitnessGroup[] calldata groups,
         address refundRecipient
     ) external payable;
 }
@@ -42,13 +46,6 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
      * @notice Thrown when attempting to set the admin address to zero
      */
     error AdminCannotBeZero();
-
-    /**
-     * @notice Thrown when source groups and target arrays have different lengths
-     * @param sourceGroupsLength Length of source pubkeys groups array
-     * @param targetLength Length of target pubkeys array
-     */
-    error ArraysLengthMismatch(uint256 sourceGroupsLength, uint256 targetLength);
 
     /**
      * @notice Thrown when batch is empty
@@ -142,7 +139,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     /**
      * @notice Emitted when consolidation requests are added
      * @param publisher Address of the publisher who added the requests
-     * @param batchData Encoded batch data (abi.encode(sourcePubkeysGroups, targetPubkeys))
+     * @param batchData Encoded batch data (abi.encode(groups))
      */
     event RequestsAdded(address indexed publisher, bytes batchData);
 
@@ -168,6 +165,11 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
     bytes32 public constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
     bytes32 public constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
     bytes32 public constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
+
+    struct ConsolidationGroup {
+        bytes[] sourcePubkeys;
+        bytes targetPubkey;
+    }
 
     struct BatchInfo {
         address publisher;
@@ -310,13 +312,10 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
     /**
      * @notice Adds grouped consolidation requests to the queue
-     * @param sourcePubkeysGroups Array of groups, where each group is an array of 48-byte source validator public keys
-     *        consolidating to the corresponding target
-     * @param targetPubkeys Array of 48-byte target validator public keys, one per group
+     * @param groups Array of consolidation groups, where each group contains source pubkeys and a target pubkey
      * @dev The same batch can be submitted again after it has been executed.
      * @dev Reverts if:
      *      - Caller does not have PUBLISH_ROLE
-     *      - Arrays have different lengths
      *      - Batch is empty
      *      - Any group is empty
      *      - Total batch size exceeds limit
@@ -324,20 +323,16 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
      *      - Any source pubkey equals its corresponding target pubkey
      *      - Batch already exists
      */
-    function addConsolidationRequests(
-        bytes[][] calldata sourcePubkeysGroups,
-        bytes[] calldata targetPubkeys
-    ) external onlyRole(PUBLISH_ROLE) {
-        uint256 groupsCount = sourcePubkeysGroups.length;
+    function addConsolidationRequests(ConsolidationGroup[] calldata groups) external onlyRole(PUBLISH_ROLE) {
+        uint256 groupsCount = groups.length;
         if (groupsCount == 0) revert EmptyBatch();
-        if (groupsCount != targetPubkeys.length) revert ArraysLengthMismatch(groupsCount, targetPubkeys.length);
 
         uint256 maxGroups = _maxGroupsInBatch;
         if (groupsCount > maxGroups) revert TooManyGroups(groupsCount, maxGroups);
 
         uint256 totalCount = 0;
         for (uint256 i = 0; i < groupsCount; ++i) {
-            uint256 groupSize = sourcePubkeysGroups[i].length;
+            uint256 groupSize = groups[i].sourcePubkeys.length;
             if (groupSize == 0) revert EmptyGroup(i);
             totalCount += groupSize;
         }
@@ -346,13 +341,13 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
         if (totalCount > limit) revert BatchTooLarge(totalCount, limit);
 
         for (uint256 i = 0; i < groupsCount; ++i) {
-            bytes calldata targetPubkey = targetPubkeys[i];
+            bytes calldata targetPubkey = groups[i].targetPubkey;
             if (targetPubkey.length != PUBKEY_LENGTH) {
                 revert InvalidTargetPubkeyLength(i, targetPubkey.length);
             }
 
             bytes32 targetHash = keccak256(targetPubkey);
-            bytes[] calldata group = sourcePubkeysGroups[i];
+            bytes[] calldata group = groups[i].sourcePubkeys;
             for (uint256 j = 0; j < group.length; ++j) {
                 bytes calldata sourcePubkey = group[j];
                 if (sourcePubkey.length != PUBKEY_LENGTH) {
@@ -365,7 +360,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
             }
         }
 
-        bytes memory encodedBatch = abi.encode(sourcePubkeysGroups, targetPubkeys);
+        bytes memory encodedBatch = abi.encode(groups);
 
         bytes32 batchHash = keccak256(encodedBatch);
 
@@ -382,22 +377,22 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
     /**
      * @notice Executes a batch of grouped consolidation requests
-     * @param sourcePubkeysGroups Array of groups of 48-byte source validator public keys
-     * @param targetWitnesses Array of ValidatorWitness structs, one per group; each witness.pubkey is the target pubkey
+     * @param groups Array of consolidation witness groups, each containing source pubkeys and a target validator witness
      * @dev Forwards the batch to ConsolidationGateway with msg.value as fee
      * @dev Reverts if:
      *      - Batch was not added or was already executed/removed
      */
-    function executeConsolidation(
-        bytes[][] calldata sourcePubkeysGroups,
-        IPredepositGuarantee.ValidatorWitness[] calldata targetWitnesses
-    ) external payable {
-        bytes[] memory targetPubkeys = new bytes[](targetWitnesses.length);
-        for (uint256 i = 0; i < targetWitnesses.length; ++i) {
-            targetPubkeys[i] = targetWitnesses[i].pubkey;
+    function executeConsolidation(IConsolidationGateway.ConsolidationWitnessGroup[] calldata groups) external payable {
+        // Reconstruct ConsolidationGroup[] to compute the batch hash that matches the publisher's submission
+        ConsolidationGroup[] memory publisherGroups = new ConsolidationGroup[](groups.length);
+        for (uint256 i = 0; i < groups.length; ++i) {
+            publisherGroups[i] = ConsolidationGroup({
+                sourcePubkeys: groups[i].sourcePubkeys,
+                targetPubkey: groups[i].targetWitness.pubkey
+            });
         }
 
-        bytes32 batchHash = keccak256(abi.encode(sourcePubkeysGroups, targetPubkeys));
+        bytes32 batchHash = keccak256(abi.encode(publisherGroups));
 
         BatchInfo memory batch = _pendingBatches[batchHash];
         if (batch.publisher == address(0)) revert BatchNotFound(batchHash);
@@ -407,11 +402,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
         delete _pendingBatches[batchHash];
 
-        CONSOLIDATION_GATEWAY.addConsolidationRequests{value: msg.value}(
-            sourcePubkeysGroups,
-            targetWitnesses,
-            msg.sender
-        );
+        CONSOLIDATION_GATEWAY.addConsolidationRequests{value: msg.value}(groups, msg.sender);
 
         emit RequestsExecuted(batchHash, msg.value);
     }

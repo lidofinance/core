@@ -60,9 +60,8 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
   // Target pubkeys: 5
   let targetPubkeys: string[];
 
-  // Key indices for submitConsolidationBatch
-  let sourceKeyIndicesGroups: bigint[][];
-  let targetKeyIndices: bigint[];
+  // Key index groups for submitConsolidationBatch
+  let consolidationIndexGroups: { sourceKeyIndices: bigint[]; targetKeyIndex: bigint }[];
 
   let originalState: string;
 
@@ -151,7 +150,7 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
     // Retrieve pubkeys from NOR
     // =========================================
     sourcePubkeysGroups = [];
-    sourceKeyIndicesGroups = [];
+    consolidationIndexGroups = [];
     for (let g = 0; g < NUM_GROUPS; g++) {
       const group: string[] = [];
       const indices: bigint[] = [];
@@ -163,16 +162,14 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
         indices.push(BigInt(keyIndex));
       }
       sourcePubkeysGroups.push(group);
-      sourceKeyIndicesGroups.push(indices);
+      consolidationIndexGroups.push({ sourceKeyIndices: indices, targetKeyIndex: BigInt(g) });
     }
 
     targetPubkeys = [];
-    targetKeyIndices = [];
     for (let t = 0; t < NUM_GROUPS; t++) {
       const key = await nor.getSigningKey(targetOperatorId, t);
       expect(key.used).to.be.true;
       targetPubkeys.push(key.key);
-      targetKeyIndices.push(BigInt(t));
     }
 
     // =========================================
@@ -243,7 +240,7 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
     // Submit batch via ConsolidationMigrator → ConsolidationBus
     const submitTx = await consolidationMigrator
       .connect(submitter)
-      .submitConsolidationBatch(sourceOperatorId, targetOperatorId, sourceKeyIndicesGroups, targetKeyIndices);
+      .submitConsolidationBatch(sourceOperatorId, targetOperatorId, consolidationIndexGroups);
     const submitReceipt = await submitTx.wait();
 
     // Get fee from real WithdrawalVault
@@ -251,12 +248,15 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
     const fee = await withdrawalVault.getConsolidationRequestFee();
     const totalFee = fee * BigInt(TOTAL_REQUESTS);
 
-    // Execute batch through full stack
-    const executeTx = await consolidationBus
-      .connect(executor)
-      .executeConsolidation(sourcePubkeysGroups, targetWitnesses, {
-        value: totalFee,
-      });
+    // Execute batch through full stack - build ConsolidationWitnessGroup array
+    const consolidationWitnessGroups = sourcePubkeysGroups.map((sourcePubkeys, i) => ({
+      sourcePubkeys,
+      targetWitness: targetWitnesses[i],
+    }));
+
+    const executeTx = await consolidationBus.connect(executor).executeConsolidation(consolidationWitnessGroups, {
+      value: totalFee,
+    });
     const executeReceipt = await executeTx.wait();
 
     // Gas assertions
