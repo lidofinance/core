@@ -21,17 +21,15 @@ import {
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 import {
   calculateLockedValue,
-  depositValidatorsWithoutReport,
   ensurePredepositGuaranteeUnpaused,
-  getCurrentModuleAccountingReportParams,
   getProtocolContext,
   getReportTimeElapsed,
   OracleReportParams,
   ProtocolContext,
   report,
   reportVaultDataWithProof,
+  reportWithEffectiveClDiff,
   setupLidoForVaults,
-  submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
@@ -121,56 +119,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // Use beacon balance to calculate the vault value
     return vault101Balance + stakingVaultCLBalance;
-  }
-
-  async function seedProtocolPendingBaselineForAprReport() {
-    const { lido, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
-    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
-    const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-
-    const grossProtocolRewardBP = (TARGET_APR * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - PROTOCOL_FEE);
-    // The APR scenario is still meant to model protocol CL rewards. Under the new
-    // sanity path those rewards must be backed by protocol pending, so derive the
-    // minimal pending baseline from the live cap formula instead of guessing a seed.
-    const pendingBalanceRequiredForApr =
-      (grossProtocolRewardBP * (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) +
-        (annualBalanceIncreaseBPLimit - grossProtocolRewardBP) -
-        1n) /
-      (annualBalanceIncreaseBPLimit - grossProtocolRewardBP);
-    const pendingValidatorsRequired = (pendingBalanceRequiredForApr + ether("32") - 1n) / ether("32");
-    const pendingSeedAmount = pendingValidatorsRequired * ether("32");
-    const norPendingValidators = await stakingRouter.getStakingModuleMaxDepositsCount(1n, pendingSeedAmount);
-    const norPendingValidatorsToDeposit =
-      norPendingValidators < pendingValidatorsRequired ? norPendingValidators : pendingValidatorsRequired;
-
-    if (norPendingValidatorsToDeposit > 0n) {
-      await depositValidatorsWithoutReport(ctx, 1n, norPendingValidatorsToDeposit);
-    }
-
-    const remainingPendingValidators = pendingValidatorsRequired - norPendingValidatorsToDeposit;
-    if (remainingPendingValidators > 0n) {
-      await depositValidatorsWithoutReport(ctx, 2n, remainingPendingValidators);
-    }
-
-    const { depositedSinceLastReport } = await lido.getBalanceStats();
-
-    // Snapshot the freshly created pending balance into Lido's previous report state
-    // before sending the APR-bearing report. This preserves the original APR intent
-    // and avoids weakening the scenario into a neutral report.
-    const { data } = await report(ctx, {
-      clDiff: depositedSinceLastReport,
-      dryRun: true,
-      excludeVaultsBalances: true,
-      skipWithdrawals: true,
-      ...(await getCurrentModuleAccountingReportParams(ctx)),
-    });
-
-    const pendingBaselineGwei = depositedSinceLastReport / 10n ** 9n;
-    await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
-      ...data,
-      clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei,
-      clPendingBalanceGwei: pendingBaselineGwei,
-    });
   }
 
   it("Should have vaults factory deployed and adopted by DAO", async () => {
@@ -372,17 +320,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should rebase simulating 3% stETH APR", async () => {
     const { vaultHub } = ctx.contracts;
 
-    await seedProtocolPendingBaselineForAprReport();
-
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward);
 
-    const params = {
-      clDiff: elapsedProtocolReward,
+    await reportWithEffectiveClDiff(ctx, elapsedProtocolReward, {
       excludeVaultsBalances: true,
-    } as OracleReportParams;
-
-    await report(ctx, params);
+    });
 
     expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.be.equal(stakingVaultMaxMintingShares);
 

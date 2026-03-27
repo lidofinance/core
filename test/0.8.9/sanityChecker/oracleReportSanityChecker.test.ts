@@ -1141,11 +1141,6 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(checker.checkCLBalancesConsistency([1n, 2n], [10n, 20n], 30n)).not.to.be.reverted;
     });
 
-    it("ignores module pending balances and only checks validators balance consistency", async () => {
-      // Pending-by-module consistency is no longer part of this helper; only validator totals remain here.
-      await expect(checker.checkCLBalancesConsistency([1n, 2n], [10n, 20n], 30n)).not.to.be.reverted;
-    });
-
     it("passes for empty arrays and zero totals", async () => {
       await expect(checker.checkCLBalancesConsistency([], [], 0n)).not.to.be.reverted;
     });
