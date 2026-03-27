@@ -156,7 +156,6 @@ struct CheckParams {
     uint256 elRewardsVaultBalance;
     uint256 sharesRequestedToBurn;
     uint256 deposits;
-    uint256 withdrawalsVaultTransfer;
 
     // cached values
     AccountingCoreLimitsPacked limitsList;
@@ -641,8 +640,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _withdrawalVaultBalance,
             _elRewardsVaultBalance,
             _sharesRequestedToBurn,
-            _deposits,
-            _withdrawalsVaultTransfer
+            _deposits
         );
 
         _checkCLPendingBalanceIncrease(checkParams);
@@ -674,8 +672,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                 _withdrawalVaultBalance,
                 0,
                 0,
-                _deposits,
-                0
+                _deposits
             )
         );
     }
@@ -727,8 +724,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             0,
             0,
             0,
-            _depositsWei,
-            0
+            _depositsWei
         );
 
         _checkModuleValidatorsBalanceIncrease(checkParams, _stakingModuleIds, _validatorBalancesWeiByStakingModule);
@@ -833,8 +829,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 withdrawalVaultBalance,
         uint256 elRewardsVaultBalance,
         uint256 sharesRequestedToBurn,
-        uint256 deposits,
-        uint256 withdrawalsVaultTransfer
+        uint256 deposits
     ) internal view returns (CheckParams memory $) {
         $.timeElapsed = timeElapsed;
         $.preCLValidatorsBalance = preCLValidatorsBalance;
@@ -845,7 +840,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         $.elRewardsVaultBalance = elRewardsVaultBalance;
         $.sharesRequestedToBurn = sharesRequestedToBurn;
         $.deposits = deposits;
-        $.withdrawalsVaultTransfer = withdrawalsVaultTransfer;
 
         // precalculated values
         uint256 pendingBalanceWithDeposits = preCLPendingBalance + deposits;
