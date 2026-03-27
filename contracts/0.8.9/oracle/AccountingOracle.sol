@@ -890,7 +890,6 @@ contract AccountingOracle is BaseOracle {
             revert InvalidExtraDataItem(iter.index);
         }
 
-        // todo do we need routing?
         // Route to appropriate StakingRouter function based on item type
         if (iter.itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
             IStakingRouter(iter.stakingRouter)
