@@ -145,7 +145,6 @@ describe("StakingRouter.sol:module-sync", () => {
       bigint,
       number,
       bigint,
-      bigint,
     ];
 
     // module mock state
@@ -165,7 +164,6 @@ describe("StakingRouter.sol:module-sync", () => {
     const stakingModuleAccounting: Parameters<StakingRouter__Harness["testing_setStakingModuleAccounting"]> = [
       0n, // moduleId
       balance, // effectiveBalanceGwei
-      balance, // pendingBalanceGwei
       exitedValidators, // exitedValidators
     ];
 
@@ -203,7 +201,6 @@ describe("StakingRouter.sol:module-sync", () => {
         maxDepositsPerBlock,
         minDepositBlockDistance,
         WithdrawalCredentialsType.WC0x01,
-        balance,
         balance,
       ];
 
@@ -485,6 +482,49 @@ describe("StakingRouter.sol:module-sync", () => {
     });
   });
 
+  context("validateReportValidatorBalancesByStakingModule", () => {
+    it("reverts if the report does not include all registered modules", async () => {
+      const secondStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
+      await stakingRouter.addStakingModule(name + "-2", await secondStakingModule.getAddress(), {
+        stakeShareLimit,
+        priorityExitShareThreshold,
+        stakingModuleFee,
+        treasuryFee,
+        maxDepositsPerBlock,
+        minDepositBlockDistance,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+      });
+
+      await expect(
+        stakingRouter.validateReportValidatorBalancesByStakingModule([moduleId], [1n]),
+      ).to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch");
+    });
+
+    it("reverts if the report module ids are not in router order", async () => {
+      const secondStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
+      await stakingRouter.addStakingModule(name + "-2", await secondStakingModule.getAddress(), {
+        stakeShareLimit,
+        priorityExitShareThreshold,
+        stakingModuleFee,
+        treasuryFee,
+        maxDepositsPerBlock,
+        minDepositBlockDistance,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+      });
+      const secondModuleId = await stakingRouter.getStakingModulesCount();
+
+      await expect(stakingRouter.validateReportValidatorBalancesByStakingModule([secondModuleId, moduleId], [1n, 2n]))
+        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedModuleId")
+        .withArgs(moduleId, secondModuleId);
+    });
+
+    it("reverts if a reported balance exceeds the allowed gwei range", async () => {
+      await expect(
+        stakingRouter.validateReportValidatorBalancesByStakingModule([moduleId], [10n ** 27n]),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidAmountGwei");
+    });
+  });
+
   context("updateExitedValidatorsCountByStakingModule", () => {
     it("Reverts if the caller does not have the role", async () => {
       await expect(stakingRouter.connect(user).updateExitedValidatorsCountByStakingModule([moduleId], [0n]))
@@ -708,12 +748,7 @@ describe("StakingRouter.sol:module-sync", () => {
         WithdrawalCredentialsType.WC0x01,
         moduleSummary.totalDepositedValidators - moduleSummary.totalExitedValidators,
       );
-      await stakingRouter.testing_setStakingModuleAccounting(
-        moduleId,
-        balance,
-        balance,
-        moduleSummary.totalExitedValidators,
-      );
+      await stakingRouter.testing_setStakingModuleAccounting(moduleId, balance, moduleSummary.totalExitedValidators);
 
       const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
         operatorSummary.targetLimitMode,
@@ -956,7 +991,7 @@ describe("StakingRouter.sol:module-sync", () => {
         WithdrawalCredentialsType.WC0x01,
         100n, // active validators
       );
-      await stakingRouter.testing_setStakingModuleAccounting(moduleId, balance, balance, 0);
+      await stakingRouter.testing_setStakingModuleAccounting(moduleId, balance, 0);
     });
 
     it("Reverts if the caller is not DSM", async () => {
@@ -971,7 +1006,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
       await expect(stakingRouter.connect(dsmSigner).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
-        "CannotDeposit",
+        "StakingModuleNotActive",
       );
     });
 
@@ -994,7 +1029,7 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Successfully deposits for module type 0x02 (New)", async () => {
       const stakingRouterAsAdmin = stakingRouter.connect(admin);
 
-      const newStakingModule = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
+      const newStakingModule = await ethers.deployContract("StakingModuleV2__MockForStakingRouter", deployer);
       const newStakingModuleAddress = await newStakingModule.getAddress();
       const withdrawalCredentialsType = WithdrawalCredentialsType.WC0x02;
       const stakingModuleConfigNew = {
@@ -1021,7 +1056,7 @@ describe("StakingRouter.sol:module-sync", () => {
         depositableValidators,
       ); // 10 depositable validators
       const validatorsBalanceGwei = _getBalanceByValidatorsCount(withdrawalCredentialsType, depositedValidators);
-      await stakingRouter.testing_setStakingModuleAccounting(newModuleId, validatorsBalanceGwei, 0n, exitedValidators);
+      await stakingRouter.testing_setStakingModuleAccounting(newModuleId, validatorsBalanceGwei, exitedValidators);
 
       await expect(stakingRouter.connect(dsmSigner).deposit(newModuleId, "0x")).to.emit(
         depositContract,

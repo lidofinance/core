@@ -15,13 +15,17 @@ import { ZERO_HASH } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
-import { report } from "./accounting";
+import { report, submitReportDataWithConsensusAndEmptyExtraData } from "./accounting";
 
 const DEPOSIT_SIZE = ether("32");
 
 export type StakingModuleBalances = {
   validatorsBalanceGwei: bigint;
-  pendingBalanceGwei: bigint;
+};
+
+export type ModuleAccountingReportParams = {
+  stakingModuleIdsWithUpdatedBalance: bigint[];
+  validatorBalancesGweiByStakingModule: bigint[];
 };
 
 export const unpauseStaking = async (ctx: ProtocolContext) => {
@@ -65,10 +69,35 @@ export const getStakingModuleBalances = async (
   ctx: ProtocolContext,
   moduleId: bigint,
 ): Promise<StakingModuleBalances> => {
-  const [validatorsBalanceGwei, pendingBalanceGwei] =
-    await ctx.contracts.stakingRouter.getStakingModuleStateAccounting(moduleId);
+  const [validatorsBalanceGwei] = await ctx.contracts.stakingRouter.getStakingModuleStateAccounting(moduleId);
+  return { validatorsBalanceGwei };
+};
 
-  return { validatorsBalanceGwei, pendingBalanceGwei };
+const buildModuleAccountingReportParams = async (
+  ctx: ProtocolContext,
+  {
+    validatorsDeltaGweiByModule = new Map<bigint, bigint>(),
+  }: {
+    validatorsDeltaGweiByModule?: Map<bigint, bigint>;
+  } = {},
+): Promise<ModuleAccountingReportParams> => {
+  const { stakingRouter } = ctx.contracts;
+
+  const stakingModuleIds = await stakingRouter.getStakingModuleIds();
+  // Router balance reporting now requires all registered modules in router order.
+  const stakingModuleIdsWithUpdatedBalance = [...stakingModuleIds];
+  const validatorBalancesGweiByStakingModule: bigint[] = [];
+
+  for (const moduleId of stakingModuleIds) {
+    const [currentValidatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+    const validatorsBalanceGwei = currentValidatorsBalanceGwei + (validatorsDeltaGweiByModule.get(moduleId) ?? 0n);
+    validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
+  }
+
+  return {
+    stakingModuleIdsWithUpdatedBalance,
+    validatorBalancesGweiByStakingModule,
+  };
 };
 
 export const setModuleStakeShareLimit = async (ctx: ProtocolContext, moduleId: bigint, stakeShareLimit: bigint) => {
@@ -205,21 +234,51 @@ export const depositValidatorsWithoutReport = async (ctx: ProtocolContext, modul
   await ensureCanDeposit(ctx);
   await setModuleStakeShareLimit(ctx, moduleId, TOTAL_BASIS_POINTS);
 
-  const { pendingBalanceGwei: pendingBefore } = await getStakingModuleBalances(ctx, moduleId);
+  const { validatorsBalanceGwei: validatorsBefore } = await getStakingModuleBalances(ctx, moduleId);
   const depositedBefore = (await lido.getBalanceStats()).depositedSinceLastReport;
 
   await depositValidatorsViaRouter(ctx, moduleId, depositsCount);
 
-  const { pendingBalanceGwei: pendingAfter } = await getStakingModuleBalances(ctx, moduleId);
+  const { validatorsBalanceGwei: validatorsAfter } = await getStakingModuleBalances(ctx, moduleId);
   const { depositedSinceLastReport } = await lido.getBalanceStats();
 
   if (depositedSinceLastReport - depositedBefore !== ethToDeposit) {
     throw new Error(`Deposited ${depositedSinceLastReport - depositedBefore} wei, expected ${ethToDeposit}`);
   }
 
-  if (pendingAfter - pendingBefore !== ethToDeposit / ONE_GWEI) {
-    throw new Error(`Pending increased by ${pendingAfter - pendingBefore} gwei, expected ${ethToDeposit / ONE_GWEI}`);
+  if (validatorsAfter !== validatorsBefore) {
+    throw new Error(`Validators balance changed before report: ${validatorsAfter} != ${validatorsBefore}`);
   }
+};
+
+export const getCurrentModuleAccountingReportParams = async (
+  ctx: ProtocolContext,
+): Promise<ModuleAccountingReportParams> => {
+  return buildModuleAccountingReportParams(ctx);
+};
+
+export const seedProtocolPendingBaseline = async (
+  ctx: ProtocolContext,
+  moduleId: bigint,
+  depositsCount: bigint = 1n,
+) => {
+  await depositValidatorsWithoutReport(ctx, moduleId, depositsCount);
+
+  const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
+  const { data } = await report(ctx, {
+    clDiff: depositedSinceLastReport,
+    dryRun: true,
+    excludeVaultsBalances: true,
+    skipWithdrawals: true,
+    ...(await buildModuleAccountingReportParams(ctx)),
+  });
+
+  const pendingBaselineGwei = depositedSinceLastReport / ONE_GWEI;
+  return submitReportDataWithConsensusAndEmptyExtraData(ctx, {
+    ...data,
+    clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei,
+    clPendingBalanceGwei: pendingBaselineGwei,
+  });
 };
 
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
@@ -295,10 +354,12 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   });
 
   // Add new validators to beacon chain
+  const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[moduleId, ethToDeposit / ONE_GWEI]]);
   await report(ctx, {
     clDiff: ethToDeposit,
     clAppearedValidators: depositsCount,
     skipWithdrawals: true,
+    ...(await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule })),
   });
 
   const after = await lido.getBalanceStats();

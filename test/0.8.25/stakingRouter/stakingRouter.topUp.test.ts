@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -14,10 +13,12 @@ import {
 } from "typechain-types";
 
 import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib";
-import { StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
+import { ONE_GWEI, WithdrawalCredentialsType } from "lib/constants";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
+
+import { CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers";
 
 describe("StakingRouter.sol:topUp", () => {
   let deployer: HardhatEthersSigner;
@@ -33,17 +34,8 @@ describe("StakingRouter.sol:topUp", () => {
 
   let originalState: string;
 
-  const DEFAULT_CONFIG: ModuleConfig = {
-    stakeShareLimit: TOTAL_BASIS_POINTS,
-    priorityExitShareThreshold: TOTAL_BASIS_POINTS,
-    moduleFee: 5_00n,
-    treasuryFee: 5_00n,
-    maxDepositsPerBlock: 150n,
-    minDepositBlockDistance: 25n,
-    withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
-  };
+  let ctx: CtxConfig;
 
-  const GWEI = 1_000_000_000n;
   const NEW_MEB = wcTypeMaxEB(WithdrawalCredentialsType.WC0x02);
   const WEI_PER_GWEI = 1_000_000_000n;
   const withdrawalCredentials = randomWCType1();
@@ -77,6 +69,12 @@ describe("StakingRouter.sol:topUp", () => {
 
     // grant roles
     await Promise.all([stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin)]);
+
+    ctx = {
+      deployer,
+      admin,
+      stakingRouter,
+    };
   });
 
   beforeEach(async () => {
@@ -90,7 +88,7 @@ describe("StakingRouter.sol:topUp", () => {
   context("topUp", () => {
     const KEY_INDEX = 0n;
     const OPERATOR_ID = 1n;
-    const TOP_UP_LIMIT_GWEI = 10n * GWEI; // 10 ETH in GWEI
+    const TOP_UP_LIMIT_GWEI = 10n * ONE_GWEI; // 10 ETH in ONE_GWEI
 
     function makeValidTopUpData() {
       const keyIndices = [KEY_INDEX];
@@ -108,7 +106,7 @@ describe("StakingRouter.sol:topUp", () => {
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       };
 
-      const [, id] = await setupModule(config);
+      const [, id] = await setupModule(ctx, config);
       const { keyIndices, operatorIds, topUpLimits, pubkeys } = makeValidTopUpData();
 
       await expect(
@@ -125,7 +123,7 @@ describe("StakingRouter.sol:topUp", () => {
     });
 
     it("Reverts if the module is Legacy (top-ups only supported for 0x02)", async () => {
-      const [, id] = await setupModule({
+      const [, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
       });
@@ -138,7 +136,7 @@ describe("StakingRouter.sol:topUp", () => {
     });
 
     it("Reverts if keyIndices array is empty", async () => {
-      const [, id] = await setupModule({
+      const [, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       });
@@ -154,14 +152,14 @@ describe("StakingRouter.sol:topUp", () => {
     });
 
     it("Reverts if pubkeys array length doesn't match keyIndices count", async () => {
-      const [, id] = await setupModule({
+      const [, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       });
 
       const keyIndices = [0n, 1n];
       const operatorIds = [0n, 0n];
-      const topUpLimits = [10n * GWEI * WEI_PER_GWEI, 20n * GWEI * WEI_PER_GWEI]; // in wei
+      const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI, 20n * ONE_GWEI * WEI_PER_GWEI]; // in wei
       const pubkeys = [randomString(48)]; // Only 1 key, but 2 expected
 
       await expect(
@@ -170,7 +168,7 @@ describe("StakingRouter.sol:topUp", () => {
     });
 
     it("Does not perform deposits when module allocation is 0", async () => {
-      const [stakingModule, id] = await setupModule({
+      const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         depositable: 0n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
@@ -185,7 +183,7 @@ describe("StakingRouter.sol:topUp", () => {
 
       const keyIndices = [0n];
       const operatorIds = [0n];
-      const topUpLimits = [10n * GWEI * WEI_PER_GWEI]; // in wei
+      const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI]; // in wei
 
       const tx = await stakingRouter
         .connect(topUpGatewaySigner)
@@ -198,7 +196,7 @@ describe("StakingRouter.sol:topUp", () => {
     });
 
     it("Performs top-up for a New module for all keys", async () => {
-      const [stakingModule, id] = await setupModule({
+      const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         deposited: 100n,
         validatorsBalanceGwei: 100n * 32n * 10n ** 9n, //100 x 32 eth / 1 gwei
@@ -236,16 +234,16 @@ describe("StakingRouter.sol:topUp", () => {
     });
 
     it("Reverts when allocation exceeds module's target", async () => {
-      const [stakingModule, id] = await setupModule({
+      const [stakingModule, id] = (await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         stakeShareLimit: 50_00n, // 50%
         priorityExitShareThreshold: 50_00n,
         depositable: 2n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-      });
+      })) as [StakingModuleV2__MockForStakingRouter, bigint];
 
       // Add second module to split allocation
-      await setupModule({
+      await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         stakeShareLimit: 50_00n,
         priorityExitShareThreshold: 50_00n,
@@ -258,7 +256,7 @@ describe("StakingRouter.sol:topUp", () => {
       // Mock module returns allocations that exceed target (in wei)
       const pubkeys = [randomString(48), randomString(48)];
       // These allocations will exceed 50% of depositableEth
-      const topUpWei = [1500n * GWEI * WEI_PER_GWEI, 1500n * GWEI * WEI_PER_GWEI]; // 3000 ETH total, but module only gets 50% = 2048 ETH
+      const topUpWei = [1500n * ONE_GWEI * WEI_PER_GWEI, 1500n * ONE_GWEI * WEI_PER_GWEI]; // 3000 ETH total, but module only gets 50% = 2048 ETH
       await stakingModule.mock__setTopUpDepositData(topUpWei);
 
       await lidoMock.setDepositableEther(depositableEth);
@@ -274,7 +272,7 @@ describe("StakingRouter.sol:topUp", () => {
     it("Reverts when top up amount for key is below 1 ETH", async () => {
       const reducedBalanceGwei = (100n * NEW_MEB - 64n * 10n ** 18n) / 10n ** 9n;
 
-      const [stakingModule, id] = await setupModule({
+      const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         deposited: 100n,
         depositable: 100n,
@@ -300,7 +298,7 @@ describe("StakingRouter.sol:topUp", () => {
     });
 
     it("Zero allocations from module result in no deposits", async () => {
-      const [stakingModule, id] = await setupModule({
+      const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         depositable: 100n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
@@ -314,7 +312,7 @@ describe("StakingRouter.sol:topUp", () => {
 
       const keyIndices = [0n];
       const operatorIds = [0n];
-      const topUpLimits = [10n * GWEI * WEI_PER_GWEI]; // in wei
+      const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI]; // in wei
 
       const tx = await stakingRouter
         .connect(topUpGatewaySigner)
@@ -326,68 +324,4 @@ describe("StakingRouter.sol:topUp", () => {
       expect(depositEvents.length).to.equal(0);
     });
   });
-
-  async function setupModule({
-    stakeShareLimit,
-    priorityExitShareThreshold,
-    moduleFee,
-    treasuryFee,
-    maxDepositsPerBlock,
-    minDepositBlockDistance,
-    exited = 0n,
-    deposited = 0n,
-    depositable = 0n,
-    status = StakingModuleStatus.Active,
-    withdrawalCredentialsType = WithdrawalCredentialsType.WC0x01,
-    validatorsBalanceGwei = 0n,
-    pendingBalanceGwei = 0n,
-  }: ModuleConfig): Promise<[StakingModuleV2__MockForStakingRouter, bigint]> {
-    const modulesCount = await stakingRouter.getStakingModulesCount();
-    const module = await ethers.deployContract("StakingModuleV2__MockForStakingRouter", deployer);
-
-    const stakingModuleConfig = {
-      stakeShareLimit,
-      priorityExitShareThreshold,
-      stakingModuleFee: moduleFee,
-      treasuryFee,
-      maxDepositsPerBlock,
-      minDepositBlockDistance,
-      withdrawalCredentialsType,
-    };
-
-    await stakingRouter
-      .connect(admin)
-      .addStakingModule(randomBytes(8).toString(), await module.getAddress(), stakingModuleConfig);
-
-    const moduleId = modulesCount + 1n;
-    expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
-
-    await module.mock__getStakingModuleSummary(exited, deposited, depositable);
-    if (validatorsBalanceGwei == 0n && deposited > 0n) {
-      validatorsBalanceGwei = (deposited * wcTypeMaxEB(withdrawalCredentialsType)) / 1_000_000_000n; // in gwei
-    }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, validatorsBalanceGwei, pendingBalanceGwei, exited);
-
-    if (status != StakingModuleStatus.Active) {
-      await stakingRouter.setStakingModuleStatus(moduleId, status);
-    }
-
-    return [module, moduleId];
-  }
 });
-
-interface ModuleConfig {
-  stakeShareLimit: bigint;
-  priorityExitShareThreshold: bigint;
-  moduleFee: bigint;
-  treasuryFee: bigint;
-  maxDepositsPerBlock: bigint;
-  minDepositBlockDistance: bigint;
-  withdrawalCredentialsType: WithdrawalCredentialsType;
-  exited?: bigint;
-  deposited?: bigint;
-  depositable?: bigint;
-  status?: StakingModuleStatus;
-  validatorsBalanceGwei?: bigint;
-  pendingBalanceGwei?: bigint;
-}

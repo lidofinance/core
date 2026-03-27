@@ -59,6 +59,10 @@ library SRStorage {
         return getRouterState().moduleIds.values();
     }
 
+    function getModuleIdAt(uint256 _idx) internal view returns (uint256) {
+        return getRouterState().moduleIds.at(_idx);
+    }
+
     function isModuleExists(uint256 _moduleId) internal view returns (bool) {
         return getRouterState().moduleIds.contains(_moduleId);
     }

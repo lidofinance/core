@@ -275,7 +275,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
     context("early exit predicate", () => {
       it("passes when postCL >= preCL (no decrease)", async () => {
-        await expect(callCheck(ether("100"), ether("100.001"))).not.to.be.reverted;
+        await expect(
+          callCheck(ether("101"), ether("101.001"), 0n, 0n, 0n, 4n * 24n * 60n * 60n, ether("1"), ether("0.999")),
+        ).not.to.be.reverted;
       });
 
       it("passes when postCL + withdrawals >= preCL", async () => {
@@ -522,7 +524,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
         // deposits raise adjusted balance, increasing the allowed decrease
         await setRefSlot(baseRefSlot);
-        await expect(callCheckWithPendingDeposits(ether("9700"), ether("9700.001"), ether("300"))).not.to.be.reverted;
+        await expect(callCheckWithPendingDeposits(ether("9700"), ether("9700"), ether("300"))).not.to.be.reverted;
       });
 
       it("single large decrease exceeds limit", async () => {
@@ -614,7 +616,14 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         const expectedMaxDiff = maxDiffFor(baseline);
 
         await callCheck(baseline, baseline, 0n, 0n, 0n, twoDaysInSeconds);
-        await callCheck(baseline, baseline, oldWindowWithdrawal, 0n, oldWindowWithdrawal, twoDaysInSeconds);
+        await callCheck(
+          baseline + oldWindowWithdrawal,
+          baseline,
+          oldWindowWithdrawal,
+          oldWindowWithdrawal,
+          oldWindowWithdrawal,
+          twoDaysInSeconds,
+        );
 
         for (let i = 0; i < 17; ++i) {
           await callCheck(baseline, baseline, 0n, 0n, 0n, twoDaysInSeconds);
@@ -635,7 +644,13 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         const expectedMaxDiff = maxDiffFor(baseline);
 
         await setRefSlot(baseRefSlot - BigInt(totalReports) * SLOTS_PER_DAY);
-        await callCheck(baseline, baseline, baselineWithdrawals, 0n, baselineWithdrawals);
+        await callCheck(
+          baseline + baselineWithdrawals,
+          baseline,
+          baselineWithdrawals,
+          baselineWithdrawals,
+          baselineWithdrawals,
+        );
 
         for (let i = 1; i < REPORTS_WINDOW; i++) {
           await setRefSlot(baseRefSlot - BigInt(totalReports - i) * SLOTS_PER_DAY);
@@ -1127,15 +1142,12 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
     const setRefSlot = (slot: bigint) => accountingOracle.setLastProcessingRefSlot(slot);
 
-    it("requires MIGRATION_MANAGER_ROLE", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await expect(checker.migrateBaselineSnapshot()).to.be.revertedWithOZAccessControlError(deployer.address, role);
+    it("is permissionless before migration completes", async () => {
+      await lido.mock__setContractVersion(4);
+      await expect(checker.migrateBaselineSnapshot()).not.to.be.reverted;
     });
 
     it("reverts with UnexpectedLidoVersion when version != 4", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await checker.grantRole(role, deployer.address);
-
       await lido.mock__setContractVersion(3);
       await expect(checker.migrateBaselineSnapshot())
         .to.be.revertedWithCustomError(checker, "UnexpectedLidoVersion")
@@ -1143,14 +1155,12 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     });
 
     it("seeds baseline and bootstrap entries in reportData and emits event", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await checker.grantRole(role, deployer.address);
-
       const clActive = ether("10000000");
       const clPending = ether("500000");
       const deposits = ether("320000");
+      const depositsCur = ether("320000");
       await lido.mock__setContractVersion(4);
-      await lido.mock__setBalanceStats(clActive, clPending, deposits);
+      await lido.mock__setBalanceStats(clActive, clPending, deposits, depositsCur);
 
       const expectedCLBalance = clActive + clPending;
 
@@ -1174,25 +1184,20 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     });
 
     it("reverts with MigrationAlreadyDone on second call", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await checker.grantRole(role, deployer.address);
-
       await lido.mock__setContractVersion(4);
-      await lido.mock__setBalanceStats(ether("10000000"), ether("500000"), ether("320000"));
+      await lido.mock__setBalanceStats(ether("10000000"), ether("500000"), ether("320000"), ether("320000"));
 
       await checker.migrateBaselineSnapshot();
       await expect(checker.migrateBaselineSnapshot()).to.be.revertedWithCustomError(checker, "MigrationAlreadyDone");
     });
 
     it("after migration, decrease within limit passes", async () => {
-      const role = await checker.MIGRATION_MANAGER_ROLE();
-      await checker.grantRole(role, deployer.address);
-
       const clActive = ether("10000000");
       const clPending = ether("500000");
       const migrationDeposits = ether("320000");
+      const migrationDepositsCur = ether("320000");
       await lido.mock__setContractVersion(4);
-      await lido.mock__setBalanceStats(clActive, clPending, migrationDeposits);
+      await lido.mock__setBalanceStats(clActive, clPending, migrationDeposits, migrationDepositsCur);
 
       await checker.migrateBaselineSnapshot();
 

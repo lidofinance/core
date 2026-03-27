@@ -33,8 +33,7 @@ import {
     ModuleStateConfig,
     ModuleStateDeposits,
     ModuleStateAccounting,
-    ILido,
-    IAccountingOracle
+    ILido
 } from "./SRTypes.sol";
 
 contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
@@ -123,8 +122,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
     function finalizeUpgrade_v4() external reinitializer(4) {
         // migrate current modules to new storage
-        (, bool extraDataSubmitted) = _getOracleProcessingState();
-        if (!extraDataSubmitted) revert OracleExtraDataNotSubmitted();
         SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
 
         /// @dev migrate OZ roles
@@ -185,17 +182,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         /// @dev Simulate last deposit state to prevent real deposits into the new ModuleState via
         ///      DepositSecurityModule just after the addition.
         _updateModuleLastDepositState(newModuleId, 0);
-        emit StakingModuleAdded(newModuleId, _stakingModuleAddress, _name, _msgSender());
-
-        _emitUpdateModuleParamsEvents(
-            newModuleId,
-            _stakingModuleConfig.stakeShareLimit,
-            _stakingModuleConfig.priorityExitShareThreshold,
-            _stakingModuleConfig.stakingModuleFee,
-            _stakingModuleConfig.treasuryFee,
-            _stakingModuleConfig.maxDepositsPerBlock,
-            _stakingModuleConfig.minDepositBlockDistance
-        );
     }
 
     /// @notice Updates staking module params.
@@ -221,32 +207,17 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             _maxDepositsPerBlock,
             _minDepositBlockDistance
         );
-
-        _emitUpdateModuleParamsEvents(
-            _stakingModuleId,
-            _stakeShareLimit,
-            _priorityExitShareThreshold,
-            _stakingModuleFee,
-            _treasuryFee,
-            _maxDepositsPerBlock,
-            _minDepositBlockDistance
-        );
     }
 
-    function _emitUpdateModuleParamsEvents(
-        uint256 _moduleId,
-        uint256 _stakeShareLimit,
-        uint256 _priorityExitShareThreshold,
-        uint256 _stakingModuleFee,
-        uint256 _treasuryFee,
-        uint256 _maxDepositsPerBlock,
-        uint256 _minDepositBlockDistance
-    ) internal {
-        address setBy = _msgSender();
-        emit StakingModuleShareLimitSet(_moduleId, _stakeShareLimit, _priorityExitShareThreshold, setBy);
-        emit StakingModuleFeesSet(_moduleId, _stakingModuleFee, _treasuryFee, setBy);
-        emit StakingModuleMaxDepositsPerBlockSet(_moduleId, _maxDepositsPerBlock, setBy);
-        emit StakingModuleMinDepositBlockDistanceSet(_moduleId, _minDepositBlockDistance, setBy);
+    /// @notice Updates fees for all staking modules in a single atomic operation.
+    /// @param _stakingModuleFees New staking module fee values in the current module iteration order (returned by `getStakingModuleIds()`).
+    /// @param _treasuryFees New treasury fee values in the current module iteration order.
+    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
+    function updateAllStakingModulesFees(uint256[] calldata _stakingModuleFees, uint256[] calldata _treasuryFees)
+        external
+        onlyRole(STAKING_MODULE_MANAGE_ROLE)
+    {
+        SRLib._updateAllModuleFees(_stakingModuleFees, _treasuryFees);
     }
 
     /// @notice Updates staking module share params.
@@ -260,8 +231,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     {
         SRUtils._requireModuleIdExists(_stakingModuleId);
         SRLib._updateModuleShares(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold);
-
-        emit StakingModuleShareLimitSet(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold, _msgSender());
     }
 
     /// @notice Updates the limit of the validators that can be used for deposit.
@@ -305,10 +274,17 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// i.e. `REPORT_EXITED_VALIDATORS_ROLE` role.
     function reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _validatorBalancesGwei,
-        uint256[] calldata _pendingBalancesGwei
+        uint256[] calldata _validatorBalancesGwei
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
-        SRLib._reportValidatorBalancesByStakingModule(_stakingModuleIds, _validatorBalancesGwei, _pendingBalancesGwei);
+        SRLib._reportValidatorBalancesByStakingModule(_stakingModuleIds, _validatorBalancesGwei);
+    }
+
+    /// @notice Validates a validator balances report against the current StakingRouter module set and limits.
+    function validateReportValidatorBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _validatorBalancesGwei
+    ) external view {
+        SRLib._validateReportValidatorBalancesByStakingModule(_stakingModuleIds, _validatorBalancesGwei);
     }
 
     /// @dev See {SRLib._reportStakingModuleOperatorExitedValidators}.
@@ -320,18 +296,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         bytes calldata _exitedValidatorsCounts
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
         SRLib._reportStakingModuleOperatorExitedValidators(_stakingModuleId, _nodeOperatorIds, _exitedValidatorsCounts);
-    }
-
-    /// @notice Reports operator balances for balance-based staking modules (v2 modules with 0x02 withdrawal credentials)
-    /// @param _stakingModuleId The id of the staking module to be updated
-    /// @param _nodeOperatorIds Ids of the node operators to be updated
-    /// @param _totalBalancesGwei Total CL balances (active + pending) for the specified operators
-    function reportStakingModuleOperatorBalances(
-        uint256 _stakingModuleId,
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _totalBalancesGwei
-    ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
-        SRLib._reportStakingModuleOperatorBalances(_stakingModuleId, _nodeOperatorIds, _totalBalancesGwei);
     }
 
     /// @dev DEPRECATED
@@ -390,11 +354,11 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @notice Returns all registered staking modules.
     /// @return moduleStates Array of staking modules.
     function getStakingModules() external view returns (StakingModule[] memory) {
-        uint256[] memory moduleIds = SRStorage.getModuleIds();
-        StakingModule[] memory moduleStates = new StakingModule[](moduleIds.length);
+        uint256 modulesCount = SRStorage.getModulesCount();
+        StakingModule[] memory moduleStates = new StakingModule[](modulesCount);
 
-        for (uint256 i; i < moduleIds.length; ++i) {
-            moduleStates[i] = _getModuleStateCompat(moduleIds[i]);
+        for (uint256 i; i < modulesCount; ++i) {
+            moduleStates[i] = _getModuleStateCompat(SRStorage.getModuleIdAt(i));
         }
         return moduleStates;
     }
@@ -422,11 +386,11 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     function getStakingModuleStateAccounting(uint256 _stakingModuleId)
         external
         view
-        returns (uint64 validatorsBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount)
+        returns (uint64 validatorsBalanceGwei, uint64 exitedValidatorsCount)
     {
         (ModuleState storage state,) = _getModuleState(_stakingModuleId);
         ModuleStateAccounting memory moduleAcc = state.accounting;
-        return (moduleAcc.validatorsBalanceGwei, moduleAcc.pendingBalanceGwei, moduleAcc.exitedValidatorsCount);
+        return (moduleAcc.validatorsBalanceGwei, moduleAcc.exitedValidatorsCount);
     }
 
     /// @notice Returns the ids of all registered staking modules.
@@ -684,31 +648,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     }
 
     function canDeposit(uint256 _stakingModuleId) external view returns (bool) {
-        return hasStakingModule(_stakingModuleId) && _canDeposit(_stakingModuleId);
-    }
-
-    /// @notice check if oracle report's extra data was submitted
-    function _canDeposit(uint256 _moduleId) internal view returns (bool) {
-        if (_moduleId.getModuleState().config.status == StakingModuleStatus.Active) {
-            (, bool extraDataSubmitted) = _getOracleProcessingState();
-            return extraDataSubmitted;
-        }
-        return false;
-    }
-
-    /// @notice get mainDataSubmitted and extraDataSubmitted flags from oracle processing state
-    /// @dev simulates submitted report in case of initial deploy
-    function _getOracleProcessingState() internal view returns (bool mainDataSubmitted, bool extraDataSubmitted) {
-        IAccountingOracle oracle = IAccountingOracle(_getAccountingOracle());
-        (,,, mainDataSubmitted,,, extraDataSubmitted,,) = oracle.getProcessingState();
-        if (!mainDataSubmitted) {
-            /// @dev allow deposits in case of initial deploy
-            ///      this flow will not be triggered onchain in most cases, so
-            ///      no worry about gas consumption on 2nd call
-            if (oracle.getLastProcessingRefSlot() == 0) {
-                return (true, true);
-            }
-        }
+        return hasStakingModule(_stakingModuleId)
+            && _stakingModuleId.getModuleState().config.status == StakingModuleStatus.Active;
     }
 
     /**
@@ -740,7 +681,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
         (, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
 
-        if (!_canDeposit(_stakingModuleId)) revert CannotDeposit();
+        if (stateConfig.status != StakingModuleStatus.Active) revert StakingModuleNotActive();
 
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
@@ -789,7 +730,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
             // Make beacon chain top-up deposits
             BeaconChainDepositor.makeBeaconChainTopUp(DEPOSIT_CONTRACT, wcBytes, _pubkeys, allocations);
-            _updateModulePendingBalance(_stakingModuleId, amount);
 
             uint256 etherBalanceAfterDeposits = address(this).balance;
 
@@ -857,9 +797,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         )
     {
         uint256 totalValidatorsBalance = SRUtils._getTotalModulesValidatorsBalance();
-
-        uint256[] memory moduleIds = SRStorage.getModuleIds();
-        uint256 stakingModulesCount = totalValidatorsBalance == 0 ? 0 : moduleIds.length;
+        uint256 stakingModulesCount = totalValidatorsBalance == 0 ? 0 : SRStorage.getModulesCount();
 
         stakingModuleIds = new uint256[](stakingModulesCount);
         recipients = new address[](stakingModulesCount);
@@ -874,7 +812,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         uint256 rewardedStakingModulesCount = 0;
 
         for (uint256 i; i < stakingModulesCount; ++i) {
-            uint256 moduleId = moduleIds[i];
+            uint256 moduleId = SRStorage.getModuleIdAt(i);
             uint256 allocation = SRUtils._getModuleValidatorsBalance(moduleId);
 
             /// @dev Skip staking modules which have no active balance.
@@ -915,13 +853,13 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         return (recipients, stakingModuleIds, stakingModuleFees, totalFee, precisionPoints);
     }
 
-    function getStakingModuleBalance(uint256 moduleId) external view returns (uint256) {
+    function getModuleValidatorsBalance(uint256 moduleId) external view returns (uint256) {
         SRUtils._requireModuleIdExists(moduleId);
-        return SRUtils._getModuleBalance(moduleId);
+        return SRUtils._getModuleValidatorsBalance(moduleId);
     }
 
-    function getTotalStakingModulesBalance() external view returns (uint256) {
-        return SRUtils._getTotalModulesBalance();
+    function getTotalModulesValidatorsBalance() external view returns (uint256) {
+        return SRUtils._getTotalModulesValidatorsBalance();
     }
 
     function _computeModuleFee(
@@ -985,7 +923,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         _checkAppAuth(_getDepositSecurityModule());
         (ModuleState storage state, ModuleStateConfig storage stateConfig) = _getModuleState(_stakingModuleId);
 
-        if (!_canDeposit(_stakingModuleId)) revert CannotDeposit();
+        if (stateConfig.status != StakingModuleStatus.Active) revert StakingModuleNotActive();
 
         bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
         address stakingModuleAddress = stateConfig.moduleAddress;
@@ -1035,8 +973,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             signaturesBatch
         );
 
-        _updateModulePendingBalance(_stakingModuleId, depositsValue);
-
         uint256 etherBalanceAfterDeposits = address(this).balance;
 
         /// @dev All pulled ETH must be deposited and self balance stay the same.
@@ -1081,10 +1017,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     function _updateModuleLastDepositState(uint256 stakingModuleId, uint256 depositsValue) internal {
         SRLib._updateModuleLastDepositState(stakingModuleId);
         emit StakingRouterETHDeposited(stakingModuleId, depositsValue);
-    }
-
-    function _updateModulePendingBalance(uint256 stakingModuleId, uint256 depositsValue) internal {
-        SRLib._updateModulePendingBalance(stakingModuleId, depositsValue);
     }
 
     /// @notice Allocation for single module based on target share
@@ -1161,9 +1093,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         moduleState.minDepositBlockDistance = stateDeposits.minDepositBlockDistance;
 
         ModuleStateAccounting storage moduleAcc = state.accounting;
-        moduleState.exitedValidatorsCount = moduleAcc.exitedValidatorsCount;
         moduleState.validatorsBalanceGwei = moduleAcc.validatorsBalanceGwei;
-        moduleState.pendingBalanceGwei = moduleAcc.pendingBalanceGwei;
+        moduleState.exitedValidatorsCount = moduleAcc.exitedValidatorsCount;
     }
 
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.

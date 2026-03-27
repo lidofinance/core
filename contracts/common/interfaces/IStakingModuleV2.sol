@@ -25,8 +25,6 @@ interface IStakingModuleV2 {
         uint256[] calldata topUpLimits
     ) external returns (uint256[] memory allocations);
 
-    /// @notice Updates the total CL balances for node operators
-    /// @param operatorIds Encoded operator IDs
-    /// @param totalBalancesGwei Encoded total CL balances for the operators
-    function updateOperatorBalances(bytes calldata operatorIds, bytes calldata totalBalancesGwei) external;
+    /// @notice returns the total amount of ETH staked in the module, in wei
+    function getTotalModuleStake() external view returns (uint256);
 }

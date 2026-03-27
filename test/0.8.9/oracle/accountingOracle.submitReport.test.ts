@@ -69,7 +69,6 @@ describe("AccountingOracle.sol:submitReport", () => {
     numExitedValidatorsByStakingModule: [3],
     stakingModuleIdsWithUpdatedBalance: [1],
     validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
-    pendingBalancesGweiByStakingModule: [20n * ONE_GWEI],
     withdrawalVaultBalance: ether("1"),
     elRewardsVaultBalance: ether("2"),
     sharesRequestedToBurn: ether("3"),
@@ -661,6 +660,19 @@ describe("AccountingOracle.sol:submitReport", () => {
     });
 
     context("Balance-based accounting", () => {
+      it("should revert with InvalidClBalancesData if a staking module id does not exist", async () => {
+        const { newReportFields } = await prepareNextReportInNextFrame(
+          getReportFields({
+            stakingModuleIdsWithUpdatedBalance: [999],
+            validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
+          }),
+        );
+
+        await expect(
+          oracle.connect(member1).submitReportData(newReportFields, oracleVersion),
+        ).to.be.revertedWithCustomError(mockStakingRouter, "InvalidValidatorBalancesReport");
+      });
+
       it("should accept different balance values", async () => {
         await consensus.setTime(deadline);
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion)).not.to.be.reverted;
@@ -681,14 +693,16 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should accept zero active balance", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [64n * ONE_GWEI]);
+        // Router mock stores validators balance only; pending is seeded on the Lido mock.
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(64n * 10n ** 18n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
             clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 64n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [0n],
-            pendingBalancesGweiByStakingModule: [64n * ONE_GWEI],
           }),
         );
 
@@ -701,7 +715,7 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         // Seed the previous router balances to the target values; this case checks zero pending itself, not one-frame growth.
-        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [1000n * ONE_GWEI], [0n]);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [1000n * ONE_GWEI]);
         await mockLido.mock__setClValidatorsBalance(1000n * 10n ** 18n);
         await mockLido.mock__setClPendingBalance(0n);
 
@@ -710,7 +724,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 1000n * ONE_GWEI,
             clPendingBalanceGwei: 0n,
             validatorBalancesGweiByStakingModule: [1000n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [0n],
           }),
         );
 
@@ -722,7 +735,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should accept large balance values", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [60000n * ONE_GWEI], [5000n * ONE_GWEI]);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [60000n * ONE_GWEI]);
         await mockLido.mock__setClValidatorsBalance(60000n * 10n ** 18n);
         await mockLido.mock__setClPendingBalance(5000n * 10n ** 18n);
 
@@ -731,7 +744,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 60000n * ONE_GWEI,
             clPendingBalanceGwei: 5000n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [60000n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [5000n * ONE_GWEI],
           }),
         );
 
@@ -743,14 +755,15 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should handle pending larger than active", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [500n * ONE_GWEI]);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(500n * 10n ** 18n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
             clValidatorsBalanceGwei: 100n * ONE_GWEI,
             clPendingBalanceGwei: 500n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [100n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [500n * ONE_GWEI],
           }),
         );
 
@@ -762,14 +775,15 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should convert gwei to wei correctly", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI], [456n * ONE_GWEI]);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(456n * 10n ** 18n);
 
         const nextReport = await prepareNextReportInNextFrame(
           getReportFields({
             clValidatorsBalanceGwei: 123n * ONE_GWEI,
             clPendingBalanceGwei: 456n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [123n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [456n * ONE_GWEI],
           }),
         );
 
@@ -790,7 +804,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 0n,
             clPendingBalanceGwei: 0n,
             validatorBalancesGweiByStakingModule: [0n],
-            pendingBalancesGweiByStakingModule: [0n],
           }),
         );
 
@@ -808,7 +821,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 1n,
             clPendingBalanceGwei: 1n,
             validatorBalancesGweiByStakingModule: [1n],
-            pendingBalancesGweiByStakingModule: [1n],
           }),
         );
 
@@ -820,7 +832,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("should handle realistic scenarios", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [30000n * ONE_GWEI], [1000n * ONE_GWEI]);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [30000n * ONE_GWEI]);
         await mockLido.mock__setClValidatorsBalance(30000n * 10n ** 18n);
         await mockLido.mock__setClPendingBalance(1000n * 10n ** 18n);
 
@@ -829,7 +841,6 @@ describe("AccountingOracle.sol:submitReport", () => {
             clValidatorsBalanceGwei: 30000n * ONE_GWEI,
             clPendingBalanceGwei: 1000n * ONE_GWEI,
             validatorBalancesGweiByStakingModule: [30000n * ONE_GWEI],
-            pendingBalancesGweiByStakingModule: [1000n * ONE_GWEI],
           }),
         );
 

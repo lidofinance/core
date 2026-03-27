@@ -180,6 +180,17 @@ describe("StakingRouter.sol:module-management", () => {
       );
     });
 
+    it("Reverts if the module fee sum differs from existing modules", async () => {
+      await stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig);
+
+      await expect(
+        stakingRouter.addStakingModule("StakingModule2", certainAddress("test:staking-router:staking-module-2"), {
+          ...stakingModuleConfig,
+          stakingModuleFee: MODULE_FEE + 1n,
+        }),
+      ).to.be.revertedWithCustomError(stakingRouter, "InconsistentFeeSum");
+    });
+
     it("Adds the module to stakingRouter and emits events", async () => {
       const stakingModuleId = (await stakingRouter.getStakingModulesCount()) + 1n;
       const moduleAddedBlock = await getNextBlock();
@@ -209,7 +220,6 @@ describe("StakingRouter.sol:module-management", () => {
         MAX_DEPOSITS_PER_BLOCK,
         MIN_DEPOSIT_BLOCK_DISTANCE,
         WithdrawalCredentialsType.WC0x01,
-        0,
         0,
       ]);
     });
@@ -410,6 +420,28 @@ describe("StakingRouter.sol:module-management", () => {
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
     });
 
+    it("Reverts if the new fee sum differs from other modules", async () => {
+      await stakingRouter.addStakingModule(
+        "StakingModule2",
+        certainAddress("test:staking-router-modules:staking-module-2"),
+        {
+          ...stakingModuleConfig,
+        },
+      );
+
+      await expect(
+        stakingRouter.updateStakingModule(
+          ID,
+          STAKE_SHARE_LIMIT,
+          PRIORITY_EXIT_SHARE_THRESHOLD,
+          MODULE_FEE + 1n,
+          TREASURY_FEE,
+          MAX_DEPOSITS_PER_BLOCK,
+          MIN_DEPOSIT_BLOCK_DISTANCE,
+        ),
+      ).to.be.revertedWithCustomError(stakingRouter, "InconsistentFeeSum");
+    });
+
     it("Update target share, module and treasury fees and emits events", async () => {
       await expect(
         stakingRouter.updateStakingModule(
@@ -562,6 +594,86 @@ describe("StakingRouter.sol:module-management", () => {
       const moduleAfter = await stakingRouter.getStakingModule(ID);
       expect(moduleAfter.stakeShareLimit).to.equal(MAX_BP);
       expect(moduleAfter.priorityExitShareThreshold).to.equal(MAX_BP);
+    });
+  });
+
+  context("updateAllStakingModulesFees", () => {
+    const MODULE_ONE_NAME = "StakingModule1";
+    const MODULE_TWO_NAME = "StakingModule2";
+    const MODULE_ONE_ADDRESS = certainAddress("test:staking-router-modules:staking-module-batch-1");
+    const MODULE_TWO_ADDRESS = certainAddress("test:staking-router-modules:staking-module-batch-2");
+    const STAKE_SHARE_LIMIT = 1_00n;
+    const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
+    const MODULE_FEE = 5_00n;
+    const TREASURY_FEE = 5_00n;
+    const MAX_DEPOSITS_PER_BLOCK = 150n;
+    const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
+
+    const stakingModuleConfig = {
+      stakeShareLimit: STAKE_SHARE_LIMIT,
+      priorityExitShareThreshold: PRIORITY_EXIT_SHARE_THRESHOLD,
+      stakingModuleFee: MODULE_FEE,
+      treasuryFee: TREASURY_FEE,
+      maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
+      minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
+    };
+
+    beforeEach(async () => {
+      await stakingRouter.addStakingModule(MODULE_ONE_NAME, MODULE_ONE_ADDRESS, stakingModuleConfig);
+      await stakingRouter.addStakingModule(MODULE_TWO_NAME, MODULE_TWO_ADDRESS, stakingModuleConfig);
+    });
+
+    it("Reverts if the caller does not have the role", async () => {
+      await expect(stakingRouter.connect(user).updateAllStakingModulesFees([6_00n, 7_00n], [4_00n, 3_00n]))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+    });
+
+    it("Reverts if batch arrays length differs from modules count", async () => {
+      await expect(stakingRouter.updateAllStakingModulesFees([6_00n], [4_00n])).to.be.revertedWithCustomError(
+        stakingRouter,
+        "ArraysLengthMismatch",
+      );
+
+      await expect(stakingRouter.updateAllStakingModulesFees([6_00n, 7_00n], [4_00n])).to.be.revertedWithCustomError(
+        stakingRouter,
+        "ArraysLengthMismatch",
+      );
+    });
+
+    it("Reverts if any fee sum is greater than 100%", async () => {
+      await expect(
+        stakingRouter.updateAllStakingModulesFees([100_01n, 7_00n], [0n, 3_00n]),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
+    });
+
+    it("Reverts if fee sums differ inside the batch", async () => {
+      await expect(
+        stakingRouter.updateAllStakingModulesFees([6_00n, 7_00n], [4_00n, 4_00n]),
+      ).to.be.revertedWithCustomError(stakingRouter, "InconsistentFeeSum");
+    });
+
+    it("Updates fees for all modules atomically and emits events", async () => {
+      await expect(stakingRouter.updateAllStakingModulesFees([6_00n, 7_00n], [4_00n, 3_00n]))
+        .to.be.emit(stakingRouter, "StakingModuleFeesSet")
+        .withArgs(1n, 6_00n, 4_00n, admin.address)
+        .and.to.be.emit(stakingRouter, "StakingModuleFeesSet")
+        .withArgs(2n, 7_00n, 3_00n, admin.address);
+
+      const moduleOne = await stakingRouter.getStakingModule(1n);
+      expect(moduleOne.stakingModuleFee).to.equal(6_00n);
+      expect(moduleOne.treasuryFee).to.equal(4_00n);
+      expect(moduleOne.stakeShareLimit).to.equal(STAKE_SHARE_LIMIT);
+      expect(moduleOne.maxDepositsPerBlock).to.equal(MAX_DEPOSITS_PER_BLOCK);
+      expect(moduleOne.minDepositBlockDistance).to.equal(MIN_DEPOSIT_BLOCK_DISTANCE);
+
+      const moduleTwo = await stakingRouter.getStakingModule(2n);
+      expect(moduleTwo.stakingModuleFee).to.equal(7_00n);
+      expect(moduleTwo.treasuryFee).to.equal(3_00n);
+      expect(moduleTwo.stakeShareLimit).to.equal(STAKE_SHARE_LIMIT);
+      expect(moduleTwo.maxDepositsPerBlock).to.equal(MAX_DEPOSITS_PER_BLOCK);
+      expect(moduleTwo.minDepositBlockDistance).to.equal(MIN_DEPOSIT_BLOCK_DISTANCE);
     });
   });
 });

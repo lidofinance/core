@@ -25,8 +25,13 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         address _lidoLocator,
         address _accounting,
         address _admin,
-        LimitsList memory _limitsList
-    ) OracleReportSanityChecker(_lidoLocator, _accounting, _admin, _limitsList) {}
+        LimitsList memory _limitsList,
+        bool _postMigrationFirstReportDone
+    ) OracleReportSanityChecker(_lidoLocator, _accounting, _admin, _limitsList) {
+        if (_postMigrationFirstReportDone) {
+            _finalizePostReportState(0, 0);
+        }
+    }
 
     function addReportData(uint256 _timestamp, uint256 _clBalance, uint256 _deposits, uint256 _clWithdrawals) public {
         _addReportData(_timestamp, _clBalance, _deposits, _clWithdrawals);
