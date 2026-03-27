@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="5905"  lines-covered="5650"  line-rate="0.9568000000000001"  branches-valid="2742"  branches-covered="2483"  branch-rate="0.9055"  timestamp="1774615001204" complexity="0" version="0.1">
+<coverage lines-valid="5905"  lines-covered="5650"  line-rate="0.9568000000000001"  branches-valid="2742"  branches-covered="2483"  branch-rate="0.9055"  timestamp="1774622842632" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4558,10 +4558,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="43"  branch="false" />
-			<line number="173"  hits="43"  branch="false" />
-			<line number="175"  hits="43"  branch="false" />
-			<line number="176"  hits="43"  branch="false" />
+			<line number="172"  hits="45"  branch="false" />
+			<line number="173"  hits="45"  branch="false" />
+			<line number="175"  hits="45"  branch="false" />
+			<line number="176"  hits="45"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -9865,8 +9865,8 @@
 			<method name="checkCLPendingBalanceIncrease"  hits="9"  signature="()V" >
 				<lines><line number="682"  hits="9" /></lines>
 			</method>
-			<method name="checkCLBalancesConsistency"  hits="5"  signature="()V" >
-				<lines><line number="703"  hits="5" /></lines>
+			<method name="checkCLBalancesConsistency"  hits="4"  signature="()V" >
+				<lines><line number="703"  hits="4" /></lines>
 			</method>
 			<method name="checkModuleAndCLBalancesChangeRates"  hits="132"  signature="()V" >
 				<lines><line number="716"  hits="132" /></lines>
@@ -9892,8 +9892,8 @@
 			<method name="checkSimulatedShareRate"  hits="4"  signature="()V" >
 				<lines><line number="827"  hits="4" /></lines>
 			</method>
-			<method name="_checkCLBalancesConsistency"  hits="137"  signature="()V" >
-				<lines><line number="847"  hits="137" /></lines>
+			<method name="_checkCLBalancesConsistency"  hits="136"  signature="()V" >
+				<lines><line number="847"  hits="136" /></lines>
 			</method>
 			<method name="_checkExitedEthAmountPerDay"  hits="102"  signature="()V" >
 				<lines><line number="870"  hits="102" /></lines>
@@ -10128,7 +10128,7 @@
 			<line number="678"  hits="303"  branch="false" />
 			<line number="691"  hits="9"  branch="false" />
 			<line number="699"  hits="9"  branch="false" />
-			<line number="708"  hits="5"  branch="false" />
+			<line number="708"  hits="4"  branch="false" />
 			<line number="726"  hits="132"  branch="false" />
 			<line number="734"  hits="132"  branch="false" />
 			<line number="744"  hits="130"  branch="true"  condition-coverage="100% (2/2)" />
@@ -10153,15 +10153,15 @@
 			<line number="818"  hits="2"  branch="false" />
 			<line number="834"  hits="4"  branch="false" />
 			<line number="839"  hits="4"  branch="false" />
-			<line number="852"  hits="137"  branch="false" />
-			<line number="853"  hits="137"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="852"  hits="136"  branch="false" />
+			<line number="853"  hits="136"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="854"  hits="2"  branch="false" />
-			<line number="857"  hits="135"  branch="false" />
-			<line number="858"  hits="135"  branch="false" />
-			<line number="859"  hits="145"  branch="false" />
-			<line number="860"  hits="145"  branch="false" />
-			<line number="861"  hits="145"  branch="false" />
-			<line number="865"  hits="135"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="857"  hits="134"  branch="false" />
+			<line number="858"  hits="134"  branch="false" />
+			<line number="859"  hits="143"  branch="false" />
+			<line number="860"  hits="143"  branch="false" />
+			<line number="861"  hits="143"  branch="false" />
+			<line number="865"  hits="134"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="866"  hits="2"  branch="false" />
 			<line number="874"  hits="102"  branch="false" />
 			<line number="877"  hits="102"  branch="true"  condition-coverage="100% (2/2)" />
