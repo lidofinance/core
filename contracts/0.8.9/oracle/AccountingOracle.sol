@@ -43,6 +43,11 @@ interface IStakingRouter {
         uint256[] calldata _exitedValidatorsCounts
     ) external returns (uint256);
 
+    function validateReportValidatorBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _validatorBalancesGwei
+    ) external view;
+
     function reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _validatorBalancesGwei
@@ -607,21 +612,8 @@ contract AccountingOracle is BaseOracle {
         uint256[] calldata stakingModuleIds,
         uint256[] calldata validatorBalancesGwei
     ) internal {
-        uint256 numModules = stakingModuleIds.length;
-        if (numModules != validatorBalancesGwei.length) {
-            revert InvalidClBalancesData();
-        }
-        if (numModules == 0) {
+        if (stakingModuleIds.length == 0) {
             return;
-        }
-
-        for (uint256 i = 1; i < numModules;) {
-            if (stakingModuleIds[i] <= stakingModuleIds[i - 1]) {
-                revert InvalidClBalancesData();
-            }
-            unchecked {
-                ++i;
-            }
         }
 
         stakingRouter.reportValidatorBalancesByStakingModule(stakingModuleIds, validatorBalancesGwei);
@@ -725,13 +717,14 @@ contract AccountingOracle is BaseOracle {
         // This check must run before `reportValidatorBalancesByStakingModule(...)` mutates the router state,
         // because it compares the report against the previous per-module validators balances in StakingRouter
         // and the pre-report protocol pending/deposits snapshot in Lido.
-        uint256[] memory validatorBalancesWeiByStakingModule = new uint256[](data.validatorBalancesGweiByStakingModule.length);
-        for (uint256 i = 0; i < validatorBalancesWeiByStakingModule.length; ) {
-            validatorBalancesWeiByStakingModule[i] = data.validatorBalancesGweiByStakingModule[i] * 1 gwei;
-            unchecked {
-                ++i;
-            }
-        }
+        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
+        stakingRouter.validateReportValidatorBalancesByStakingModule(
+            data.stakingModuleIdsWithUpdatedBalance,
+            data.validatorBalancesGweiByStakingModule
+        );
+
+        uint256[] memory validatorBalancesWeiByStakingModule =
+            _normalizeStakingRouterValidatorBalancesToWei(data.validatorBalancesGweiByStakingModule);
 
         (uint256 preCLValidatorsBalanceWei, uint256 preCLPendingBalanceWei,, uint256 depositsWei) =
             ILido(LOCATOR.lido()).getBalanceStats();
@@ -745,6 +738,19 @@ contract AccountingOracle is BaseOracle {
             depositsWei,
             timeElapsed
         );
+    }
+
+    function _normalizeStakingRouterValidatorBalancesToWei(
+        uint256[] calldata validatorBalancesGwei
+    ) internal pure returns (uint256[] memory validatorBalancesWeiByStakingModule) {
+        uint256 modulesCount = validatorBalancesGwei.length;
+        validatorBalancesWeiByStakingModule = new uint256[](modulesCount);
+        for (uint256 i = 0; i < modulesCount; ) {
+            validatorBalancesWeiByStakingModule[i] = validatorBalancesGwei[i] * 1 gwei;
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function _processExtraDataItems(bytes calldata data, ExtraDataIterState memory iter) internal {

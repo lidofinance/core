@@ -307,6 +307,14 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         SRLib._reportValidatorBalancesByStakingModule(_stakingModuleIds, _validatorBalancesGwei);
     }
 
+    /// @notice Validates a validator balances report against the current StakingRouter module set and limits.
+    function validateReportValidatorBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _validatorBalancesGwei
+    ) external view {
+        SRLib._validateReportValidatorBalancesByStakingModule(_stakingModuleIds, _validatorBalancesGwei);
+    }
+
     /// @dev See {SRLib._reportStakingModuleOperatorExitedValidators}.
     ///
     /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.

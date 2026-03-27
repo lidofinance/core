@@ -42,8 +42,6 @@ interface IBaseOracle {
 }
 
 interface IStakingRouter {
-    function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
-
     function getStakingModuleStateAccounting(uint256 _stakingModuleId)
         external
         view
@@ -1059,13 +1057,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint64 exitedValidatorsCount
         )
     {
-        if (!_stakingRouter.hasStakingModule(_moduleId)) {
-            return (false, 0, 0);
-        }
-
         (previousValidatorsBalanceGwei, exitedValidatorsCount) =
             _stakingRouter.getStakingModuleStateAccounting(_moduleId);
-
         hasPreviousAccounting =
             previousValidatorsBalanceGwei != 0 ||
             exitedValidatorsCount != 0;

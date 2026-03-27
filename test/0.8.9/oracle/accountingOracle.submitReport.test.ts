@@ -660,6 +660,19 @@ describe("AccountingOracle.sol:submitReport", () => {
     });
 
     context("Balance-based accounting", () => {
+      it("should revert with InvalidClBalancesData if a staking module id does not exist", async () => {
+        const { newReportFields } = await prepareNextReportInNextFrame(
+          getReportFields({
+            stakingModuleIdsWithUpdatedBalance: [999],
+            validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
+          }),
+        );
+
+        await expect(
+          oracle.connect(member1).submitReportData(newReportFields, oracleVersion),
+        ).to.be.revertedWithCustomError(mockStakingRouter, "InvalidValidatorBalancesReport");
+      });
+
       it("should accept different balance values", async () => {
         await consensus.setTime(deadline);
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion)).not.to.be.reverted;

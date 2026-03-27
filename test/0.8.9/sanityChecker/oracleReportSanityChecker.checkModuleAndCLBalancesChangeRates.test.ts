@@ -76,6 +76,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
   const seedPreviousBalances = async (modules: ModuleBalance[]) => {
     const input = toModuleInput(modules);
+    for (const id of input.ids) {
+      await stakingRouter.mock__registerStakingModule(id);
+    }
     // Router state seeds validators balance only; pending budget is passed to the checker explicitly.
     await stakingRouter.reportValidatorBalancesByStakingModule(input.ids, input.validatorBalancesGweiByStakingModule);
   };
