@@ -15,6 +15,10 @@ import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.so
 
 import {WithdrawalQueue} from "./WithdrawalQueue.sol";
 
+interface IRedeemsReserveVault {
+    function withdrawToLido(uint256 _amount) external;
+}
+
 interface IStakingRouter {
     function getStakingRewardsDistribution()
         external
@@ -36,6 +40,8 @@ interface IStakingRouter {
 /// calculating all the state changes that is required to apply the report
 /// and distributing calculated values to relevant parts of the protocol
 contract Accounting {
+    uint256 internal constant TOTAL_BASIS_POINTS = 10000;
+
     struct Contracts {
         address accountingOracle;
         IOracleReportSanityChecker oracleReportSanityChecker;
@@ -139,6 +145,10 @@ contract Accounting {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
+        // Do NOT reconcile vault before snapshot. The stale tracked vault ETH keeps
+        // preInternalEther overcounted, and the vault delta is passed to smoothenTokenRebase
+        // as an explicit ether decrease — creating headroom for the paired burn.
+
         PreReportState memory pre = _snapshotPreReportState(contracts, false);
         CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report);
         _applyOracleReportContext(contracts, _report, pre, update);
@@ -182,20 +192,25 @@ contract Accounting {
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
         // and/or leaving some shares unburnt on Burner to be processed on future reports
+        //
+        // NOTE: vaultDelta is merged with etherToFinalizeWQ into a single _etherToDecrease param
+        // due to stack-too-deep in smoothenTokenRebase (0.8.9 without via-IR).
+        // Spec describes them as separate decreaseEther calls; mathematically equivalent.
+        uint256 vaultDelta = _getRedeemsReserveVaultDelta();
         (
             update.withdrawalsVaultTransfer,
             update.elRewardsVaultTransfer,
             update.sharesToBurnForWithdrawals,
             update.totalSharesToBurn // shares to burn from Burner balance
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
-            _pre.totalPooledEther - _pre.externalEther, // we need to change the base as shareRate is now calculated on
-            _pre.totalShares - _pre.externalShares,     // internal ether and shares, but inside it's still total
+            _pre.totalPooledEther - _pre.externalEther,
+            _pre.totalShares - _pre.externalShares,
             update.principalClBalance,
             _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            update.etherToFinalizeWQ,
+            update.etherToFinalizeWQ + vaultDelta,  // paired decreases: WQ finalization + vault redemptions
             update.sharesToFinalizeWQ
         );
 
@@ -204,10 +219,11 @@ contract Accounting {
             update.totalSharesToBurn; // shares to be burned for withdrawals and cover
 
         update.postInternalEther =
-            _pre.totalPooledEther - _pre.externalEther // internal ether before
+            _pre.totalPooledEther - _pre.externalEther // internal ether before (includes stale vault ETH)
             + _report.clValidatorsBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
             + update.elRewardsVaultTransfer
-            - update.etherToFinalizeWQ;
+            - update.etherToFinalizeWQ
+            - vaultDelta; // subtract vault delta: stale vault ETH was overcounted in preInternalEther
 
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
         (update.sharesToMintAsFees, update.feeDistribution) = _calculateProtocolFees(
@@ -370,6 +386,10 @@ contract Accounting {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
         }
 
+        // Reconcile RedeemsReserveVault AFTER burns — tracked vault ETH updated to actual.
+        // Must happen after commitSharesToBurn so the paired burn + reconcile are both applied.
+        _reconcileRedeemsReserveVault();
+
         LIDO.collectRewardsAndProcessWithdrawals(
             _report.timestamp,
             _report.clValidatorsBalance + _report.clPendingBalance,
@@ -380,6 +400,9 @@ contract Accounting {
             _report.simulatedShareRate,
             _update.etherToFinalizeWQ
         );
+
+        // Replenish RedeemsReserveVault: push/pull ETH to match target
+        _replenishRedeemsReserveVault();
 
         if (_update.sharesToMintAsFees > 0) {
             // this is a final action that changes share rate.
@@ -406,6 +429,69 @@ contract Accounting {
             _update.postInternalEther,
             _update.sharesToMintAsFees
         );
+    }
+
+    /// @dev Computes how much ETH left the RedeemsReserveVault since the last report.
+    ///      Returns 0 if no vault is configured or vault balance increased (e.g. donation).
+    ///      Used to pass the delta to smoothenTokenRebase as an ether decrease.
+    function _getRedeemsReserveVaultDelta() internal view returns (uint256) {
+        address vault = LIDO.getRedeemsReserveVault();
+        if (vault == address(0)) return 0;
+
+        uint256 tracked = LIDO.getRedeemsReserveVaultEth();
+        uint256 actual = vault.balance;
+        return tracked > actual ? tracked - actual : 0;
+    }
+
+    /// @dev Reconciles the RedeemsReserveVault tracked ETH to the actual vault balance.
+    ///      Called AFTER commitSharesToBurn so the paired burn + reconcile are applied together.
+    function _reconcileRedeemsReserveVault() internal {
+        address vault = LIDO.getRedeemsReserveVault();
+        if (vault == address(0)) return;
+
+        LIDO.reconcileRedeemsReserveVault(vault.balance);
+    }
+
+    /// @dev Replenishes or drains the RedeemsReserveVault to match the reserve target.
+    ///      Called after collectRewardsAndProcessWithdrawals when the buffer is finalized.
+    ///      Fills to target from unreserved surplus first. When surplus is insufficient,
+    ///      splits the shared allocation (withdrawalsReserve + unreserved) by replenishmentShareBP.
+    function _replenishRedeemsReserveVault() internal {
+        address vault = LIDO.getRedeemsReserveVault();
+        if (vault == address(0)) return;
+
+        uint256 target = LIDO.getRedeemsReserveTarget();
+        uint256 actual = vault.balance;
+
+        if (target > actual) {
+            uint256 deficit = target - actual;
+            uint256 unreserved = LIDO.getDepositableEther();
+            uint256 toPush;
+
+            if (unreserved >= deficit) {
+                // Surplus fully covers the deficit — no impact on WQ
+                toPush = deficit;
+            } else {
+                // Surplus insufficient — split shared allocation by replenishment share
+                uint256 shareBP = LIDO.getRedeemsReserveReplenishmentShare();
+                if (shareBP == 0) {
+                    // No forced growth — reserve grows only from genuine surplus
+                    toPush = unreserved;
+                } else {
+                    uint256 withdrawalsReserve = LIDO.getWithdrawalsReserve();
+                    uint256 sharedAllocation = withdrawalsReserve + unreserved;
+                    uint256 reserveShare = sharedAllocation * shareBP / TOTAL_BASIS_POINTS;
+                    toPush = reserveShare > unreserved ? reserveShare : unreserved;
+                    if (toPush > deficit) toPush = deficit;
+                }
+            }
+
+            if (toPush > 0) {
+                LIDO.pushToRedeemsReserveVault(toPush);
+            }
+        } else if (actual > target) {
+            LIDO.pullFromRedeemsReserveVault(actual - target);
+        }
     }
 
     /// @dev checks the provided oracle data internally and against the sanity checker contract

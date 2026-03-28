@@ -533,12 +533,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _withdrawalVaultBalance withdrawal vault balance on Execution Layer for the report calculation moment
     /// @param _elRewardsVaultBalance elRewards vault balance on Execution Layer for the report calculation moment
     /// @param _sharesRequestedToBurn shares requested to burn through Burner for the report calculation moment
-    /// @param _etherToLockForWithdrawals ether to lock on withdrawals queue contract
+    /// @param _etherToDecrease total ether to remove as paired decreases (WQ finalization + vault delta)
     /// @param _newSharesToBurnForWithdrawals new shares to burn due to withdrawal request finalization
     /// @return withdrawals ETH amount allowed to be taken from the withdrawals vault
     /// @return elRewards ETH amount allowed to be taken from the EL rewards vault
     /// @return sharesFromWQToBurn amount of shares from Burner that should be burned due to WQ finalization
     /// @return sharesToBurn amount to be burnt (accounting for withdrawals finalization)
+    /// @param _etherToDecrease Total ether to remove from the limiter as paired decreases.
+    ///        Sum of: ether locked for WQ finalization + vault delta (ETH that left the RedeemsReserveVault).
+    ///        Both are paired operations (ether decrease + matching share burn = rate-neutral).
     function smoothenTokenRebase(
         uint256 _preInternalEther,
         uint256 _preInternalShares,
@@ -547,7 +550,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
-        uint256 _etherToLockForWithdrawals,
+        uint256 _etherToDecrease,
         uint256 _newSharesToBurnForWithdrawals
     ) external view returns (uint256 withdrawals, uint256 elRewards, uint256 sharesFromWQToBurn, uint256 sharesToBurn) {
         TokenRebaseLimiterData memory tokenRebaseLimiter = PositiveTokenRebaseLimiter.initLimiterState(
@@ -568,17 +571,18 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // determining the shares to burn limit that would have been
         // if no withdrawals finalized during the report
         // it's used to check later the provided `simulatedShareRate` value
-        uint256 simulatedSharesToBurn = Math256.min(tokenRebaseLimiter.getSharesToBurnLimit(), _sharesRequestedToBurn);
+        sharesFromWQToBurn = Math256.min(tokenRebaseLimiter.getSharesToBurnLimit(), _sharesRequestedToBurn);
 
-        // remove ether to lock for withdrawals from total pooled ether
-        tokenRebaseLimiter.decreaseEther(_etherToLockForWithdrawals);
-        // re-evaluate shares to burn after TVL was updated due to withdrawals finalization
+        // remove ether locked for WQ finalization + vault delta from total pooled ether
+        tokenRebaseLimiter.decreaseEther(_etherToDecrease);
+        // re-evaluate shares to burn after TVL was updated due to withdrawals finalization and vault redemptions
         sharesToBurn = Math256.min(
             tokenRebaseLimiter.getSharesToBurnLimit(),
             _newSharesToBurnForWithdrawals + _sharesRequestedToBurn
         );
 
-        sharesFromWQToBurn = sharesToBurn - simulatedSharesToBurn;
+        // sharesFromWQToBurn was temporarily used for simulatedSharesToBurn above
+        sharesFromWQToBurn = sharesToBurn - sharesFromWQToBurn;
     }
 
     /// @notice Applies sanity checks to the accounting params of Lido's oracle report

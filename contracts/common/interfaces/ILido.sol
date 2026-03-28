@@ -82,4 +82,22 @@ interface ILido is IERC20, IVersioned {
     function mintShares(address _recipient, uint256 _sharesAmount) external;
 
     function internalizeExternalBadDebt(uint256 _amountOfShares) external;
+
+    function getRedeemsReserveVault() external view returns (address);
+
+    function getRedeemsReserveVaultEth() external view returns (uint256);
+
+    function getRedeemsReserveTarget() external view returns (uint256);
+
+    function getRedeemsReserveReplenishmentShare() external view returns (uint256);
+
+    function getWithdrawalsReserve() external view returns (uint256);
+
+    function getDepositableEther() external view returns (uint256);
+
+    function reconcileRedeemsReserveVault(uint256 _actualBalance) external;
+
+    function pushToRedeemsReserveVault(uint256 _amount) external;
+
+    function pullFromRedeemsReserveVault(uint256 _amount) external;
 }
