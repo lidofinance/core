@@ -34,7 +34,12 @@ interface IStakingRouter {
 interface IWithdrawalQueue {
     function unfinalizedStETH() external view returns (uint256);
     function isBunkerModeActive() external view returns (bool);
+    function isPaused() external view returns (bool);
     function finalize(uint256 _lastIdToFinalize, uint256 _maxShareRate) external payable;
+}
+
+interface IEtherReceiver {
+    function receiveEther(uint256 _etherAmount) external payable;
 }
 
 interface ILidoExecutionLayerRewardsVault {
@@ -170,6 +175,36 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant DEPOSITS_RESERVE_TARGET_POSITION =
         0x3d3e9bd6e90e5d1f1c6839835bcbe5746a47c9a013d1eae6e80c248264c06a81;
 
+    /// @dev Storage slot for redeems reserve.
+    /// Holds the absolute ETH amount of the redeems reserve, snapshotted on oracle reports.
+    /// Lifecycle:
+    ///   1) can be decreased by `setRedeemsReserveTargetRatio()` when target is lowered;
+    ///   2) consumed by `redeemStETH()` as redemptions are performed;
+    ///   3) grown toward target on report processing via `_updateBufferedEtherAllocation()`
+    /// keccak256("lido.Lido.redeemsReserve")
+    bytes32 internal constant REDEEMS_RESERVE_POSITION =
+        0xb7af1be1174094cbfa385246fd431e8a0c2e91a989378c7c6491265918dc3d58;
+
+    /// @dev Storage slot for redeems reserve target ratio.
+    /// Stores governance-configured ratio (in basis points) of internal ether.
+    /// Set via `setRedeemsReserveTargetRatio()`, gated by `BUFFER_RESERVE_MANAGER_ROLE`
+    /// keccak256("lido.Lido.redeemsReserveTargetRatio")
+    bytes32 internal constant REDEEMS_RESERVE_TARGET_RATIO_POSITION =
+        0xa3ab8c45cc56567e890b52bdd4f310aacdc4a7b9a4384808e34fb3b77524a729;
+
+    /// @dev Storage slot for redeems reserve growth share.
+    /// Stores basis points controlling split of available ether (WQ + unreserved) between
+    /// reserve growth and WQ finalization when surplus is insufficient.
+    /// keccak256("lido.Lido.redeemsReserveGrowthShare")
+    bytes32 internal constant REDEEMS_RESERVE_GROWTH_SHARE_POSITION =
+        0x165efeb2acd150f40e68b22ff2e9492cf5007021f951e4109c407f04e4e36129;
+
+    /// @dev Storage slot for the authorized stETH redeemer address.
+    /// Only this address can call `redeemStETH()`. Setting to address(0) disables redemption.
+    /// keccak256("lido.Lido.stETHRedeemer")
+    bytes32 internal constant STETH_REDEEMER_POSITION =
+        0xeade068654e7304d0e649105c09bc19f779c87bc5ffc4f5c7dcc09e813b10d61;
+
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
     // Staking was resumed (accept user's ether submits)
@@ -257,6 +292,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Emitted when deposits reserve target is set via `setDepositsReserveTarget()`.
     // Emitted even if the new value equals the previous one
     event DepositsReserveTargetSet(uint256 depositsReserveTarget);
+
+    // Emitted when redeems reserve absolute value is updated
+    event RedeemsReserveSet(uint256 redeemsReserve);
+
+    // Emitted when redeems reserve target ratio is set via `setRedeemsReserveTargetRatio()`
+    event RedeemsReserveTargetRatioSet(uint256 ratioBP);
+
+    // Emitted when redeems reserve growth share is set via `setRedeemsReserveGrowthShare()`
+    event RedeemsReserveGrowthShareSet(uint256 shareBP);
+
+    // Emitted when the authorized stETH redeemer address is set
+    event StETHRedeemerSet(address redeemer);
+
+    // Emitted when stETH is redeemed for ETH from the redeems reserve
+    event StETHRedeemed(address redeemer, uint256 stETHAmount, uint256 sharesAmount, uint256 etherAmount);
 
     /**
      * @notice Initializer function for scratch deploy of Lido contract
@@ -549,8 +599,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @notice Buffered ether split into reserve buckets.
      * @param total Total buffered ether, equal to `getBufferedEther()`.
-     * @param unreserved Buffer remainder after both reserves are filled. Available for additional CL deposits
+     * @param unreserved Buffer remainder after all reserves are filled. Available for additional CL deposits
      *        beyond the deposits reserve
+     * @param redeemsReserve Buffer portion reserved for stETH redemption, highest allocation priority.
+     *        Snapshotted on oracle reports, decreased by `redeemStETH()`
      * @param depositsReserve Buffer portion available for CL deposits, protected from withdrawals demand.
      *        Resets on each oracle report, decreases via `withdrawDepositableEther()`
      * @param withdrawalsReserve Buffer portion allocated to unfinalized withdrawals. Not depositable to CL.
@@ -559,6 +611,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     struct BufferedEtherAllocation {
         uint256 total;
         uint256 unreserved;
+        uint256 redeemsReserve;
         uint256 depositsReserve;
         uint256 withdrawalsReserve;
     }
@@ -567,27 +620,32 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @notice Calculates buffered ether allocation across reserves
      * @dev Buffer is split by priority:
      *
-     *      1. depositsReserve    - per-frame CL deposit allowance, filled first
-     *      2. withdrawalsReserve - covers unfinalized withdrawal requests
-     *      3. unreserved         - excess, available for additional CL deposits
+     *      1. redeemsReserve    - stETH redemption reserve, filled first (highest priority)
+     *      2. depositsReserve   - per-frame CL deposit allowance
+     *      3. withdrawalsReserve - covers unfinalized withdrawal requests
+     *      4. unreserved         - excess, available for additional CL deposits
      *
-     *      ┌─────────── Total Buffered Ether ───────────┐
-     *      ├────────────────────┬───────────────────────┼─────┬──────────────┐
-     *      │●●●●●●●●●●●●●●●●●●●●│●●●●●●●●●●●●●●●●●●●●●●●●○○○○○│○○○○○○○○○○○○○○│
-     *      ├────────────────────┼───────────────────────┼─────┼──────────────┤
-     *      └─ Deposits Reserve ─┼─ Withdrawals Reserve ─┘     ├─ Unreserved ─┘
-     *                           └───── Unfinalized stETH ─────┘
+     *      ┌──────────────────── Total Buffered Ether ────────────────────┐
+     *      ├──────────┬────────────────────┬───────────────────────┼─────┬──────────────┐
+     *      │●●●●●●●●●●│●●●●●●●●●●●●●●●●●●●●│●●●●●●●●●●●●●●●●●●●●●●●●○○○○○│○○○○○○○○○○○○○○│
+     *      ├──────────┼────────────────────┼───────────────────────┼─────┼──────────────┤
+     *      └ Redeems  ┼─ Deposits Reserve ─┼─ Withdrawals Reserve ─┘     ├─ Unreserved ─┘
+     *        Reserve  │                    └───── Unfinalized stETH ─────┘
      *
      *      ● - covered by Buffered Ether
      *      ○ - not covered by Buffered Ether
      *
-     *      depositsReserve    = min(total, stored deposits reserve)
-     *      withdrawalsReserve = min(total - depositsReserve, unfinalizedStETH)
-     *      unreserved         = total - depositsReserve - withdrawalsReserve
+     *      redeemsReserve     = min(total, stored redeems reserve)
+     *      depositsReserve    = min(total - redeemsReserve, stored deposits reserve)
+     *      withdrawalsReserve = min(total - redeemsReserve - depositsReserve, unfinalizedStETH)
+     *      unreserved         = total - redeemsReserve - depositsReserve - withdrawalsReserve
      */
     function _getBufferedEtherAllocation() internal view returns (BufferedEtherAllocation allocation) {
         uint256 remaining = _getBufferedEther();
         allocation.total = remaining;
+
+        allocation.redeemsReserve = Math256.min(remaining, REDEEMS_RESERVE_POSITION.getStorageUint256());
+        remaining -= allocation.redeemsReserve;
 
         allocation.depositsReserve = Math256.min(remaining, DEPOSITS_RESERVE_POSITION.getStorageUint256());
         remaining -= allocation.depositsReserve;
@@ -652,6 +710,101 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         if (_newDepositsReserveTarget < currentDepositsReserve) {
             _setDepositsReserve(_newDepositsReserveTarget);
         }
+    }
+
+    /**
+     * @notice Returns the currently effective redeems reserve — buffer portion reserved for stETH redemption
+     * @dev Capped by current buffered ether. See `_getBufferedEtherAllocation()`
+     */
+    function getRedeemsReserve() external view returns (uint256) {
+        return _getBufferedEtherAllocation().redeemsReserve;
+    }
+
+    /**
+     * @notice Sets redeems reserve target ratio as basis points of internal ether
+     * @dev If the new target is lower than the current reserve, the reserve is reduced immediately.
+     *      If higher, the reserve grows only on the next oracle report.
+     * @param _ratioBP Target ratio in basis points [0-10000]
+     */
+    function setRedeemsReserveTargetRatio(uint256 _ratioBP) external {
+        _auth(BUFFER_RESERVE_MANAGER_ROLE);
+        require(_ratioBP <= TOTAL_BASIS_POINTS, "INVALID_RATIO");
+
+        REDEEMS_RESERVE_TARGET_RATIO_POSITION.setStorageUint256(_ratioBP);
+
+        uint256 newTarget = _getRedeemsReserveTarget();
+        uint256 currentReserve = REDEEMS_RESERVE_POSITION.getStorageUint256();
+        if (newTarget < currentReserve) {
+            _setRedeemsReserve(newTarget);
+        }
+
+        emit RedeemsReserveTargetRatioSet(_ratioBP);
+    }
+
+    /**
+     * @return the redeems reserve target ratio in basis points
+     */
+    function getRedeemsReserveTargetRatio() external view returns (uint256) {
+        return REDEEMS_RESERVE_TARGET_RATIO_POSITION.getStorageUint256();
+    }
+
+    /**
+     * @notice Returns the current redeems reserve target in absolute ETH,
+     *         computed from the ratio and current internal ether.
+     */
+    function getRedeemsReserveTarget() external view returns (uint256) {
+        return _getRedeemsReserveTarget();
+    }
+
+    function _getRedeemsReserveTarget() internal view returns (uint256) {
+        return _getInternalEther()
+            * REDEEMS_RESERVE_TARGET_RATIO_POSITION.getStorageUint256()
+            / TOTAL_BASIS_POINTS;
+    }
+
+    /**
+     * @notice Sets the growth share controlling how available ether (WQ + unreserved)
+     *         is split between reserve growth and WQ finalization when surplus is insufficient
+     * @param _shareBP Share in basis points [0-10000]. 0 = reserve only grows from surplus.
+     */
+    function setRedeemsReserveGrowthShare(uint256 _shareBP) external {
+        _auth(BUFFER_RESERVE_MANAGER_ROLE);
+        require(_shareBP <= TOTAL_BASIS_POINTS, "INVALID_SHARE");
+        REDEEMS_RESERVE_GROWTH_SHARE_POSITION.setStorageUint256(_shareBP);
+        emit RedeemsReserveGrowthShareSet(_shareBP);
+    }
+
+    /**
+     * @return the redeems reserve growth share in basis points
+     */
+    function getRedeemsReserveGrowthShare() external view returns (uint256) {
+        return REDEEMS_RESERVE_GROWTH_SHARE_POSITION.getStorageUint256();
+    }
+
+    /**
+     * @notice Sets the authorized stETH redeemer address
+     * @dev Setting to address(0) disables redemption
+     * @param _redeemer Address of the redeemer contract
+     */
+    function setStETHRedeemer(address _redeemer) external {
+        _auth(BUFFER_RESERVE_MANAGER_ROLE);
+        STETH_REDEEMER_POSITION.setStorageAddress(_redeemer);
+        emit StETHRedeemerSet(_redeemer);
+    }
+
+    /**
+     * @return the authorized stETH redeemer address
+     */
+    function getStETHRedeemer() external view returns (address) {
+        return STETH_REDEEMER_POSITION.getStorageAddress();
+    }
+
+    /**
+     * @dev Stores new redeems reserve value and emits RedeemsReserveSet event
+     */
+    function _setRedeemsReserve(uint256 _redeemsReserve) internal {
+        REDEEMS_RESERVE_POSITION.setStorageUint256(_redeemsReserve);
+        emit RedeemsReserveSet(_redeemsReserve);
     }
 
     /**
@@ -1048,14 +1201,40 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @dev Syncs stored deposits reserve to configured target after oracle report processing
+     * @dev Syncs stored reserves to configured targets after oracle report processing.
+     *      1. Deposits reserve resets unconditionally to its configured target.
+     *      2. Redeems reserve grows toward target from unreserved surplus,
+     *         or from available ether (WQ + unreserved) split by growth share.
      */
     function _updateBufferedEtherAllocation() internal {
-        uint256 depositsReserveTarget = getDepositsReserveTarget();
-        uint256 depositsReserve = DEPOSITS_RESERVE_POSITION.getStorageUint256();
+        _resetDepositsReserve();
+        _growRedeemsReserve();
+    }
 
-        if (depositsReserve != depositsReserveTarget) {
-            _setDepositsReserve(depositsReserveTarget);
+    /// @dev Resets deposits reserve to its configured target unconditionally.
+    function _resetDepositsReserve() internal {
+        uint256 target = getDepositsReserveTarget();
+        if (DEPOSITS_RESERVE_POSITION.getStorageUint256() != target) {
+            _setDepositsReserve(target);
+        }
+    }
+
+    /// @dev Grows redeems reserve toward target. Growth comes from unreserved surplus first;
+    ///      if insufficient, a share of available ether (WQ allocation + unreserved) is taken
+    ///      proportional to `growthShareBP`. Reserve never exceeds target.
+    function _growRedeemsReserve() internal {
+        uint256 target = _getRedeemsReserveTarget();
+        BufferedEtherAllocation memory allocation = _getBufferedEtherAllocation();
+
+        uint256 growthShareBP = REDEEMS_RESERVE_GROWTH_SHARE_POSITION.getStorageUint256();
+        uint256 availableEther = allocation.withdrawalsReserve + allocation.unreserved;
+        uint256 minGrowth = availableEther * growthShareBP / TOTAL_BASIS_POINTS;
+        uint256 growth = Math256.max(allocation.unreserved, minGrowth);
+
+        uint256 newRedeemsReserve = Math256.min(allocation.redeemsReserve + growth, target);
+
+        if (newRedeemsReserve != allocation.redeemsReserve) {
+            _setRedeemsReserve(newRedeemsReserve);
         }
     }
 
@@ -1192,6 +1371,38 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         _emitTransferAfterMintingShares(msg.sender, sharesAmount);
         return sharesAmount;
+    }
+
+    /**
+     * @notice Redeem stETH for ETH from the redeems reserve.
+     *         Burns stETH shares from the caller, decreases buffered ether and redeems reserve,
+     *         sends equivalent ETH to the caller (redeemer contract).
+     * @param _stETHAmount Amount of stETH to redeem
+     */
+    function redeemStETH(uint256 _stETHAmount) external {
+        require(_stETHAmount != 0, "ZERO_AMOUNT");
+        _auth(STETH_REDEEMER_POSITION.getStorageAddress());
+        _whenNotStopped();
+        require(!_withdrawalQueue().isBunkerModeActive(), "BUNKER_MODE");
+        require(!_withdrawalQueue().isPaused(), "WQ_PAUSED");
+
+        uint256 redeemsReserve = _getBufferedEtherAllocation().redeemsReserve;
+        require(_stETHAmount <= redeemsReserve, "RESERVE_LIMIT_REACHED");
+
+        uint256 sharesAmount = getSharesByPooledEth(_stETHAmount);
+        uint256 etherAmount = getPooledEthByShares(sharesAmount);
+
+        _burnShares(msg.sender, sharesAmount);
+
+        _setBufferedEther(_getBufferedEther() - etherAmount);
+        _setRedeemsReserve(
+            REDEEMS_RESERVE_POSITION.getStorageUint256() - etherAmount
+        );
+
+        _emitSharesBurnt(msg.sender, etherAmount, etherAmount, sharesAmount);
+
+        IEtherReceiver(msg.sender).receiveEther.value(etherAmount)(etherAmount);
+        emit StETHRedeemed(msg.sender, _stETHAmount, sharesAmount, etherAmount);
     }
 
     /// @dev Get the total amount of ether controlled by the protocol internally

@@ -4,8 +4,13 @@
 pragma solidity 0.4.24;
 
 contract WithdrawalQueue__MockForLidoMisc {
+    bool public isPaused;
     bool public isBunkerModeActive;
     uint256 public unfinalizedStETH;
+
+    function mock__isPaused(bool paused) external {
+        isPaused = paused;
+    }
 
     function mock__bunkerMode(bool active) external {
         isBunkerModeActive = active;

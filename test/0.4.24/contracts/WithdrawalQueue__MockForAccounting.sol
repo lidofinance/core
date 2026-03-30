@@ -57,6 +57,10 @@ contract WithdrawalQueue__MockForAccounting {
         isPaused = paused;
     }
 
+    function mock__isBunkerModeActive(bool active) external {
+        isBunkerModeActive = active;
+    }
+
     function mock__prefinalizeReturn(uint256 _ethToLock, uint256 _sharesToBurn) external {
         ethToLock_ = _ethToLock;
         sharesToBurn_ = _sharesToBurn;
