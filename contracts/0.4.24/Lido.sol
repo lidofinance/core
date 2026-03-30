@@ -39,6 +39,7 @@ interface IWithdrawalQueue {
 }
 
 interface IRedeemsReserveVault {
+    function fundReserve() external payable;
     function withdrawToLido(uint256 _amount) external;
 }
 
@@ -195,13 +196,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant REDEEMS_RESERVE_VAULT_ETH_POSITION =
         0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2;
 
-    /// @dev Storage slot for redeems reserve replenishment share.
+    /// @dev Storage slot for redeems reserve growth share.
     /// Basis points determining how shared allocation (withdrawalsReserve + unreserved) is split
     /// between reserve growth and WQ finalization when surplus is insufficient.
     /// 0 (default) = reserve grows only from surplus. 8000 = 80% to reserve, 20% to WQ.
-    /// keccak256("lido.Lido.redeemsReserveReplenishmentShare")
-    bytes32 internal constant REDEEMS_RESERVE_REPLENISHMENT_SHARE_POSITION =
-        0xf0700d4e4a89999085a7b5d94e2e6697101ac2553a2f01512a848b9140605dfb;
+    /// keccak256("lido.Lido.redeemsReserveGrowthShare")
+    bytes32 internal constant REDEEMS_RESERVE_GROWTH_SHARE_POSITION =
+        0x165efeb2acd150f40e68b22ff2e9492cf5007021f951e4109c407f04e4e36129;
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -295,7 +296,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event RedeemsReserveTargetRatioSet(uint256 ratioBP);
 
     // Emitted when redeems reserve replenishment share is set
-    event RedeemsReserveReplenishmentShareSet(uint256 shareBP);
+    event RedeemsReserveGrowthShareSet(uint256 shareBP);
 
     // Emitted when the RedeemsReserveVault address is set
     event RedeemsReserveVaultSet(address vault);
@@ -741,25 +742,25 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Sets the replenishment share for redeems reserve.
+     * @notice Sets the growth share for redeems reserve.
      *         When unreserved surplus is insufficient to fill the reserve, this share (in BP)
      *         determines what fraction of the shared allocation (withdrawalsReserve + unreserved)
      *         goes to reserve growth vs WQ finalization.
      *         0 (default) = reserve grows only from genuine surplus. 10000 = 100% to reserve.
-     * @param _shareBP Replenishment share in basis points [0-10000]
+     * @param _shareBP Growth share in basis points [0-10000]
      */
-    function setRedeemsReserveReplenishmentShare(uint256 _shareBP) external {
+    function setRedeemsReserveGrowthShare(uint256 _shareBP) external {
         _auth(BUFFER_RESERVE_MANAGER_ROLE);
         require(_shareBP <= TOTAL_BASIS_POINTS, "INVALID_SHARE");
-        REDEEMS_RESERVE_REPLENISHMENT_SHARE_POSITION.setStorageUint256(_shareBP);
-        emit RedeemsReserveReplenishmentShareSet(_shareBP);
+        REDEEMS_RESERVE_GROWTH_SHARE_POSITION.setStorageUint256(_shareBP);
+        emit RedeemsReserveGrowthShareSet(_shareBP);
     }
 
     /**
-     * @return the redeems reserve replenishment share in basis points
+     * @return the redeems reserve growth share in basis points
      */
-    function getRedeemsReserveReplenishmentShare() external view returns (uint256) {
-        return REDEEMS_RESERVE_REPLENISHMENT_SHARE_POSITION.getStorageUint256();
+    function getRedeemsReserveGrowthShare() external view returns (uint256) {
+        return REDEEMS_RESERVE_GROWTH_SHARE_POSITION.getStorageUint256();
     }
 
     /**
@@ -825,7 +826,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             REDEEMS_RESERVE_VAULT_ETH_POSITION.getStorageUint256().add(_amount)
         );
 
-        vault.transfer(_amount);
+        IRedeemsReserveVault(vault).fundReserve.value(_amount)();
         emit RedeemsReserveVaultFunded(_amount);
     }
 

@@ -52,17 +52,25 @@ describe("Integration: Redeems reserve — failure modes", () => {
       await acl.connect(agent).grantPermission(reserveManager.address, lido.address, role);
     }
 
+    const accountingAddr = await ctx.contracts.locator.accounting();
     const VaultFactory = await ethers.getContractFactory("RedeemsReserveVault");
     vault = await VaultFactory.connect(holder).deploy(
       await lido.getAddress(),
       await burner.getAddress(),
       await withdrawalQueue.getAddress(),
+      accountingAddr,
       holder.address,
     );
 
     const burnRole = await burner.REQUEST_BURN_SHARES_ROLE();
     await burner.connect(agent).grantRole(burnRole, await vault.getAddress());
     await lido.connect(reserveManager).setRedeemsReserveVault(await vault.getAddress());
+
+    // Grant REDEEMER_ROLE to test signers
+    const redeemerRole = await vault.REDEEMER_ROLE();
+    await vault.connect(holder).grantRole(redeemerRole, holder.address);
+    await vault.connect(holder).grantRole(redeemerRole, holderB.address);
+    await vault.connect(holder).grantRole(redeemerRole, stranger.address);
   });
 
   beforeEach(async () => {
@@ -206,9 +214,9 @@ describe("Integration: Redeems reserve — failure modes", () => {
     // Vault balance decreased by exact etherAmount
     const vaultAfterRedeem = await ethers.provider.getBalance(await vault.getAddress());
     expect(vaultAfterRedeem).to.equal(before.vaultBalance - etherAmount);
-    // Shares pending burn in Burner
-    const [, pendingBurn] = await ctx.contracts.burner.getSharesRequestedToBurn();
-    expect(pendingBurn).to.equal(sharesAmount);
+    // Shares held on vault (not in Burner yet — flushed on report)
+    expect(await vault.getRedeemedShares()).to.equal(sharesAmount);
+    expect(await vault.getRedeemedEther()).to.equal(etherAmount);
 
     // Report: finalizes WQ + burns vault shares + refills vault
     await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, skipWithdrawals: false });
@@ -491,7 +499,6 @@ describe("Integration: Redeems reserve — failure modes", () => {
       expect(vaultMid).to.be.gt(0n);
 
       await lido.connect(reserveManager).setRedeemsReserveTargetRatio(0n);
-      // Multiple reports: each drains vault excess → buffer grows → WQ finalizes
       for (let i = 0; i < 10; i++) {
         if ((await withdrawalQueue.unfinalizedStETH()) === 0n) break;
         await report(ctx, { clDiff: 0n });
@@ -537,9 +544,11 @@ describe("Integration: Redeems reserve — failure modes", () => {
     await lido.connect(stranger).approve(await burner.getAddress(), coverStETH);
     await burner.connect(stranger).requestBurnSharesForCover(stranger.address, coverShares);
 
+    // Cover shares in Burner, vault shares on vault (not Burner yet)
     const [coverBefore, nonCoverBefore] = await burner.getSharesRequestedToBurn();
     expect(coverBefore).to.equal(coverShares);
-    expect(nonCoverBefore).to.equal(vaultShares);
+    expect(nonCoverBefore).to.equal(0n); // vault shares held locally
+    expect(await vault.getRedeemedShares()).to.equal(vaultShares);
 
     const before = await captureState();
 
@@ -571,8 +580,8 @@ describe("Integration: Redeems reserve — failure modes", () => {
     const before = await captureState();
     const { sharesAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
 
-    const [, nonCoverBefore] = await burner.getSharesRequestedToBurn();
-    expect(nonCoverBefore).to.equal(sharesAmount);
+    // Shares held on vault (flushed to Burner on report)
+    expect(await vault.getRedeemedShares()).to.equal(sharesAmount);
 
     // clDiff=0 → exact shares
     await report(ctx, reportOpts);
@@ -758,9 +767,6 @@ describe("Integration: Redeems reserve — failure modes", () => {
       vault.connect(stranger).redeem(ether("1"), stranger.address, { gasPrice: 0 }),
     ).to.be.revertedWithCustomError(vault, "BunkerMode");
 
-    // canRedeem returns false
-    expect(await vault.canRedeem(ether("1"))).to.equal(false);
-
     // Exit bunker mode via neutral report
     await reportWithEffectiveClDiff(ctx, 0n, { excludeVaultsBalances: true });
     expect(await withdrawalQueue.isBunkerModeActive()).to.equal(false);
@@ -911,5 +917,63 @@ describe("Integration: Redeems reserve — failure modes", () => {
     // Redeem still works at new rate
     const { etherAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
     expect(etherAmount).to.be.gt(0n);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  14. Simulated Share Rate Deviation
+  // ═══════════════════════════════════════════════════════════════════════
+
+  it("14.1 Redeem between refSlot and report — actual rate deviates from simulated, bounded by spec formula", async () => {
+    const { lido } = ctx.contracts;
+    // Large deposit so holder has enough stETH to drain entire vault
+    await setupVault(ether("10000"), 500n);
+
+    const clDiff = ether("0.01");
+
+    // Dry-run report at refSlot — simulated rate BEFORE redeem
+    const { hashConsensus } = ctx.contracts;
+    const refSlot = (await hashConsensus.getCurrentFrame()).refSlot;
+    const simResult = await report(ctx, {
+      clDiff,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+      refSlot,
+      waitNextReportTime: false,
+      dryRun: true,
+    });
+
+    const SHARE_RATE_PRECISION = 10n ** 27n;
+    const simulatedRate = BigInt(simResult.data.simulatedShareRate);
+
+    // Redeem entire vault AFTER refSlot — worst case for deviation
+    const vaultBalance = await ethers.provider.getBalance(await vault.getAddress());
+    expect(await lido.balanceOf(holder.address)).to.be.gte(vaultBalance);
+    await redeemWithReceipt(holder, vaultBalance, holder.address);
+    expect(await ethers.provider.getBalance(await vault.getAddress())).to.be.lte(1n);
+
+    // Actual report — same params, applies to post-redeem state
+    await report(ctx, {
+      clDiff,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+    });
+
+    // Compute actual post-report rate
+    const actualRate = ((await lido.getTotalPooledEther()) * SHARE_RATE_PRECISION) / (await lido.getTotalShares());
+
+    // Deviation: actual > simulated (rewards on smaller base = higher rate)
+    expect(actualRate).to.be.gte(simulatedRate);
+
+    const deviation = actualRate - simulatedRate;
+    const deviationBP = (deviation * 10000n) / simulatedRate;
+
+    // Spec formula: deviation ≈ etherRedeemed / internalEther × rebasePercent
+    // With 5% redeem and 0.001% rebase → deviation ≈ 0.00005% ≈ 0.005 BP
+    // Must be well within 250 BP sanity checker limit
+    expect(deviationBP).to.be.lt(250n);
+
+    // Verify deviation is non-zero (redeem actually affected the rate)
+    // With clDiff > 0, the base shrinks from redeem → rate increases → deviation > 0
+    expect(deviation).to.be.gt(0n);
   });
 });

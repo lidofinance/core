@@ -17,6 +17,10 @@ import {WithdrawalQueue} from "./WithdrawalQueue.sol";
 
 interface IRedeemsReserveVault {
     function withdrawToLido(uint256 _amount) external;
+    function getRedeemedShares() external view returns (uint256);
+    function getRedeemedEther() external view returns (uint256);
+    function flushSharesToBurner() external;
+    function resetRedeemedEther() external;
 }
 
 interface IStakingRouter {
@@ -145,9 +149,9 @@ contract Accounting {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
-        // Do NOT reconcile vault before snapshot. The stale tracked vault ETH keeps
-        // preInternalEther overcounted, and the vault delta is passed to smoothenTokenRebase
-        // as an explicit ether decrease — creating headroom for the paired burn.
+        // Vault redemption counters are read on-chain during _simulateOracleReport.
+        // redeemedEther is subtracted from the smoothenTokenRebase base,
+        // and redeemedShares are added outside the rebase limiter.
 
         PreReportState memory pre = _snapshotPreReportState(contracts, false);
         CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report);
@@ -189,41 +193,41 @@ contract Accounting {
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clValidatorsBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
-        // Limit the rebase to avoid oracle frontrunning
-        // by leaving some ether to sit in EL rewards vault or withdrawals vault
-        // and/or leaving some shares unburnt on Burner to be processed on future reports
-        //
-        // NOTE: vaultDelta is merged with etherToFinalizeWQ into a single _etherToDecrease param
-        // due to stack-too-deep in smoothenTokenRebase (0.8.9 without via-IR).
-        // Spec describes them as separate decreaseEther calls; mathematically equivalent.
-        uint256 vaultDelta = _getRedeemsReserveVaultDelta();
+        // Read redemption counters from vault (on-chain, includes all redemptions)
+        (uint256 redeemedShares, uint256 redeemedEther) = _getRedeemedCounters();
+
+        // Limit the rebase to avoid oracle frontrunning.
+        // The base is reduced by redeemedEther so the limiter sees the actual protocol size.
         (
             update.withdrawalsVaultTransfer,
             update.elRewardsVaultTransfer,
             update.sharesToBurnForWithdrawals,
-            update.totalSharesToBurn // shares to burn from Burner balance
+            update.totalSharesToBurn // shares to burn from Burner balance (WQ + cover)
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
-            _pre.totalPooledEther - _pre.externalEther,
+            _pre.totalPooledEther - _pre.externalEther - redeemedEther,
             _pre.totalShares - _pre.externalShares,
             update.principalClBalance,
             _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            update.etherToFinalizeWQ + vaultDelta,  // paired decreases: WQ finalization + vault redemptions
+            update.etherToFinalizeWQ,
             update.sharesToFinalizeWQ
         );
 
+        // Add redemption shares outside the limiter — rate-neutral, must all burn on this report
+        update.totalSharesToBurn += redeemedShares;
+
         uint256 postInternalSharesBeforeFees = _pre.totalShares -
             _pre.externalShares - // internal shares before
-            update.totalSharesToBurn; // shares to be burned for withdrawals and cover
+            update.totalSharesToBurn; // shares to be burned (WQ + cover + redemptions)
 
         update.postInternalEther =
-            _pre.totalPooledEther - _pre.externalEther // internal ether before (includes stale vault ETH)
+            _pre.totalPooledEther - _pre.externalEther
             + _report.clValidatorsBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
             + update.elRewardsVaultTransfer
             - update.etherToFinalizeWQ
-            - vaultDelta; // subtract vault delta: stale vault ETH was overcounted in preInternalEther
+            - redeemedEther;
 
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
         (update.sharesToMintAsFees, update.feeDistribution) = _calculateProtocolFees(
@@ -382,12 +386,14 @@ contract Accounting {
             LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
         }
 
+        // Flush accumulated redemption shares from vault to Burner before commit
+        _flushVaultSharesToBurner();
+
         if (_update.totalSharesToBurn > 0) {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
         }
 
-        // Reconcile RedeemsReserveVault AFTER burns — tracked vault ETH updated to actual.
-        // Must happen after commitSharesToBurn so the paired burn + reconcile are both applied.
+        // Reconcile RedeemsReserveVault — tracked vault ETH updated to actual.
         _reconcileRedeemsReserveVault();
 
         LIDO.collectRewardsAndProcessWithdrawals(
@@ -431,31 +437,38 @@ contract Accounting {
         );
     }
 
-    /// @dev Computes how much ETH left the RedeemsReserveVault since the last report.
-    ///      Returns 0 if no vault is configured or vault balance increased (e.g. donation).
-    ///      Used to pass the delta to smoothenTokenRebase as an ether decrease.
-    function _getRedeemsReserveVaultDelta() internal view returns (uint256) {
+    /// @dev Reads redemption counters from the vault. Returns (0, 0) if no vault configured.
+    function _getRedeemedCounters() internal view returns (uint256 redeemedShares, uint256 redeemedEther) {
         address vault = LIDO.getRedeemsReserveVault();
-        if (vault == address(0)) return 0;
+        if (vault == address(0)) return (0, 0);
 
-        uint256 tracked = LIDO.getRedeemsReserveVaultEth();
-        uint256 actual = vault.balance;
-        return tracked > actual ? tracked - actual : 0;
+        redeemedShares = IRedeemsReserveVault(vault).getRedeemedShares();
+        redeemedEther = IRedeemsReserveVault(vault).getRedeemedEther();
     }
 
-    /// @dev Reconciles the RedeemsReserveVault tracked ETH to the actual vault balance.
-    ///      Called AFTER commitSharesToBurn so the paired burn + reconcile are applied together.
+    /// @dev Flushes accumulated redemption shares from vault to Burner.
+    ///      Called before commitSharesToBurn so redeemed shares are included in the burn.
+    function _flushVaultSharesToBurner() internal {
+        address vault = LIDO.getRedeemsReserveVault();
+        if (vault == address(0)) return;
+
+        IRedeemsReserveVault(vault).flushSharesToBurner();
+    }
+
+    /// @dev Reconciles the RedeemsReserveVault tracked ETH to the actual vault balance
+    ///      and resets the redeemed ether counter.
     function _reconcileRedeemsReserveVault() internal {
         address vault = LIDO.getRedeemsReserveVault();
         if (vault == address(0)) return;
 
         LIDO.reconcileRedeemsReserveVault(vault.balance);
+        IRedeemsReserveVault(vault).resetRedeemedEther();
     }
 
     /// @dev Replenishes or drains the RedeemsReserveVault to match the reserve target.
     ///      Called after collectRewardsAndProcessWithdrawals when the buffer is finalized.
     ///      Fills to target from unreserved surplus first. When surplus is insufficient,
-    ///      splits the shared allocation (withdrawalsReserve + unreserved) by replenishmentShareBP.
+    ///      splits the shared allocation (withdrawalsReserve + unreserved) by growthShareBP.
     function _replenishRedeemsReserveVault() internal {
         address vault = LIDO.getRedeemsReserveVault();
         if (vault == address(0)) return;
@@ -465,23 +478,20 @@ contract Accounting {
 
         if (target > actual) {
             uint256 deficit = target - actual;
-            uint256 unreserved = LIDO.getDepositableEther();
+            uint256 depositableEther = LIDO.getDepositableEther();
             uint256 toPush;
 
-            if (unreserved >= deficit) {
-                // Surplus fully covers the deficit — no impact on WQ
+            if (depositableEther >= deficit) {
                 toPush = deficit;
             } else {
-                // Surplus insufficient — split shared allocation by replenishment share
-                uint256 shareBP = LIDO.getRedeemsReserveReplenishmentShare();
+                uint256 shareBP = LIDO.getRedeemsReserveGrowthShare();
                 if (shareBP == 0) {
-                    // No forced growth — reserve grows only from genuine surplus
-                    toPush = unreserved;
+                    toPush = depositableEther;
                 } else {
                     uint256 withdrawalsReserve = LIDO.getWithdrawalsReserve();
-                    uint256 sharedAllocation = withdrawalsReserve + unreserved;
+                    uint256 sharedAllocation = withdrawalsReserve + depositableEther;
                     uint256 reserveShare = sharedAllocation * shareBP / TOTAL_BASIS_POINTS;
-                    toPush = reserveShare > unreserved ? reserveShare : unreserved;
+                    toPush = reserveShare > depositableEther ? reserveShare : depositableEther;
                     if (toPush > deficit) toPush = deficit;
                 }
             }

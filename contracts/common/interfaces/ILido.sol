@@ -89,7 +89,7 @@ interface ILido is IERC20, IVersioned {
 
     function getRedeemsReserveTarget() external view returns (uint256);
 
-    function getRedeemsReserveReplenishmentShare() external view returns (uint256);
+    function getRedeemsReserveGrowthShare() external view returns (uint256);
 
     function getWithdrawalsReserve() external view returns (uint256);
 
