@@ -752,10 +752,8 @@ describe("Integration: Redeems reserve — failure modes", () => {
     const { lido, withdrawalQueue } = ctx.contracts;
     await setupVault(ether("1000"), 500n);
 
-    // Transfer stETH to stranger for redeem
     await lido.connect(holder).transfer(stranger.address, ether("20"), { gasPrice: 0 });
 
-    // Enter bunker mode via large negative CL rebase (skipWithdrawals must be false for bunker flag)
     await resetCLBalanceDecreaseWindow(ctx);
     await reportWithEffectiveClDiff(ctx, ether("-1"), { excludeVaultsBalances: true });
     expect(await withdrawalQueue.isBunkerModeActive()).to.equal(true);
@@ -767,17 +765,48 @@ describe("Integration: Redeems reserve — failure modes", () => {
       vault.connect(stranger).redeem(ether("1"), stranger.address, { gasPrice: 0 }),
     ).to.be.revertedWithCustomError(vault, "BunkerMode");
 
-    // Exit bunker mode via neutral report
+    // Exit bunker → redeem works again
     await reportWithEffectiveClDiff(ctx, 0n, { excludeVaultsBalances: true });
     expect(await withdrawalQueue.isBunkerModeActive()).to.equal(false);
-
-    // Vault survived bunker — still reconciled and at target
     await assertVaultReconciled();
     await assertVaultAtTarget();
 
-    // Redeem works again
     const { etherAmount } = await redeemWithReceipt(stranger, ether("1"), stranger.address);
     expect(etherAmount).to.be.gt(0n);
+  });
+
+  it("9.2 Bunker A/B: share rate after negative rebase — same with and without prior redeem", async () => {
+    const { lido } = ctx.contracts;
+
+    // Scenario A: no redeem → negative rebase
+    await setupVault(ether("1000"), 500n);
+    await resetCLBalanceDecreaseWindow(ctx);
+    await reportWithEffectiveClDiff(ctx, ether("-1"), { excludeVaultsBalances: true, skipWithdrawals: true });
+    const rateA = await lido.getPooledEthByShares(ether("1"));
+    const tpeA = await lido.getTotalPooledEther();
+    const sharesA = await lido.getTotalShares();
+
+    // Restore snapshot and run Scenario B: redeem → same negative rebase
+    await Snapshot.restore(testSnapshot);
+    testSnapshot = await Snapshot.take();
+
+    await setupVault(ether("1000"), 500n);
+    await redeemWithReceipt(holder, ether("30"), holder.address);
+    await resetCLBalanceDecreaseWindow(ctx);
+    await reportWithEffectiveClDiff(ctx, ether("-1"), { excludeVaultsBalances: true, skipWithdrawals: true });
+    const rateB = await lido.getPooledEthByShares(ether("1"));
+    const tpeB = await lido.getTotalPooledEther();
+    const sharesB = await lido.getTotalShares();
+
+    // B has less TPE and shares (30 ETH redeemed + burned)
+    expect(tpeB).to.be.lt(tpeA);
+    expect(sharesB).to.be.lt(sharesA);
+
+    // Rate should be approximately the same — redeem is rate-neutral
+    // Deviation bounded: redeemedEther/IE × rate_change ≈ 30/24000 × 0.004% ≈ negligible
+    const rateDiff = rateA > rateB ? rateA - rateB : rateB - rateA;
+    const deviationBP = (rateDiff * 10000n) / rateA;
+    expect(deviationBP).to.be.lte(1n); // < 1 BP
   });
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -885,8 +914,8 @@ describe("Integration: Redeems reserve — failure modes", () => {
   //  13. Insurance Burn — rate impact on redeem
   // ═══════════════════════════════════════════════════════════════════════
 
-  it("13.1 Insurance burn increases rate — redeemer gets more ETH per stETH", async () => {
-    const { lido } = ctx.contracts;
+  it("13.1 Insurance burn via report increases rate — vault and reserve unaffected", async () => {
+    const { lido, burner } = ctx.contracts;
     await setupVault(ether("1000"), 500n);
 
     const vaultBefore = await ethers.provider.getBalance(await vault.getAddress());
@@ -894,25 +923,33 @@ describe("Integration: Redeems reserve — failure modes", () => {
     const targetBefore = await lido.getRedeemsReserveTarget();
     const rateBefore = await lido.getPooledEthByShares(ether("1"));
 
-    const burnStETH = ether("5");
-    const sharesToBurn = await lido.getSharesByPooledEth(burnStETH);
-    const burnerAddr = await ctx.contracts.locator.burner();
-    await lido.connect(holder).transfer(burnerAddr, burnStETH, { gasPrice: 0 });
-    const burnerSigner = await impersonate(burnerAddr, ether("10"));
-    await lido.connect(burnerSigner).burnShares(sharesToBurn);
+    // Request cover burn via standard Burner path
+    const agent = await ctx.getSigner("agent");
+    const coverRole = await burner.REQUEST_BURN_SHARES_ROLE();
+    if (!(await burner.hasRole(coverRole, holder.address))) {
+      await burner.connect(agent).grantRole(coverRole, holder.address);
+    }
+    const coverStETH = ether("5");
+    const coverShares = await lido.getSharesByPooledEth(coverStETH);
+    await lido.connect(holder).approve(await burner.getAddress(), coverStETH, { gasPrice: 0 });
+    await burner.connect(holder).requestBurnSharesForCover(holder.address, coverShares);
+
+    const [coverPending] = await burner.getSharesRequestedToBurn();
+    expect(coverPending).to.equal(coverShares);
+
+    // Report burns cover shares → rate increases (same ETH, fewer shares)
+    await report(ctx, reportOpts);
+
+    const [coverAfter] = await burner.getSharesRequestedToBurn();
+    expect(coverAfter).to.equal(0n);
 
     const rateAfter = await lido.getPooledEthByShares(ether("1"));
     expect(rateAfter).to.be.gt(rateBefore);
-    // Vault balance, tracked, and target unchanged by insurance burn
+
+    // Vault balance, tracked, and target unchanged by cover burn
     expect(await ethers.provider.getBalance(await vault.getAddress())).to.equal(vaultBefore);
     expect(await lido.getRedeemsReserveVaultEth()).to.equal(trackedBefore);
     expect(await lido.getRedeemsReserveTarget()).to.equal(targetBefore);
-
-    // Fixed share amount gets more ETH at higher rate
-    const probeShares = ether("1");
-    const ethPerShareBefore = (probeShares * rateBefore) / ether("1");
-    const ethPerShareAfter = (probeShares * rateAfter) / ether("1");
-    expect(ethPerShareAfter).to.be.gt(ethPerShareBefore);
 
     // Redeem still works at new rate
     const { etherAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
