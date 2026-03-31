@@ -540,7 +540,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @return sharesFromWQToBurn amount of shares from Burner that should be burned due to WQ finalization
     /// @return sharesToBurn amount to be burnt (accounting for withdrawals finalization)
     /// @param _etherToDecrease Total ether to remove from the limiter as paired decreases.
-    ///        Sum of: ether locked for WQ finalization + vault delta (ETH that left the RedeemsReserveVault).
+    ///        Sum of: ether locked for WQ finalization + buffer delta (ETH that left the RedeemsBuffer).
     ///        Both are paired operations (ether decrease + matching share burn = rate-neutral).
     function smoothenTokenRebase(
         uint256 _preInternalEther,

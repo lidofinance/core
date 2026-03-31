@@ -81,6 +81,9 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
 
         uint256 totalCoverSharesBurnt;
         uint256 totalNonCoverSharesBurnt;
+
+        uint256 redeemSharesBurnRequested;
+        uint256 totalRedeemSharesBurnt;
     }
 
     /// @custom:storage-location erc7201:Lido.Core.Burner.IsMigrationAllowed-v3Upgrade
@@ -115,6 +118,16 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
      * Emitted when the stETH `amount` (corresponding to `amountOfShares` shares) burnt for the `isCover` reason.
      */
     event StETHBurnt(bool indexed isCover, uint256 amountOfStETH, uint256 amountOfShares);
+
+    /**
+     * Emitted when a new redeem burn request is added.
+     */
+    event RedeemStETHBurnRequested(address indexed requestedBy, uint256 amountOfStETH, uint256 amountOfShares);
+
+    /**
+     * Emitted when redeem shares are burnt.
+     */
+    event RedeemStETHBurnt(uint256 amountOfStETH, uint256 amountOfShares);
 
     /**
      * Emitted when the excessive stETH `amount` (corresponding to `amountOfShares` shares) recovered (i.e. transferred)
@@ -281,6 +294,29 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
     }
 
     /**
+     * @notice BE CAREFUL, the provided stETH shares will be burnt permanently.
+     *
+     * Transfers `_sharesAmountToBurn` stETH shares from `_from` and irreversibly locks these
+     * on the burner contract address. Marks the shares amount for burning on the isolated
+     * redeem track (burned outside the rebase limiter).
+     *
+     * @param _from address to transfer shares from
+     * @param _sharesAmountToBurn stETH shares to burn
+     */
+    function requestBurnSharesForRedeem(
+        address _from,
+        uint256 _sharesAmountToBurn
+    ) external onlyRole(REQUEST_BURN_SHARES_ROLE) {
+        if (_sharesAmountToBurn == 0) revert ZeroBurnAmount();
+
+        uint256 stETHAmount = LIDO.transferSharesFrom(_from, address(this), _sharesAmountToBurn);
+
+        emit RedeemStETHBurnRequested(msg.sender, stETHAmount, _sharesAmountToBurn);
+
+        _storage().redeemSharesBurnRequested += _sharesAmountToBurn;
+    }
+
+    /**
      * Transfers the excess stETH amount (e.g. belonging to the burner contract address
      * but not marked for burning) to the Lido treasury address set upon the
      * contract construction.
@@ -393,6 +429,35 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
     }
 
     /**
+     * Commit all pending redeem shares to burn. Burns everything — no budget argument.
+     *
+     * Redeem shares are burned outside the rebase limiter (rate-neutral),
+     * so they are always fully burned on each oracle report.
+     *
+     * Increments `totalRedeemSharesBurnt` counter.
+     * Resets `redeemSharesBurnRequested` counter.
+     * Does nothing if zero shares are pending.
+     */
+    function commitRedeemSharesToBurn() external virtual override {
+        if (msg.sender != LOCATOR.accounting()) revert AppAuthFailed();
+
+        Storage storage $ = _storage();
+        uint256 redeemShares = $.redeemSharesBurnRequested;
+
+        if (redeemShares == 0) {
+            return;
+        }
+
+        $.redeemSharesBurnRequested = 0;
+        $.totalRedeemSharesBurnt += redeemShares;
+
+        uint256 stETHAmount = LIDO.getPooledEthByShares(redeemShares);
+        emit RedeemStETHBurnt(stETHAmount, redeemShares);
+
+        LIDO.burnShares(redeemShares);
+    }
+
+    /**
      * Returns the current amount of shares locked on the contract to be burnt.
      */
     function getSharesRequestedToBurn()
@@ -422,6 +487,20 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
     }
 
     /**
+     * Returns the current amount of redeem shares locked on the contract to be burnt.
+     */
+    function getRedeemSharesRequestedToBurn() external view virtual override returns (uint256) {
+        return _storage().redeemSharesBurnRequested;
+    }
+
+    /**
+     * Returns the total redeem shares ever burnt.
+     */
+    function getRedeemSharesBurnt() external view virtual override returns (uint256) {
+        return _storage().totalRedeemSharesBurnt;
+    }
+
+    /**
      * Returns the stETH amount belonging to the burner contract address but not marked for burning.
      */
     function getExcessStETH() public view returns (uint256) {
@@ -430,7 +509,9 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
 
     function _getExcessStETHShares() internal view returns (uint256) {
         Storage storage $ = _storage();
-        uint256 sharesBurnRequested = ($.coverSharesBurnRequested + $.nonCoverSharesBurnRequested);
+        uint256 sharesBurnRequested = $.coverSharesBurnRequested
+            + $.nonCoverSharesBurnRequested
+            + $.redeemSharesBurnRequested;
         uint256 totalShares = LIDO.sharesOf(address(this));
 
         // sanity check, don't revert

@@ -8,8 +8,9 @@ import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
+import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
-interface ILidoForRedeemsReserve {
+interface ILidoForRedeemsBuffer {
     function getSharesByPooledEth(uint256 _pooledEthAmount) external view returns (uint256);
     function getPooledEthByShares(uint256 _sharesAmount) external view returns (uint256);
     function transferSharesFrom(address _sender, address _recipient, uint256 _sharesAmount) external returns (uint256);
@@ -17,16 +18,16 @@ interface ILidoForRedeemsReserve {
     function sharesOf(address _account) external view returns (uint256);
     function approve(address _spender, uint256 _amount) external returns (bool);
     function isStopped() external view returns (bool);
-    function receiveRedeemsReserve() external payable;
+    function receiveFromRedeemsBuffer() external payable;
 }
 
-interface IWithdrawalQueueForRedeemsReserve {
+interface IWithdrawalQueueForRedeemsBuffer {
     function isBunkerModeActive() external view returns (bool);
     function isPaused() external view returns (bool);
 }
 
 /**
- * @title RedeemsReserveVault
+ * @title RedeemsBuffer
  * @notice Holds reserve ETH for stETH-to-ETH redemptions.
  *
  *   On each oracle report, Lido funds the vault via `fundReserve()` to match the
@@ -37,18 +38,18 @@ interface IWithdrawalQueueForRedeemsReserve {
  *
  *   Gate Seal compatible via PausableUntil.
  */
-contract RedeemsReserveVault is PausableUntil, AccessControlEnumerable {
-    bytes32 public constant PAUSE_ROLE = keccak256("RedeemsReserveVault.PauseRole");
-    bytes32 public constant RESUME_ROLE = keccak256("RedeemsReserveVault.ResumeRole");
-    bytes32 public constant REDEEMER_ROLE = keccak256("RedeemsReserveVault.RedeemerRole");
+contract RedeemsBuffer is PausableUntil, AccessControlEnumerable {
+    bytes32 public constant PAUSE_ROLE = keccak256("RedeemsBuffer.PauseRole");
+    bytes32 public constant RESUME_ROLE = keccak256("RedeemsBuffer.ResumeRole");
+    bytes32 public constant REDEEMER_ROLE = keccak256("RedeemsBuffer.RedeemerRole");
 
-    ILidoForRedeemsReserve public immutable LIDO;
+    ILidoLocator public immutable LOCATOR;
+    ILidoForRedeemsBuffer public immutable LIDO;
     IBurner public immutable BURNER;
-    IWithdrawalQueueForRedeemsReserve public immutable WITHDRAWAL_QUEUE;
+    IWithdrawalQueueForRedeemsBuffer public immutable WITHDRAWAL_QUEUE;
     address public immutable ACCOUNTING;
 
     uint256 private _reserveBalance;
-    uint256 private _redeemedShares;
     uint256 private _redeemedEther;
 
     event Redeemed(
@@ -58,7 +59,6 @@ contract RedeemsReserveVault is PausableUntil, AccessControlEnumerable {
         uint256 sharesAmount,
         uint256 etherAmount
     );
-    event SharesFlushedToBurner(uint256 sharesAmount);
     event ReserveFunded(uint256 amount);
 
     error ZeroAmount();
@@ -73,19 +73,14 @@ contract RedeemsReserveVault is PausableUntil, AccessControlEnumerable {
     error ETHTransferFailed(address recipient, uint256 amount);
     error StETHRecoveryNotAllowed();
 
-    constructor(
-        address _lido,
-        address _burner,
-        address _withdrawalQueue,
-        address _accounting,
-        address _admin
-    ) {
-        LIDO = ILidoForRedeemsReserve(_lido);
-        BURNER = IBurner(_burner);
-        WITHDRAWAL_QUEUE = IWithdrawalQueueForRedeemsReserve(_withdrawalQueue);
-        ACCOUNTING = _accounting;
+    constructor(address _locator, address _admin) {
+        LOCATOR = ILidoLocator(_locator);
+        LIDO = ILidoForRedeemsBuffer(LOCATOR.lido());
+        BURNER = IBurner(LOCATOR.burner());
+        WITHDRAWAL_QUEUE = IWithdrawalQueueForRedeemsBuffer(LOCATOR.withdrawalQueue());
+        ACCOUNTING = LOCATOR.accounting();
 
-        LIDO.approve(_burner, type(uint256).max);
+        LIDO.approve(address(BURNER), type(uint256).max);
         _setupRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
@@ -112,18 +107,13 @@ contract RedeemsReserveVault is PausableUntil, AccessControlEnumerable {
         }
 
         LIDO.transferSharesFrom(msg.sender, address(this), sharesAmount);
-        _redeemedShares += sharesAmount;
+        BURNER.requestBurnSharesForRedeem(address(this), sharesAmount);
         _redeemedEther += etherAmount;
 
         (bool success,) = _ethRecipient.call{value: etherAmount}("");
         if (!success) revert ETHTransferFailed(_ethRecipient, etherAmount);
 
         emit Redeemed(msg.sender, _ethRecipient, _stETHAmount, sharesAmount, etherAmount);
-    }
-
-    /// @notice Shares accumulated from redemptions since the last report.
-    function getRedeemedShares() external view returns (uint256) {
-        return _redeemedShares;
     }
 
     /// @notice ETH sent to redeemers since the last report.
@@ -142,39 +132,19 @@ contract RedeemsReserveVault is PausableUntil, AccessControlEnumerable {
     }
 
     /**
-     * @notice Forwards accumulated shares to Burner for burning.
-     *         Called by Accounting during oracle report, before commitSharesToBurn().
-     *         Resets shares counter only. Ether counter is reset during reconcile.
+     * @notice Returns unredeemed ETH to Lido and resets counters.
+     *         Called by Accounting during oracle report, before the standard flow.
+     *         Sends back `_reserveBalance - _redeemedEther` (unredeemed portion).
+     *         Resets both `_reserveBalance` and `_redeemedEther` to 0.
      */
-    function flushSharesToBurner() external {
+    function withdrawUnredeemed() external {
         if (msg.sender != ACCOUNTING) revert NotAccounting();
-        uint256 shares = _redeemedShares;
-        if (shares > 0) {
-            BURNER.requestBurnShares(address(this), shares);
-            emit SharesFlushedToBurner(shares);
-        }
-        _redeemedShares = 0;
-    }
-
-    /**
-     * @notice Resets the redeemed ether counter. Called by Accounting after reconcile.
-     */
-    function resetRedeemedEther() external {
-        if (msg.sender != ACCOUNTING) revert NotAccounting();
+        uint256 amount = _reserveBalance - _redeemedEther;
+        _reserveBalance = 0;
         _redeemedEther = 0;
-    }
-
-    /**
-     * @notice Returns ETH to Lido. Called by Lido when vault has excess over target.
-     * @param _amount Amount of ETH to return
-     */
-    function withdrawToLido(uint256 _amount) external {
-        if (msg.sender != address(LIDO)) revert NotLido();
-        if (_amount > address(this).balance) {
-            revert InsufficientBalance(_amount, address(this).balance);
+        if (amount > 0) {
+            LIDO.receiveFromRedeemsBuffer{value: amount}();
         }
-        _reserveBalance -= _amount;
-        LIDO.receiveRedeemsReserve{value: _amount}();
     }
 
     // ── Recovery ─────────────────────────────────────────────────────────
@@ -185,12 +155,12 @@ contract RedeemsReserveVault is PausableUntil, AccessControlEnumerable {
         IERC20(_token).transfer(msg.sender, _amount);
     }
 
-    /// @notice Recover excess stETH shares above the redeemed amount.
+    /// @notice Recover accidentally sent stETH shares.
+    ///         No pending shares on the buffer — all are forwarded to Burner during redeem().
     function recoverStETHShares() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 sharesOnVault = LIDO.sharesOf(address(this));
-        uint256 excess = sharesOnVault - _redeemedShares;
-        if (excess > 0) {
-            LIDO.transferShares(msg.sender, excess);
+        uint256 shares = LIDO.sharesOf(address(this));
+        if (shares > 0) {
+            LIDO.transferShares(msg.sender, shares);
         }
     }
 

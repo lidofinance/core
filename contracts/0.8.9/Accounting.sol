@@ -15,12 +15,9 @@ import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.so
 
 import {WithdrawalQueue} from "./WithdrawalQueue.sol";
 
-interface IRedeemsReserveVault {
-    function withdrawToLido(uint256 _amount) external;
-    function getRedeemedShares() external view returns (uint256);
+interface IRedeemsBuffer {
     function getRedeemedEther() external view returns (uint256);
-    function flushSharesToBurner() external;
-    function resetRedeemedEther() external;
+    function withdrawUnredeemed() external;
 }
 
 interface IStakingRouter {
@@ -102,6 +99,8 @@ contract Accounting {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
+        /// @notice number of redeem shares to burn (outside the rebase limiter, rate-neutral)
+        uint256 redeemSharesToBurn;
     }
 
     /// @notice precalculated numbers of shares that should be minted as fee to NO
@@ -193,7 +192,7 @@ contract Accounting {
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clValidatorsBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
-        // Read redemption counters from vault (on-chain, includes all redemptions)
+        // Read redemption counters from buffer (on-chain, includes all redemptions)
         (uint256 redeemedShares, uint256 redeemedEther) = _getRedeemedCounters();
 
         // Limit the rebase to avoid oracle frontrunning.
@@ -215,12 +214,13 @@ contract Accounting {
             update.sharesToFinalizeWQ
         );
 
-        // Add redemption shares outside the limiter — rate-neutral, must all burn on this report
-        update.totalSharesToBurn += redeemedShares;
+        // Redeem shares are burned via a separate commit (outside the rebase limiter, rate-neutral)
+        update.redeemSharesToBurn = redeemedShares;
 
         uint256 postInternalSharesBeforeFees = _pre.totalShares -
             _pre.externalShares - // internal shares before
-            update.totalSharesToBurn; // shares to be burned (WQ + cover + redemptions)
+            update.totalSharesToBurn - // shares to be burned (WQ + cover)
+            update.redeemSharesToBurn; // redeem shares burned separately
 
         update.postInternalEther =
             _pre.totalPooledEther - _pre.externalEther
@@ -386,16 +386,20 @@ contract Accounting {
             LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
         }
 
-        // Flush accumulated redemption shares from vault to Burner before commit
-        _flushVaultSharesToBurner();
+        // Burn all redeem shares (rate-neutral, outside limiter)
+        // Shares are already on Burner — sent during each redeem() call
+        _contracts.burner.commitRedeemSharesToBurn();
 
+        // Burn limiter-constrained cover/nonCover shares
         if (_update.totalSharesToBurn > 0) {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
         }
 
-        // Reconcile RedeemsReserveVault — tracked vault ETH updated to actual.
-        _reconcileRedeemsReserveVault();
+        // ETH round-trip: withdraw unredeemed → reconcile bufferedEther
+        _withdrawAndReconcileRedeemsBuffer();
 
+        // Standard flow — runs on clean state (bufferedEther == Lido.balance)
+        // _updateBufferedEtherAllocation() inside grows the redeems reserve snapshot
         LIDO.collectRewardsAndProcessWithdrawals(
             _report.timestamp,
             _report.clValidatorsBalance + _report.clPendingBalance,
@@ -407,8 +411,8 @@ contract Accounting {
             _update.etherToFinalizeWQ
         );
 
-        // Replenish RedeemsReserveVault: push/pull ETH to match target
-        _replenishRedeemsReserveVault();
+        // Push new reserve to buffer (bufferedEther NOT decremented — soft-reserved)
+        _pushRedeemsReserveToBuffer();
 
         if (_update.sharesToMintAsFees > 0) {
             // this is a final action that changes share rate.
@@ -437,70 +441,45 @@ contract Accounting {
         );
     }
 
-    /// @dev Reads redemption counters from the vault. Returns (0, 0) if no vault configured.
+    /// @dev Reads redemption counters. Shares from Burner redeem track, ether from buffer.
+    ///      Returns (0, 0) if no buffer configured.
     function _getRedeemedCounters() internal view returns (uint256 redeemedShares, uint256 redeemedEther) {
-        address vault = LIDO.getRedeemsReserveVault();
-        if (vault == address(0)) return (0, 0);
+        address buffer = LIDO.getRedeemsBuffer();
+        if (buffer == address(0)) return (0, 0);
 
-        redeemedShares = IRedeemsReserveVault(vault).getRedeemedShares();
-        redeemedEther = IRedeemsReserveVault(vault).getRedeemedEther();
+        redeemedShares = IBurner(LIDO_LOCATOR.burner()).getRedeemSharesRequestedToBurn();
+        redeemedEther = IRedeemsBuffer(buffer).getRedeemedEther();
     }
 
-    /// @dev Flushes accumulated redemption shares from vault to Burner.
-    ///      Called before commitSharesToBurn so redeemed shares are included in the burn.
-    function _flushVaultSharesToBurner() internal {
-        address vault = LIDO.getRedeemsReserveVault();
-        if (vault == address(0)) return;
+    /// @dev ETH round-trip: withdraw unredeemed ETH from buffer back to Lido,
+    ///      then reconcile bufferedEther by subtracting redeemedEther.
+    ///      After this call: bufferedEther == Lido.balance (clean state).
+    function _withdrawAndReconcileRedeemsBuffer() internal {
+        address buffer = LIDO.getRedeemsBuffer();
+        if (buffer == address(0)) return;
 
-        IRedeemsReserveVault(vault).flushSharesToBurner();
+        uint256 redeemedEther = IRedeemsBuffer(buffer).getRedeemedEther();
+
+        // Withdraw unredeemed ETH back to Lido (resets buffer counters)
+        IRedeemsBuffer(buffer).withdrawUnredeemed();
+
+        // Reconcile: bufferedEther -= redeemedEther
+        LIDO.reconcileRedeemedEther(redeemedEther);
     }
 
-    /// @dev Reconciles the RedeemsReserveVault tracked ETH to the actual vault balance
-    ///      and resets the redeemed ether counter.
-    function _reconcileRedeemsReserveVault() internal {
-        address vault = LIDO.getRedeemsReserveVault();
-        if (vault == address(0)) return;
+    /// @dev After standard flow + _updateBufferedEtherAllocation() grew the reserve,
+    ///      push the new reserve amount to the buffer.
+    ///      bufferedEther is NOT decremented — ETH is soft-reserved.
+    /// @dev After collectRewardsAndProcessWithdrawals, _updateBufferedEtherAllocation()
+    ///      has set the new REDEEMS_RESERVE_POSITION via _growRedeemsReserve().
+    ///      Push that amount to the buffer. bufferedEther is NOT decremented.
+    function _pushRedeemsReserveToBuffer() internal {
+        address buffer = LIDO.getRedeemsBuffer();
+        if (buffer == address(0)) return;
 
-        LIDO.reconcileRedeemsReserveVault(vault.balance);
-        IRedeemsReserveVault(vault).resetRedeemedEther();
-    }
-
-    /// @dev Replenishes or drains the RedeemsReserveVault to match the reserve target.
-    ///      Called after collectRewardsAndProcessWithdrawals when the buffer is finalized.
-    ///      Fills to target from unreserved surplus first. When surplus is insufficient,
-    ///      splits the shared allocation (withdrawalsReserve + unreserved) by growthShareBP.
-    function _replenishRedeemsReserveVault() internal {
-        address vault = LIDO.getRedeemsReserveVault();
-        if (vault == address(0)) return;
-
-        uint256 target = LIDO.getRedeemsReserveTarget();
-        uint256 actual = vault.balance;
-
-        if (target > actual) {
-            uint256 deficit = target - actual;
-            uint256 depositableEther = LIDO.getDepositableEther();
-            uint256 toPush;
-
-            if (depositableEther >= deficit) {
-                toPush = deficit;
-            } else {
-                uint256 shareBP = LIDO.getRedeemsReserveGrowthShare();
-                if (shareBP == 0) {
-                    toPush = depositableEther;
-                } else {
-                    uint256 withdrawalsReserve = LIDO.getWithdrawalsReserve();
-                    uint256 sharedAllocation = withdrawalsReserve + depositableEther;
-                    uint256 reserveShare = sharedAllocation * shareBP / TOTAL_BASIS_POINTS;
-                    toPush = reserveShare > depositableEther ? reserveShare : depositableEther;
-                    if (toPush > deficit) toPush = deficit;
-                }
-            }
-
-            if (toPush > 0) {
-                LIDO.pushToRedeemsReserveVault(toPush);
-            }
-        } else if (actual > target) {
-            LIDO.pullFromRedeemsReserveVault(actual - target);
+        uint256 toPush = LIDO.getRedeemsReserve();
+        if (toPush > 0) {
+            LIDO.pushToRedeemsBuffer(toPush);
         }
     }
 

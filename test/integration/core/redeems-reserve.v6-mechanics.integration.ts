@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { RedeemsReserveVault } from "typechain-types";
+import { RedeemsBuffer } from "typechain-types";
 
 import { ether } from "lib";
 import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
@@ -29,7 +29,7 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
   let holder: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let vault: RedeemsReserveVault;
+  let vault: RedeemsBuffer;
 
   const reportOpts = { clDiff: 0n, excludeVaultsBalances: true, skipWithdrawals: true };
 
@@ -40,7 +40,7 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
     [holder, , stranger] = await ethers.getSigners();
     reserveManager = holder;
 
-    const { acl, lido, burner, withdrawalQueue } = ctx.contracts;
+    const { acl, lido, burner } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
 
     const role = await lido.BUFFER_RESERVE_MANAGER_ROLE();
@@ -49,19 +49,12 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
       await acl.connect(agent).grantPermission(reserveManager.address, lido.address, role);
     }
 
-    const accountingAddr = await ctx.contracts.locator.accounting();
-    const VaultFactory = await ethers.getContractFactory("RedeemsReserveVault");
-    vault = await VaultFactory.connect(holder).deploy(
-      await lido.getAddress(),
-      await burner.getAddress(),
-      await withdrawalQueue.getAddress(),
-      accountingAddr,
-      holder.address,
-    );
+    const VaultFactory = await ethers.getContractFactory("RedeemsBuffer");
+    vault = await VaultFactory.connect(holder).deploy(await ctx.contracts.locator.getAddress(), holder.address);
 
     const burnRole = await burner.REQUEST_BURN_SHARES_ROLE();
     await burner.connect(agent).grantRole(burnRole, await vault.getAddress());
-    await lido.connect(reserveManager).setRedeemsReserveVault(await vault.getAddress());
+    await lido.connect(reserveManager).setRedeemsBuffer(await vault.getAddress());
 
     const redeemerRole = await vault.REDEEMER_ROLE();
     await vault.connect(holder).grantRole(redeemerRole, holder.address);
@@ -125,8 +118,8 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
     // Large redeem — creates significant pending shares
     const { sharesAmount } = await redeemWithReceipt(holder, ether("30"), holder.address);
 
-    // Shares on vault, not Burner
-    expect(await vault.getRedeemedShares()).to.equal(sharesAmount);
+    // Shares on Burner redeem track (sent during redeem)
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(sharesAmount);
     const [, nonCoverBefore] = await burner.getSharesRequestedToBurn();
     expect(nonCoverBefore).to.equal(0n);
 
@@ -137,7 +130,7 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
     // All redeemed shares burned — none deferred
     const [, nonCoverAfter] = await burner.getSharesRequestedToBurn();
     expect(nonCoverAfter).to.equal(0n);
-    expect(await vault.getRedeemedShares()).to.equal(0n);
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
     expect(await vault.getRedeemedEther()).to.equal(0n);
 
     // Shares decreased by at least redemption amount (minus fee shares minted)
@@ -156,7 +149,7 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
 
     // Redeem — creates vault shares to burn
     const { sharesAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
-    expect(await vault.getRedeemedShares()).to.equal(sharesAmount);
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(sharesAmount);
 
     // Report with rewards — WQ finalization through limiter, redemptions outside
     await report(ctx, { clDiff: ether("0.01"), excludeVaultsBalances: true, skipWithdrawals: false });
@@ -165,7 +158,7 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
     expect(await withdrawalQueue.unfinalizedStETH()).to.equal(0n);
 
     // Vault shares all burned (outside limiter)
-    expect(await vault.getRedeemedShares()).to.equal(0n);
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
     const [, nonCover] = await burner.getSharesRequestedToBurn();
     expect(nonCover).to.equal(0n);
   });
@@ -242,17 +235,18 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
   // ═══════════════════════════════════════════════════════════════════════
 
   it("After report: both counters reset to zero", async () => {
+    const { burner } = ctx.contracts;
     await setupVault(ether("1000"), 500n);
 
     await redeemWithReceipt(holder, ether("10"), holder.address);
 
-    expect(await vault.getRedeemedShares()).to.be.gt(0n);
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.be.gt(0n);
     expect(await vault.getRedeemedEther()).to.be.gt(0n);
 
     await report(ctx, reportOpts);
 
     // Both counters reset (shares by flushSharesToBurner, ether by resetRedeemedEther)
-    expect(await vault.getRedeemedShares()).to.equal(0n);
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
     expect(await vault.getRedeemedEther()).to.equal(0n);
   });
 
@@ -278,7 +272,52 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  6. Recovery
+  //  6. _reserveBalance drift — redeem → report → redeem must not exceed actual balance
+  // ═══════════════════════════════════════════════════════════════════════
+
+  it("BUG: _reserveBalance drifts above actual balance after redeem+report cycles", async () => {
+    const { lido } = ctx.contracts;
+    // Large deposit so holder has more stETH than vault balance
+    await lido.connect(holder).submit(ZeroAddress, { value: ether("5000") });
+    await lido.connect(reserveManager).setRedeemsReserveTargetRatio(500n);
+    await report(ctx, reportOpts);
+
+    const vaultAddr = await vault.getAddress();
+    const targetBalance = await ethers.provider.getBalance(vaultAddr);
+    expect(targetBalance).to.be.gt(0n);
+
+    // Run 5 cycles: redeem → report → fundReserve accumulates in _reserveBalance
+    // Each cycle: _reserveBalance += replenishAmount, but never -= redeemedEther
+    const redeemPerCycle = ether("5");
+    for (let i = 0; i < 5; i++) {
+      await redeemWithReceipt(holder, redeemPerCycle, holder.address);
+      await report(ctx, reportOpts);
+    }
+
+    // After 5 cycles: _reserveBalance ≈ initial + 5 * replenishAmount
+    // Actual vault balance ≈ target (replenished each cycle)
+    const actualBalance = await ethers.provider.getBalance(vaultAddr);
+
+    // The drift: try to redeem more than actual balance
+    // _reserveBalance >> actualBalance, so InsufficientReserve check passes
+    // But ETH transfer will fail because vault doesn't have enough ETH
+    const overRedeemAmount = actualBalance + ether("10");
+    const holderBal = await lido.balanceOf(holder.address);
+
+    expect(overRedeemAmount).to.be.lte(holderBal, "holder must have enough stETH");
+
+    // Pre-approve vault for the full amount
+    await lido.connect(holder).approve(await vault.getAddress(), overRedeemAmount + ether("100"), { gasPrice: 0 });
+
+    // EXPECTED: revert with InsufficientReserve (tracked reserve < actual request)
+    // BUG: _reserveBalance drifted → check passes → reverts at ETH transfer
+    await expect(
+      vault.connect(holder).redeem(overRedeemAmount, holder.address, { gasPrice: 0 }),
+    ).to.be.revertedWithCustomError(vault, "InsufficientReserve");
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  7. Recovery
   // ═══════════════════════════════════════════════════════════════════════
 
   it("recoverERC20 reverts for stETH", async () => {

@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { RedeemsReserveVault } from "typechain-types";
+import { RedeemsBuffer } from "typechain-types";
 
 import { ether, impersonate } from "lib";
 import {
@@ -34,7 +34,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
   let holderB: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let vault: RedeemsReserveVault;
+  let vault: RedeemsBuffer;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -43,7 +43,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     [holder, holderB, stranger] = await ethers.getSigners();
     reserveManager = holder;
 
-    const { acl, lido, burner, withdrawalQueue } = ctx.contracts;
+    const { acl, lido, burner } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
 
     const role = await lido.BUFFER_RESERVE_MANAGER_ROLE();
@@ -52,19 +52,12 @@ describe("Integration: Redeems reserve — failure modes", () => {
       await acl.connect(agent).grantPermission(reserveManager.address, lido.address, role);
     }
 
-    const accountingAddr = await ctx.contracts.locator.accounting();
-    const VaultFactory = await ethers.getContractFactory("RedeemsReserveVault");
-    vault = await VaultFactory.connect(holder).deploy(
-      await lido.getAddress(),
-      await burner.getAddress(),
-      await withdrawalQueue.getAddress(),
-      accountingAddr,
-      holder.address,
-    );
+    const VaultFactory = await ethers.getContractFactory("RedeemsBuffer");
+    vault = await VaultFactory.connect(holder).deploy(await ctx.contracts.locator.getAddress(), holder.address);
 
     const burnRole = await burner.REQUEST_BURN_SHARES_ROLE();
     await burner.connect(agent).grantRole(burnRole, await vault.getAddress());
-    await lido.connect(reserveManager).setRedeemsReserveVault(await vault.getAddress());
+    await lido.connect(reserveManager).setRedeemsBuffer(await vault.getAddress());
 
     // Grant REDEEMER_ROLE to test signers
     const redeemerRole = await vault.REDEEMER_ROLE();
@@ -139,7 +132,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
       totalShares: await lido.getTotalShares(),
       shareRate: await lido.getPooledEthByShares(ether("1")),
       bufferedEther: await lido.getBufferedEther(),
-      trackedVaultEth: await lido.getRedeemsReserveVaultEth(),
+      trackedVaultEth: await lido.getRedeemsReserve(),
       vaultBalance: await ethers.provider.getBalance(vaultAddr),
       depositableEther: await lido.getDepositableEther(),
       coverPending,
@@ -149,7 +142,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
 
   const assertVaultReconciled = async () => {
     const { lido } = ctx.contracts;
-    const tracked = await lido.getRedeemsReserveVaultEth();
+    const tracked = await lido.getRedeemsReserve();
     const actual = await ethers.provider.getBalance(await vault.getAddress());
     expect(tracked).to.equal(actual, "vault tracked != actual balance");
   };
@@ -164,8 +157,11 @@ describe("Integration: Redeems reserve — failure modes", () => {
   const assertAllocationInvariant = async () => {
     const { lido } = ctx.contracts;
     const buffered = await lido.getBufferedEther();
+    const rRes = await lido.getRedeemsReserve();
     const wRes = await lido.getWithdrawalsReserve();
-    expect(await lido.getDepositableEther()).to.equal(buffered - wRes, "allocation invariant broken");
+    // buffered includes soft-reserved redeemsReserve
+    // depositableEther = buffered - redeemsReserve - withdrawalsReserve (when all fit)
+    expect(await lido.getDepositableEther()).to.equal(buffered - rRes - wRes, "allocation invariant broken");
   };
 
   const claimAndVerify = async (signer: HardhatEthersSigner, reqId: bigint) => {
@@ -185,7 +181,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
   // ═══════════════════════════════════════════════════════════════════════
 
   it("0.1 Full lifecycle: submit, fund vault, WQ request + redeem, report finalizes both, vault refills", async () => {
-    const { lido, withdrawalQueue } = ctx.contracts;
+    const { lido, withdrawalQueue, burner } = ctx.contracts;
     await setupVault(ether("1000"), 500n);
 
     await assertVaultAtTarget();
@@ -215,7 +211,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     const vaultAfterRedeem = await ethers.provider.getBalance(await vault.getAddress());
     expect(vaultAfterRedeem).to.equal(before.vaultBalance - etherAmount);
     // Shares held on vault (not in Burner yet — flushed on report)
-    expect(await vault.getRedeemedShares()).to.equal(sharesAmount);
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(sharesAmount);
     expect(await vault.getRedeemedEther()).to.equal(etherAmount);
 
     // Report: finalizes WQ + burns vault shares + refills vault
@@ -291,7 +287,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     const { sharesAmount, etherAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
 
     // Between reports: tracked stale, vault balance decreased by exact etherAmount
-    expect(await lido.getRedeemsReserveVaultEth()).to.equal(before.trackedVaultEth);
+    expect(await lido.getRedeemsReserve()).to.equal(before.trackedVaultEth);
     expect(await ethers.provider.getBalance(await vault.getAddress())).to.equal(before.vaultBalance - etherAmount);
 
     // Rate unchanged between reports (overcount cancels)
@@ -548,7 +544,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     const [coverBefore, nonCoverBefore] = await burner.getSharesRequestedToBurn();
     expect(coverBefore).to.equal(coverShares);
     expect(nonCoverBefore).to.equal(0n); // vault shares held locally
-    expect(await vault.getRedeemedShares()).to.equal(vaultShares);
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(vaultShares);
 
     const before = await captureState();
 
@@ -581,7 +577,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     const { sharesAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
 
     // Shares held on vault (flushed to Burner on report)
-    expect(await vault.getRedeemedShares()).to.equal(sharesAmount);
+    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(sharesAmount);
 
     // clDiff=0 → exact shares
     await report(ctx, reportOpts);
@@ -615,7 +611,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     const totalEther = r1.etherAmount + r2.etherAmount + r3.etherAmount;
 
     // vaultDelta = sum of all redeemed ETH
-    const midTracked = await lido.getRedeemsReserveVaultEth();
+    const midTracked = await lido.getRedeemsReserve();
     const midActual = await ethers.provider.getBalance(await vault.getAddress());
     expect(midTracked - midActual).to.equal(totalEther);
     // Tracked stale
@@ -667,13 +663,13 @@ describe("Integration: Redeems reserve — failure modes", () => {
     // Redeem drains some vault ETH
     await redeemWithReceipt(holder, ether("10"), holder.address);
     const vaultAfterRedeem = await ethers.provider.getBalance(await vault.getAddress());
-    const trackedAfterRedeem = await lido.getRedeemsReserveVaultEth();
+    const trackedAfterRedeem = await lido.getRedeemsReserve();
 
     // submit() does NOT change vault balance or tracked ETH
     await lido.connect(holderB).submit(ZeroAddress, { value: ether("50"), gasPrice: 0 });
 
     expect(await ethers.provider.getBalance(await vault.getAddress())).to.equal(vaultAfterRedeem);
-    expect(await lido.getRedeemsReserveVaultEth()).to.equal(trackedAfterRedeem);
+    expect(await lido.getRedeemsReserve()).to.equal(trackedAfterRedeem);
 
     // Target increased (higher TVL from submit), but vault still at old level
     const target = await lido.getRedeemsReserveTarget();
@@ -819,7 +815,6 @@ describe("Integration: Redeems reserve — failure modes", () => {
 
     const targetBefore = await lido.getRedeemsReserveTarget();
     const vaultBefore = await ethers.provider.getBalance(await vault.getAddress());
-    const bufferedBefore = await lido.getBufferedEther();
     expect(vaultBefore).to.equal(targetBefore);
 
     await resetCLBalanceDecreaseWindow(ctx);
@@ -834,8 +829,10 @@ describe("Integration: Redeems reserve — failure modes", () => {
     // Excess ETH returned to buffer
     const excessReturned = vaultBefore - vaultAfter;
     expect(excessReturned).to.be.gt(0n);
-    // Buffer absorbed the returned vault ETH (minus CL loss impact)
-    expect(await lido.getBufferedEther()).to.be.gt(bufferedBefore);
+    // Reserve shrank → less soft-reserved in bufferedEther
+    // With round-trip: old reserve was included, new (smaller) reserve now included
+    // Net effect on bufferedEther depends on CL loss vs reserve reduction
+    expect(targetAfter).to.be.lt(targetBefore);
   });
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -885,7 +882,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     await report(ctx, reportOpts);
 
     const vaultBefore = await ethers.provider.getBalance(await vault.getAddress());
-    const trackedBefore = await lido.getRedeemsReserveVaultEth();
+    const trackedBefore = await lido.getRedeemsReserve();
     const targetBefore = await lido.getRedeemsReserveTarget();
     const rateBefore = await lido.getPooledEthByShares(ether("1"));
 
@@ -896,7 +893,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     expect(rateAfter).to.be.lt(rateBefore);
     // Vault balance, tracked, and target unchanged by bad debt
     expect(await ethers.provider.getBalance(await vault.getAddress())).to.equal(vaultBefore);
-    expect(await lido.getRedeemsReserveVaultEth()).to.equal(trackedBefore);
+    expect(await lido.getRedeemsReserve()).to.equal(trackedBefore);
     expect(await lido.getRedeemsReserveTarget()).to.equal(targetBefore);
 
     // Fixed share amount gets less ETH at reduced rate
@@ -919,7 +916,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
     await setupVault(ether("1000"), 500n);
 
     const vaultBefore = await ethers.provider.getBalance(await vault.getAddress());
-    const trackedBefore = await lido.getRedeemsReserveVaultEth();
+    const trackedBefore = await lido.getRedeemsReserve();
     const targetBefore = await lido.getRedeemsReserveTarget();
     const rateBefore = await lido.getPooledEthByShares(ether("1"));
 
@@ -948,7 +945,7 @@ describe("Integration: Redeems reserve — failure modes", () => {
 
     // Vault balance, tracked, and target unchanged by cover burn
     expect(await ethers.provider.getBalance(await vault.getAddress())).to.equal(vaultBefore);
-    expect(await lido.getRedeemsReserveVaultEth()).to.equal(trackedBefore);
+    expect(await lido.getRedeemsReserve()).to.equal(trackedBefore);
     expect(await lido.getRedeemsReserveTarget()).to.equal(targetBefore);
 
     // Redeem still works at new rate

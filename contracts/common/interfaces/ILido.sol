@@ -83,9 +83,7 @@ interface ILido is IERC20, IVersioned {
 
     function internalizeExternalBadDebt(uint256 _amountOfShares) external;
 
-    function getRedeemsReserveVault() external view returns (address);
-
-    function getRedeemsReserveVaultEth() external view returns (uint256);
+    function getRedeemsBuffer() external view returns (address);
 
     function getRedeemsReserveTarget() external view returns (uint256);
 
@@ -95,9 +93,9 @@ interface ILido is IERC20, IVersioned {
 
     function getDepositableEther() external view returns (uint256);
 
-    function reconcileRedeemsReserveVault(uint256 _actualBalance) external;
+    function getRedeemsReserve() external view returns (uint256);
 
-    function pushToRedeemsReserveVault(uint256 _amount) external;
+    function reconcileRedeemedEther(uint256 _redeemedEther) external;
 
-    function pullFromRedeemsReserveVault(uint256 _amount) external;
+    function pushToRedeemsBuffer(uint256 _amount) external;
 }
