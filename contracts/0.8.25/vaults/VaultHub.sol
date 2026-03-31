@@ -1107,8 +1107,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reportMaxLiabilityShares,
         uint256 _reportSlashingReserve
     ) internal {
-        _record.cumulativeLidoFees = uint128(_reportCumulativeLidoFees);
-        _record.minimalReserve = uint128(Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve));
+        _record.cumulativeLidoFees = SafeCast.toUint128(_reportCumulativeLidoFees);
+        _record.minimalReserve = SafeCast.toUint128(Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve));
 
         // We want to prevent 1 tx looping here:
         // 1. bring ETH (TV+)
@@ -1121,8 +1121,10 @@ contract VaultHub is PausableUntilWithRoles {
         // if any stETH is minted on funds added after the refslot
         // in that case we don't update it (preventing unlock)
         if (_record.maxLiabilityShares == _reportMaxLiabilityShares) {
-            _record.maxLiabilityShares = uint96(Math256.max(_record.liabilityShares, _reportLiabilityShares));
+            _record.maxLiabilityShares = SafeCast.toUint96(Math256.max(_record.liabilityShares, _reportLiabilityShares));
         }
+
+        // report values is not safecasted because they're checked extensively in LazyOracle
         _record.report = Report({
             totalValue: uint104(_reportTotalValue),
             inOutDelta: int104(_reportInOutDelta),
