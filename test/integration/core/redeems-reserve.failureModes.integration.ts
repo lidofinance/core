@@ -53,7 +53,8 @@ describe("Integration: Redeems reserve — failure modes", () => {
     }
 
     const VaultFactory = await ethers.getContractFactory("RedeemsBuffer");
-    vault = await VaultFactory.connect(holder).deploy(await ctx.contracts.locator.getAddress(), holder.address);
+    vault = await VaultFactory.connect(holder).deploy(await ctx.contracts.locator.getAddress());
+    await vault.initialize(holder.address);
 
     const burnRole = await burner.REQUEST_BURN_SHARES_ROLE();
     await burner.connect(agent).grantRole(burnRole, await vault.getAddress());

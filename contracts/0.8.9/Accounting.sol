@@ -101,6 +101,8 @@ contract Accounting {
         uint256 postTotalPooledEther;
         /// @notice number of redeem shares to burn (outside the rebase limiter, rate-neutral)
         uint256 redeemSharesToBurn;
+        /// @notice amount of ether redeemed since last report (from RedeemsBuffer)
+        uint256 redeemedEther;
     }
 
     /// @notice precalculated numbers of shares that should be minted as fee to NO
@@ -194,6 +196,7 @@ contract Accounting {
 
         // Read redemption counters from buffer (on-chain, includes all redemptions)
         (uint256 redeemedShares, uint256 redeemedEther) = _getRedeemedCounters();
+        update.redeemedEther = redeemedEther;
 
         // Limit the rebase to avoid oracle frontrunning.
         // The base is reduced by redeemedEther so the limiter sees the actual protocol size.
@@ -388,18 +391,17 @@ contract Accounting {
 
         // Burn all redeem shares (rate-neutral, outside limiter)
         // Shares are already on Burner — sent during each redeem() call
-        _contracts.burner.commitRedeemSharesToBurn();
+        if (_update.redeemSharesToBurn > 0) {
+            _contracts.burner.commitRedeemSharesToBurn();
+        }
 
         // Burn limiter-constrained cover/nonCover shares
         if (_update.totalSharesToBurn > 0) {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
         }
 
-        // ETH round-trip: withdraw unredeemed → reconcile bufferedEther
-        _withdrawAndReconcileRedeemsBuffer();
-
-        // Standard flow — runs on clean state (bufferedEther == Lido.balance)
-        // _updateBufferedEtherAllocation() inside grows the redeems reserve snapshot
+        // collectRewardsAndProcessWithdrawals handles ETH round-trip internally:
+        // withdraw unredeemed → reconcile → standard flow → grow reserve → push
         LIDO.collectRewardsAndProcessWithdrawals(
             _report.timestamp,
             _report.clValidatorsBalance + _report.clPendingBalance,
@@ -408,11 +410,9 @@ contract Accounting {
             _update.elRewardsVaultTransfer,
             lastWithdrawalRequestToFinalize,
             _report.simulatedShareRate,
-            _update.etherToFinalizeWQ
+            _update.etherToFinalizeWQ,
+            _update.redeemedEther
         );
-
-        // Push new reserve to buffer (bufferedEther NOT decremented — soft-reserved)
-        _pushRedeemsReserveToBuffer();
 
         if (_update.sharesToMintAsFees > 0) {
             // this is a final action that changes share rate.
@@ -449,38 +449,6 @@ contract Accounting {
 
         redeemedShares = IBurner(LIDO_LOCATOR.burner()).getRedeemSharesRequestedToBurn();
         redeemedEther = IRedeemsBuffer(buffer).getRedeemedEther();
-    }
-
-    /// @dev ETH round-trip: withdraw unredeemed ETH from buffer back to Lido,
-    ///      then reconcile bufferedEther by subtracting redeemedEther.
-    ///      After this call: bufferedEther == Lido.balance (clean state).
-    function _withdrawAndReconcileRedeemsBuffer() internal {
-        address buffer = LIDO.getRedeemsBuffer();
-        if (buffer == address(0)) return;
-
-        uint256 redeemedEther = IRedeemsBuffer(buffer).getRedeemedEther();
-
-        // Withdraw unredeemed ETH back to Lido (resets buffer counters)
-        IRedeemsBuffer(buffer).withdrawUnredeemed();
-
-        // Reconcile: bufferedEther -= redeemedEther
-        LIDO.reconcileRedeemedEther(redeemedEther);
-    }
-
-    /// @dev After standard flow + _updateBufferedEtherAllocation() grew the reserve,
-    ///      push the new reserve amount to the buffer.
-    ///      bufferedEther is NOT decremented — ETH is soft-reserved.
-    /// @dev After collectRewardsAndProcessWithdrawals, _updateBufferedEtherAllocation()
-    ///      has set the new REDEEMS_RESERVE_POSITION via _growRedeemsReserve().
-    ///      Push that amount to the buffer. bufferedEther is NOT decremented.
-    function _pushRedeemsReserveToBuffer() internal {
-        address buffer = LIDO.getRedeemsBuffer();
-        if (buffer == address(0)) return;
-
-        uint256 toPush = LIDO.getRedeemsReserve();
-        if (toPush > 0) {
-            LIDO.pushToRedeemsBuffer(toPush);
-        }
     }
 
     /// @dev checks the provided oracle data internally and against the sanity checker contract

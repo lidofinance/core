@@ -25,7 +25,8 @@ contract Lido__MockForAccounting {
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _withdrawalsShareRate,
-        uint256 _etherToLockOnWithdrawalQueue
+        uint256 _etherToLockOnWithdrawalQueue,
+        uint256 _redeemedEther
     );
     /**
      * @notice An executed shares transfer from `sender` to `recipient`.
@@ -98,7 +99,8 @@ contract Lido__MockForAccounting {
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _simulatedShareRate,
-        uint256 _etherToLockOnWithdrawalQueue
+        uint256 _etherToLockOnWithdrawalQueue,
+        uint256 _redeemedEther
     ) external {
         emit Mock__CollectRewardsAndProcessWithdrawals(
             _reportTimestamp,
@@ -108,7 +110,8 @@ contract Lido__MockForAccounting {
             _elRewardsToWithdraw,
             _lastWithdrawalRequestToFinalize,
             _simulatedShareRate,
-            _etherToLockOnWithdrawalQueue
+            _etherToLockOnWithdrawalQueue,
+            _redeemedEther
         );
     }
 
@@ -142,5 +145,9 @@ contract Lido__MockForAccounting {
     function transferShares(address _recipient, uint256 _amount) external returns (uint256) {
         emit TransferShares(msg.sender, _recipient, _amount);
         return _amount;
+    }
+
+    function getRedeemsBuffer() external pure returns (address) {
+        return address(0);
     }
 }

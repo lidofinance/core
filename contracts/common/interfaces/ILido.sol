@@ -64,7 +64,8 @@ interface ILido is IERC20, IVersioned {
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _withdrawalsShareRate,
-        uint256 _etherToLockOnWithdrawalQueue
+        uint256 _etherToLockOnWithdrawalQueue,
+        uint256 _redeemedEther
     ) external;
 
     function emitTokenRebase(
@@ -94,8 +95,4 @@ interface ILido is IERC20, IVersioned {
     function getDepositableEther() external view returns (uint256);
 
     function getRedeemsReserve() external view returns (uint256);
-
-    function reconcileRedeemedEther(uint256 _redeemedEther) external;
-
-    function pushToRedeemsBuffer(uint256 _amount) external;
 }

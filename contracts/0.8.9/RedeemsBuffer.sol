@@ -7,6 +7,7 @@ pragma solidity 0.8.9;
 import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
+import {Versioned} from "./utils/Versioned.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
@@ -31,14 +32,14 @@ interface IWithdrawalQueueForRedeemsBuffer {
  * @notice Holds reserve ETH for stETH-to-ETH redemptions.
  *
  *   On each oracle report, Lido funds the vault via `fundReserve()` to match the
- *   reserve target, or pulls excess back via `withdrawToLido()`. Between reports,
+ *   reserve target, or pulls excess back via `withdrawUnredeemed()`. Between reports,
  *   REDEEMER_ROLE holders invoke `redeem()` to exchange stETH for ETH. The stETH
  *   shares are held locally and flushed to the Burner during the next oracle report,
  *   where they are burned outside the rebase limiter (rate-neutral).
  *
  *   Gate Seal compatible via PausableUntil.
  */
-contract RedeemsBuffer is PausableUntil, AccessControlEnumerable {
+contract RedeemsBuffer is PausableUntil, AccessControlEnumerable, Versioned {
     bytes32 public constant PAUSE_ROLE = keccak256("RedeemsBuffer.PauseRole");
     bytes32 public constant RESUME_ROLE = keccak256("RedeemsBuffer.ResumeRole");
     bytes32 public constant REDEEMER_ROLE = keccak256("RedeemsBuffer.RedeemerRole");
@@ -47,7 +48,6 @@ contract RedeemsBuffer is PausableUntil, AccessControlEnumerable {
     ILidoForRedeemsBuffer public immutable LIDO;
     IBurner public immutable BURNER;
     IWithdrawalQueueForRedeemsBuffer public immutable WITHDRAWAL_QUEUE;
-    address public immutable ACCOUNTING;
 
     uint256 private _reserveBalance;
     uint256 private _redeemedEther;
@@ -68,20 +68,25 @@ contract RedeemsBuffer is PausableUntil, AccessControlEnumerable {
     error WQPaused();
     error InsufficientReserve(uint256 requested, uint256 available);
     error NotLido();
-    error NotAccounting();
     error InsufficientBalance(uint256 requested, uint256 available);
     error ETHTransferFailed(address recipient, uint256 amount);
     error StETHRecoveryNotAllowed();
+    error DirectETHTransferNotAllowed();
 
-    constructor(address _locator, address _admin) {
+    constructor(address _locator)
+        Versioned()
+    {
         LOCATOR = ILidoLocator(_locator);
         LIDO = ILidoForRedeemsBuffer(LOCATOR.lido());
         BURNER = IBurner(LOCATOR.burner());
         WITHDRAWAL_QUEUE = IWithdrawalQueueForRedeemsBuffer(LOCATOR.withdrawalQueue());
-        ACCOUNTING = LOCATOR.accounting();
+    }
 
+    /// @notice Initializes the contract. Called once after proxy deployment.
+    function initialize(address _admin) external {
+        _initializeContractVersionTo(1);
         LIDO.approve(address(BURNER), type(uint256).max);
-        _setupRole(DEFAULT_ADMIN_ROLE, _admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
     /**
@@ -133,12 +138,12 @@ contract RedeemsBuffer is PausableUntil, AccessControlEnumerable {
 
     /**
      * @notice Returns unredeemed ETH to Lido and resets counters.
-     *         Called by Accounting during oracle report, before the standard flow.
+     *         Called by Lido during collectRewardsAndProcessWithdrawals, before the standard flow.
      *         Sends back `_reserveBalance - _redeemedEther` (unredeemed portion).
      *         Resets both `_reserveBalance` and `_redeemedEther` to 0.
      */
     function withdrawUnredeemed() external {
-        if (msg.sender != ACCOUNTING) revert NotAccounting();
+        if (msg.sender != address(LIDO)) revert NotLido();
         uint256 amount = _reserveBalance - _redeemedEther;
         _reserveBalance = 0;
         _redeemedEther = 0;
@@ -180,6 +185,6 @@ contract RedeemsBuffer is PausableUntil, AccessControlEnumerable {
 
     /// @notice Reject direct ETH transfers. Use fundReserve() instead.
     receive() external payable {
-        revert NotLido();
+        revert DirectETHTransferNotAllowed();
     }
 }

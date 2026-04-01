@@ -1198,7 +1198,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     function _checkSharesRequestedToBurn(uint256 _sharesRequestedToBurn) internal view {
-        (uint256 coverShares, uint256 nonCoverShares) = IBurner(LIDO_LOCATOR.burner()).getSharesRequestedToBurn();
+        (uint256 coverShares, uint256 nonCoverShares,) = IBurner(LIDO_LOCATOR.burner()).getSharesRequestedToBurn();
         uint256 actualSharesToBurn = coverShares + nonCoverShares;
         if (_sharesRequestedToBurn > actualSharesToBurn) {
             revert IncorrectSharesRequestedToBurn(actualSharesToBurn);

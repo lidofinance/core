@@ -195,7 +195,7 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
         Storage storage $ = _storage();
         $.totalCoverSharesBurnt = oldBurner.getCoverSharesBurnt();
         $.totalNonCoverSharesBurnt = oldBurner.getNonCoverSharesBurnt();
-        (uint256 coverShares, uint256 nonCoverShares) = oldBurner.getSharesRequestedToBurn();
+        (uint256 coverShares, uint256 nonCoverShares,) = oldBurner.getSharesRequestedToBurn();
         $.coverSharesBurnRequested = coverShares;
         $.nonCoverSharesBurnRequested = nonCoverShares;
     }
@@ -465,11 +465,12 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
         view
         virtual
         override
-        returns (uint256 coverShares, uint256 nonCoverShares)
+        returns (uint256 coverShares, uint256 nonCoverShares, uint256 redeemShares)
     {
         Storage storage $ = _storage();
         coverShares = $.coverSharesBurnRequested;
         nonCoverShares = $.nonCoverSharesBurnRequested;
+        redeemShares = $.redeemSharesBurnRequested;
     }
 
     /**

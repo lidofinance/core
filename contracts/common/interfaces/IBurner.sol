@@ -47,7 +47,7 @@ interface IBurner {
     /**
       * Returns the current amount of shares locked on the contract to be burnt.
       */
-    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares);
+    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares, uint256 redeemShares);
 
     /**
       * Returns the total cover shares ever burnt.

@@ -40,7 +40,8 @@ interface IWithdrawalQueue {
 
 interface IRedeemsBuffer {
     function fundReserve() external payable;
-    function withdrawToLido(uint256 _amount) external;
+    function withdrawUnredeemed() external;
+    function getRedeemedEther() external view returns (uint256);
 }
 
 interface ILidoExecutionLayerRewardsVault {
@@ -305,9 +306,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // Emitted when the redeems reserve snapshot is updated
     event RedeemsReserveSet(uint256 reserve);
-
-    // Emitted when ETH is pushed to RedeemsBuffer
-    event RedeemsBufferFunded(uint256 amount);
 
     // Emitted when ETH is returned from RedeemsBuffer
     event RedeemsBufferDrained(uint256 amount);
@@ -796,35 +794,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Decreases bufferedEther by the amount redeemed since last report.
-     * @dev Called by Accounting after withdrawing unredeemed ETH from the buffer.
-     *      After this call: bufferedEther == address(this).balance (clean state for standard flow).
-     * @param _redeemedEther ETH consumed by redemptions since last report
-     */
-    function reconcileRedeemedEther(uint256 _redeemedEther) external {
-        _auth(_accounting());
-        if (_redeemedEther > 0) {
-            _setBufferedEther(_getBufferedEther().sub(_redeemedEther));
-        }
-    }
-
-    /**
-     * @notice Pushes reserve ETH to RedeemsBuffer. Called by Accounting after standard flow.
-     * @dev bufferedEther is NOT decremented — the pushed ETH remains soft-reserved in bufferedEther.
-     *      REDEEMS_RESERVE_POSITION is set to the pushed amount (new snapshot).
-     * @param _amount Amount of ETH to push
-     */
-    function pushToRedeemsBuffer(uint256 _amount) external {
-        _auth(_accounting());
-        address buffer = REDEEMS_BUFFER_POSITION.getStorageAddress();
-        require(buffer != address(0), "BUFFER_NOT_SET");
-
-        _setRedeemsReserve(_amount);
-        IRedeemsBuffer(buffer).fundReserve.value(_amount)();
-        emit RedeemsBufferFunded(_amount);
-    }
-
-    /**
      * @notice Receives ETH back from RedeemsBuffer (unredeemed return on report).
      * @dev bufferedEther is NOT modified — ETH was already counted in bufferedEther.
      */
@@ -1189,13 +1158,24 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _withdrawalsShareRate,
-        uint256 _etherToLockOnWithdrawalQueue
+        uint256 _etherToLockOnWithdrawalQueue,
+        uint256 _redeemedEther
     ) external {
         _whenNotStopped();
 
         ILidoLocator locator = _getLidoLocator();
         _auth(_accounting(locator));
 
+        // --- 1. Buffer round-trip: withdraw unredeemed ETH, reconcile bufferedEther ---
+        address buffer = REDEEMS_BUFFER_POSITION.getStorageAddress();
+        if (buffer != address(0)) {
+            IRedeemsBuffer(buffer).withdrawUnredeemed();
+            if (_redeemedEther > 0) {
+                _setBufferedEther(_getBufferedEther().sub(_redeemedEther));
+            }
+        }
+
+        // --- 2. Standard flow ---
         // withdraw execution layer rewards and put them to the buffer
         if (_elRewardsToWithdraw > 0) {
             _elRewardsVault(locator).withdrawRewards(_elRewardsToWithdraw);
@@ -1229,6 +1209,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _elRewardsToWithdraw,
             postBufferedEther
         );
+
+        // --- 3. Push new reserve to buffer ---
+        if (buffer != address(0)) {
+            uint256 reserve = _getBufferedEtherAllocation().redeemsReserve;
+            if (reserve > 0) {
+                IRedeemsBuffer(buffer).fundReserve.value(reserve)();
+            }
+        }
     }
 
     /**

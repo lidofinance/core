@@ -7,9 +7,14 @@ contract Burner__MockForSanityChecker {
     uint256 private nonCover;
     uint256 private cover;
 
-    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares) {
+    function getSharesRequestedToBurn()
+        external
+        view
+        returns (uint256 coverShares, uint256 nonCoverShares, uint256 redeemShares)
+    {
         coverShares = cover;
         nonCoverShares = nonCover;
+        redeemShares = 0;
     }
 
     function setSharesRequestedToBurn(uint256 _cover, uint256 _nonCover) external {
