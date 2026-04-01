@@ -49,7 +49,7 @@
   },
   "lint-staged": {
     "./**/*.ts": [
-      "eslint --max-warnings=0 --fix"
+      "eslint --max-warnings=0 --fix --no-warn-ignored"
     ],
     "./**/*.{ts,md,json}": [
       "prettier --write"
