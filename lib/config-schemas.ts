@@ -33,10 +33,10 @@ const ValidatorExitDelayVerifierSchema = z.object({
 });
 
 // Vault hub schema
-const VaultHubSchema = z.object({
-  relativeShareLimitBP: BasisPointsSchema.optional(),
-  maxRelativeShareLimitBP: BasisPointsSchema.optional(),
-});
+// const VaultHubSchema = z.object({
+//   relativeShareLimitBP: BasisPointsSchema.optional(),
+//   maxRelativeShareLimitBP: BasisPointsSchema.optional(),
+// });
 
 // Lazy oracle schema
 const LazyOracleSchema = z.object({
@@ -84,11 +84,18 @@ const ConsolidationGatewaySchema = z.object({
   maxConsolidationRequestsLimit: PositiveIntSchema,
   consolidationsPerFrame: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
+  gIFirstValidatorPrev: HexStringSchema,
+  gIFirstValidatorCurr: HexStringSchema,
+  pivotSlot: NonNegativeIntSchema,
+
   gateSeal: EthereumAddressSchema,
 });
 
 const ConsolidationBusSchema = z.object({
-  batchSize: PositiveIntSchema,
+  initialBatchSize: PositiveIntSchema,
+  initialMaxGroupsInBatch: PositiveIntSchema,
+  initialExecutionDelay: NonNegativeIntSchema,
+
   executorBot: EthereumAddressSchema,
 });
 
@@ -342,6 +349,8 @@ export const ScratchParametersSchema = z.object({
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   consolidationGateway: ConsolidationGatewaySchema,
+  consolidationBus: ConsolidationBusSchema,
+  consolidationMigrator: ConsolidationMigratorSchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
   topUpGateway: TopUpGatewaySchema,

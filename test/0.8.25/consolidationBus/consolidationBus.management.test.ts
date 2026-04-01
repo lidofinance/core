@@ -5,12 +5,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types";
 
+import { proxify } from "lib/proxy";
+
 import { Snapshot } from "test/suite";
 
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-];
+import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers";
 
 describe("ConsolidationBus.sol: management", () => {
   let consolidationBus: ConsolidationBus;
@@ -31,11 +30,9 @@ describe("ConsolidationBus.sol: management", () => {
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway__MockForConsolidationBus");
 
-    consolidationBus = await ethers.deployContract("ConsolidationBus", [
-      admin.address,
-      await consolidationGateway.getAddress(),
-      100,
-    ]);
+    const impl = await ethers.deployContract("ConsolidationBus", [await consolidationGateway.getAddress()]);
+    [consolidationBus] = await proxify({ impl, admin });
+    await consolidationBus.initialize(admin.address, 100, 100, 0);
 
     MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
     PUBLISH_ROLE = await consolidationBus.PUBLISH_ROLE();
@@ -64,8 +61,44 @@ describe("ConsolidationBus.sol: management", () => {
         .withArgs("batchSizeLimit");
     });
 
+    it("should revert if new batch size is less than current maxGroupsInBatch", async () => {
+      // maxGroupsInBatch is 100, try to set batchSize to 50
+      await expect(consolidationBus.connect(manager).setBatchSize(50))
+        .to.be.revertedWithCustomError(consolidationBus, "MaxGroupsExceedsBatchSize")
+        .withArgs(100, 50);
+    });
+
     it("should revert if caller does not have MANAGE_ROLE", async () => {
       await expect(consolidationBus.connect(stranger).setBatchSize(200))
+        .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger.address, MANAGE_ROLE);
+    });
+  });
+
+  context("setMaxGroupsInBatch", () => {
+    it("should set max groups in batch", async () => {
+      await expect(consolidationBus.connect(manager).setMaxGroupsInBatch(50))
+        .to.emit(consolidationBus, "MaxGroupsInBatchUpdated")
+        .withArgs(50);
+
+      expect(await consolidationBus.maxGroupsInBatch()).to.equal(50);
+    });
+
+    it("should revert setting max groups in batch to zero", async () => {
+      await expect(consolidationBus.connect(manager).setMaxGroupsInBatch(0))
+        .to.be.revertedWithCustomError(consolidationBus, "ZeroArgument")
+        .withArgs("maxGroupsInBatchLimit");
+    });
+
+    it("should revert if maxGroupsInBatch exceeds batchSize", async () => {
+      // batchSize is 100, try to set maxGroupsInBatch to 200
+      await expect(consolidationBus.connect(manager).setMaxGroupsInBatch(200))
+        .to.be.revertedWithCustomError(consolidationBus, "MaxGroupsExceedsBatchSize")
+        .withArgs(200, 100);
+    });
+
+    it("should revert if caller does not have MANAGE_ROLE", async () => {
+      await expect(consolidationBus.connect(stranger).setMaxGroupsInBatch(50))
         .to.be.revertedWithCustomError(consolidationBus, "AccessControlUnauthorizedAccount")
         .withArgs(stranger.address, MANAGE_ROLE);
     });
@@ -79,26 +112,27 @@ describe("ConsolidationBus.sol: management", () => {
       await consolidationBus.connect(admin).grantRole(PUBLISH_ROLE, publisher.address);
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, publisher.address);
 
-      const sourcePubkeys = [PUBKEYS[0]];
-      const targetPubkeys = [PUBKEYS[1]];
+      const groups = [{ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] }];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys, targetPubkeys);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups);
 
       // Compute batch hash
       batchHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [sourcePubkeys, targetPubkeys]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups]),
       );
     });
 
     it("should remove batches", async () => {
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.not.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.not.equal(ethers.ZeroAddress);
 
       await expect(consolidationBus.connect(manager).removeBatches([batchHash]))
         .to.emit(consolidationBus, "BatchesRemoved")
         .withArgs([batchHash]);
 
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
+      const batchInfo = await consolidationBus.getBatchInfo(batchHash);
+      expect(batchInfo.publisher).to.equal(ethers.ZeroAddress);
+      expect(batchInfo.addedAt).to.equal(0);
     });
 
     it("should revert if caller does not have REMOVE_ROLE", async () => {
@@ -117,16 +151,24 @@ describe("ConsolidationBus.sol: management", () => {
         .withArgs(fakeBatchHash);
     });
 
-    it("should revert if batch already executed", async () => {
-      // Grant executor role and execute the batch
-      const EXECUTE_ROLE = await consolidationBus.EXECUTE_ROLE();
-      await consolidationBus.connect(admin).grantRole(EXECUTE_ROLE, manager.address);
+    it("should revert if batchHashes is empty", async () => {
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
 
-      const sourcePubkeys = [PUBKEYS[0]];
+      await expect(consolidationBus.connect(manager).removeBatches([])).to.be.revertedWithCustomError(
+        consolidationBus,
+        "EmptyBatchHashes",
+      );
+    });
+
+    it("should revert if batch already executed", async () => {
+      await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
+
+      const sourcePubkeysGroups = [[PUBKEYS[0]]];
       const targetPubkeys = [PUBKEYS[1]];
 
-      await consolidationBus.connect(manager).executeConsolidation(sourcePubkeys, targetPubkeys, { value: 10 });
+      await consolidationBus
+        .connect(manager)
+        .executeConsolidation(buildWitnessGroups(sourcePubkeysGroups, targetPubkeys), { value: 10 });
 
       // Try to remove the executed batch — batch was deleted, so it's not found
       await expect(consolidationBus.connect(manager).removeBatches([batchHash]))
@@ -136,22 +178,21 @@ describe("ConsolidationBus.sol: management", () => {
 
     it("should remove multiple batches", async () => {
       // Add another batch
-      const sourcePubkeys2 = [PUBKEYS[1]];
-      const targetPubkeys2 = [PUBKEYS[0]];
+      const groups2 = [{ sourcePubkeys: [PUBKEYS[1]], targetPubkey: PUBKEYS[0] }];
 
-      await consolidationBus.connect(publisher).addConsolidationRequests(sourcePubkeys2, targetPubkeys2);
+      await consolidationBus.connect(publisher).addConsolidationRequests(groups2);
       await consolidationBus.connect(admin).grantRole(REMOVE_ROLE, manager.address);
 
       const batchHash2 = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]", "bytes[]"], [sourcePubkeys2, targetPubkeys2]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["tuple(bytes[] sourcePubkeys, bytes targetPubkey)[]"], [groups2]),
       );
 
       await expect(consolidationBus.connect(manager).removeBatches([batchHash, batchHash2]))
         .to.emit(consolidationBus, "BatchesRemoved")
         .withArgs([batchHash, batchHash2]);
 
-      expect(await consolidationBus.getBatchPublisher(batchHash)).to.equal(ethers.ZeroAddress);
-      expect(await consolidationBus.getBatchPublisher(batchHash2)).to.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash)).publisher).to.equal(ethers.ZeroAddress);
+      expect((await consolidationBus.getBatchInfo(batchHash2)).publisher).to.equal(ethers.ZeroAddress);
     });
   });
 });

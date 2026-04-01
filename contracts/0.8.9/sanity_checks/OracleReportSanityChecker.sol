@@ -42,7 +42,13 @@ interface IBaseOracle {
 }
 
 interface IStakingRouter {
-    function getStakingModuleBalance(uint256 moduleId) external view returns (uint256);
+    function getStakingModuleStateAccounting(uint256 _stakingModuleId)
+        external
+        view
+        returns (
+            uint64 validatorsBalanceGwei,
+            uint64 exitedValidatorsCount
+        );
 }
 
 /// @notice The set of restrictions used in the sanity checks of the oracle report
@@ -133,7 +139,7 @@ struct OperationalLimitsPacked {
 
 struct ReportData {
     uint64 timestamp;       // Logical report timestamp in seconds
-    uint128 clBalance;      // CL balance in Wei
+    uint128 clBalance;      // Total CL balance (validators + pending) in Wei
     uint128 deposits;       // Deposits for the period since the last report in Wei
     uint128 clWithdrawals;  // Actual ETH moved from CL to withdrawal vault this period
 }
@@ -147,6 +153,20 @@ struct CLBalanceDecreaseCheckParams {
     uint256 withdrawalsVaultTransfer;
     uint256 deposits;
     uint256 timeElapsed;
+}
+
+struct CLBalanceChangeCheckParams {
+    uint256 timeElapsed;
+    uint256 preCLValidatorsBalance;
+    uint256 preCLPendingBalance;
+    uint256 postCLValidatorsBalance;
+    uint256 postCLPendingBalance;
+    uint256 deposits;
+}
+
+struct ActivationBalanceCheckResult {
+    uint256 effectiveTimeElapsed;
+    uint256 activatedBalanceWithGap;
 }
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
@@ -187,11 +207,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     bytes32 public constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
     bytes32 public constant MAX_CL_BALANCE_DECREASE_MANAGER_ROLE =
         keccak256("MAX_CL_BALANCE_DECREASE_MANAGER_ROLE");
-    bytes32 public constant MIGRATION_MANAGER_ROLE = keccak256("MIGRATION_MANAGER_ROLE");
-
     uint256 private constant DEFAULT_TIME_ELAPSED = 1 hours;
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
+    uint256 private constant ANNUAL_BALANCE_INCREASE_DENOMINATOR = 365 days * MAX_BASIS_POINTS;
     /// @dev Maximum withdrawals ether used for migration bootstrap, bounded by CL churn limit per report window
     uint256 private constant MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT = 57_600 ether;
     /// @dev Time window for the CL balance decrease check
@@ -216,6 +235,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @dev Logical timestamp of the latest stored report snapshot.
     ///      It is advanced by `_timeElapsed` on each accounting report.
     uint256 private _lastReportTimestamp;
+
+    /// @dev Migration flag: false until the first successful accounting report after migration.
+    ///      The per-module validators balance increase check is skipped while the flag is false.
+    bool private _isPostMigrationFirstReportDone;
 
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _accounting address of the Accounting instance
@@ -486,18 +509,18 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice One-time migration: seeds initial snapshots into reportData
     ///     so that the sliding-window CL decrease check has a valid starting point.
-    function migrateBaselineSnapshot() external onlyRole(MIGRATION_MANAGER_ROLE) {
+    /// @dev Permissionless by design: after the first successful call, further calls revert.
+    function migrateBaselineSnapshot() external {
         if (reportData.length != 0) revert MigrationAlreadyDone();
 
         address lidoAddr = LIDO_LOCATOR.lido();
         uint256 lidoVersion = IVersioned(lidoAddr).getContractVersion();
         if (lidoVersion != 4) revert UnexpectedLidoVersion(lidoVersion, 4);
 
-        (uint256 migrationCLValidatorsBalance, uint256 migrationCLPendingBalance, uint256 migrationDeposits) = ILido(lidoAddr)
+        (uint256 migrationCLValidatorsBalance, uint256 migrationCLPendingBalance,, uint256 migrationDeposits) = ILido(lidoAddr)
             .getBalanceStats();
         uint256 migrationCLBalance = migrationCLValidatorsBalance + migrationCLPendingBalance;
         uint256 migrationCLWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
-
         // Initialize vault state: vault is not drained during migration,
         // so after-transfer balance equals current vault balance
         _lastVaultBalanceAfterTransfer = LIDO_LOCATOR.withdrawalVault().balance;
@@ -576,10 +599,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// WARNING. The function has side effects and modifies the state of the contract.
     ///          It's needed to keep CL balance snapshots for the balance decrease check over a sliding window.
     /// @param _timeElapsed time elapsed since the previous oracle report
-    /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
-    ///     current oracle report (NB: also include the initial balance of newly appeared validators)
-    /// @param _postCLBalance sum of all Lido validators' balances on the Consensus Layer after the
-    ///     current oracle report
+    /// @param _preCLValidatorsBalance sum of all Lido validators' balances on the Consensus Layer
+    ///     before the current oracle report
+    /// @param _preCLPendingBalance pending deposits balance on the Consensus Layer before the current oracle report
+    /// @param _postCLValidatorsBalance sum of all Lido validators' balances on the Consensus Layer
+    ///     after the current oracle report
+    /// @param _postCLPendingBalance pending deposits balance on the Consensus Layer after the current oracle report
     /// @param _withdrawalVaultBalance withdrawal vault balance on Execution Layer for the report reference slot
     /// @param _elRewardsVaultBalance el rewards vault balance on Execution Layer for the report reference slot
     /// @param _sharesRequestedToBurn shares requested to burn for the report reference slot
@@ -587,8 +612,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _withdrawalsVaultTransfer ETH amount transferred from withdrawal vault this report
     function checkAccountingOracleReport(
         uint256 _timeElapsed,
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
+        uint256 _preCLValidatorsBalance,
+        uint256 _preCLPendingBalance,
+        uint256 _postCLValidatorsBalance,
+        uint256 _postCLPendingBalance,
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
@@ -604,93 +631,126 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkELRewardsVaultBalance(LIDO_LOCATOR.elRewardsVault().balance, _elRewardsVaultBalance);
         // 3. Burn requests
         _checkSharesRequestedToBurn(_sharesRequestedToBurn);
+        CLBalanceChangeCheckParams memory checkParams = CLBalanceChangeCheckParams({
+            timeElapsed: _timeElapsed,
+            preCLValidatorsBalance: _preCLValidatorsBalance,
+            preCLPendingBalance: _preCLPendingBalance,
+            postCLValidatorsBalance: _postCLValidatorsBalance,
+            postCLPendingBalance: _postCLPendingBalance,
+            deposits: _deposits
+        });
         _checkAccountingOracleReportCLBalances(
-            _timeElapsed,
-            _preCLBalance,
-            _postCLBalance,
+            checkParams,
             _withdrawalVaultBalance,
-            _deposits,
             _withdrawalsVaultTransfer
         );
     }
 
     function _checkAccountingOracleReportCLBalances(
-        uint256 _timeElapsed,
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
+        CLBalanceChangeCheckParams memory _checkParams,
         uint256 _withdrawalVaultBalance,
-        uint256 _deposits,
         uint256 _withdrawalsVaultTransfer
     ) internal {
         AccountingCoreLimitsPacked memory limitsList = _accountingCoreLimits;
-        CLBalanceDecreaseCheckParams memory checkParams;
-        checkParams.maxCLBalanceDecreaseBP = limitsList.maxCLBalanceDecreaseBP;
-        checkParams.clBalanceOraclesErrorUpperBPLimit = limitsList.clBalanceOraclesErrorUpperBPLimit;
-        checkParams.preCLBalance = _preCLBalance;
-        checkParams.postCLBalance = _postCLBalance;
-        checkParams.withdrawalVaultBalance = _withdrawalVaultBalance;
-        checkParams.withdrawalsVaultTransfer = _withdrawalsVaultTransfer;
-        checkParams.deposits = _deposits;
-        checkParams.timeElapsed = _timeElapsed;
+        CLBalanceDecreaseCheckParams memory decreaseCheckParams;
+        decreaseCheckParams.maxCLBalanceDecreaseBP = limitsList.maxCLBalanceDecreaseBP;
+        decreaseCheckParams.clBalanceOraclesErrorUpperBPLimit = limitsList.clBalanceOraclesErrorUpperBPLimit;
+        decreaseCheckParams.preCLBalance =
+            _checkParams.preCLValidatorsBalance + _checkParams.preCLPendingBalance + _checkParams.deposits;
+        decreaseCheckParams.postCLBalance = _checkParams.postCLValidatorsBalance + _checkParams.postCLPendingBalance;
+        decreaseCheckParams.withdrawalVaultBalance = _withdrawalVaultBalance;
+        decreaseCheckParams.withdrawalsVaultTransfer = _withdrawalsVaultTransfer;
+        decreaseCheckParams.deposits = _checkParams.deposits;
+        decreaseCheckParams.timeElapsed = _checkParams.timeElapsed;
+        uint256 clWithdrawals = _getCLWithdrawals(_withdrawalVaultBalance);
+        _checkWithdrawalsVaultTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
+        _checkCLPendingBalanceIncrease(limitsList, _checkParams, clWithdrawals);
         // 4. Consensus Layer balance decrease
-        _checkCLBalanceDecrease(checkParams);
+        _checkCLBalanceDecrease(decreaseCheckParams, clWithdrawals);
         // 5. Consensus Layer annual balances increase
-        _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
-        // 6. Consensus Layer balance increase rate
-        if (_postCLBalance > _preCLBalance) {
-            uint256 clBalanceIncreasePerDay = _normalizePerDay(_postCLBalance - _preCLBalance, _timeElapsed);
-            _checkCLBalanceIncreaseRatePerDay(limitsList, clBalanceIncreasePerDay);
-        }
+        _checkAnnualBalancesIncrease(
+            limitsList,
+            decreaseCheckParams.preCLBalance,
+            decreaseCheckParams.postCLBalance,
+            _checkParams.timeElapsed
+        );
+        _finalizePostReportState(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
     }
 
-    /// @notice Check that per-module validators/pending CL balances are consistent with reported totals.
+    /// @notice Check total pending CL balance from the current report against protocol state and growth limits.
+    function checkCLPendingBalanceIncrease(
+        uint256 _timeElapsed,
+        uint256 _preCLValidatorsBalance,
+        uint256 _preCLPendingBalance,
+        uint256 _postCLValidatorsBalance,
+        uint256 _postCLPendingBalance,
+        uint256 _withdrawalVaultBalance,
+        uint256 _deposits
+    ) external view {
+        CLBalanceChangeCheckParams memory checkParams = CLBalanceChangeCheckParams({
+            timeElapsed: _timeElapsed,
+            preCLValidatorsBalance: _preCLValidatorsBalance,
+            preCLPendingBalance: _preCLPendingBalance,
+            postCLValidatorsBalance: _postCLValidatorsBalance,
+            postCLPendingBalance: _postCLPendingBalance,
+            deposits: _deposits
+        });
+        _checkCLPendingBalanceIncrease(_accountingCoreLimits, checkParams, _getCLWithdrawals(_withdrawalVaultBalance));
+    }
+
+    /// @notice Check that per-module validators CL balances in wei are consistent with reported total validators balance.
     function checkCLBalancesConsistency(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _validatorBalancesGweiByStakingModule,
-        uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _clValidatorsBalanceGwei,
-        uint256 _clPendingBalanceGwei
+        uint256[] calldata _validatorBalancesWeiByStakingModule,
+        uint256 _clValidatorsBalanceWei
     ) external pure {
         _checkCLBalancesConsistency(
             _stakingModuleIdsWithUpdatedBalance,
-            _validatorBalancesGweiByStakingModule,
-            _pendingBalancesGweiByStakingModule,
-            _clValidatorsBalanceGwei,
-            _clPendingBalanceGwei
+            _validatorBalancesWeiByStakingModule,
+            _clValidatorsBalanceWei
         );
     }
 
-    /// @notice Check per-day module balance change rates against configured limits.
-    /// @dev This check intentionally validates only module balance increases.
-    /// @dev A decrease on one module can be caused by balance redistribution to another module while preserving the
-    /// @dev total CL balance, and the overall CL balance decrease is validated separately in `checkAccountingOracleReport`.
+    /// @notice Check per-module validators balances consistency and global CL growth budget derived from protocol pending, all in wei.
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _validatorBalancesGweiByStakingModule,
-        uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _clValidatorsBalanceGwei,
-        uint256 _clPendingBalanceGwei,
+        uint256[] calldata _validatorBalancesWeiByStakingModule,
+        uint256 _preCLValidatorsBalanceWei,
+        uint256 _preCLPendingBalanceWei,
+        uint256 _postCLValidatorsBalanceWei,
+        uint256 _postCLPendingBalanceWei,
+        uint256 _depositsWei,
         uint256 _timeElapsed
     ) external view {
+        CLBalanceChangeCheckParams memory checkParams = CLBalanceChangeCheckParams({
+            timeElapsed: _timeElapsed,
+            preCLValidatorsBalance: _preCLValidatorsBalanceWei,
+            preCLPendingBalance: _preCLPendingBalanceWei,
+            postCLValidatorsBalance: _postCLValidatorsBalanceWei,
+            postCLPendingBalance: _postCLPendingBalanceWei,
+            deposits: _depositsWei
+        });
         _checkCLBalancesConsistency(
             _stakingModuleIdsWithUpdatedBalance,
-            _validatorBalancesGweiByStakingModule,
-            _pendingBalancesGweiByStakingModule,
-            _clValidatorsBalanceGwei,
-            _clPendingBalanceGwei
+            _validatorBalancesWeiByStakingModule,
+            checkParams.postCLValidatorsBalance
         );
 
-        IStakingRouter stakingRouter = IStakingRouter(LIDO_LOCATOR.stakingRouter());
-        AccountingCoreLimitsPacked memory limitsList = _accountingCoreLimits;
-        uint256 moduleBalanceIncreasePerDay = _calculateModuleBalanceIncreasePerDay(
-            stakingRouter,
+        // StakingRouter migration seeds per-module validators balances from active validators count
+        // using the max effective balance, so those migration values may be higher than the first
+        // oracle-reported balances. Skip the module validators balance increase check until the
+        // first report overwrites the migrated accounting state with the actual per-module values.
+        if (!_isPostMigrationFirstReportDone) {
+            return;
+        }
+
+        _checkModuleValidatorsBalanceIncrease(
+            IStakingRouter(LIDO_LOCATOR.stakingRouter()),
+            _accountingCoreLimits,
             _stakingModuleIdsWithUpdatedBalance,
-            _validatorBalancesGweiByStakingModule,
-            _pendingBalancesGweiByStakingModule,
-            _timeElapsed
+            _validatorBalancesWeiByStakingModule,
+            checkParams
         );
-
-        _checkAppearedEthAmountPerDay(limitsList, moduleBalanceIncreasePerDay);
     }
 
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
@@ -785,31 +845,24 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _checkCLBalancesConsistency(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _validatorBalancesGweiByStakingModule,
-        uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _clValidatorsBalanceGwei,
-        uint256 _clPendingBalanceGwei
+        uint256[] calldata _validatorBalancesWeiByStakingModule,
+        uint256 _clValidatorsBalanceWei
     ) internal pure {
         uint256 modulesCount = _stakingModuleIdsWithUpdatedBalance.length;
-        if (modulesCount != _validatorBalancesGweiByStakingModule.length || modulesCount != _pendingBalancesGweiByStakingModule.length) {
+        if (modulesCount != _validatorBalancesWeiByStakingModule.length) {
             revert InvalidClBalancesData();
         }
 
         uint256 validatorBalancesSum;
-        uint256 pendingBalancesSum;
         for (uint256 i = 0; i < modulesCount;) {
-            validatorBalancesSum += _validatorBalancesGweiByStakingModule[i];
-            pendingBalancesSum += _pendingBalancesGweiByStakingModule[i];
+            validatorBalancesSum += _validatorBalancesWeiByStakingModule[i];
             unchecked {
                 ++i;
             }
         }
 
-        if (validatorBalancesSum != _clValidatorsBalanceGwei) {
-            revert InconsistentValidatorsBalanceByModule(_clValidatorsBalanceGwei, validatorBalancesSum);
-        }
-        if (pendingBalancesSum != _clPendingBalanceGwei) {
-            revert InconsistentPendingBalanceByModule(_clPendingBalanceGwei, pendingBalancesSum);
+        if (validatorBalancesSum != _clValidatorsBalanceWei) {
+            revert InconsistentValidatorsBalanceByModule(_clValidatorsBalanceWei, validatorBalancesSum);
         }
     }
 
@@ -837,47 +890,177 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _checkCLBalanceIncreaseRatePerDay(
+    function _normalizePerDay(uint256 _amount, uint256 _timeElapsed) internal pure returns (uint256) {
+        return (_amount * SECONDS_PER_DAY) / _getTimeElapsedForRateNormalization(_timeElapsed);
+    }
+
+    function _getTimeElapsedForRateNormalization(uint256 _timeElapsed) internal pure returns (uint256) {
+        return _timeElapsed == 0 ? 1 : _timeElapsed;
+    }
+
+    function _getTimeElapsedForAllowanceChecks(uint256 _timeElapsed) internal pure returns (uint256) {
+        return _timeElapsed == 0 ? DEFAULT_TIME_ELAPSED : _timeElapsed;
+    }
+
+    function _calculateAmountForPeriod(
+        uint256 _amountPerDay,
+        uint256 _effectiveTimeElapsed
+    ) internal pure returns (uint256) {
+        return (_amountPerDay * _effectiveTimeElapsed) / SECONDS_PER_DAY;
+    }
+
+    function _calculateAprAndGiftSafetyCap(
+        uint256 _preCLValidatorsBalance,
+        uint256 _annualBalanceIncreaseMultiplier
+    ) internal pure returns (uint256) {
+        return (_preCLValidatorsBalance * _annualBalanceIncreaseMultiplier) / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
+    }
+
+    function _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(
         AccountingCoreLimitsPacked memory _limitsList,
-        uint256 _clBalanceIncreaseEthAmountPerDay
+        CLBalanceChangeCheckParams memory _checkParams
+    ) internal pure returns (ActivationBalanceCheckResult memory result) {
+        result.effectiveTimeElapsed = _getTimeElapsedForAllowanceChecks(_checkParams.timeElapsed);
+
+        uint256 pendingBalanceWithDeposits = _checkParams.preCLPendingBalance + _checkParams.deposits;
+        if (_checkParams.postCLPendingBalance > pendingBalanceWithDeposits) {
+            revert IncorrectTotalPendingBalance(pendingBalanceWithDeposits, _checkParams.postCLPendingBalance);
+        }
+
+        uint256 activatedBalance = pendingBalanceWithDeposits - _checkParams.postCLPendingBalance;
+        uint256 appearedEthLimitPerPeriod = _calculateAmountForPeriod(
+            uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether,
+            result.effectiveTimeElapsed
+        );
+        if (activatedBalance > appearedEthLimitPerPeriod) {
+            revert IncorrectTotalActivatedBalance(appearedEthLimitPerPeriod, activatedBalance);
+        }
+
+        result.activatedBalanceWithGap =
+            activatedBalance +
+            _calculateAprAndGiftSafetyCap(
+                _checkParams.preCLValidatorsBalance,
+                uint256(_limitsList.annualBalanceIncreaseBPLimit) * result.effectiveTimeElapsed
+            );
+    }
+
+    function _checkCLPendingBalanceIncrease(
+        AccountingCoreLimitsPacked memory _limitsList,
+        CLBalanceChangeCheckParams memory _checkParams,
+        uint256 _clWithdrawals
     ) internal pure {
-        uint256 clBalanceIncreaseLimitPerDay = uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether;
-        if (_clBalanceIncreaseEthAmountPerDay > clBalanceIncreaseLimitPerDay) {
-            revert CLBalanceIncreaseRatePerDayLimitExceeded(
-                clBalanceIncreaseLimitPerDay,
-                _clBalanceIncreaseEthAmountPerDay
+        if (_clWithdrawals > _checkParams.preCLValidatorsBalance) {
+            revert InvalidClBalancesData();
+        }
+
+        ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(
+            _limitsList,
+            _checkParams
+        );
+        uint256 preCLValidatorsBalanceAfterWithdrawals = _checkParams.preCLValidatorsBalance - _clWithdrawals;
+        if (_checkParams.postCLValidatorsBalance > preCLValidatorsBalanceAfterWithdrawals) {
+            uint256 validatorsBalanceIncrease =
+                _checkParams.postCLValidatorsBalance - preCLValidatorsBalanceAfterWithdrawals;
+            if (validatorsBalanceIncrease > activationCheckResult.activatedBalanceWithGap) {
+                revert IncorrectTotalCLBalanceIncrease(
+                    activationCheckResult.activatedBalanceWithGap,
+                    validatorsBalanceIncrease
+                );
+            }
+        }
+    }
+
+    function _checkModuleValidatorsBalanceIncrease(
+        IStakingRouter _stakingRouter,
+        AccountingCoreLimitsPacked memory _limitsList,
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _validatorBalancesWeiByStakingModule,
+        CLBalanceChangeCheckParams memory _checkParams
+    ) internal view {
+        ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(
+            _limitsList,
+            _checkParams
+        );
+
+        if (_checkParams.postCLValidatorsBalance > _checkParams.preCLValidatorsBalance) {
+            uint256 validatorsBalanceIncrease =
+                _checkParams.postCLValidatorsBalance - _checkParams.preCLValidatorsBalance;
+            if (validatorsBalanceIncrease > activationCheckResult.activatedBalanceWithGap) {
+                revert IncorrectTotalCLBalanceIncrease(
+                    activationCheckResult.activatedBalanceWithGap,
+                    validatorsBalanceIncrease
+                );
+            }
+        }
+
+        uint256 totalActivatedInClByModules = _calculateTotalActivatedInClByModules(
+            _stakingRouter,
+            _stakingModuleIdsWithUpdatedBalance,
+            _validatorBalancesWeiByStakingModule
+        );
+
+        uint256 consolidationLimitPerPeriodWei = _calculateAmountForPeriod(
+            uint256(_limitsList.consolidationEthAmountPerDayLimit) * 1 ether,
+            activationCheckResult.effectiveTimeElapsed
+        );
+        uint256 totalActivatedInClByModulesLimit =
+            activationCheckResult.activatedBalanceWithGap + consolidationLimitPerPeriodWei;
+        if (totalActivatedInClByModules > totalActivatedInClByModulesLimit) {
+            revert IncorrectTotalModuleValidatorsBalanceIncrease(
+                totalActivatedInClByModulesLimit,
+                totalActivatedInClByModules
             );
         }
     }
 
-    function _calculateModuleBalanceIncreasePerDay(
+    function _calculateTotalActivatedInClByModules(
         IStakingRouter _stakingRouter,
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _validatorBalancesGweiByStakingModule,
-        uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _timeElapsed
-    ) internal view returns (uint256 moduleBalanceIncreasePerDay) {
-        uint256 moduleBalanceIncrease;
-        for (uint256 i = 0; i < _stakingModuleIdsWithUpdatedBalance.length;) {
-            uint256 previousModuleBalance = _stakingRouter.getStakingModuleBalance(_stakingModuleIdsWithUpdatedBalance[i]);
-            uint256 currentModuleBalance =
-                (_validatorBalancesGweiByStakingModule[i] + _pendingBalancesGweiByStakingModule[i]) * 1 gwei;
-            if (currentModuleBalance >= previousModuleBalance) {
-                moduleBalanceIncrease += currentModuleBalance - previousModuleBalance;
+        uint256[] calldata _validatorBalancesWeiByStakingModule
+    ) internal view returns (uint256 totalActivatedInClByModules) {
+        uint256 modulesCount = _stakingModuleIdsWithUpdatedBalance.length;
+        for (uint256 i = 0; i < modulesCount;) {
+            (bool hasPreviousAccounting, uint64 previousModuleValidatorsBalanceGwei,) =
+                _getModuleAccountingState(_stakingRouter, _stakingModuleIdsWithUpdatedBalance[i]);
+            uint256 previousModuleValidatorsBalanceWei = uint256(previousModuleValidatorsBalanceGwei) * 1 gwei;
+            // Skip module-delta aggregation until the module has previous accounting baseline.
+            if (hasPreviousAccounting && _validatorBalancesWeiByStakingModule[i] > previousModuleValidatorsBalanceWei) {
+                totalActivatedInClByModules +=
+                    _validatorBalancesWeiByStakingModule[i] - previousModuleValidatorsBalanceWei;
             }
+
             unchecked {
                 ++i;
             }
         }
-
-        moduleBalanceIncreasePerDay = _normalizePerDay(moduleBalanceIncrease, _timeElapsed);
     }
 
-    function _normalizePerDay(uint256 _amount, uint256 _timeElapsed) internal pure returns (uint256) {
-        if (_timeElapsed == 0) {
-            return _amount * SECONDS_PER_DAY;
-        }
-        return (_amount * SECONDS_PER_DAY) / _timeElapsed;
+    /// @notice Returns stored module accounting state and whether it can be used as previous baseline in sanity checks.
+    /// @dev All modules existing at release activation get their initial accounting baseline via StakingRouter migration.
+    /// @dev Modules added after the release have no previous baseline in the first report, so module-delta
+    ///      aggregation is skipped for them until `reportValidatorBalancesByStakingModule(...)` seeds their accounting state.
+    /// @param _stakingRouter StakingRouter contract used as the source of module accounting state.
+    /// @param _moduleId Staking module id.
+    /// @return hasPreviousAccounting True if previous accounting baseline is available for sanity checks.
+    /// @return previousValidatorsBalanceGwei Previous module validators balance in gwei.
+    /// @return exitedValidatorsCount Previous module exited validators count.
+    function _getModuleAccountingState(
+        IStakingRouter _stakingRouter,
+        uint256 _moduleId
+    )
+        internal
+        view
+        returns (
+            bool hasPreviousAccounting,
+            uint64 previousValidatorsBalanceGwei,
+            uint64 exitedValidatorsCount
+        )
+    {
+        (previousValidatorsBalanceGwei, exitedValidatorsCount) =
+            _stakingRouter.getStakingModuleStateAccounting(_moduleId);
+        hasPreviousAccounting =
+            previousValidatorsBalanceGwei != 0 ||
+            exitedValidatorsCount != 0;
     }
 
     function _checkWithdrawalVaultBalance(
@@ -922,38 +1105,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
-    function _checkCLBalanceDecrease(CLBalanceDecreaseCheckParams memory _checkParams) internal {
-        if (_checkParams.withdrawalVaultBalance < _lastVaultBalanceAfterTransfer) {
-            revert IncorrectCLWithdrawalsVaultBalance(
-                _checkParams.withdrawalVaultBalance,
-                _lastVaultBalanceAfterTransfer
-            );
-        }
-        // In the current Accounting flow `withdrawalsVaultTransfer` comes from `smoothenTokenRebase()`,
-        // where it is capped by `_withdrawalVaultBalance`, so the subtraction below cannot underflow.
-        // Keep this explicit guard anyway because `checkAccountingOracleReport` still receives it as an external input.
-        if (_checkParams.withdrawalsVaultTransfer > _checkParams.withdrawalVaultBalance) {
-            revert IncorrectWithdrawalsVaultTransfer(
-                _checkParams.withdrawalVaultBalance,
-                _checkParams.withdrawalsVaultTransfer
-            );
-        }
-
+    function _checkCLBalanceDecrease(
+        CLBalanceDecreaseCheckParams memory _checkParams,
+        uint256 _clWithdrawals
+    ) internal {
         // Compute actual CL withdrawals for this period:
         // clWithdrawals = current vault balance - vault balance after last report's transfer
-        uint256 clWithdrawals = _checkParams.withdrawalVaultBalance - _lastVaultBalanceAfterTransfer;
         uint256 reportTimestamp = _lastReportTimestamp + _checkParams.timeElapsed;
-        _addReportData(reportTimestamp, _checkParams.postCLBalance, _checkParams.deposits, clWithdrawals);
+        _addReportData(reportTimestamp, _checkParams.postCLBalance, _checkParams.deposits, _clWithdrawals);
         _lastReportTimestamp = reportTimestamp;
-
-        // Update vault state after this report's transfer
-        _lastVaultBalanceAfterTransfer =
-            _checkParams.withdrawalVaultBalance -
-            _checkParams.withdrawalsVaultTransfer;
 
         // If the CL balance didn't decrease accounting for withdrawals, skip the window check
         if (_checkParams.preCLBalance <= _checkParams.postCLBalance) return;
-        if (_checkParams.preCLBalance - _checkParams.postCLBalance <= clWithdrawals) return;
+        if (_checkParams.preCLBalance - _checkParams.postCLBalance <= _clWithdrawals) return;
 
         uint256 len = reportData.length;
         // Need at least two snapshots to build a window: baseline B[X-k] and current point B[X].
@@ -990,6 +1154,41 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             actualCLBalanceDiff,
             maxAllowedCLBalanceDiff
         );
+    }
+
+    function _getCLWithdrawals(uint256 _withdrawalVaultBalance) internal view returns (uint256) {
+        if (_withdrawalVaultBalance < _lastVaultBalanceAfterTransfer) {
+            revert IncorrectCLWithdrawalsVaultBalance(_withdrawalVaultBalance, _lastVaultBalanceAfterTransfer);
+        }
+        return _withdrawalVaultBalance - _lastVaultBalanceAfterTransfer;
+    }
+
+    function _checkWithdrawalsVaultTransfer(
+        uint256 _withdrawalVaultBalance,
+        uint256 _withdrawalsVaultTransfer
+    ) internal pure {
+        // In the current Accounting flow `withdrawalsVaultTransfer` comes from `smoothenTokenRebase()`,
+        // where it is capped by `_withdrawalVaultBalance`, so the subtraction below cannot underflow.
+        // Keep this explicit guard anyway because `checkAccountingOracleReport` still receives it as an external input.
+        if (_withdrawalsVaultTransfer > _withdrawalVaultBalance) {
+            revert IncorrectWithdrawalsVaultTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
+        }
+    }
+
+    /// @notice Finalizes sanity-check state after a successful accounting report.
+    /// @dev Stores the withdrawals vault balance after the current report transfer so the next report can derive
+    ///      actual CL withdrawals as `current vault balance - last vault balance after transfer`.
+    /// @dev Marks the post-migration first report as completed so subsequent reports stop skipping
+    ///      `_checkModuleValidatorsBalanceIncrease(...)`; this is needed because StakingRouter migration can seed
+    ///      per-module validators balances above the first oracle-reported values.
+    /// @param _withdrawalVaultBalance Withdrawal vault balance reported for the current report, before transfer.
+    /// @param _withdrawalsVaultTransfer ETH amount transferred from the withdrawal vault during the current report.
+    function _finalizePostReportState(
+        uint256 _withdrawalVaultBalance,
+        uint256 _withdrawalsVaultTransfer
+    ) internal {
+        _lastVaultBalanceAfterTransfer = _withdrawalVaultBalance - _withdrawalsVaultTransfer;
+        _isPostMigrationFirstReportDone = true;
     }
 
     function _calcWindowDiff(
@@ -1091,20 +1290,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         if (_preCLBalance >= _postCLBalance) return;
 
-        if (_timeElapsed == 0) {
-            _timeElapsed = DEFAULT_TIME_ELAPSED;
-        }
+        _timeElapsed = _getTimeElapsedForAllowanceChecks(_timeElapsed);
 
         uint256 balanceIncrease = _postCLBalance - _preCLBalance;
-        uint256 annualBalanceIncrease = ((365 days * MAX_BASIS_POINTS * balanceIncrease) / _preCLBalance) /
+        uint256 annualBalanceIncrease = (ANNUAL_BALANCE_INCREASE_DENOMINATOR * balanceIncrease) / _preCLBalance /
             _timeElapsed;
 
         if (annualBalanceIncrease > _limitsList.annualBalanceIncreaseBPLimit) {
             revert IncorrectCLBalanceIncrease(annualBalanceIncrease);
         }
     }
-
-
 
     function _checkLastFinalizableId(
         OperationalLimitsPacked memory _limitsList,
@@ -1286,9 +1481,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectCLBalanceIncrease(uint256 annualBalanceDiff);
     error InvalidClBalancesData();
     error InconsistentValidatorsBalanceByModule(uint256 expected, uint256 actual);
-    error InconsistentPendingBalanceByModule(uint256 expected, uint256 actual);
+    error IncorrectTotalPendingBalance(uint256 maxAllowed, uint256 actual);
+    error IncorrectTotalActivatedBalance(uint256 maxAllowed, uint256 actual);
+    error IncorrectTotalCLBalanceIncrease(uint256 maxAllowed, uint256 actual);
+    error IncorrectTotalModuleValidatorsBalanceIncrease(uint256 maxAllowed, uint256 actual);
     error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
-    error CLBalanceIncreaseRatePerDayLimitExceeded(uint256 limitPerDay, uint256 increasePerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);

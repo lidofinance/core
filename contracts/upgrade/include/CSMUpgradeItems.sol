@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {IBurner} from "contracts/common/interfaces/IBurner.sol";
 import {
     IUpgradeConfig,
     GeneralConfig,
@@ -12,9 +11,7 @@ import {
     IFeeOracleV3,
     IAccountingV3,
     IFeeDistributorV3,
-    IPausableRole,
-    IValidatorStrikesV3,
-    ITriggerableWithdrawalsGateway
+    IValidatorStrikesV3
 } from "../UpgradeTypes.sol";
 
 import {OmnibusBase} from "../utils/OmnibusBase.sol";

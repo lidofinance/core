@@ -52,6 +52,7 @@ interface ISRBase {
     error ZeroAddress();
     error ZeroArgument();
     error ArraysLengthMismatch();
+    error OracleExtraDataNotSubmitted();
 
     // Oracle report
     error InvalidReportData(uint256 code);
@@ -68,7 +69,6 @@ interface ISRBase {
     error ExitedValidatorsCountCannotDecrease();
 
     // Deposits
-    error CannotDeposit();
     error DirectETHTransfer();
     error ModuleReturnExceedTarget();
     error StakingModuleStatusTheSame();
@@ -83,10 +83,13 @@ interface ISRBase {
     error StakingModulesLimitExceeded();
     error StakingModuleWrongName();
     error StakingModuleUnregistered();
+    error StakingModuleNotActive();
     error WrongWithdrawalCredentialsType();
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
+    error InconsistentFeeSum();
+    error UnexpectedModuleId(uint256 expectedId, uint256 actualId);
 }

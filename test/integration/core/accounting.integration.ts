@@ -6,7 +6,15 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
-import { getProtocolContext, getReportTimeElapsed, ProtocolContext, removeStakingLimit, report } from "lib/protocol";
+import {
+  getProtocolContext,
+  getReportTimeElapsed,
+  ProtocolContext,
+  removeStakingLimit,
+  report,
+  seedProtocolPendingBaseline,
+} from "lib/protocol";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
@@ -263,7 +271,7 @@ describe("Integration: Accounting", () => {
         reportBurner: false,
         skipWithdrawals: true,
       }),
-    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease");
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
   });
 
   it("Should account correctly with no CL rebase", async () => {
@@ -398,28 +406,26 @@ describe("Integration: Accounting", () => {
   it("Should account correctly with positive CL rebase close to the limits", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
 
+    await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
+
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
-    const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
+    const { clValidatorsBalanceAtLastReport } = await lido.getBalanceStats();
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
-    // To calculate the rebase amount close to the annual increase limit
-    // we use (ONE_DAY + 1n) to slightly underperform for the daily limit
-    // This ensures we're testing a scenario very close to, but not exceeding, the annual limit
-    const time = timeElapsed + 1n;
-    let rebaseAmount = (clBalance * annualBalanceIncreaseBPLimit * time) / (365n * ONE_DAY) / MAX_BASIS_POINTS;
+    // `report()` submits the raw post-vs-pre CL delta. In this seeded scenario the
+    // pending baseline is activated inside the same report, so the raw boundary is
+    // the validators-based safety-cap component rather than `pending + safetyCap`.
+    let rebaseAmount =
+      (clValidatorsBalanceAtLastReport * annualBalanceIncreaseBPLimit * timeElapsed) /
+      (365n * ONE_DAY) /
+      MAX_BASIS_POINTS;
     rebaseAmount = roundToGwei(rebaseAmount);
 
-    // At this point, rebaseAmount represents a positive CL rebase that is
-    // just slightly below the maximum allowed daily increase, testing the system's
-    // behavior near its operational limits
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: rebaseAmount, excludeVaultsBalances: true };
-
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await report(ctx, { clDiff: rebaseAmount, excludeVaultsBalances: true })) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };

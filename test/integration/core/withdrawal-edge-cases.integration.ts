@@ -6,14 +6,17 @@ import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Lido, WithdrawalQueueERC721 } from "typechain-types";
 
-import { ether, findEventsWithInterfaces } from "lib";
+import { ether, findEventsWithInterfaces, ONE_GWEI } from "lib";
 import {
   finalizeWQViaSubmit,
   getProtocolContext,
   ProtocolContext,
+  report,
   reportWithEffectiveClDiff,
   resetCLBalanceDecreaseWindow,
 } from "lib/protocol";
+import { depositValidatorsWithoutReport } from "lib/protocol/helpers/staking";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 
@@ -41,6 +44,85 @@ describe("Integration: Withdrawal edge cases", () => {
     expect(depositable).to.equal(buffered - withdrawalsReserve, "Depositable should equal buffered minus reserve");
     expect(withdrawalsReserve).to.be.lte(unfinalized, "Reserve should not exceed unfinalized withdrawals demand");
     expect(withdrawalsReserve).to.be.lte(buffered, "Reserve should not exceed buffered ether");
+  };
+
+  const getModuleAccountingReportParams = async (postCLBalanceWei: bigint) => {
+    const { stakingRouter } = ctx.contracts;
+    const stakingModuleIds = await stakingRouter.getStakingModuleIds();
+    const modules: { moduleId: bigint; validatorsBalanceGwei: bigint }[] = [];
+    let totalValidatorsBalanceGwei = 0n;
+
+    for (const moduleId of stakingModuleIds) {
+      const [validatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+      modules.push({ moduleId, validatorsBalanceGwei });
+      totalValidatorsBalanceGwei += validatorsBalanceGwei;
+    }
+
+    const totalReportedValidatorsBalanceGwei = postCLBalanceWei / ONE_GWEI;
+    const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
+    const validatorBalancesGweiByStakingModule: bigint[] = [];
+    let remainingReportedValidatorsBalanceGwei = totalReportedValidatorsBalanceGwei;
+    let remainingValidatorsBalanceGwei = totalValidatorsBalanceGwei;
+
+    for (let index = 0; index < modules.length; ++index) {
+      const { moduleId, validatorsBalanceGwei } = modules[index];
+      const isLastModule = index === modules.length - 1;
+      const reportedValidatorsBalanceGwei =
+        isLastModule || remainingValidatorsBalanceGwei === 0n
+          ? remainingReportedValidatorsBalanceGwei
+          : (remainingReportedValidatorsBalanceGwei * validatorsBalanceGwei) / remainingValidatorsBalanceGwei;
+
+      stakingModuleIdsWithUpdatedBalance.push(moduleId);
+      validatorBalancesGweiByStakingModule.push(reportedValidatorsBalanceGwei);
+
+      remainingReportedValidatorsBalanceGwei -= reportedValidatorsBalanceGwei;
+      remainingValidatorsBalanceGwei -= validatorsBalanceGwei;
+    }
+
+    return {
+      stakingModuleIdsWithUpdatedBalance,
+      validatorBalancesGweiByStakingModule,
+    };
+  };
+
+  const reportWithEffectiveClDiffUsingCurrentModuleBalances = async (
+    effectiveClDiff: bigint,
+    skipWithdrawals = false,
+  ) => {
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
+      await ctx.contracts.lido.getBalanceStats();
+    const postCLBalanceWei =
+      clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport + effectiveClDiff;
+
+    await reportWithEffectiveClDiff(ctx, effectiveClDiff, {
+      excludeVaultsBalances: true,
+      skipWithdrawals,
+      ...(await getModuleAccountingReportParams(postCLBalanceWei)),
+    });
+  };
+
+  const activateDepositedValidators = async (depositsCount: bigint) => {
+    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, depositsCount);
+
+    const { stakingRouter, lido: lidoContract } = ctx.contracts;
+    const stakingModuleIds = [...(await stakingRouter.getStakingModuleIds())];
+    const { depositedSinceLastReport } = await lidoContract.getBalanceStats();
+    const depositedValidatorsBalanceGwei = depositedSinceLastReport / ONE_GWEI;
+
+    await report(ctx, {
+      clDiff: depositedSinceLastReport,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+      stakingModuleIdsWithUpdatedBalance: stakingModuleIds,
+      validatorBalancesGweiByStakingModule: await Promise.all(
+        stakingModuleIds.map(async (moduleId) => {
+          const [validatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
+          return moduleId === NOR_MODULE_ID
+            ? validatorsBalanceGwei + depositedValidatorsBalanceGwei
+            : validatorsBalanceGwei;
+        }),
+      ),
+    });
   };
 
   before(async () => {
@@ -76,9 +158,11 @@ describe("Integration: Withdrawal edge cases", () => {
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
       await assertBufferAllocationInvariants();
 
+      await activateDepositedValidators(1n);
+
       const stethInitialBalance = await lido.balanceOf(holder.address);
 
-      await reportWithEffectiveClDiff(ctx, ether("-1"), { excludeVaultsBalances: true });
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("-1"));
       await assertBufferAllocationInvariants();
 
       const stethFirstNegativeReportBalance = await lido.balanceOf(holder.address);
@@ -92,7 +176,7 @@ describe("Integration: Withdrawal edge cases", () => {
       const [firstRequestEvent] = findEventsWithInterfaces(firstRequestReceipt!, "WithdrawalRequested", [wq.interface]);
       const firstRequestId = firstRequestEvent!.args.requestId;
 
-      await reportWithEffectiveClDiff(ctx, ether("-0.1"), { excludeVaultsBalances: true });
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("-0.1"));
       await assertBufferAllocationInvariants();
 
       const stethSecondNegativeReportBalance = await lido.balanceOf(holder.address);
@@ -116,7 +200,7 @@ describe("Integration: Withdrawal edge cases", () => {
       expect(firstStatus.amountOfStETH).to.equal(secondStatus.amountOfStETH);
       expect(firstStatus.amountOfShares).to.be.lt(secondStatus.amountOfShares);
 
-      await reportWithEffectiveClDiff(ctx, ether("0.0001"), { excludeVaultsBalances: true });
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.0001"));
       await assertBufferAllocationInvariants();
 
       expect(await wq.isBunkerModeActive()).to.be.false;
@@ -128,7 +212,6 @@ describe("Integration: Withdrawal edge cases", () => {
 
       const lastCheckpointIndex = await wq.getLastCheckpointIndex();
       const hints = await wq.findCheckpointHints([...requestIds], 1, lastCheckpointIndex);
-
       const claimTx = await wq.connect(holder).claimWithdrawals([...requestIds], [...hints]);
       const claimReceipt = await claimTx.wait();
 
@@ -153,7 +236,8 @@ describe("Integration: Withdrawal edge cases", () => {
       await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
       await assertBufferAllocationInvariants();
 
-      await reportWithEffectiveClDiff(ctx, ether("0.001"), { excludeVaultsBalances: true });
+      await activateDepositedValidators(3n);
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.001"));
       await assertBufferAllocationInvariants();
 
       // Create withdrawal request
@@ -175,7 +259,7 @@ describe("Integration: Withdrawal edge cases", () => {
       expect(status.isFinalized).to.be.false;
 
       // Submit next report to finalize request
-      await reportWithEffectiveClDiff(ctx, ether("0.001"), { excludeVaultsBalances: true });
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.001"));
       await assertBufferAllocationInvariants();
 
       // Verify request finalized
@@ -214,7 +298,8 @@ describe("Integration: Withdrawal edge cases", () => {
       await assertBufferAllocationInvariants();
 
       // First rebase - positive
-      await reportWithEffectiveClDiff(ctx, ether("0.001"), { excludeVaultsBalances: true });
+      await activateDepositedValidators(1n);
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.0000001"));
       await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.false;
 
@@ -227,7 +312,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle second (negative) rebase correctly", async () => {
       // Second rebase - negative
-      await reportWithEffectiveClDiff(ctx, ether("-0.1"), { excludeVaultsBalances: true });
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("-0.1"));
       await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.true;
 
@@ -246,7 +331,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle third (negative) rebase correctly", async () => {
       // Third rebase - negative
-      await reportWithEffectiveClDiff(ctx, ether("-0.1"), { excludeVaultsBalances: true });
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("-0.1"));
       await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.true;
 
@@ -259,7 +344,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     it("should handle fourth (positive) rebase correctly", async () => {
       // Fourth rebase - positive
-      await reportWithEffectiveClDiff(ctx, ether("0.0000001"), { excludeVaultsBalances: true });
+      await reportWithEffectiveClDiffUsingCurrentModuleBalances(ether("0.0000001"));
       await assertBufferAllocationInvariants();
       expect(await wq.isBunkerModeActive()).to.be.false;
 
@@ -283,10 +368,9 @@ describe("Integration: Withdrawal edge cases", () => {
       const secondClaimed = claimEvents![1].args.amountOfETH;
       const thirdClaimed = claimEvents![2].args.amountOfETH;
 
-      expect(firstClaimed).to.be.lte(withdrawalAmount);
-      expect(secondClaimed).to.be.lte(withdrawalAmount);
-      expect(thirdClaimed).to.be.lte(withdrawalAmount);
-      expect(firstClaimed < withdrawalAmount || secondClaimed < withdrawalAmount).to.be.true;
+      expect(firstClaimed).to.be.lt(withdrawalAmount);
+      expect(secondClaimed).to.be.lt(withdrawalAmount);
+      expect(thirdClaimed).to.equal(withdrawalAmount);
     });
   });
 });

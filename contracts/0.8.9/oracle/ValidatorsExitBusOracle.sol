@@ -59,7 +59,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         address consensusContract,
         uint256 consensusVersion,
         uint256 lastProcessingRefSlot,
-        uint256 maxValidatorsPerRequest,
+        uint256 maxValidatorsPerReport,
         uint256 maxExitBalanceEth,
         uint256 balancePerFrameEth,
         uint256 frameDurationInSec
@@ -70,8 +70,10 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
         _updateContractVersion(2);
+        _updateContractVersion(3);
 
-        _initialize_v3(maxValidatorsPerRequest, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
+        _setMaxValidatorsPerReport(maxValidatorsPerReport);
+        _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }
 
     /**
@@ -83,18 +85,12 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 maxValidatorsPerReport,
         uint256 maxExitBalanceEth,
         uint256 balancePerFrameEth,
-        uint256 frameDurationInSec
+        uint256 frameDurationInSec,
+        uint256 consensusVersion
     ) external {
-        _initialize_v3(maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
-    }
-
-    function _initialize_v3(
-        uint256 maxValidatorsPerReport,
-        uint256 maxExitBalanceEth,
-        uint256 balancePerFrameEth,
-        uint256 frameDurationInSec
-    ) internal {
         _updateContractVersion(3);
+        _setConsensusVersion(consensusVersion);
+
         _setMaxValidatorsPerReport(maxValidatorsPerReport);
         _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
     }

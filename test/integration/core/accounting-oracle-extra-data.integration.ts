@@ -6,7 +6,13 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
 import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
-import { getProtocolContext, OracleReportParams, ProtocolContext, report } from "lib/protocol";
+import {
+  getProtocolContext,
+  OracleReportParams,
+  ProtocolContext,
+  report,
+  seedProtocolPendingBaseline,
+} from "lib/protocol";
 import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
@@ -14,6 +20,7 @@ import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MODULE_ID = NOR_MODULE_ID;
 const NUM_NEWLY_EXITED_VALIDATORS = 1n;
+const MAIN_REPORT_EFFECTIVE_CL_REWARD = ether("1");
 const MAINNET_NOR_ADDRESS = "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5".toLowerCase();
 
 describe("Integration: AccountingOracle extra data", () => {
@@ -112,7 +119,21 @@ describe("Integration: AccountingOracle extra data", () => {
     // Add total exited validators for both entries
     const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
 
-    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData);
+    // The main report in this suite must stay reward-bearing because it drives the
+    // TransferredToModule -> ReadyForDistribution state machine. Snapshot protocol
+    // pending first so the original 1 ETH main report still reaches that phase path.
+    await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
+
+    // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
+    // safety cap enough elapsed time after snapshotting the pending baseline.
+    await advanceChainTime(15n * 24n * 60n * 60n);
+
+    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData, {
+      // Snapshot protocol pending into the previous report first, then run the original
+      // reward-bearing main report so this suite still exercises
+      // TransferredToModule -> ReadyForDistribution.
+      effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
+    });
   }
 
   it("should accept report with multiple keys per node operator (single chunk)", async () => {
@@ -170,6 +191,8 @@ describe("Integration: AccountingOracle extra data", () => {
     const { accountingOracle } = ctx.contracts;
 
     const { submitter, extraDataChunks } = await submitMainReport();
+    // Make the main-report transition explicit before extra data starts changing module state further.
+    await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
     // Submit first chunk of extra data
     await accountingOracle.connect(submitter).submitReportExtraDataList(hexToBytes(extraDataChunks[0]));
@@ -196,6 +219,8 @@ describe("Integration: AccountingOracle extra data", () => {
     const { accountingOracle } = ctx.contracts;
 
     const { submitter, extraDataChunks } = await submitMainReport();
+    // Make the main-report transition explicit before extra data starts changing module state further.
+    await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
     // Submit first chunk of extra data
     await accountingOracle.connect(submitter).submitReportExtraDataList(hexToBytes(extraDataChunks[0]));

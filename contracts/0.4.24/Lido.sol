@@ -15,10 +15,6 @@ import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from ".
 import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
-interface IBurnerMigration {
-    function migrate(address _oldBurner) external;
-}
-
 interface IStakingRouter {
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
 
@@ -36,9 +32,7 @@ interface IStakingRouter {
 
 interface IWithdrawalQueue {
     function unfinalizedStETH() external view returns (uint256);
-
     function isBunkerModeActive() external view returns (bool);
-
     function finalize(uint256 _lastIdToFinalize, uint256 _maxShareRate) external payable;
 }
 
@@ -48,6 +42,26 @@ interface ILidoExecutionLayerRewardsVault {
 
 interface IWithdrawalVault {
     function withdrawWithdrawals(uint256 _amount) external;
+}
+
+interface IAccountingOracle {
+    /// @dev returns a tuple instead of a structure to avoid allocating memory
+    function getProcessingState()
+        external
+        view
+        returns (
+            uint256 currentFrameRefSlot,
+            uint256 processingDeadlineTime,
+            bytes32 mainDataHash,
+            bool mainDataSubmitted,
+            bytes32 extraDataHash,
+            uint256 extraDataFormat,
+            bool extraDataSubmitted,
+            uint256 extraDataItemsCount,
+            uint256 extraDataItemsSubmitted
+        );
+    function getLastProcessingRefSlot() external view returns (uint256);
+    function getCurrentFrame() external view returns (uint256 refSlot, uint256 refSlotTimestamp);
 }
 
 /**
@@ -116,6 +130,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// keccak256("lido.Lido.bufferedEtherAndDepositedPostReport");
     bytes32 internal constant BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION =
         0x81a11fa1111afa59b50051f60ccf604a39d96acb484dc467ad8eadb4a63f0a5f;
+
+    /// @dev an internal counter accumulates the ETH deposited after the reporting period/frame changes
+    ///      and unique identifier for the last deposit's frame (in this case, it's current refSlot)
+    /// keccak256("lido.Lido.depositedNextReportAndLastDepositNonce")
+    bytes32 internal constant DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION =
+        0x8d3ed945c7718edcdb639b1235f2bbe3fa81f4a6cec7a436d8ea13fbc502d957;
 
     /// @dev CL validators balance and deposited balance since last report
     /// |----- 128 bit ------------|------ 128 bit -------|
@@ -273,6 +293,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function finalizeUpgrade_v4() external {
         require(hasInitialized(), "NOT_INITIALIZED");
+
+        /// @dev prevent migration if the last oracle report wasn't submitted, otherwise deposits
+        ///      made after refSlot and before migration (i.e. report's tx) will be lost
+        IAccountingOracle oracle = _accountingOracle();
+        (,,, bool mainDataSubmitted,,,,,) = oracle.getProcessingState();
+        /// @dev pass in case of initial deploy
+        require(mainDataSubmitted || oracle.getLastProcessingRefSlot() == 0, "NO_REPORT");
+
         _checkContractVersion(3);
         _setContractVersion(4);
         _migrateStorage_v3_to_v4();
@@ -296,6 +324,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         ///      after the last accounting oracle report
         uint256 depositedPostReport = (depositedValidators - clValidators) * DEPOSIT_SIZE;
         _setBufferedEtherAndDepositedPostReport(bufferedEther, depositedPostReport);
+        /// @dev Since migration is only possible after a report and before the next frame begins,
+        ///      the transient balance will apply to the current frame
+        (uint256 curNonce,) = _getCurrentFrame(); // get current refslot
+        _setDepositedNextReportAndLastDepositNonce(depositedPostReport, curNonce);
+
         /// @dev no pending balance at the moment of upgrade
         _setClValidatorsBalanceAndClPendingBalance(clValidatorsBalance, 0);
         _setSeedDepositsCount(depositedValidators);
@@ -704,11 +737,63 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         returns (
             uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
-            uint256 depositedSinceLastReport
+            uint256 depositedSinceLastReport,
+            uint256 depositedForCurrentReport
         )
     {
         (clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport) = _getClValidatorsBalanceAndClPendingBalance();
+
         depositedSinceLastReport = _getDepositedPostReport();
+        (depositedForCurrentReport,) = _getDepositedNextReportAdjusted();
+        /// @dev depositedNextReport is always less than depositedPostReport, so we can safely subtract
+        depositedForCurrentReport = depositedSinceLastReport - depositedForCurrentReport;
+    }
+
+    /**
+     * To accurately track the ETH that was deposited between the refSlot and the report transaction, we use the following
+     * approach:
+     *
+     * Data structure can be represented as:
+     *   - lastNonce - last deposit refSlot
+     *   - depositedPostReport - total sum of all deposits across all periods since the last successful report
+     *   - depositedNextReport - sum of deposits within the current reporting period, to be included in the next report
+     *
+     * Flow diagram:
+     *                                                              NOW
+     *                     ┌── depositedPostReport ────────────────┐ ↓
+     *      │○○○○○○○○○○○○○○│○●●○○R○○○●○○●○│○○●●●○○●○●○○○○│○○●●○○●○○●○○○○│
+     *      ┆         lastReport-↑       currentRefSlot-↑└────⁠┬────┘
+     *      ┆              ┆ currentReportFrame-↓        ┆    └depositedNextReport
+     *      ⁠║   frame X    ⁠║   frame X+1  ⁠║   frame X+2  ⁠║   frame X+3  ⁠║
+     *
+     *       R - report transaction slot
+     *       ● - slot with deposits
+     *       ○ - empty slot
+     *       ⁠║ - frame refSlot
+     *
+     * Logic:
+     *   - On any read/write operation, we first retrieve currentNonce (currentRefSlot)
+     *   - Whenever the nonce changes (i.e. the reporting period changes), we reset depositedNextReport to zero
+     *   - To obtain the exact deposit amount for the reporting periods, we compute:  depositedPostReport - depositedNextReport
+     *   - On each deposit, both counters are incremented:  depositedPostReport += amount and depositedNextReport += amount
+     *   - At reporting time, deposits already accounted for in the report are excluded from depositedPostReport, leaving
+     *     only the current period: depositedPostReport = depositedNextReport
+     */
+    /// @dev read and adjust the `depositedNextReport` value according to the current frame
+    function _getDepositedNextReportAdjusted() internal view returns (uint256 depositedNextReport, uint256 curNonce) {
+        uint256 lastNonce;
+        (depositedNextReport, lastNonce) = _getDepositedNextReportAndLastDepositNonce();
+        (curNonce,) = _getCurrentFrame(); // get current refSlot
+        if (curNonce != lastNonce) {
+            // treating all unsettled amounts as belonging to previous periods (aka nonces),
+            // i.e., as already settled (accounted in upcoming report)
+            depositedNextReport = 0;
+        }
+    }
+
+    /// @dev get currentFrameRefSlot from oracle processing state
+    function _getCurrentFrame() internal view returns (uint256 refSlot, uint256 refSlotTimestamp) {
+        (refSlot, refSlotTimestamp) = _accountingOracle().getCurrentFrame();
     }
 
     /**
@@ -747,10 +832,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         /// @dev the requested amount will be sent to DepositContract, so we increment
         ///      depositedPostReport counter to keep _getInternalEther value correct
         uint256 depositedPostReport = _getDepositedPostReport().add(_depositAmount);
-
         _setBufferedEtherAndDepositedPostReport(allocation.total.sub(_depositAmount), depositedPostReport);
         emit Unbuffered(_depositAmount);
-        emit DepositedPostReportUpdated(depositedPostReport);
+
+        (uint256 depositedNextReport, uint256 curNonce) = _getDepositedNextReportAdjusted();
+        depositedNextReport = depositedNextReport.add(_depositAmount);
+        _setDepositedNextReportAndLastDepositNonce(depositedNextReport, curNonce);
 
         uint256 storedDepositsReserve = DEPOSITS_RESERVE_POSITION.getStorageUint256();
         if (storedDepositsReserve > 0) {
@@ -915,11 +1002,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _whenNotStopped();
         _auth(_accounting());
 
-        // Update storage with new balances
+        (uint256 depositedNextReport, uint256 curNonce) = _getDepositedNextReportAdjusted();
+        /// @dev just save adjusted depositedNextReport
+        _setDepositedNextReportAndLastDepositNonce(depositedNextReport, curNonce);
+        /// @dev Since `depositedPostReport` accumulates all deposits, including those that occurred
+        ///      after `refSlot` but before the report, we must retain only the amount not
+        ///      reflected in the report
+        _setDepositedPostReport(depositedNextReport);
+
+        /// @dev new values of clValidatorsBalance and clPendingBalance should reflect all
+        ///      deposits during the report frame
         _setClValidatorsBalanceAndClPendingBalance(_clValidatorsBalance, _clPendingBalance);
-        /// @dev new values of clValidatorsBalance and clPendingBalance should reflect all deposits
-        ///      between reports, so we reset depositedPostReport
-        _setDepositedPostReport(0);
         emit CLBalancesUpdated(_reportTimestamp, _clValidatorsBalance, _clPendingBalance);
     }
 
@@ -1320,6 +1413,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return _accounting(_getLidoLocator());
     }
 
+    function _accountingOracle() internal view returns (IAccountingOracle) {
+        return IAccountingOracle(_getLidoLocator().accountingOracle());
+    }
+
     function _elRewardsVault(ILidoLocator _locator) internal view returns (ILidoExecutionLayerRewardsVault) {
         return ILidoExecutionLayerRewardsVault(_locator.elRewardsVault());
     }
@@ -1398,6 +1495,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     {
         BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.setLowAndHighUint128(
             _newBufferedEther, _newDepositedPostReport
+        );
+    }
+
+    function _getDepositedNextReportAndLastDepositNonce() internal view returns (uint256, uint256) {
+        return DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION.getLowAndHighUint128();
+    }
+
+    function _setDepositedNextReportAndLastDepositNonce(uint256 _depositedNextReport, uint256 _lastDepositNonce)
+        internal
+    {
+        DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION.setLowAndHighUint128(
+            _depositedNextReport, _lastDepositNonce
         );
     }
 

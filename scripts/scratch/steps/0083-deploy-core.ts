@@ -17,6 +17,8 @@ import {
   deployWithoutProxy,
   makeTx,
 } from "lib/deploy";
+import { EIP7002_ADDRESS } from "lib/eips/eip7002";
+import { EIP7251_ADDRESS } from "lib/eips/eip7251";
 import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 import { en0x } from "lib/string";
@@ -249,7 +251,7 @@ export async function main() {
     undefined, // factoryOptions
     topUpGatewayInitData,
   );
-  const topUpGateway = await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
+  await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
 
   //
   // Deploy Accounting
@@ -377,13 +379,16 @@ export async function main() {
   // Deploy Consolidation Gateway
   //
 
+  const consolidationGatewayParams = state[Sk.consolidationGateway].deployParameters;
   const consolidationGateway_ = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
     admin,
     locator.address,
-    // ToDo: Replace dummy parameters with real ones
-    10, // maxConsolidationRequestsLimit,
-    1, // consolidationsPerFrame,
-    60, // frameDurationInSec
+    consolidationGatewayParams.maxConsolidationRequestsLimit,
+    consolidationGatewayParams.consolidationsPerFrame,
+    consolidationGatewayParams.frameDurationInSec,
+    consolidationGatewayParams.gIFirstValidatorPrev,
+    consolidationGatewayParams.gIFirstValidatorCurr,
+    consolidationGatewayParams.pivotSlot,
   ]);
 
   const consolidationGateway = await loadContract<ConsolidationGateway>(
@@ -395,19 +400,31 @@ export async function main() {
   // Deploy Consolidation Bus
   //
 
-  const consolidationBus_ = await deployWithoutProxy(Sk.consolidationBus, "ConsolidationBus", deployer, [
-    admin,
-    consolidationGateway_.address,
-    200, // initialBatchSize
-  ]);
+  const consolidationBusParams = state[Sk.consolidationBus].deployParameters;
+  const consolidationBus_ = await deployBehindOssifiableProxy(
+    Sk.consolidationBus,
+    "ConsolidationBus",
+    proxyContractsOwner,
+    deployer,
+    [consolidationGateway_.address],
+  );
 
   const consolidationBus = await loadContract<ConsolidationBus>("ConsolidationBus", consolidationBus_.address);
 
+  await makeTx(
+    consolidationBus,
+    "initialize",
+    [
+      admin,
+      consolidationBusParams.initialBatchSize,
+      consolidationBusParams.initialMaxGroupsInBatch,
+      consolidationBusParams.initialExecutionDelay,
+    ],
+    { from: deployer },
+  );
+
   // Grant MANAGE_ROLE to deployer for testing
   await makeTx(consolidationBus, "grantRole", [await consolidationBus.MANAGE_ROLE(), deployer], { from: deployer });
-
-  // Grant EXECUTE_ROLE to deployer for testing
-  await makeTx(consolidationBus, "grantRole", [await consolidationBus.EXECUTE_ROLE(), deployer], { from: deployer });
 
   // Grant ADD_CONSOLIDATION_REQUEST_ROLE on Gateway to Bus
   await makeTx(
@@ -428,24 +445,27 @@ export async function main() {
   //
   // Deploy Consolidation Migrator
   //
-  // Note: Uses NOR module ID (1) for both source and target for testing purposes.
-  // The actual module IDs will be set after StakingRouter has modules registered (step 0140).
-  // For scratch deploy testing, we use moduleId=1 which corresponds to NOR.
+  const consolidationMigratorParams = state[Sk.consolidationMigrator].deployParameters;
 
-  const NOR_MODULE_ID = 1;
-
-  const consolidationMigrator_ = await deployWithoutProxy(Sk.consolidationMigrator, "ConsolidationMigrator", deployer, [
-    admin,
-    stakingRouter_.address,
-    consolidationBus_.address,
-    NOR_MODULE_ID, // sourceModuleId
-    NOR_MODULE_ID, // targetModuleId (same module for testing)
-  ]);
+  const consolidationMigrator_ = await deployBehindOssifiableProxy(
+    Sk.consolidationMigrator,
+    "ConsolidationMigrator",
+    proxyContractsOwner,
+    deployer,
+    [
+      stakingRouter_.address,
+      consolidationBus_.address,
+      consolidationMigratorParams.sourceModuleId,
+      consolidationMigratorParams.targetModuleId,
+    ],
+  );
 
   const consolidationMigrator = await loadContract<ConsolidationMigrator>(
     "ConsolidationMigrator",
     consolidationMigrator_.address,
   );
+
+  await makeTx(consolidationMigrator, "initialize", [admin], { from: deployer });
 
   // Grant ALLOW_PAIR_ROLE to deployer for testing
   await makeTx(consolidationMigrator, "grantRole", [await consolidationMigrator.ALLOW_PAIR_ROLE(), deployer], {
@@ -497,6 +517,8 @@ export async function main() {
     treasuryAddress,
     triggerableWithdrawalsGateway.address,
     consolidationGateway.address,
+    EIP7002_ADDRESS,
+    EIP7251_ADDRESS,
   ]);
 
   await makeTx(withdrawalsManagerProxy, "proxy_upgradeTo", [withdrawalVaultImpl.address, "0x"], { from: deployer });

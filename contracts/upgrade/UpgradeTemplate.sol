@@ -18,8 +18,7 @@ import {
     IWithdrawalsManagerProxy,
     IKernel,
     IVersioned,
-    IEasyTrack,
-    IStakingRouter
+    IEasyTrack
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";

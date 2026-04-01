@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {IBurner} from "contracts/common/interfaces/IBurner.sol";
 import {
     IUpgradeConfig,
     GeneralConfig,
     CuratedModuleConfig,
     ICSModuleV3,
-    ITriggerableWithdrawalsGateway,
     IHashConsensusV3,
     IStakingRouter
 } from "../UpgradeTypes.sol";

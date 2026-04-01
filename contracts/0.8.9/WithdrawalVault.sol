@@ -44,7 +44,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
     event ERC721Recovered(address indexed requestedBy, address indexed token, uint256 tokenId);
 
     // Errors
-    error ZeroAddress();
     error NotLido();
     error NotTriggerableWithdrawalsGateway();
     error NotConsolidationGateway();
@@ -55,7 +54,14 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
      * @param _lido the Lido token (stETH) address
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
      */
-    constructor(address _lido, address _treasury, address _triggerableWithdrawalsGateway, address _consolidationGateway) {
+    constructor(
+        address _lido,
+        address _treasury,
+        address _triggerableWithdrawalsGateway,
+        address _consolidationGateway,
+        address _withdrawalRequest,
+        address _consolidationRequest
+    ) WithdrawalVaultEIP7685(_withdrawalRequest, _consolidationRequest) {
         _onlyNonZeroAddress(_lido);
         _onlyNonZeroAddress(_treasury);
         _onlyNonZeroAddress(_triggerableWithdrawalsGateway);
@@ -80,14 +86,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
         // Initializations for v0 --> v2
         _checkContractVersion(0);
         _initializeContractVersionTo(3);
-    }
-
-    // TODO: remove later, added because of TWVote contract
-    /// @notice Finalizes upgrade to v2 (from v1). Can be called only once.
-    function finalizeUpgrade_v2() external {
-        // Finalization for v1 --> v2
-        _checkContractVersion(1);
-        _updateContractVersion(2);
     }
 
     /// @notice Finalizes upgrade to v3 (from v2). Can be called only once.
@@ -146,10 +144,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
         emit ERC721Recovered(msg.sender, address(_token), _tokenId);
 
         _token.transferFrom(address(this), TREASURY, _tokenId);
-    }
-
-    function _onlyNonZeroAddress(address _address) internal pure {
-        if (_address == address(0)) revert ZeroAddress();
     }
 
     /**

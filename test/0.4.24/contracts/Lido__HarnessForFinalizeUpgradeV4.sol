@@ -16,8 +16,11 @@ contract Lido__HarnessForFinalizeUpgradeV4 is Lido {
         keccak256("lido.Lido.bufferedEtherAndDepositedValidators");
     bytes32 internal constant CL_BALANCE_AND_CL_VALIDATORS_POSITION = keccak256("lido.Lido.clBalanceAndClValidators");
 
-    function harness_initialize_v3() external payable {
+    function harness_initialize_v3(address _lidoLocator) external payable {
         _bootstrapInitialHolder(); // stone in the elevator
+
+        _setLidoLocator(_lidoLocator);
+        emit LidoLocatorSet(_lidoLocator);
 
         initialized();
 

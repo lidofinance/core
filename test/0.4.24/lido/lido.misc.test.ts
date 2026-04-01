@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   Accounting__MockForAccountingOracle,
+  AccountingOracle__MockForStakingRouter,
   ACL,
   Lido,
   LidoLocator,
@@ -31,6 +32,7 @@ describe("Lido.sol:misc", () => {
   let withdrawalQueue: WithdrawalQueue__MockForLidoMisc;
   let stakingRouter: StakingRouter__MockForLidoMisc;
   let accounting: Accounting__MockForAccountingOracle;
+  let accountingOracle: AccountingOracle__MockForStakingRouter;
 
   const elRewardsVaultBalance = ether("100.0");
   const withdrawalsVaultBalance = ether("100.0");
@@ -42,6 +44,8 @@ describe("Lido.sol:misc", () => {
     withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForLidoMisc", deployer);
     stakingRouter = await ethers.deployContract("StakingRouter__MockForLidoMisc", deployer);
     accounting = await ethers.deployContract("Accounting__MockForAccountingOracle", deployer);
+    accounting = await ethers.deployContract("Accounting__MockForAccountingOracle", deployer);
+    accountingOracle = await ethers.deployContract("AccountingOracle__MockForStakingRouter", deployer);
 
     ({ lido, acl } = await deployLidoDao({
       rootAccount: deployer,
@@ -51,6 +55,7 @@ describe("Lido.sol:misc", () => {
         stakingRouter,
         depositSecurityModule,
         accounting,
+        accountingOracle,
       },
     }));
 
@@ -147,9 +152,10 @@ describe("Lido.sol:misc", () => {
   });
 
   context("canDeposit", () => {
-    it("Returns true if Lido is not stopped and bunkerMode is disabled", async () => {
+    it("Returns true if Lido is not stopped and bunkerMode is disabled, and report is submitted", async () => {
       await lido.resume();
       await withdrawalQueue.mock__bunkerMode(false);
+      await accountingOracle.mock_setProcessingState(1, true, true);
 
       expect(await lido.canDeposit()).to.equal(true);
     });
@@ -169,6 +175,12 @@ describe("Lido.sol:misc", () => {
 
     it("Returns false if Lido is stopped and bunkerMode is disabled", async () => {
       await withdrawalQueue.mock__bunkerMode(true);
+
+      expect(await lido.canDeposit()).to.equal(false);
+    });
+
+    it("Returns false if main phase of report is not submitted", async () => {
+      await accountingOracle.mock_setProcessingState(1, false, false);
 
       expect(await lido.canDeposit()).to.equal(false);
     });
@@ -716,6 +728,8 @@ describe("Lido.sol:misc", () => {
       // Get stakingRouter signer to call withdrawDepositableEther
       const stakingRouterAddress = await locator.stakingRouter();
       stakingRouterSigner = await impersonate(stakingRouterAddress, ether("1.0"));
+      // simulate success report
+      await accountingOracle.mock_setProcessingState(1, true, true);
     });
 
     it("Reverts if the caller is not `StakingRouter`", async () => {
@@ -740,7 +754,7 @@ describe("Lido.sol:misc", () => {
       );
     });
 
-    it("Emits `Unbuffered`, `DepositedValidatorsChanged` and `DepositedPostReportUpdated` events when withdrawing ether", async () => {
+    it("Emits `Unbuffered`, `DepositedValidatorsChanged` events when withdrawing ether", async () => {
       const depositAmount = ether("32.0");
       // top up Lido buffer enough for deposit
       await lido.submit(ZeroAddress, { value: depositAmount });
@@ -762,9 +776,7 @@ describe("Lido.sol:misc", () => {
         .to.emit(lido, "Unbuffered")
         .withArgs(amountToWithdraw)
         .and.to.emit(lido, "DepositedValidatorsChanged")
-        .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n)
-        .and.to.emit(lido, "DepositedPostReportUpdated")
-        .withArgs(beforeDeposit.balanceStats.depositedSinceLastReport + amountToWithdraw);
+        .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n);
 
       const afterDeposit = await batch({
         lidoBalance: ethers.provider.getBalance(lido),

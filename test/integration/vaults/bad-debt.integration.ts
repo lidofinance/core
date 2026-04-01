@@ -705,7 +705,8 @@ describe("Integration: Vault with bad debt", () => {
       const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const simulationAtRefSlot = await simulateReport(ctx, {
         refSlot: nextRefSlot,
-        clBalance,
+        clValidatorsBalance: clBalance,
+        clPendingBalance: 0n,
         withdrawalVaultBalance: 0n,
         elRewardsVaultBalance: 0n,
       });
@@ -717,7 +718,8 @@ describe("Integration: Vault with bad debt", () => {
       expect(
         await simulateReport(ctx, {
           refSlot: (await hashConsensus.getCurrentFrame()).refSlot,
-          clBalance,
+          clValidatorsBalance: clBalance,
+          clPendingBalance: 0n,
           withdrawalVaultBalance: 0n,
           elRewardsVaultBalance: 0n,
         }),

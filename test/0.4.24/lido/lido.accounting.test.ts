@@ -4,6 +4,8 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  AccountingOracle__MockForStakingRouter,
+  AccountingOracle__MockForStakingRouter__factory,
   ACL,
   Burner__MockForAccounting,
   Burner__MockForAccounting__factory,
@@ -37,16 +39,18 @@ describe("Lido:accounting", () => {
   let burner: Burner__MockForAccounting;
   let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
   let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
+  let accountingOracle: AccountingOracle__MockForStakingRouter;
 
   beforeEach(async () => {
     [deployer, stranger] = await ethers.getSigners();
 
-    [stakingRouter, withdrawalQueue, burner, elRewardsVault, withdrawalVault] = await Promise.all([
+    [stakingRouter, withdrawalQueue, burner, elRewardsVault, withdrawalVault, accountingOracle] = await Promise.all([
       new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
       new WithdrawalQueue__MockForAccounting__factory(deployer).deploy(),
       new Burner__MockForAccounting__factory(deployer).deploy(),
       new LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory(deployer).deploy(),
       new WithdrawalVault__MockForLidoAccounting__factory(deployer).deploy(),
+      new AccountingOracle__MockForStakingRouter__factory(deployer).deploy(),
     ]);
 
     ({ lido, acl } = await deployLidoDao({
@@ -58,6 +62,7 @@ describe("Lido:accounting", () => {
         burner,
         elRewardsVault,
         withdrawalVault,
+        accountingOracle,
       },
     }));
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), deployer);
@@ -249,6 +254,8 @@ describe("Lido:accounting", () => {
       const reserveTarget = ether("3.0");
       await lido.setDepositsReserveTarget(reserveTarget);
       expect(await lido.getDepositsReserve()).to.equal(0n);
+
+      await accountingOracle.mock_setProcessingState(1, true, true);
 
       const accountingSigner = await getAccountingSigner();
       await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(...args());

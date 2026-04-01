@@ -6,19 +6,31 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   ConsolidationGateway,
   DepositSecurityModule__MockForConsolidationGateway,
+  Lido__MockForConsolidationGateway,
   WithdrawalVault__MockForConsolidationGateway,
 } from "typechain-types";
 
-import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
+import {
+  addressToWC,
+  advanceChainTime,
+  generateValidator,
+  getCurrentBlockTimestamp,
+  prepareLocalMerkleTree,
+} from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-];
+import { PUBKEYS } from "../consolidation-helpers";
+
+const dummyWitness = (pubkey: string) => ({
+  proof: [] as string[],
+  pubkey,
+  validatorIndex: 0,
+  childBlockTimestamp: 0,
+  slot: 0,
+  proposerIndex: 0,
+});
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
 
@@ -33,6 +45,16 @@ describe("ConsolidationGateway.sol: pausable", () => {
   let PAUSE_ROLE: string;
   let RESUME_ROLE: string;
 
+  // Pre-built valid witnesses with CL proofs for target validators
+  let validWitnesses: {
+    proof: string[];
+    pubkey: string;
+    validatorIndex: number;
+    childBlockTimestamp: number;
+    slot: number;
+    proposerIndex: number;
+  }[];
+
   let originalState: string;
 
   before(async () => {
@@ -43,13 +65,48 @@ describe("ConsolidationGateway.sol: pausable", () => {
 
     withdrawalVault = await ethers.deployContract("WithdrawalVault__MockForConsolidationGateway");
     dsm = await ethers.deployContract("DepositSecurityModule__MockForConsolidationGateway");
+    const lido: Lido__MockForConsolidationGateway = await ethers.deployContract("Lido__MockForConsolidationGateway");
 
     await updateLidoLocatorImplementation(locatorAddr, {
       withdrawalVault: await withdrawalVault.getAddress(),
       depositSecurityModule: await dsm.getAddress(),
+      lido: await lido.getAddress(),
     });
 
-    consolidationGateway = await ethers.deployContract("ConsolidationGateway", [admin, locatorAddr, 100, 1, 48]);
+    // Set up merkle tree for CL proof verification
+    const localMerkle = await prepareLocalMerkleTree();
+    const withdrawalCredentials = addressToWC(await withdrawalVault.getAddress(), 2);
+
+    // Generate a validator with matching withdrawal credentials
+    const validator = generateValidator(withdrawalCredentials);
+    const { validatorIndex } = await localMerkle.addValidator(validator.container);
+
+    // Commit merkle tree to beacon block root
+    const { childBlockTimestamp, beaconBlockHeader } = await localMerkle.commitChangesToBeaconRoot();
+
+    // Build valid witness
+    const proof = await localMerkle.buildProof(validatorIndex, beaconBlockHeader);
+    validWitnesses = [
+      {
+        proof,
+        pubkey: String(validator.container.pubkey),
+        validatorIndex,
+        childBlockTimestamp,
+        slot: beaconBlockHeader.slot as number,
+        proposerIndex: beaconBlockHeader.proposerIndex as number,
+      },
+    ];
+
+    consolidationGateway = await ethers.deployContract("ConsolidationGateway", [
+      admin,
+      locatorAddr,
+      100,
+      1,
+      48,
+      localMerkle.gIFirstValidator,
+      localMerkle.gIFirstValidator,
+      0,
+    ]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
     await consolidationGateway.grantRole(role, authorizedEntity);
@@ -98,17 +155,6 @@ describe("ConsolidationGateway.sol: pausable", () => {
 
         // Verify contract is resumed
         expect(await consolidationGateway.isPaused()).to.equal(false);
-      });
-
-      it("should allow consolidation requests after resuming", async () => {
-        // First pause and then resume the contract
-        await consolidationGateway.connect(admin).pauseFor(1000n);
-        await consolidationGateway.connect(admin).resume();
-
-        // Should be able to add consolidation requests
-        await consolidationGateway
-          .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
       });
     });
 
@@ -260,7 +306,11 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests(
+              [{ sourcePubkeys: [PUBKEYS[0]], targetWitness: dummyWitness(PUBKEYS[1]) }],
+              ZERO_ADDRESS,
+              { value: 2 },
+            ),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -274,7 +324,11 @@ describe("ConsolidationGateway.sol: pausable", () => {
         await expect(
           consolidationGateway
             .connect(authorizedEntity)
-            .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 }),
+            .addConsolidationRequests(
+              [{ sourcePubkeys: [PUBKEYS[0]], targetWitness: dummyWitness(PUBKEYS[1]) }],
+              ZERO_ADDRESS,
+              { value: 2 },
+            ),
         ).to.be.revertedWithCustomError(consolidationGateway, "ResumedExpected");
       });
 
@@ -286,7 +340,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          });
       });
 
       it("pauseUntil: should allow consolidation requests immediately after resuming", async () => {
@@ -299,7 +355,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          });
       });
 
       it("pauseFor: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -312,7 +370,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          });
       });
 
       it("pauseUntil: should allow consolidation requests after pause duration automatically expires", async () => {
@@ -327,7 +387,9 @@ describe("ConsolidationGateway.sol: pausable", () => {
         // Should allow consolidation requests
         await consolidationGateway
           .connect(authorizedEntity)
-          .addConsolidationRequests([PUBKEYS[0]], [PUBKEYS[1]], ZERO_ADDRESS, { value: 2 });
+          .addConsolidationRequests([{ sourcePubkeys: [PUBKEYS[0]], targetWitness: validWitnesses[0] }], ZERO_ADDRESS, {
+            value: 2,
+          });
       });
     });
   });

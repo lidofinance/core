@@ -6,12 +6,11 @@ pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
+import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
-
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
-
 import {BaseOracle} from "./BaseOracle.sol";
 
 interface IReportReceiver {
@@ -25,10 +24,12 @@ interface IOracleReportSanityChecker {
     ) external view;
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _validatorBalancesGweiByStakingModule,
-        uint256[] calldata _pendingBalancesGweiByStakingModule,
-        uint256 _clValidatorsBalanceGwei,
-        uint256 _clPendingBalanceGwei,
+        uint256[] calldata _validatorBalancesWeiByStakingModule,
+        uint256 _preCLValidatorsBalanceWei,
+        uint256 _preCLPendingBalanceWei,
+        uint256 _postCLValidatorsBalanceWei,
+        uint256 _postCLPendingBalanceWei,
+        uint256 _depositsWei,
         uint256 _timeElapsed
     ) external view;
 
@@ -42,22 +43,20 @@ interface IStakingRouter {
         uint256[] calldata _exitedValidatorsCounts
     ) external returns (uint256);
 
+    function validateReportValidatorBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _validatorBalancesGwei
+    ) external view;
+
     function reportValidatorBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _validatorBalancesGwei,
-        uint256[] calldata _pendingBalancesGwei
+        uint256[] calldata _validatorBalancesGwei
     ) external;
 
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
         uint256 _stakingModuleId,
         bytes calldata _nodeOperatorIds,
         bytes calldata _exitedValidatorsCounts
-    ) external;
-
-    function reportStakingModuleOperatorBalances(
-        uint256 _stakingModuleId,
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _totalBalancesGwei
     ) external;
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
@@ -139,10 +138,11 @@ contract AccountingOracle is BaseOracle {
         _updateContractVersion(2);
         _updateContractVersion(3);
         _updateContractVersion(4);
+        _updateContractVersion(5);
     }
 
-    function finalizeUpgrade_v4(uint256 consensusVersion) external {
-        _updateContractVersion(4);
+    function finalizeUpgrade_v5(uint256 consensusVersion) external {
+        _updateContractVersion(5);
         _setConsensusVersion(consensusVersion);
     }
 
@@ -188,11 +188,6 @@ contract AccountingOracle is BaseOracle {
         /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,
         /// excluding pending deposits, as observed at the reference slot.
         uint256[] validatorBalancesGweiByStakingModule;
-        /// @dev Sum of consensus-layer pending deposits balances 
-        /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,
-        /// as observed at the reference slot.
-        uint256[] pendingBalancesGweiByStakingModule;
-        ///
         /// EL values
         ///
 
@@ -320,7 +315,6 @@ contract AccountingOracle is BaseOracle {
 
     uint256 public constant EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1;
     uint256 public constant EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2;
-    uint256 public constant EXTRA_DATA_TYPE_OPERATOR_BALANCES = 3;
 
     /// @notice The extra data format used to signify that the oracle report contains no extra data.
     ///
@@ -443,6 +437,11 @@ contract AccountingOracle is BaseOracle {
         result.extraDataItemsSubmitted = extraState.itemsProcessed;
     }
 
+    function getCurrentFrame() external view returns (uint256 refSlot, uint256 refSlotTimestamp) {
+        refSlot = _getCurrentRefSlot();
+        refSlotTimestamp = _getSlotTimestamp(refSlot);
+    }
+
     ///
     /// Implementation & helpers
     ///
@@ -503,15 +502,7 @@ contract AccountingOracle is BaseOracle {
         IWithdrawalQueue withdrawalQueue = IWithdrawalQueue(LOCATOR.withdrawalQueue());
         IOracleReportSanityChecker sanityChecker = IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker());
 
-        sanityChecker.checkModuleAndCLBalancesChangeRates(
-            data.stakingModuleIdsWithUpdatedBalance,
-            data.validatorBalancesGweiByStakingModule,
-            data.pendingBalancesGweiByStakingModule,
-            data.clValidatorsBalanceGwei,
-            data.clPendingBalanceGwei,
-            timeElapsed
-        );
-
+        _checkStakingRouterModuleBalances(sanityChecker, data, timeElapsed);
         _processStakingRouterExitedValidatorsByModule(
             stakingRouter,
             sanityChecker,
@@ -527,19 +518,18 @@ contract AccountingOracle is BaseOracle {
         _processStakingRouterValidatorBalancesByModule(
             stakingRouter,
             data.stakingModuleIdsWithUpdatedBalance,
-            data.validatorBalancesGweiByStakingModule,
-            data.pendingBalancesGweiByStakingModule
+            data.validatorBalancesGweiByStakingModule
         );
 
         withdrawalQueue.onOracleReport(
             data.isBunkerMode,
-            GENESIS_TIME + prevRefSlot * SECONDS_PER_SLOT,
-            GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT
+            _getSlotTimestamp(prevRefSlot),
+            _getSlotTimestamp(data.refSlot)
         );
 
         IReportReceiver(LOCATOR.accounting()).handleOracleReport(
             ReportValues(
-                GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+                _getSlotTimestamp(data.refSlot),
                 timeElapsed,
                 data.clValidatorsBalanceGwei * 1e9,
                 data.clPendingBalanceGwei * 1e9,
@@ -552,7 +542,7 @@ contract AccountingOracle is BaseOracle {
         );
 
         ILazyOracle(LOCATOR.lazyOracle()).updateReportData(
-            GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+            _getSlotTimestamp(data.refSlot),
             data.refSlot,
             data.vaultsDataTreeRoot,
             data.vaultsDataTreeCid
@@ -567,6 +557,10 @@ contract AccountingOracle is BaseOracle {
             itemsProcessed: 0,
             lastSortingKey: 0
         });
+    }
+
+    function _getSlotTimestamp(uint256 slot) internal view returns (uint256) {
+        return GENESIS_TIME + (slot * SECONDS_PER_SLOT);
     }
 
     function _processStakingRouterExitedValidatorsByModule(
@@ -584,7 +578,7 @@ contract AccountingOracle is BaseOracle {
             return;
         }
 
-        for (uint256 i = 1; i < stakingModuleIds.length; ) {
+        for (uint256 i = 1; i < stakingModuleIds.length;) {
             if (stakingModuleIds[i] <= stakingModuleIds[i - 1]) {
                 revert InvalidExitedValidatorsData();
             }
@@ -593,7 +587,7 @@ contract AccountingOracle is BaseOracle {
             }
         }
 
-        for (uint256 i = 0; i < stakingModuleIds.length; ) {
+        for (uint256 i = 0; i < stakingModuleIds.length;) {
             if (numExitedValidatorsByStakingModule[i] == 0) {
                 revert InvalidExitedValidatorsData();
             }
@@ -616,27 +610,13 @@ contract AccountingOracle is BaseOracle {
     function _processStakingRouterValidatorBalancesByModule(
         IStakingRouter stakingRouter,
         uint256[] calldata stakingModuleIds,
-        uint256[] calldata validatorBalancesGwei,
-        uint256[] calldata pendingBalancesGwei
+        uint256[] calldata validatorBalancesGwei
     ) internal {
-        uint256 numModules = stakingModuleIds.length;
-        if (numModules != validatorBalancesGwei.length || numModules != pendingBalancesGwei.length) {
-            revert InvalidClBalancesData();
-        }
-        if (numModules == 0) {
+        if (stakingModuleIds.length == 0) {
             return;
         }
 
-        for (uint256 i = 1; i < numModules;) {
-            if (stakingModuleIds[i] <= stakingModuleIds[i - 1]) {
-                revert InvalidClBalancesData();
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        stakingRouter.reportValidatorBalancesByStakingModule(stakingModuleIds, validatorBalancesGwei, pendingBalancesGwei);
+        stakingRouter.reportValidatorBalancesByStakingModule(stakingModuleIds, validatorBalancesGwei);
     }
 
     function _submitReportExtraDataEmpty() internal {
@@ -729,6 +709,50 @@ contract AccountingOracle is BaseOracle {
         emit ExtraDataSubmitted(procState.refSlot, procState.itemsProcessed, procState.itemsCount);
     }
 
+    function _checkStakingRouterModuleBalances(
+        IOracleReportSanityChecker sanityChecker,
+        ReportData calldata data,
+        uint256 timeElapsed
+    ) internal view {
+        // This check must run before `reportValidatorBalancesByStakingModule(...)` mutates the router state,
+        // because it compares the report against the previous per-module validators balances in StakingRouter
+        // and the pre-report protocol pending/deposits snapshot in Lido.
+        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
+        stakingRouter.validateReportValidatorBalancesByStakingModule(
+            data.stakingModuleIdsWithUpdatedBalance,
+            data.validatorBalancesGweiByStakingModule
+        );
+
+        uint256[] memory validatorBalancesWeiByStakingModule =
+            _normalizeStakingRouterValidatorBalancesToWei(data.validatorBalancesGweiByStakingModule);
+
+        (uint256 preCLValidatorsBalanceWei, uint256 preCLPendingBalanceWei,, uint256 depositsWei) =
+            ILido(LOCATOR.lido()).getBalanceStats();
+        sanityChecker.checkModuleAndCLBalancesChangeRates(
+            data.stakingModuleIdsWithUpdatedBalance,
+            validatorBalancesWeiByStakingModule,
+            preCLValidatorsBalanceWei,
+            preCLPendingBalanceWei,
+            data.clValidatorsBalanceGwei * 1 gwei,
+            data.clPendingBalanceGwei * 1 gwei,
+            depositsWei,
+            timeElapsed
+        );
+    }
+
+    function _normalizeStakingRouterValidatorBalancesToWei(
+        uint256[] calldata validatorBalancesGwei
+    ) internal pure returns (uint256[] memory validatorBalancesWeiByStakingModule) {
+        uint256 modulesCount = validatorBalancesGwei.length;
+        validatorBalancesWeiByStakingModule = new uint256[](modulesCount);
+        for (uint256 i = 0; i < modulesCount; ) {
+            validatorBalancesWeiByStakingModule[i] = validatorBalancesGwei[i] * 1 gwei;
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     function _processExtraDataItems(bytes calldata data, ExtraDataIterState memory iter) internal {
         uint256 dataOffset = iter.dataOffset;
         uint256 maxNodeOperatorsPerItem = 0;
@@ -769,7 +793,7 @@ contract AccountingOracle is BaseOracle {
 
             uint256 nodeOpsProcessed;
 
-            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS || itemType == EXTRA_DATA_TYPE_OPERATOR_BALANCES) {
+            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
                 nodeOpsProcessed = _processExtraDataItem(data, iter);
             } else {
                 revert UnsupportedExtraDataType(index, itemType);
@@ -870,9 +894,6 @@ contract AccountingOracle is BaseOracle {
         if (iter.itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
             IStakingRouter(iter.stakingRouter)
                 .reportStakingModuleExitedValidatorsCountByNodeOperator(moduleId, nodeOpIds, payload);
-        } else if (iter.itemType == EXTRA_DATA_TYPE_OPERATOR_BALANCES) {
-            IStakingRouter(iter.stakingRouter)
-                .reportStakingModuleOperatorBalances(moduleId, nodeOpIds, payload);
         }
 
         iter.dataOffset = dataOffset;

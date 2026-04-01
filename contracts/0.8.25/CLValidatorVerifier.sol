@@ -6,16 +6,16 @@ pragma solidity 0.8.25;
 import {GIndex, pack, concat} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
-import {BeaconRootData, ValidatorWitness} from "../common/interfaces/TopUpWitness.sol";
+import {BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/ValidatorWitness.sol";
 
 /**
- * @title CLTopUpVerifier
+ * @title CLValidatorVerifier
  * @author Lido
  * @notice
  *
  * Smart contract verifying CL data of validators
  */
-abstract contract CLTopUpVerifier {
+abstract contract CLValidatorVerifier {
     // BeaconBlockHeader: state_root field gindex
     uint8 private constant STATE_ROOT_DEPTH = 3;
     uint256 private constant STATE_ROOT_POSITION = 3;

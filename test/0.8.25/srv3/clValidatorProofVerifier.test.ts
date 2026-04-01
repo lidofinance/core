@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { CLTopUpVerifier__Harness, SSZValidatorsMerkleTree } from "typechain-types";
+import { CLValidatorVerifier__Harness, SSZValidatorsMerkleTree } from "typechain-types";
 
 import { generateBeaconHeader, generateValidator, randomBytes32, setBeaconBlockRoot } from "lib/pdg";
 import { prepareLocalMerkleTree } from "lib/top-ups";
@@ -150,7 +150,7 @@ describe("CLTopUpProofVerifier", () => {
   let sszMerkleTree: SSZValidatorsMerkleTree;
   let gIFirstValidator: string;
   let firstValidatorLeafIndex: bigint;
-  let verifier: CLTopUpVerifier__Harness;
+  let verifier: CLValidatorVerifier__Harness;
 
   before(async () => {
     // 1) Build a local SSZ tree once
@@ -166,7 +166,7 @@ describe("CLTopUpProofVerifier", () => {
     }
 
     // 2) Deploy the verifier (same GI for prev/curr, no pivot)
-    verifier = await ethers.deployContract("CLTopUpVerifier__Harness", [
+    verifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       gIFirstValidator, // GI_FIRST_VALIDATOR_PREV
       gIFirstValidator, // GI_FIRST_VALIDATOR_CURR
       0, // PIVOT_SLOT
@@ -415,7 +415,7 @@ describe("CLTopUpProofVerifier", () => {
   });
 
   it("should verify static validator 12345 with real mainnet proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLTopUpVerifier__Harness", [
+    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
       STATIC_VALIDATOR.gIFirstValidator,
       0,
@@ -438,7 +438,7 @@ describe("CLTopUpProofVerifier", () => {
   });
 
   it("should verify static validator 67890 with real mainnet proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLTopUpVerifier__Harness", [
+    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
       STATIC_VALIDATOR.gIFirstValidator,
       0,
@@ -461,7 +461,7 @@ describe("CLTopUpProofVerifier", () => {
   });
 
   it("should reject static validator with wrong withdrawal credentials", async () => {
-    const staticVerifier = await ethers.deployContract("CLTopUpVerifier__Harness", [
+    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
       STATIC_VALIDATOR.gIFirstValidator,
       0,
@@ -480,7 +480,7 @@ describe("CLTopUpProofVerifier", () => {
   });
 
   it("should reject static validator with fake proof", async () => {
-    const staticVerifier = await ethers.deployContract("CLTopUpVerifier__Harness", [
+    const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
       STATIC_VALIDATOR.gIFirstValidator,
       0,
@@ -515,7 +515,7 @@ describe("CLTopUpProofVerifier", () => {
     const giPrev = randomBytes32();
     const giCurr = randomBytes32();
 
-    const proofVerifier = await ethers.deployContract("CLTopUpVerifier__Harness", [giPrev, giCurr, pivotSlot], {});
+    const proofVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [giPrev, giCurr, pivotSlot], {});
     expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot - 1)).to.equal(giPrev);
     expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(giCurr);
     expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot + 1)).to.equal(giCurr);

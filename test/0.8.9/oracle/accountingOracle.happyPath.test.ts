@@ -138,7 +138,6 @@ describe("AccountingOracle.sol:happyPath", () => {
       numExitedValidatorsByStakingModule: [3],
       stakingModuleIdsWithUpdatedBalance: [1],
       validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
-      pendingBalancesGweiByStakingModule: [20n * ONE_GWEI],
       withdrawalVaultBalance: ether("1"),
       elRewardsVaultBalance: ether("2"),
       sharesRequestedToBurn: ether("3"),

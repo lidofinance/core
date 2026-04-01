@@ -47,7 +47,8 @@ interface ILido is IERC20, IVersioned {
         returns (
             uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
-            uint256 depositedSinceLastReport
+            uint256 depositedSinceLastReport,
+            uint256 depositedForCurrentReport
         );
 
     function processClStateUpdate(
