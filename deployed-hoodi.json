@@ -870,7 +870,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/VaultHub.sol",
-      "address": "0x4300a0FA4BAD3243b5952db16dB93Db8E3752E23",
+      "address": "0xAd2C869FE66Ff4c0E347A0824Af92D2B7C91288A",
       "constructorArgs": [
         "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
         "0x3508A952176b3c15387C97BE809eaffB1982176a",
