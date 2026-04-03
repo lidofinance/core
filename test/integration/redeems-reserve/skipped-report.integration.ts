@@ -76,7 +76,7 @@ describe("Integration: Redeems reserve — skipped report", () => {
     const { lido } = ctx.contracts;
 
     // --- Seed reserve, process report ---
-    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, redeemsReserveRatioBP: RATIO_BP });
 
     const state0: ProtocolState = await captureState(lido);
     const depositable0 = await lido.getDepositableEther();
@@ -158,10 +158,7 @@ describe("Integration: Redeems reserve — skipped report", () => {
 
     assertReserveState(state5, RATIO_BP);
     // Verify: final target = post-deposit target minus redeem's proportional contribution
-    expect(state5.reserveTarget).to.be.closeTo(
-      targetAfterDeposit - expectedReserveTarget(redeemEther2, RATIO_BP),
-      10n,
-    );
+    expect(state5.reserveTarget).to.be.closeTo(targetAfterDeposit - expectedReserveTarget(redeemEther2, RATIO_BP), 10n);
     await assertReserveAllocationInvariant(lido);
   });
 });

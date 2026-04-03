@@ -67,7 +67,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     testSnapshot = await Snapshot.take();
     fix = await setupRedeemer(ctx, reserveManager);
 
-    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, redeemsReserveRatioBP: RATIO_BP });
     await resetCLBalanceDecreaseWindow(ctx);
 
     const { lido } = ctx.contracts;
@@ -114,6 +114,9 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     expect(state2.reserveTarget).to.equal(expectedReserveTarget(state2.internalEther, RATIO_BP));
     expect(state1.reserveTarget).to.equal(expectedReserveTarget(state1.internalEther, RATIO_BP));
 
+    // Verify: redeem shrinks the base → state2 target is lower than state1 target (1 wei integer division rounding)
+    expect(state1.reserveTarget - state2.reserveTarget).to.be.closeTo(expectedReserveTarget(redeemEther, RATIO_BP), 1n);
+
     // Verify: difference between paths is only the redeemed ETH and shares
     expect(state2.totalPooledEther).to.equal(state1.totalPooledEther - redeemEther);
     expect(state2.totalShares).to.equal(state1.totalShares - redeemShares);
@@ -121,6 +124,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
 
   it("redeem amplifies negative rebase for remaining holders", async () => {
     const { lido } = ctx.contracts;
+    const rateBeforeRebase = (await captureState(lido)).shareRate;
 
     // --- Path A: report with CL loss, no redeem (via snapshot) ---
     const simSnapshot = await Snapshot.take();
@@ -145,6 +149,10 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     assertReserveState(state2, RATIO_BP);
 
     // --- Compare paths: redeem amplifies loss per remaining share ---
+    // Verify: both paths produced a negative rebase — rate dropped from pre-rebase baseline
+    expect(rateBeforeRebase - state1.shareRate).to.be.gt(0n);
+    expect(rateBeforeRebase - state2.shareRate).to.be.gt(0n);
+
     // Verify: state1 spreads loss over full base, state2 over smaller base (sharper impact)
     const expectedShareRate1 = (state1.totalPooledEther * ether("1")) / state1.totalShares;
     const expectedShareRate2 =
@@ -201,6 +209,9 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     const internalizedBadDebtShares = await vaultHub
       .connect(badDebtManager)
       .internalizeBadDebt.staticCall(stakingVault, badDebtShares);
+    // Precondition: bad debt is non-trivial
+    expect(internalizedBadDebtShares).to.be.gt(0n);
+    expect(internalizedBadDebtShares).to.equal(badDebtShares);
     await vaultHub.connect(badDebtManager).internalizeBadDebt(stakingVault, badDebtShares);
 
     await doReport(ctx);

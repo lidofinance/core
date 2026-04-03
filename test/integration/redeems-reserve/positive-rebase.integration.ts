@@ -61,7 +61,7 @@ describe("Integration: Redeems reserve — positive rebase", () => {
     testSnapshot = await Snapshot.take();
     fix = await setupRedeemer(ctx, reserveManager);
 
-    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, redeemsReserveRatioBP: RATIO_BP });
 
     const { lido } = ctx.contracts;
     expect(await lido.getRedeemsReserve()).to.equal(await lido.getRedeemsReserveTarget());
@@ -112,9 +112,9 @@ describe("Integration: Redeems reserve — positive rebase", () => {
     expect(state2.totalPooledEther).to.equal(state0.totalPooledEther + REWARDS - redeemEther);
     expect(state2.totalShares).to.equal(state0.totalShares - redeemShares);
 
-    const expectedState1ShareRate = (state0.totalPooledEther + REWARDS) * ether("1") / state0.totalShares;
+    const expectedState1ShareRate = ((state0.totalPooledEther + REWARDS) * ether("1")) / state0.totalShares;
     const expectedState2ShareRate =
-      (state0.totalPooledEther + REWARDS - redeemEther) * ether("1") / (state0.totalShares - redeemShares);
+      ((state0.totalPooledEther + REWARDS - redeemEther) * ether("1")) / (state0.totalShares - redeemShares);
 
     expect(state1.shareRate).to.equal(expectedState1ShareRate);
     expect(state2.shareRate).to.equal(expectedState2ShareRate);

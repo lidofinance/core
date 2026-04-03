@@ -16,6 +16,7 @@ import {
   captureBufferState,
   captureState,
   doReport,
+  fundElRewards,
   getRedeemAmount,
   RedeemerFixture,
   redeemExact,
@@ -110,7 +111,7 @@ describe("Integration: Redeems reserve — buffer allocation", () => {
     // --- Seed reserve, second holder deposits, process report ---
     await seedReserve(ctx, holder, reserveManager, {
       deposit: DEFAULT_DEPOSIT,
-      ratioBP: DEFAULT_RATIO_BP,
+      redeemsReserveRatioBP: DEFAULT_RATIO_BP,
       depositsReserveTarget: DEPOSITS_RESERVE_TARGET,
     });
     await lido.connect(secondHolder).submit(ZeroAddress, { value: SECOND_DEPOSIT });
@@ -122,8 +123,15 @@ describe("Integration: Redeems reserve — buffer allocation", () => {
     assertReserveState(protocol0, DEFAULT_RATIO_BP);
 
     // --- Request withdrawals exceeding unreserved buffer ---
-    const [firstRequestId] = await requestWithdrawals({ ctx, from: holder, amounts: [DEFAULT_DEPOSIT - ether("100")] });
-    const [secondRequestId] = await requestWithdrawals({ ctx, from: secondHolder, amounts: [SECOND_DEPOSIT] });
+    const firstAmount = DEFAULT_DEPOSIT - ether("100");
+    const secondAmount = SECOND_DEPOSIT;
+    const [firstRequestId] = await requestWithdrawals({ ctx, from: holder, amounts: [firstAmount] });
+    const [secondRequestId] = await requestWithdrawals({ ctx, from: secondHolder, amounts: [secondAmount] });
+
+    // Verify: total requested exceeds available for WQ (not all can be finalized in one report)
+    const preReport = await captureBufferState(ctx);
+    const availableForWQ = preReport.buffered - preReport.reserve - preReport.depositsReserve;
+    expect(firstAmount + secondAmount).to.be.gt(availableForWQ);
 
     // --- Process report with WQ finalization ---
     await doReport(ctx, { skipWithdrawals: false, excludeVaultsBalances: true });
@@ -151,7 +159,7 @@ describe("Integration: Redeems reserve — buffer allocation", () => {
     // --- Seed reserve with 50% ratio, growthShare = 0 ---
     await seedReserve(ctx, holder, reserveManager, {
       deposit: SPLIT_DEPOSIT,
-      ratioBP: SPLIT_RATIO_BP,
+      redeemsReserveRatioBP: SPLIT_RATIO_BP,
       growthShareBP: GROWTH_SHARE_ZERO,
     });
 
@@ -182,6 +190,16 @@ describe("Integration: Redeems reserve — buffer allocation", () => {
     expect(growthZero.withdrawalsReserve).to.equal(beforeReport.withdrawalsReserve);
     expect(growthZero.unfinalizedStETH).to.equal(beforeReport.unfinalizedStETH);
     expect(growthZero.unfinalizedStETH).to.equal(requestAmount);
+
+    // Verify: EL rewards go to withdrawalsReserve, redeems reserve stays unchanged (growthShare=0)
+    const EL_REWARDS = ether("1");
+    await fundElRewards(ctx, EL_REWARDS);
+    await doReport(ctx, { skipWithdrawals: true, excludeVaultsBalances: false, reportElVault: true });
+
+    const withRewards = await captureBufferState(ctx);
+    await assertReserveAllocationInvariant(lido);
+    expect(withRewards.reserve).to.equal(growthZero.reserve);
+    expect(withRewards.withdrawalsReserve).to.equal(growthZero.withdrawalsReserve + EL_REWARDS);
 
     await Snapshot.restore(restorePoint);
 

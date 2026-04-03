@@ -17,7 +17,7 @@ import {
 import { Snapshot } from "test/suite";
 
 import {
-  advanceToReportableTime,
+  advancePastRequestTimestampMargin,
   assertReserveAllocationInvariant,
   assertReserveState,
   captureState,
@@ -87,7 +87,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
 
   /** Advances to reportable time, mines blocks, runs a dryRun and returns refSlot + full report data */
   async function dryRunAtCurrentState(opts: Parameters<typeof report>[1] = {}) {
-    await advanceToReportableTime(ctx);
+    await advancePastRequestTimestampMargin(ctx);
     await mineBlocks(3);
 
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
@@ -120,7 +120,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     const RATIO_BP = 500n;
 
     // --- Seed reserve, process report ---
-    await seedReserve(ctx, holder, reserveManager, { deposit: ether("1000"), ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: ether("1000"), redeemsReserveRatioBP: RATIO_BP });
 
     const state0: ProtocolState = await captureState(lido);
     assertReserveState(state0, RATIO_BP);
@@ -151,21 +151,30 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
 
     const headroomDrained = await getHeadroom(lido);
 
-    await doReport(ctx, { excludeVaultsBalances: false, reportElVault: true });
+    const reportResult = await doReport(ctx, { excludeVaultsBalances: false, reportElVault: true });
+
+    // Verify: report helper recomputed simulatedShareRate from post-redeem state with smoothing
+    const reportSimulatedRate = BigInt(reportResult.data.simulatedShareRate);
+    const expectedReportRate =
+      ((state0.totalPooledEther - redeemEther + headroomDrained) * SHARE_RATE_PRECISION) /
+      (state0.totalShares - redeemShares);
+    expect(reportSimulatedRate).to.equal(expectedReportRate);
 
     const state2: ProtocolState = await captureState(lido);
     const deferredRewards = await ethers.provider.getBalance(elVaultAddr);
     const appliedRewards = headroomFull - deferredRewards;
 
     // --- Compare paths: drain caused deferred rewards ---
-    // Verify: deferred = headroomFull - headroomDrained (smoothing capped by smaller base)
+    // Verify: some rewards were deferred (smoothing kicked in due to smaller post-drain base)
+    expect(deferredRewards).to.be.gt(0n);
     expect(deferredRewards).to.equal(headroomFull - headroomDrained);
-    expect(appliedRewards).to.equal(headroomDrained);
+    // Cross-check: applied + deferred = total funded
+    expect(appliedRewards + deferredRewards).to.equal(headroomFull);
 
     expect(state2.totalPooledEther).to.equal(state1.totalPooledEther - deferredRewards - redeemEther);
     expect(state2.totalShares).to.equal(state1.totalShares - redeemShares);
 
-    const expectedShareRate2 = state2.totalPooledEther * ether("1") / state2.totalShares;
+    const expectedShareRate2 = (state2.totalPooledEther * ether("1")) / state2.totalShares;
     expect(state2.shareRate).to.equal(expectedShareRate2);
     await assertReserveAllocationInvariant(lido);
 
@@ -188,7 +197,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     // --- Setup: maxRebase = 10%, ratio = 20% ---
     const savedRebase = await setMaxPositiveTokenRebase(ctx, LIMITER_PRECISION_BASE / 10n);
 
-    await seedReserve(ctx, holder, reserveManager, { deposit: ether("1000"), ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: ether("1000"), redeemsReserveRatioBP: RATIO_BP });
     assertReserveState(await captureState(lido), RATIO_BP);
 
     await requestWithdrawal(ctx, holder, ether("1"));
@@ -206,16 +215,25 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     // --- Drain entire reserve ---
     await mineBlocks(3);
     const redeemAmount = await getRedeemAmount(lido, "full");
+    const redeemShares = await lido.getSharesByPooledEth(redeemAmount);
+    const redeemEther = await lido.getPooledEthByShares(redeemShares);
     await redeemExact(lido, holder, fix, redeemAmount);
 
     // --- Process report ---
     await mineBlocks(4);
-    await report(ctx, {
+    const reportResult = await report(ctx, {
       clDiff: 0n,
       excludeVaultsBalances: false,
       reportElVault: true,
       skipWithdrawals: false,
     });
+
+    // Verify: report helper recomputed simulatedShareRate from post-redeem state (differs from pre-redeem dryRun)
+    const reportSimulatedRate = BigInt(reportResult.data.simulatedShareRate);
+    const expectedReportRate =
+      ((statePreRedeem.totalPooledEther - redeemEther + REWARDS) * SHARE_RATE_PRECISION) /
+      (statePreRedeem.totalShares - redeemShares);
+    expect(reportSimulatedRate).to.equal(expectedReportRate);
 
     // Verify: smoothing did NOT kick in (all rewards applied)
     expect(await ethers.provider.getBalance(elVaultAddr)).to.equal(0n);
@@ -226,15 +244,12 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     const actualRate = (totalPooled * SHARE_RATE_PRECISION) / totalShares;
 
     const expectedSimulatedRate =
-      (statePreRedeem.totalPooledEther + REWARDS) * SHARE_RATE_PRECISION / statePreRedeem.totalShares;
+      ((statePreRedeem.totalPooledEther + REWARDS) * SHARE_RATE_PRECISION) / statePreRedeem.totalShares;
     expect(simulatedShareRate).to.equal(expectedSimulatedRate);
 
     // Verify: actualRate > simulatedRate because same rewards over fewer shares (post-redeem)
-    const rateDiff = actualRate - simulatedShareRate;
-    expect(rateDiff).to.equal(actualRate - expectedSimulatedRate);
-
-    const deviationBP = (rateDiff * TOTAL_BASIS_POINTS) / actualRate;
-    expect(deviationBP).to.equal(computeDeviationBP(actualRate, simulatedShareRate));
+    const deviationBP = computeDeviationBP(actualRate, simulatedShareRate);
+    expect(deviationBP).to.equal(((actualRate - simulatedShareRate) * TOTAL_BASIS_POINTS) / actualRate);
 
     await assertReserveAllocationInvariant(lido);
 
@@ -250,7 +265,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     // --- Setup: maxRebase = 1%, ratio = 20% ---
     const savedRebase = await setMaxPositiveTokenRebase(ctx, LIMITER_PRECISION_BASE / 100n);
 
-    await seedReserve(ctx, holder, reserveManager, { deposit: ether("1000"), ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: ether("1000"), redeemsReserveRatioBP: RATIO_BP });
     assertReserveState(await captureState(lido), RATIO_BP);
 
     await requestWithdrawal(ctx, holder, ether("1"));
@@ -258,6 +273,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     // --- Fund EL rewards (>> headroom), dryRun at pre-redeem state ---
     await fundElRewards(ctx, REWARDS);
 
+    const statePreRedeem: ProtocolState = await captureState(lido);
     const { simulatedShareRate } = await dryRunAtCurrentState({
       excludeVaultsBalances: false,
       reportElVault: true,
@@ -267,18 +283,28 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     // --- Drain entire reserve ---
     await mineBlocks(3);
     const redeemAmount = await getRedeemAmount(lido, "full");
+    const redeemShares = await lido.getSharesByPooledEth(redeemAmount);
+    const redeemEther = await lido.getPooledEthByShares(redeemShares);
     await redeemExact(lido, holder, fix, redeemAmount);
 
     const headroomAfterDrain = await getHeadroom(lido);
 
     // --- Process report ---
     await mineBlocks(4);
-    await report(ctx, {
+    const reportResult = await report(ctx, {
       clDiff: 0n,
       excludeVaultsBalances: false,
       reportElVault: true,
       skipWithdrawals: false,
     });
+
+    // Verify: report helper recomputed simulatedShareRate from post-redeem state with smoothing applied
+    // (headroomAfterDrain < REWARDS, so only headroom worth of rewards are included in simulated rate)
+    const reportSimulatedRate = BigInt(reportResult.data.simulatedShareRate);
+    const expectedReportRate =
+      ((statePreRedeem.totalPooledEther - redeemEther + headroomAfterDrain) * SHARE_RATE_PRECISION) /
+      (statePreRedeem.totalShares - redeemShares);
+    expect(reportSimulatedRate).to.equal(expectedReportRate);
 
     // Verify: smoothing DID kick in (some rewards deferred)
     const deferredRewards = await ethers.provider.getBalance(elVaultAddr);
@@ -304,7 +330,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     // --- Setup: maxRebase = 20%, ratio = 20%, rewards = 150 ETH ---
     const savedRebase = await setMaxPositiveTokenRebase(ctx, LIMITER_PRECISION_BASE / 5n);
 
-    await seedReserve(ctx, holder, reserveManager, { deposit: ether("1000"), ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: ether("1000"), redeemsReserveRatioBP: RATIO_BP });
     assertReserveState(await captureState(lido), RATIO_BP);
 
     await requestWithdrawal(ctx, holder, ether("1"));
@@ -346,9 +372,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     const tamperedData = { ...postRedeemResult.data, simulatedShareRate: staleRate };
 
     // --- Submit report with stale simulatedShareRate, expect revert ---
-    await expect(
-      submitReportDataWithConsensus(ctx, tamperedData),
-    ).to.be.revertedWithCustomError(
+    await expect(submitReportDataWithConsensus(ctx, tamperedData)).to.be.revertedWithCustomError(
       ctx.contracts.oracleReportSanityChecker,
       "IncorrectSimulatedShareRate",
     );

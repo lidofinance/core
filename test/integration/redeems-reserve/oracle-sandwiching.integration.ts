@@ -62,7 +62,7 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
     testSnapshot = await Snapshot.take();
     fix = await setupRedeemer(ctx, reserveManager);
 
-    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, redeemsReserveRatioBP: RATIO_BP });
 
     const { lido } = ctx.contracts;
     await assertReserveAllocationInvariant(lido);
@@ -101,8 +101,8 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
 
     // --- Attacker re-enters at higher share rate ---
     const reenter = await submitEther({ lido, from: attacker, amount: redeemQuote.ether });
-    const expectedShareRate1 = (state0.totalPooledEther + REWARDS) * ether("1") / state0.totalShares;
-    const expectedSharesBack = redeemQuote.ether * state1.totalShares / state1.totalPooledEther;
+    const expectedShareRate1 = ((state0.totalPooledEther + REWARDS) * ether("1")) / state0.totalShares;
+    const expectedSharesBack = (redeemQuote.ether * state1.totalShares) / state1.totalPooledEther;
     const expectedSharesLost = redeemQuote.shares - expectedSharesBack;
 
     expect(state1.totalPooledEther).to.equal(state0.totalPooledEther + REWARDS);
@@ -151,10 +151,11 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
     // --- Compare paths: attacker diluted the pool ---
     const expectedState2TotalPooledEther = postAttackReport.totalPooledEther - attackerRedeemQuote.ether;
     const expectedState2TotalShares = postAttackReport.totalShares - attackerRedeemQuote.shares;
-    const expectedBaselineShareRate = state1.totalPooledEther * ether("1") / state1.totalShares;
-    const expectedAttackShareRate = postAttackReport.totalPooledEther * ether("1") / postAttackReport.totalShares;
-    const expectedState2ShareRate = expectedState2TotalPooledEther * ether("1") / expectedState2TotalShares;
-    const expectedRedeemPayout = attackDeposit.shares * postAttackReport.totalPooledEther / postAttackReport.totalShares;
+    const expectedBaselineShareRate = (state1.totalPooledEther * ether("1")) / state1.totalShares;
+    const expectedAttackShareRate = (postAttackReport.totalPooledEther * ether("1")) / postAttackReport.totalShares;
+    const expectedState2ShareRate = (expectedState2TotalPooledEther * ether("1")) / expectedState2TotalShares;
+    const expectedRedeemPayout =
+      (attackDeposit.shares * postAttackReport.totalPooledEther) / postAttackReport.totalShares;
     const expectedProfit = expectedRedeemPayout - attackerDepositAmount;
 
     expect(await ethers.provider.getBalance(fix.address)).to.equal(redeemerBalanceBefore + attackerRedeemQuote.ether);
@@ -209,10 +210,10 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
     const state2 = await captureState(lido);
     await assertReserveAllocationInvariant(lido);
 
-    const expectedSharesAfter = redeemQuote.ether * lossPathState.totalShares / lossPathState.totalPooledEther;
+    const expectedSharesAfter = (redeemQuote.ether * lossPathState.totalShares) / lossPathState.totalPooledEther;
     const expectedState2TotalPooledEther = state1.totalPooledEther;
     const expectedState2TotalShares = state1.totalShares - redeemQuote.shares + expectedSharesAfter;
-    const expectedState2ShareRate = expectedState2TotalPooledEther * ether("1") / expectedState2TotalShares;
+    const expectedState2ShareRate = (expectedState2TotalPooledEther * ether("1")) / expectedState2TotalShares;
     const expectedEscapedShares = expectedSharesAfter - redeemQuote.shares;
 
     expect(reenter.shares).to.equal(expectedSharesAfter);

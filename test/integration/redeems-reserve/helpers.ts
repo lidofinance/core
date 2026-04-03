@@ -50,7 +50,7 @@ export async function seedReserve(
   reserveManager: HardhatEthersSigner,
   opts: {
     deposit: bigint;
-    ratioBP: bigint;
+    redeemsReserveRatioBP: bigint;
     depositsReserveTarget?: bigint;
     growthShareBP?: bigint;
   },
@@ -59,7 +59,7 @@ export async function seedReserve(
   if (opts.deposit > 0n) {
     await lido.connect(holder).submit(ZeroAddress, { value: opts.deposit });
   }
-  await lido.connect(reserveManager).setRedeemsReserveTargetRatio(opts.ratioBP);
+  await lido.connect(reserveManager).setRedeemsReserveTargetRatio(opts.redeemsReserveRatioBP);
   if (opts.depositsReserveTarget !== undefined) {
     await lido.connect(reserveManager).setDepositsReserveTarget(opts.depositsReserveTarget);
   }
@@ -140,8 +140,8 @@ export async function fundElRewards(ctx: ProtocolContext, amount: bigint) {
   await updateBalance(elVaultAddr, amount);
 }
 
-/** Advances chain time past the oracle requestTimestampMargin */
-export async function advanceToReportableTime(ctx: ProtocolContext) {
+/** Advances chain time past requestTimestampMargin so pending WQ requests pass the creation-time sanity check */
+export async function advancePastRequestTimestampMargin(ctx: ProtocolContext) {
   const { requestTimestampMargin } = await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits();
   await advanceChainTime(requestTimestampMargin + 1n);
 }
@@ -244,9 +244,9 @@ export async function getRedeemAmount(lido: Lido, size: RedeemSize): Promise<big
   const reserve = await lido.getRedeemsReserve();
   switch (size) {
     case "small":
-      return reserve * 5n / 100n;
+      return (reserve * 5n) / 100n;
     case "huge":
-      return reserve * 50n / 100n;
+      return (reserve * 50n) / 100n;
     case "full": {
       const shares = await lido.getSharesByPooledEth(reserve);
       return await lido.getPooledEthByShares(shares);
@@ -283,10 +283,13 @@ export async function applyInsurance(ctx: ProtocolContext, holder: HardhatEthers
 
 /** Computes expected reserve target from internal ether and ratio */
 export function expectedReserveTarget(internalEther: bigint, ratioBP: bigint): bigint {
-  return ratioBP * internalEther / 10_000n;
+  return (ratioBP * internalEther) / 10_000n;
 }
 
-/** Validates reserve-related state derived from total pooled ether */
+/**
+ * Validates reserve is fully funded: target matches internalEther × ratioBP, and reserve == target.
+ * Only valid after a report when the buffer has enough ETH to fill the reserve.
+ */
 export function assertReserveState(state: ProtocolState, ratioBP: bigint) {
   expect(state.reserveTarget).to.equal(expectedReserveTarget(state.internalEther, ratioBP));
   expect(state.reserve).to.equal(state.reserveTarget);

@@ -10,7 +10,7 @@ import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
 import { Snapshot } from "test/suite";
 
 import {
-  advanceToReportableTime,
+  advancePastRequestTimestampMargin,
   assertReserveAllocationInvariant,
   assertReserveState,
   captureState,
@@ -99,7 +99,7 @@ describe("Integration: Redeems reserve — full circle", () => {
     const requestId = await requestWithdrawal(ctx, bob, ether("100"));
 
     // --- Process report with WQ finalization ---
-    await advanceToReportableTime(ctx);
+    await advancePastRequestTimestampMargin(ctx);
     const reportResult = await doReport(ctx, { skipWithdrawals: false, excludeVaultsBalances: true });
 
     const state2: ProtocolState = await captureState(lido);
@@ -167,7 +167,7 @@ describe("Integration: Redeems reserve — full circle", () => {
       await requestWithdrawal(ctx, user, balance);
     }
 
-    await advanceToReportableTime(ctx);
+    await advancePastRequestTimestampMargin(ctx);
     await doReport(ctx, { skipWithdrawals: false, excludeVaultsBalances: true });
 
     const state1: ProtocolState = await captureState(lido);
@@ -185,7 +185,7 @@ describe("Integration: Redeems reserve — full circle", () => {
     const eveBalance = await lido.balanceOf(eve.address);
     await requestWithdrawal(ctx, eve, eveBalance);
 
-    await advanceToReportableTime(ctx);
+    await advancePastRequestTimestampMargin(ctx);
     await doReport(ctx, { skipWithdrawals: false, excludeVaultsBalances: true });
     await assertReserveAllocationInvariant(lido);
 
@@ -197,7 +197,7 @@ describe("Integration: Redeems reserve — full circle", () => {
     let prevFinalized = await withdrawalQueue.getLastFinalizedRequestId();
 
     for (let i = 0; i < 10; i++) {
-      await advanceToReportableTime(ctx);
+      await advancePastRequestTimestampMargin(ctx);
       await doReport(ctx, { skipWithdrawals: false, excludeVaultsBalances: true });
       await assertReserveAllocationInvariant(lido);
 
@@ -215,6 +215,10 @@ describe("Integration: Redeems reserve — full circle", () => {
     await assertReserveAllocationInvariant(lido);
 
     // --- Daemon override: force-finalize with full buffered budget ---
+    // Verify: reserve is at target before override (will be drained to zero after)
+    const reserveBeforeOverride = await lido.getRedeemsReserve();
+    expect(reserveBeforeOverride).to.equal(await lido.getRedeemsReserveTarget());
+
     const buffered = await lido.getBufferedEther();
     const totalPooled = await lido.getTotalPooledEther();
     const totalShares = await lido.getTotalShares();
@@ -243,6 +247,9 @@ describe("Integration: Redeems reserve — full circle", () => {
     });
 
     expect(await withdrawalQueue.unfinalizedStETH()).to.equal(0n);
+
+    // Verify: reserve drained to zero after override (full buffer used for WQ; 1 wei rounding)
+    expect(await lido.getRedeemsReserve()).to.be.closeTo(0n, 1n);
 
     const [daveStatusFinal] = await withdrawalQueue.getWithdrawalStatus([daveRequestId]);
     expect(daveStatusFinal.isFinalized).to.equal(true);

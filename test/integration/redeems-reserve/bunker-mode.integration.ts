@@ -9,7 +9,7 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { Snapshot } from "test/suite";
 
 import {
-  advanceToReportableTime,
+  advancePastRequestTimestampMargin,
   assertReserveState,
   captureValidatedBunkerCheckpoint,
   doReport,
@@ -50,16 +50,17 @@ function expectBunkerReportState({
 }) {
   expect(current.bunkerMode).to.equal(true);
   expect(current.protocol.reserve).to.equal(current.protocol.reserveTarget);
-  expect(current.protocol.internalEther).to.equal(previous.protocol.internalEther + effectiveClDiff - amountOfETHLocked);
+  expect(current.protocol.internalEther).to.equal(
+    previous.protocol.internalEther + effectiveClDiff - amountOfETHLocked,
+  );
 
   const expectedTotalPooledEther =
     current.protocol.internalEther + (current.externalShares * current.protocol.internalEther) / current.internalShares;
-  const expectedShareRate = expectedTotalPooledEther * ether("1") / current.protocol.totalShares;
+  const expectedShareRate = (expectedTotalPooledEther * ether("1")) / current.protocol.totalShares;
 
   expect(current.protocol.totalPooledEther).to.equal(expectedTotalPooledEther);
   expect(current.protocol.shareRate).to.equal(expectedShareRate);
 }
-
 
 describe("Integration: Redeems reserve — bunker mode", () => {
   let ctx: ProtocolContext;
@@ -92,7 +93,7 @@ describe("Integration: Redeems reserve — bunker mode", () => {
     testSnapshot = await Snapshot.take();
     fix = await setupRedeemer(ctx, reserveManager);
 
-    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, ratioBP: RATIO_BP });
+    await seedReserve(ctx, holder, reserveManager, { deposit: DEPOSIT, redeemsReserveRatioBP: RATIO_BP });
   });
 
   afterEach(async () => {
@@ -110,7 +111,7 @@ describe("Integration: Redeems reserve — bunker mode", () => {
     // --- Initial redeem and WQ request before bunker ---
     await redeemExact(lido, holder, fix, initialRedeemAmount);
     const firstRequestId = await requestWithdrawal(ctx, holder, WQ_AMOUNT_BEFORE_BUNKER);
-    await advanceToReportableTime(ctx);
+    await advancePastRequestTimestampMargin(ctx);
     const state0 = await captureValidatedBunkerCheckpoint(ctx);
 
     // --- Enter bunker mode with CL loss ---
