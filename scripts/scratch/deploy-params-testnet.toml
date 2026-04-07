@@ -79,7 +79,7 @@ maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per secon
 
 # Accounting oracle configuration
 [accountingOracle]
-consensusVersion = 5                  # Consensus version
+consensusVersion = 6                  # Consensus version
 
 # Hash consensus for validators exit bus oracle
 [hashConsensusForValidatorsExitBusOracle]
@@ -88,7 +88,7 @@ epochsPerFrame = 4                    # Epochs per consensus frame
 
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
-consensusVersion = 4                  # Consensus version
+consensusVersion = 5                  # Consensus version
 maxValidatorsPerRequest = 600         # Maximum validators per request
 maxExitRequestsLimit = 13000          # Maximum exit requests limit
 exitsPerFrame = 1                     # Exits per frame

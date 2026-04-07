@@ -88,7 +88,7 @@
   },
   "accountingOracle": {
     "deployParameters": {
-      "consensusVersion": 4
+      "consensusVersion": 6
     }
   },
   "hashConsensusForValidatorsExitBusOracle": {
@@ -99,7 +99,7 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 4
+      "consensusVersion": 5
     }
   },
   "depositSecurityModule": {
