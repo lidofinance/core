@@ -199,7 +199,10 @@ contract Accounting {
         update.redeemedEther = redeemedEther;
 
         // Limit the rebase to avoid oracle frontrunning.
-        // The base is reduced by redeemedEther so the limiter sees the actual protocol size.
+        // The base is reduced by redeemed ether AND shares so the limiter sees
+        // a rate-neutral pre-state (as if the redeem never happened).
+        // Without the shares adjustment the pre-share-rate fed to the limiter
+        // would be artificially low, shrinking the shares-burn budget.
         (
             update.withdrawalsVaultTransfer,
             update.elRewardsVaultTransfer,
@@ -207,7 +210,7 @@ contract Accounting {
             update.totalSharesToBurn // shares to burn from Burner balance (WQ + cover)
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
             _pre.totalPooledEther - _pre.externalEther - redeemedEther,
-            _pre.totalShares - _pre.externalShares,
+            _pre.totalShares - _pre.externalShares - redeemedShares,
             update.principalClBalance,
             _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
