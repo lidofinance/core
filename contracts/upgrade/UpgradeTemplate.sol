@@ -15,7 +15,7 @@ import {
     ILidoWithFinalizeUpgrade,
     IAccountingOracle,
     IOracleReportSanityChecker,
-    IProxyAdmin,
+    IWithdrawalsManagerProxy,
     IKernel,
     IVersioned,
     IEasyTrack,
@@ -212,11 +212,11 @@ contract UpgradeTemplate is UpgradeConfig {
 
 
         // WithdrawalVault
-        if (IProxyAdmin(WITHDRAWAL_VAULT).proxy_getAdmin() != AGENT) {
+        if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).proxy_getAdmin() != AGENT) {
             revert IncorrectProxyAdmin(WITHDRAWAL_VAULT);
         }
-        if (IProxyAdmin(WITHDRAWAL_VAULT).implementation() != NEW_WITHDRAWAL_VAULT_IMPL) {
-            revert IncorrectProxyImplementation(WITHDRAWAL_VAULT, IProxyAdmin(WITHDRAWAL_VAULT).implementation());
+        if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation() != NEW_WITHDRAWAL_VAULT_IMPL) {
+            revert IncorrectProxyImplementation(WITHDRAWAL_VAULT, IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation());
         }
 
         // Consolidation rollout

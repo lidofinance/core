@@ -92,8 +92,6 @@ const ConsolidationGatewaySchema = z.object({
   gIFirstValidatorPrev: HexStringSchema,
   gIFirstValidatorCurr: HexStringSchema,
   pivotSlot: NonNegativeIntSchema,
-
-  gateSeal: EthereumAddressSchema,
 });
 
 const ConsolidationBusSchema = z.object({
@@ -213,8 +211,7 @@ const UpgradeVoteScriptSchema = z.object({
 // Gate seal schema (for scratch deployment)
 const GateSealSchema = z.object({
   sealDuration: PositiveIntSchema,
-  expiryTimestamp: PositiveIntSchema,
-  sealingCommittee: z.array(EthereumAddressSchema),
+  sealingCommittee: EthereumAddressSchema,
 });
 
 // DAO schema
@@ -327,11 +324,16 @@ const LidoApmSchema = z.object({
   ensRegDurationSec: PositiveIntSchema,
 });
 
+const LidoSchema = z.object({
+  lidoDepositsReserveTarget: BigIntStringSchema,
+});
+
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
   gateSeal: GateSealSchema,
   lidoApm: LidoApmSchema,
+  lido: LidoSchema.optional(),
   dao: DaoSchema,
   vesting: VestingSchema,
   burner: BurnerSchema.extend({
@@ -365,10 +367,10 @@ export const ScratchParametersSchema = z.object({
 
 // Upgrade parameters schema
 export const UpgradeParametersSchema = z.object({
+  lido: LidoSchema,
   easyTrack: EasyTrackSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerSchema,
-  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
   consolidationMigrator: ConsolidationMigratorSchema,
@@ -377,6 +379,7 @@ export const UpgradeParametersSchema = z.object({
   stakingRouter: StakingRouterSchema,
   withdrawalVault: WithdrawalVaultSchema,
 
+  // csm
   csmUpgrade: CSMUpgradeConfigSchema,
   curatedModule: CuratedModuleConfigSchema,
 
@@ -390,6 +393,7 @@ export const UpgradeParametersSchema = z.object({
   burner: BurnerSchema.optional(),
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
+  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema.optional(),
 });
 
 // Inferred types from zod schemas

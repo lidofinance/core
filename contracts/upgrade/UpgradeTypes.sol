@@ -108,7 +108,7 @@ interface IWithdrawalVault {
     function finalizeUpgrade_v3() external;
 }
 
-interface IProxyAdmin {
+interface IWithdrawalsManagerProxy {
     function proxy_getAdmin() external view returns (address);
     function implementation() external view returns (address);
     function proxy_upgradeTo(address newImplementation, bytes memory setupCalldata) external;

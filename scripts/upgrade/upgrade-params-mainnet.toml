@@ -31,6 +31,14 @@ clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles erro
 consolidationEthAmountPerDayLimit = 57600              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32
 
+[lido]
+lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
+
+[withdrawalVault]
+# https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification
+withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
+# https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7251.md#specification
+consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
 [triggerableWithdrawalsGateway]
 maxExitRequestsLimit = 13000
@@ -49,24 +57,24 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
-gateSeal = "0x00000000000000000000000000000000000bAc01"
-
 [consolidationBus]
 initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 0             # Delay before pending batch execution
 #TODO  update upon deployment
-executor = "0x00000000000000000000000000000000000bAc02"
+executor = "0x00000000000000000000000000000000000EEE01"
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
+#TODO  update upon deployment
+committee = "0x00000000000000000000000000000000000CcC02"
 
 # Gate seal configuration for vault operations
 [consolidationGatewayGateSeal]
-#TODO  update upon deployment
 sealDuration = 1209600  # 14 days
-sealingCommittee = "0x00000000000000000000000000000000000ccc01"
+#TODO  update upon deployment
+sealingCommittee = "0x00000000000000000000000000000000000cCC01"
 
 [topUpGateway]
 maxValidatorsPerTopUp = 100
@@ -78,7 +86,8 @@ minTopUpGwei = 1000000000
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 pivotSlot = 0
-depositor = "0x000000000000000000000000000000000000dE22"
+#TODO  update upon deployment
+depositor = "0x00000000000000000000000000000000000dDd01"
 
 [stakingRouter]
 maxEBType1 = "32000000000000000000"

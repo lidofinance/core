@@ -7,7 +7,7 @@ import {
     CoreUpgradeConfig,
     IKernel,
     IACL,
-    IProxyAdmin,
+    IWithdrawalsManagerProxy,
     IStakingRouter,
     IAccountingOracle,
     IVersioned,
@@ -108,7 +108,7 @@ library CoreUpgradeItems {
         items[i++] = VoteScriptHelpers.item({
             description: "Upgrade WithdrawalVault implementation",
             to: c.withdrawalVault,
-            data: abi.encodeCall(IProxyAdmin.proxy_upgradeTo, (c.newWithdrawalVaultImpl, bytes("")))
+            data: abi.encodeCall(IWithdrawalsManagerProxy.proxy_upgradeTo, (c.newWithdrawalVaultImpl, bytes("")))
         });
 
         assert(i == COUNT);

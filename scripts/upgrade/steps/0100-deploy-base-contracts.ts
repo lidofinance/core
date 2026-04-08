@@ -18,7 +18,7 @@ import { getAddress, readNetworkState, Sk, updateObjectInState } from "lib/state
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = readNetworkState();
   const parameters = readUpgradeParameters();
 
   const agentAddress = getAddress(Sk.appAgent, state);
