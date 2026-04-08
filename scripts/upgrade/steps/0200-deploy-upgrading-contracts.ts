@@ -34,6 +34,7 @@ export async function main() {
     dualGovernance: getAddress(Sk.dgDualGovernance, state),
     resealManager: getAddress(Sk.resealManager, state),
     easyTrack: getAddress(Sk.easyTrack, state),
+
     coreUpgrade: {
       oldLocatorImpl,
       oldLidoImpl,
@@ -53,12 +54,12 @@ export async function main() {
 
       // TopUp GW
       topUpGatewayImpl: state[Sk.topUpGateway].implementation.address,
-      topUpDepositorBot: parameters.topUpGateway.depositorBot,
+      topUpDepositorBot: parameters.topUpGateway.depositor,
 
       // Consolidation
       consolidationGatewayImpl: getAddress(Sk.consolidationGateway, state),
       consolidationBus: getAddress(Sk.consolidationBus, state),
-      consolidationBusBot: parameters.consolidationBus.executorBot,
+      consolidationBusExecutor: parameters.consolidationBus.executor,
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
       consolidationGatewayGateSeal: parameters.consolidationGateway.gateSeal,
       // consolidationCommittee: parameters.easyTrack.trustedCaller,

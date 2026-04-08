@@ -9,7 +9,6 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 // import {IBurner} from "contracts/common/interfaces/IBurner.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
-// import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
 // ============================
 // Interfaces
@@ -36,11 +35,6 @@ interface ITimeConstraints {
     function checkTimeAfterTimestampAndEmit(uint40 timestamp) external;
     function checkTimeBeforeTimestampAndEmit(uint40 timestamp) external;
     function checkTimeWithinDayTimeAndEmit(uint32 startDayTime, uint32 endDayTime) external;
-}
-
-interface ILidoLocatorV3 is ILidoLocator {
-    function consolidationGateway() external view returns (address);
-    function triggerableWithdrawalsGateway() external view returns (address);
 }
 
 interface IBaseOracle is IAccessControlEnumerable, IVersioned {
@@ -102,14 +96,19 @@ interface IConsolidationMigrator {
 }
 
 interface ILidoWithFinalizeUpgrade is ILido {
+    function getBufferedEther() external view returns (uint256);
     function finalizeUpgrade_v4() external;
 }
 
 interface IAccountingOracle is IBaseOracle {
-    function finalizeUpgrade_v4(uint256 consensusVersion) external;
+    function finalizeUpgrade_v5(uint256 consensusVersion) external;
 }
 
-interface IWithdrawalsManagerProxy {
+interface IWithdrawalVault {
+    function finalizeUpgrade_v3() external;
+}
+
+interface IProxyAdmin {
     function proxy_getAdmin() external view returns (address);
     function implementation() external view returns (address);
     function proxy_upgradeTo(address newImplementation, bytes memory setupCalldata) external;
@@ -211,38 +210,39 @@ struct CoreUpgradeParams {
     // Old implementations
     address oldLocatorImpl;
     address oldLidoImpl;
+    address oldAccountingImpl;
     address oldAccountingOracleImpl;
     address oldStakingRouterImpl;
+    address oldWithdrawalVaultImpl;
+    address oldValidatorsExitBusOracleImpl;
     address oldOracleReportSanityChecker;
     address oldDepositSecurityModule;
-    //todo Accounting
-    // ConsolidationMigrator.sol
-    // ConsolidationBus.sol
-    // todo libs BeaconChainDepositor.sol, SRLib.sol ?
 
     // New implementations
     address newLocatorImpl;
     address newLidoImpl;
+    address newAccountingImpl;
     address newAccountingOracleImpl;
     address newStakingRouterImpl;
-    address newAccountingImpl;
     address newWithdrawalVaultImpl;
+    address newValidatorsExitBusOracleImpl;
     address newOracleReportSanityChecker;
     address newDepositSecurityModule;
+    address consolidationBusImpl;
+    address consolidationMigratorImpl;
+    address topUpGatewayImpl;
 
     // New fancy proxy and blueprint contracts
-    address topUpGatewayImpl;
-    address topUpDepositorBot;
-    address consolidationGatewayImpl;
     address consolidationBus;
     address consolidationMigrator;
-    address consolidationCommittee;
-    address consolidationBusBot;
-    address consolidationGatewayGateSeal;
+    address topUpGateway;
 
-    uint256 twMaxExitRequestsLimit;
-    uint256 twExitsPerFrame;
-    uint256 twFrameDurationInSec;
+    // params
+    uint256 lidoDepositsReserveTarget;
+    address consolidationGatewayGateSeal;
+    address consolidationBusExecutor;
+    address consolidationManagerCommittee;
+    address topUpGatewayDepositor;
 
     // EasyTrack new factories
     address etfUpdateStakingModuleShareLimits;
@@ -298,9 +298,9 @@ struct GeneralConfig {
     address easyTrackEVMScriptExecutor;
     address stakingRouter;
     address triggerableWithdrawalsGateway;
-    address accountingOracle;
-    address topUpGateway;
-    address withdrawalVault;
+    // address accountingOracle;
+    // address topUpGateway;
+    // address withdrawalVault;
 }
 
 struct CoreUpgradeConfig {
@@ -312,35 +312,40 @@ struct CoreUpgradeConfig {
 
     address oldLocatorImpl;
     address oldLidoImpl;
+    address oldAccountingImpl;
     address oldAccountingOracleImpl;
     address oldStakingRouterImpl;
+    address oldWithdrawalVaultImpl;
+    address oldValidatorsExitBusOracleImpl;
     address oldOracleReportSanityChecker;
     address oldDepositSecurityModule;
 
     address newLocatorImpl;
     address newLidoImpl;
+    address newAccountingImpl;
     address newAccountingOracleImpl;
     address newStakingRouterImpl;
-    address newAccountingImpl;
     address newWithdrawalVaultImpl;
+    address newValidatorsExitBusOracleImpl;
     address newOracleReportSanityChecker;
     address newDepositSecurityModule;
+    address consolidationBusImpl;
+    address consolidationMigratorImpl;
+    address topUpGatewayImpl;
 
     address accounting;
+    address accountingOracle;
     address withdrawalVault;
-    address topUpGateway;
-    address topUpGatewayImpl;
-    address topUpDepositorBot;
     address consolidationGateway;
-    address consolidationGatewayImpl;
     address consolidationBus;
-    address consolidationBusBot;
     address consolidationMigrator;
-    address consolidationGatewayGateSeal;
+    address topUpGateway;
 
-    uint256 twMaxExitRequestsLimit;
-    uint256 twExitsPerFrame;
-    uint256 twFrameDurationInSec;
+    uint256 lidoDepositsReserveTarget;
+    address consolidationGatewayGateSeal;
+    address consolidationBusExecutor;
+    address consolidationManagerCommittee;
+    address topUpGatewayDepositor;
 
     address etfUpdateStakingModuleShareLimits;
     address etfAllowConsolidationPair;

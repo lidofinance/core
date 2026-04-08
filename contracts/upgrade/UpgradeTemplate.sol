@@ -15,10 +15,11 @@ import {
     ILidoWithFinalizeUpgrade,
     IAccountingOracle,
     IOracleReportSanityChecker,
-    IWithdrawalsManagerProxy,
+    IProxyAdmin,
     IKernel,
     IVersioned,
-    IEasyTrack
+    IEasyTrack,
+    IWithdrawalVault
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
@@ -46,6 +47,7 @@ contract UpgradeTemplate is UpgradeConfig {
     uint256 public constant EXPECTED_FINAL_STAKING_ROUTER_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 5;
+    uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -69,7 +71,10 @@ contract UpgradeTemplate is UpgradeConfig {
     // uint256 public initialOldBurnerStethSharesBalance;
     // uint256 public initialTotalShares;
     // uint256 public initialTotalPooledEther;
-    // mapping(bytes32 => address[]) public initialStakingRouterRoleMembers;
+    uint256 initialBufferedEther;
+    uint256 initialDepositedValidators;
+    uint256 initialBeaconValidators;
+    uint256 initialBeaconBalance;
 
     //
     // Slots for transient storage
@@ -80,38 +85,22 @@ contract UpgradeTemplate is UpgradeConfig {
     bytes32 public constant UPGRADE_STARTED_SLOT = 0x058d69f67a3d86c424c516d23a070ff8bed34431617274caa2049bd702675e3f;
 
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
     bytes32 internal constant ALLOW_PAIR_ROLE = keccak256("ALLOW_PAIR_ROLE");
+    bytes32 internal constant DISALLOW_PAIR_ROLE = keccak256("DISALLOW_PAIR_ROLE");
     bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
     bytes32 internal constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 internal constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
     bytes32 internal constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
     bytes32 internal constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
     bytes32 internal constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
-
-    //
-    // Intermediate setup's completion status
-    //
-    mapping(bytes32 => bool) public setupComplete;
+    bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
 
     /// @param _params Params required to initialize the addresses contract
     /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
     constructor(UpgradeParameters memory _params, uint256 _expireSinceInclusive) UpgradeConfig(_params) {
         EXPIRE_SINCE_INCLUSIVE = _expireSinceInclusive;
     }
-
-    modifier requireUpgradeStarted() {
-        if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
-        if (isUpgradeFinished) revert UpgradeAlreadyFinished();
-        if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
-        _;
-    }
-
-    // modifier requireSetupOnlyOnce(string memory itemName) {
-    //     bytes32 item = keccak256(abi.encodePacked(itemName));
-    //     if (setupComplete[item]) revert SetupAlreadyCompleted(itemName);
-    //     setupComplete[item] = true;
-    //     _;
-    // }
 
     /// @notice Must be called before LidoLocator is upgraded
     function startUpgrade() external {
@@ -124,22 +113,25 @@ contract UpgradeTemplate is UpgradeConfig {
         assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
         upgradeBlockNumber = block.number;
 
-        // initialTotalShares = ILidoWithFinalizeUpgrade(LIDO).getTotalShares();
-        // initialTotalPooledEther = ILidoWithFinalizeUpgrade(LIDO).getTotalPooledEther();
+        initialBufferedEther = ILidoWithFinalizeUpgrade(LIDO).getBufferedEther();
+        (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) =
+            ILidoWithFinalizeUpgrade(LIDO).getBeaconStat();
 
         _assertPreUpgradeState();
-
-        // Save initial state for the check after burner migration
-        // initialOldBurnerStethSharesBalance = ILidoWithFinalizeUpgrade(LIDO).sharesOf(OLD_BURNER);
 
         emit UpgradeStarted();
     }
 
-    function finishUpgrade() external requireUpgradeStarted {
+    function finishUpgrade() external {
+        if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
+        if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+        if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
+
         isUpgradeFinished = true;
 
         ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v4();
-        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v4(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
+        IWithdrawalVault(WITHDRAWAL_VAULT).finalizeUpgrade_v3();
+        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v5(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
 
         _assertPostUpgradeState();
 
@@ -147,93 +139,19 @@ contract UpgradeTemplate is UpgradeConfig {
     }
 
     //
-    // StakingRouter
-    //
-
-    /// @notice Save all StakingRouter existing ACL role members from OZ v4 AccessControlEnumerable
-    ///         to migrate OZ v5.2 AccessControlEnumerableUpgradeable.
-    // function _preUpgradeStakingRouter() internal {
-    //     // save existing role members
-    //     IStakingRouter sr = IStakingRouter(STAKING_ROUTER);
-    //     bytes32[6] memory roles = [
-    //         sr.STAKING_MODULE_MANAGE_ROLE(),
-    //         sr.STAKING_MODULE_UNVETTING_ROLE(),
-    //         sr.REPORT_EXITED_VALIDATORS_ROLE(),
-    //         sr.REPORT_VALIDATOR_EXITING_STATUS_ROLE(),
-    //         sr.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(),
-    //         REPORT_REWARDS_MINTED_ROLE,
-    //         sr.UNSAFE_SET_EXITED_VALIDATORS_ROLE(),
-    //         sr.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE()
-    //     ];
-    //     for (uint256 i = 0; i < roles.length; ++i) {
-    //         bytes32 role = roles[i];
-    //         address[] storage members = initialStakingRouterRoleMembers[role];
-    //         for (uint256 j; j < sr.getRoleMemberCount(role); ++j) {
-    //             members.push(sr.getRoleMember(role, j));
-    //         }
-    //     }
-    // }
-
-    /// @notice Setup StakingRouter with required roles and transfer admin to agent
-    // function _postUpgradeStakingRouter() internal {
-    //     IStakingRouter sr = IStakingRouter(STAKING_ROUTER);
-    //     // restore existing role members
-    //     bytes32[6] memory roles = [
-    //         sr.STAKING_MODULE_MANAGE_ROLE(),
-    //         sr.STAKING_MODULE_UNVETTING_ROLE(),
-    //         sr.REPORT_EXITED_VALIDATORS_ROLE(),
-    //         sr.REPORT_VALIDATOR_EXITING_STATUS_ROLE(),
-    //         sr.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(),
-    //         REPORT_REWARDS_MINTED_ROLE,
-    //         sr.UNSAFE_SET_EXITED_VALIDATORS_ROLE(),
-    //         sr.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE()
-    //     ];
-
-    //     for (uint256 i = 0; i < roles.length; ++i) {
-    //         bytes32 role = roles[i];
-    //         address[] storage members = initialStakingRouterRoleMembers[role];
-    //         for (uint256 j; j < members.length; ++j) {
-    //             sr.grantRole(role, members[j]);
-    //         }
-    //     }
-
-    //     _transferAdminToAgent(STAKING_ROUTER);
-    // }
-
-    /// @notice Method should be called after the StakingRouter is upgraded to the new implementation in the same transaction
-    // function setupStakingRouter() external requireUpgradeStarted requireSetupOnlyOnce("stakingRouter") {
-    //     _postUpgradeStakingRouter();
-    // }
-
-    //
     // Assertions
     //
 
     function _assertPreUpgradeState() internal view {
         // Check initial implementations of the proxies to be upgraded
-        _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(STAKING_ROUTER), OLD_STAKING_ROUTER_IMPL);
         _assertAragonKernelImplementation(IKernel(KERNEL), OLD_LIDO_IMPL);
 
-        // Check allowances of the old burner
-        // address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
-        // for (uint256 i = 0; i < contractsWithBurnerAllowances_.length; ++i) {
-        //     if (
-        //         ILidoWithFinalizeUpgrade(LIDO).allowance(contractsWithBurnerAllowances_[i], OLD_BURNER)
-        //             != INFINITE_ALLOWANCE
-        //     ) {
-        //         revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], OLD_BURNER);
-        //     }
-        // }
-        // if (ILidoWithFinalizeUpgrade(LIDO).allowance(NODE_OPERATORS_REGISTRY, OLD_BURNER) != 0) {
-        //     revert IncorrectBurnerAllowance(NODE_OPERATORS_REGISTRY, OLD_BURNER);
-        // }
-        // if (ILidoWithFinalizeUpgrade(LIDO).allowance(SIMPLE_DVT, OLD_BURNER) != 0) {
-        //     revert IncorrectBurnerAllowance(SIMPLE_DVT, OLD_BURNER);
-        // }
-
-        // if (!IBurner(BURNER).isMigrationAllowed()) revert BurnerMigrationNotAllowed();
+        _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING), OLD_ACCOUNTING_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(STAKING_ROUTER), OLD_STAKING_ROUTER_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(WITHDRAWAL_VAULT), OLD_WITHDRAWAL_VAULT_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(VALIDATORS_EXIT_BUS_ORACLE), OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL);
     }
 
     function _assertPostUpgradeState() internal view {
@@ -244,78 +162,88 @@ contract UpgradeTemplate is UpgradeConfig {
         //     revert TotalSharesOrPooledEtherChanged();
         // }
 
+        _assertAragonKernelImplementation(IKernel(KERNEL), NEW_LIDO_IMPL);
+
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING), NEW_ACCOUNTING_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), NEW_ACCOUNTING_ORACLE_IMPL);
         _assertProxyImplementation(IOssifiableProxy(STAKING_ROUTER), NEW_STAKING_ROUTER_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING), NEW_ACCOUNTING_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(TOP_UP_GATEWAY), TOP_UP_GATEWAY_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(WITHDRAWAL_VAULT), NEW_WITHDRAWAL_VAULT_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(VALIDATORS_EXIT_BUS_ORACLE), NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL);
 
-        _assertAragonKernelImplementation(IKernel(KERNEL), NEW_LIDO_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(CONSOLIDATION_BUS), CONSOLIDATION_BUS_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(CONSOLIDATION_MIGRATOR), CONSOLIDATION_MIGRATOR_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(TOP_UP_GATEWAY), TOP_UP_GATEWAY_IMPL);
 
         _assertContractVersion(IVersioned(LIDO), EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(IVersioned(ACCOUNTING_ORACLE), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
+        _assertContractVersion(IVersioned(WITHDRAWAL_VAULT), EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
 
         _assertFinalACL();
 
-        // _checkTokenRateNotifierMigratedCorrectly();
-        // _checkBurnerMigratedCorrectly();
+        _checkStakingRouterMigratedCorrectly();
+        _checkLidoMigratedCorrectly();
 
-        // if (VaultFactory(VAULT_FACTORY).BEACON() != UPGRADEABLE_BEACON) {
-        //     revert IncorrectVaultFactoryBeacon(VAULT_FACTORY, UPGRADEABLE_BEACON);
-        // }
-        // if (VaultFactory(VAULT_FACTORY).DASHBOARD_IMPL() != DASHBOARD_IMPL) {
-        //     revert IncorrectVaultFactoryDashboardImplementation(VAULT_FACTORY, DASHBOARD_IMPL);
-        // }
-        // if (UpgradeableBeacon(UPGRADEABLE_BEACON).owner() != AGENT) {
-        //     revert IncorrectUpgradeableBeaconOwner(UPGRADEABLE_BEACON, AGENT);
-        // }
-        // if (UpgradeableBeacon(UPGRADEABLE_BEACON).implementation() != STAKING_VAULT_IMPL) {
-        //     revert IncorrectUpgradeableBeaconImplementation(UPGRADEABLE_BEACON, STAKING_VAULT_IMPL);
-        // }
     }
 
     function _assertFinalACL() internal view {
-        // Burner
-        // bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
-        // _assertZeroOZRoleHolders(OLD_BURNER, requestBurnSharesRole);
-
-        // _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
-        // _assertSingleOZRoleHolder(BURNER, DEFAULT_ADMIN_ROLE, AGENT);
-        // {
-        //     address[] memory holders = new address[](2);
-        //     holders[0] = ACCOUNTING;
-        //     holders[1] = CSM_ACCOUNTING;
-        //     _assertOZRoleHolders(BURNER, requestBurnSharesRole, holders);
-        // }
-
-        // // VaultHub
-        // _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
-        // _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, AGENT);
-
-        // _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULTS_ADAPTER);
-        // _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULTS_ADAPTER);
-        // _assertZeroOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE());
-        // _assertZeroOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE());
-        // _assertTwoOZRoleHolders(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER);
-        // _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).RESUME_ROLE(), RESEAL_MANAGER);
-
-        // // OperatorGrid
-        // _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
-        // _assertSingleOZRoleHolder(OPERATOR_GRID, DEFAULT_ADMIN_ROLE, AGENT);
-        // _assertTwoOZRoleHolders(
-        //     OPERATOR_GRID, OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), EVM_SCRIPT_EXECUTOR, VAULTS_ADAPTER
-        // );
-
-        // // LazyOracle
-        // _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
-        // _assertSingleOZRoleHolder(LAZY_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
-        // _assertZeroOZRoleHolders(LAZY_ORACLE, ILazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE());
+        // Accounting
+        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
+        _assertSingleOZRoleHolder(ACCOUNTING, DEFAULT_ADMIN_ROLE, AGENT);
 
         // AccountingOracle
         _assertProxyAdmin(IOssifiableProxy(ACCOUNTING_ORACLE), AGENT);
         _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
+
+        // StakingRouter
         _assertProxyAdmin(IOssifiableProxy(STAKING_ROUTER), AGENT);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, ACCOUNTING);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_SHARE_MANAGE_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
+
+
+        _assertProxyAdmin(IOssifiableProxy(VALIDATORS_EXIT_BUS_ORACLE), AGENT);
+        _assertSingleOZRoleHolder(VALIDATORS_EXIT_BUS_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
+
+        // address internal immutable NEW_ORACLE_REPORT_SANITY_CHECKER;
+        // address internal immutable NEW_DEPOSIT_SECURITY_MODULE;
+
+
+
+        // WithdrawalVault
+        if (IProxyAdmin(WITHDRAWAL_VAULT).proxy_getAdmin() != AGENT) {
+            revert IncorrectProxyAdmin(WITHDRAWAL_VAULT);
+        }
+        if (IProxyAdmin(WITHDRAWAL_VAULT).implementation() != NEW_WITHDRAWAL_VAULT_IMPL) {
+            revert IncorrectProxyImplementation(WITHDRAWAL_VAULT, IProxyAdmin(WITHDRAWAL_VAULT).implementation());
+        }
+
+        // Consolidation rollout
+
+        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertTwoOZRoleHolders(CONSOLIDATION_GATEWAY, PAUSE_ROLE, CONSOLIDATION_GATEWAY_GATE_SEAL, RESEAL_MANAGER);
+        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, RESUME_ROLE, RESEAL_MANAGER);
+
+        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, ADD_CONSOLIDATION_REQUEST_ROLE, CONSOLIDATION_BUS);
+        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, PAUSE_ROLE, CONSOLIDATION_GATEWAY_GATE_SEAL);
+
+        _assertProxyAdmin(IOssifiableProxy(CONSOLIDATION_BUS), AGENT);
+        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, PUBLISH_ROLE, CONSOLIDATION_MIGRATOR);
+        _assertTwoOZRoleHolders(CONSOLIDATION_BUS, REMOVE_ROLE, AGENT, CONSOLIDATION_BUS_EXECUTOR);
+
+        _assertProxyAdmin(IOssifiableProxy(CONSOLIDATION_MIGRATOR), AGENT);
+        _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, ALLOW_PAIR_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
+        _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, DISALLOW_PAIR_ROLE, CONSOLIDATION_MANAGER_COMMITTEE);
+
+        // TopUps
+        _assertProxyAdmin(IOssifiableProxy(TOP_UP_GATEWAY), AGENT);
+        _assertSingleOZRoleHolder(TOP_UP_GATEWAY, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(TOP_UP_GATEWAY, TOP_UP_ROLE, TOP_UP_GATEWAY_DEPOSITOR);
+
+
 
         // OracleReportSanityChecker
         IOracleReportSanityChecker checker = IOracleReportSanityChecker(ORACLE_REPORT_SANITY_CHECKER);
@@ -338,43 +266,6 @@ contract UpgradeTemplate is UpgradeConfig {
             _assertZeroOZRoleHolders(ORACLE_REPORT_SANITY_CHECKER, roles[i]);
         }
 
-        // Accounting
-        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
-        _assertProxyAdmin(IOssifiableProxy(TOP_UP_GATEWAY), AGENT);
-
-        // WithdrawalVault
-        if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).proxy_getAdmin() != AGENT) {
-            revert IncorrectProxyAdmin(WITHDRAWAL_VAULT);
-        }
-        if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation() != NEW_WITHDRAWAL_VAULT_IMPL) {
-            revert IncorrectProxyImplementation(
-                WITHDRAWAL_VAULT, IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation()
-            );
-        }
-
-        // Consolidation rollout
-        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, ADD_CONSOLIDATION_REQUEST_ROLE, CONSOLIDATION_BUS);
-        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, PUBLISH_ROLE, CONSOLIDATION_MIGRATOR);
-        _assertTwoOZRoleHolders(
-            CONSOLIDATION_GATEWAY, PAUSE_ROLE, CONSOLIDATION_COMMITTEE, CONSOLIDATION_GATEWAY_GATE_SEAL
-        );
-        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, EXECUTE_ROLE, CONSOLIDATION_BUS_BOT);
-        _assertTwoOZRoleHolders(CONSOLIDATION_BUS, REMOVE_ROLE, AGENT, CONSOLIDATION_BUS_BOT);
-        _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, ALLOW_PAIR_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
-        _assertSingleOZRoleHolder(TOP_UP_GATEWAY, TOP_UP_ROLE, TOP_UP_DEPOSITOR_BOT);
-
-        // // PredepositGuarantee
-        // _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
-        // _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, DEFAULT_ADMIN_ROLE, AGENT);
-        // _assertTwoOZRoleHolders(
-        //     PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL, RESEAL_MANAGER
-        // );
-        // _assertSingleOZRoleHolder(
-        //     PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).RESUME_ROLE(), RESEAL_MANAGER
-        // );
-
-        // StakingRouter
-        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, ACCOUNTING);
 
         _assertEasyTrackFactoriesAdded();
     }
@@ -397,70 +288,41 @@ contract UpgradeTemplate is UpgradeConfig {
         }
     }
 
-    // function _checkTokenRateNotifierMigratedCorrectly() internal view {
-    //     ITokenRateNotifier oldNotifier = ITokenRateNotifier(OLD_TOKEN_RATE_NOTIFIER);
-    //     ITokenRateNotifier newNotifier = ITokenRateNotifier(NEW_TOKEN_RATE_NOTIFIER);
+    function _checkStakingRouterMigratedCorrectly() internal view {
+        // TODO
+    }
 
-    //     if (newNotifier.owner() != AGENT) {
-    //         revert IncorrectTokenRateNotifierOwnerMigration(NEW_TOKEN_RATE_NOTIFIER, AGENT);
-    //     }
+    function _checkLidoMigratedCorrectly() internal view {
+        uint256 bufferedEther = ILidoWithFinalizeUpgrade(LIDO).getBufferedEther();
+        if (bufferedEther != initialBufferedEther) {
+            revert IncorrectLidoMigration("bufferedEther");
+        }
 
-    //     if (oldNotifier.observersLength() != newNotifier.observersLength()) {
-    //         revert IncorrectTokenRateNotifierObserversLengthMigration();
-    //     }
+        (uint256 depositedValidators, uint256 clValidators, uint256 beaconBalance) =
+            ILidoWithFinalizeUpgrade(LIDO).getBeaconStat();
 
-    //     for (uint256 i = 0; i < oldNotifier.observersLength(); i++) {
-    //         if (oldNotifier.observers(i) != newNotifier.observers(i)) {
-    //             revert IncorrectTokenRateNotifierObserversMigration();
-    //         }
-    //     }
-    // }
+        if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
+            revert IncorrectLidoMigration("depositedValidators");
+        }
 
-    // function _checkBurnerMigratedCorrectly() internal view {
-    //     if (IBurner(OLD_BURNER).getCoverSharesBurnt() != IBurner(BURNER).getCoverSharesBurnt()) {
-    //         revert IncorrectBurnerSharesMigration("Cover shares burnt mismatch");
-    //     }
+        (
+            uint256 clValidatorsBalanceAtLastReport,
+            uint256 clPendingBalanceAtLastReport,
+            uint256 depositedSinceLastReport,
+            uint256 depositedForCurrentReport
+        ) = ILidoWithFinalizeUpgrade(LIDO).getBalanceStats();
 
-    //     if (IBurner(OLD_BURNER).getNonCoverSharesBurnt() != IBurner(BURNER).getNonCoverSharesBurnt()) {
-    //         revert IncorrectBurnerSharesMigration("Non-cover shares burnt mismatch");
-    //     }
+        if (clValidatorsBalanceAtLastReport != initialBeaconBalance || clPendingBalanceAtLastReport != 0) {
+            revert IncorrectLidoMigration("clValidatorsBalance");
+        }
 
-    //     (uint256 oldCoverShares, uint256 oldNonCoverShares) = IBurner(OLD_BURNER).getSharesRequestedToBurn();
-    //     (uint256 newCoverShares, uint256 newNonCoverShares) = IBurner(BURNER).getSharesRequestedToBurn();
-    //     if (oldCoverShares != newCoverShares) {
-    //         revert IncorrectBurnerSharesMigration("Cover shares requested to burn mismatch");
-    //     }
-
-    //     if (oldNonCoverShares != newNonCoverShares) {
-    //         revert IncorrectBurnerSharesMigration("Non-cover shares requested to burn mismatch");
-    //     }
-
-    //     if (ILidoWithFinalizeUpgrade(LIDO).balanceOf(OLD_BURNER) != 0) {
-    //         revert IncorrectBurnerSharesMigration("Old burner stETH balance is not zero");
-    //     }
-
-    //     if (ILidoWithFinalizeUpgrade(LIDO).sharesOf(BURNER) != initialOldBurnerStethSharesBalance) {
-    //         revert IncorrectBurnerSharesMigration("New burner stETH balance mismatch");
-    //     }
-
-    //     if (IBurner(BURNER).isMigrationAllowed()) {
-    //         revert IncorrectBurnerSharesMigration("Burner migration is still allowed");
-    //     }
-
-    //     // address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
-    //     // for (uint256 i = 0; i < contractsWithBurnerAllowances_.length; i++) {
-    //     //     if (ILidoWithFinalizeUpgrade(LIDO).allowance(contractsWithBurnerAllowances_[i], OLD_BURNER) != 0) {
-    //     //         revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], OLD_BURNER);
-    //     //     }
-    //     //     if (
-    //     //         ILidoWithFinalizeUpgrade(LIDO).allowance(contractsWithBurnerAllowances_[i], BURNER)
-    //     //             != INFINITE_ALLOWANCE
-    //     //     ) {
-    //     //         revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], BURNER);
-    //     //     }
-    //     // }
-
-    // }
+        if (
+            depositedSinceLastReport != (initialDepositedValidators - initialBeaconValidators) * 32 ether
+                || depositedForCurrentReport != 0
+        ) {
+            revert IncorrectLidoMigration("depositedSinceLastReport");
+        }
+    }
 
     function _assertProxyAdmin(IOssifiableProxy _proxy, address _admin) internal view {
         if (_proxy.proxy__getAdmin() != _admin) revert IncorrectProxyAdmin(address(_proxy));
@@ -545,16 +407,6 @@ contract UpgradeTemplate is UpgradeConfig {
     error StartAlreadyCalledInThisTx();
     error SetupAlreadyCompleted(string itemName);
     error Expired();
-    error IncorrectBurnerSharesMigration(string reason);
-    error IncorrectBurnerAllowance(address contractAddress, address burner);
-    error BurnerMigrationNotAllowed();
-    error IncorrectVaultFactoryBeacon(address factory, address beacon);
-    error IncorrectVaultFactoryDashboardImplementation(address factory, address delegation);
-    error IncorrectUpgradeableBeaconOwner(address beacon, address owner);
-    error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
-    error TotalSharesOrPooledEtherChanged();
+    error IncorrectLidoMigration(string reason);
     error UnexpectedEasyTrackFactories();
-    error IncorrectTokenRateNotifierOwnerMigration(address notifier, address owner);
-    error IncorrectTokenRateNotifierObserversLengthMigration();
-    error IncorrectTokenRateNotifierObserversMigration();
 }

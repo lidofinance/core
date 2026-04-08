@@ -50,10 +50,9 @@ library CSMUpgradeItems {
         CSMUpgradeConfig memory c = template.getCSMUpgradeConfig();
 
         items = new OmnibusBase.VoteItem[](COUNT);
+        uint256 i = 0;
 
         address oldEjector = IValidatorStrikesV3(c.strikes).ejector();
-
-        uint256 i = 0;
 
         // --- Proxy upgrades ---
 

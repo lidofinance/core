@@ -27,7 +27,6 @@ library CuratedModuleItems {
         CuratedModuleConfig memory c = template.getCuratedModuleConfig();
 
         items = new OmnibusBase.VoteItem[](COUNT);
-
         uint256 i = 0;
 
         items[i++] = VoteScriptHelpers.item({

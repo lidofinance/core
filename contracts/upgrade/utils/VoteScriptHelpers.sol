@@ -7,23 +7,6 @@ import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/extensions/IAc
 import {OmnibusBase} from "./OmnibusBase.sol";
 
 library VoteScriptHelpers {
-    // function itemFwd(address forwarder, OmnibusBase.VoteItem memory voteItem)
-    //     internal
-    //     pure
-    //     returns (OmnibusBase.VoteItem memory)
-    // {
-    //     voteItem.call = OmnibusBase._forwardCall(forwarder, voteItem.call.to, voteItem.call.data);
-    //     return voteItem;
-    // }
-
-    // function itemFwd(address forwarder, string memory description, address to, bytes memory data)
-    //     internal
-    //     pure
-    //     returns (OmnibusBase.VoteItem memory)
-    // {
-    //     return item(description, OmnibusBase._forwardCall(forwarder, to, data));
-    // }
-
     function item(string memory description, address to, bytes memory data)
         internal
         pure
@@ -39,10 +22,6 @@ library VoteScriptHelpers {
     {
         return OmnibusBase.VoteItem({description: description, call: call});
     }
-
-    // function item(string memory description, address to, bytes memory data) internal pure returns (OmnibusBase.VoteItem memory) {
-    //     return VoteItem({description: description, call: ScriptCall({to: to, data: data})});
-    // }
 
     function grantRole(address target, bytes32 role, address account)
         internal
