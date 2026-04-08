@@ -1,15 +1,7 @@
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import {
-  ConsolidationBus,
-  ConsolidationMigrator,
-  IGateSealFactory,
-  IOracleReportSanityChecker_preV4,
-  LidoLocator,
-  TopUpGateway,
-  UpgradeTemporaryAdmin,
-} from "typechain-types";
+import { IGateSealFactory, IOracleReportSanityChecker_preV4, LidoLocator } from "typechain-types";
 
 import { findEventsWithInterfaces } from "lib";
 import { loadContract } from "lib/contract";
@@ -210,7 +202,7 @@ export async function main() {
     parameters.consolidationBus.initialMaxGroupsInBatch,
     parameters.consolidationBus.initialExecutionDelay,
   ]);
-  const consolidationBus_ = await deployBehindOssifiableProxy(
+  const consolidationBus = await deployBehindOssifiableProxy(
     Sk.consolidationBus,
     "ConsolidationBus",
     proxyContractsOwner,
@@ -221,8 +213,6 @@ export async function main() {
     undefined, // factoryOptions
     consolidationBusInitData,
   );
-
-  const consolidationBus = await loadContract<ConsolidationBus>("ConsolidationBus", consolidationBus_.address);
 
   //
   // Deploy Consolidation Migrator

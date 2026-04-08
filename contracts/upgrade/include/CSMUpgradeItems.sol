@@ -212,26 +212,31 @@ library CSMUpgradeItems {
             call: VoteScriptHelpers.revokeRole(c.verifier, PAUSE_ROLE, c.gateSeal)
         });
 
+        // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
         items[i++] = VoteScriptHelpers.item({
             description: "25. Revoke PAUSE_ROLE from old gate seal on old Ejector",
             call: VoteScriptHelpers.revokeRole(oldEjector, PAUSE_ROLE, c.gateSeal)
         });
 
+        // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
         items[i++] = VoteScriptHelpers.item({
             description: "26. Revoke PAUSE_ROLE from reseal manager on old Verifier",
             call: VoteScriptHelpers.revokeRole(c.verifier, PAUSE_ROLE, g.resealManager)
         });
 
+        // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
         items[i++] = VoteScriptHelpers.item({
             description: "27. Revoke RESUME_ROLE from reseal manager on old Verifier",
             call: VoteScriptHelpers.revokeRole(c.verifier, RESUME_ROLE, g.resealManager)
         });
 
+        // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
         items[i++] = VoteScriptHelpers.item({
             description: "28. Revoke PAUSE_ROLE from reseal manager on old Ejector",
             call: VoteScriptHelpers.revokeRole(oldEjector, PAUSE_ROLE, g.resealManager)
         });
 
+        // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
         items[i++] = VoteScriptHelpers.item({
             description: "29. Revoke RESUME_ROLE from reseal manager on old Ejector",
             call: VoteScriptHelpers.revokeRole(oldEjector, RESUME_ROLE, g.resealManager)

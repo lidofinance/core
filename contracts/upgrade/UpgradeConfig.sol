@@ -282,7 +282,6 @@ contract UpgradeConfig is IUpgradeConfig {
         CuratedModuleParams memory curatedModuleParams = params.curatedModule;
 
         CURATED_MODULE = curatedModuleParams.module;
-        CURATED_HASH_CONSENSUS = curatedModuleParams.hashConsensus;
         /// @dev save in storage
         _curatedModuleName = curatedModuleParams.moduleName;
         CURATED_STAKE_SHARE_LIMIT = curatedModuleParams.stakeShareLimit;
@@ -294,8 +293,9 @@ contract UpgradeConfig is IUpgradeConfig {
         CURATED_HASH_CONSENSUS_INITIAL_EPOCH = curatedModuleParams.hashConsensusInitialEpoch;
 
         CURATED_ACCOUNTING = IBaseModuleV3(CURATED_MODULE).ACCOUNTING();
-        address curatedFeeDistributor = IAccountingV3(CURATED_ACCOUNTING).FEE_DISTRIBUTOR();
+        address curatedFeeDistributor = IBaseModuleV3(CURATED_MODULE).FEE_DISTRIBUTOR();
         address curatedFeeOracle = IFeeDistributorV3(curatedFeeDistributor).ORACLE();
+        CURATED_HASH_CONSENSUS = IFeeOracleV3(curatedFeeOracle).getConsensusContract();
         address curatedStrikes = IFeeOracleV3(curatedFeeOracle).STRIKES();
         CURATED_EJECTOR = IValidatorStrikesV3(curatedStrikes).ejector();
     }

@@ -5,12 +5,11 @@
 
 [easyTrack]
 # TODO:  update upon deployment
-trustedCaller = "0x00000000000000000000000000000000000fAc00"     # Address of SR EasyTrack committee
-# Must be deployed before the V3 upgrading contracts
+trustedCaller = "0x00000000000000000000000000000000000eee00"
 [easyTrack.newFactories]
-# TODO: update upon deployment
-UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000fAc01"
-AllowConsolidationPair = "0x00000000000000000000000000000000000fAc0A"
+# TODO: fill with deployed Easy Track factory address before execution
+UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
+AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]
@@ -69,18 +68,19 @@ initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 0             # Delay before pending batch execution
 #TODO  update upon deployment
-executor = "0x00000000000000000000000000000000000EEE01"
+executor = "0x00000000000000000000000000000000000abc01"
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-committee = "0x00000000000000000000000000000000000CcC02"
+#TODO  update upon deployment
+committee = "0x00000000000000000000000000000000000abc02"
 
 # Gate seal configuration for vault operations
 [consolidationGatewayGateSeal]
-#TODO  update upon deployment
 sealDuration = 1209600  # 14 days
-sealingCommittee = "0x00000000000000000000000000000000000cCC01"
+#TODO  update upon deployment
+sealingCommittee = "0x00000000000000000000000000000000000abc03"
 
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
@@ -93,8 +93,9 @@ minTopUpGwei = 1000000000
 # Generalized indices for validator/balance/pending state verification
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
-pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
-depositor = "0x00000000000000000000000000000000000dDd01"
+pivotSlot = 0
+#TODO  update upon deployment           # Pivot slot for fork-aware gIndex selection
+depositor = "0x00000000000000000000000000000000000abc04"
 
 # StakingRouter configuration
 [stakingRouter]
@@ -121,26 +122,21 @@ strikesProxy = "0x8fBA385C3c334D251eE413e79d4D3890db98693c"
 strikesImpl = "0xF9CcA99e34197E5fc70aB05F5dEb112EcD2367e9"
 oldPermissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
 verifier = "0x1773b2Ff99A030F6000554Cb8A5Ec93145650cbA"
-# TODO: upgrade-specific VerifierV3 is not present in artifacts/hoodi/deploy-hoodi.json.
-# Prefill required.
-verifierV3 = "0x00000000000000000000000000000000000dAc01"
+# TODO: replace with deployed verifier v3
+verifierV3 = "0x00000000000000000000000000000000000dac01"
 permissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
-ejector = "0x777bd76326E4aDcD353b03AD45b33BAF41048476"
+# TODO: replace with new deployed ejector
+ejector = "0x00000000000000000000000000000000000dac02"
 gateSeal = "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65"
-# TODO: upgrade-specific GateSealV3 is not present in artifacts/hoodi/deploy-hoodi.json.
-# Prefill required.
-gateSealV3 = "0x00000000000000000000000000000000000dAc02"
+# TODO: replace with deployed gate seal v3
+gateSealV3 = "0x00000000000000000000000000000000000dac03"
 identifiedCommunityStakersGateManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 generalDelayedPenaltyReporter = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 penaltiesManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 
 [curatedModule]
-# TODO: curated module deployment addresses are not present in artifacts/hoodi.
-# Prefill required.
-module = "0x00000000000000000000000000000000000cAc01"
-accounting = "0x00000000000000000000000000000000000cAc02"
-ejector = "0x00000000000000000000000000000000000cAc03"
-hashConsensus = "0x00000000000000000000000000000000000cAc04"
+# TODO: replace with deployed curated module addresses
+module = "0x00000000000000000000000000000000000cac01"
 moduleName = "curated-onchain-v1"
 stakeShareLimit = 2000
 priorityExitShareThreshold = 2500

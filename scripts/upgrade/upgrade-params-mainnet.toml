@@ -1,11 +1,11 @@
 # Lido Protocol Upgrade Parameters - Mainnet Configuration
 
 [easyTrack]
-trustedCaller = "0x000000000000000000000000000000000000dE10"
+trustedCaller = "0x00000000000000000000000000000000000eee00"
 [easyTrack.newFactories]
 # TODO: fill with deployed Easy Track factory address before execution
-UpdateStakingModuleShareLimits = "0x000000000000000000000000000000000000dEaD"
-AllowConsolidationPair = "0x000000000000000000000000000000000000dE19"
+UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
+AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]
@@ -62,19 +62,19 @@ initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 0             # Delay before pending batch execution
 #TODO  update upon deployment
-executor = "0x00000000000000000000000000000000000EEE01"
+executor = "0x00000000000000000000000000000000000abc01"
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
 #TODO  update upon deployment
-committee = "0x00000000000000000000000000000000000CcC02"
+committee = "0x00000000000000000000000000000000000abc02"
 
 # Gate seal configuration for vault operations
 [consolidationGatewayGateSeal]
 sealDuration = 1209600  # 14 days
 #TODO  update upon deployment
-sealingCommittee = "0x00000000000000000000000000000000000cCC01"
+sealingCommittee = "0x00000000000000000000000000000000000abc03"
 
 [topUpGateway]
 maxValidatorsPerTopUp = 100
@@ -87,7 +87,7 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 pivotSlot = 0
 #TODO  update upon deployment
-depositor = "0x00000000000000000000000000000000000dDd01"
+depositor = "0x00000000000000000000000000000000000abc04"
 
 [stakingRouter]
 maxEBType1 = "32000000000000000000"
@@ -108,22 +108,20 @@ strikesImpl = "0x3E5021424c9e13FC853e523Cd68ebBec848956a0"
 oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 verifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
 # TODO: replace with deployed verifier v3
-verifierV3 = "0x000000000000000000000000000000000000dE01"
+verifierV3 = "0x00000000000000000000000000000000000dac01"
 permissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
-ejector = "0xc72b58aa02E0e98cF8A4a0E9Dce75e763800802C"
+# TODO: replace with new deployed ejector
+ejector = "0x00000000000000000000000000000000000dac02"
 identifiedCommunityStakersGateManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 gateSeal = "0xE1686C2E90eb41a48356c1cC7FaA17629af3ADB3"
 # TODO: replace with deployed gate seal v3
-gateSealV3 = "0x000000000000000000000000000000000000dE02"
+gateSealV3 = "0x00000000000000000000000000000000000dac02"
 generalDelayedPenaltyReporter = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 penaltiesManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 
 [curatedModule]
 # TODO: replace with deployed curated module addresses
-module = "0x000000000000000000000000000000000000cA01"
-accounting = "0x000000000000000000000000000000000000cA04"
-ejector = "0x000000000000000000000000000000000000cA05"
-hashConsensus = "0x000000000000000000000000000000000000cA02"
+module = "0x00000000000000000000000000000000000cac01"
 moduleName = "curated-onchain-v1"
 stakeShareLimit = 2000
 priorityExitShareThreshold = 2500
@@ -134,5 +132,8 @@ minDepositBlockDistance = 25
 hashConsensusInitialEpoch = 47480
 
 [upgradeVoteScript]
-expiryTimestamp = 1780272000
+# Expiry timestamp after which the upgrade transaction will revert
+# Format: Unix timestamp (seconds since epoch)
+# The upgrade transaction must be executed before this deadline
+expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
 timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"

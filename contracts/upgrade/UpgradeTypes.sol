@@ -139,6 +139,7 @@ interface IParametersRegistryV3 {
 interface IFeeOracleV3 {
     function finalizeUpgradeV3(uint256 consensusVersion) external;
     function STRIKES() external view returns (address);
+    function getConsensusContract() external view returns (address);
 }
 
 interface IAccountingV3 {
@@ -275,7 +276,6 @@ struct CSMUpgradeParams {
 
 struct CuratedModuleParams {
     address module;
-    address hashConsensus;
     string moduleName;
     uint256 stakeShareLimit;
     uint256 priorityExitShareThreshold;

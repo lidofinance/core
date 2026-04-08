@@ -166,6 +166,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.vaultHub:
     case Sk.dgDualGovernance:
     case Sk.dgEmergencyProtectedTimelock:
+    case Sk.consolidationBus:
+    case Sk.consolidationMigrator:
     case Sk.topUpGateway:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
@@ -198,8 +200,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
     case Sk.consolidationGateway:
-    case Sk.consolidationBus:
-    case Sk.consolidationMigrator:
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
