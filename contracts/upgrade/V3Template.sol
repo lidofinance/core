@@ -377,8 +377,8 @@ contract V3Template is V3Addresses {
             revert IncorrectBurnerSharesMigration("Non-cover shares burnt mismatch");
         }
 
-        (uint256 oldCoverShares, uint256 oldNonCoverShares,) = IBurner(OLD_BURNER).getSharesRequestedToBurn();
-        (uint256 newCoverShares, uint256 newNonCoverShares,) = IBurner(BURNER).getSharesRequestedToBurn();
+        (uint256 oldCoverShares, uint256 oldNonCoverShares) = IBurner(OLD_BURNER).getSharesRequestedToBurn();
+        (uint256 newCoverShares, uint256 newNonCoverShares) = IBurner(BURNER).getSharesRequestedToBurn();
         if (oldCoverShares != newCoverShares) {
             revert IncorrectBurnerSharesMigration("Cover shares requested to burn mismatch");
         }

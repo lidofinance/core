@@ -17,7 +17,9 @@ import {WithdrawalQueue} from "./WithdrawalQueue.sol";
 
 interface IRedeemsBuffer {
     function getRedeemedEther() external view returns (uint256);
-    function withdrawUnredeemed() external;
+    function getRedeemedShares() external view returns (uint256);
+    function getRedeemedEtherForReport() external view returns (uint256);
+    function getRedeemedSharesForReport() external view returns (uint256);
 }
 
 interface IStakingRouter {
@@ -64,6 +66,8 @@ contract Accounting {
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
+        uint256 redeemedEther;
+        uint256 redeemedShares;
     }
 
     /// @notice precalculated values that is used to change the state of the protocol during the report
@@ -99,10 +103,6 @@ contract Accounting {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
-        /// @notice number of redeem shares to burn (outside the rebase limiter, rate-neutral)
-        uint256 redeemSharesToBurn;
-        /// @notice amount of ether redeemed since last report (from RedeemsBuffer)
-        uint256 redeemedEther;
     }
 
     /// @notice precalculated numbers of shares that should be minted as fee to NO
@@ -150,10 +150,6 @@ contract Accounting {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
-        // Vault redemption counters are read on-chain during _simulateOracleReport.
-        // redeemedEther is subtracted from the smoothenTokenRebase base,
-        // and redeemedShares are added outside the rebase limiter.
-
         PreReportState memory pre = _snapshotPreReportState(contracts, false);
         CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report);
         _applyOracleReportContext(contracts, _report, pre, update);
@@ -174,6 +170,8 @@ contract Accounting {
         } else {
             pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
         }
+
+        (pre.redeemedShares, pre.redeemedEther) = _getRedeemedCounters(isSimulation);
     }
 
     /// @dev calculates all the state changes that is required to apply the report
@@ -194,46 +192,39 @@ contract Accounting {
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clValidatorsBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
-        // Read redemption counters from buffer (on-chain, includes all redemptions)
-        (uint256 redeemedShares, uint256 redeemedEther) = _getRedeemedCounters();
-        update.redeemedEther = redeemedEther;
-
         // Limit the rebase to avoid oracle frontrunning.
         // The base is reduced by redeemed ether AND shares so the limiter sees
         // a rate-neutral pre-state (as if the redeem never happened).
-        // Without the shares adjustment the pre-share-rate fed to the limiter
-        // would be artificially low, shrinking the shares-burn budget.
+        // sharesRequestedToBurn from oracle includes redeem shares (nonCover on Burner) —
+        // subtract them so the limiter only governs cover + regular nonCover.
         (
             update.withdrawalsVaultTransfer,
             update.elRewardsVaultTransfer,
             update.sharesToBurnForWithdrawals,
-            update.totalSharesToBurn // shares to burn from Burner balance (WQ + cover)
+            update.totalSharesToBurn
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
-            _pre.totalPooledEther - _pre.externalEther - redeemedEther,
-            _pre.totalShares - _pre.externalShares - redeemedShares,
+            _pre.totalPooledEther - _pre.externalEther - _pre.redeemedEther,
+            _pre.totalShares - _pre.externalShares - _pre.redeemedShares,
             update.principalClBalance,
             _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
-            _report.sharesRequestedToBurn,
+            _report.sharesRequestedToBurn - _pre.redeemedShares,
             update.etherToFinalizeWQ,
             update.sharesToFinalizeWQ
         );
 
-        // Redeem shares are burned via a separate commit (outside the rebase limiter, rate-neutral)
-        update.redeemSharesToBurn = redeemedShares;
-
         uint256 postInternalSharesBeforeFees = _pre.totalShares -
             _pre.externalShares - // internal shares before
             update.totalSharesToBurn - // shares to be burned (WQ + cover)
-            update.redeemSharesToBurn; // redeem shares burned separately
+            _pre.redeemedShares; // redeem shares burned separately (outside limiter)
 
         update.postInternalEther =
             _pre.totalPooledEther - _pre.externalEther
             + _report.clValidatorsBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
             + update.elRewardsVaultTransfer
             - update.etherToFinalizeWQ
-            - redeemedEther;
+            - _pre.redeemedEther;
 
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
         (update.sharesToMintAsFees, update.feeDistribution) = _calculateProtocolFees(
@@ -392,15 +383,13 @@ contract Accounting {
             LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
         }
 
-        // Burn all redeem shares (rate-neutral, outside limiter)
-        // Shares are already on Burner — sent during each redeem() call
-        if (_update.redeemSharesToBurn > 0) {
-            _contracts.burner.commitRedeemSharesToBurn();
-        }
-
-        // Burn limiter-constrained cover/nonCover shares
-        if (_update.totalSharesToBurn > 0) {
-            _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
+        // Burn shares: limiter-constrained cover/nonCover + all settled redeem shares.
+        // Redeem shares sit on Burner as nonCover — burned together in one call.
+        {
+            uint256 totalBurn = _update.totalSharesToBurn + _pre.redeemedShares;
+            if (totalBurn > 0) {
+                _contracts.burner.commitSharesToBurn(totalBurn);
+            }
         }
 
         // collectRewardsAndProcessWithdrawals handles ETH round-trip internally:
@@ -414,7 +403,7 @@ contract Accounting {
             lastWithdrawalRequestToFinalize,
             _report.simulatedShareRate,
             _update.etherToFinalizeWQ,
-            _update.redeemedEther
+            _pre.redeemedEther
         );
 
         if (_update.sharesToMintAsFees > 0) {
@@ -444,14 +433,21 @@ contract Accounting {
         );
     }
 
-    /// @dev Reads redemption counters. Shares from Burner redeem track, ether from buffer.
+    /// @dev Reads redemption counters from RedeemsBuffer.
+    ///      Simulation (daemon at refSlot): reads raw current values.
+    ///      Execution (delivery): reads RefSlotCache snapshots (excludes post-refSlot redeems).
     ///      Returns (0, 0) if no buffer configured.
-    function _getRedeemedCounters() internal view returns (uint256 redeemedShares, uint256 redeemedEther) {
+    function _getRedeemedCounters(bool _isSimulation) internal view returns (uint256 redeemedShares, uint256 redeemedEther) {
         address buffer = LIDO.getRedeemsBuffer();
         if (buffer == address(0)) return (0, 0);
 
-        redeemedShares = IBurner(LIDO_LOCATOR.burner()).getRedeemSharesRequestedToBurn();
-        redeemedEther = IRedeemsBuffer(buffer).getRedeemedEther();
+        if (_isSimulation) {
+            redeemedShares = IRedeemsBuffer(buffer).getRedeemedShares();
+            redeemedEther = IRedeemsBuffer(buffer).getRedeemedEther();
+        } else {
+            redeemedShares = IRedeemsBuffer(buffer).getRedeemedSharesForReport();
+            redeemedEther = IRedeemsBuffer(buffer).getRedeemedEtherForReport();
+        }
     }
 
     /// @dev checks the provided oracle data internally and against the sanity checker contract

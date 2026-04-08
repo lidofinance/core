@@ -92,7 +92,7 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
     await redeemExact(lido, attacker, fix, redeemAmount);
 
     // Verify: pending shares on burner
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemQuote.shares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemQuote.shares);
 
     // state0 is stale in push: TPE and totalShares unchanged (burn deferred to report)
     const state0 = await captureState(lido);
@@ -106,7 +106,7 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
     assertReserveState(state1, RATIO_BP);
 
     // Verify: shares burned
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
 
     // --- Attacker re-enters at higher share rate ---
     const reenter = await submitEther({ lido, from: attacker, amount: redeemQuote.ether });
@@ -160,7 +160,7 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
     await redeemExact(lido, attacker, fix, attackerBalance);
 
     // Verify: pending shares on burner (state2 is stale — TPE and shares unchanged)
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(attackerRedeemQuote.shares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(attackerRedeemQuote.shares);
 
     const state2 = await captureState(lido);
     await assertReserveAllocationInvariant(lido);
@@ -217,7 +217,7 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
     await redeemExact(lido, attacker, fix, redeemAmount);
 
     // Verify: pending shares on burner
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemQuote.shares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemQuote.shares);
 
     await doReport(ctx, { clDiff: CL_LOSS });
     const lossPathState = await captureState(lido);
@@ -225,7 +225,7 @@ describe("Integration: Redeems reserve — oracle report sandwiching", () => {
     assertReserveState(lossPathState, RATIO_BP);
 
     // Verify: shares burned
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
 
     const reenter = await submitEther({ lido, from: attacker, amount: redeemQuote.ether });
     const state2 = await captureState(lido);

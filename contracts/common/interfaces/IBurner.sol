@@ -25,29 +25,9 @@ interface IBurner {
     function requestBurnMyShares(uint256 _sharesAmountToBurn) external;
 
     /**
-     * Request burn shares for redeem (isolated track, burned outside the rebase limiter)
-     */
-    function requestBurnSharesForRedeem(address _from, uint256 _sharesAmountToBurn) external;
-
-    /**
-     * Commit all pending redeem shares to burn. No budget argument — always burns everything.
-     */
-    function commitRedeemSharesToBurn() external;
-
-    /**
-     * Returns the current amount of redeem shares locked on the contract to be burnt.
-     */
-    function getRedeemSharesRequestedToBurn() external view returns (uint256);
-
-    /**
-     * Returns the total redeem shares ever burnt.
-     */
-    function getRedeemSharesBurnt() external view returns (uint256);
-
-    /**
       * Returns the current amount of shares locked on the contract to be burnt.
       */
-    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares, uint256 redeemShares);
+    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares);
 
     /**
       * Returns the total cover shares ever burnt.

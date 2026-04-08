@@ -174,14 +174,14 @@ describe("Integration: Redeems reserve — buffer allocation", () => {
 
     // Verify: redeem shares pending on burner
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
     expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
 
     // --- Reconciliation report: burn redeem shares before capturing buffer state ---
     await doReport(ctx);
 
     // Verify: all redeem shares burned, counters reset
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await fix.vault.getRedeemedEther()).to.equal(0n);
 
     const afterRedeem = await captureBufferState(ctx);

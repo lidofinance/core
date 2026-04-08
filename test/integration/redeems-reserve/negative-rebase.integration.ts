@@ -106,7 +106,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
 
     // Verify: redeem shares pending on burner
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
     expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
 
     await doReport(ctx, { clDiff: CL_LOSS });
@@ -114,7 +114,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     await assertReserveAllocationInvariant(lido);
 
     // Verify: all redeem shares burned, counters reset
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await fix.vault.getRedeemedEther()).to.equal(0n);
 
     // --- Compare paths: reserve auto-shrinks to new target in both ---
@@ -155,7 +155,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
 
     // Verify: redeem shares pending on burner
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
     expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
 
     await doReport(ctx, { clDiff: CL_LOSS });
@@ -164,7 +164,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     assertReserveState(state2, RATIO_BP);
 
     // Verify: all redeem shares burned, counters reset
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await fix.vault.getRedeemedEther()).to.equal(0n);
 
     // --- Compare paths: redeem amplifies loss per remaining share ---
@@ -276,7 +276,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
 
     // Verify: redeem shares pending on burner (burn deferred to next report)
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemQuoteAfterLoss.shares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemQuoteAfterLoss.shares);
     expect(await fix.vault.getRedeemedEther()).to.equal(redeemQuoteAfterLoss.ether);
   });
 });

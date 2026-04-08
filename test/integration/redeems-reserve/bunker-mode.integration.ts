@@ -124,7 +124,7 @@ describe("Integration: Redeems reserve — bunker mode", () => {
 
     // Verify: redeem shares pending on burner (will be burned on next report inside enterBunkerMode)
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
     expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
 
     const firstRequestId = await requestWithdrawal(ctx, holder, WQ_AMOUNT_BEFORE_BUNKER);
@@ -190,14 +190,14 @@ describe("Integration: Redeems reserve — bunker mode", () => {
     await redeemAfterBunkerExit(lido, holder, fix, exitRedeemAmount);
 
     // Verify: redeem shares pending on burner
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(exitRedeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(exitRedeemShares);
     expect(await fix.vault.getRedeemedEther()).to.equal(exitRedeemEther);
 
     // --- Reconciliation report: burn redeem shares and refill vault before WQ processing ---
     await doReport(ctx);
 
     // Verify: all redeem shares burned, counters reset
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await fix.vault.getRedeemedEther()).to.equal(0n);
 
     const thirdRequestId = await requestWithdrawal(ctx, holder, WQ_AMOUNT_AFTER_BUNKER);

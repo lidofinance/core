@@ -782,6 +782,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function setRedeemsBuffer(address _buffer) external {
         _auth(BUFFER_RESERVE_MANAGER_ROLE);
+
+        address oldBuffer = REDEEMS_BUFFER_POSITION.getStorageAddress();
+        if (oldBuffer != address(0)) {
+            uint256 oldRedeemedEther = IRedeemsBuffer(oldBuffer).getRedeemedEther();
+            IRedeemsBuffer(oldBuffer).withdrawUnredeemed();
+            if (oldRedeemedEther > 0) {
+                _setBufferedEther(_getBufferedEther().sub(oldRedeemedEther));
+            }
+        }
+
         REDEEMS_BUFFER_POSITION.setStorageAddress(_buffer);
         emit RedeemsBufferSet(_buffer);
     }

@@ -88,24 +88,18 @@ describe("Integration: Redeems reserve — smoothing interaction with cover burn
   /**
    * Core scenario: tight rebase limit + large cover burn + large redeem.
    *
-   * Without subtracting redeemedShares from the limiter's preInternalShares,
-   * the limiter would use a distorted (too low) pre-share-rate, allowing more
-   * cover shares to burn than the rebase limit permits. With the fix, the
-   * limiter sees a rate-neutral base and correctly sizes the cover burn.
+   * The limiter sees a rate-neutral base (ether and shares both reduced by redeems).
+   * Redeem shares sit on Burner as nonCover. commitSharesToBurn(limited + redeems)
+   * gives the Burner an expanded budget — cover-first priority means cover burns
+   * faster when redeems are present. The rebase stays within the limit because
+   * the limiter controls ether headroom, not the cover/nonCover split.
    *
-   * The test proves this by comparing two paths:
-   *   Path A: report with cover burn only (no redeem) — baseline
-   *   Path B: same report but preceded by a full reserve drain
-   *
-   * With the fix applied:
-   *   - Path B rebase does not exceed maxRebase
-   *   - Path B burns fewer cover shares (proportional to the reduced base)
-   *   - Both paths achieve approximately the same rebase percentage
+   * Path A: report with cover burn only (no redeem) — baseline
+   * Path B: same report but preceded by a full reserve drain
    */
-  it("large redeem does not inflate cover burn beyond rebase limit", async () => {
+  it("large redeem does not inflate rebase beyond limit; cover burns faster via expanded budget", async () => {
     const { lido, burner } = ctx.contracts;
 
-    // --- Setup: tight rebase, large reserve, significant cover burn ---
     const RATIO_BP = 2000n; // 20% reserve
     const MAX_REBASE = LIMITER_PRECISION_BASE / 100n; // 1%
 
@@ -115,18 +109,16 @@ describe("Integration: Redeems reserve — smoothing interaction with cover burn
 
     const stateSeeded: ProtocolState = await captureState(lido);
 
-    // Apply a large cover burn request (~30 ETH worth — larger than the limiter will allow)
     const COVER_BURN = ether("30");
     await applyInsurance(ctx, holder, COVER_BURN);
 
-    // Fund EL rewards: ~50% of headroom so the limiter has room for share burns but is tight
     const headroom = (stateSeeded.internalEther * MAX_REBASE) / LIMITER_PRECISION_BASE;
     const REWARDS = headroom / 2n;
     await fundElRewards(ctx, REWARDS);
 
     const stateBeforeReport: ProtocolState = await captureState(lido);
 
-    // ── Path A: report with cover burn, NO redeem (snapshot) ──
+    // ── Path A: report with cover burn, NO redeem ──
     const pathASnapshot = await Snapshot.take();
 
     const coverBurntBefore_A = await burner.getCoverSharesBurnt();
@@ -136,12 +128,15 @@ describe("Integration: Redeems reserve — smoothing interaction with cover burn
       reportWithdrawalsVault: false,
       reportBurner: true,
     });
-    const coverBurntAfter_A = await burner.getCoverSharesBurnt();
-    const coverBurned_A = coverBurntAfter_A - coverBurntBefore_A;
+    const coverBurned_A = (await burner.getCoverSharesBurnt()) - coverBurntBefore_A;
 
     const stateAfterReport_A: ProtocolState = await captureState(lido);
     const rebase_A = computeRebase(stateBeforeReport, stateAfterReport_A);
     await assertReserveAllocationInvariant(lido);
+
+    // Path A: limiter caps cover burn
+    expect(coverBurned_A).to.be.gt(0n);
+    expect(coverBurned_A).to.be.lt(await lido.getSharesByPooledEth(COVER_BURN));
 
     await Snapshot.restore(pathASnapshot);
 
@@ -151,8 +146,7 @@ describe("Integration: Redeems reserve — smoothing interaction with cover burn
     const redeemEther = await lido.getPooledEthByShares(redeemShares);
     await redeemExact(lido, holder, fix, redeemAmount);
 
-    // Verify: pending counters
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
     expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
 
     const coverBurntBefore_B = await burner.getCoverSharesBurnt();
@@ -162,44 +156,26 @@ describe("Integration: Redeems reserve — smoothing interaction with cover burn
       reportWithdrawalsVault: false,
       reportBurner: true,
     });
-    const coverBurntAfter_B = await burner.getCoverSharesBurnt();
-    const coverBurned_B = coverBurntAfter_B - coverBurntBefore_B;
+    const coverBurned_B = (await burner.getCoverSharesBurnt()) - coverBurntBefore_B;
 
     const stateAfterReport_B: ProtocolState = await captureState(lido);
     const rebase_B = computeRebase(stateBeforeReport, stateAfterReport_B);
     await assertReserveAllocationInvariant(lido);
 
-    // Verify: all redeem shares burned, counters reset
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await fix.vault.getRedeemedEther()).to.equal(0n);
 
     // ── Assertions ──
 
-    // 1. Both paths hit the rebase limit (rewards + cover burn together exceed headroom)
+    // 1. Both paths have positive rebase, neither exceeds the limit
     expect(rebase_A).to.be.gt(0n, "Path A should have positive rebase");
     expect(rebase_B).to.be.gt(0n, "Path B should have positive rebase");
-
-    // 2. Path B rebase does NOT exceed the configured limit
-    //    (with 1 wei tolerance for rounding)
+    expect(rebase_A).to.be.lte(MAX_REBASE + 1n, "Path A rebase must not exceed maxRebase");
     expect(rebase_B).to.be.lte(MAX_REBASE + 1n, "Path B rebase must not exceed maxRebase");
 
-    // 3. Path B burns FEWER cover shares than Path A
-    //    (because the limiter correctly operates on a smaller share base)
-    expect(coverBurned_B).to.be.lt(coverBurned_A, "Path B should burn fewer cover shares due to reduced limiter base");
-
-    // 4. The reduction is stronger than the simple share ratio because
-    //    the same absolute rewards consume a larger fraction of the smaller
-    //    base's headroom, leaving less room for cover burns.
-    //    coverBurned_B / coverBurned_A < (totalShares - redeemShares) / totalShares
-    const simpleShareRatio =
-      ((stateBeforeReport.totalShares - redeemShares) * TOTAL_BASIS_POINTS) / stateBeforeReport.totalShares;
-    const actualRatio = (coverBurned_B * TOTAL_BASIS_POINTS) / coverBurned_A;
-    expect(actualRatio).to.be.lt(
-      simpleShareRatio,
-      "Cover burn reduction should be stronger than the simple share ratio " +
-        "(rewards consume more headroom on the smaller base)",
-    );
-    expect(actualRatio).to.be.gt(0n, "Some cover shares should still be burned");
+    // 2. Path B burns MORE cover shares — expanded budget from redeem shares
+    //    lets Burner's cover-first priority apply insurance faster
+    expect(coverBurned_B).to.be.gt(coverBurned_A, "Path B should burn more cover (expanded budget)");
 
     await setMaxPositiveTokenRebase(ctx, savedRebase);
   });

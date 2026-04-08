@@ -152,7 +152,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
 
     // Verify: pending shares on burner
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
     expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
 
     // Compute post-reconciliation headroom: Lido's IE is stale (doesn't reflect the drain yet),
@@ -168,7 +168,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     const appliedRewards = headroomFull - deferredRewards;
 
     // Verify: shares burned, counters reset
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await fix.vault.getRedeemedEther()).to.equal(0n);
 
     // --- Compare paths: drain caused deferred rewards ---
@@ -227,7 +227,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
 
     // Verify: pending shares on burner
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
 
     // --- Process report ---
     await mineBlocks(4);
@@ -242,7 +242,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     expect(await ethers.provider.getBalance(elVaultAddr)).to.equal(0n);
 
     // Verify: shares burned
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
 
     // --- Compute exact deviation ---
     const totalPooled = await lido.getTotalPooledEther();
@@ -299,7 +299,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
 
     // Verify: pending shares on burner
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
 
     // --- Process report ---
     await mineBlocks(4);
@@ -315,7 +315,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     expect(deferredRewards).to.equal(REWARDS - headroomAfterDrain);
 
     // Verify: shares burned
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
 
     // Verify: deviation == 0 (smoothing caps both pre- and post-drain paths equally)
     const totalPooled = await lido.getTotalPooledEther();
@@ -369,7 +369,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
 
     // Verify: pending shares on burner
     const { burner } = ctx.contracts;
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares);
 
     // Verify: rewards fit within post-drain headroom (no smoothing → full deviation applies).
     // Lido's IE is stale — subtracting vault's tracked redeemed amount gives the real post-drain IE.

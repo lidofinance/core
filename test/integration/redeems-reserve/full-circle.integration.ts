@@ -91,7 +91,7 @@ describe("Integration: Redeems reserve — full circle", () => {
     await redeemExact(lido, alice, fix, ether("10"));
 
     // Verify: stale state (burn deferred), rate preserved, pending shares on burner
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares1);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares1);
     expect(await lido.getPooledEthByShares(ether("1"))).to.equal(state0.shareRate);
     await assertReserveAllocationInvariant(lido);
 
@@ -100,7 +100,7 @@ describe("Integration: Redeems reserve — full circle", () => {
 
     // --- Reconciliation report: burn redeem shares before WQ processing ---
     await doReport(ctx);
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
 
     const state1: ProtocolState = await captureState(lido);
 
@@ -136,7 +136,7 @@ describe("Integration: Redeems reserve — full circle", () => {
 
     // Verify: stale reserve, pending shares, alice received ETH
     expect(state3.reserve).to.equal(state2.reserve);
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(redeemShares2);
+    expect(await fix.vault.getRedeemedShares()).to.equal(redeemShares2);
     expect(await ethers.provider.getBalance(alice.address)).to.equal(aliceEthBefore + redeemEther2);
     await assertReserveAllocationInvariant(lido);
   });
@@ -177,7 +177,7 @@ describe("Integration: Redeems reserve — full circle", () => {
 
     // --- Wave 1: Alice redeems 30 ETH, Bob and Carol full WQ withdrawal ---
     await redeemExact(lido, alice, fix, ether("30"));
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(await lido.getSharesByPooledEth(ether("30")));
+    expect(await fix.vault.getRedeemedShares()).to.equal(await lido.getSharesByPooledEth(ether("30")));
 
     for (const user of [bob, carol]) {
       const balance = await lido.balanceOf(user.address);
@@ -192,7 +192,7 @@ describe("Integration: Redeems reserve — full circle", () => {
 
     const state1: ProtocolState = await captureState(lido);
 
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await withdrawalQueue.unfinalizedStETH()).to.equal(0n);
     assertReserveState(state1, RATIO_BP);
     await assertReserveAllocationInvariant(lido);
@@ -202,7 +202,7 @@ describe("Integration: Redeems reserve — full circle", () => {
     await requestWithdrawal(ctx, alice, aliceRemainder);
 
     await redeemExact(lido, dave, fix, ether("20"));
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(await lido.getSharesByPooledEth(ether("20")));
+    expect(await fix.vault.getRedeemedShares()).to.equal(await lido.getSharesByPooledEth(ether("20")));
 
     const eveBalance = await lido.balanceOf(eve.address);
     await requestWithdrawal(ctx, eve, eveBalance);
@@ -213,7 +213,7 @@ describe("Integration: Redeems reserve — full circle", () => {
     await advancePastRequestTimestampMargin(ctx);
     await doReport(ctx, { skipWithdrawals: false, excludeVaultsBalances: true });
 
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     await assertReserveAllocationInvariant(lido);
 
     // --- Wave 3: Dave requests WQ for remainder ---

@@ -62,7 +62,8 @@ export async function setupVault(
   const agent = await ctx.getSigner("agent");
 
   const factory = await ethers.getContractFactory("RedeemsBuffer");
-  const impl = await factory.connect(admin).deploy(await locator.getAddress());
+  const hashConsensusAddr = await ctx.contracts.hashConsensus.getAddress();
+  const impl = await factory.connect(admin).deploy(await locator.getAddress(), hashConsensusAddr);
   const [vault] = await proxify({ impl, admin });
   await vault.initialize(admin.address);
 

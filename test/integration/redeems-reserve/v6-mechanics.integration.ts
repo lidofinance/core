@@ -101,19 +101,19 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
     // Large redeem — creates significant pending shares
     const { sharesAmount } = await redeemWithReceipt(holder, ether("30"), holder.address);
 
-    // Shares on Burner redeem track (sent during redeem)
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(sharesAmount);
+    // Shares tracked on buffer, sitting on Burner as nonCover
+    expect(await fix.vault.getRedeemedShares()).to.equal(sharesAmount);
     const [, nonCoverBefore] = await burner.getSharesRequestedToBurn();
-    expect(nonCoverBefore).to.equal(0n);
+    expect(nonCoverBefore).to.equal(sharesAmount); // redeem shares are nonCover
 
     // Report WITH positive rewards — limiter consumes headroom for rewards
-    // Redemption shares must still burn fully (outside limiter)
+    // Redemption shares must still burn fully (added on top of limiter budget)
     await doReport(ctx, { clDiff: ether("0.01") });
 
     // All redeemed shares burned — none deferred
     const [, nonCoverAfter] = await burner.getSharesRequestedToBurn();
     expect(nonCoverAfter).to.equal(0n);
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await fix.vault.getRedeemedEther()).to.equal(0n);
 
     // Shares decreased (exact delta depends on fee shares minted from rewards)
@@ -136,7 +136,7 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
 
     // Redeem — creates vault shares to burn
     const { sharesAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(sharesAmount);
+    expect(await fix.vault.getRedeemedShares()).to.equal(sharesAmount);
 
     // Report with rewards — WQ finalization through limiter, redemptions outside
     await doReport(ctx, { clDiff: ether("0.01"), skipWithdrawals: false });
@@ -145,7 +145,7 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
     expect(await withdrawalQueue.unfinalizedStETH()).to.equal(0n);
 
     // Vault shares all burned (outside limiter)
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     const [, nonCover] = await burner.getSharesRequestedToBurn();
     expect(nonCover).to.equal(0n);
   });
@@ -231,13 +231,13 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
 
     const { sharesAmount, etherAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
 
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(sharesAmount);
+    expect(await fix.vault.getRedeemedShares()).to.equal(sharesAmount);
     expect(await fix.vault.getRedeemedEther()).to.equal(etherAmount);
 
     await doReport(ctx);
 
     // Both counters reset (shares by flushSharesToBurner, ether by resetRedeemedEther)
-    expect(await burner.getRedeemSharesRequestedToBurn()).to.equal(0n);
+    expect(await fix.vault.getRedeemedShares()).to.equal(0n);
     expect(await fix.vault.getRedeemedEther()).to.equal(0n);
   });
 
