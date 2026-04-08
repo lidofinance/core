@@ -12,6 +12,31 @@ trustedCaller = "0x00000000000000000000000000000000000fAc00"     # Address of SR
 UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000fAc01"
 AllowConsolidationPair = "0x00000000000000000000000000000000000fAc0A"
 
+# Oracle report sanity checker configuration
+[oracleReportSanityChecker]
+# TODO: set final NEW sanity limits in deploy params before release deployment
+# - exitedEthAmountPerDayLimit
+# - appearedEthAmountPerDayLimit
+# - consolidationEthAmountPerDayLimit
+# - exitedValidatorEthAmountLimit
+
+exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
+appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
+deprecatedOneOffCLBalanceDecreaseBPLimit = 500         # Deprecated one-off CL balance decrease limit (BP)
+annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
+simulatedShareRateDeviationBPLimit = 50               # Simulated share rate deviation limit (BP)
+maxBalanceExitRequestedPerReportInEth = 64000          # Maximum exit ETH per report
+maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
+maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
+maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
+maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
+requestTimestampMargin = 7680                           # Request timestamp margin
+maxPositiveTokenRebase = 750000                       # Maximum positive token rebase
+maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
+clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
+consolidationEthAmountPerDayLimit = 57600              # Consolidation ETH amount per day limit
+exitedValidatorEthAmountLimit = 32
+
 [triggerableWithdrawalsGateway]
 maxExitRequestsLimit = 13000
 exitsPerFrame = 1
@@ -26,15 +51,29 @@ pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
 frameDurationInSec = 48               # Duration of each processing frame in seconds
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
+gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
+pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+
 gateSeal = "0x00000000000000000000000000000000000bAc01"
 
 [consolidationBus]
-batchSize = 200
-executorBot = "0x00000000000000000000000000000000000bAc02"
+initialBatchSize = 350                # Max number of requests in a batch
+initialMaxGroupsInBatch = 10          # Max source groups in a batch
+initialExecutionDelay = 0             # Delay before pending batch execution
+#TODO  update upon deployment
+executor = "0x00000000000000000000000000000000000bAc02"
 
 [consolidationMigrator]
-sourceModuleId = 1
-targetModuleId = 4
+sourceModuleId = 1                    # Source staking module ID
+targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
+
+# Gate seal configuration for vault operations
+[consolidationGatewayGateSeal]
+#TODO  update upon deployment
+sealDuration = 1209600  # 14 days
+sealingCommittee = "0x00000000000000000000000000000000000ccc01"
+
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
@@ -47,7 +86,7 @@ minTopUpGwei = 1000000000
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
-depositorBot = "0x00000000000000000000000000000000000bAc03"
+depositor = "0x00000000000000000000000000000000000bAc03"
 
 # StakingRouter configuration
 [stakingRouter]

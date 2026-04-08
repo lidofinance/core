@@ -70,6 +70,7 @@ export enum Sk {
   gateSealV3 = "gateSealV3",
   gateSealFactory = "gateSealFactory",
   gateSealTW = "gateSealTW",
+  gateSealConsolidationGW = "gateSealConsolidationGW",
   resealManager = "resealManager",
   stakingRouter = "stakingRouter",
   burner = "burner",
@@ -132,6 +133,7 @@ export enum Sk {
   upgradeConfig = "upgradeConfig",
   upgradeTemplate = "upgradeTemplate",
   upgradeVoteScript = "upgradeVoteScript",
+  upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -178,6 +180,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.executionLayerRewardsVault:
     case Sk.gateSeal:
     case Sk.gateSealV3:
+    case Sk.gateSealTW:
+    case Sk.gateSealConsolidationGW:
     case Sk.resealManager:
     case Sk.hashConsensusForAccountingOracle:
     case Sk.hashConsensusForValidatorsExitBusOracle:

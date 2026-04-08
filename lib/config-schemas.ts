@@ -72,6 +72,11 @@ const BurnerSchema = z.object({
   totalNonCoverSharesBurnt: BigIntStringSchema.optional(),
 });
 
+const WithdrawalVaultSchema = z.object({
+  withdrawalRequestContract: EthereumAddressSchema,
+  consolidationRequestContract: EthereumAddressSchema,
+});
+
 // Triggerable withdrawals gateway schema (used in scratch configs)
 const TriggerableWithdrawalsGatewaySchema = z.object({
   maxExitRequestsLimit: PositiveIntSchema,
@@ -95,13 +100,14 @@ const ConsolidationBusSchema = z.object({
   initialBatchSize: PositiveIntSchema,
   initialMaxGroupsInBatch: PositiveIntSchema,
   initialExecutionDelay: NonNegativeIntSchema,
-
-  executorBot: EthereumAddressSchema,
+  executor: EthereumAddressSchema,
 });
 
 const ConsolidationMigratorSchema = z.object({
   sourceModuleId: PositiveIntSchema,
   targetModuleId: PositiveIntSchema,
+
+  committee: EthereumAddressSchema,
 });
 
 // Top-up gateway schema
@@ -114,7 +120,7 @@ const TopUpGatewaySchema = z.object({
   gIFirstValidatorPrev: HexStringSchema,
   gIFirstValidatorCurr: HexStringSchema,
   pivotSlot: NonNegativeIntSchema,
-  depositorBot: EthereumAddressSchema,
+  depositor: EthereumAddressSchema,
 });
 
 const StakingRouterSchema = z.object({
@@ -361,12 +367,15 @@ export const ScratchParametersSchema = z.object({
 export const UpgradeParametersSchema = z.object({
   easyTrack: EasyTrackSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
+  oracleReportSanityChecker: OracleReportSanityCheckerSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
   consolidationMigrator: ConsolidationMigratorSchema,
+  consolidationGatewayGateSeal: GateSealSchema,
   topUpGateway: TopUpGatewaySchema,
   stakingRouter: StakingRouterSchema,
+  withdrawalVault: WithdrawalVaultSchema,
 
   csmUpgrade: CSMUpgradeConfigSchema,
   curatedModule: CuratedModuleConfigSchema,
