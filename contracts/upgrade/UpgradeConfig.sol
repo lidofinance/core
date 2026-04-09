@@ -8,7 +8,7 @@ import {
     CoreUpgradeParams,
     CSMUpgradeParams,
     CuratedModuleParams,
-    GeneralConfig,
+    GlobalConfig,
     CoreUpgradeConfig,
     CuratedModuleConfig,
     CSMUpgradeConfig,
@@ -18,8 +18,7 @@ import {
     IBaseModuleV3,
     IFeeOracleV3,
     IFeeDistributorV3,
-    IValidatorStrikesV3,
-    IAccountingV3
+    IValidatorStrikesV3
 } from "./UpgradeTypes.sol";
 
 /**
@@ -37,7 +36,6 @@ contract UpgradeConfig is IUpgradeConfig {
     address public immutable DUAL_GOVERNANCE;
     address public immutable RESEAL_MANAGER;
     address public immutable BURNER;
-
 
     //
     // -------- Pre-upgrade old implementations --------
@@ -300,24 +298,8 @@ contract UpgradeConfig is IUpgradeConfig {
         CURATED_EJECTOR = IValidatorStrikesV3(curatedStrikes).ejector();
     }
 
-    function getGeneralConfig() external view returns (GeneralConfig memory) {
-        return _getGeneralConfig();
-    }
-
-    function getCoreUpgradeConfig() external view returns (CoreUpgradeConfig memory) {
-        return _getCoreUpgradeConfig();
-    }
-
-    function getCSMUpgradeConfig() external view returns (CSMUpgradeConfig memory) {
-        return _getCSMUpgradeConfig();
-    }
-
-    function getCuratedModuleConfig() external view returns (CuratedModuleConfig memory) {
-        return _getCuratedModuleConfig();
-    }
-
-    function _getGeneralConfig() internal view returns (GeneralConfig memory) {
-        return GeneralConfig({
+    function getGlobalConfig() external view returns (GlobalConfig memory) {
+        return GlobalConfig({
             agent: AGENT,
             burner: BURNER,
             resealManager: RESEAL_MANAGER,
@@ -328,8 +310,7 @@ contract UpgradeConfig is IUpgradeConfig {
         });
     }
 
-    function _getCoreUpgradeConfig() internal view returns (CoreUpgradeConfig memory) {
-
+    function getCoreUpgradeConfig() external view returns (CoreUpgradeConfig memory) {
         return CoreUpgradeConfig({
             kernel: KERNEL,
             acl: ACL,
@@ -377,7 +358,7 @@ contract UpgradeConfig is IUpgradeConfig {
         });
     }
 
-    function _getCSMUpgradeConfig() internal view returns (CSMUpgradeConfig memory) {
+    function getCSMUpgradeConfig() external view returns (CSMUpgradeConfig memory) {
         return CSMUpgradeConfig({
             csm: CSM,
             csmImpl: CSM_IMPL,
@@ -409,7 +390,7 @@ contract UpgradeConfig is IUpgradeConfig {
         });
     }
 
-    function _getCuratedModuleConfig() internal view returns (CuratedModuleConfig memory) {
+    function getCuratedModuleConfig() external view returns (CuratedModuleConfig memory) {
         return CuratedModuleConfig({
             module: CURATED_MODULE,
             accounting: CURATED_ACCOUNTING,

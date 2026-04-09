@@ -19,8 +19,11 @@ import {
     IKernel,
     IVersioned,
     IEasyTrack,
-    IWithdrawalVault
-} from "./UpgradeTypes.sol";
+    IWithdrawalVault,
+    IWithdrawalsManagerProxy
+} from
+
+"./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
 
@@ -51,15 +54,14 @@ contract UpgradeTemplate is UpgradeConfig {
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
+    // Initial value of upgradeBlockNumber storage variable
+    uint256 public constant UPGRADE_NOT_STARTED = 0;
+    uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
+
     // Timestamp since which startUpgrade()
     // This behavior is introduced to disarm the template if the upgrade voting creation or enactment
     // didn't happen in proper time period
     uint256 public immutable EXPIRE_SINCE_INCLUSIVE;
-
-    // Initial value of upgradeBlockNumber storage variable
-    uint256 public constant UPGRADE_NOT_STARTED = 0;
-
-    uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
 
     //
     // Structured storage
@@ -71,10 +73,10 @@ contract UpgradeTemplate is UpgradeConfig {
     // uint256 public initialOldBurnerStethSharesBalance;
     // uint256 public initialTotalShares;
     // uint256 public initialTotalPooledEther;
-    uint256 initialBufferedEther;
-    uint256 initialDepositedValidators;
-    uint256 initialBeaconValidators;
-    uint256 initialBeaconBalance;
+    uint256 internal initialBufferedEther;
+    uint256 internal initialDepositedValidators;
+    uint256 internal initialBeaconValidators;
+    uint256 internal initialBeaconBalance;
 
     //
     // Slots for transient storage
@@ -146,12 +148,13 @@ contract UpgradeTemplate is UpgradeConfig {
         // Check initial implementations of the proxies to be upgraded
         _assertAragonKernelImplementation(IKernel(KERNEL), OLD_LIDO_IMPL);
 
-        _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING), OLD_ACCOUNTING_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(STAKING_ROUTER), OLD_STAKING_ROUTER_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(WITHDRAWAL_VAULT), OLD_WITHDRAWAL_VAULT_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(VALIDATORS_EXIT_BUS_ORACLE), OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL);
+        _assertProxyImplementation(LOCATOR, OLD_LOCATOR_IMPL);
+        _assertProxyImplementation(ACCOUNTING, OLD_ACCOUNTING_IMPL);
+        _assertProxyImplementation(ACCOUNTING_ORACLE, OLD_ACCOUNTING_ORACLE_IMPL);
+        _assertProxyImplementation(STAKING_ROUTER, OLD_STAKING_ROUTER_IMPL);
+        _assertProxyImplementation(VALIDATORS_EXIT_BUS_ORACLE, OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL);
+
+        _assertWithdrawalsManagerProxyImplementation(WITHDRAWAL_VAULT, OLD_WITHDRAWAL_VAULT_IMPL);
     }
 
     function _assertPostUpgradeState() internal view {
@@ -164,60 +167,51 @@ contract UpgradeTemplate is UpgradeConfig {
 
         _assertAragonKernelImplementation(IKernel(KERNEL), NEW_LIDO_IMPL);
 
-        _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING), NEW_ACCOUNTING_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), NEW_ACCOUNTING_ORACLE_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(STAKING_ROUTER), NEW_STAKING_ROUTER_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(WITHDRAWAL_VAULT), NEW_WITHDRAWAL_VAULT_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(VALIDATORS_EXIT_BUS_ORACLE), NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL);
+        _assertProxyImplementation(LOCATOR, NEW_LOCATOR_IMPL);
+        _assertProxyImplementation(ACCOUNTING, NEW_ACCOUNTING_IMPL);
+        _assertProxyImplementation(ACCOUNTING_ORACLE, NEW_ACCOUNTING_ORACLE_IMPL);
+        _assertProxyImplementation(STAKING_ROUTER, NEW_STAKING_ROUTER_IMPL);
+        _assertProxyImplementation(VALIDATORS_EXIT_BUS_ORACLE, NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL);
 
-        _assertProxyImplementation(IOssifiableProxy(CONSOLIDATION_BUS), CONSOLIDATION_BUS_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(CONSOLIDATION_MIGRATOR), CONSOLIDATION_MIGRATOR_IMPL);
-        _assertProxyImplementation(IOssifiableProxy(TOP_UP_GATEWAY), TOP_UP_GATEWAY_IMPL);
+        _assertWithdrawalsManagerProxyImplementation(WITHDRAWAL_VAULT, NEW_WITHDRAWAL_VAULT_IMPL);
 
-        _assertContractVersion(IVersioned(LIDO), EXPECTED_FINAL_LIDO_VERSION);
-        _assertContractVersion(IVersioned(ACCOUNTING_ORACLE), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
-        _assertContractVersion(IVersioned(WITHDRAWAL_VAULT), EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
+        _assertProxyImplementation(CONSOLIDATION_BUS, CONSOLIDATION_BUS_IMPL);
+        _assertProxyImplementation(CONSOLIDATION_MIGRATOR, CONSOLIDATION_MIGRATOR_IMPL);
+        _assertProxyImplementation(TOP_UP_GATEWAY, TOP_UP_GATEWAY_IMPL);
+
+        _assertContractVersion(LIDO, EXPECTED_FINAL_LIDO_VERSION);
+        _assertContractVersion(ACCOUNTING_ORACLE, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
+        _assertContractVersion(WITHDRAWAL_VAULT, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
 
         _assertFinalACL();
 
         _checkStakingRouterMigratedCorrectly();
         _checkLidoMigratedCorrectly();
-
     }
 
     function _assertFinalACL() internal view {
         // Accounting
-        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
+        _assertProxyAdmin(ACCOUNTING, AGENT);
         _assertSingleOZRoleHolder(ACCOUNTING, DEFAULT_ADMIN_ROLE, AGENT);
 
         // AccountingOracle
-        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING_ORACLE), AGENT);
+        _assertProxyAdmin(ACCOUNTING_ORACLE, AGENT);
         _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
-
         // StakingRouter
-        _assertProxyAdmin(IOssifiableProxy(STAKING_ROUTER), AGENT);
+        _assertProxyAdmin(STAKING_ROUTER, AGENT);
         _assertSingleOZRoleHolder(STAKING_ROUTER, DEFAULT_ADMIN_ROLE, AGENT);
         _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, ACCOUNTING);
         _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_SHARE_MANAGE_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
 
-
-        _assertProxyAdmin(IOssifiableProxy(VALIDATORS_EXIT_BUS_ORACLE), AGENT);
+        _assertProxyAdmin(VALIDATORS_EXIT_BUS_ORACLE, AGENT);
         _assertSingleOZRoleHolder(VALIDATORS_EXIT_BUS_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
         // address internal immutable NEW_ORACLE_REPORT_SANITY_CHECKER;
         // address internal immutable NEW_DEPOSIT_SECURITY_MODULE;
 
-
-
         // WithdrawalVault
-        if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).proxy_getAdmin() != AGENT) {
-            revert IncorrectProxyAdmin(WITHDRAWAL_VAULT);
-        }
-        if (IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation() != NEW_WITHDRAWAL_VAULT_IMPL) {
-            revert IncorrectProxyImplementation(WITHDRAWAL_VAULT, IWithdrawalsManagerProxy(WITHDRAWAL_VAULT).implementation());
-        }
+        _assertWithdrawalsManagerProxyAdmin(WITHDRAWAL_VAULT, AGENT);
 
         // Consolidation rollout
 
@@ -228,22 +222,20 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, ADD_CONSOLIDATION_REQUEST_ROLE, CONSOLIDATION_BUS);
         _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, PAUSE_ROLE, CONSOLIDATION_GATEWAY_GATE_SEAL);
 
-        _assertProxyAdmin(IOssifiableProxy(CONSOLIDATION_BUS), AGENT);
+        _assertProxyAdmin(CONSOLIDATION_BUS, AGENT);
         _assertSingleOZRoleHolder(CONSOLIDATION_BUS, DEFAULT_ADMIN_ROLE, AGENT);
         _assertSingleOZRoleHolder(CONSOLIDATION_BUS, PUBLISH_ROLE, CONSOLIDATION_MIGRATOR);
         _assertTwoOZRoleHolders(CONSOLIDATION_BUS, REMOVE_ROLE, AGENT, CONSOLIDATION_BUS_EXECUTOR);
 
-        _assertProxyAdmin(IOssifiableProxy(CONSOLIDATION_MIGRATOR), AGENT);
+        _assertProxyAdmin(CONSOLIDATION_MIGRATOR, AGENT);
         _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, DEFAULT_ADMIN_ROLE, AGENT);
         _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, ALLOW_PAIR_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
         _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, DISALLOW_PAIR_ROLE, CONSOLIDATION_MANAGER_COMMITTEE);
 
         // TopUps
-        _assertProxyAdmin(IOssifiableProxy(TOP_UP_GATEWAY), AGENT);
+        _assertProxyAdmin(TOP_UP_GATEWAY, AGENT);
         _assertSingleOZRoleHolder(TOP_UP_GATEWAY, DEFAULT_ADMIN_ROLE, AGENT);
         _assertSingleOZRoleHolder(TOP_UP_GATEWAY, TOP_UP_ROLE, TOP_UP_GATEWAY_DEPOSITOR);
-
-
 
         // OracleReportSanityChecker
         IOracleReportSanityChecker checker = IOracleReportSanityChecker(ORACLE_REPORT_SANITY_CHECKER);
@@ -265,7 +257,6 @@ contract UpgradeTemplate is UpgradeConfig {
         for (uint256 i = 0; i < roles.length; ++i) {
             _assertZeroOZRoleHolders(ORACLE_REPORT_SANITY_CHECKER, roles[i]);
         }
-
 
         _assertEasyTrackFactoriesAdded();
     }
@@ -324,14 +315,31 @@ contract UpgradeTemplate is UpgradeConfig {
         }
     }
 
-    function _assertProxyAdmin(IOssifiableProxy _proxy, address _admin) internal view {
-        if (_proxy.proxy__getAdmin() != _admin) revert IncorrectProxyAdmin(address(_proxy));
+    function _assertProxyAdmin(address _proxy, address _admin) internal view {
+        if (IOssifiableProxy(_proxy).proxy__getAdmin() != _admin) revert IncorrectProxyAdmin(_proxy);
     }
 
-    function _assertProxyImplementation(IOssifiableProxy _proxy, address _implementation) internal view {
-        address actualImplementation = _proxy.proxy__getImplementation();
+    function _assertProxyImplementation(address _proxy, address _implementation) internal view {
+        address actualImplementation = IOssifiableProxy(_proxy).proxy__getImplementation();
         if (actualImplementation != _implementation) {
-            revert IncorrectProxyImplementation(address(_proxy), actualImplementation);
+            revert IncorrectProxyImplementation(_proxy, actualImplementation);
+        }
+    }
+
+    function _assertAragonKernelImplementation(IKernel _kernel, address _implementation) internal view {
+        if (_kernel.getApp(_kernel.APP_BASES_NAMESPACE(), LIDO_APP_ID) != _implementation) {
+            revert IncorrectAragonKernelImplementation(address(_kernel), _implementation);
+        }
+    }
+
+    function _assertWithdrawalsManagerProxyAdmin(address _proxy, address _admin) internal view {
+        if (IWithdrawalsManagerProxy(_proxy).proxy_getAdmin() != _admin) revert IncorrectProxyAdmin(_proxy);
+    }
+
+    function _assertWithdrawalsManagerProxyImplementation(address _proxy, address _implementation) internal view {
+        address actualImplementation = IWithdrawalsManagerProxy(_proxy).implementation();
+        if (actualImplementation != _implementation) {
+            revert IncorrectProxyImplementation(_proxy, actualImplementation);
         }
     }
 
@@ -371,15 +379,9 @@ contract UpgradeTemplate is UpgradeConfig {
         }
     }
 
-    function _assertAragonKernelImplementation(IKernel _kernel, address _implementation) internal view {
-        if (_kernel.getApp(_kernel.APP_BASES_NAMESPACE(), LIDO_APP_ID) != _implementation) {
-            revert IncorrectAragonKernelImplementation(address(_kernel), _implementation);
-        }
-    }
-
-    function _assertContractVersion(IVersioned _versioned, uint256 _expectedVersion) internal view {
-        if (_versioned.getContractVersion() != _expectedVersion) {
-            revert InvalidContractVersion(address(_versioned), _expectedVersion);
+    function _assertContractVersion(address _versioned, uint256 _expectedVersion) internal view {
+        if (IVersioned(_versioned).getContractVersion() != _expectedVersion) {
+            revert InvalidContractVersion(_versioned, _expectedVersion);
         }
     }
 

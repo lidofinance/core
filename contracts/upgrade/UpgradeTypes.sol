@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {
-    IAccessControl,
-    IAccessControlEnumerable
-} from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-// import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {IAccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 
@@ -180,7 +175,7 @@ interface IUpgradeConfig {
     function VOTING() external view returns (address);
     function DUAL_GOVERNANCE() external view returns (address);
 
-    function getGeneralConfig() external view returns (GeneralConfig memory);
+    function getGlobalConfig() external view returns (GlobalConfig memory);
     function getCoreUpgradeConfig() external view returns (CoreUpgradeConfig memory);
     function getCSMUpgradeConfig() external view returns (CSMUpgradeConfig memory);
     function getCuratedModuleConfig() external view returns (CuratedModuleConfig memory);
@@ -290,7 +285,7 @@ struct CuratedModuleParams {
 // ------ Shared configs for VotingScript ------
 //
 
-struct GeneralConfig {
+struct GlobalConfig {
     address agent;
     address burner;
     address resealManager;

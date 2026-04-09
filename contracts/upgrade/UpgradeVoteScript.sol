@@ -3,26 +3,38 @@ pragma solidity 0.8.25;
 
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 import {UpgradeTemplate} from "./UpgradeTemplate.sol";
-import {VoteScriptHelpers} from "./utils/VoteScriptHelpers.sol";
-import {EasyTrackFactoryItems} from "./include/EasyTrackFactoryItems.sol";
-import {CoreUpgradeItems} from "./include/CoreUpgradeItems.sol";
-import {CSMUpgradeItems} from "./include/CSMUpgradeItems.sol";
-import {CuratedModuleItems} from "./include/CuratedModuleItems.sol";
+import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {Strings} from "@openzeppelin/contracts-v5.2/utils/Strings.sol";
+import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
 
 import {
     ITimeConstraints,
-    GeneralConfig,
+    GlobalConfig,
     CoreUpgradeConfig,
+    CSMUpgradeConfig,
+    CuratedModuleConfig,
     IKernel,
     IACL,
     IEasyTrack,
     IStakingRouter,
-    IConsolidationMigrator
-} from "./UpgradeTypes.sol";
+    IConsolidationMigrator,
+    IWithdrawalsManagerProxy,
+    IOssifiableProxyV2,
+    ICSModuleV3,
+    IHashConsensusV3,
+    IParametersRegistryV3,
+    IFeeOracleV3,
+    IAccountingV3,
+    IFeeDistributorV3,
+    IValidatorStrikesV3
+} from
+
+"./UpgradeTypes.sol";
 
 /// @title UpgradeVoteScript
 /// @notice Script for upgrading Lido protocol components
 contract UpgradeVoteScript is OmnibusBase {
+    using Strings for uint256;
     uint32 public constant ENABLED_DAY_SPAN_START = 50400; // 14:00 UTC
     uint32 public constant ENABLED_DAY_SPAN_END = 82800; // 23:00 UTC
 
@@ -35,14 +47,36 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 public constant DG_ITEMS_COUNT = 71;
+    uint256 public constant DG_ITEMS_COUNT = 58; //59;
     uint256 public constant VOTING_ITEMS_COUNT = 2;
+
+    bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
+    bytes32 internal constant REPORT_EL_REWARDS_STEALING_PENALTY_ROLE =
+        keccak256("REPORT_EL_REWARDS_STEALING_PENALTY_ROLE");
+    bytes32 internal constant SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE =
+        keccak256("SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE");
+    bytes32 internal constant REPORT_GENERAL_DELAYED_PENALTY_ROLE = keccak256("REPORT_GENERAL_DELAYED_PENALTY_ROLE");
+    bytes32 internal constant SETTLE_GENERAL_DELAYED_PENALTY_ROLE = keccak256("SETTLE_GENERAL_DELAYED_PENALTY_ROLE");
+    bytes32 internal constant REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE =
+        keccak256("REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE");
+    bytes32 internal constant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE =
+        keccak256("REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE");
+    bytes32 internal constant START_REFERRAL_SEASON_ROLE = keccak256("START_REFERRAL_SEASON_ROLE");
+    bytes32 internal constant END_REFERRAL_SEASON_ROLE = keccak256("END_REFERRAL_SEASON_ROLE");
+    bytes32 internal constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
+    bytes32 internal constant CREATE_NODE_OPERATOR_ROLE = keccak256("CREATE_NODE_OPERATOR_ROLE");
+    bytes32 internal constant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE =
+        keccak256("MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE");
+    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
+    bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
+    bytes32 internal constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
+    bytes32 internal constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
 
     //
     // Immutables
     //
     UpgradeTemplate public immutable TEMPLATE;
-    address internal immutable AGENT;
 
     //
     // Structured storage
@@ -56,108 +90,590 @@ contract UpgradeVoteScript is OmnibusBase {
         )
     {
         TEMPLATE = UpgradeTemplate(_params.upgradeTemplate);
-        AGENT = TEMPLATE.AGENT();
         params = _params;
     }
 
     /// @dev Non DG voting items
-    function getVotingVoteItems() public view override returns (VoteItem[] memory votingVoteItems) {
-        votingVoteItems = new VoteItem[](VOTING_ITEMS_COUNT);
-        uint256 index = 0;
+    function getVotingVoteItems() public view override returns (VoteItem[] memory) {
+        VoteItem[] memory items = new VoteItem[](VOTING_ITEMS_COUNT);
+        uint256 i = 0;
+
+        UpgradeTemplate template = TEMPLATE;
+        GlobalConfig memory g = template.getGlobalConfig();
+        CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
 
         //
         // Add new EasyTrack Factories
         //
-        index = _mergeItems(EasyTrackFactoryItems.getItems(TEMPLATE), votingVoteItems, index);
+        address easyTrack = g.easyTrack;
+        items[i++] = _addETFactoryItem(
+            "Add UpdateStakingModuleShareLimits factory to Easy Track",
+            easyTrack,
+            c.etfUpdateStakingModuleShareLimits,
+            bytes.concat(bytes20(g.stakingRouter), bytes4(IStakingRouter.updateModuleShares.selector))
+        );
 
-        assert(index == VOTING_ITEMS_COUNT);
+        items[i++] = _addETFactoryItem(
+            "Add AllowConsolidationPair factory to Easy Track",
+            easyTrack,
+            c.etfAllowConsolidationPair,
+            bytes.concat(bytes20(c.consolidationMigrator), bytes4(IConsolidationMigrator.allowPair.selector))
+        );
+        assert(i == VOTING_ITEMS_COUNT);
+
+        // start numbers from `2` as `1` is reserved for DG submission item
+        return _wrapItemsNumber(items, 2);
     }
 
     /// @dev DG voting items
-    function getVoteItems() public view override returns (VoteItem[] memory voteItems) {
-        voteItems = new VoteItem[](DG_ITEMS_COUNT);
-        uint256 index = 0;
+    function getVoteItems() public view override returns (VoteItem[] memory) {
+        VoteItem[] memory items = new VoteItem[](DG_ITEMS_COUNT);
+        uint256 i = 0;
 
-        voteItems[index++] = VoteScriptHelpers.item({
-            description: "Ensure DG proposal execution is within daily time window (14:00 UTC - 23:00 UTC)",
-            to: params.timeConstraints,
-            data: abi.encodeCall(
-                ITimeConstraints.checkTimeWithinDayTimeAndEmit, (ENABLED_DAY_SPAN_START, ENABLED_DAY_SPAN_END)
-            )
-        });
+        UpgradeTemplate template = TEMPLATE;
+        GlobalConfig memory g = template.getGlobalConfig();
+        address agent = g.agent;
+        address resealManager = g.resealManager;
 
-        voteItems[index++] = _itemAsAgent({
+        // items[i++] = _item({
+        //     description: "Ensure DG proposal execution is within daily time window (14:00 UTC - 23:00 UTC)",
+        //     to: params.timeConstraints,
+        //     data: abi.encodeCall(
+        //         ITimeConstraints.checkTimeWithinDayTimeAndEmit, (ENABLED_DAY_SPAN_START, ENABLED_DAY_SPAN_END)
+        //     )
+        // });
+
+        items[i++] = _item({
             description: "Call UpgradeTemplate.startUpgrade",
-            to: address(TEMPLATE),
+            to: address(template),
             data: abi.encodeCall(UpgradeTemplate.startUpgrade, ())
         });
 
         //
         // Core upgrade
         //
-        index = _mergeItemsAsAgent(CoreUpgradeItems.getItems(TEMPLATE), voteItems, index);
+        {
+            CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade LidoLocator implementation", to: c.locator, impl: c.newLocatorImpl
+            });
+
+            items[i++] = _item({
+                description: "Grant Aragon APP_MANAGER_ROLE to the AGENT",
+                to: c.acl,
+                data: abi.encodeCall(IACL.grantPermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
+            });
+
+            items[i++] = _item({
+                description: "Set Lido implementation in Kernel",
+                to: c.kernel,
+                data: abi.encodeCall(
+                    IKernel.setApp, (IKernel(c.kernel).APP_BASES_NAMESPACE(), c.lidoAppId, c.newLidoImpl)
+                )
+            });
+
+            items[i++] = _item({
+                description: "Revoke Aragon APP_MANAGER_ROLE from the AGENT",
+                to: c.acl,
+                data: abi.encodeCall(IACL.revokePermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
+            });
+
+            /// @notice updating implementation and calling finalizeUpgrade
+            /// @dev finalizeUpgrade_v4 must be called before any other actions to migrate storage and OZ roles
+            items[i++] = _proxyUpgradeToAndCallItem({
+                description: "Upgrade StakingRouter implementation and finalize v4 migration",
+                to: g.stakingRouter,
+                impl: c.newStakingRouterImpl,
+                data: abi.encodeCall(IStakingRouter.finalizeUpgrade_v4, ())
+            });
+
+            /// @notice grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor",
+                to: g.stakingRouter,
+                role: STAKING_MODULE_SHARE_MANAGE_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            /// @notice updating AccountingOracle implementation
+            /// @dev finalizeUpgrade will be called in UpgradeTemplate.finishUpgrade()
+            items[i++] = _item({
+                description: "Upgrade AccountingOracle implementation",
+                to: c.accountingOracle,
+                data: abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (c.newAccountingOracleImpl))
+            });
+
+            /// @notice updating Accounting implementation
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade Accounting implementation", to: c.accounting, impl: c.newAccountingImpl
+            });
+
+            /// @notice updating WithdrawalVault implementation
+            /// @dev finalizeUpgrade will be called in UpgradeTemplate.finishUpgrade()
+            items[i++] = _item({
+                description: "Upgrade WithdrawalVault implementation",
+                to: c.withdrawalVault,
+                data: abi.encodeCall(IWithdrawalsManagerProxy.proxy_upgradeTo, (c.newWithdrawalVaultImpl, bytes("")))
+            });
+        }
 
         //
-        // CSM upgrade & CMv2
+        // CSM Upgrade items
         //
-        index = _mergeItemsAsAgent(CSMUpgradeItems.getItems(TEMPLATE), voteItems, index);
-        index = _mergeItemsAsAgent(CuratedModuleItems.getItems(TEMPLATE), voteItems, index);
+        {
+            CSMUpgradeConfig memory c = template.getCSMUpgradeConfig();
+            address csm = c.csm;
+            address gateSeal = c.gateSeal;
+            address oldEjector = IValidatorStrikesV3(c.strikes).ejector();
+
+            // --- Proxy upgrades ---
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade and finalize CSM v3",
+                to: csm,
+                impl: c.csmImpl,
+                data: abi.encodeCall(ICSModuleV3.finalizeUpgradeV3, ())
+            });
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade and finalize ParametersRegistry v3",
+                to: c.parametersRegistry,
+                impl: c.parametersRegistryImpl,
+                data: abi.encodeCall(IParametersRegistryV3.finalizeUpgradeV3, ())
+            });
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade and finalize FeeOracle v3",
+                to: c.feeOracle,
+                impl: c.feeOracleImpl,
+                data: abi.encodeCall(IFeeOracleV3.finalizeUpgradeV3, (c.feeOracleConsensusVersion))
+            });
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade VettedGate implementation", to: c.vettedGate, impl: c.vettedGateImpl
+            });
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade and finalize Accounting v3",
+                to: c.accounting,
+                impl: c.accountingImpl,
+                data: abi.encodeCall(IAccountingV3.finalizeUpgradeV3, ())
+            });
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade and finalize FeeDistributor v3",
+                to: c.feeDistributor,
+                impl: c.feeDistributorImpl,
+                data: abi.encodeCall(IFeeDistributorV3.finalizeUpgradeV3, ())
+            });
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade ExitPenalties implementation", to: c.exitPenalties, impl: c.exitPenaltiesImpl
+            });
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade ValidatorStrikes implementation", to: c.strikes, impl: c.strikesImpl
+            });
+
+            // --- Role & permission updates ---
+
+            items[i++] = _item({
+                description: "Point ValidatorStrikes to the new Ejector",
+                to: c.strikes,
+                data: abi.encodeCall(IValidatorStrikesV3.setEjector, (c.ejector))
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant REPORT_GENERAL_DELAYED_PENALTY_ROLE",
+                to: csm,
+                role: REPORT_GENERAL_DELAYED_PENALTY_ROLE,
+                account: c.generalDelayedPenaltyReporter
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SETTLE_GENERAL_DELAYED_PENALTY_ROLE",
+                to: csm,
+                role: SETTLE_GENERAL_DELAYED_PENALTY_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke REPORT_EL_REWARDS_STEALING_PENALTY_ROLE",
+                to: csm,
+                role: REPORT_EL_REWARDS_STEALING_PENALTY_ROLE,
+                account: c.generalDelayedPenaltyReporter
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE",
+                to: csm,
+                role: SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke VERIFIER_ROLE from old verifier", to: csm, role: VERIFIER_ROLE, account: c.verifier
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant VERIFIER_ROLE to VerifierV3", to: csm, role: VERIFIER_ROLE, account: c.verifierV3
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE to VerifierV3",
+                to: csm,
+                role: REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE,
+                account: c.verifierV3
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track",
+                to: csm,
+                role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke CREATE_NODE_OPERATOR_ROLE from old PermissionlessGate",
+                to: csm,
+                role: CREATE_NODE_OPERATOR_ROLE,
+                account: c.oldPermissionlessGate
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CREATE_NODE_OPERATOR_ROLE to new PermissionlessGate",
+                to: csm,
+                role: CREATE_NODE_OPERATOR_ROLE,
+                account: c.permissionlessGate
+            });
+
+            // --- Gate seal migration ---
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke PAUSE_ROLE from old gate seal on CSModule",
+                to: csm,
+                role: PAUSE_ROLE,
+                account: gateSeal
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke PAUSE_ROLE from old gate seal on Accounting",
+                to: c.accounting,
+                role: PAUSE_ROLE,
+                account: gateSeal
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke PAUSE_ROLE from old gate seal on FeeOracle",
+                to: c.feeOracle,
+                role: PAUSE_ROLE,
+                account: gateSeal
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke PAUSE_ROLE from old gate seal on VettedGate",
+                to: c.vettedGate,
+                role: PAUSE_ROLE,
+                account: gateSeal
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke PAUSE_ROLE from old gate seal on old Verifier",
+                to: c.verifier,
+                role: PAUSE_ROLE,
+                account: gateSeal
+            });
+
+            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke PAUSE_ROLE from old gate seal on old Ejector",
+                to: oldEjector,
+                role: PAUSE_ROLE,
+                account: gateSeal
+            });
+
+            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke PAUSE_ROLE from reseal manager on old Verifier",
+                to: c.verifier,
+                role: PAUSE_ROLE,
+                account: resealManager
+            });
+
+            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke RESUME_ROLE from reseal manager on old Verifier",
+                to: c.verifier,
+                role: RESUME_ROLE,
+                account: resealManager
+            });
+
+            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke PAUSE_ROLE from reseal manager on old Ejector",
+                to: oldEjector,
+                role: PAUSE_ROLE,
+                account: resealManager
+            });
+
+            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke RESUME_ROLE from reseal manager on old Ejector",
+                to: oldEjector,
+                role: RESUME_ROLE,
+                account: resealManager
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke START_REFERRAL_SEASON_ROLE",
+                to: c.vettedGate,
+                role: START_REFERRAL_SEASON_ROLE,
+                account: agent
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke END_REFERRAL_SEASON_ROLE",
+                to: c.vettedGate,
+                role: END_REFERRAL_SEASON_ROLE,
+                account: c.identifiedCommunityStakersGateManager
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant PAUSE_ROLE to GateSealV3 on CSModule",
+                to: csm,
+                role: PAUSE_ROLE,
+                account: c.gateSealV3
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant PAUSE_ROLE to GateSealV3 on Accounting",
+                to: c.accounting,
+                role: PAUSE_ROLE,
+                account: c.gateSealV3
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant PAUSE_ROLE to GateSealV3 on FeeOracle",
+                to: c.feeOracle,
+                role: PAUSE_ROLE,
+                account: c.gateSealV3
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant PAUSE_ROLE to GateSealV3 on VettedGate",
+                to: c.vettedGate,
+                role: PAUSE_ROLE,
+                account: c.gateSealV3
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE to penaltiesManager",
+                to: c.parametersRegistry,
+                role: MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE,
+                account: c.penaltiesManager
+            });
+
+            // --- Burner role migration ---
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke REQUEST_BURN_SHARES_ROLE from CSM Accounting",
+                to: g.burner,
+                role: REQUEST_BURN_SHARES_ROLE,
+                account: c.accounting
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant REQUEST_BURN_MY_STETH_ROLE to CSM Accounting",
+                to: g.burner,
+                role: REQUEST_BURN_MY_STETH_ROLE,
+                account: c.accounting
+            });
+
+            // --- TWG role migration ---
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke TWG full-withdrawal role from old Ejector",
+                to: g.triggerableWithdrawalsGateway,
+                role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
+                account: oldEjector
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant TWG full-withdrawal role to new Ejector",
+                to: g.triggerableWithdrawalsGateway,
+                role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
+                account: c.ejector
+            });
+        }
+
+        //
+        // Curated Module items
+        //
+        {
+            CuratedModuleConfig memory c = template.getCuratedModuleConfig();
+
+            items[i++] = _item({
+                description: "Add Curated module to StakingRouter",
+                to: g.stakingRouter,
+                data: abi.encodeCall(
+                    IStakingRouter.addStakingModule,
+                    (
+                        c.moduleName,
+                        c.module,
+                        c.stakeShareLimit,
+                        c.priorityExitShareThreshold,
+                        c.stakingModuleFee,
+                        c.treasuryFee,
+                        c.maxDepositsPerBlock,
+                        c.minDepositBlockDistance
+                    )
+                )
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant REQUEST_BURN_MY_STETH_ROLE to Curated Accounting",
+                to: g.burner,
+                role: REQUEST_BURN_MY_STETH_ROLE,
+                account: c.accounting
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant TWG full-withdrawal role to Curated Ejector",
+                to: g.triggerableWithdrawalsGateway,
+                role: REQUEST_BURN_MY_STETH_ROLE,
+                account: c.ejector
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant RESUME_ROLE to agent on Curated module",
+                to: c.module,
+                role: RESUME_ROLE,
+                account: agent
+            });
+
+            items[i++] = _item({
+                description: "Resume Curated module", to: c.module, data: abi.encodeCall(ICSModuleV3.resume, ())
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke RESUME_ROLE from agent on Curated module",
+                to: c.module,
+                role: RESUME_ROLE,
+                account: agent
+            });
+
+            items[i++] = _item({
+                description: "Update Curated HashConsensus initial epoch",
+                to: c.hashConsensus,
+                data: abi.encodeCall(IHashConsensusV3.updateInitialEpoch, (c.hashConsensusInitialEpoch))
+            });
+        }
 
         //
         // Template: finish upgrade
         //
 
-        voteItems[index++] = _itemAsAgent({
+        items[i++] = _item({
             description: "Call UpgradeTemplate.finishUpgrade",
             to: params.upgradeTemplate,
             data: abi.encodeCall(UpgradeTemplate.finishUpgrade, ())
         });
 
-        assert(index == DG_ITEMS_COUNT);
+        assert(i == DG_ITEMS_COUNT);
+
+        // set prefix to `1`, so all item's description will transform to `1.N. Description...`
+        return _wrapItemsPrefixNumberForward(items, agent, 1, 1);
     }
 
     //
     // Helpers
     //
 
-    /// @dev Wrap item with forward to AGENT
-    function _itemAsAgent(string memory description, address to, bytes memory data)
+    function _addNumber(string memory s, uint256 n) internal pure returns (string memory) {
+        return string.concat(n.toString(), ". ", s);
+    }
+
+    function _addPrefixedNumber(string memory s, string memory p, uint256 n) internal pure returns (string memory) {
+        return string.concat(p, n.toString(), ". ", s);
+    }
+
+    function _wrapItemsNumber(VoteItem[] memory items, uint256 startNum) internal pure returns (VoteItem[] memory) {
+        for (uint256 i = 0; i < items.length; ++i) {
+            uint256 num = i + startNum;
+            items[i].description = _addNumber(items[i].description, num);
+        }
+        return items;
+    }
+
+    /// @dev Wrap item with prefix, add number and forwarded `forwarder`
+    function _wrapItemsPrefixNumberForward(
+        VoteItem[] memory items,
+        address forwarder,
+        uint256 prefixNum,
+        uint256 startNum
+    ) internal pure returns (VoteItem[] memory) {
+        string memory prefix = string.concat(prefixNum.toString(), ".");
+        for (uint256 i = 0; i < items.length; ++i) {
+            uint256 num = i + startNum;
+            items[i].description = _addPrefixedNumber(items[i].description, prefix, num);
+            items[i].call = _forwardCall(forwarder, items[i].call.to, items[i].call.data);
+        }
+
+        return items;
+    }
+
+    function _item(string memory description, address to, bytes memory data) internal pure returns (VoteItem memory) {
+        return VoteItem({description: description, call: _votingCall(to, data)});
+    }
+
+    function _addETFactoryItem(string memory description, address easyTrack, address factory, bytes memory permissions)
         private
-        view
+        pure
         returns (VoteItem memory)
     {
-        return _itemFwd(AGENT, description, to, data);
+        return _item(description, easyTrack, abi.encodeCall(IEasyTrack.addEVMScriptFactory, (factory, permissions)));
     }
 
-    /// @dev Merge items from src to dst starting at index wrapped with forward to AGENT
-    function _mergeItemsAsAgent(VoteItem[] memory src, VoteItem[] memory dst, uint256 index)
-        internal
-        view
-        returns (uint256)
-    {
-        for (uint256 i = 0; i < src.length; ++i) {
-            dst[index++] = _itemFwd(AGENT, src[i]);
-        }
-        return index;
-    }
-
-    function _mergeItems(VoteItem[] memory src, VoteItem[] memory dst, uint256 index) internal pure returns (uint256) {
-        for (uint256 i = 0; i < src.length; ++i) {
-            dst[index++] = src[i];
-        }
-        return index;
-    }
-
-    function _itemFwd(address forwarder, string memory description, address to, bytes memory data)
+    function _ozGrantRoleItem(string memory description, address to, bytes32 role, address account)
         internal
         pure
         returns (VoteItem memory)
     {
-        return VoteScriptHelpers.item(description, _forwardCall(forwarder, to, data));
+        return _item(description, to, abi.encodeCall(IAccessControl.grantRole, (role, account)));
     }
 
-    function _itemFwd(address forwarder, VoteItem memory voteItem) internal pure returns (VoteItem memory) {
-        voteItem.call = _forwardCall(forwarder, voteItem.call.to, voteItem.call.data);
-        return voteItem;
+    function _ozRevokeRoleItem(string memory description, address to, bytes32 role, address account)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IAccessControl.revokeRole, (role, account)));
+    }
+
+    function _proxyUpgradeToItem(string memory description, address to, address impl)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (impl)));
+    }
+
+    /// @dev wraps call to the IOssifiableProxy.proxy__upgradeToAndCall
+    function _proxyUpgradeToAndCallItem(string memory description, address to, address impl, bytes memory data)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IOssifiableProxy.proxy__upgradeToAndCall, (impl, data, false)));
+    }
+
+    /// @dev wraps call to the modified IOssifiableProxyV2.proxy__upgradeToAndCall (used in CSM/CM)
+    function _proxyUpgradeToAndCallV2Item(string memory description, address to, address impl, bytes memory data)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IOssifiableProxyV2.proxy__upgradeToAndCall, (impl, data)));
     }
 }
