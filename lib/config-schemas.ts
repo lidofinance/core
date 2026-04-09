@@ -192,7 +192,6 @@ const CSMUpgradeConfigSchema = z.object({
 
 const CuratedModuleConfigSchema = z.object({
   module: EthereumAddressSchema,
-  hashConsensus: EthereumAddressSchema,
   moduleName: z.string().min(1),
   stakeShareLimit: NonNegativeIntSchema,
   priorityExitShareThreshold: NonNegativeIntSchema,

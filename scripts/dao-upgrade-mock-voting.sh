@@ -25,6 +25,6 @@ export UPGRADE_PARAMETERS_FILE=${UPGRADE_PARAMETERS_FILE:="scripts/upgrade/upgra
 
 export STEPS_FILE=${STEPS_FILE:="upgrade/steps-mock-voting.json"}
 export PROPOSAL_METADATA=${PROPOSAL_METADATA:="mock-proposal-metadata"}
-# export PROPOSAL_ID=0
+export PROPOSAL_ID=${PROPOSAL_ID:=""}
 
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
