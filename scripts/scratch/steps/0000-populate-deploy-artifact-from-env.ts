@@ -15,7 +15,6 @@ function getEnvVariable(name: string, defaultValue?: string): string {
 export async function main() {
   // Retrieve environment variables
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
-  const gateSealFactoryAddress = getEnvVariable("GATE_SEAL_FACTORY", "");
   const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
   const slotsPerEpoch = parseInt(getEnvVariable("SLOTS_PER_EPOCH", "32"));
   const depositContractAddress = getEnvVariable("DEPOSIT_CONTRACT", "");
@@ -41,13 +40,6 @@ export async function main() {
 
   if (depositContractAddress) {
     state.chainSpec.depositContract = ethers.getAddress(depositContractAddress);
-  }
-
-  if (gateSealFactoryAddress) {
-    state.gateSeal = {
-      ...state.gateSeal,
-      factoryAddress: gateSealFactoryAddress,
-    };
   }
 
   if (withdrawalQueueBaseUri) {

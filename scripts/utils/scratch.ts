@@ -27,12 +27,9 @@ export function readScratchParameters(): ScratchParameters {
 export function scratchParametersToDeploymentState(params: ScratchParameters): Record<string, unknown> {
   return {
     deployer: null, // Set by deployment scripts
-    gateSeal: {
+    circuitBreaker: {
       address: null, // Set by deployment scripts
-      factoryAddress: null, // Set by deployment scripts
-      sealDuration: params.gateSeal.sealDuration,
-      expiryTimestamp: params.gateSeal.expiryTimestamp,
-      sealingCommittee: params.gateSeal.sealingCommittee,
+      deployParameters: params.circuitBreaker,
     },
     lidoApmEnsName: params.lidoApm.ensName,
     lidoApmEnsRegDurationSec: params.lidoApm.ensRegDurationSec,

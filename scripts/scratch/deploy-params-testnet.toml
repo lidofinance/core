@@ -7,11 +7,14 @@ slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum co
 secondsPerSlot = 12                   # Duration of each slot in seconds
 # genesisTime and depositContract are set via environment variables or deployment scripts
 
-# Gate seal configuration for testnet deployment
-[gateSeal]
-sealDuration = 518400                 # Gate seal duration in seconds (6 days)
-expiryTimestamp = 1714521600          # Gate seal expiry timestamp
-sealingCommittee = []                 # Empty sealing committee for testnet
+# CircuitBreaker configuration for testnet deployment
+[circuitBreaker]
+minPauseDuration = 300                # Minimum pause duration in seconds (5 minutes)
+maxPauseDuration = 5184000            # Maximum pause duration in seconds (60 days)
+minHeartbeatInterval = 300            # Minimum heartbeat interval in seconds (5 minutes)
+maxHeartbeatInterval = 94608000       # Maximum heartbeat interval in seconds (3 years)
+initialPauseDuration = 1814400        # Initial pause duration in seconds (21 days)
+initialHeartbeatInterval = 31536000   # Initial heartbeat interval in seconds (365 days)
 
 # Lido APM ENS configuration
 [lidoApm]
