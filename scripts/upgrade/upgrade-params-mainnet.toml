@@ -9,27 +9,22 @@ AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]
-# TODO: set final NEW sanity limits in deploy params before release deployment
-# - exitedEthAmountPerDayLimit
-# - appearedEthAmountPerDayLimit
-# - consolidationEthAmountPerDayLimit
-# - exitedValidatorEthAmountLimit
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
 deprecatedOneOffCLBalanceDecreaseBPLimit = 500         # Deprecated one-off CL balance decrease limit (BP)
 annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
-simulatedShareRateDeviationBPLimit = 50               # Simulated share rate deviation limit (BP)
-maxBalanceExitRequestedPerReportInEth = 64000          # Maximum exit ETH per report
+simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
+maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
 maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
 maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
 maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
 maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
-requestTimestampMargin = 7680                           # Request timestamp margin
-maxPositiveTokenRebase = 750000                       # Maximum positive token rebase
+requestTimestampMargin = 128                           # Request timestamp margin
+maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
 maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
-consolidationEthAmountPerDayLimit = 57600              # Consolidation ETH amount per day limit
-exitedValidatorEthAmountLimit = 32
+consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
+exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 
 [lido]
 lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
