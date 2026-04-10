@@ -358,7 +358,9 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
       const MAX_BASIS_POINTS = 10000n;
       const maxBalanceIncrease =
-        ((annualBalanceIncreaseBPLimit * clValidatorsBalanceAtLastReport * reportTimeElapsed) /
+        ((annualBalanceIncreaseBPLimit *
+          (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) *
+          reportTimeElapsed) /
           (SECONDS_PER_YEAR * MAX_BASIS_POINTS) /
           ONE_GWEI) *
         ONE_GWEI;
@@ -367,7 +369,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       expect(stateBefore.badDebtToInternalize).to.equal(badDebtShares, "Bad debt should be queued");
 
       // `report()` consumes the seeded pending baseline inside the same report, so the
-      // raw CL delta under test is just the validators-based safety-cap component.
+      // raw CL delta under test is the safety-cap component computed from the
+      // post-activation validators base.
       // Bad debt still must not compensate an over-limit report.
       expect(clPendingBalanceAtLastReport).to.be.gt(0n, "test precondition failed: pending baseline must be non-zero");
       await expect(

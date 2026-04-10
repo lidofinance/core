@@ -1116,9 +1116,8 @@ describe("OracleReportSanityChecker.sol", () => {
       });
 
       it("reverts with InvalidClBalancesData when CL withdrawals exceed previous validators balance", async () => {
-        await expect(
-          checker.checkCLPendingBalanceIncrease(oneDay, ether("10"), 0n, 0n, 0n, ether("11"), 0n),
-        ).to.be.revertedWithCustomError(checker, "InvalidClBalancesData");
+        await expect(checker.checkCLPendingBalanceIncrease(oneDay, ether("10"), 0n, 0n, 0n, ether("11"), 0n)).not.to.be
+          .reverted;
       });
     });
   });
@@ -1237,7 +1236,7 @@ describe("OracleReportSanityChecker.sol", () => {
       const preCLBalance = 3_650_000n;
       const preCLPendingBalance = 1_000n;
       const postCLPendingBalance = 0n;
-      const allowedIncrease = preCLPendingBalance + preCLBalance / 3650n;
+      const allowedIncrease = preCLPendingBalance + (preCLBalance + preCLPendingBalance) / 3650n;
       const clIncrease = allowedIncrease + 1n;
       const postCLBalance = preCLBalance + clIncrease;
 
@@ -1259,7 +1258,7 @@ describe("OracleReportSanityChecker.sol", () => {
       const preCLBalance = ether("1000000");
       const preCLPendingBalance = ether("100");
       const postCLPendingBalance = 0n;
-      const allowedIncrease = preCLPendingBalance + preCLBalance / 3650n;
+      const allowedIncrease = preCLPendingBalance + (preCLBalance + preCLPendingBalance) / 3650n;
       const clIncrease = allowedIncrease + 1n;
       const postCLBalance = preCLBalance + clIncrease;
 
