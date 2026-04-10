@@ -1,0 +1,149 @@
+# Lido Protocol Upgrade Parameters - Hoodi Configuration
+# This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum Hoodi testnet
+
+
+
+[easyTrack]
+# TODO:  update upon deployment
+trustedCaller = "0x00000000000000000000000000000000000eee00"
+[easyTrack.newFactories]
+# TODO: fill with deployed Easy Track factory address before execution
+UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
+AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
+
+# Oracle report sanity checker configuration
+[oracleReportSanityChecker]
+exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
+appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
+deprecatedOneOffCLBalanceDecreaseBPLimit = 500         # Deprecated one-off CL balance decrease limit (BP)
+annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
+simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
+maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
+maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
+maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
+maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
+maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
+requestTimestampMargin = 128                           # Request timestamp margin
+maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
+maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
+clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
+consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
+exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
+
+[lido]
+lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
+
+[withdrawalVault]
+# https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification
+withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
+# https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7251.md#specification
+consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
+
+[triggerableWithdrawalsGateway]
+maxExitRequestsLimit = 13000
+exitsPerFrame = 1
+frameDurationInSec = 48
+
+# Deposit security module configuration
+[depositSecurityModule]
+maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
+pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
+
+[consolidationGateway]
+maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
+consolidationsPerFrame = 1            # Number of consolidations processed per frame
+frameDurationInSec = 48               # Duration of each processing frame in seconds
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
+gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
+pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
+
+[consolidationBus]
+initialBatchSize = 350                # Max number of requests in a batch
+initialMaxGroupsInBatch = 10          # Max source groups in a batch
+initialExecutionDelay = 0             # Delay before pending batch execution
+#TODO  update upon deployment
+executor = "0x00000000000000000000000000000000000abc01"
+
+[consolidationMigrator]
+sourceModuleId = 1                    # Source staking module ID
+targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
+#TODO  update upon deployment
+committee = "0x00000000000000000000000000000000000abc02"
+
+# Gate seal configuration for vault operations
+[consolidationGatewayGateSeal]
+sealDuration = 1209600  # 14 days
+#TODO  update upon deployment
+sealingCommittee = "0x00000000000000000000000000000000000abc03"
+
+
+# Top-up gateway configuration for validator top-ups via Merkle proofs
+[topUpGateway]
+maxValidatorsPerTopUp = 100           # Maximum validators per top-up call
+minBlockDistance = 1                  # Minimum block distance between top-ups
+maxRootAge = 300                      # Maximum allowed age of beacon root relative to current block timestamp
+targetBalanceGwei = 2046750000000
+minTopUpGwei = 1000000000
+# Generalized indices for validator/balance/pending state verification
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
+pivotSlot = 0
+#TODO  update upon deployment           # Pivot slot for fork-aware gIndex selection
+depositor = "0x00000000000000000000000000000000000abc04"
+
+# StakingRouter configuration
+[stakingRouter]
+maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
+maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2
+
+[csmUpgrade]
+csmProxy = "0x79CEf36D84743222f37765204Bec41E92a93E59d"
+csmImpl = "0x6140195075a2BFaE0C332377af1f1461Fced0791"
+parametersRegistryProxy = "0xA4aD5236963f9Fe4229864712269D8d79B65C5Ad"
+parametersRegistryImpl = "0xae34514B7A5B402264dB13ac8ffe25766173B3cc"
+feeOracleProxy = "0xe7314f561B2e72f9543F1004e741bab6Fc51028B"
+feeOracleImpl = "0x2fcc1bE07eAf30FC7daC541327B96B038C73eE7a"
+feeOracleConsensusVersion = 4
+vettedGateProxy = "0x10a254E724fe2b7f305F76f3F116a3969c53845f"
+vettedGateImpl = "0x86915F7D0C68A627385eF36DdB40A48391118882"
+accountingProxy = "0xA54b90BA34C5f326BC1485054080994e38FB4C60"
+accountingImpl = "0xD32b59d6054b94516f8EEE2A84C3c33DaF1d06B8"
+feeDistributorProxy = "0xaCd9820b0A2229a82dc1A0770307ce5522FF3582"
+feeDistributorImpl = "0x1B952bd0C5d65B86d4F1F29589A31584e2bE038f"
+exitPenaltiesProxy = "0xD259b31083Be841E5C85b2D481Cfc17C14276800"
+exitPenaltiesImpl = "0xF8CC5BFFC0580395a5D8bBE3C4CD07ce3F623d89"
+strikesProxy = "0x8fBA385C3c334D251eE413e79d4D3890db98693c"
+strikesImpl = "0xF9CcA99e34197E5fc70aB05F5dEb112EcD2367e9"
+oldPermissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
+verifier = "0x1773b2Ff99A030F6000554Cb8A5Ec93145650cbA"
+# TODO: replace with deployed verifier v3
+verifierV3 = "0x00000000000000000000000000000000000dac01"
+permissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
+# TODO: replace with new deployed ejector
+ejector = "0x00000000000000000000000000000000000dac02"
+gateSeal = "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65"
+# TODO: replace with deployed gate seal v3
+gateSealV3 = "0x00000000000000000000000000000000000dac03"
+identifiedCommunityStakersGateManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
+generalDelayedPenaltyReporter = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
+penaltiesManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
+
+[curatedModule]
+# TODO: replace with deployed curated module addresses
+module = "0x00000000000000000000000000000000000cac01"
+moduleName = "curated-onchain-v1"
+stakeShareLimit = 2000
+priorityExitShareThreshold = 2500
+stakingModuleFee = 800
+treasuryFee = 200
+maxDepositsPerBlock = 30
+minDepositBlockDistance = 25
+hashConsensusInitialEpoch = 47480
+
+
+[upgradeVoteScript]
+# Expiry timestamp after which the upgrade transaction will revert
+# Format: Unix timestamp (seconds since epoch)
+# The upgrade transaction must be executed before this deadline
+expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
+timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"
