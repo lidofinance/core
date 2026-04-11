@@ -97,40 +97,36 @@ maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
 maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2
 
 [csmUpgrade]
-csmProxy = "0x79CEf36D84743222f37765204Bec41E92a93E59d"
-csmImpl = "0x6140195075a2BFaE0C332377af1f1461Fced0791"
-parametersRegistryProxy = "0xA4aD5236963f9Fe4229864712269D8d79B65C5Ad"
-parametersRegistryImpl = "0xae34514B7A5B402264dB13ac8ffe25766173B3cc"
-feeOracleProxy = "0xe7314f561B2e72f9543F1004e741bab6Fc51028B"
-feeOracleImpl = "0x2fcc1bE07eAf30FC7daC541327B96B038C73eE7a"
+csmProxy = "0x531C17C4E2Eef4cE6aA72CCA0aacf41FD06bcA84"
+csmImpl = "0xc8249cbe40477bAFfB7c3944A54e8Bcc04442E61"
+parametersRegistryProxy = "0xb9ecA5123336eA9ea9F95B6E6F04dDedD148c6CE"
+parametersRegistryImpl = "0x21a846DB6B1fde38874Da0175195ed257bBee656"
+feeOracleProxy = "0x23f7a4cE6FF9d64042D2e1eE4d8Ab20c3dBF24AF"
+feeOracleImpl = "0x5Ab1E1A3F85EA5b350ff524bC6a2E74d212E09D8"
 feeOracleConsensusVersion = 4
-vettedGateProxy = "0x10a254E724fe2b7f305F76f3F116a3969c53845f"
-vettedGateImpl = "0x86915F7D0C68A627385eF36DdB40A48391118882"
-accountingProxy = "0xA54b90BA34C5f326BC1485054080994e38FB4C60"
-accountingImpl = "0xD32b59d6054b94516f8EEE2A84C3c33DaF1d06B8"
-feeDistributorProxy = "0xaCd9820b0A2229a82dc1A0770307ce5522FF3582"
-feeDistributorImpl = "0x1B952bd0C5d65B86d4F1F29589A31584e2bE038f"
-exitPenaltiesProxy = "0xD259b31083Be841E5C85b2D481Cfc17C14276800"
-exitPenaltiesImpl = "0xF8CC5BFFC0580395a5D8bBE3C4CD07ce3F623d89"
-strikesProxy = "0x8fBA385C3c334D251eE413e79d4D3890db98693c"
-strikesImpl = "0xF9CcA99e34197E5fc70aB05F5dEb112EcD2367e9"
-oldPermissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
-verifier = "0x1773b2Ff99A030F6000554Cb8A5Ec93145650cbA"
-# TODO: replace with deployed verifier v3
-verifierV3 = "0x00000000000000000000000000000000000dac01"
-permissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
-# TODO: replace with new deployed ejector
-ejector = "0x00000000000000000000000000000000000dac02"
-gateSeal = "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65"
-# TODO: replace with deployed gate seal v3
-gateSealV3 = "0x00000000000000000000000000000000000dac03"
-identifiedCommunityStakersGateManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
-generalDelayedPenaltyReporter = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
-penaltiesManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
+vettedGateProxy = "0xd04E46D444cD12eD1136Db229d9eB7357b0D4685"
+vettedGateImpl = "0x2FbCe6cF3DA01Fc80A67491574e04396379d8C21"
+accountingProxy = "0x38339391CFBa34802b224408dd78de0B91bF0C66"
+accountingImpl = "0xE50288Ddfe4bCDfC9c47CAE59C55A525921Cf6f8"
+feeDistributorProxy = "0x5D80cA6C7c3FB6b999286a9c2325D6b07dd25296"
+feeDistributorImpl = "0xCf7f0285Df627aFDcFAA3f8FcAa9EC4fDC892815"
+exitPenaltiesProxy = "0xFBEd979da64dEd080ba2ef2bD297B000A4e8391b"
+exitPenaltiesImpl = "0x386C57D258383052D2ee23F01081ecd3b0bD8cd7"
+strikesProxy = "0x19628bBE586737722a14eb898A5a787EDE955662"
+strikesImpl = "0x948c0D6d635010314e010DcEB86C72Bfc10b69bB"
+oldPermissionlessGate = "0x5676715F8537DCbC5a13003Bf1bb7EF6a3196dB9"
+permissionlessGate = "0xD29438F352dF79e948B9F79f273e3Fda528C5C06"
+verifier = "0x9De74784543D1428Fa73AAFF05B3E334769c7C50"
+verifierV3 = "0x50d6EDfE6669e91dcab40503E5Aa1f49A6933F19"
+ejector = "0xE9D7a318F531AB07abb7E5560aa55E23365a9515"
+gateSeal = "0x0000000000000000000000000000000000000000"
+gateSealV3 = "0x0000000000000000000000000000000000000000"
+identifiedCommunityStakersGateManager = "0xE25583099BA105D9ec0A67f5Ae86D90e50036425"
+generalDelayedPenaltyReporter = "0xE25583099BA105D9ec0A67f5Ae86D90e50036425"
+penaltiesManager = "0xE25583099BA105D9ec0A67f5Ae86D90e50036425"
 
 [curatedModule]
-# TODO: replace with deployed curated module addresses
-module = "0x00000000000000000000000000000000000cac01"
+module = "0x1c5A849640229610800c9E27F84039fCb6912f23"
 moduleName = "curated-onchain-v1"
 stakeShareLimit = 2000
 priorityExitShareThreshold = 2500
@@ -138,7 +134,7 @@ stakingModuleFee = 800
 treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
-hashConsensusInitialEpoch = 47480
+hashConsensusInitialEpoch = 0 # FIXME: calculate
 
 
 [upgradeVoteScript]
