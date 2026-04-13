@@ -80,7 +80,7 @@ export async function main() {
       consolidationGatewayGateSeal: getAddress(Sk.gateSealConsolidationGW, state),
 
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
-      consolidationManagerCommittee: parameters.consolidationMigrator.committee,
+      curatedModuleCommittee: parameters.consolidationMigrator.committee,
 
       lidoDepositsReserveTarget: parameters.lido.lidoDepositsReserveTarget,
 

@@ -237,7 +237,7 @@ struct CoreUpgradeParams {
     uint256 lidoDepositsReserveTarget;
     address consolidationGatewayGateSeal;
     address consolidationBusExecutor;
-    address consolidationManagerCommittee;
+    address curatedModuleCommittee;
     address topUpGatewayDepositor;
 
     // EasyTrack new factories
@@ -339,7 +339,7 @@ struct CoreUpgradeConfig {
     uint256 lidoDepositsReserveTarget;
     address consolidationGatewayGateSeal;
     address consolidationBusExecutor;
-    address consolidationManagerCommittee;
+    address curatedModuleCommittee;
     address topUpGatewayDepositor;
 
     address etfUpdateStakingModuleShareLimits;
