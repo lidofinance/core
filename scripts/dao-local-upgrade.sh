@@ -14,8 +14,5 @@ export GAS_MAX_FEE=100
 
 bash scripts/dao-upgrade.sh
 
-# Need this to get sure the last transactions are mined
-yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
-
 # Run acceptance tests
 yarn test:integration:fork:local

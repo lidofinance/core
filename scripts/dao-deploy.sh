@@ -25,5 +25,8 @@ export STEPS_FILE=scratch/steps.json
 
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
 
+# Need this to get sure the last transactions are mined
+yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
+
 # TODO
 # yarn hardhat --network $NETWORK run --no-compile scripts/scratch/steps/90-check-dao.ts

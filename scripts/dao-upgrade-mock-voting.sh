@@ -28,3 +28,6 @@ export PROPOSAL_METADATA=${PROPOSAL_METADATA:="mock-proposal-metadata"}
 export PROPOSAL_ID=${PROPOSAL_ID:=""}
 
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
+
+# Need this to get sure the last transactions are mined
+yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
