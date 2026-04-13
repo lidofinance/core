@@ -168,9 +168,9 @@ shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (
 
 # Triggerable withdrawals gateway for managing validator exit requests
 [triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 13000          # Maximum number of exit requests that can be processed
+maxExitRequestsLimit = 250          # Maximum number of exit requests that can be processed
 exitsPerFrame = 1                     # Number of exits processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
+frameDurationInSec = 240               # Duration of each processing frame in seconds
 
 [consolidationGateway]
 maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
