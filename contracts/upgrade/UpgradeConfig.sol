@@ -5,6 +5,8 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {
     IUpgradeConfig,
     UpgradeParameters,
+    EasyTrackNewFactories,
+    EasyTrackOldFactories,
     CoreUpgradeParams,
     CSMUpgradeParams,
     CuratedModuleParams,
@@ -12,7 +14,7 @@ import {
     CoreUpgradeConfig,
     CuratedModuleConfig,
     CSMUpgradeConfig,
-    IKernel,
+    IAragonKernel,
     IAragonApp,
     IEasyTrack,
     IBaseModuleV3,
@@ -102,9 +104,15 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable EASY_TRACK;
     address internal immutable EASY_TRACK_EVM_SCRIPT_EXECUTOR;
     // ETF = EasyTrack Factory
-    address internal immutable ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS;
-    address internal immutable ETF_ALLOW_CONSOLIDATION_PAIR;
-    /// TODO csm easytracks
+    // new factories
+    address internal immutable ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS;
+    address internal immutable ETF_NEW_ALLOW_CONSOLIDATION_PAIR;
+    address internal immutable ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP;
+    address internal immutable ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS;
+    address internal immutable ETF_NEW_SET_MERKLE_GATE_TREE;
+    address internal immutable ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY;
+    // old factories
+    address internal immutable ETF_OLD_SETTLE_EL_STEALING_PENALTY;
 
     //
     // ------- Misc -------
@@ -157,6 +165,7 @@ contract UpgradeConfig is IUpgradeConfig {
     uint256 internal immutable CURATED_MAX_DEPOSITS_PER_BLOCK;
     uint256 internal immutable CURATED_MIN_DEPOSIT_BLOCK_DISTANCE;
     uint256 internal immutable CURATED_HASH_CONSENSUS_INITIAL_EPOCH;
+    address internal immutable CURATED_META_REGISTRY;
 
     // UpgradeParameters public upgradeParams;
 
@@ -177,7 +186,7 @@ contract UpgradeConfig is IUpgradeConfig {
         // Save passed parameters
         AGENT = params.agent;
         KERNEL = IAragonApp(AGENT).kernel();
-        ACL = IKernel(KERNEL).acl();
+        ACL = IAragonKernel(KERNEL).acl();
 
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
@@ -218,9 +227,18 @@ contract UpgradeConfig is IUpgradeConfig {
         CONSOLIDATION_GATEWAY_GATE_SEAL = coreUpgradeParams.consolidationGatewayGateSeal;
         TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
 
-        ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS = coreUpgradeParams.etfUpdateStakingModuleShareLimits;
-        ETF_ALLOW_CONSOLIDATION_PAIR = coreUpgradeParams.etfAllowConsolidationPair;
+        // EasyTrack new factories
+        EasyTrackNewFactories memory newFactories = params.newFactories;
+        ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS = newFactories.UpdateStakingModuleShareLimits;
+        ETF_NEW_ALLOW_CONSOLIDATION_PAIR = newFactories.AllowConsolidationPair;
+        ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP = newFactories.CreateOrUpdateOperatorGroup;
+        ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS = newFactories.ReportWithdrawalsForSlashedValidators;
+        ETF_NEW_SET_MERKLE_GATE_TREE = newFactories.SetMerkleGateTree;
+        ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY = newFactories.SettleGeneralDelayedPenalty;
 
+        // EasyTrack old factories
+        EasyTrackOldFactories memory oldFactories = params.oldFactories;
+        ETF_OLD_SETTLE_EL_STEALING_PENALTY = oldFactories.CSMSettleElStealingPenalty;
         // todo add CSM etf
 
         // Discover via locator
@@ -289,6 +307,7 @@ contract UpgradeConfig is IUpgradeConfig {
         CURATED_MAX_DEPOSITS_PER_BLOCK = curatedModuleParams.maxDepositsPerBlock;
         CURATED_MIN_DEPOSIT_BLOCK_DISTANCE = curatedModuleParams.minDepositBlockDistance;
         CURATED_HASH_CONSENSUS_INITIAL_EPOCH = curatedModuleParams.hashConsensusInitialEpoch;
+        CURATED_META_REGISTRY = curatedModuleParams.metaRegistry;
 
         CURATED_ACCOUNTING = IBaseModuleV3(CURATED_MODULE).ACCOUNTING();
         address curatedFeeDistributor = IBaseModuleV3(CURATED_MODULE).FEE_DISTRIBUTOR();
@@ -308,6 +327,20 @@ contract UpgradeConfig is IUpgradeConfig {
             stakingRouter: STAKING_ROUTER,
             triggerableWithdrawalsGateway: TRIGGERABLE_WITHDRAWALS_GATEWAY
         });
+    }
+
+    function getEasyTrackConfig() external view returns (EasyTrackNewFactories memory, EasyTrackOldFactories memory) {
+        return (
+            EasyTrackNewFactories({
+                UpdateStakingModuleShareLimits: ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS,
+                AllowConsolidationPair: ETF_NEW_ALLOW_CONSOLIDATION_PAIR,
+                CreateOrUpdateOperatorGroup: ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP,
+                ReportWithdrawalsForSlashedValidators: ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS,
+                SetMerkleGateTree: ETF_NEW_SET_MERKLE_GATE_TREE,
+                SettleGeneralDelayedPenalty: ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY
+            }),
+            EasyTrackOldFactories({CSMSettleElStealingPenalty: ETF_OLD_SETTLE_EL_STEALING_PENALTY})
+        );
     }
 
     function getCoreUpgradeConfig() external view returns (CoreUpgradeConfig memory) {
@@ -352,9 +385,7 @@ contract UpgradeConfig is IUpgradeConfig {
             consolidationGatewayGateSeal: CONSOLIDATION_GATEWAY_GATE_SEAL,
             consolidationBusExecutor: CONSOLIDATION_BUS_EXECUTOR,
             consolidationManagerCommittee: CONSOLIDATION_MANAGER_COMMITTEE,
-            topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
-            etfUpdateStakingModuleShareLimits: ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS,
-            etfAllowConsolidationPair: ETF_ALLOW_CONSOLIDATION_PAIR
+            topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR
         });
     }
 
@@ -403,7 +434,8 @@ contract UpgradeConfig is IUpgradeConfig {
             treasuryFee: CURATED_TREASURY_FEE,
             maxDepositsPerBlock: CURATED_MAX_DEPOSITS_PER_BLOCK,
             minDepositBlockDistance: CURATED_MIN_DEPOSIT_BLOCK_DISTANCE,
-            hashConsensusInitialEpoch: CURATED_HASH_CONSENSUS_INITIAL_EPOCH
+            hashConsensusInitialEpoch: CURATED_HASH_CONSENSUS_INITIAL_EPOCH,
+            metaRegistry: CURATED_META_REGISTRY
         });
     }
 

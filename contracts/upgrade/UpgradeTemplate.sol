@@ -16,14 +16,12 @@ import {
     IAccountingOracle,
     IOracleReportSanityChecker,
     IWithdrawalsManagerProxy,
-    IKernel,
+    IAragonKernel,
     IVersioned,
     IEasyTrack,
     IWithdrawalVault,
     IWithdrawalsManagerProxy
-} from
-
-"./UpgradeTypes.sol";
+} from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
 
@@ -49,7 +47,8 @@ contract UpgradeTemplate is UpgradeConfig {
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_STAKING_ROUTER_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 4;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 5;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 6;
+    uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION = 5;
     uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
@@ -146,7 +145,7 @@ contract UpgradeTemplate is UpgradeConfig {
 
     function _assertPreUpgradeState() internal view {
         // Check initial implementations of the proxies to be upgraded
-        _assertAragonKernelImplementation(IKernel(KERNEL), OLD_LIDO_IMPL);
+        _assertAragonKernelImplementation(IAragonKernel(KERNEL), OLD_LIDO_IMPL);
 
         _assertProxyImplementation(LOCATOR, OLD_LOCATOR_IMPL);
         _assertProxyImplementation(ACCOUNTING, OLD_ACCOUNTING_IMPL);
@@ -165,7 +164,7 @@ contract UpgradeTemplate is UpgradeConfig {
         //     revert TotalSharesOrPooledEtherChanged();
         // }
 
-        _assertAragonKernelImplementation(IKernel(KERNEL), NEW_LIDO_IMPL);
+        _assertAragonKernelImplementation(IAragonKernel(KERNEL), NEW_LIDO_IMPL);
 
         _assertProxyImplementation(LOCATOR, NEW_LOCATOR_IMPL);
         _assertProxyImplementation(ACCOUNTING, NEW_ACCOUNTING_IMPL);
@@ -182,6 +181,8 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertContractVersion(LIDO, EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(ACCOUNTING_ORACLE, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
         _assertContractVersion(WITHDRAWAL_VAULT, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
+
+        _assertEasyTrackFactories();
 
         _assertFinalACL();
 
@@ -257,26 +258,28 @@ contract UpgradeTemplate is UpgradeConfig {
         for (uint256 i = 0; i < roles.length; ++i) {
             _assertZeroOZRoleHolders(ORACLE_REPORT_SANITY_CHECKER, roles[i]);
         }
-
-        _assertEasyTrackFactoriesAdded();
     }
 
-    function _assertEasyTrackFactoriesAdded() internal view {
+    function _assertEasyTrackFactories() internal view {
         IEasyTrack easyTrack = IEasyTrack(EASY_TRACK);
-        address[] memory factories = easyTrack.getEVMScriptFactories();
 
-        address[2] memory expectedFactories = [ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS, ETF_ALLOW_CONSOLIDATION_PAIR];
+        // todo add CSM & CMv2 factories
+        address[2] memory newFactories = [ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS, ETF_NEW_ALLOW_CONSOLIDATION_PAIR];
 
-        uint256 numFactories = factories.length;
-        if (numFactories < expectedFactories.length) {
-            revert UnexpectedEasyTrackFactories();
-        }
-
-        for (uint256 i = 0; i < expectedFactories.length; ++i) {
-            if (factories[numFactories - expectedFactories.length + i] != expectedFactories[i]) {
-                revert UnexpectedEasyTrackFactories();
+        for (uint256 i = 0; i < newFactories.length; ++i) {
+            if (!easyTrack.isEVMScriptFactory(newFactories[i])) {
+                revert UnexpectedNewEasyTrackFactories();
             }
         }
+
+        // address[1] memory oldFactories =
+        //     [ETF_OLD_SETTLE_EL_STEALING_PENALTY];
+
+        // for (uint256 i = 0; i < newFactories.length; ++i) {
+        //     if (easyTrack.isEVMScriptFactory(newFactories[i])) {
+        //         revert UnexpectedOldEasyTrackFactories();
+        //     }
+        // }
     }
 
     function _checkStakingRouterMigratedCorrectly() internal view {
@@ -326,7 +329,7 @@ contract UpgradeTemplate is UpgradeConfig {
         }
     }
 
-    function _assertAragonKernelImplementation(IKernel _kernel, address _implementation) internal view {
+    function _assertAragonKernelImplementation(IAragonKernel _kernel, address _implementation) internal view {
         if (_kernel.getApp(_kernel.APP_BASES_NAMESPACE(), LIDO_APP_ID) != _implementation) {
             revert IncorrectAragonKernelImplementation(address(_kernel), _implementation);
         }
@@ -410,5 +413,6 @@ contract UpgradeTemplate is UpgradeConfig {
     error SetupAlreadyCompleted(string itemName);
     error Expired();
     error IncorrectLidoMigration(string reason);
-    error UnexpectedEasyTrackFactories();
+    error UnexpectedNewEasyTrackFactories();
+    error UnexpectedOldEasyTrackFactories();
 }

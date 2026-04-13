@@ -6,6 +6,13 @@ trustedCaller = "0x00000000000000000000000000000000000eee00"
 # TODO: fill with deployed Easy Track factory address before execution
 UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
 AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
+# csm & cmv2
+CreateOrUpdateOperatorGroup = "0x00000000000000000000000000000000000eee03"
+ReportWithdrawalsForSlashedValidators = "0x00000000000000000000000000000000000eee04"
+SetMerkleGateTree = "0x00000000000000000000000000000000000eee05"
+SettleGeneralDelayedPenalty = "0x00000000000000000000000000000000000eee06"
+[easyTrack.oldFactories]
+CSMSettleElStealingPenalty = "0x00000000000000000000000000000000000eee07"
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]

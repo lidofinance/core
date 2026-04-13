@@ -10,11 +10,13 @@ import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/extensions/IAc
 import {
     ITimeConstraints,
     GlobalConfig,
+    EasyTrackNewFactories,
+    EasyTrackOldFactories,
     CoreUpgradeConfig,
     CSMUpgradeConfig,
     CuratedModuleConfig,
-    IKernel,
-    IACL,
+    IAragonKernel,
+    IAragonACL,
     IEasyTrack,
     IStakingRouter,
     IConsolidationMigrator,
@@ -26,7 +28,8 @@ import {
     IFeeOracleV3,
     IAccountingV3,
     IFeeDistributorV3,
-    IValidatorStrikesV3
+    IValidatorStrikesV3,
+    IMetaRegistry
 } from
 
 "./UpgradeTypes.sol";
@@ -100,28 +103,54 @@ contract UpgradeVoteScript is OmnibusBase {
 
         UpgradeTemplate template = TEMPLATE;
         GlobalConfig memory g = template.getGlobalConfig();
-        CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
+        address easyTrack = g.easyTrack;
+        (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = template.getEasyTrackConfig();
 
         //
         // Add new EasyTrack Factories
         //
-        address easyTrack = g.easyTrack;
-        items[i++] = _addETFactoryItem(
-            "Add UpdateStakingModuleShareLimits factory to Easy Track",
-            easyTrack,
-            c.etfUpdateStakingModuleShareLimits,
-            bytes.concat(bytes20(g.stakingRouter), bytes4(IStakingRouter.updateModuleShares.selector))
-        );
+        // todo remove old factories?
+        // items[i++] =
+        //     _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
 
-        items[i++] = _addETFactoryItem(
-            "Add AllowConsolidationPair factory to Easy Track",
-            easyTrack,
-            c.etfAllowConsolidationPair,
-            bytes.concat(bytes20(c.consolidationMigrator), bytes4(IConsolidationMigrator.allowPair.selector))
-        );
+        {
+            CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
+
+            items[i++] = _addETFactoryItem(
+                "Add UpdateStakingModuleShareLimits ET factory",
+                easyTrack,
+                n.UpdateStakingModuleShareLimits,
+                bytes.concat(bytes20(g.stakingRouter), bytes4(IStakingRouter.updateModuleShares.selector))
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add AllowConsolidationPair ET factory",
+                easyTrack,
+                n.AllowConsolidationPair,
+                bytes.concat(bytes20(c.consolidationMigrator), bytes4(IConsolidationMigrator.allowPair.selector))
+            );
+        }
+
+        {
+            CSMUpgradeConfig memory c = template.getCSMUpgradeConfig();
+            // TODO: remove old and add new factories for CSM
+        }
+
+        {
+            CuratedModuleConfig memory c = template.getCuratedModuleConfig();
+
+            items[i++] = _addETFactoryItem(
+                "Add CreateOrUpdateOperatorGroup ET factory",
+                easyTrack,
+                n.CreateOrUpdateOperatorGroup,
+                bytes.concat(bytes20(c.metaRegistry), bytes4(IMetaRegistry.createOrUpdateOperatorGroup.selector))
+            );
+
+            // TODO: add new factories for  CMV2
+        }
         assert(i == VOTING_ITEMS_COUNT);
 
-        // start numbers from `2` as `1` is reserved for DG submission item
+        //  start from `2` as `1` is reserved for DG submission item
         return _wrapItemsNumber(items, 2);
     }
 
@@ -162,21 +191,21 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] = _item({
                 description: "Grant Aragon APP_MANAGER_ROLE to the AGENT",
                 to: c.acl,
-                data: abi.encodeCall(IACL.grantPermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
+                data: abi.encodeCall(IAragonACL.grantPermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
             });
 
             items[i++] = _item({
                 description: "Set Lido implementation in Kernel",
                 to: c.kernel,
                 data: abi.encodeCall(
-                    IKernel.setApp, (IKernel(c.kernel).APP_BASES_NAMESPACE(), c.lidoAppId, c.newLidoImpl)
+                    IAragonKernel.setApp, (IAragonKernel(c.kernel).APP_BASES_NAMESPACE(), c.lidoAppId, c.newLidoImpl)
                 )
             });
 
             items[i++] = _item({
                 description: "Revoke Aragon APP_MANAGER_ROLE from the AGENT",
                 to: c.acl,
-                data: abi.encodeCall(IACL.revokePermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
+                data: abi.encodeCall(IAragonACL.revokePermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
             });
 
             /// @notice updating implementation and calling finalizeUpgrade
@@ -633,6 +662,14 @@ contract UpgradeVoteScript is OmnibusBase {
         returns (VoteItem memory)
     {
         return _item(description, easyTrack, abi.encodeCall(IEasyTrack.addEVMScriptFactory, (factory, permissions)));
+    }
+
+    function _delETFactoryItem(string memory description, address easyTrack, address factory)
+        private
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, easyTrack, abi.encodeCall(IEasyTrack.removeEVMScriptFactory, (factory)));
     }
 
     function _ozGrantRoleItem(string memory description, address to, bytes32 role, address account)

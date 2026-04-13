@@ -9,20 +9,20 @@ import {ILido} from "contracts/common/interfaces/ILido.sol";
 // Interfaces
 // ============================
 
-interface IKernel {
-    function acl() external view returns (address); //IACL
+interface IAragonKernel {
+    function acl() external view returns (address); //IAragonACL
     function getApp(bytes32 _namespace, bytes32 _appId) external view returns (address);
     function setApp(bytes32 _namespace, bytes32 _appId, address _app) external;
     function APP_BASES_NAMESPACE() external view returns (bytes32);
 }
 
-interface IACL {
+interface IAragonACL {
     function grantPermission(address _entity, address _app, bytes32 _role) external;
     function revokePermission(address _entity, address _app, bytes32 _role) external;
 }
 
 interface IAragonApp {
-    function kernel() external view returns (address); //IKernel
+    function kernel() external view returns (address); //IAragonKernel
     function appId() external view returns (bytes32);
 }
 
@@ -37,9 +37,11 @@ interface IBaseOracle is IAccessControlEnumerable, IVersioned {
 }
 
 interface IEasyTrack {
-    function getEVMScriptFactories() external view returns (address[] memory);
     function evmScriptExecutor() external view returns (address);
+    function isEVMScriptFactory(address _maybeEVMScriptFactory) external view returns (bool);
+    function getEVMScriptFactories() external view returns (address[] memory);
     function addEVMScriptFactory(address _evmScriptFactory, bytes memory _permissions) external;
+    function removeEVMScriptFactory(address _evmScriptFactory) external;
 }
 
 interface IStakingRouter is IAccessControlEnumerable {
@@ -165,6 +167,24 @@ interface IHashConsensusV3 {
     function updateInitialEpoch(uint256 epoch) external;
 }
 
+interface IMetaRegistry {
+    struct SubNodeOperator {
+        uint64 nodeOperatorId;
+        uint16 share;
+    }
+
+    struct ExternalOperator {
+        bytes data;
+    }
+
+    struct OperatorGroup {
+        SubNodeOperator[] subNodeOperators;
+        ExternalOperator[] externalOperators;
+    }
+
+    function createOrUpdateOperatorGroup(uint256 groupId, OperatorGroup calldata groupInfo) external;
+}
+
 // ============================
 // Shared types
 // ============================
@@ -194,12 +214,28 @@ struct UpgradeParameters {
     address resealManager;
     address easyTrack;
 
+    EasyTrackNewFactories newFactories;
+    EasyTrackOldFactories oldFactories;
     // Upgrade config for protocol core
     CoreUpgradeParams coreUpgrade;
 
     // Upgrade config for CSM/CMv2
     CSMUpgradeParams csmUpgrade;
     CuratedModuleParams curatedModule;
+}
+
+struct EasyTrackNewFactories {
+    // EasyTrack new factories
+    address UpdateStakingModuleShareLimits;
+    address AllowConsolidationPair;
+    address CreateOrUpdateOperatorGroup;
+    address ReportWithdrawalsForSlashedValidators;
+    address SetMerkleGateTree;
+    address SettleGeneralDelayedPenalty;
+}
+
+struct EasyTrackOldFactories {
+    address CSMSettleElStealingPenalty;
 }
 
 struct CoreUpgradeParams {
@@ -239,10 +275,6 @@ struct CoreUpgradeParams {
     address consolidationBusExecutor;
     address consolidationManagerCommittee;
     address topUpGatewayDepositor;
-
-    // EasyTrack new factories
-    address etfUpdateStakingModuleShareLimits;
-    address etfAllowConsolidationPair;
 }
 
 struct CSMUpgradeParams {
@@ -279,6 +311,7 @@ struct CuratedModuleParams {
     uint256 maxDepositsPerBlock;
     uint256 minDepositBlockDistance;
     uint256 hashConsensusInitialEpoch;
+    address metaRegistry;
 }
 
 //
@@ -341,9 +374,6 @@ struct CoreUpgradeConfig {
     address consolidationBusExecutor;
     address consolidationManagerCommittee;
     address topUpGatewayDepositor;
-
-    address etfUpdateStakingModuleShareLimits;
-    address etfAllowConsolidationPair;
 }
 
 struct CSMUpgradeConfig {
@@ -389,4 +419,5 @@ struct CuratedModuleConfig {
     uint256 maxDepositsPerBlock;
     uint256 minDepositBlockDistance;
     uint256 hashConsensusInitialEpoch;
+    address metaRegistry;
 }

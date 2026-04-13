@@ -7,6 +7,7 @@ import {
   LidoLocator,
   OssifiableProxy__factory,
 } from "typechain-types";
+import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
 
 import { loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
@@ -37,13 +38,16 @@ export async function main() {
     deployer,
   );
 
-  const upgradeParams = {
+  const upgradeParams: UpgradeParametersStruct = {
     locator: locatorAddress,
     agent: getAddress(Sk.appAgent, state),
     voting: getAddress(Sk.appVoting, state),
     dualGovernance: getAddress(Sk.dgDualGovernance, state),
     resealManager: getAddress(Sk.resealManager, state),
     easyTrack: getAddress(Sk.easyTrack, state),
+
+    newFactories: parameters.easyTrack.newFactories,
+    oldFactories: parameters.easyTrack.oldFactories,
 
     coreUpgrade: {
       oldLocatorImpl,
@@ -83,10 +87,6 @@ export async function main() {
       consolidationManagerCommittee: parameters.consolidationMigrator.committee,
 
       lidoDepositsReserveTarget: parameters.lido.lidoDepositsReserveTarget,
-
-      // easy tracks
-      etfUpdateStakingModuleShareLimits: parameters.easyTrack.newFactories.UpdateStakingModuleShareLimits,
-      etfAllowConsolidationPair: parameters.easyTrack.newFactories.AllowConsolidationPair,
     },
     csmUpgrade: parameters.csmUpgrade,
     curatedModule: parameters.curatedModule,

@@ -128,7 +128,6 @@ const StakingRouterSchema = z.object({
 
 // Easy track schema
 const EasyTrackSchema = z.object({
-  // VaultsAdapter: EthereumAddressSchema,
   // trustedCaller: EthereumAddressSchema,
   newFactories: z.object({
     // v3
@@ -143,6 +142,13 @@ const EasyTrackSchema = z.object({
     // v4
     UpdateStakingModuleShareLimits: EthereumAddressSchema,
     AllowConsolidationPair: EthereumAddressSchema,
+    CreateOrUpdateOperatorGroup: EthereumAddressSchema,
+    ReportWithdrawalsForSlashedValidators: EthereumAddressSchema,
+    SetMerkleGateTree: EthereumAddressSchema,
+    SettleGeneralDelayedPenalty: EthereumAddressSchema,
+  }),
+  oldFactories: z.object({
+    CSMSettleElStealingPenalty: EthereumAddressSchema,
   }),
 });
 
@@ -200,6 +206,7 @@ const CuratedModuleConfigSchema = z.object({
   maxDepositsPerBlock: NonNegativeIntSchema,
   minDepositBlockDistance: NonNegativeIntSchema,
   hashConsensusInitialEpoch: NonNegativeIntSchema,
+  metaRegistry: EthereumAddressSchema,
 });
 
 const UpgradeVoteScriptSchema = z.object({
