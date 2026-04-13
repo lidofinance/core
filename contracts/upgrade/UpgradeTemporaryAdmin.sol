@@ -49,7 +49,6 @@ contract UpgradeTemporaryAdmin {
         address _consolidationMigrator,
         address _consolidationMigratorCommittee,
         address _consolidationBus,
-        address _consolidationBusExecutorBot,
         address _consolidationGatewayGateSeal,
         address _topUpGateway,
         address _topUpGatewayDepositor
@@ -65,7 +64,7 @@ contract UpgradeTemporaryAdmin {
         address consolidationGateway = locator.consolidationGateway();
 
         _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationMigratorCommittee);
-        _setupConsolidationBus(_consolidationBus, _consolidationMigrator, _consolidationBusExecutorBot);
+        _setupConsolidationBus(_consolidationBus, _consolidationMigrator);
         _setupConsolidationGateway(consolidationGateway, _consolidationBus, _consolidationGatewayGateSeal, _resealManager);
         _setupTopUpGateway(_topUpGateway, _topUpGatewayDepositor);
 
@@ -79,9 +78,8 @@ contract UpgradeTemporaryAdmin {
         _transferAdminToAgent(_migrator);
     }
 
-    function _setupConsolidationBus(address _bus, address _migrator, address _executor) private {
+    function _setupConsolidationBus(address _bus, address _migrator) private {
         IAccessControl(_bus).grantRole(PUBLISH_ROLE, _migrator);
-        IAccessControl(_bus).grantRole(REMOVE_ROLE, _executor);
 
         _transferAdminToAgent(_bus);
     }

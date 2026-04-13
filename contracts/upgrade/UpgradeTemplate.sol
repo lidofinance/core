@@ -225,7 +225,7 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertProxyAdmin(CONSOLIDATION_BUS, AGENT);
         _assertSingleOZRoleHolder(CONSOLIDATION_BUS, DEFAULT_ADMIN_ROLE, AGENT);
         _assertSingleOZRoleHolder(CONSOLIDATION_BUS, PUBLISH_ROLE, CONSOLIDATION_MIGRATOR);
-        _assertTwoOZRoleHolders(CONSOLIDATION_BUS, REMOVE_ROLE, AGENT, CONSOLIDATION_BUS_EXECUTOR);
+        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, REMOVE_ROLE, AGENT);
 
         _assertProxyAdmin(CONSOLIDATION_MIGRATOR, AGENT);
         _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, DEFAULT_ADMIN_ROLE, AGENT);

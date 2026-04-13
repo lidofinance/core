@@ -329,7 +329,6 @@ export async function main() {
       consolidationMigrator.address,
       parameters.consolidationMigrator.committee,
       consolidationBus.address,
-      parameters.consolidationBus.executor,
       consolidationGateSealAddress,
       topUpGateway.address,
       parameters.topUpGateway.depositor,

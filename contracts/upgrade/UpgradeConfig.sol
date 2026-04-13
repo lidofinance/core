@@ -93,7 +93,6 @@ contract UpgradeConfig is IUpgradeConfig {
     //
     uint256 internal immutable LIDO_DEPOSITS_RESERVE_TARGET;
     address internal immutable CURATED_MODULE_COMMITTEE;
-    address internal immutable CONSOLIDATION_BUS_EXECUTOR;
     address internal immutable CONSOLIDATION_GATEWAY_GATE_SEAL;
     address internal immutable TOP_UP_GATEWAY_DEPOSITOR;
 
@@ -214,7 +213,6 @@ contract UpgradeConfig is IUpgradeConfig {
 
         LIDO_DEPOSITS_RESERVE_TARGET = coreUpgradeParams.lidoDepositsReserveTarget;
         CURATED_MODULE_COMMITTEE = coreUpgradeParams.curatedModuleCommittee;
-        CONSOLIDATION_BUS_EXECUTOR = coreUpgradeParams.consolidationBusExecutor;
         CONSOLIDATION_GATEWAY_GATE_SEAL = coreUpgradeParams.consolidationGatewayGateSeal;
         TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
 
@@ -350,7 +348,6 @@ contract UpgradeConfig is IUpgradeConfig {
             // params
             lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
             consolidationGatewayGateSeal: CONSOLIDATION_GATEWAY_GATE_SEAL,
-            consolidationBusExecutor: CONSOLIDATION_BUS_EXECUTOR,
             curatedModuleCommittee: CURATED_MODULE_COMMITTEE,
             topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
             etfUpdateStakingModuleShareLimits: ETF_UPDATE_STAKING_MODULE_SHARE_LIMITS,

@@ -75,7 +75,6 @@ export async function main() {
 
       // Consolidation
       consolidationBus: getAddress(Sk.consolidationBus, state),
-      consolidationBusExecutor: parameters.consolidationBus.executor,
 
       consolidationGatewayGateSeal: getAddress(Sk.gateSealConsolidationGW, state),
 
