@@ -92,12 +92,8 @@ export async function main() {
     curatedModule: parameters.curatedModule,
   };
 
-  const template = await deployWithoutProxy(Sk.upgradeTemplate, "UpgradeTemplate", deployer.address, [
+  await deployWithoutProxy(Sk.upgradeTemplate, "UpgradeTemplate", deployer.address, [
     upgradeParams,
     parameters.upgradeVoteScript.expiryTimestamp,
-  ]);
-
-  await deployWithoutProxy(Sk.upgradeVoteScript, "UpgradeVoteScript", deployer.address, [
-    [template.address, parameters.upgradeVoteScript.timeConstraintsContract],
   ]);
 }

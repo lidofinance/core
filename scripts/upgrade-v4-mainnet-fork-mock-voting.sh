@@ -19,6 +19,3 @@ export UPGRADE_PARAMETERS_FILE="scripts/upgrade/upgrade-params-mainnet.toml"
 export PROPOSAL_METADATA="upgrade-v4-mock-voting"
 
 bash scripts/dao-upgrade-mock-voting.sh
-
-# Need this to get sure the last transactions are mined
-yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
