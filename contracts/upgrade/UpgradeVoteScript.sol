@@ -29,10 +29,11 @@ import {
     IAccountingV3,
     IFeeDistributorV3,
     IValidatorStrikesV3,
+    IBaseModuleV3,
+    IAllowedMerkleGatesRegistry,
+    IMerkleGate,
     IMetaRegistry
-} from
-
-"./UpgradeTypes.sol";
+} from "./UpgradeTypes.sol";
 
 /// @title UpgradeVoteScript
 /// @notice Script for upgrading Lido protocol components
@@ -50,8 +51,8 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 public constant DG_ITEMS_COUNT = 58; //59;
-    uint256 public constant VOTING_ITEMS_COUNT = 2;
+    uint256 internal constant DG_ITEMS_COUNT = 69;
+    uint256 public constant VOTING_ITEMS_COUNT = 10;
 
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 internal constant REPORT_EL_REWARDS_STEALING_PENALTY_ROLE =
@@ -75,6 +76,8 @@ contract UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
     bytes32 internal constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
     bytes32 internal constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
+    bytes32 internal constant SET_TREE_ROLE = keccak256("SET_TREE_ROLE");
+    bytes32 internal constant MANAGE_OPERATOR_GROUPS_ROLE = keccak256("MANAGE_OPERATOR_GROUPS_ROLE");
 
     //
     // Immutables
@@ -109,9 +112,8 @@ contract UpgradeVoteScript is OmnibusBase {
         //
         // Add new EasyTrack Factories
         //
-        // todo remove old factories?
-        // items[i++] =
-        //     _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
+        items[i++] =
+            _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
 
         {
             CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
@@ -133,20 +135,59 @@ contract UpgradeVoteScript is OmnibusBase {
 
         {
             CSMUpgradeConfig memory c = template.getCSMUpgradeConfig();
-            // TODO: remove old and add new factories for CSM
+
+            items[i++] = _addETFactoryItem(
+                "Add SetMerkleGateTree CSM ET factory",
+                easyTrack,
+                n.SetMerkleGateTreeForCSM,
+                _setMerkleGateTreePermissions(n.AllowedMerkleGatesRegistryForCSM)
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add ReportWithdrawalsForSlashedValidators CSM ET factory",
+                easyTrack,
+                n.ReportWithdrawalsForSlashedValidatorsForCSM,
+                bytes.concat(bytes20(c.csm), bytes4(IBaseModuleV3.reportSlashedWithdrawnValidators.selector))
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add SettleGeneralDelayedPenalty CSM ET factory",
+                easyTrack,
+                n.SettleGeneralDelayedPenaltyForCSM,
+                bytes.concat(bytes20(c.csm), bytes4(IBaseModuleV3.settleGeneralDelayedPenalty.selector))
+            );
         }
 
         {
             CuratedModuleConfig memory c = template.getCuratedModuleConfig();
 
             items[i++] = _addETFactoryItem(
-                "Add CreateOrUpdateOperatorGroup ET factory",
+                "Add SetMerkleGateTree CM ET factory",
+                easyTrack,
+                n.SetMerkleGateTreeForCM,
+                _setMerkleGateTreePermissions(n.AllowedMerkleGatesRegistryForCM)
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add ReportWithdrawalsForSlashedValidators CM ET factory",
+                easyTrack,
+                n.ReportWithdrawalsForSlashedValidatorsForCM,
+                bytes.concat(bytes20(c.module), bytes4(IBaseModuleV3.reportSlashedWithdrawnValidators.selector))
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add SettleGeneralDelayedPenalty CM ET factory",
+                easyTrack,
+                n.SettleGeneralDelayedPenaltyForCM,
+                bytes.concat(bytes20(c.module), bytes4(IBaseModuleV3.settleGeneralDelayedPenalty.selector))
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add CreateOrUpdateOperatorGroup CM ET factory",
                 easyTrack,
                 n.CreateOrUpdateOperatorGroup,
                 bytes.concat(bytes20(c.metaRegistry), bytes4(IMetaRegistry.createOrUpdateOperatorGroup.selector))
             );
-
-            // TODO: add new factories for  CMV2
         }
         assert(i == VOTING_ITEMS_COUNT);
 
@@ -156,10 +197,11 @@ contract UpgradeVoteScript is OmnibusBase {
 
     /// @dev DG voting items
     function getVoteItems() public view override returns (VoteItem[] memory) {
+        UpgradeTemplate template = TEMPLATE;
+
         VoteItem[] memory items = new VoteItem[](DG_ITEMS_COUNT);
         uint256 i = 0;
 
-        UpgradeTemplate template = TEMPLATE;
         GlobalConfig memory g = template.getGlobalConfig();
         address agent = g.agent;
         address resealManager = g.resealManager;
@@ -360,6 +402,13 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Grant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track",
                 to: csm,
                 role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SET_TREE_ROLE to Easy Track on VettedGate",
+                to: c.vettedGate,
+                role: SET_TREE_ROLE,
                 account: g.easyTrackEVMScriptExecutor
             });
 
@@ -568,6 +617,69 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozGrantRoleItem({
+                description: "Grant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track on Curated module",
+                to: c.module,
+                role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SETTLE_GENERAL_DELAYED_PENALTY_ROLE to Easy Track on Curated module",
+                to: c.module,
+                role: SETTLE_GENERAL_DELAYED_PENALTY_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant MANAGE_OPERATOR_GROUPS_ROLE to Easy Track on Curated MetaRegistry",
+                to: c.metaRegistry,
+                role: MANAGE_OPERATOR_GROUPS_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SET_TREE_ROLE to Easy Track on Curated Professional Operator Gate",
+                to: c.professionalOperatorGate,
+                role: SET_TREE_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SET_TREE_ROLE to Easy Track on Curated Professional Trusted Operator Gate",
+                to: c.professionalTrustedOperatorGate,
+                role: SET_TREE_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SET_TREE_ROLE to Easy Track on Curated Public Good Operator Gate",
+                to: c.publicGoodOperatorGate,
+                role: SET_TREE_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SET_TREE_ROLE to Easy Track on Curated Decentralization Operator Gate",
+                to: c.decentralizationOperatorGate,
+                role: SET_TREE_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SET_TREE_ROLE to Easy Track on Curated Extra Effort Operator Gate",
+                to: c.extraEffortOperatorGate,
+                role: SET_TREE_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant SET_TREE_ROLE to Easy Track on Curated Intra-Operator DVT Cluster Gate",
+                to: c.intraOperatorDVTClusterGate,
+                role: SET_TREE_ROLE,
+                account: g.easyTrackEVMScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
                 description: "Grant TWG full-withdrawal role to Curated Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: REQUEST_BURN_MY_STETH_ROLE,
@@ -654,6 +766,17 @@ contract UpgradeVoteScript is OmnibusBase {
 
     function _item(string memory description, address to, bytes memory data) internal pure returns (VoteItem memory) {
         return VoteItem({description: description, call: _votingCall(to, data)});
+    }
+
+    function _setMerkleGateTreePermissions(address allowedMerkleGatesRegistry)
+        private
+        view
+        returns (bytes memory permissions)
+    {
+        address[] memory gates = IAllowedMerkleGatesRegistry(allowedMerkleGatesRegistry).getAllowedGates();
+        for (uint256 i = 0; i < gates.length; ++i) {
+            permissions = bytes.concat(permissions, bytes20(gates[i]), bytes4(IMerkleGate.setTreeParams.selector));
+        }
     }
 
     function _addETFactoryItem(string memory description, address easyTrack, address factory, bytes memory permissions)

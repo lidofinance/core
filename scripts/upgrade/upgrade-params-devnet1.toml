@@ -20,7 +20,10 @@ AllowedMerkleGatesRegistryForCM = "0x92420b96A6ce5B4F00849A944e0489c58B9759F6"
 SetMerkleGateTreeForCM = "0x9BC48d538C9d8dd7a559f4460CCb2327fF39C1f4"
 ReportWithdrawalsForSlashedValidatorsForCM = "0x612d23ba265ad1fDc62B2e3A08722668E1D0ECa3"
 SettleGeneralDelayedPenaltyForCM = "0xd51c0d3C9BF00FF5690f901BBB8E85e976374BAE"
-CreateOrUpdateOperatorGroupForCM = "0x29D272Db50946716466cf00bC7d4bc435d8Ea44E"
+CreateOrUpdateOperatorGroup = "0x29D272Db50946716466cf00bC7d4bc435d8Ea44E"
+[easyTrack.oldFactories]
+# TODO: fill with corresponding devnet Easy Track factory address before execution
+CSMSettleElStealingPenalty = "0x00000000000000000000000000000000000eee07"
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]
@@ -146,7 +149,14 @@ treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
 hashConsensusInitialEpoch = 0 # FIXME: calculate
-
+# Curated Merkle Gates
+# TODO: replace with deployed gate addresses
+professionalOperatorGate = "0x00000000000000000000000000000000000cac10"
+professionalTrustedOperatorGate = "0x00000000000000000000000000000000000cac11"
+publicGoodOperatorGate = "0x00000000000000000000000000000000000cac12"
+decentralizationOperatorGate = "0x00000000000000000000000000000000000cac13"
+extraEffortOperatorGate = "0x00000000000000000000000000000000000cac14"
+intraOperatorDVTClusterGate = "0x00000000000000000000000000000000000cac15"
 
 [upgradeVoteScript]
 # Expiry timestamp after which the upgrade transaction will revert

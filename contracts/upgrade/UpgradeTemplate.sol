@@ -263,8 +263,17 @@ contract UpgradeTemplate is UpgradeConfig {
     function _assertEasyTrackFactories() internal view {
         IEasyTrack easyTrack = IEasyTrack(EASY_TRACK);
 
-        // todo add CSM & CMv2 factories
-        address[2] memory newFactories = [ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS, ETF_NEW_ALLOW_CONSOLIDATION_PAIR];
+        address[9] memory newFactories = [
+            ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS,
+            ETF_NEW_ALLOW_CONSOLIDATION_PAIR,
+            ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CSM,
+            ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CSM,
+            ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CSM,
+            ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM,
+            ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM,
+            ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM,
+            ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP
+        ];
 
         for (uint256 i = 0; i < newFactories.length; ++i) {
             if (!easyTrack.isEVMScriptFactory(newFactories[i])) {

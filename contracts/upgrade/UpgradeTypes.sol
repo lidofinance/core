@@ -92,6 +92,14 @@ interface IConsolidationMigrator {
     function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external;
 }
 
+interface IAllowedMerkleGatesRegistry {
+    function getAllowedGates() external view returns (address[] memory);
+}
+
+interface IMerkleGate {
+    function setTreeParams(bytes32 treeRoot, string calldata treeCid) external;
+}
+
 interface ILidoWithFinalizeUpgrade is ILido {
     function getBufferedEther() external view returns (uint256);
     function finalizeUpgrade_v4() external;
@@ -111,12 +119,26 @@ interface IWithdrawalsManagerProxy {
     function proxy_upgradeTo(address newImplementation, bytes memory setupCalldata) external;
 }
 
+struct WithdrawnValidatorInfo {
+    uint256 nodeOperatorId;
+    uint256 keyIndex;
+    uint256 exitBalance;
+    uint256 slashingPenalty;
+    bool isSlashed;
+}
+
 interface IBaseModuleV3 {
     function LIDO_LOCATOR() external view returns (address);
     function PARAMETERS_REGISTRY() external view returns (address);
     function ACCOUNTING() external view returns (address);
     function EXIT_PENALTIES() external view returns (address);
     function FEE_DISTRIBUTOR() external view returns (address);
+    function reportSlashedWithdrawnValidators(WithdrawnValidatorInfo[] calldata validatorInfos) external;
+    function settleGeneralDelayedPenalty(uint256[] calldata nodeOperatorIds, uint256[] calldata maxAmounts) external;
+}
+
+interface ICuratedModule is IBaseModuleV3 {
+    function META_REGISTRY() external view returns (address);
 }
 
 interface IOssifiableProxyV2 {
@@ -228,10 +250,17 @@ struct EasyTrackNewFactories {
     // EasyTrack new factories
     address UpdateStakingModuleShareLimits;
     address AllowConsolidationPair;
+    // CSM
+    address AllowedMerkleGatesRegistryForCSM;
+    address SetMerkleGateTreeForCSM;
+    address ReportWithdrawalsForSlashedValidatorsForCSM;
+    address SettleGeneralDelayedPenaltyForCSM;
+    // CM
+    address AllowedMerkleGatesRegistryForCM;
+    address SetMerkleGateTreeForCM;
+    address ReportWithdrawalsForSlashedValidatorsForCM;
+    address SettleGeneralDelayedPenaltyForCM;
     address CreateOrUpdateOperatorGroup;
-    address ReportWithdrawalsForSlashedValidators;
-    address SetMerkleGateTree;
-    address SettleGeneralDelayedPenalty;
 }
 
 struct EasyTrackOldFactories {
@@ -311,7 +340,13 @@ struct CuratedModuleParams {
     uint256 maxDepositsPerBlock;
     uint256 minDepositBlockDistance;
     uint256 hashConsensusInitialEpoch;
-    address metaRegistry;
+    // Curated Merkle Gates
+    address professionalOperatorGate;
+    address professionalTrustedOperatorGate;
+    address publicGoodOperatorGate;
+    address decentralizationOperatorGate;
+    address extraEffortOperatorGate;
+    address intraOperatorDVTClusterGate;
 }
 
 //
@@ -420,4 +455,11 @@ struct CuratedModuleConfig {
     uint256 minDepositBlockDistance;
     uint256 hashConsensusInitialEpoch;
     address metaRegistry;
+    // Curated Merkle Gates
+    address professionalOperatorGate;
+    address professionalTrustedOperatorGate;
+    address publicGoodOperatorGate;
+    address decentralizationOperatorGate;
+    address extraEffortOperatorGate;
+    address intraOperatorDVTClusterGate;
 }

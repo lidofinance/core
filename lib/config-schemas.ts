@@ -142,10 +142,15 @@ const EasyTrackSchema = z.object({
     // v4
     UpdateStakingModuleShareLimits: EthereumAddressSchema,
     AllowConsolidationPair: EthereumAddressSchema,
+    AllowedMerkleGatesRegistryForCSM: EthereumAddressSchema,
+    SetMerkleGateTreeForCSM: EthereumAddressSchema,
+    ReportWithdrawalsForSlashedValidatorsForCSM: EthereumAddressSchema,
+    SettleGeneralDelayedPenaltyForCSM: EthereumAddressSchema,
+    AllowedMerkleGatesRegistryForCM: EthereumAddressSchema,
+    SetMerkleGateTreeForCM: EthereumAddressSchema,
+    ReportWithdrawalsForSlashedValidatorsForCM: EthereumAddressSchema,
+    SettleGeneralDelayedPenaltyForCM: EthereumAddressSchema,
     CreateOrUpdateOperatorGroup: EthereumAddressSchema,
-    ReportWithdrawalsForSlashedValidators: EthereumAddressSchema,
-    SetMerkleGateTree: EthereumAddressSchema,
-    SettleGeneralDelayedPenalty: EthereumAddressSchema,
   }),
   oldFactories: z.object({
     CSMSettleElStealingPenalty: EthereumAddressSchema,
@@ -206,7 +211,13 @@ const CuratedModuleConfigSchema = z.object({
   maxDepositsPerBlock: NonNegativeIntSchema,
   minDepositBlockDistance: NonNegativeIntSchema,
   hashConsensusInitialEpoch: NonNegativeIntSchema,
-  metaRegistry: EthereumAddressSchema,
+  // Curated Merkle Gates
+  professionalOperatorGate: EthereumAddressSchema,
+  professionalTrustedOperatorGate: EthereumAddressSchema,
+  publicGoodOperatorGate: EthereumAddressSchema,
+  decentralizationOperatorGate: EthereumAddressSchema,
+  extraEffortOperatorGate: EthereumAddressSchema,
+  intraOperatorDVTClusterGate: EthereumAddressSchema,
 });
 
 const UpgradeVoteScriptSchema = z.object({

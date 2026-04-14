@@ -6,11 +6,18 @@ trustedCaller = "0x00000000000000000000000000000000000eee00"
 # TODO: fill with deployed Easy Track factory address before execution
 UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
 AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
-# csm & cmv2
-CreateOrUpdateOperatorGroup = "0x00000000000000000000000000000000000eee03"
-ReportWithdrawalsForSlashedValidators = "0x00000000000000000000000000000000000eee04"
-SetMerkleGateTree = "0x00000000000000000000000000000000000eee05"
-SettleGeneralDelayedPenalty = "0x00000000000000000000000000000000000eee06"
+
+AllowedMerkleGatesRegistryForCSM = "0x00000000000000000000000000000000000eee08"
+SetMerkleGateTreeForCSM = "0x00000000000000000000000000000000000eee09"
+ReportWithdrawalsForSlashedValidatorsForCSM = "0x00000000000000000000000000000000000eee10"
+SettleGeneralDelayedPenaltyForCSM = "0x00000000000000000000000000000000000eee11"
+
+AllowedMerkleGatesRegistryForCM = "0x00000000000000000000000000000000000eee12"
+SetMerkleGateTreeForCM = "0x00000000000000000000000000000000000eee13"
+ReportWithdrawalsForSlashedValidatorsForCM = "0x00000000000000000000000000000000000eee14"
+SettleGeneralDelayedPenaltyForCM = "0x00000000000000000000000000000000000eee15"
+CreateOrUpdateOperatorGroup = "0x00000000000000000000000000000000000eee16"
+
 [easyTrack.oldFactories]
 CSMSettleElStealingPenalty = "0x00000000000000000000000000000000000eee07"
 
@@ -132,6 +139,14 @@ treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
 hashConsensusInitialEpoch = 47480
+# Curated Merkle Gates
+# TODO: replace with deployed gate addresses
+professionalOperatorGate = "0x00000000000000000000000000000000000cac10"
+professionalTrustedOperatorGate = "0x00000000000000000000000000000000000cac11"
+publicGoodOperatorGate = "0x00000000000000000000000000000000000cac12"
+decentralizationOperatorGate = "0x00000000000000000000000000000000000cac13"
+extraEffortOperatorGate = "0x00000000000000000000000000000000000cac14"
+intraOperatorDVTClusterGate = "0x00000000000000000000000000000000000cac15"
 
 [upgradeVoteScript]
 # Expiry timestamp after which the upgrade transaction will revert
