@@ -24,6 +24,8 @@ CreateOrUpdateOperatorGroup = "0x29D272Db50946716466cf00bC7d4bc435d8Ea44E"
 [easyTrack.oldFactories]
 # TODO: fill with corresponding devnet Easy Track factory address before execution
 CSMSettleElStealingPenalty = "0x00000000000000000000000000000000000eee07"
+# TODO: fill with corresponding devnet Easy Track factory address before execution
+CSMSetVettedGateTree = "0x00000000000000000000000000000000000eee16"
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]

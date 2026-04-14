@@ -51,8 +51,8 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 internal constant DG_ITEMS_COUNT = 69;
-    uint256 public constant VOTING_ITEMS_COUNT = 10;
+    uint256 internal constant DG_ITEMS_COUNT = 68;
+    uint256 public constant VOTING_ITEMS_COUNT = 11;
 
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 internal constant REPORT_EL_REWARDS_STEALING_PENALTY_ROLE =
@@ -114,6 +114,8 @@ contract UpgradeVoteScript is OmnibusBase {
         //
         items[i++] =
             _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
+        items[i++] =
+            _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, o.CSMSetVettedGateTree);
 
         {
             CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
@@ -402,13 +404,6 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Grant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track",
                 to: csm,
                 role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
-                account: g.easyTrackEVMScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_TREE_ROLE to Easy Track on VettedGate",
-                to: c.vettedGate,
-                role: SET_TREE_ROLE,
                 account: g.easyTrackEVMScriptExecutor
             });
 

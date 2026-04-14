@@ -265,6 +265,7 @@ struct EasyTrackNewFactories {
 
 struct EasyTrackOldFactories {
     address CSMSettleElStealingPenalty;
+    address CSMSetVettedGateTree;
 }
 
 struct CoreUpgradeParams {

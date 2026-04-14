@@ -24,6 +24,7 @@ CreateOrUpdateOperatorGroup = "0x00000000000000000000000000000000000eee16"
 
 [easyTrack.oldFactories]
 CSMSettleElStealingPenalty = "0x5c0af5b9f96921d3F61503e1006CF0ab9867279E"
+CSMSetVettedGateTree = "0xa890fc73e1b771Ee6073e2402E631c312FF92Cd9"
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]

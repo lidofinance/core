@@ -121,6 +121,7 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP;
     // old factories
     address internal immutable ETF_OLD_SETTLE_EL_STEALING_PENALTY;
+    address internal immutable ETF_OLD_CSM_SET_VETTED_GATE_TREE;
 
     //
     // ------- Misc -------
@@ -260,6 +261,7 @@ contract UpgradeConfig is IUpgradeConfig {
         // EasyTrack old factories
         EasyTrackOldFactories memory oldFactories = params.oldFactories;
         ETF_OLD_SETTLE_EL_STEALING_PENALTY = oldFactories.CSMSettleElStealingPenalty;
+        ETF_OLD_CSM_SET_VETTED_GATE_TREE = oldFactories.CSMSetVettedGateTree;
 
         // Discover via locator
         LOCATOR = params.locator;
@@ -371,7 +373,10 @@ contract UpgradeConfig is IUpgradeConfig {
                 SettleGeneralDelayedPenaltyForCM: ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM,
                 CreateOrUpdateOperatorGroup: ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP
             }),
-            EasyTrackOldFactories({CSMSettleElStealingPenalty: ETF_OLD_SETTLE_EL_STEALING_PENALTY})
+            EasyTrackOldFactories({
+                CSMSettleElStealingPenalty: ETF_OLD_SETTLE_EL_STEALING_PENALTY,
+                CSMSetVettedGateTree: ETF_OLD_CSM_SET_VETTED_GATE_TREE
+            })
         );
     }
 

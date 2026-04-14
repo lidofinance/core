@@ -154,6 +154,7 @@ const EasyTrackSchema = z.object({
   }),
   oldFactories: z.object({
     CSMSettleElStealingPenalty: EthereumAddressSchema,
+    CSMSetVettedGateTree: EthereumAddressSchema,
   }),
 });
 
