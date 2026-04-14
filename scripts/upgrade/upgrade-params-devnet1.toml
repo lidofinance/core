@@ -11,6 +11,17 @@ trustedCaller = "0x00000000000000000000000000000000000eee00"
 UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
 AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
 
+AllowedMerkleGatesRegistryForCSM = "0xF7740F7a819825152383f12182d1F0cFdB1e19c7"
+SetMerkleGateTreeForCSM = "0xF417BBcc9682B6d5B8312e8F8588Cd6489C5B85F"
+ReportWithdrawalsForSlashedValidatorsForCSM = "0x8418692bf1390F1a9f2E3996475612514F746a77"
+SettleGeneralDelayedPenaltyForCSM = "0xF3865826309f55cD3E104a22Ab9d04724d2D9020"
+
+AllowedMerkleGatesRegistryForCM = "0x92420b96A6ce5B4F00849A944e0489c58B9759F6"
+SetMerkleGateTreeForCM = "0x9BC48d538C9d8dd7a559f4460CCb2327fF39C1f4"
+ReportWithdrawalsForSlashedValidatorsForCM = "0x612d23ba265ad1fDc62B2e3A08722668E1D0ECa3"
+SettleGeneralDelayedPenaltyForCM = "0xd51c0d3C9BF00FF5690f901BBB8E85e976374BAE"
+CreateOrUpdateOperatorGroupForCM = "0x29D272Db50946716466cf00bC7d4bc435d8Ea44E"
+
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
