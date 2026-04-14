@@ -166,3 +166,5 @@ intraOperatorDVTClusterGate = "0x00000000000000000000000000000000000cac15"
 # The upgrade transaction must be executed before this deadline
 expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
 timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"
+enabledDaySpanStart = 0 # 00:00 UTC
+enabledDaySpanEnd = 86400 # 24:00 UTC

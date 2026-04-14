@@ -224,6 +224,8 @@ const CuratedModuleConfigSchema = z.object({
 const UpgradeVoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
   timeConstraintsContract: EthereumAddressSchema,
+  enabledDaySpanStart: NonNegativeIntSchema,
+  enabledDaySpanEnd: NonNegativeIntSchema,
 });
 
 // Gate seal schema (for scratch deployment)

@@ -19,7 +19,7 @@ SettleGeneralDelayedPenaltyForCM = "0x00000000000000000000000000000000000eee15"
 CreateOrUpdateOperatorGroup = "0x00000000000000000000000000000000000eee16"
 
 [easyTrack.oldFactories]
-CSMSettleElStealingPenalty = "0x00000000000000000000000000000000000eee07"
+CSMSettleElStealingPenalty = "0xF6B6E7997338C48Ea3a8BCfa4BB64a315fDa76f4"
 CSMSetVettedGateTree = "0xBc5642bDD6F2a54b01A75605aAe9143525D97308"
 
 # Oracle report sanity checker configuration
@@ -155,3 +155,5 @@ intraOperatorDVTClusterGate = "0x00000000000000000000000000000000000cac15"
 # The upgrade transaction must be executed before this deadline
 expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
 timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"
+enabledDaySpanStart = 50400 # 14:00 UTC
+enabledDaySpanEnd = 82800 # 23:00 UTC

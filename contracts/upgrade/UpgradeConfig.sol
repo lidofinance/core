@@ -419,7 +419,7 @@ contract UpgradeConfig is IUpgradeConfig {
             lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
             consolidationGatewayGateSeal: CONSOLIDATION_GATEWAY_GATE_SEAL,
             curatedModuleCommittee: CURATED_MODULE_COMMITTEE,
-            topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
+            topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR
         });
     }
 

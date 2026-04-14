@@ -39,13 +39,6 @@ import {
 /// @notice Script for upgrading Lido protocol components
 contract UpgradeVoteScript is OmnibusBase {
     using Strings for uint256;
-    uint32 public constant ENABLED_DAY_SPAN_START = 50400; // 14:00 UTC
-    uint32 public constant ENABLED_DAY_SPAN_END = 82800; // 23:00 UTC
-
-    struct ScriptParams {
-        address upgradeTemplate;
-        address timeConstraints;
-    }
 
     //
     // Constants
@@ -82,12 +75,17 @@ contract UpgradeVoteScript is OmnibusBase {
     //
     // Immutables
     //
-    UpgradeTemplate public immutable TEMPLATE;
+    address public immutable TEMPLATE;
+    address public immutable TIME_CONSTRAINTS;
+    uint32 public immutable ENABLED_DAY_SPAN_START; // = 50400; // 14:00 UTC
+    uint32 public immutable ENABLED_DAY_SPAN_END; // = 82800; // 23:00 UTC
 
-    //
-    // Structured storage
-    //
-    ScriptParams public params;
+    struct ScriptParams {
+        address upgradeTemplate;
+        address timeConstraints;
+        uint32 enabledDaySpanStart;
+        uint32 enabledDaySpanEnd;
+    }
 
     constructor(ScriptParams memory _params)
         OmnibusBase(
@@ -95,8 +93,10 @@ contract UpgradeVoteScript is OmnibusBase {
             UpgradeTemplate(_params.upgradeTemplate).DUAL_GOVERNANCE()
         )
     {
-        TEMPLATE = UpgradeTemplate(_params.upgradeTemplate);
-        params = _params;
+        TEMPLATE = _params.upgradeTemplate;
+        TIME_CONSTRAINTS = _params.timeConstraints;
+        ENABLED_DAY_SPAN_START = _params.enabledDaySpanStart; // e.g. 50400 = 14:00 UTC
+        ENABLED_DAY_SPAN_END = _params.enabledDaySpanEnd; // e.g. 82800 = 23:00 UTC
     }
 
     /// @dev Non DG voting items
@@ -104,7 +104,7 @@ contract UpgradeVoteScript is OmnibusBase {
         VoteItem[] memory items = new VoteItem[](VOTING_ITEMS_COUNT);
         uint256 i = 0;
 
-        UpgradeTemplate template = TEMPLATE;
+        UpgradeTemplate template = UpgradeTemplate(TEMPLATE);
         GlobalConfig memory g = template.getGlobalConfig();
         address easyTrack = g.easyTrack;
         (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = template.getEasyTrackConfig();
@@ -114,8 +114,7 @@ contract UpgradeVoteScript is OmnibusBase {
         //
         items[i++] =
             _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
-        items[i++] =
-            _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, o.CSMSetVettedGateTree);
+        items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, o.CSMSetVettedGateTree);
 
         {
             CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
@@ -199,18 +198,18 @@ contract UpgradeVoteScript is OmnibusBase {
 
     /// @dev DG voting items
     function getVoteItems() public view override returns (VoteItem[] memory) {
-        UpgradeTemplate template = TEMPLATE;
-
         VoteItem[] memory items = new VoteItem[](DG_ITEMS_COUNT);
         uint256 i = 0;
 
+        UpgradeTemplate template = UpgradeTemplate(TEMPLATE);
         GlobalConfig memory g = template.getGlobalConfig();
         address agent = g.agent;
         address resealManager = g.resealManager;
+        address evmScriptExecutor = g.easyTrackEVMScriptExecutor;
 
         // items[i++] = _item({
-        //     description: "Ensure DG proposal execution is within daily time window (14:00 UTC - 23:00 UTC)",
-        //     to: params.timeConstraints,
+        //     description: "Ensure DG proposal execution is within defined time window",
+        //     to: TIME_CONSTRAINTS,
         //     data: abi.encodeCall(
         //         ITimeConstraints.checkTimeWithinDayTimeAndEmit, (ENABLED_DAY_SPAN_START, ENABLED_DAY_SPAN_END)
         //     )
@@ -266,7 +265,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor",
                 to: g.stakingRouter,
                 role: STAKING_MODULE_SHARE_MANAGE_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             /// @notice updating AccountingOracle implementation
@@ -298,6 +297,8 @@ contract UpgradeVoteScript is OmnibusBase {
             CSMUpgradeConfig memory c = template.getCSMUpgradeConfig();
             address csm = c.csm;
             address gateSeal = c.gateSeal;
+            address verifier = c.verifier;
+            address vettedGate = c.vettedGate;
             address oldEjector = IValidatorStrikesV3(c.strikes).ejector();
 
             // --- Proxy upgrades ---
@@ -324,7 +325,7 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _proxyUpgradeToItem({
-                description: "Upgrade VettedGate implementation", to: c.vettedGate, impl: c.vettedGateImpl
+                description: "Upgrade VettedGate implementation", to: vettedGate, impl: c.vettedGateImpl
             });
 
             items[i++] = _proxyUpgradeToAndCallV2Item({
@@ -368,7 +369,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Grant SETTLE_GENERAL_DELAYED_PENALTY_ROLE",
                 to: csm,
                 role: SETTLE_GENERAL_DELAYED_PENALTY_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozRevokeRoleItem({
@@ -382,11 +383,11 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Revoke SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE",
                 to: csm,
                 role: SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke VERIFIER_ROLE from old verifier", to: csm, role: VERIFIER_ROLE, account: c.verifier
+                description: "Revoke VERIFIER_ROLE from old verifier", to: csm, role: VERIFIER_ROLE, account: verifier
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -404,7 +405,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Grant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track",
                 to: csm,
                 role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozRevokeRoleItem({
@@ -446,14 +447,14 @@ contract UpgradeVoteScript is OmnibusBase {
 
             items[i++] = _ozRevokeRoleItem({
                 description: "Revoke PAUSE_ROLE from old gate seal on VettedGate",
-                to: c.vettedGate,
+                to: vettedGate,
                 role: PAUSE_ROLE,
                 account: gateSeal
             });
 
             items[i++] = _ozRevokeRoleItem({
                 description: "Revoke PAUSE_ROLE from old gate seal on old Verifier",
-                to: c.verifier,
+                to: verifier,
                 role: PAUSE_ROLE,
                 account: gateSeal
             });
@@ -469,7 +470,7 @@ contract UpgradeVoteScript is OmnibusBase {
             // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
             items[i++] = _ozRevokeRoleItem({
                 description: "Revoke PAUSE_ROLE from reseal manager on old Verifier",
-                to: c.verifier,
+                to: verifier,
                 role: PAUSE_ROLE,
                 account: resealManager
             });
@@ -477,7 +478,7 @@ contract UpgradeVoteScript is OmnibusBase {
             // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
             items[i++] = _ozRevokeRoleItem({
                 description: "Revoke RESUME_ROLE from reseal manager on old Verifier",
-                to: c.verifier,
+                to: verifier,
                 role: RESUME_ROLE,
                 account: resealManager
             });
@@ -500,14 +501,14 @@ contract UpgradeVoteScript is OmnibusBase {
 
             items[i++] = _ozRevokeRoleItem({
                 description: "Revoke START_REFERRAL_SEASON_ROLE",
-                to: c.vettedGate,
+                to: vettedGate,
                 role: START_REFERRAL_SEASON_ROLE,
                 account: agent
             });
 
             items[i++] = _ozRevokeRoleItem({
                 description: "Revoke END_REFERRAL_SEASON_ROLE",
-                to: c.vettedGate,
+                to: vettedGate,
                 role: END_REFERRAL_SEASON_ROLE,
                 account: c.identifiedCommunityStakersGateManager
             });
@@ -535,7 +536,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant PAUSE_ROLE to GateSealV3 on VettedGate",
-                to: c.vettedGate,
+                to: vettedGate,
                 role: PAUSE_ROLE,
                 account: c.gateSealV3
             });
@@ -615,63 +616,63 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Grant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track on Curated module",
                 to: c.module,
                 role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant SETTLE_GENERAL_DELAYED_PENALTY_ROLE to Easy Track on Curated module",
                 to: c.module,
                 role: SETTLE_GENERAL_DELAYED_PENALTY_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant MANAGE_OPERATOR_GROUPS_ROLE to Easy Track on Curated MetaRegistry",
                 to: c.metaRegistry,
                 role: MANAGE_OPERATOR_GROUPS_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant SET_TREE_ROLE to Easy Track on Curated Professional Operator Gate",
                 to: c.professionalOperatorGate,
                 role: SET_TREE_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant SET_TREE_ROLE to Easy Track on Curated Professional Trusted Operator Gate",
                 to: c.professionalTrustedOperatorGate,
                 role: SET_TREE_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant SET_TREE_ROLE to Easy Track on Curated Public Good Operator Gate",
                 to: c.publicGoodOperatorGate,
                 role: SET_TREE_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant SET_TREE_ROLE to Easy Track on Curated Decentralization Operator Gate",
                 to: c.decentralizationOperatorGate,
                 role: SET_TREE_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant SET_TREE_ROLE to Easy Track on Curated Extra Effort Operator Gate",
                 to: c.extraEffortOperatorGate,
                 role: SET_TREE_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant SET_TREE_ROLE to Easy Track on Curated Intra-Operator DVT Cluster Gate",
                 to: c.intraOperatorDVTClusterGate,
                 role: SET_TREE_ROLE,
-                account: g.easyTrackEVMScriptExecutor
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -712,7 +713,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
         items[i++] = _item({
             description: "Call UpgradeTemplate.finishUpgrade",
-            to: params.upgradeTemplate,
+            to: address(template),
             data: abi.encodeCall(UpgradeTemplate.finishUpgrade, ())
         });
 
