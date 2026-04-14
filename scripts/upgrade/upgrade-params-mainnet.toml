@@ -51,18 +51,18 @@ withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
 consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
 [triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 13000
+maxExitRequestsLimit = 250
 exitsPerFrame = 1
-frameDurationInSec = 48
+frameDurationInSec = 240
 
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
 pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 
 [consolidationGateway]
-maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
+maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
+frameDurationInSec = 36               # Duration of each processing frame in seconds
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
@@ -70,7 +70,7 @@ pivotSlot = 0                         # Pivot slot for fork-aware gIndex selecti
 [consolidationBus]
 initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
-initialExecutionDelay = 0             # Delay before pending batch execution
+initialExecutionDelay = 86400         # Delay before pending batch execution
 #TODO  update upon deployment
 executor = "0x00000000000000000000000000000000000abc01"
 

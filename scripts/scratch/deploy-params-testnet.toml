@@ -168,14 +168,14 @@ shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (
 
 # Triggerable withdrawals gateway for managing validator exit requests
 [triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 13000          # Maximum number of exit requests that can be processed
+maxExitRequestsLimit = 250          # Maximum number of exit requests that can be processed
 exitsPerFrame = 1                     # Number of exits processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
+frameDurationInSec = 240               # Duration of each processing frame in seconds
 
 [consolidationGateway]
-maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
+maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
+frameDurationInSec = 36               # Duration of each processing frame in seconds
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection

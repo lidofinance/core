@@ -95,8 +95,7 @@ contract UpgradeConfig is IUpgradeConfig {
     // -------- Upgrade parameters --------
     //
     uint256 internal immutable LIDO_DEPOSITS_RESERVE_TARGET;
-    address internal immutable CONSOLIDATION_MANAGER_COMMITTEE;
-    address internal immutable CONSOLIDATION_BUS_EXECUTOR;
+    address internal immutable CURATED_MODULE_COMMITTEE;
     address internal immutable CONSOLIDATION_GATEWAY_GATE_SEAL;
     address internal immutable TOP_UP_GATEWAY_DEPOSITOR;
 
@@ -237,8 +236,7 @@ contract UpgradeConfig is IUpgradeConfig {
         CONSOLIDATION_MIGRATOR = coreUpgradeParams.consolidationMigrator;
 
         LIDO_DEPOSITS_RESERVE_TARGET = coreUpgradeParams.lidoDepositsReserveTarget;
-        CONSOLIDATION_MANAGER_COMMITTEE = coreUpgradeParams.consolidationManagerCommittee;
-        CONSOLIDATION_BUS_EXECUTOR = coreUpgradeParams.consolidationBusExecutor;
+        CURATED_MODULE_COMMITTEE = coreUpgradeParams.curatedModuleCommittee;
         CONSOLIDATION_GATEWAY_GATE_SEAL = coreUpgradeParams.consolidationGatewayGateSeal;
         TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
 
@@ -420,9 +418,8 @@ contract UpgradeConfig is IUpgradeConfig {
             // params
             lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
             consolidationGatewayGateSeal: CONSOLIDATION_GATEWAY_GATE_SEAL,
-            consolidationBusExecutor: CONSOLIDATION_BUS_EXECUTOR,
-            consolidationManagerCommittee: CONSOLIDATION_MANAGER_COMMITTEE,
-            topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR
+            curatedModuleCommittee: CURATED_MODULE_COMMITTEE,
+            topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
         });
     }
 
