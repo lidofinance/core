@@ -11,7 +11,7 @@ export GAS_MAX_FEE=100
 
 export NETWORK_STATE_FILE="deployed-devnet1.json"
 export UPGRADE_PARAMETERS_FILE="scripts/upgrade/upgrade-params-devnet1.toml"
-export STEPS_FILE="upgrade/steps-upgrade-v4-devnet-fork-new-vote.json"
+export STEPS_FILE="upgrade/steps-devnet-fork-new-vote.json"
 export VOTE_DESCRIPTION="upgrade-v4-devnet"
 export PROPOSAL_METADATA="upgrade-v4-devnet"
 export PROPOSAL_ID=${PROPOSAL_ID:=""}

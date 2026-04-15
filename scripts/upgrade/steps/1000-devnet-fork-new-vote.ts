@@ -1,64 +1,26 @@
-import { encodeCallScript, VoteItem } from "scripts/utils/omnibus";
+import { processAragonVoting } from "scripts/utils/upgrade";
 
-import { IDualGovernance, TokenManager, UpgradeVoteScript, Voting } from "typechain-types";
-
-import { ether, findEventsWithInterfaces, impersonate } from "lib";
-import { loadContract } from "lib/contract";
-import { getAddress, readNetworkState, Sk } from "lib/state-file";
+import { ether, impersonate } from "lib";
 
 export async function main() {
   const holderAddress = process.env.HOLDER || process.env.DEPLOYER || "";
   const holder = await impersonate(holderAddress, ether("100"));
-
-  const state = readNetworkState();
-
-  const tm = await loadContract<TokenManager>("TokenManager", getAddress(Sk.appTokenManager, state));
-
-  const voteScript = await loadContract<UpgradeVoteScript>(
-    "UpgradeVoteScript",
-    getAddress(Sk.upgradeVoteScript, state),
-  );
-  // const template = await loadContract<UpgradeTemplate>("UpgradeTemplate", getAddress(Sk.upgradeTemplate, state));
-  await loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state));
-  const voting = await loadContract<Voting>("Voting", getAddress(Sk.appVoting, state));
-
   const voteDescription = process.env.VOTE_DESCRIPTION || "vote-description";
+  const voteId = BigInt(process.env.VOTE_ID || "");
 
-  const voteItems = (await voteScript.getVotingVoteItems()) as VoteItem[];
-  console.log("Voting vote items:");
-  console.log(voteItems.map(({ description }) => description));
+  await processAragonVoting(holder, voteId, voteDescription);
 
-  const voteItemsDg = (await voteScript.getVoteItems()) as VoteItem[];
-  console.log("Dual Governance vote items:");
-  console.log(voteItemsDg.map(({ description }) => description));
+  // const parameters = readUpgradeParameters();
 
-  const evmScript = encodeCallScript(
-    voteItems.concat(voteItemsDg).map(({ call }) => ({ to: call.to, data: call.data })),
-  );
-  const evmScriptNewVote = encodeCallScript([
-    {
-      to: voting.address,
-      data: voting.interface.encodeFunctionData("newVote(bytes,string,bool,bool)", [
-        evmScript,
-        voteDescription,
-        true,
-        true,
-      ]),
-    },
-  ]);
+  //   const kernel = await loadContract<IAragonKernel>("IAragonKernel", getAddress(Sk.aragonKernel, state));
+  //   const acl = await loadContract<ACL>("ACL", getAddress(Sk.aragonAcl, state));
+  // //keccak256("APP_MANAGER_ROLE")
+  //   const manager = await acl.getPermissionManager(kernel.address, "0xb6d92708f3d4817afc106147d969e229ced5c46e65e0a5002a0d391287762bd0");
+  //   console.log("agent", getAddress(Sk.appAgent, state));
+  //   console.log("acl", acl.address);
+  //   console.log("kernel", kernel.address);
+  //   console.log("manager", manager);
 
-  console.log("estimateGas newVote", await tm.connect(holder).forward.estimateGas(evmScriptNewVote));
-
-  const tx = await tm.connect(holder).forward(evmScriptNewVote);
-  console.log("newVote tx.hash", tx.hash);
-  const receipt = await tx.wait();
-  if (!receipt) {
-    throw new Error(`Transaction ${tx.hash} did not return a receipt`);
-  }
-  console.log("newVote tx success");
-  const voteId = await findEventsWithInterfaces(receipt, "StartVote", [voting.interface])[0].args.voteId;
-  console.log("New voteId", voteId);
-
-  const voteTx = await voting.connect(holder).vote(voteId, true, true);
-  console.log("cast vote tx.hash", voteTx.hash);
+  // const wv = await loadContract<WithdrawalsManagerProxy>("WithdrawalsManagerProxy", getAddress(Sk.withdrawalVault, state));
+  // console.log("withdrawal vault address", await wv.proxy_getAdmin());
 }

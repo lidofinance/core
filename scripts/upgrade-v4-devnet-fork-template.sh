@@ -11,6 +11,6 @@ export GAS_MAX_FEE=100
 
 export NETWORK_STATE_FILE="deployed-devnet1.json"
 export UPGRADE_PARAMETERS_FILE="scripts/upgrade/upgrade-params-devnet1.toml"
-export STEPS_FILE="upgrade/steps-upgrade-template.json"
+export STEPS_FILE="upgrade/steps-deploy-template.json"
 
 bash scripts/dao-upgrade.sh

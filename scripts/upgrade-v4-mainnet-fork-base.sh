@@ -15,6 +15,6 @@ if [ ! -f "$NETWORK_STATE_FILE" ]; then
 fi
 
 export UPGRADE_PARAMETERS_FILE="scripts/upgrade/upgrade-params-mainnet.toml"
-export STEPS_FILE="upgrade/steps-upgrade-base.json"
+export STEPS_FILE="upgrade/steps-deploy-base.json"
 
 bash scripts/dao-upgrade.sh

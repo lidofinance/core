@@ -73,6 +73,11 @@ export async function main() {
       topUpGateway: getAddress(Sk.topUpGateway, state),
       topUpGatewayDepositor: parameters.topUpGateway.depositor,
 
+      // TW GW
+      twMaxExitRequestsLimit: parameters.triggerableWithdrawalsGateway.maxExitRequestsLimit,
+      twExitsPerFrame: parameters.triggerableWithdrawalsGateway.exitsPerFrame,
+      twFrameDurationInSec: parameters.triggerableWithdrawalsGateway.frameDurationInSec,
+
       // Consolidation
       consolidationBus: getAddress(Sk.consolidationBus, state),
 

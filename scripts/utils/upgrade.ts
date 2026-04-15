@@ -2,21 +2,67 @@ import { TransactionReceipt, TransactionResponse } from "ethers";
 import fs from "fs";
 
 import * as toml from "@iarna/toml";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { IDualGovernance, ITimelock, UpgradeTemplate, UpgradeVoteScript } from "typechain-types";
+import { IDualGovernance, ITimelock, TokenManager, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types";
 
-import { advanceChainTime, ether, impersonate, log } from "lib";
+import { advanceChainTime, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
-import { loadContract } from "lib/contract";
-import { DeploymentState, getAddress, Sk } from "lib/state-file";
+import { loadContract, LoadedContract } from "lib/contract";
+import { DeploymentState, getAddress, readNetworkState, Sk } from "lib/state-file";
 
 import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite";
+
+import { encodeCallScript, VoteItem } from "./omnibus";
 
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
 const PROPOSAL_ID = process.env.PROPOSAL_ID || "";
 const PROPOSAL_METADATA = process.env.PROPOSAL_METADATA || "proposal-metadata";
 
 export { UpgradeParameters };
+
+type Ctx = {
+  tm: LoadedContract<TokenManager>;
+  dg: LoadedContract<IDualGovernance>;
+  voting: LoadedContract<Voting>;
+  template: LoadedContract<UpgradeTemplate>;
+  voteScript: LoadedContract<UpgradeVoteScript>;
+  timelock: LoadedContract<ITimelock>;
+};
+
+let ctxPromise: Promise<Ctx> | undefined;
+
+export const loadCtx = (): Promise<Ctx> => {
+  if (!ctxPromise) {
+    ctxPromise = (async () => {
+      try {
+        const state = readNetworkState();
+        const [tm, dg, voting, template, voteScript, timelock] = await Promise.all([
+          loadContract<TokenManager>("TokenManager", getAddress(Sk.appTokenManager, state)),
+          loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state)),
+          loadContract<Voting>("Voting", getAddress(Sk.appVoting, state)),
+          loadContract<UpgradeTemplate>("UpgradeTemplate", getAddress(Sk.upgradeTemplate, state)),
+          loadContract<UpgradeVoteScript>("UpgradeVoteScript", getAddress(Sk.upgradeVoteScript, state)),
+          loadContract<ITimelock>("ITimelock", getAddress(Sk.dgEmergencyProtectedTimelock, state)),
+        ]);
+
+        return {
+          tm,
+          dg,
+          voting,
+          template,
+          voteScript,
+          timelock,
+        };
+      } catch (error) {
+        ctxPromise = undefined;
+        throw error;
+      }
+    })();
+  }
+
+  return ctxPromise;
+};
 
 export function readUpgradeParameters(skipValidation: boolean = false): UpgradeParameters {
   if (!UPGRADE_PARAMETERS_FILE) {
@@ -41,6 +87,79 @@ export function readUpgradeParameters(skipValidation: boolean = false): UpgradeP
   }
 }
 
+export const newCombinedAragonVoting = async (
+  holder: HardhatEthersSigner,
+  voteDescription: string,
+): Promise<bigint> => {
+  const { tm, voting, voteScript } = await loadCtx();
+
+  log("Creating new vote with description:", voteDescription);
+  const voteItems = (await voteScript.getVotingVoteItems()) as VoteItem[];
+  console.log("Voting vote items:");
+  console.log(voteItems.map(({ description }) => description));
+
+  const voteItemsDg = (await voteScript.getVoteItems()) as VoteItem[];
+  console.log("Dual Governance vote items:");
+  console.log(voteItemsDg.map(({ description }) => description));
+
+  const evmScript = encodeCallScript(
+    voteItems.concat(voteItemsDg).map(({ call }) => ({ to: call.to, data: call.data })),
+  );
+  const evmScriptNewVote = encodeCallScript([
+    {
+      to: voting.address,
+      data: voting.interface.encodeFunctionData("newVote(bytes,string,bool,bool)", [
+        evmScript,
+        voteDescription,
+        true,
+        true,
+      ]),
+    },
+  ]);
+
+  // console.log("estimateGas newVote", await tm.connect(holder).forward.estimateGas(evmScriptNewVote));
+  const tx = await tm.connect(holder).forward(evmScriptNewVote);
+  log.success("newVote tx.hash", tx.hash);
+  const receipt = await tx.wait();
+  if (!receipt) {
+    throw new Error(`Transaction ${tx.hash} did not return a receipt`);
+  }
+  const voteId = await findEventsWithInterfaces(receipt, "StartVote", [voting.interface])[0].args.voteId;
+  log.success("New voteId:", voteId);
+
+  return voteId;
+};
+
+export const processAragonVoting = async (holder: HardhatEthersSigner, voteId: bigint, voteDescription: string) => {
+  if (!voteId) {
+    voteId = await newCombinedAragonVoting(holder, voteDescription);
+  } else {
+    log("Using existing voteId:", voteId);
+  }
+  const { voting } = await loadCtx();
+
+  const vote = await voting.getVote(voteId);
+  if (!vote.startDate) {
+    log.error("Vote with id", voteId, "does not exist");
+    return;
+  } else if (vote.executed) {
+    log.warning("Vote is already executed, nothing to do");
+    return;
+  }
+
+  if ((await voting.canVote(voteId, holder)) && (await voting.getVoterState(voteId, holder)) !== 1n) {
+    const voteTx = await voting.connect(holder).vote(voteId, true, true);
+    log.success("vote for voteId:", voteId, "tx.hash", voteTx.hash);
+  }
+
+  if (await voting.canExecute(voteId)) {
+    const execTx = await voting.connect(holder).executeVote(voteId);
+    log.success("execute voteId:", voteId, "tx.hash", execTx.hash);
+  } else {
+    log.warning("Vote with id", voteId, "is not ready for execution");
+  }
+};
+
 export async function mockDGAragonVoting(state: DeploymentState): Promise<{
   proposalId: bigint;
   scheduleReceipt: TransactionReceipt | null;
@@ -53,10 +172,7 @@ export async function mockDGAragonVoting(state: DeploymentState): Promise<{
 
   const agent = await impersonate(getAddress(Sk.appAgent, state), ether("100"));
 
-  const vs = await loadContract<UpgradeVoteScript>("UpgradeVoteScript", getAddress(Sk.upgradeVoteScript, state));
-  const template = await loadContract<UpgradeTemplate>("UpgradeTemplate", getAddress(Sk.upgradeTemplate, state));
-  const dg = await loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state));
-  const timelock = await loadContract<ITimelock>("ITimelock", getAddress(Sk.dgEmergencyProtectedTimelock, state));
+  const { template, dg, voteScript: vs, timelock } = await loadCtx();
 
   const proposers = await dg.getProposers();
   if (!proposers.length) {
