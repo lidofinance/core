@@ -13,6 +13,6 @@ export async function main() {
   const template = state[Sk.upgradeTemplate];
 
   await deployWithoutProxy(Sk.upgradeVoteScript, "UpgradeVoteScript", deployer, [
-    [template.address, parameters.upgradeVoteScript.timeConstraintsContract],
+    [template.address, parameters.upgradeVoteScript.timeConstraintsContract, parameters.upgradeVoteScript.enabledDaySpanStart, parameters.upgradeVoteScript.enabledDaySpanEnd],
   ]);
 }

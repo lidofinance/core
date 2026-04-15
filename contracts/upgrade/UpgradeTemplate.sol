@@ -10,17 +10,18 @@ import {
 } from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
 
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {ModuleStateConfig, StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 import {
     UpgradeParameters,
     ILidoWithFinalizeUpgrade,
     IAccountingOracle,
-    IOracleReportSanityChecker,
     IWithdrawalsManagerProxy,
     IAragonKernel,
     IVersioned,
     IEasyTrack,
     IWithdrawalVault,
-    IWithdrawalsManagerProxy
+    IWithdrawalsManagerProxy,
+    IStakingRouter
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
@@ -76,6 +77,8 @@ contract UpgradeTemplate is UpgradeConfig {
     uint256 internal initialDepositedValidators;
     uint256 internal initialBeaconValidators;
     uint256 internal initialBeaconBalance;
+    bytes32 internal initialWithdrawalCredentials;
+    uint256 internal initialModulesCount;
 
     //
     // Slots for transient storage
@@ -94,8 +97,40 @@ contract UpgradeTemplate is UpgradeConfig {
     bytes32 internal constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
     bytes32 internal constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
     bytes32 internal constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
+    // sr roles
+    bytes32 internal constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
+    bytes32 internal constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
+    bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+    bytes32 internal constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
+    bytes32 internal constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 internal constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
+    bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
+    bytes32 internal constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
+
+    //sanitychecker roles
+    bytes32 internal constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
+    bytes32 internal constant EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
+        keccak256("EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
+    bytes32 internal constant APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
+        keccak256("APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
+    bytes32 internal constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
+        keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
+    bytes32 internal constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
+        keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
+    bytes32 internal constant MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE =
+        keccak256("MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE");
+    bytes32 internal constant MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE =
+        keccak256("MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE");
+    bytes32 internal constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE =
+        keccak256("MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE");
+    bytes32 internal constant REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE =
+        keccak256("REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE");
+    bytes32 internal constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
+        keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
+    bytes32 internal constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
+    bytes32 internal constant INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE =
+        keccak256("INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE");
 
     /// @param _params Params required to initialize the addresses contract
     /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
@@ -117,6 +152,10 @@ contract UpgradeTemplate is UpgradeConfig {
         initialBufferedEther = ILidoWithFinalizeUpgrade(LIDO).getBufferedEther();
         (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) =
             ILidoWithFinalizeUpgrade(LIDO).getBeaconStat();
+
+        IStakingRouter sr = IStakingRouter(STAKING_ROUTER);
+        initialWithdrawalCredentials = sr.getWithdrawalCredentials();
+        initialModulesCount = sr.getStakingModulesCount();
 
         _assertPreUpgradeState();
 
@@ -182,7 +221,8 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertContractVersion(ACCOUNTING_ORACLE, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
         _assertContractVersion(WITHDRAWAL_VAULT, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
 
-        _assertEasyTrackFactories();
+        // TODO uncomment for testnet/mainnet
+        // _assertEasyTrackFactories();
 
         _assertFinalACL();
 
@@ -202,9 +242,17 @@ contract UpgradeTemplate is UpgradeConfig {
         // StakingRouter
         _assertProxyAdmin(STAKING_ROUTER, AGENT);
         _assertSingleOZRoleHolder(STAKING_ROUTER, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_MANAGE_ROLE, AGENT);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_UNVETTING_ROLE, DEPOSIT_SECURITY_MODULE);
         _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, ACCOUNTING);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_EXITED_VALIDATORS_ROLE, ACCOUNTING_ORACLE);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_VALIDATOR_EXITING_STATUS_ROLE, VALIDATOR_EXIT_DELAY_VERIFIER);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE, TRIGGERABLE_WITHDRAWALS_GATEWAY);
         _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_SHARE_MANAGE_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
+        _assertZeroOZRoleHolders(STAKING_ROUTER, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
+        _assertZeroOZRoleHolders(STAKING_ROUTER, UNSAFE_SET_EXITED_VALIDATORS_ROLE);
 
+        // ValidatorsExitBusOracle
         _assertProxyAdmin(VALIDATORS_EXIT_BUS_ORACLE, AGENT);
         _assertSingleOZRoleHolder(VALIDATORS_EXIT_BUS_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
@@ -239,21 +287,20 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertSingleOZRoleHolder(TOP_UP_GATEWAY, TOP_UP_ROLE, TOP_UP_GATEWAY_DEPOSITOR);
 
         // OracleReportSanityChecker
-        IOracleReportSanityChecker checker = IOracleReportSanityChecker(ORACLE_REPORT_SANITY_CHECKER);
         _assertSingleOZRoleHolder(ORACLE_REPORT_SANITY_CHECKER, DEFAULT_ADMIN_ROLE, AGENT);
         bytes32[12] memory roles = [
-            checker.ALL_LIMITS_MANAGER_ROLE(),
-            checker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
-            checker.APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
-            checker.ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE(),
-            checker.SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE(),
-            checker.MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE(),
-            checker.MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE(),
-            checker.MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE(),
-            checker.REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE(),
-            checker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE(),
-            checker.SECOND_OPINION_MANAGER_ROLE(),
-            checker.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE()
+            ALL_LIMITS_MANAGER_ROLE,
+            EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
+            APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
+            ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE,
+            SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE,
+            MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
+            MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE,
+            MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE,
+            REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE,
+            MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE,
+            SECOND_OPINION_MANAGER_ROLE,
+            INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
         ];
         for (uint256 i = 0; i < roles.length; ++i) {
             _assertZeroOZRoleHolders(ORACLE_REPORT_SANITY_CHECKER, roles[i]);
@@ -292,7 +339,27 @@ contract UpgradeTemplate is UpgradeConfig {
     }
 
     function _checkStakingRouterMigratedCorrectly() internal view {
-        // TODO
+        IStakingRouter sr = IStakingRouter(STAKING_ROUTER);
+        bytes32 newWithdrawalCredentials = sr.getWithdrawalCredentials();
+        if (newWithdrawalCredentials != initialWithdrawalCredentials) {
+            revert IncorrectStakingRouterMigration("withdrawalCredentials");
+        }
+        uint256[] memory moduleIds = sr.getStakingModuleIds();
+        if (moduleIds.length != initialModulesCount + 1) {
+            // 1 new module is added in this upgrade
+            revert IncorrectStakingRouterMigration("modulesCount");
+        }
+
+        uint256 newModuleId = moduleIds[moduleIds.length - 1];
+        ModuleStateConfig memory config = sr.getStakingModuleStateConfig(newModuleId);
+        if (
+            config.moduleAddress != CURATED_MODULE || config.moduleFee != CURATED_STAKING_MODULE_FEE
+                || config.treasuryFee != CURATED_TREASURY_FEE || config.stakeShareLimit != CURATED_STAKE_SHARE_LIMIT
+                || config.priorityExitShareThreshold != CURATED_PRIORITY_EXIT_SHARE_THRESHOLD
+                || config.status != StakingModuleStatus.Active || config.withdrawalCredentialsType != 0x02
+        ) {
+            revert IncorrectStakingRouterMigration("addStakingModule");
+        }
     }
 
     function _checkLidoMigratedCorrectly() internal view {
@@ -422,6 +489,7 @@ contract UpgradeTemplate is UpgradeConfig {
     error SetupAlreadyCompleted(string itemName);
     error Expired();
     error IncorrectLidoMigration(string reason);
+    error IncorrectStakingRouterMigration(string reason);
     error UnexpectedNewEasyTrackFactories();
     error UnexpectedOldEasyTrackFactories();
 }

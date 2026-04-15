@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {IAccessControl} from "@openzeppelin/contracts-v4.4/access/AccessControl.sol";
+import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 interface IEasyTrack {
@@ -65,7 +65,9 @@ contract UpgradeTemporaryAdmin {
 
         _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationMigratorCommittee);
         _setupConsolidationBus(_consolidationBus, _consolidationMigrator);
-        _setupConsolidationGateway(consolidationGateway, _consolidationBus, _consolidationGatewayGateSeal, _resealManager);
+        _setupConsolidationGateway(
+            consolidationGateway, _consolidationBus, _consolidationGatewayGateSeal, _resealManager
+        );
         _setupTopUpGateway(_topUpGateway, _topUpGatewayDepositor);
 
         emit SetupCompleted(_consolidationMigrator, _consolidationBus, consolidationGateway, _topUpGateway);
@@ -84,7 +86,9 @@ contract UpgradeTemporaryAdmin {
         _transferAdminToAgent(_bus);
     }
 
-    function _setupConsolidationGateway(address _gateway, address _bus, address _gateSeal, address _resealManager) private {
+    function _setupConsolidationGateway(address _gateway, address _bus, address _gateSeal, address _resealManager)
+        private
+    {
         IAccessControl(_gateway).grantRole(PAUSE_ROLE, _gateSeal);
         IAccessControl(_gateway).grantRole(PAUSE_ROLE, _resealManager);
         IAccessControl(_gateway).grantRole(RESUME_ROLE, _resealManager);

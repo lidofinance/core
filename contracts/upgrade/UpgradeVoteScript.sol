@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
+import {Strings} from "@openzeppelin/contracts-v5.2/utils/Strings.sol";
+import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
+import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {StakingModuleConfig} from "contracts/0.8.25/sr/SRTypes.sol";
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 import {UpgradeTemplate} from "./UpgradeTemplate.sol";
-import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
-import {Strings} from "@openzeppelin/contracts-v5.2/utils/Strings.sol";
-import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
 
 import {
     ITimeConstraints,
@@ -595,12 +596,15 @@ contract UpgradeVoteScript is OmnibusBase {
                     (
                         c.moduleName,
                         c.module,
-                        c.stakeShareLimit,
-                        c.priorityExitShareThreshold,
-                        c.stakingModuleFee,
-                        c.treasuryFee,
-                        c.maxDepositsPerBlock,
-                        c.minDepositBlockDistance
+                        StakingModuleConfig({
+                            stakeShareLimit: c.stakeShareLimit,
+                            priorityExitShareThreshold: c.priorityExitShareThreshold,
+                            stakingModuleFee: c.stakingModuleFee,
+                            treasuryFee: c.treasuryFee,
+                            maxDepositsPerBlock: c.maxDepositsPerBlock,
+                            minDepositBlockDistance: c.minDepositBlockDistance,
+                            withdrawalCredentialsType: 0x02
+                        })
                     )
                 )
             });

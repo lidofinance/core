@@ -4,6 +4,7 @@ pragma solidity 0.8.25;
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
+import {ModuleStateConfig, StakingModuleConfig} from "contracts/0.8.25/sr/SRTypes.sol";
 
 // ============================
 // Interfaces
@@ -46,16 +47,8 @@ interface IEasyTrack {
 
 interface IStakingRouter is IAccessControlEnumerable {
     // existing roles
-    function MANAGE_WITHDRAWAL_CREDENTIALS_ROLE() external view returns (bytes32);
-    function STAKING_MODULE_MANAGE_ROLE() external view returns (bytes32);
-    function STAKING_MODULE_UNVETTING_ROLE() external view returns (bytes32);
-    function REPORT_EXITED_VALIDATORS_ROLE() external view returns (bytes32);
-    function UNSAFE_SET_EXITED_VALIDATORS_ROLE() external view returns (bytes32);
-    function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
-    function REPORT_VALIDATOR_EXITING_STATUS_ROLE() external view returns (bytes32);
-    function REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE() external view returns (bytes32);
-    function STAKING_MODULE_SHARE_MANAGE_ROLE() external view returns (bytes32);
 
+    function getWithdrawalCredentials() external view returns (bytes32);
     function finalizeUpgrade_v4() external;
     function updateModuleShares(uint256 _stakingModuleId, uint16 _stakeShareLimit, uint16 _priorityExitShareThreshold)
         external;
@@ -63,28 +56,15 @@ interface IStakingRouter is IAccessControlEnumerable {
     function addStakingModule(
         string calldata _name,
         address _stakingModuleAddress,
-        uint256 _stakeShareLimit,
-        uint256 _priorityExitShareThreshold,
-        uint256 _stakingModuleFee,
-        uint256 _treasuryFee,
-        uint256 _maxDepositsPerBlock,
-        uint256 _minDepositBlockDistance
+        StakingModuleConfig calldata _stakingModuleConfig
     ) external;
-}
 
-interface IOracleReportSanityChecker is IAccessControlEnumerable {
-    function ALL_LIMITS_MANAGER_ROLE() external view returns (bytes32);
-    function EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE() external view returns (bytes32);
-    function APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE() external view returns (bytes32);
-    function ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE() external view returns (bytes32);
-    function SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE() external view returns (bytes32);
-    function MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE() external view returns (bytes32);
-    function MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE() external view returns (bytes32);
-    function MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE() external view returns (bytes32);
-    function REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE() external view returns (bytes32);
-    function MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE() external view returns (bytes32);
-    function SECOND_OPINION_MANAGER_ROLE() external view returns (bytes32);
-    function INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE() external view returns (bytes32);
+    function getStakingModulesCount() external view returns (uint256);
+    function getStakingModuleIds() external view returns (uint256[] memory);
+    function getStakingModuleStateConfig(uint256 _stakingModuleId)
+        external
+        view
+        returns (ModuleStateConfig memory stateConfig);
 }
 
 interface IConsolidationMigrator {
@@ -169,10 +149,6 @@ interface IAccountingV3 {
 interface IFeeDistributorV3 {
     function ORACLE() external view returns (address);
     function finalizeUpgradeV3() external;
-}
-
-interface IPausableRole {
-    function PAUSE_ROLE() external view returns (bytes32);
 }
 
 interface IValidatorStrikesV3 {
