@@ -212,13 +212,6 @@ const CuratedModuleConfigSchema = z.object({
   maxDepositsPerBlock: NonNegativeIntSchema,
   minDepositBlockDistance: NonNegativeIntSchema,
   hashConsensusInitialEpoch: NonNegativeIntSchema,
-  // Curated Merkle Gates
-  professionalOperatorGate: EthereumAddressSchema,
-  professionalTrustedOperatorGate: EthereumAddressSchema,
-  publicGoodOperatorGate: EthereumAddressSchema,
-  decentralizationOperatorGate: EthereumAddressSchema,
-  extraEffortOperatorGate: EthereumAddressSchema,
-  intraOperatorDVTClusterGate: EthereumAddressSchema,
 });
 
 const UpgradeVoteScriptSchema = z.object({

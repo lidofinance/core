@@ -50,7 +50,7 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 internal constant DG_ITEMS_COUNT = 61;
+    uint256 internal constant DG_ITEMS_COUNT = 52;
     uint256 public constant VOTING_ITEMS_COUNT = 9;
 
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
@@ -640,72 +640,9 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track on Curated module",
-                to: c.module,
-                role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant SETTLE_GENERAL_DELAYED_PENALTY_ROLE to Easy Track on Curated module",
-                to: c.module,
-                role: SETTLE_GENERAL_DELAYED_PENALTY_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant MANAGE_OPERATOR_GROUPS_ROLE to Easy Track on Curated MetaRegistry",
-                to: c.metaRegistry,
-                role: MANAGE_OPERATOR_GROUPS_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_TREE_ROLE to Easy Track on Curated Professional Operator Gate",
-                to: c.professionalOperatorGate,
-                role: SET_TREE_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_TREE_ROLE to Easy Track on Curated Professional Trusted Operator Gate",
-                to: c.professionalTrustedOperatorGate,
-                role: SET_TREE_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_TREE_ROLE to Easy Track on Curated Public Good Operator Gate",
-                to: c.publicGoodOperatorGate,
-                role: SET_TREE_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_TREE_ROLE to Easy Track on Curated Decentralization Operator Gate",
-                to: c.decentralizationOperatorGate,
-                role: SET_TREE_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_TREE_ROLE to Easy Track on Curated Extra Effort Operator Gate",
-                to: c.extraEffortOperatorGate,
-                role: SET_TREE_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_TREE_ROLE to Easy Track on Curated Intra-Operator DVT Cluster Gate",
-                to: c.intraOperatorDVTClusterGate,
-                role: SET_TREE_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozGrantRoleItem({
                 description: "Grant TWG full-withdrawal role to Curated Ejector",
                 to: g.triggerableWithdrawalsGateway,
-                role: REQUEST_BURN_MY_STETH_ROLE,
+                role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
                 account: c.ejector
             });
 

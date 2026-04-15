@@ -321,13 +321,6 @@ struct CuratedModuleParams {
     uint256 maxDepositsPerBlock;
     uint256 minDepositBlockDistance;
     uint256 hashConsensusInitialEpoch;
-    // Curated Merkle Gates
-    address professionalOperatorGate;
-    address professionalTrustedOperatorGate;
-    address publicGoodOperatorGate;
-    address decentralizationOperatorGate;
-    address extraEffortOperatorGate;
-    address intraOperatorDVTClusterGate;
 }
 
 //
@@ -435,11 +428,4 @@ struct CuratedModuleConfig {
     uint256 minDepositBlockDistance;
     uint256 hashConsensusInitialEpoch;
     address metaRegistry;
-    // Curated Merkle Gates
-    address professionalOperatorGate;
-    address professionalTrustedOperatorGate;
-    address publicGoodOperatorGate;
-    address decentralizationOperatorGate;
-    address extraEffortOperatorGate;
-    address intraOperatorDVTClusterGate;
 }
