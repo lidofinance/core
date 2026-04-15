@@ -464,7 +464,7 @@
   },
   "dg:emergencyProtectedTimelock": {
     "proxy": {
-       "address": "0x8943545177806ED17B9F23F0a21ee5948eCaa776"
+      "address": "0x8943545177806ED17B9F23F0a21ee5948eCaa776"
     },
     "note": "The dual governance contract is not deployed, the address is set to the deployer address as a placeholder."
   },
