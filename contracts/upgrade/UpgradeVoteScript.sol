@@ -50,7 +50,7 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 internal constant DG_ITEMS_COUNT = 52;
+    uint256 internal constant DG_ITEMS_COUNT = 54;
     uint256 public constant VOTING_ITEMS_COUNT = 9;
 
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
@@ -111,7 +111,18 @@ contract UpgradeVoteScript is OmnibusBase {
 
     /// @dev Non DG voting items
     function getVotingVoteItems() public view override returns (VoteItem[] memory) {
-        VoteItem[] memory items = new VoteItem[](VOTING_ITEMS_COUNT);
+        //  start from `2` as `1` is reserved for DG submission item
+        return _wrapItemsNumber(_getVotingVoteItems(), 2);
+    }
+
+    /// @dev DG voting items
+    function getVoteItems() public view override returns (VoteItem[] memory) {
+        // set prefix to `1`, so all item's description will transform to `1.N. Description...`
+        return _wrapItemsPrefixNumberForward(_getVoteItems(), AGENT, 1, 1);
+    }
+
+    function _getVotingVoteItems() internal view returns (VoteItem[] memory items) {
+        items = new VoteItem[](VOTING_ITEMS_COUNT);
         uint256 i = 0;
 
         UpgradeTemplate template = UpgradeTemplate(TEMPLATE);
@@ -202,15 +213,6 @@ contract UpgradeVoteScript is OmnibusBase {
             );
         }
         if (i != VOTING_ITEMS_COUNT) revert InvalidItemsCount(i, VOTING_ITEMS_COUNT);
-        assert(i == VOTING_ITEMS_COUNT);
-
-        //  start from `2` as `1` is reserved for DG submission item
-        return _wrapItemsNumber(items, 2);
-    }
-
-    /// @dev DG voting items
-    function getVoteItems() public view override returns (VoteItem[] memory) {
-        return _wrapItemsPrefixNumberForward(_getVoteItems(), AGENT, 1, 1);
     }
 
     function getAgentScriptCall() public view returns (bytes memory) {
@@ -262,7 +264,6 @@ contract UpgradeVoteScript is OmnibusBase {
         UpgradeTemplate template = UpgradeTemplate(TEMPLATE);
         GlobalConfig memory g = template.getGlobalConfig();
         address agent = g.agent;
-        address resealManager = g.resealManager;
         address evmScriptExecutor = g.easyTrackEVMScriptExecutor;
 
         // items[i++] = _item({
@@ -682,9 +683,6 @@ contract UpgradeVoteScript is OmnibusBase {
         });
 
         if (i != DG_ITEMS_COUNT) revert InvalidItemsCount(i, DG_ITEMS_COUNT);
-        assert(i == DG_ITEMS_COUNT);
-
-        // set prefix to `1`, so all item's description will transform to `1.N. Description...`
     }
 
     //

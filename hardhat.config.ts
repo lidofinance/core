@@ -48,6 +48,13 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
       hardfork: "prague",
+      chains: {
+        32382: {
+          hardforkHistory: {
+            prague: 0,
+          },
+        },
+      },
       mining: {
         mempool: {
           order: "fifo",

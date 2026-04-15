@@ -456,6 +456,18 @@
       200
     ]
   },
+  "dg:dualGovernance": {
+    "proxy": {
+      "address": "0x8943545177806ED17B9F23F0a21ee5948eCaa776"
+    },
+    "note": "The dual governance contract is not deployed, the address is set to the deployer address as a placeholder."
+  },
+  "dg:emergencyProtectedTimelock": {
+    "proxy": {
+       "address": "0x8943545177806ED17B9F23F0a21ee5948eCaa776"
+    },
+    "note": "The dual governance contract is not deployed, the address is set to the deployer address as a placeholder."
+  },
   "dummyEmptyContract": {
     "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",
     "address": "0x2694cfcc47aAbC5C042dea104b6ac37e9924a4B1",
@@ -791,7 +803,8 @@
     }
   },
   "resealManager": {
-    "address": "0x8943545177806ED17B9F23F0a21ee5948eCaa776"
+    "address": "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
+    "note": "The reseal manager contract is not deployed, the address is set to the deployer address as a placeholder."
   },
   "scratchDeployGasUsed": "250150913",
   "simpleDvt": {
