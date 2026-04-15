@@ -843,5 +843,8 @@
   },
   "easyTrackEVMScriptExecutor": {
     "address": "0x9c457ac681092D4Fb4e8C9Ac0Bdf5e59efBbE016"
+  },
+  "resealManager": {
+    "address": "0x8943545177806ED17B9F23F0a21ee5948eCaa776"
   }
 }
