@@ -6,8 +6,9 @@ pragma solidity 0.8.25;
 
 import {TopUpData, BeaconRootData, ValidatorWitness} from "contracts/common/interfaces/TopUpWitness.sol";
 import {CLValidatorVerifier} from "./CLValidatorVerifier.sol";
-import {AccessControlEnumerableUpgradeable} from
-    "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {
+    AccessControlEnumerableUpgradeable
+} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 
@@ -70,6 +71,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         uint64 _pivotSlot,
         uint256 _slotsPerEpoch
     ) CLValidatorVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
+        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         LOCATOR = ILidoLocator(_lidoLocator);
         SLOTS_PER_EPOCH = _slotsPerEpoch;
         _disableInitializers();
@@ -96,6 +98,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         uint256 _targetBalanceGwei,
         uint256 _minTopUpGwei
     ) external initializer {
+        if (_admin == address(0)) revert ZeroArgument("_admin");
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setMaxValidatorsPerTopUp(_maxValidatorsPerTopUp);
@@ -107,10 +110,29 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     /**
      * @notice Method verifying Merkle proofs on validators, making check of age of slot's proof
      * and proceeding to top up validators via StakingRouter.topUp(stakingModuleId, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei)
-     * @param _topUps TopUpData structure, containing validators' container fields, actual balances and pending deposits
+     * @param _topUps TopUpData structure, containing validators' container fields, pending deposits
      *  and Merkle proofs on inclusion of each container in Beacon State tree
-     * @dev Amount of validators limited by maxValidatorsPerTopUp; Between topUp calls should pass minBlockDistance.
-     *      Only callable by accounts with TOP_UP_ROLE.
+     * @dev Only callable by accounts with TOP_UP_ROLE.
+     *
+     * validatorIndices MUST be sorted in strictly ascending order. The corresponding keyIndices,
+     * operatorIds, validatorWitness and pendingBalanceGwei arrays must be aligned by position
+     * to validatorIndices[i].
+     *
+     * Reverts if:
+     *  - the caller doesn't have TOP_UP_ROLE (AccessControl);
+     *  - validatorIndices is empty, or any of keyIndices, operatorIds, validatorWitness,
+     *    pendingBalanceGwei has a length different from validatorIndices
+     *    (`WrongArrayLength`);
+     *  - validatorIndices length maxValidatorsPerTopUp (`MaxValidatorsPerTopUpExceeded`);
+     *  - validatorIndices is not strictly increasing (not sorted or contains duplicates) (`InvalidValidatorIndicesSortOrder`);
+     *  - fewer than minBlockDistance blocks have passed since the last top-up (`MinBlockDistanceNotMet`);
+     *  - the beacon root is older than maxRootAge relative to block.timestamp (`RootIsTooOld`);
+     *  - the beacon root childBlockTimestamp is not newer than the last top-up timestamp
+     *    (`RootPrecedesLastTopUp`);
+     *  - the module's withdrawal credentials are not of type 0x02 (`WrongWithdrawalCredentials`);
+     *  - any validator pubkey has a length different from 48 bytes (`WrongPubkeyLength`);
+     *  - any validator has activationEpoch >= current epoch (derived from beacon root slot) (`ValidatorIsNotActivated`);
+     *  - any validator Merkle proof fails verification in CLValidatorVerifier.
      */
     function topUp(TopUpData calldata _topUps) external onlyRole(TOP_UP_ROLE) {
         Storage storage $ = _gatewayStorage();
@@ -131,12 +153,10 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
             revert MaxValidatorsPerTopUpExceeded();
         }
 
-        // Check for duplicate validatorIndices (O(n^2) acceptable since bounded by maxValidatorsPerTopUp)
-        for (uint256 i; i < validatorsCount; ++i) {
-            for (uint256 j = i + 1; j < validatorsCount; ++j) {
-                if (_topUps.validatorIndices[i] == _topUps.validatorIndices[j]) {
-                    revert DuplicateValidatorIndex();
-                }
+        // Require validatorIndices to be strictly increasing.
+        for (uint256 i = 1; i < validatorsCount; ++i) {
+            if (_topUps.validatorIndices[i] <= _topUps.validatorIndices[i - 1]) {
+                revert InvalidValidatorIndicesSortOrder();
             }
         }
 
@@ -181,9 +201,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         }
 
         // Proceed to StakingRouter
-        IStakingRouter(stakingRouter).topUp(
-            _topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits
-        );
+        IStakingRouter(stakingRouter)
+            .topUp(_topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits);
 
         _setLastTopUpData();
     }
@@ -343,7 +362,9 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
             revert RootIsTooOld();
         }
 
-        if (_beaconRootData.childBlockTimestamp <= _gatewayStorage().lastTopUpTimestamp) revert RootPrecedesLastTopUp();
+        if (_beaconRootData.childBlockTimestamp <= _gatewayStorage().lastTopUpTimestamp) {
+            revert RootPrecedesLastTopUp();
+        }
     }
 
     function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata _w) internal view {
@@ -389,6 +410,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     event TopUpBalanceLimitsChanged(uint256 targetBalanceGwei, uint256 minTopUpGwei);
 
     error ZeroValue();
+    error ZeroArgument(string argument);
     error TooLargeValue();
     error RootIsTooOld();
     error RootPrecedesLastTopUp();
@@ -397,7 +419,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     error WrongWithdrawalCredentials();
     error WrongPubkeyLength();
     error MinBlockDistanceNotMet();
-    error DuplicateValidatorIndex();
+    error InvalidValidatorIndicesSortOrder();
     error ValidatorIsNotActivated();
     error MinTopUpExceedsTarget();
 }
