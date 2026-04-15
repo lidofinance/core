@@ -50,7 +50,7 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 internal constant DG_ITEMS_COUNT = 67;
+    uint256 internal constant DG_ITEMS_COUNT = 61;
     uint256 public constant VOTING_ITEMS_COUNT = 9;
 
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
@@ -371,10 +371,7 @@ contract UpgradeVoteScript is OmnibusBase {
             CSMUpgradeConfig memory c = template.getCSMUpgradeConfig();
             address csm = c.csm;
             address gateSeal = c.gateSeal;
-            address verifier = c.verifier;
             address vettedGate = c.vettedGate;
-            address oldEjector = IValidatorStrikesV3(c.strikes).ejector();
-
             // --- Proxy upgrades ---
 
             items[i++] = _proxyUpgradeToAndCallV2Item({
@@ -461,7 +458,7 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke VERIFIER_ROLE from old verifier", to: csm, role: VERIFIER_ROLE, account: verifier
+                description: "Revoke VERIFIER_ROLE from old verifier", to: csm, role: VERIFIER_ROLE, account: c.verifier
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -524,53 +521,6 @@ contract UpgradeVoteScript is OmnibusBase {
                 to: vettedGate,
                 role: PAUSE_ROLE,
                 account: gateSeal
-            });
-
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke PAUSE_ROLE from old gate seal on old Verifier",
-                to: verifier,
-                role: PAUSE_ROLE,
-                account: gateSeal
-            });
-
-            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke PAUSE_ROLE from old gate seal on old Ejector",
-                to: oldEjector,
-                role: PAUSE_ROLE,
-                account: gateSeal
-            });
-
-            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke PAUSE_ROLE from reseal manager on old Verifier",
-                to: verifier,
-                role: PAUSE_ROLE,
-                account: resealManager
-            });
-
-            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke RESUME_ROLE from reseal manager on old Verifier",
-                to: verifier,
-                role: RESUME_ROLE,
-                account: resealManager
-            });
-
-            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke PAUSE_ROLE from reseal manager on old Ejector",
-                to: oldEjector,
-                role: PAUSE_ROLE,
-                account: resealManager
-            });
-
-            // todo: do we need revoke role from old ejector, since it’s just going to end up as trash?
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke RESUME_ROLE from reseal manager on old Ejector",
-                to: oldEjector,
-                role: RESUME_ROLE,
-                account: resealManager
             });
 
             items[i++] = _ozRevokeRoleItem({
@@ -644,7 +594,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Revoke TWG full-withdrawal role from old Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
-                account: oldEjector
+                account: IValidatorStrikesV3(c.strikes).ejector()
             });
 
             items[i++] = _ozGrantRoleItem({
