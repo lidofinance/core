@@ -1,0 +1,5 @@
+{
+  "steps": [
+    "upgrade/steps/9999-test-new-vote"
+  ]
+}
