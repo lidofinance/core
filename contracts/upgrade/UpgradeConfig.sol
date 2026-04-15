@@ -173,13 +173,6 @@ contract UpgradeConfig is IUpgradeConfig {
     uint256 internal immutable CURATED_MIN_DEPOSIT_BLOCK_DISTANCE;
     uint256 internal immutable CURATED_HASH_CONSENSUS_INITIAL_EPOCH;
     address internal immutable CURATED_META_REGISTRY;
-    // Curated Merkle Gates
-    address internal immutable CURATED_PROFESSIONAL_OPERATOR_GATE;
-    address internal immutable CURATED_PROFESSIONAL_TRUSTED_OPERATOR_GATE;
-    address internal immutable CURATED_PUBLIC_GOOD_OPERATOR_GATE;
-    address internal immutable CURATED_DECENTRALIZATION_OPERATOR_GATE;
-    address internal immutable CURATED_EXTRA_EFFORT_OPERATOR_GATE;
-    address internal immutable CURATED_INTRA_OPERATOR_DVT_CLUSTER_GATE;
 
     // UpgradeParameters public upgradeParams;
 
@@ -237,12 +230,12 @@ contract UpgradeConfig is IUpgradeConfig {
         ETF_NEW_ALLOWED_MERKLE_GATES_REGISTRY_FOR_CSM = newFactories.AllowedMerkleGatesRegistryForCSM;
         ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CSM = newFactories.SetMerkleGateTreeForCSM;
         ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CSM =
-            newFactories.ReportWithdrawalsForSlashedValidatorsForCSM;
+        newFactories.ReportWithdrawalsForSlashedValidatorsForCSM;
         ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CSM = newFactories.SettleGeneralDelayedPenaltyForCSM;
         ETF_NEW_ALLOWED_MERKLE_GATES_REGISTRY_FOR_CM = newFactories.AllowedMerkleGatesRegistryForCM;
         ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM = newFactories.SetMerkleGateTreeForCM;
         ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM =
-            newFactories.ReportWithdrawalsForSlashedValidatorsForCM;
+        newFactories.ReportWithdrawalsForSlashedValidatorsForCM;
         ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM = newFactories.SettleGeneralDelayedPenaltyForCM;
         ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP = newFactories.CreateOrUpdateOperatorGroup;
 
@@ -320,12 +313,6 @@ contract UpgradeConfig is IUpgradeConfig {
         CURATED_MAX_DEPOSITS_PER_BLOCK = curatedModuleParams.maxDepositsPerBlock;
         CURATED_MIN_DEPOSIT_BLOCK_DISTANCE = curatedModuleParams.minDepositBlockDistance;
         CURATED_HASH_CONSENSUS_INITIAL_EPOCH = curatedModuleParams.hashConsensusInitialEpoch;
-        CURATED_PROFESSIONAL_OPERATOR_GATE = curatedModuleParams.professionalOperatorGate;
-        CURATED_PROFESSIONAL_TRUSTED_OPERATOR_GATE = curatedModuleParams.professionalTrustedOperatorGate;
-        CURATED_PUBLIC_GOOD_OPERATOR_GATE = curatedModuleParams.publicGoodOperatorGate;
-        CURATED_DECENTRALIZATION_OPERATOR_GATE = curatedModuleParams.decentralizationOperatorGate;
-        CURATED_EXTRA_EFFORT_OPERATOR_GATE = curatedModuleParams.extraEffortOperatorGate;
-        CURATED_INTRA_OPERATOR_DVT_CLUSTER_GATE = curatedModuleParams.intraOperatorDVTClusterGate;
 
         ICuratedModule curatedModule = ICuratedModule(CURATED_MODULE);
         CURATED_META_REGISTRY = curatedModule.META_REGISTRY();
@@ -462,13 +449,7 @@ contract UpgradeConfig is IUpgradeConfig {
             maxDepositsPerBlock: CURATED_MAX_DEPOSITS_PER_BLOCK,
             minDepositBlockDistance: CURATED_MIN_DEPOSIT_BLOCK_DISTANCE,
             hashConsensusInitialEpoch: CURATED_HASH_CONSENSUS_INITIAL_EPOCH,
-            metaRegistry: CURATED_META_REGISTRY,
-            professionalOperatorGate: CURATED_PROFESSIONAL_OPERATOR_GATE,
-            professionalTrustedOperatorGate: CURATED_PROFESSIONAL_TRUSTED_OPERATOR_GATE,
-            publicGoodOperatorGate: CURATED_PUBLIC_GOOD_OPERATOR_GATE,
-            decentralizationOperatorGate: CURATED_DECENTRALIZATION_OPERATOR_GATE,
-            extraEffortOperatorGate: CURATED_EXTRA_EFFORT_OPERATOR_GATE,
-            intraOperatorDVTClusterGate: CURATED_INTRA_OPERATOR_DVT_CLUSTER_GATE
+            metaRegistry: CURATED_META_REGISTRY
         });
     }
 

@@ -154,14 +154,6 @@ treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
 hashConsensusInitialEpoch = 47480
-# Curated Merkle Gates
-# TODO: replace with deployed gate addresses
-professionalOperatorGate = "0x00000000000000000000000000000000000cac10"
-professionalTrustedOperatorGate = "0x00000000000000000000000000000000000cac11"
-publicGoodOperatorGate = "0x00000000000000000000000000000000000cac12"
-decentralizationOperatorGate = "0x00000000000000000000000000000000000cac13"
-extraEffortOperatorGate = "0x00000000000000000000000000000000000cac14"
-intraOperatorDVTClusterGate = "0x00000000000000000000000000000000000cac15"
 
 [upgradeVoteScript]
 # Expiry timestamp after which the upgrade transaction will revert

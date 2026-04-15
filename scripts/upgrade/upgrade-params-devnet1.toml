@@ -150,13 +150,6 @@ treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
 hashConsensusInitialEpoch = 0 # FIXME: calculate
-# Curated Merkle Gates
-professionalOperatorGate = "0x2DEa3B3076c8754961ec1859396714f2B4ce5363"
-professionalTrustedOperatorGate = "0x3b44c668Ee186bc8A46EDdDa08c0213c1Ac2544A"
-publicGoodOperatorGate = "0x1eEA2A3b7a4d840aef0B24601dee17D19E924Eba"
-decentralizationOperatorGate = "0x279780a1dc127d0e38470f786924972Ef3aDdD71"
-extraEffortOperatorGate = "0x13C3eb63B9B969DAA569bf793431EBF32e470e3c"
-intraOperatorDVTClusterGate = "0xc35D573f0415C86C120aC92d00722ee7C527289B"
 
 [upgradeVoteScript]
 # Expiry timestamp after which the upgrade transaction will revert
