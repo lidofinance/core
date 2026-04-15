@@ -4,12 +4,10 @@
 
 
 [easyTrack]
-# TODO:  update upon deployment
-trustedCaller = "0x00000000000000000000000000000000000eee00"
+trustedCaller = "0xE25583099BA105D9ec0A67f5Ae86D90e50036425"
 [easyTrack.newFactories]
-# TODO: fill with deployed Easy Track factory address before execution
-UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
-AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
+UpdateStakingModuleShareLimits = "0x7ed96eEfB57E1e4C6d64D19818F3A78664318829"
+AllowConsolidationPair = "0xD6aC302915790074c7291c3bD64ddD5aeC5A7708"
 
 AllowedMerkleGatesRegistryForCSM = "0xF7740F7a819825152383f12182d1F0cFdB1e19c7"
 SetMerkleGateTreeForCSM = "0xF417BBcc9682B6d5B8312e8F8588Cd6489C5B85F"
