@@ -232,6 +232,7 @@ const UpgradeVoteScriptSchema = z.object({
 const GateSealSchema = z.object({
   sealDuration: PositiveIntSchema,
   sealingCommittee: EthereumAddressSchema,
+  expiryTimestamp: NonNegativeIntSchema.optional(),
 });
 
 // DAO schema

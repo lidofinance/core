@@ -6,10 +6,7 @@ pragma solidity 0.8.25;
 
 import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-
-interface IEasyTrack {
-    function evmScriptExecutor() external view returns (address);
-}
+import {IEasyTrack, IDepositSecurityModule} from "./UpgradeTypes.sol";
 
 /**
  * @title UpgradeTemporaryAdmin
@@ -50,8 +47,8 @@ contract UpgradeTemporaryAdmin {
         address _consolidationMigratorCommittee,
         address _consolidationBus,
         address _consolidationGatewayGateSeal,
-        address _topUpGateway,
-        address _topUpGatewayDepositor
+        address _topUpGatewayDepositor,
+        address _oldDepositSecurityModule
     ) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
         if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
@@ -62,15 +59,26 @@ contract UpgradeTemporaryAdmin {
         ILidoLocator locator = ILidoLocator(_lidoLocatorImpl);
         address evmScriptExecutor = IEasyTrack(_easyTrack).evmScriptExecutor();
         address consolidationGateway = locator.consolidationGateway();
+        address topUpGateway = locator.topUpGateway();
+        address depositSecurityModule = locator.depositSecurityModule();
 
+        _setupDSM(depositSecurityModule, _oldDepositSecurityModule);
         _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationMigratorCommittee);
         _setupConsolidationBus(_consolidationBus, _consolidationMigrator);
         _setupConsolidationGateway(
             consolidationGateway, _consolidationBus, _consolidationGatewayGateSeal, _resealManager
         );
-        _setupTopUpGateway(_topUpGateway, _topUpGatewayDepositor);
+        _setupTopUpGateway(topUpGateway, _topUpGatewayDepositor);
 
-        emit SetupCompleted(_consolidationMigrator, _consolidationBus, consolidationGateway, _topUpGateway);
+        emit SetupCompleted(_consolidationMigrator, _consolidationBus, consolidationGateway, topUpGateway);
+    }
+
+    function _setupDSM(address _dsm, address _oldDsm) private {
+        IDepositSecurityModule dsm = IDepositSecurityModule(_dsm);
+        IDepositSecurityModule oldDsm = IDepositSecurityModule(_oldDsm);
+
+        dsm.addGuardians(oldDsm.getGuardians(), oldDsm.getGuardianQuorum());
+        dsm.setOwner(AGENT);
     }
 
     function _setupConsolidationMigrator(address _migrator, address _evmScriptExecutor, address _committee) private {

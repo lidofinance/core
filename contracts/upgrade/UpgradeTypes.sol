@@ -67,6 +67,15 @@ interface IStakingRouter is IAccessControlEnumerable {
         returns (ModuleStateConfig memory stateConfig);
 }
 
+interface IDepositSecurityModule {
+    function getOwner() external view returns (address);
+    function setOwner(address newValue) external;
+    function isGuardian(address addr) external view returns (bool);
+    function getGuardianQuorum() external view returns (uint256);
+    function getGuardians() external view returns (address[] memory);
+    function addGuardians(address[] memory addresses, uint256 newQuorum) external;
+}
+
 interface IConsolidationMigrator {
     function allowPair(uint256 sourceOperatorId, uint256 targetOperatorId, address submitter) external;
     function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external;
@@ -253,8 +262,6 @@ struct CoreUpgradeParams {
     address oldStakingRouterImpl;
     address oldWithdrawalVaultImpl;
     address oldValidatorsExitBusOracleImpl;
-    address oldOracleReportSanityChecker;
-    address oldDepositSecurityModule;
 
     // New implementations
     address newLocatorImpl;
@@ -264,8 +271,6 @@ struct CoreUpgradeParams {
     address newStakingRouterImpl;
     address newWithdrawalVaultImpl;
     address newValidatorsExitBusOracleImpl;
-    address newOracleReportSanityChecker;
-    address newDepositSecurityModule;
     address consolidationBusImpl;
     address consolidationMigratorImpl;
     address topUpGatewayImpl;

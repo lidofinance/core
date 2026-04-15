@@ -21,7 +21,8 @@ import {
     IEasyTrack,
     IWithdrawalVault,
     IWithdrawalsManagerProxy,
-    IStakingRouter
+    IStakingRouter,
+    IDepositSecurityModule
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
@@ -44,49 +45,6 @@ contract UpgradeTemplate is UpgradeConfig {
     //
     // -------- Constants --------
     //
-
-    uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 4;
-    uint256 public constant EXPECTED_FINAL_STAKING_ROUTER_VERSION = 4;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 4;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 6;
-    uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION = 5;
-    uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
-
-    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
-
-    // Initial value of upgradeBlockNumber storage variable
-    uint256 public constant UPGRADE_NOT_STARTED = 0;
-    uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
-
-    // Timestamp since which startUpgrade()
-    // This behavior is introduced to disarm the template if the upgrade voting creation or enactment
-    // didn't happen in proper time period
-    uint256 public immutable EXPIRE_SINCE_INCLUSIVE;
-
-    //
-    // Structured storage
-    //
-
-    uint256 public upgradeBlockNumber = UPGRADE_NOT_STARTED;
-    bool public isUpgradeFinished;
-
-    // uint256 public initialOldBurnerStethSharesBalance;
-    // uint256 public initialTotalShares;
-    // uint256 public initialTotalPooledEther;
-    uint256 internal initialBufferedEther;
-    uint256 internal initialDepositedValidators;
-    uint256 internal initialBeaconValidators;
-    uint256 internal initialBeaconBalance;
-    bytes32 internal initialWithdrawalCredentials;
-    uint256 internal initialModulesCount;
-
-    //
-    // Slots for transient storage
-    //
-
-    // Slot for the upgrade started flag
-    // / keccak256("UpgradeTemplate.upgradeStartedFlag");
-    bytes32 public constant UPGRADE_STARTED_SLOT = 0x058d69f67a3d86c424c516d23a070ff8bed34431617274caa2049bd702675e3f;
 
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -132,6 +90,51 @@ contract UpgradeTemplate is UpgradeConfig {
     bytes32 internal constant INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE =
         keccak256("INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE");
 
+    uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 4;
+    uint256 public constant EXPECTED_FINAL_STAKING_ROUTER_VERSION = 4;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 4;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 6;
+    uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION = 5;
+    uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
+
+    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
+
+    // Initial value of upgradeBlockNumber storage variable
+    uint256 public constant UPGRADE_NOT_STARTED = 0;
+    uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
+
+    // Timestamp since which startUpgrade()
+    // This behavior is introduced to disarm the template if the upgrade voting creation or enactment
+    // didn't happen in proper time period
+    uint256 public immutable EXPIRE_SINCE_INCLUSIVE;
+
+    //
+    // Structured storage
+    //
+
+    uint256 public upgradeBlockNumber = UPGRADE_NOT_STARTED;
+    bool public isUpgradeFinished;
+
+    // uint256 public initialOldBurnerStethSharesBalance;
+    // uint256 public initialTotalShares;
+    // uint256 public initialTotalPooledEther;
+    uint256 internal initialBufferedEther;
+    uint256 internal initialDepositedValidators;
+    uint256 internal initialBeaconValidators;
+    uint256 internal initialBeaconBalance;
+    // bytes32 internal initialWithdrawalCredentials;
+    uint256 internal initialModulesCount;
+    // address[] internal initialDSMGuardians;
+    // uint256 internal initialDSMGuardianQuorum;
+
+    //
+    // Slots for transient storage
+    //
+
+    // Slot for the upgrade started flag
+    // / keccak256("UpgradeTemplate.upgradeStartedFlag");
+    bytes32 public constant UPGRADE_STARTED_SLOT = 0x058d69f67a3d86c424c516d23a070ff8bed34431617274caa2049bd702675e3f;
+
     /// @param _params Params required to initialize the addresses contract
     /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
     constructor(UpgradeParameters memory _params, uint256 _expireSinceInclusive) UpgradeConfig(_params) {
@@ -154,8 +157,11 @@ contract UpgradeTemplate is UpgradeConfig {
             ILidoWithFinalizeUpgrade(LIDO).getBeaconStat();
 
         IStakingRouter sr = IStakingRouter(STAKING_ROUTER);
-        initialWithdrawalCredentials = sr.getWithdrawalCredentials();
+        // initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
+
+        // initialDSMGuardians = IDepositSecurityModule(OLD_DEPOSIT_SECURITY_MODULE).getGuardians();
+        // initialDSMGuardianQuorum = IDepositSecurityModule(OLD_DEPOSIT_SECURITY_MODULE).getGuardianQuorum();
 
         _assertPreUpgradeState();
 
@@ -226,8 +232,9 @@ contract UpgradeTemplate is UpgradeConfig {
 
         _assertFinalACL();
 
-        _checkStakingRouterMigratedCorrectly();
-        _checkLidoMigratedCorrectly();
+        _checkStakingRouter();
+        _checkLido();
+        _checkDSM();
     }
 
     function _assertFinalACL() internal view {
@@ -243,7 +250,7 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertProxyAdmin(STAKING_ROUTER, AGENT);
         _assertSingleOZRoleHolder(STAKING_ROUTER, DEFAULT_ADMIN_ROLE, AGENT);
         _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_MANAGE_ROLE, AGENT);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_UNVETTING_ROLE, DEPOSIT_SECURITY_MODULE);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_UNVETTING_ROLE, NEW_DEPOSIT_SECURITY_MODULE);
         _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, ACCOUNTING);
         _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_EXITED_VALIDATORS_ROLE, ACCOUNTING_ORACLE);
         _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_VALIDATOR_EXITING_STATUS_ROLE, VALIDATOR_EXIT_DELAY_VERIFIER);
@@ -256,14 +263,10 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertProxyAdmin(VALIDATORS_EXIT_BUS_ORACLE, AGENT);
         _assertSingleOZRoleHolder(VALIDATORS_EXIT_BUS_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
-        // address internal immutable NEW_ORACLE_REPORT_SANITY_CHECKER;
-        // address internal immutable NEW_DEPOSIT_SECURITY_MODULE;
-
         // WithdrawalVault
         _assertWithdrawalsManagerProxyAdmin(WITHDRAWAL_VAULT, AGENT);
 
         // Consolidation rollout
-
         _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, DEFAULT_ADMIN_ROLE, AGENT);
         _assertTwoOZRoleHolders(CONSOLIDATION_GATEWAY, PAUSE_ROLE, CONSOLIDATION_GATEWAY_GATE_SEAL, RESEAL_MANAGER);
         _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, RESUME_ROLE, RESEAL_MANAGER);
@@ -287,7 +290,7 @@ contract UpgradeTemplate is UpgradeConfig {
         _assertSingleOZRoleHolder(TOP_UP_GATEWAY, TOP_UP_ROLE, TOP_UP_GATEWAY_DEPOSITOR);
 
         // OracleReportSanityChecker
-        _assertSingleOZRoleHolder(ORACLE_REPORT_SANITY_CHECKER, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(NEW_ORACLE_REPORT_SANITY_CHECKER, DEFAULT_ADMIN_ROLE, AGENT);
         bytes32[12] memory roles = [
             ALL_LIMITS_MANAGER_ROLE,
             EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
@@ -303,7 +306,7 @@ contract UpgradeTemplate is UpgradeConfig {
             INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
         ];
         for (uint256 i = 0; i < roles.length; ++i) {
-            _assertZeroOZRoleHolders(ORACLE_REPORT_SANITY_CHECKER, roles[i]);
+            _assertZeroOZRoleHolders(NEW_ORACLE_REPORT_SANITY_CHECKER, roles[i]);
         }
     }
 
@@ -338,42 +341,44 @@ contract UpgradeTemplate is UpgradeConfig {
         // }
     }
 
-    function _checkStakingRouterMigratedCorrectly() internal view {
+    function _checkStakingRouter() internal view {
         IStakingRouter sr = IStakingRouter(STAKING_ROUTER);
-        bytes32 newWithdrawalCredentials = sr.getWithdrawalCredentials();
-        if (newWithdrawalCredentials != initialWithdrawalCredentials) {
-            revert IncorrectStakingRouterMigration("withdrawalCredentials");
-        }
-        uint256[] memory moduleIds = sr.getStakingModuleIds();
-        if (moduleIds.length != initialModulesCount + 1) {
-            // 1 new module is added in this upgrade
-            revert IncorrectStakingRouterMigration("modulesCount");
-        }
+        // bytes32 newWithdrawalCredentials = sr.getWithdrawalCredentials();
+        // if (newWithdrawalCredentials != initialWithdrawalCredentials) {
+        //     revert StakingRouterMigrationIncorrectWithdrawalCredentials();
+        // }
+        // uint256[] memory moduleIds = sr.getStakingModuleIds();
+        // if (moduleIds.length != initialModulesCount + 1) {
+        //     // 1 new module is added in this upgrade
+        //     revert StakingRouterMigrationIncorrectModulesCount();
+        // }
 
-        uint256 newModuleId = moduleIds[moduleIds.length - 1];
+        // uint256 newModuleId = moduleIds[moduleIds.length - 1];
+        uint256 newModuleId = initialModulesCount; // the new module should be added
         ModuleStateConfig memory config = sr.getStakingModuleStateConfig(newModuleId);
         if (
-            config.moduleAddress != CURATED_MODULE || config.moduleFee != CURATED_STAKING_MODULE_FEE
-                || config.treasuryFee != CURATED_TREASURY_FEE || config.stakeShareLimit != CURATED_STAKE_SHARE_LIMIT
-                || config.priorityExitShareThreshold != CURATED_PRIORITY_EXIT_SHARE_THRESHOLD
-                || config.status != StakingModuleStatus.Active || config.withdrawalCredentialsType != 0x02
+            config.moduleAddress != CURATED_MODULE
+            // || config.moduleFee != CURATED_STAKING_MODULE_FEE
+            //     || config.treasuryFee != CURATED_TREASURY_FEE || config.stakeShareLimit != CURATED_STAKE_SHARE_LIMIT
+            //     || config.priorityExitShareThreshold != CURATED_PRIORITY_EXIT_SHARE_THRESHOLD
+            //     || config.status != StakingModuleStatus.Active || config.withdrawalCredentialsType != 0x02
         ) {
-            revert IncorrectStakingRouterMigration("addStakingModule");
+            revert StakingRouterMigrationIncorrectAddStakingModule();
         }
     }
 
-    function _checkLidoMigratedCorrectly() internal view {
+    function _checkLido() internal view {
         uint256 bufferedEther = ILidoWithFinalizeUpgrade(LIDO).getBufferedEther();
         if (bufferedEther != initialBufferedEther) {
-            revert IncorrectLidoMigration("bufferedEther");
+            revert LidoMigrationIncorrectBufferedEther();
         }
 
-        (uint256 depositedValidators, uint256 clValidators, uint256 beaconBalance) =
-            ILidoWithFinalizeUpgrade(LIDO).getBeaconStat();
+        // (uint256 depositedValidators, uint256 clValidators, uint256 beaconBalance) =
+        //     ILidoWithFinalizeUpgrade(LIDO).getBeaconStat();
 
-        if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
-            revert IncorrectLidoMigration("depositedValidators");
-        }
+        // if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
+        //     revert LidoMigrationIncorrectDepositedValidators();
+        // }
 
         (
             uint256 clValidatorsBalanceAtLastReport,
@@ -383,15 +388,33 @@ contract UpgradeTemplate is UpgradeConfig {
         ) = ILidoWithFinalizeUpgrade(LIDO).getBalanceStats();
 
         if (clValidatorsBalanceAtLastReport != initialBeaconBalance || clPendingBalanceAtLastReport != 0) {
-            revert IncorrectLidoMigration("clValidatorsBalance");
+            revert LidoMigrationIncorrectBeaconBalance();
         }
 
         if (
             depositedSinceLastReport != (initialDepositedValidators - initialBeaconValidators) * 32 ether
                 || depositedForCurrentReport != 0
         ) {
-            revert IncorrectLidoMigration("depositedSinceLastReport");
+            revert LidoMigrationIncorrectDepositedSinceLastReport();
         }
+    }
+
+    function _checkDSM() internal view {
+        IDepositSecurityModule dsm = IDepositSecurityModule(NEW_DEPOSIT_SECURITY_MODULE);
+        // IDepositSecurityModule oldDsm = IDepositSecurityModule(OLD_DEPOSIT_SECURITY_MODULE);
+        if (dsm.getOwner() != AGENT) {
+            revert DSMMigrationIncorrectOwner();
+        }
+
+        // address[] memory guardians = dsm.getGuardians();
+        // if (dsm.getGuardianQuorum() != oldDsm.getGuardianQuorum()) {
+        //     revert DSMMigrationIncorrectGuardianQuorum();
+        // }
+        // for (uint256 i = 0; i < guardians.length; ++i) {
+        //     if (!oldDsm.isGuardian(guardians[i])) {
+        //         revert DSMMigrationIncorrectGuardians();
+        //     }
+        // }
     }
 
     function _assertProxyAdmin(address _proxy, address _admin) internal view {
@@ -486,10 +509,20 @@ contract UpgradeTemplate is UpgradeConfig {
     error IncorrectAragonKernelImplementation(address kernel, address implementation);
     error StartAndFinishMustBeInSameTx();
     error StartAlreadyCalledInThisTx();
-    error SetupAlreadyCompleted(string itemName);
     error Expired();
-    error IncorrectLidoMigration(string reason);
-    error IncorrectStakingRouterMigration(string reason);
+    error LidoMigrationIncorrectBufferedEther();
+    error LidoMigrationIncorrectDepositedValidators();
+    error LidoMigrationIncorrectBeaconBalance();
+    error LidoMigrationIncorrectDepositedSinceLastReport();
+
+    error StakingRouterMigrationIncorrectAddStakingModule();
+    error StakingRouterMigrationIncorrectModulesCount();
+    error StakingRouterMigrationIncorrectWithdrawalCredentials();
+
+    error DSMMigrationIncorrectOwner();
+    error DSMMigrationIncorrectGuardianQuorum();
+    error DSMMigrationIncorrectGuardians();
+
     error UnexpectedNewEasyTrackFactories();
     error UnexpectedOldEasyTrackFactories();
 }

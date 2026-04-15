@@ -7,6 +7,9 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 import {StakingModuleConfig} from "contracts/0.8.25/sr/SRTypes.sol";
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 import {UpgradeTemplate} from "./UpgradeTemplate.sol";
+import {CallsScriptBuilder} from "./utils/CallScriptBuilder.sol";
+import {IDualGovernance, ExternalCall} from "./interfaces/IDualGovernance.sol";
+import {IForwarder} from "./interfaces/IForwarder.sol";
 
 import {
     ITimeConstraints,
@@ -40,15 +43,19 @@ import {
 /// @notice Script for upgrading Lido protocol components
 contract UpgradeVoteScript is OmnibusBase {
     using Strings for uint256;
+    using CallsScriptBuilder for CallsScriptBuilder.Context;
 
+    error InvalidItemsCount(uint256 actual, uint256 expected);
     //
     // Constants
     //
     // TODO set upon finish with items
-    uint256 internal constant DG_ITEMS_COUNT = 68;
-    uint256 public constant VOTING_ITEMS_COUNT = 11;
+    uint256 internal constant DG_ITEMS_COUNT = 67;
+    uint256 public constant VOTING_ITEMS_COUNT = 9;
 
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
+    bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+
     bytes32 internal constant REPORT_EL_REWARDS_STEALING_PENALTY_ROLE =
         keccak256("REPORT_EL_REWARDS_STEALING_PENALTY_ROLE");
     bytes32 internal constant SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE =
@@ -77,6 +84,7 @@ contract UpgradeVoteScript is OmnibusBase {
     // Immutables
     //
     address public immutable TEMPLATE;
+    address public immutable AGENT;
     address public immutable TIME_CONSTRAINTS;
     uint32 public immutable ENABLED_DAY_SPAN_START; // = 50400; // 14:00 UTC
     uint32 public immutable ENABLED_DAY_SPAN_END; // = 82800; // 23:00 UTC
@@ -95,6 +103,7 @@ contract UpgradeVoteScript is OmnibusBase {
         )
     {
         TEMPLATE = _params.upgradeTemplate;
+        AGENT = UpgradeTemplate(_params.upgradeTemplate).AGENT();
         TIME_CONSTRAINTS = _params.timeConstraints;
         ENABLED_DAY_SPAN_START = _params.enabledDaySpanStart; // e.g. 50400 = 14:00 UTC
         ENABLED_DAY_SPAN_END = _params.enabledDaySpanEnd; // e.g. 82800 = 23:00 UTC
@@ -110,12 +119,13 @@ contract UpgradeVoteScript is OmnibusBase {
         address easyTrack = g.easyTrack;
         (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = template.getEasyTrackConfig();
 
+        // Delete old EasyTrack Factories
+        // items[i++] = _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
+        // items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, o.CSMSetVettedGateTree);
+
         //
         // Add new EasyTrack Factories
         //
-        items[i++] =
-            _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
-        items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, o.CSMSetVettedGateTree);
 
         {
             CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
@@ -191,6 +201,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 bytes.concat(bytes20(c.metaRegistry), bytes4(IMetaRegistry.createOrUpdateOperatorGroup.selector))
             );
         }
+        if (i != VOTING_ITEMS_COUNT) revert InvalidItemsCount(i, VOTING_ITEMS_COUNT);
         assert(i == VOTING_ITEMS_COUNT);
 
         //  start from `2` as `1` is reserved for DG submission item
@@ -199,7 +210,53 @@ contract UpgradeVoteScript is OmnibusBase {
 
     /// @dev DG voting items
     function getVoteItems() public view override returns (VoteItem[] memory) {
-        VoteItem[] memory items = new VoteItem[](DG_ITEMS_COUNT);
+        return _wrapItemsPrefixNumberForward(_getVoteItems(), AGENT, 1, 1);
+    }
+
+    function getAgentScriptCall() public view returns (bytes memory) {
+        VoteItem[] memory voteItems = _getVoteItems();
+        // CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
+        CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
+        for (uint256 i = 0; i < voteItems.length; ++i) {
+            scriptBuilder.addCall(voteItems[i].call.to, voteItems[i].call.data);
+        }
+        return scriptBuilder.getResult();
+
+        // return _votingCall(agent, abi.encodeCall(IForwarder.forward, scriptBuilder.getResult()));
+    }
+
+    function getEVMScript2(string memory proposalMetadata) public view returns (bytes memory) {
+        ExternalCall[] memory dgCalls = new ExternalCall[](1);
+        dgCalls[0] =
+            ExternalCall({target: AGENT, value: 0, payload: abi.encodeCall(IForwarder.forward, getAgentScriptCall())});
+
+        CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
+
+        scriptBuilder.addCall(
+            address(DUAL_GOVERNANCE), abi.encodeCall(IDualGovernance.submitProposal, (dgCalls, proposalMetadata))
+        );
+
+        VoteItem[] memory votingVoteItems = this.getVotingVoteItems();
+        for (uint256 i = 0; i < votingVoteItems.length; i++) {
+            scriptBuilder.addCall(votingVoteItems[i].call.to, votingVoteItems[i].call.data);
+        }
+
+        return scriptBuilder.getResult();
+    }
+
+    function getNewVoteCallBytecode2(string memory description, string memory proposalMetadata)
+        external
+        view
+        returns (bytes memory)
+    {
+        return CallsScriptBuilder.create(
+                address(VOTING_CONTRACT),
+                abi.encodeCall(VOTING_CONTRACT.newVote, (getEVMScript2(proposalMetadata), description, false, false))
+            ).getResult();
+    }
+
+    function _getVoteItems() internal view returns (VoteItem[] memory items) {
+        items = new VoteItem[](DG_ITEMS_COUNT);
         uint256 i = 0;
 
         UpgradeTemplate template = UpgradeTemplate(TEMPLATE);
@@ -267,6 +324,22 @@ contract UpgradeVoteScript is OmnibusBase {
                 to: g.stakingRouter,
                 role: STAKING_MODULE_SHARE_MANAGE_ROLE,
                 account: evmScriptExecutor
+            });
+
+            /// @notice revoke STAKING_MODULE_UNVETTING_ROLE from old DSM
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke STAKING_MODULE_UNVETTING_ROLE from old DSM",
+                to: g.stakingRouter,
+                role: STAKING_MODULE_UNVETTING_ROLE,
+                account: c.oldDepositSecurityModule
+            });
+
+            /// @notice grant STAKING_MODULE_UNVETTING_ROLE to new DSM
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant STAKING_MODULE_UNVETTING_ROLE to new DSM",
+                to: g.stakingRouter,
+                role: STAKING_MODULE_UNVETTING_ROLE,
+                account: c.newDepositSecurityModule
             });
 
             /// @notice updating AccountingOracle implementation
@@ -721,10 +794,10 @@ contract UpgradeVoteScript is OmnibusBase {
             data: abi.encodeCall(UpgradeTemplate.finishUpgrade, ())
         });
 
+        if (i != DG_ITEMS_COUNT) revert InvalidItemsCount(i, DG_ITEMS_COUNT);
         assert(i == DG_ITEMS_COUNT);
 
         // set prefix to `1`, so all item's description will transform to `1.N. Description...`
-        return _wrapItemsPrefixNumberForward(items, agent, 1, 1);
     }
 
     //

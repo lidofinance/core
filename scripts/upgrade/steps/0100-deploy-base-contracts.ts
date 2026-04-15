@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { IGateSealFactory, IOracleReportSanityChecker_preV4, LidoLocator } from "typechain-types";
+import { DepositSecurityModule, IGateSealFactory, IOracleReportSanityChecker_preV4, LidoLocator } from "typechain-types";
 
 import { findEventsWithInterfaces } from "lib";
 import { loadContract } from "lib/contract";
@@ -135,13 +135,15 @@ export async function main() {
   //
   // Deploy  DepositSecurityModule
   //
-  const depositSecurityModule = await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
+  const depositSecurityModule_ = await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
     lidoAddress,
     depositContractAddress,
     stakingRouterAddress,
     parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
     parameters.depositSecurityModule.maxOperatorsPerUnvetting,
   ]);
+  const depositSecurityModule = await loadContract<DepositSecurityModule>("DepositSecurityModule", depositSecurityModule_.address);
+  await depositSecurityModule.setOwner(tempAdmin.address);
 
   //
   // Deploy OracleReportSanityChecker
@@ -330,8 +332,8 @@ export async function main() {
       parameters.consolidationMigrator.committee,
       consolidationBus.address,
       consolidationGateSealAddress,
-      topUpGateway.address,
       parameters.topUpGateway.depositor,
+      await locator.depositSecurityModule(),
     ],
     {
       from: deployer,

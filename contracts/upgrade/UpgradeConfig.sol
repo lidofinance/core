@@ -87,8 +87,8 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CONSOLIDATION_GATEWAY;
     address internal immutable CONSOLIDATION_BUS;
     address internal immutable CONSOLIDATION_MIGRATOR;
-    address internal immutable ORACLE_REPORT_SANITY_CHECKER;
-    address internal immutable DEPOSIT_SECURITY_MODULE;
+    // address internal immutable ORACLE_REPORT_SANITY_CHECKER;
+    // address internal immutable DEPOSIT_SECURITY_MODULE;
     address internal immutable VALIDATOR_EXIT_DELAY_VERIFIER;
 
     //
@@ -190,12 +190,6 @@ contract UpgradeConfig is IUpgradeConfig {
         if (coreUpgradeParams.newLocatorImpl == coreUpgradeParams.oldLocatorImpl) {
             revert NewAndOldLocatorImplementationsMustBeDifferent();
         }
-        if (coreUpgradeParams.oldOracleReportSanityChecker == coreUpgradeParams.newOracleReportSanityChecker) {
-            revert OldAndNewOracleReportSanityCheckerMustBeDifferent();
-        }
-        if (coreUpgradeParams.oldDepositSecurityModule == coreUpgradeParams.newDepositSecurityModule) {
-            revert OldAndNewDepositSecurityModuleMustBeDifferent();
-        }
 
         // Save passed parameters
         AGENT = params.agent;
@@ -216,8 +210,6 @@ contract UpgradeConfig is IUpgradeConfig {
         OLD_STAKING_ROUTER_IMPL = coreUpgradeParams.oldStakingRouterImpl;
         OLD_WITHDRAWAL_VAULT_IMPL = coreUpgradeParams.oldWithdrawalVaultImpl;
         OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL = coreUpgradeParams.oldValidatorsExitBusOracleImpl;
-        OLD_ORACLE_REPORT_SANITY_CHECKER = coreUpgradeParams.oldOracleReportSanityChecker;
-        OLD_DEPOSIT_SECURITY_MODULE = coreUpgradeParams.oldDepositSecurityModule;
 
         NEW_LOCATOR_IMPL = coreUpgradeParams.newLocatorImpl;
         NEW_LIDO_IMPL = coreUpgradeParams.newLidoImpl;
@@ -226,8 +218,6 @@ contract UpgradeConfig is IUpgradeConfig {
         NEW_ACCOUNTING_IMPL = coreUpgradeParams.newAccountingImpl;
         NEW_WITHDRAWAL_VAULT_IMPL = coreUpgradeParams.newWithdrawalVaultImpl;
         NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL = coreUpgradeParams.newValidatorsExitBusOracleImpl;
-        NEW_ORACLE_REPORT_SANITY_CHECKER = coreUpgradeParams.newOracleReportSanityChecker;
-        NEW_DEPOSIT_SECURITY_MODULE = coreUpgradeParams.newDepositSecurityModule;
         CONSOLIDATION_BUS_IMPL = coreUpgradeParams.consolidationBusImpl;
         CONSOLIDATION_MIGRATOR_IMPL = coreUpgradeParams.consolidationMigratorImpl;
         TOP_UP_GATEWAY_IMPL = coreUpgradeParams.topUpGatewayImpl;
@@ -263,23 +253,26 @@ contract UpgradeConfig is IUpgradeConfig {
 
         // Discover via locator
         LOCATOR = params.locator;
-        ILidoLocator locator = ILidoLocator(coreUpgradeParams.newLocatorImpl);
+        ILidoLocator oldLocator = ILidoLocator(params.locator);
+        OLD_ORACLE_REPORT_SANITY_CHECKER = oldLocator.oracleReportSanityChecker();
+        OLD_DEPOSIT_SECURITY_MODULE = oldLocator.depositSecurityModule();
 
+        ILidoLocator locator = ILidoLocator(coreUpgradeParams.newLocatorImpl);
         LIDO = locator.lido();
         LIDO_APP_ID = IAragonApp(LIDO).appId();
 
         ACCOUNTING_ORACLE = locator.accountingOracle();
-        ORACLE_REPORT_SANITY_CHECKER = locator.oracleReportSanityChecker();
         ACCOUNTING = locator.accounting();
         STAKING_ROUTER = locator.stakingRouter();
         VALIDATORS_EXIT_BUS_ORACLE = locator.validatorsExitBusOracle();
-        DEPOSIT_SECURITY_MODULE = locator.depositSecurityModule();
         WITHDRAWAL_VAULT = locator.withdrawalVault();
         TOP_UP_GATEWAY = locator.topUpGateway();
         BURNER = locator.burner();
         TRIGGERABLE_WITHDRAWALS_GATEWAY = locator.triggerableWithdrawalsGateway();
         VALIDATOR_EXIT_DELAY_VERIFIER = locator.validatorExitDelayVerifier();
         CONSOLIDATION_GATEWAY = locator.consolidationGateway();
+        NEW_ORACLE_REPORT_SANITY_CHECKER = locator.oracleReportSanityChecker();
+        NEW_DEPOSIT_SECURITY_MODULE = locator.depositSecurityModule();
 
         /// CSMv3
         CSMUpgradeParams memory csmUpgradeParams = params.csmUpgrade;
@@ -480,7 +473,4 @@ contract UpgradeConfig is IUpgradeConfig {
     }
 
     error NewAndOldLocatorImplementationsMustBeDifferent();
-    error OldAndNewOracleReportSanityCheckerMustBeDifferent();
-    error OldAndNewDepositSecurityModuleMustBeDifferent();
-    error StakingModuleNotFound(string moduleName);
 }

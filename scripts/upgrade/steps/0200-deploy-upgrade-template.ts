@@ -57,8 +57,6 @@ export async function main() {
       oldStakingRouterImpl: await stakingRouterProxy.proxy__getImplementation(),
       oldWithdrawalVaultImpl: await withdrawalVaultProxy.implementation(),
       oldValidatorsExitBusOracleImpl: await validatorsExitBusOracleProxy.proxy__getImplementation(),
-      oldOracleReportSanityChecker: await locator.oracleReportSanityChecker(),
-      oldDepositSecurityModule: await locator.depositSecurityModule(),
 
       newLocatorImpl: state[Sk.lidoLocator].implementation.address,
       newLidoImpl: state[Sk.appLido].implementation.address,
@@ -67,8 +65,6 @@ export async function main() {
       newStakingRouterImpl: state[Sk.stakingRouter].implementation.address,
       newWithdrawalVaultImpl: state[Sk.withdrawalVault].implementation.address,
       newValidatorsExitBusOracleImpl: state[Sk.validatorsExitBusOracle].implementation.address,
-      newOracleReportSanityChecker: getAddress(Sk.oracleReportSanityChecker, state),
-      newDepositSecurityModule: getAddress(Sk.depositSecurityModule, state),
       consolidationBusImpl: state[Sk.consolidationBus].implementation.address,
       consolidationMigratorImpl: state[Sk.consolidationMigrator].implementation.address,
 
