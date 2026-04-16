@@ -66,6 +66,7 @@ export enum Sk {
   callsScript = "callsScript",
   vestingParams = "vestingParams",
   withdrawalVault = "withdrawalVault",
+  circuitBreaker = "circuitBreaker",
   gateSeal = "gateSeal",
   gateSealV3 = "gateSealV3",
   gateSealFactory = "gateSealFactory",
@@ -171,6 +172,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.ensFactory:
     case Sk.evmScriptRegistryFactory:
     case Sk.executionLayerRewardsVault:
+    case Sk.circuitBreaker:
     case Sk.gateSeal:
     case Sk.gateSealV3:
     case Sk.resealManager:

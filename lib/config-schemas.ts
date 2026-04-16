@@ -176,11 +176,14 @@ export const UpgradeParametersSchema = z.object({
   v3VoteScript: V3VoteScriptSchema,
 });
 
-// Gate seal schema (for scratch deployment)
-const GateSealSchema = z.object({
-  sealDuration: PositiveIntSchema,
-  expiryTimestamp: PositiveIntSchema,
-  sealingCommittee: z.array(EthereumAddressSchema),
+// CircuitBreaker schema (for scratch deployment)
+const CircuitBreakerSchema = z.object({
+  minPauseDuration: PositiveIntSchema,
+  maxPauseDuration: PositiveIntSchema,
+  minHeartbeatInterval: PositiveIntSchema,
+  maxHeartbeatInterval: PositiveIntSchema,
+  initialPauseDuration: PositiveIntSchema,
+  initialHeartbeatInterval: PositiveIntSchema,
 });
 
 // DAO schema
@@ -296,7 +299,7 @@ const LidoApmSchema = z.object({
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
-  gateSeal: GateSealSchema,
+  circuitBreaker: CircuitBreakerSchema,
   lidoApm: LidoApmSchema,
   dao: DaoSchema,
   vesting: VestingSchema,
