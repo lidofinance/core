@@ -65,6 +65,17 @@ export async function main() {
     };
   }
 
+  const consolidationMigratorSourceModuleId = process.env.CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID;
+  const consolidationMigratorTargetModuleId = process.env.CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID;
+
+  if (consolidationMigratorSourceModuleId || consolidationMigratorTargetModuleId) {
+    state.consolidationMigrator.deployParameters = {
+      ...state.consolidationMigrator.deployParameters,
+      ...(consolidationMigratorSourceModuleId && { sourceModuleId: parseInt(consolidationMigratorSourceModuleId) }),
+      ...(consolidationMigratorTargetModuleId && { targetModuleId: parseInt(consolidationMigratorTargetModuleId) }),
+    };
+  }
+
   // Initialize gas usage tracking
   state[Sk.scratchDeployGasUsed] = 0n.toString();
 
