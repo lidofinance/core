@@ -21,6 +21,8 @@ export async function main() {
   const withdrawalQueueBaseUri = getEnvVariable("WITHDRAWAL_QUEUE_BASE_URI", "");
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
   const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", "0x00000000");
+  const consolidationMigratorSourceModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID", "");
+  const consolidationMigratorTargetModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID", "");
 
   await resetStateFileFromDeployParams();
   const state = readNetworkState();
@@ -56,6 +58,12 @@ export async function main() {
       usePredefinedAddressInstead: ethers.getAddress(dsmPredefinedAddress),
     };
   }
+
+  state.consolidationMigrator.deployParameters = {
+    ...state.consolidationMigrator.deployParameters,
+    ...(consolidationMigratorSourceModuleId && { sourceModuleId: parseInt(consolidationMigratorSourceModuleId) }),
+    ...(consolidationMigratorTargetModuleId && { targetModuleId: parseInt(consolidationMigratorTargetModuleId) }),
+  };
 
   // Initialize gas usage tracking
   state[Sk.scratchDeployGasUsed] = 0n.toString();
