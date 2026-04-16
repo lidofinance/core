@@ -392,6 +392,7 @@ export const UpgradeParametersSchema = z.object({
   topUpGateway: TopUpGatewaySchema,
   stakingRouter: StakingRouterSchema,
   withdrawalVault: WithdrawalVaultSchema,
+  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
 
   // csm
   csmUpgrade: CSMUpgradeConfigSchema,
@@ -407,7 +408,6 @@ export const UpgradeParametersSchema = z.object({
   burner: BurnerSchema.optional(),
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
-  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema.optional(),
 });
 
 // Inferred types from zod schemas

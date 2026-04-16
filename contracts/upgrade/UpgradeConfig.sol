@@ -98,6 +98,9 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CURATED_MODULE_COMMITTEE;
     address internal immutable CONSOLIDATION_GATEWAY_GATE_SEAL;
     address internal immutable TOP_UP_GATEWAY_DEPOSITOR;
+    uint256 internal immutable TW_MAX_EXIT_REQUESTS_LIMIT;
+    uint256 internal immutable TW_EXITS_PER_FRAME;
+    uint256 internal immutable TW_FRAME_DURATION_IN_SEC;
 
     // -------- EasyTrack addresses --------
     //
@@ -222,6 +225,9 @@ contract UpgradeConfig is IUpgradeConfig {
         CURATED_MODULE_COMMITTEE = coreUpgradeParams.curatedModuleCommittee;
         CONSOLIDATION_GATEWAY_GATE_SEAL = coreUpgradeParams.consolidationGatewayGateSeal;
         TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
+        TW_MAX_EXIT_REQUESTS_LIMIT = coreUpgradeParams.twMaxExitRequestsLimit;
+        TW_EXITS_PER_FRAME = coreUpgradeParams.twExitsPerFrame;
+        TW_FRAME_DURATION_IN_SEC = coreUpgradeParams.twFrameDurationInSec;
 
         // EasyTrack new factories
         EasyTrackNewFactories memory newFactories = params.newFactories;
@@ -327,6 +333,7 @@ contract UpgradeConfig is IUpgradeConfig {
     function getGlobalConfig() external view returns (GlobalConfig memory) {
         return GlobalConfig({
             agent: AGENT,
+            lido: LIDO,
             burner: BURNER,
             resealManager: RESEAL_MANAGER,
             easyTrack: EASY_TRACK,
@@ -390,6 +397,7 @@ contract UpgradeConfig is IUpgradeConfig {
             // contracts
             accounting: ACCOUNTING,
             accountingOracle: ACCOUNTING_ORACLE,
+            validatorsExitBusOracle: VALIDATORS_EXIT_BUS_ORACLE,
             withdrawalVault: WITHDRAWAL_VAULT,
             consolidationGateway: CONSOLIDATION_GATEWAY,
             consolidationBus: CONSOLIDATION_BUS,
@@ -399,7 +407,11 @@ contract UpgradeConfig is IUpgradeConfig {
             lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
             consolidationGatewayGateSeal: CONSOLIDATION_GATEWAY_GATE_SEAL,
             curatedModuleCommittee: CURATED_MODULE_COMMITTEE,
-            topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR
+            topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
+            // twGateway limits
+            twMaxExitRequestsLimit: TW_MAX_EXIT_REQUESTS_LIMIT,
+            twExitsPerFrame: TW_EXITS_PER_FRAME,
+            twFrameDurationInSec: TW_FRAME_DURATION_IN_SEC
         });
     }
 

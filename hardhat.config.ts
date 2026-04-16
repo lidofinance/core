@@ -68,9 +68,11 @@ const config: HardhatUserConfig = {
     // local nodes
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
     },
     "local-devnet": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
       chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID || "32382", 10),
     },

@@ -125,7 +125,7 @@ export const newCombinedAragonVoting = async (
     throw new Error(`Transaction ${tx.hash} did not return a receipt`);
   }
   const voteId = await findEventsWithInterfaces(receipt, "StartVote", [voting.interface])[0].args.voteId;
-  log.success("New voteId:", voteId);
+  log.success("New voteId:", voteId, "gas used:", receipt.gasUsed.toString());
 
   return voteId;
 };

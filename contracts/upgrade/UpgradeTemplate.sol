@@ -13,6 +13,11 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 import {ModuleStateConfig, StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 import {
     UpgradeParameters,
+    GlobalConfig,
+    CoreUpgradeConfig,
+    CuratedModuleConfig,
+    EasyTrackNewFactories,
+    EasyTrackOldFactories,
     ILidoWithFinalizeUpgrade,
     IAccountingOracle,
     IWithdrawalsManagerProxy,
@@ -22,7 +27,8 @@ import {
     IWithdrawalVault,
     IWithdrawalsManagerProxy,
     IStakingRouter,
-    IDepositSecurityModule
+    IDepositSecurityModule,
+    IValidatorsExitBusOracle
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
@@ -34,7 +40,7 @@ import {UpgradeConfig} from "./UpgradeConfig.sol";
  *   - `startUpgrade()` before upgrading LidoLocator and before everything else
  *   - `finishUpgrade()` as the last step of the upgrade
  */
-contract UpgradeTemplate is UpgradeConfig {
+contract UpgradeTemplate {
     //
     // Events
     //
@@ -92,7 +98,7 @@ contract UpgradeTemplate is UpgradeConfig {
 
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_STAKING_ROUTER_VERSION = 4;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 4;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 6;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 6;
     uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION = 5;
     uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
@@ -102,6 +108,10 @@ contract UpgradeTemplate is UpgradeConfig {
     // Initial value of upgradeBlockNumber storage variable
     uint256 public constant UPGRADE_NOT_STARTED = 0;
     uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
+
+    // Upgrade config (self deployed internal contract)
+    UpgradeConfig public immutable CONFIG;
+    address public immutable AGENT;
 
     // Timestamp since which startUpgrade()
     // This behavior is introduced to disarm the template if the upgrade voting creation or enactment
@@ -122,10 +132,10 @@ contract UpgradeTemplate is UpgradeConfig {
     uint256 internal initialDepositedValidators;
     uint256 internal initialBeaconValidators;
     uint256 internal initialBeaconBalance;
-    // bytes32 internal initialWithdrawalCredentials;
+    bytes32 internal initialWithdrawalCredentials;
     uint256 internal initialModulesCount;
-    // address[] internal initialDSMGuardians;
-    // uint256 internal initialDSMGuardianQuorum;
+    address[] internal initialDSMGuardians;
+    uint256 internal initialDSMGuardianQuorum;
 
     //
     // Slots for transient storage
@@ -137,13 +147,20 @@ contract UpgradeTemplate is UpgradeConfig {
 
     /// @param _params Params required to initialize the addresses contract
     /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
-    constructor(UpgradeParameters memory _params, uint256 _expireSinceInclusive) UpgradeConfig(_params) {
+    constructor(UpgradeParameters memory _params, uint256 _expireSinceInclusive) {
+        UpgradeConfig config = new UpgradeConfig(_params);
+        CONFIG = config;
+        AGENT = config.AGENT();
         EXPIRE_SINCE_INCLUSIVE = _expireSinceInclusive;
     }
 
     /// @notice Must be called before LidoLocator is upgraded
     function startUpgrade() external {
-        if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
+        UpgradeConfig config = UpgradeConfig(CONFIG);
+        GlobalConfig memory g = config.getGlobalConfig();
+        CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
+
+        if (msg.sender != g.agent) revert OnlyAgentCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
         if (_isStartCalledInThisTx()) revert StartAlreadyCalledInThisTx();
@@ -152,34 +169,44 @@ contract UpgradeTemplate is UpgradeConfig {
         assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
         upgradeBlockNumber = block.number;
 
-        initialBufferedEther = ILidoWithFinalizeUpgrade(LIDO).getBufferedEther();
+        initialBufferedEther = ILidoWithFinalizeUpgrade(g.lido).getBufferedEther();
         (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) =
-            ILidoWithFinalizeUpgrade(LIDO).getBeaconStat();
+            ILidoWithFinalizeUpgrade(g.lido).getBeaconStat();
 
-        IStakingRouter sr = IStakingRouter(STAKING_ROUTER);
-        // initialWithdrawalCredentials = sr.getWithdrawalCredentials();
+        IStakingRouter sr = IStakingRouter(g.stakingRouter);
+        initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
 
-        // initialDSMGuardians = IDepositSecurityModule(OLD_DEPOSIT_SECURITY_MODULE).getGuardians();
-        // initialDSMGuardianQuorum = IDepositSecurityModule(OLD_DEPOSIT_SECURITY_MODULE).getGuardianQuorum();
+        initialDSMGuardians = IDepositSecurityModule(c.oldDepositSecurityModule).getGuardians();
+        initialDSMGuardianQuorum = IDepositSecurityModule(c.oldDepositSecurityModule).getGuardianQuorum();
 
-        _assertPreUpgradeState();
+        _assertPreUpgradeState(g, c);
 
         emit UpgradeStarted();
     }
 
     function finishUpgrade() external {
-        if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
+        UpgradeConfig config = UpgradeConfig(CONFIG);
+        GlobalConfig memory g = config.getGlobalConfig();
+        CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
+
+        if (msg.sender != g.agent) revert OnlyAgentCanUpgrade();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
         if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
 
         isUpgradeFinished = true;
 
-        ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v4();
-        IWithdrawalVault(WITHDRAWAL_VAULT).finalizeUpgrade_v3();
-        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v5(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
+        ILidoWithFinalizeUpgrade(g.lido).finalizeUpgrade_v4();
+        IWithdrawalVault(c.withdrawalVault).finalizeUpgrade_v3();
+        IAccountingOracle(c.accountingOracle).finalizeUpgrade_v5(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
+        // TODO
+        // IValidatorsExitBusOracle(VALIDATORS_EXIT_BUS_ORACLE)
+        //     .finalizeUpgrade_v3(
+        //         // maxValidatorsPerReport, maxExitBalanceEth, balancePerFrameEth, frameDurationInSec, consensusVersion
+        //        0,0,0,0,0
+        //     );
 
-        _assertPostUpgradeState();
+        _assertPostUpgradeState(g, c);
 
         emit UpgradeFinished();
     }
@@ -188,20 +215,20 @@ contract UpgradeTemplate is UpgradeConfig {
     // Assertions
     //
 
-    function _assertPreUpgradeState() internal view {
+    function _assertPreUpgradeState(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
         // Check initial implementations of the proxies to be upgraded
-        _assertAragonKernelImplementation(IAragonKernel(KERNEL), OLD_LIDO_IMPL);
+        _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.oldLidoImpl);
 
-        _assertProxyImplementation(LOCATOR, OLD_LOCATOR_IMPL);
-        _assertProxyImplementation(ACCOUNTING, OLD_ACCOUNTING_IMPL);
-        _assertProxyImplementation(ACCOUNTING_ORACLE, OLD_ACCOUNTING_ORACLE_IMPL);
-        _assertProxyImplementation(STAKING_ROUTER, OLD_STAKING_ROUTER_IMPL);
-        _assertProxyImplementation(VALIDATORS_EXIT_BUS_ORACLE, OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL);
+        _assertProxyImplementation(c.locator, c.oldLocatorImpl);
+        _assertProxyImplementation(c.accounting, c.oldAccountingImpl);
+        _assertProxyImplementation(c.accountingOracle, c.oldAccountingOracleImpl);
+        _assertProxyImplementation(g.stakingRouter, c.oldStakingRouterImpl);
+        _assertProxyImplementation(c.validatorsExitBusOracle, c.oldValidatorsExitBusOracleImpl);
 
-        _assertWithdrawalsManagerProxyImplementation(WITHDRAWAL_VAULT, OLD_WITHDRAWAL_VAULT_IMPL);
+        _assertWithdrawalsManagerProxyImplementation(c.withdrawalVault, c.oldWithdrawalVaultImpl);
     }
 
-    function _assertPostUpgradeState() internal view {
+    function _assertPostUpgradeState(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
         // if (
         //     ILidoWithFinalizeUpgrade(LIDO).getTotalShares() != initialTotalShares
         //         || ILidoWithFinalizeUpgrade(LIDO).getTotalPooledEther() != initialTotalPooledEther
@@ -209,88 +236,91 @@ contract UpgradeTemplate is UpgradeConfig {
         //     revert TotalSharesOrPooledEtherChanged();
         // }
 
-        _assertAragonKernelImplementation(IAragonKernel(KERNEL), NEW_LIDO_IMPL);
+        _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.newLidoImpl);
 
-        _assertProxyImplementation(LOCATOR, NEW_LOCATOR_IMPL);
-        _assertProxyImplementation(ACCOUNTING, NEW_ACCOUNTING_IMPL);
-        _assertProxyImplementation(ACCOUNTING_ORACLE, NEW_ACCOUNTING_ORACLE_IMPL);
-        _assertProxyImplementation(STAKING_ROUTER, NEW_STAKING_ROUTER_IMPL);
-        _assertProxyImplementation(VALIDATORS_EXIT_BUS_ORACLE, NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL);
+        _assertProxyImplementation(c.locator, c.newLocatorImpl);
+        _assertProxyImplementation(c.accounting, c.newAccountingImpl);
+        _assertProxyImplementation(c.accountingOracle, c.newAccountingOracleImpl);
+        _assertProxyImplementation(g.stakingRouter, c.newStakingRouterImpl);
+        _assertProxyImplementation(c.validatorsExitBusOracle, c.newValidatorsExitBusOracleImpl);
 
-        _assertWithdrawalsManagerProxyImplementation(WITHDRAWAL_VAULT, NEW_WITHDRAWAL_VAULT_IMPL);
+        _assertWithdrawalsManagerProxyImplementation(c.withdrawalVault, c.newWithdrawalVaultImpl);
 
-        _assertProxyImplementation(CONSOLIDATION_BUS, CONSOLIDATION_BUS_IMPL);
-        _assertProxyImplementation(CONSOLIDATION_MIGRATOR, CONSOLIDATION_MIGRATOR_IMPL);
-        _assertProxyImplementation(TOP_UP_GATEWAY, TOP_UP_GATEWAY_IMPL);
+        _assertProxyImplementation(c.consolidationBus, c.consolidationBusImpl);
+        _assertProxyImplementation(c.consolidationMigrator, c.consolidationMigratorImpl);
+        _assertProxyImplementation(c.topUpGateway, c.topUpGatewayImpl);
 
-        _assertContractVersion(LIDO, EXPECTED_FINAL_LIDO_VERSION);
-        _assertContractVersion(ACCOUNTING_ORACLE, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
-        _assertContractVersion(WITHDRAWAL_VAULT, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
+        _assertContractVersion(g.lido, EXPECTED_FINAL_LIDO_VERSION);
+        _assertContractVersion(c.accountingOracle, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
+        _assertContractVersion(c.withdrawalVault, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
 
         // TODO uncomment for testnet/mainnet
-        // _assertEasyTrackFactories();
+        _assertEasyTrackFactories(g, c);
 
-        _assertFinalACL();
+        _assertFinalACL(g, c);
 
-        _checkStakingRouter();
-        _checkLido();
-        _checkDSM();
+        _checkSR(g, c);
+        _checkLido(g, c);
+        _checkDSM(g, c);
     }
 
-    function _assertFinalACL() internal view {
+    function _assertFinalACL(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+        address agent = g.agent;
+        // address resealManager = g.resealManager;
+        address stakingRouter = g.stakingRouter;
         // Accounting
-        _assertProxyAdmin(ACCOUNTING, AGENT);
-        _assertSingleOZRoleHolder(ACCOUNTING, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertProxyAdmin(c.accounting, agent);
+        _assertSingleOZRoleHolder(c.accounting, DEFAULT_ADMIN_ROLE, agent);
 
         // AccountingOracle
-        _assertProxyAdmin(ACCOUNTING_ORACLE, AGENT);
-        _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertProxyAdmin(c.accountingOracle, agent);
+        _assertSingleOZRoleHolder(c.accountingOracle, DEFAULT_ADMIN_ROLE, agent);
 
         // StakingRouter
-        _assertProxyAdmin(STAKING_ROUTER, AGENT);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_MANAGE_ROLE, AGENT);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_UNVETTING_ROLE, NEW_DEPOSIT_SECURITY_MODULE);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, ACCOUNTING);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_EXITED_VALIDATORS_ROLE, ACCOUNTING_ORACLE);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_VALIDATOR_EXITING_STATUS_ROLE, VALIDATOR_EXIT_DELAY_VERIFIER);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE, TRIGGERABLE_WITHDRAWALS_GATEWAY);
-        _assertSingleOZRoleHolder(STAKING_ROUTER, STAKING_MODULE_SHARE_MANAGE_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
-        _assertZeroOZRoleHolders(STAKING_ROUTER, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
-        _assertZeroOZRoleHolders(STAKING_ROUTER, UNSAFE_SET_EXITED_VALIDATORS_ROLE);
+        _assertProxyAdmin(stakingRouter, agent);
+        _assertSingleOZRoleHolder(stakingRouter, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_MANAGE_ROLE, agent);
+        _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_UNVETTING_ROLE, c.newDepositSecurityModule);
+        _assertSingleOZRoleHolder(stakingRouter, REPORT_REWARDS_MINTED_ROLE, c.accounting);
+        _assertSingleOZRoleHolder(stakingRouter, REPORT_EXITED_VALIDATORS_ROLE, c.accountingOracle);
+        _assertSingleOZRoleHolder(stakingRouter, REPORT_VALIDATOR_EXITING_STATUS_ROLE, c.validatorsExitBusOracle);
+        _assertSingleOZRoleHolder(stakingRouter, REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE, c.withdrawalVault);
+        _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_SHARE_MANAGE_ROLE, g.easyTrackEVMScriptExecutor);
+        _assertZeroOZRoleHolders(stakingRouter, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
+        _assertZeroOZRoleHolders(stakingRouter, UNSAFE_SET_EXITED_VALIDATORS_ROLE);
 
         // ValidatorsExitBusOracle
-        _assertProxyAdmin(VALIDATORS_EXIT_BUS_ORACLE, AGENT);
-        _assertSingleOZRoleHolder(VALIDATORS_EXIT_BUS_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertProxyAdmin(c.validatorsExitBusOracle, agent);
+        _assertSingleOZRoleHolder(c.validatorsExitBusOracle, DEFAULT_ADMIN_ROLE, agent);
 
         // WithdrawalVault
-        _assertWithdrawalsManagerProxyAdmin(WITHDRAWAL_VAULT, AGENT);
+        _assertWithdrawalsManagerProxyAdmin(c.withdrawalVault, agent);
 
         // Consolidation rollout
-        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertTwoOZRoleHolders(CONSOLIDATION_GATEWAY, PAUSE_ROLE, CONSOLIDATION_GATEWAY_GATE_SEAL, RESEAL_MANAGER);
-        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, RESUME_ROLE, RESEAL_MANAGER);
+        _assertSingleOZRoleHolder(c.consolidationGateway, DEFAULT_ADMIN_ROLE, agent);
+        _assertTwoOZRoleHolders(c.consolidationGateway, PAUSE_ROLE, c.consolidationGatewayGateSeal, g.resealManager);
+        _assertSingleOZRoleHolder(c.consolidationGateway, RESUME_ROLE, g.resealManager);
 
-        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, ADD_CONSOLIDATION_REQUEST_ROLE, CONSOLIDATION_BUS);
-        _assertSingleOZRoleHolder(CONSOLIDATION_GATEWAY, PAUSE_ROLE, CONSOLIDATION_GATEWAY_GATE_SEAL);
+        _assertSingleOZRoleHolder(c.consolidationGateway, ADD_CONSOLIDATION_REQUEST_ROLE, c.consolidationBus);
+        _assertSingleOZRoleHolder(c.consolidationGateway, PAUSE_ROLE, c.consolidationGatewayGateSeal);
 
-        _assertProxyAdmin(CONSOLIDATION_BUS, AGENT);
-        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, PUBLISH_ROLE, CONSOLIDATION_MIGRATOR);
-        _assertSingleOZRoleHolder(CONSOLIDATION_BUS, REMOVE_ROLE, AGENT);
+        _assertProxyAdmin(c.consolidationBus, agent);
+        _assertSingleOZRoleHolder(c.consolidationBus, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(c.consolidationBus, PUBLISH_ROLE, c.consolidationMigrator);
+        _assertSingleOZRoleHolder(c.consolidationBus, REMOVE_ROLE, agent);
 
-        _assertProxyAdmin(CONSOLIDATION_MIGRATOR, AGENT);
-        _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, ALLOW_PAIR_ROLE, EASY_TRACK_EVM_SCRIPT_EXECUTOR);
-        _assertSingleOZRoleHolder(CONSOLIDATION_MIGRATOR, DISALLOW_PAIR_ROLE, CURATED_MODULE_COMMITTEE);
+        _assertProxyAdmin(c.consolidationMigrator, agent);
+        _assertSingleOZRoleHolder(c.consolidationMigrator, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(c.consolidationMigrator, ALLOW_PAIR_ROLE, g.easyTrackEVMScriptExecutor);
+        _assertSingleOZRoleHolder(c.consolidationMigrator, DISALLOW_PAIR_ROLE, c.curatedModuleCommittee);
 
         // TopUps
-        _assertProxyAdmin(TOP_UP_GATEWAY, AGENT);
-        _assertSingleOZRoleHolder(TOP_UP_GATEWAY, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(TOP_UP_GATEWAY, TOP_UP_ROLE, TOP_UP_GATEWAY_DEPOSITOR);
+        _assertProxyAdmin(c.topUpGateway, agent);
+        _assertSingleOZRoleHolder(c.topUpGateway, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(c.topUpGateway, TOP_UP_ROLE, c.topUpGatewayDepositor);
 
         // OracleReportSanityChecker
-        _assertSingleOZRoleHolder(NEW_ORACLE_REPORT_SANITY_CHECKER, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(c.newOracleReportSanityChecker, DEFAULT_ADMIN_ROLE, agent);
         bytes32[12] memory roles = [
             ALL_LIMITS_MANAGER_ROLE,
             EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
@@ -306,23 +336,24 @@ contract UpgradeTemplate is UpgradeConfig {
             INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
         ];
         for (uint256 i = 0; i < roles.length; ++i) {
-            _assertZeroOZRoleHolders(NEW_ORACLE_REPORT_SANITY_CHECKER, roles[i]);
+            _assertZeroOZRoleHolders(c.newOracleReportSanityChecker, roles[i]);
         }
     }
 
-    function _assertEasyTrackFactories() internal view {
-        IEasyTrack easyTrack = IEasyTrack(EASY_TRACK);
+    function _assertEasyTrackFactories(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+        (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = CONFIG.getEasyTrackConfig();
+        IEasyTrack easyTrack = IEasyTrack(g.easyTrack);
 
         address[9] memory newFactories = [
-            ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS,
-            ETF_NEW_ALLOW_CONSOLIDATION_PAIR,
-            ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CSM,
-            ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CSM,
-            ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CSM,
-            ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM,
-            ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM,
-            ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM,
-            ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP
+            n.UpdateStakingModuleShareLimits,
+            n.AllowConsolidationPair,
+            n.SetMerkleGateTreeForCSM,
+            n.ReportWithdrawalsForSlashedValidatorsForCSM,
+            n.SettleGeneralDelayedPenaltyForCSM,
+            n.SetMerkleGateTreeForCM,
+            n.ReportWithdrawalsForSlashedValidatorsForCM,
+            n.SettleGeneralDelayedPenaltyForCM,
+            n.CreateOrUpdateOperatorGroup
         ];
 
         for (uint256 i = 0; i < newFactories.length; ++i) {
@@ -331,8 +362,8 @@ contract UpgradeTemplate is UpgradeConfig {
             }
         }
 
-        // address[1] memory oldFactories =
-        //     [ETF_OLD_SETTLE_EL_STEALING_PENALTY];
+        // address[2] memory oldFactories =
+        //     [o.CSMSettleElStealingPenalty, o.CSMSetVettedGateTree];
 
         // for (uint256 i = 0; i < newFactories.length; ++i) {
         //     if (easyTrack.isEVMScriptFactory(newFactories[i])) {
@@ -341,51 +372,52 @@ contract UpgradeTemplate is UpgradeConfig {
         // }
     }
 
-    function _checkStakingRouter() internal view {
-        IStakingRouter sr = IStakingRouter(STAKING_ROUTER);
-        // bytes32 newWithdrawalCredentials = sr.getWithdrawalCredentials();
-        // if (newWithdrawalCredentials != initialWithdrawalCredentials) {
-        //     revert StakingRouterMigrationIncorrectWithdrawalCredentials();
-        // }
-        // uint256[] memory moduleIds = sr.getStakingModuleIds();
-        // if (moduleIds.length != initialModulesCount + 1) {
-        //     // 1 new module is added in this upgrade
-        //     revert StakingRouterMigrationIncorrectModulesCount();
-        // }
+    function _checkSR(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+        CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
 
-        // uint256 newModuleId = moduleIds[moduleIds.length - 1];
-        uint256 newModuleId = initialModulesCount; // the new module should be added
-        ModuleStateConfig memory config = sr.getStakingModuleStateConfig(newModuleId);
+        IStakingRouter sr = IStakingRouter(g.stakingRouter);
+        bytes32 newWithdrawalCredentials = sr.getWithdrawalCredentials();
+        if (newWithdrawalCredentials != initialWithdrawalCredentials) {
+            revert StakingRouterMigrationIncorrectWithdrawalCredentials();
+        }
+        uint256[] memory moduleIds = sr.getStakingModuleIds();
+        if (moduleIds.length != initialModulesCount + 1) {
+            // 1 new module is added in this upgrade
+            revert StakingRouterMigrationIncorrectModulesCount();
+        }
+
+        uint256 newModuleId = moduleIds[moduleIds.length - 1];
+        // uint256 newModuleId = initialModulesCount; // the new module should be added
+        ModuleStateConfig memory stateConfig = sr.getStakingModuleStateConfig(newModuleId);
         if (
-            config.moduleAddress != CURATED_MODULE
-            // || config.moduleFee != CURATED_STAKING_MODULE_FEE
-            //     || config.treasuryFee != CURATED_TREASURY_FEE || config.stakeShareLimit != CURATED_STAKE_SHARE_LIMIT
-            //     || config.priorityExitShareThreshold != CURATED_PRIORITY_EXIT_SHARE_THRESHOLD
-            //     || config.status != StakingModuleStatus.Active || config.withdrawalCredentialsType != 0x02
+            stateConfig.moduleAddress != cm.module || stateConfig.moduleFee != cm.stakingModuleFee
+                || stateConfig.treasuryFee != cm.treasuryFee || stateConfig.stakeShareLimit != cm.stakeShareLimit
+                || stateConfig.priorityExitShareThreshold != cm.priorityExitShareThreshold
+                || stateConfig.status != StakingModuleStatus.Active || stateConfig.withdrawalCredentialsType != 0x02
         ) {
             revert StakingRouterMigrationIncorrectAddStakingModule();
         }
     }
 
-    function _checkLido() internal view {
-        uint256 bufferedEther = ILidoWithFinalizeUpgrade(LIDO).getBufferedEther();
+    function _checkLido(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+        uint256 bufferedEther = ILidoWithFinalizeUpgrade(g.lido).getBufferedEther();
         if (bufferedEther != initialBufferedEther) {
             revert LidoMigrationIncorrectBufferedEther();
         }
 
-        // (uint256 depositedValidators, uint256 clValidators, uint256 beaconBalance) =
-        //     ILidoWithFinalizeUpgrade(LIDO).getBeaconStat();
+        (uint256 depositedValidators, uint256 clValidators, uint256 beaconBalance) =
+            ILidoWithFinalizeUpgrade(g.lido).getBeaconStat();
 
-        // if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
-        //     revert LidoMigrationIncorrectDepositedValidators();
-        // }
+        if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
+            revert LidoMigrationIncorrectDepositedValidators();
+        }
 
         (
             uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport,
             uint256 depositedForCurrentReport
-        ) = ILidoWithFinalizeUpgrade(LIDO).getBalanceStats();
+        ) = ILidoWithFinalizeUpgrade(g.lido).getBalanceStats();
 
         if (clValidatorsBalanceAtLastReport != initialBeaconBalance || clPendingBalanceAtLastReport != 0) {
             revert LidoMigrationIncorrectBeaconBalance();
@@ -399,22 +431,22 @@ contract UpgradeTemplate is UpgradeConfig {
         }
     }
 
-    function _checkDSM() internal view {
-        IDepositSecurityModule dsm = IDepositSecurityModule(NEW_DEPOSIT_SECURITY_MODULE);
-        // IDepositSecurityModule oldDsm = IDepositSecurityModule(OLD_DEPOSIT_SECURITY_MODULE);
-        if (dsm.getOwner() != AGENT) {
+    function _checkDSM(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+        IDepositSecurityModule dsm = IDepositSecurityModule(c.newDepositSecurityModule);
+        IDepositSecurityModule oldDsm = IDepositSecurityModule(c.oldDepositSecurityModule);
+        if (dsm.getOwner() != g.agent) {
             revert DSMMigrationIncorrectOwner();
         }
 
-        // address[] memory guardians = dsm.getGuardians();
-        // if (dsm.getGuardianQuorum() != oldDsm.getGuardianQuorum()) {
-        //     revert DSMMigrationIncorrectGuardianQuorum();
-        // }
-        // for (uint256 i = 0; i < guardians.length; ++i) {
-        //     if (!oldDsm.isGuardian(guardians[i])) {
-        //         revert DSMMigrationIncorrectGuardians();
-        //     }
-        // }
+        address[] memory guardians = dsm.getGuardians();
+        if (dsm.getGuardianQuorum() != oldDsm.getGuardianQuorum()) {
+            revert DSMMigrationIncorrectGuardianQuorum();
+        }
+        for (uint256 i = 0; i < guardians.length; ++i) {
+            if (!oldDsm.isGuardian(guardians[i])) {
+                revert DSMMigrationIncorrectGuardians();
+            }
+        }
     }
 
     function _assertProxyAdmin(address _proxy, address _admin) internal view {
@@ -428,8 +460,11 @@ contract UpgradeTemplate is UpgradeConfig {
         }
     }
 
-    function _assertAragonKernelImplementation(IAragonKernel _kernel, address _implementation) internal view {
-        if (_kernel.getApp(_kernel.APP_BASES_NAMESPACE(), LIDO_APP_ID) != _implementation) {
+    function _assertAragonKernelImplementation(IAragonKernel _kernel, bytes32 appId, address _implementation)
+        internal
+        view
+    {
+        if (_kernel.getApp(_kernel.APP_BASES_NAMESPACE(), appId) != _implementation) {
             revert IncorrectAragonKernelImplementation(address(_kernel), _implementation);
         }
     }

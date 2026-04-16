@@ -98,6 +98,16 @@ interface IAccountingOracle is IBaseOracle {
     function finalizeUpgrade_v5(uint256 consensusVersion) external;
 }
 
+interface IValidatorsExitBusOracle is IBaseOracle {
+    function finalizeUpgrade_v3(
+        uint256 maxValidatorsPerReport,
+        uint256 maxExitBalanceEth,
+        uint256 balancePerFrameEth,
+        uint256 frameDurationInSec,
+        uint256 consensusVersion
+    ) external;
+}
+
 interface IWithdrawalVault {
     function finalizeUpgrade_v3() external;
 }
@@ -285,6 +295,11 @@ struct CoreUpgradeParams {
     address consolidationGatewayGateSeal;
     address curatedModuleCommittee;
     address topUpGatewayDepositor;
+
+    // twGateway limits
+    uint256 twMaxExitRequestsLimit;
+    uint256 twExitsPerFrame;
+    uint256 twFrameDurationInSec;
 }
 
 struct CSMUpgradeParams {
@@ -329,6 +344,7 @@ struct CuratedModuleParams {
 
 struct GlobalConfig {
     address agent;
+    address lido;
     address burner;
     address resealManager;
     address easyTrack;
@@ -372,6 +388,7 @@ struct CoreUpgradeConfig {
 
     address accounting;
     address accountingOracle;
+    address validatorsExitBusOracle;
     address withdrawalVault;
     address consolidationGateway;
     address consolidationBus;
@@ -382,6 +399,10 @@ struct CoreUpgradeConfig {
     address consolidationGatewayGateSeal;
     address curatedModuleCommittee;
     address topUpGatewayDepositor;
+
+    uint256 twMaxExitRequestsLimit;
+    uint256 twExitsPerFrame;
+    uint256 twFrameDurationInSec;
 }
 
 struct CSMUpgradeConfig {

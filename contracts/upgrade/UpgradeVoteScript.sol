@@ -6,10 +6,8 @@ import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 import {StakingModuleConfig} from "contracts/0.8.25/sr/SRTypes.sol";
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
-import {UpgradeTemplate} from "./UpgradeTemplate.sol";
+import {UpgradeTemplate, UpgradeConfig} from "./UpgradeTemplate.sol";
 import {CallsScriptBuilder} from "./utils/CallScriptBuilder.sol";
-import {IDualGovernance, ExternalCall} from "./interfaces/IDualGovernance.sol";
-import {IForwarder} from "./interfaces/IForwarder.sol";
 
 import {
     ITimeConstraints,
@@ -36,7 +34,8 @@ import {
     IBaseModuleV3,
     IAllowedMerkleGatesRegistry,
     IMerkleGate,
-    IMetaRegistry
+    IMetaRegistry,
+    ITriggerableWithdrawalsGateway
 } from "./UpgradeTypes.sol";
 
 /// @title UpgradeVoteScript
@@ -50,7 +49,7 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 internal constant DG_ITEMS_COUNT = 54;
+    uint256 internal constant DG_ITEMS_COUNT = 57;
     uint256 public constant VOTING_ITEMS_COUNT = 9;
 
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
@@ -79,15 +78,16 @@ contract UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
     bytes32 internal constant SET_TREE_ROLE = keccak256("SET_TREE_ROLE");
     bytes32 internal constant MANAGE_OPERATOR_GROUPS_ROLE = keccak256("MANAGE_OPERATOR_GROUPS_ROLE");
-
+    bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
     //
     // Immutables
     //
     address public immutable TEMPLATE;
-    address public immutable AGENT;
+    address public immutable CONFIG;
     address public immutable TIME_CONSTRAINTS;
     uint32 public immutable ENABLED_DAY_SPAN_START; // = 50400; // 14:00 UTC
     uint32 public immutable ENABLED_DAY_SPAN_END; // = 82800; // 23:00 UTC
+    address internal immutable AGENT;
 
     struct ScriptParams {
         address upgradeTemplate;
@@ -98,12 +98,15 @@ contract UpgradeVoteScript is OmnibusBase {
 
     constructor(ScriptParams memory _params)
         OmnibusBase(
-            UpgradeTemplate(_params.upgradeTemplate).VOTING(),
-            UpgradeTemplate(_params.upgradeTemplate).DUAL_GOVERNANCE()
+            UpgradeConfig(UpgradeTemplate(_params.upgradeTemplate).CONFIG()).VOTING(),
+            UpgradeConfig(UpgradeTemplate(_params.upgradeTemplate).CONFIG()).DUAL_GOVERNANCE()
         )
     {
-        TEMPLATE = _params.upgradeTemplate;
-        AGENT = UpgradeTemplate(_params.upgradeTemplate).AGENT();
+        UpgradeTemplate template = UpgradeTemplate(_params.upgradeTemplate);
+        UpgradeConfig config = UpgradeConfig(template.CONFIG());
+        TEMPLATE = address(template);
+        CONFIG = address(config);
+        AGENT = config.AGENT();
         TIME_CONSTRAINTS = _params.timeConstraints;
         ENABLED_DAY_SPAN_START = _params.enabledDaySpanStart; // e.g. 50400 = 14:00 UTC
         ENABLED_DAY_SPAN_END = _params.enabledDaySpanEnd; // e.g. 82800 = 23:00 UTC
@@ -125,10 +128,10 @@ contract UpgradeVoteScript is OmnibusBase {
         items = new VoteItem[](VOTING_ITEMS_COUNT);
         uint256 i = 0;
 
-        UpgradeTemplate template = UpgradeTemplate(TEMPLATE);
-        GlobalConfig memory g = template.getGlobalConfig();
+        UpgradeConfig config = UpgradeConfig(CONFIG);
+        GlobalConfig memory g = config.getGlobalConfig();
+        (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = config.getEasyTrackConfig();
         address easyTrack = g.easyTrack;
-        (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = template.getEasyTrackConfig();
 
         // Delete old EasyTrack Factories
         // items[i++] = _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
@@ -139,7 +142,7 @@ contract UpgradeVoteScript is OmnibusBase {
         //
 
         {
-            CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
+            CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
 
             items[i++] = _addETFactoryItem(
                 "Add UpdateStakingModuleShareLimits ET factory",
@@ -157,7 +160,7 @@ contract UpgradeVoteScript is OmnibusBase {
         }
 
         {
-            CSMUpgradeConfig memory c = template.getCSMUpgradeConfig();
+            CSMUpgradeConfig memory c = config.getCSMUpgradeConfig();
 
             items[i++] = _addETFactoryItem(
                 "Add SetMerkleGateTree CSM ET factory",
@@ -182,7 +185,7 @@ contract UpgradeVoteScript is OmnibusBase {
         }
 
         {
-            CuratedModuleConfig memory c = template.getCuratedModuleConfig();
+            CuratedModuleConfig memory c = config.getCuratedModuleConfig();
 
             items[i++] = _addETFactoryItem(
                 "Add SetMerkleGateTree CM ET factory",
@@ -215,56 +218,15 @@ contract UpgradeVoteScript is OmnibusBase {
         if (i != VOTING_ITEMS_COUNT) revert InvalidItemsCount(i, VOTING_ITEMS_COUNT);
     }
 
-    function getAgentScriptCall() public view returns (bytes memory) {
-        VoteItem[] memory voteItems = _getVoteItems();
-        // CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
-        CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
-        for (uint256 i = 0; i < voteItems.length; ++i) {
-            scriptBuilder.addCall(voteItems[i].call.to, voteItems[i].call.data);
-        }
-        return scriptBuilder.getResult();
-
-        // return _votingCall(agent, abi.encodeCall(IForwarder.forward, scriptBuilder.getResult()));
-    }
-
-    function getEVMScript2(string memory proposalMetadata) public view returns (bytes memory) {
-        ExternalCall[] memory dgCalls = new ExternalCall[](1);
-        dgCalls[0] =
-            ExternalCall({target: AGENT, value: 0, payload: abi.encodeCall(IForwarder.forward, getAgentScriptCall())});
-
-        CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
-
-        scriptBuilder.addCall(
-            address(DUAL_GOVERNANCE), abi.encodeCall(IDualGovernance.submitProposal, (dgCalls, proposalMetadata))
-        );
-
-        VoteItem[] memory votingVoteItems = this.getVotingVoteItems();
-        for (uint256 i = 0; i < votingVoteItems.length; i++) {
-            scriptBuilder.addCall(votingVoteItems[i].call.to, votingVoteItems[i].call.data);
-        }
-
-        return scriptBuilder.getResult();
-    }
-
-    function getNewVoteCallBytecode2(string memory description, string memory proposalMetadata)
-        external
-        view
-        returns (bytes memory)
-    {
-        return CallsScriptBuilder.create(
-                address(VOTING_CONTRACT),
-                abi.encodeCall(VOTING_CONTRACT.newVote, (getEVMScript2(proposalMetadata), description, false, false))
-            ).getResult();
-    }
-
     function _getVoteItems() internal view returns (VoteItem[] memory items) {
         items = new VoteItem[](DG_ITEMS_COUNT);
         uint256 i = 0;
 
-        UpgradeTemplate template = UpgradeTemplate(TEMPLATE);
-        GlobalConfig memory g = template.getGlobalConfig();
+        UpgradeConfig config = UpgradeConfig(CONFIG);
+        GlobalConfig memory g = config.getGlobalConfig();
         address agent = g.agent;
         address evmScriptExecutor = g.easyTrackEVMScriptExecutor;
+        address stakingRouter = g.stakingRouter;
 
         // items[i++] = _item({
         //     description: "Ensure DG proposal execution is within defined time window",
@@ -276,7 +238,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
         items[i++] = _item({
             description: "Call UpgradeTemplate.startUpgrade",
-            to: address(template),
+            to: TEMPLATE,
             data: abi.encodeCall(UpgradeTemplate.startUpgrade, ())
         });
 
@@ -284,7 +246,7 @@ contract UpgradeVoteScript is OmnibusBase {
         // Core upgrade
         //
         {
-            CoreUpgradeConfig memory c = template.getCoreUpgradeConfig();
+            CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
 
             items[i++] = _proxyUpgradeToItem({
                 description: "Upgrade LidoLocator implementation", to: c.locator, impl: c.newLocatorImpl
@@ -314,7 +276,7 @@ contract UpgradeVoteScript is OmnibusBase {
             /// @dev finalizeUpgrade_v4 must be called before any other actions to migrate storage and OZ roles
             items[i++] = _proxyUpgradeToAndCallItem({
                 description: "Upgrade StakingRouter implementation and finalize v4 migration",
-                to: g.stakingRouter,
+                to: stakingRouter,
                 impl: c.newStakingRouterImpl,
                 data: abi.encodeCall(IStakingRouter.finalizeUpgrade_v4, ())
             });
@@ -322,7 +284,7 @@ contract UpgradeVoteScript is OmnibusBase {
             /// @notice grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor
             items[i++] = _ozGrantRoleItem({
                 description: "Grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor",
-                to: g.stakingRouter,
+                to: stakingRouter,
                 role: STAKING_MODULE_SHARE_MANAGE_ROLE,
                 account: evmScriptExecutor
             });
@@ -330,7 +292,7 @@ contract UpgradeVoteScript is OmnibusBase {
             /// @notice revoke STAKING_MODULE_UNVETTING_ROLE from old DSM
             items[i++] = _ozRevokeRoleItem({
                 description: "Revoke STAKING_MODULE_UNVETTING_ROLE from old DSM",
-                to: g.stakingRouter,
+                to: stakingRouter,
                 role: STAKING_MODULE_UNVETTING_ROLE,
                 account: c.oldDepositSecurityModule
             });
@@ -338,22 +300,28 @@ contract UpgradeVoteScript is OmnibusBase {
             /// @notice grant STAKING_MODULE_UNVETTING_ROLE to new DSM
             items[i++] = _ozGrantRoleItem({
                 description: "Grant STAKING_MODULE_UNVETTING_ROLE to new DSM",
-                to: g.stakingRouter,
+                to: stakingRouter,
                 role: STAKING_MODULE_UNVETTING_ROLE,
                 account: c.newDepositSecurityModule
             });
 
             /// @notice updating AccountingOracle implementation
             /// @dev finalizeUpgrade will be called in UpgradeTemplate.finishUpgrade()
-            items[i++] = _item({
+            items[i++] = _proxyUpgradeToItem({
                 description: "Upgrade AccountingOracle implementation",
                 to: c.accountingOracle,
-                data: abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (c.newAccountingOracleImpl))
+                impl: c.newAccountingOracleImpl
             });
 
             /// @notice updating Accounting implementation
             items[i++] = _proxyUpgradeToItem({
                 description: "Upgrade Accounting implementation", to: c.accounting, impl: c.newAccountingImpl
+            });
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade ValidatorsExitBusOracle implementation",
+                to: c.validatorsExitBusOracle,
+                impl: c.newValidatorsExitBusOracleImpl
             });
 
             /// @notice updating WithdrawalVault implementation
@@ -363,13 +331,29 @@ contract UpgradeVoteScript is OmnibusBase {
                 to: c.withdrawalVault,
                 data: abi.encodeCall(IWithdrawalsManagerProxy.proxy_upgradeTo, (c.newWithdrawalVaultImpl, bytes("")))
             });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant TW_EXIT_LIMIT_MANAGER_ROLE to Agent on TWGateway",
+                to: g.triggerableWithdrawalsGateway,
+                role: TW_EXIT_LIMIT_MANAGER_ROLE,
+                account: agent
+            });
+
+            items[i++] = _item({
+                description: "Set TWGateway exit request limits",
+                to: g.triggerableWithdrawalsGateway,
+                data: abi.encodeCall(
+                    ITriggerableWithdrawalsGateway.setExitRequestLimit,
+                    (c.twMaxExitRequestsLimit, c.twExitsPerFrame, c.twFrameDurationInSec)
+                )
+            });
         }
 
         //
         // CSM Upgrade items
         //
         {
-            CSMUpgradeConfig memory c = template.getCSMUpgradeConfig();
+            CSMUpgradeConfig memory c = config.getCSMUpgradeConfig();
             address csm = c.csm;
             address gateSeal = c.gateSeal;
             address vettedGate = c.vettedGate;
@@ -610,11 +594,11 @@ contract UpgradeVoteScript is OmnibusBase {
         // Curated Module items
         //
         {
-            CuratedModuleConfig memory c = template.getCuratedModuleConfig();
+            CuratedModuleConfig memory c = config.getCuratedModuleConfig();
 
             items[i++] = _item({
                 description: "Add Curated module to StakingRouter",
-                to: g.stakingRouter,
+                to: stakingRouter,
                 data: abi.encodeCall(
                     IStakingRouter.addStakingModule,
                     (
@@ -678,7 +662,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
         items[i++] = _item({
             description: "Call UpgradeTemplate.finishUpgrade",
-            to: address(template),
+            to: TEMPLATE,
             data: abi.encodeCall(UpgradeTemplate.finishUpgrade, ())
         });
 
