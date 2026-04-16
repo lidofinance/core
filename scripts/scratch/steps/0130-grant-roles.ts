@@ -21,7 +21,7 @@ export async function main() {
   const agentAddress = state[Sk.appAgent].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtApp = state[Sk.appSimpleDvt].proxy.address;
-  const gateSealAddress = state.gateSeal.address;
+  const circuitBreakerAddress = state[Sk.circuitBreaker].address;
   const burnerAddress = state[Sk.burner].proxy.address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
@@ -70,16 +70,21 @@ export async function main() {
   );
 
   // ValidatorsExitBusOracle
-  if (gateSealAddress) {
+  if (circuitBreakerAddress) {
     const validatorsExitBusOracle = await loadContract<ValidatorsExitBusOracle>(
       "ValidatorsExitBusOracle",
       validatorsExitBusOracleAddress,
     );
-    await makeTx(validatorsExitBusOracle, "grantRole", [await validatorsExitBusOracle.PAUSE_ROLE(), gateSealAddress], {
-      from: deployer,
-    });
+    await makeTx(
+      validatorsExitBusOracle,
+      "grantRole",
+      [await validatorsExitBusOracle.PAUSE_ROLE(), circuitBreakerAddress],
+      {
+        from: deployer,
+      },
+    );
   } else {
-    log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
+    log(`CircuitBreaker is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
     log.emptyLine();
   }
 
@@ -97,12 +102,12 @@ export async function main() {
 
   // WithdrawalQueue
   const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
-  if (gateSealAddress) {
-    await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.PAUSE_ROLE(), gateSealAddress], {
+  if (circuitBreakerAddress) {
+    await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.PAUSE_ROLE(), circuitBreakerAddress], {
       from: deployer,
     });
   } else {
-    log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of withdrawalQueue`);
+    log(`CircuitBreaker is not specified or deployed: skipping assigning PAUSE_ROLE of withdrawalQueue`);
     log.emptyLine();
   }
 

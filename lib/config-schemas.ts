@@ -104,7 +104,6 @@ const ConsolidationBusSchema = z.object({
 const ConsolidationMigratorSchema = z.object({
   sourceModuleId: PositiveIntSchema,
   targetModuleId: PositiveIntSchema,
-
   committee: EthereumAddressSchema,
 });
 
@@ -221,11 +220,14 @@ const UpgradeVoteScriptSchema = z.object({
   enabledDaySpanEnd: NonNegativeIntSchema,
 });
 
-// Gate seal schema (for scratch deployment)
-const GateSealSchema = z.object({
-  sealDuration: PositiveIntSchema,
-  sealingCommittee: EthereumAddressSchema,
-  expiryTimestamp: NonNegativeIntSchema.optional(),
+// CircuitBreaker schema (for scratch deployment)
+const CircuitBreakerSchema = z.object({
+  minPauseDuration: PositiveIntSchema,
+  maxPauseDuration: PositiveIntSchema,
+  minHeartbeatInterval: PositiveIntSchema,
+  maxHeartbeatInterval: PositiveIntSchema,
+  initialPauseDuration: PositiveIntSchema,
+  initialHeartbeatInterval: PositiveIntSchema,
 });
 
 // DAO schema
@@ -346,7 +348,7 @@ const LidoSchema = z.object({
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
-  gateSeal: GateSealSchema,
+  circuitBreaker: CircuitBreakerSchema,
   lidoApm: LidoApmSchema,
   lido: LidoSchema.optional(),
   dao: DaoSchema,
@@ -384,12 +386,13 @@ export const ScratchParametersSchema = z.object({
 export const UpgradeParametersSchema = z.object({
   lido: LidoSchema,
   easyTrack: EasyTrackSchema,
+  circuitBreaker: CircuitBreakerSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerSchema,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
   consolidationMigrator: ConsolidationMigratorSchema,
-  consolidationGatewayGateSeal: GateSealSchema,
+
   topUpGateway: TopUpGatewaySchema,
   stakingRouter: StakingRouterSchema,
   withdrawalVault: WithdrawalVaultSchema,

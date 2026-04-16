@@ -1,12 +1,7 @@
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import {
-  IAragonKernel,
-  IWithdrawalsManagerProxy__factory,
-  LidoLocator,
-  OssifiableProxy__factory,
-} from "typechain-types";
+import { IAragonKernel, IWithdrawalsManagerProxy__factory, OssifiableProxy__factory } from "typechain-types";
 import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
 
 import { loadContract } from "lib/contract";
@@ -21,7 +16,6 @@ export async function main() {
   const locatorAddress = getAddress(Sk.lidoLocator, state);
   const locatorProxy = OssifiableProxy__factory.connect(locatorAddress, deployer);
   const oldLocatorImpl = await locatorProxy.proxy__getImplementation();
-  const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
 
   const kernel = await loadContract<IAragonKernel>("IAragonKernel", getAddress(Sk.aragonKernel, state));
   const oldLidoImpl = await kernel.getApp(await kernel.APP_BASES_NAMESPACE(), state[Sk.appLido].aragonApp.id);
@@ -45,6 +39,7 @@ export async function main() {
     dualGovernance: getAddress(Sk.dgDualGovernance, state),
     resealManager: getAddress(Sk.resealManager, state),
     easyTrack: getAddress(Sk.easyTrack, state),
+    circuitBreaker: getAddress(Sk.circuitBreaker, state),
 
     newFactories: parameters.easyTrack.newFactories,
     oldFactories: parameters.easyTrack.oldFactories,
@@ -88,8 +83,6 @@ export async function main() {
 
       // Consolidation
       consolidationBus: getAddress(Sk.consolidationBus, state),
-
-      consolidationGatewayGateSeal: getAddress(Sk.gateSealConsolidationGW, state),
 
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
       curatedModuleCommittee: parameters.consolidationMigrator.committee,

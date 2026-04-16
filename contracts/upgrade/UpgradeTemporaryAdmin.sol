@@ -43,10 +43,10 @@ contract UpgradeTemporaryAdmin {
         address _lidoLocatorImpl,
         address _easyTrack,
         address _resealManager,
+        address _circuitBreaker,
         address _consolidationMigrator,
         address _consolidationMigratorCommittee,
         address _consolidationBus,
-        address _consolidationGatewayGateSeal,
         address _topUpGatewayDepositor,
         address _oldDepositSecurityModule
     ) external {
@@ -65,9 +65,7 @@ contract UpgradeTemporaryAdmin {
         _setupDSM(depositSecurityModule, _oldDepositSecurityModule);
         _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationMigratorCommittee);
         _setupConsolidationBus(_consolidationBus, _consolidationMigrator);
-        _setupConsolidationGateway(
-            consolidationGateway, _consolidationBus, _consolidationGatewayGateSeal, _resealManager
-        );
+        _setupConsolidationGateway(consolidationGateway, _consolidationBus, _circuitBreaker, _resealManager);
         _setupTopUpGateway(topUpGateway, _topUpGatewayDepositor);
 
         emit SetupCompleted(_consolidationMigrator, _consolidationBus, consolidationGateway, topUpGateway);
@@ -94,10 +92,8 @@ contract UpgradeTemporaryAdmin {
         _transferAdminToAgent(_bus);
     }
 
-    function _setupConsolidationGateway(address _gateway, address _bus, address _gateSeal, address _resealManager)
-        private
-    {
-        IAccessControl(_gateway).grantRole(PAUSE_ROLE, _gateSeal);
+    function _setupConsolidationGateway(address _gateway, address _bus, address _cb, address _resealManager) private {
+        IAccessControl(_gateway).grantRole(PAUSE_ROLE, _cb);
         IAccessControl(_gateway).grantRole(PAUSE_ROLE, _resealManager);
         IAccessControl(_gateway).grantRole(RESUME_ROLE, _resealManager);
         IAccessControl(_gateway).grantRole(ADD_CONSOLIDATION_REQUEST_ROLE, _bus);

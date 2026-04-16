@@ -307,11 +307,10 @@ contract UpgradeTemplate {
 
         // Consolidation rollout
         _assertSingleOZRoleHolder(c.consolidationGateway, DEFAULT_ADMIN_ROLE, agent);
-        _assertTwoOZRoleHolders(c.consolidationGateway, PAUSE_ROLE, c.consolidationGatewayGateSeal, g.resealManager);
+        _assertTwoOZRoleHolders(c.consolidationGateway, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
         _assertSingleOZRoleHolder(c.consolidationGateway, RESUME_ROLE, g.resealManager);
 
         _assertSingleOZRoleHolder(c.consolidationGateway, ADD_CONSOLIDATION_REQUEST_ROLE, c.consolidationBus);
-        _assertSingleOZRoleHolder(c.consolidationGateway, PAUSE_ROLE, c.consolidationGatewayGateSeal);
 
         _assertProxyAdmin(c.consolidationBus, agent);
         _assertSingleOZRoleHolder(c.consolidationBus, DEFAULT_ADMIN_ROLE, agent);

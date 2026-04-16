@@ -95,13 +95,6 @@ targetModuleId = 4                    # Target staking module ID, for scratch de
 #TODO  update upon deployment
 committee = "0x8943545177806ED17B9F23F0a21ee5948eCaa776"        # devnet deployer
 
-# Gate seal configuration for vault operations
-[consolidationGatewayGateSeal]
-sealDuration = 1209600  # 14 days
-#TODO  update upon deployment
-sealingCommittee = "0x8943545177806ED17B9F23F0a21ee5948eCaa776" # devnet deployer
-
-
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
 maxValidatorsPerTopUp = 100           # Maximum validators per top-up call

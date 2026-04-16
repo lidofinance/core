@@ -38,6 +38,7 @@ contract UpgradeConfig is IUpgradeConfig {
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
     address public immutable RESEAL_MANAGER;
+    address public immutable CIRCUIT_BREAKER;
     address public immutable BURNER;
 
     //
@@ -96,7 +97,6 @@ contract UpgradeConfig is IUpgradeConfig {
     //
     uint256 internal immutable LIDO_DEPOSITS_RESERVE_TARGET;
     address internal immutable CURATED_MODULE_COMMITTEE;
-    address internal immutable CONSOLIDATION_GATEWAY_GATE_SEAL;
     address internal immutable TOP_UP_GATEWAY_DEPOSITOR;
     uint256 internal immutable TW_MAX_EXIT_REQUESTS_LIMIT;
     uint256 internal immutable TW_EXITS_PER_FRAME;
@@ -163,7 +163,6 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CSM_EJECTOR;
     address internal immutable CSM_IDENTIFIED_COMMUNITY_STAKERS_GATE_MANAGER;
     address internal immutable CSM_GATE_SEAL;
-    address internal immutable CSM_GATE_SEAL_V3;
     address internal immutable CSM_GENERAL_DELAYED_PENALTY_REPORTER;
     address internal immutable CSM_PENALTIES_MANAGER;
 
@@ -201,6 +200,7 @@ contract UpgradeConfig is IUpgradeConfig {
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
         RESEAL_MANAGER = params.resealManager;
+        CIRCUIT_BREAKER = params.circuitBreaker;
 
         EASY_TRACK = params.easyTrack;
         EASY_TRACK_EVM_SCRIPT_EXECUTOR = IEasyTrack(params.easyTrack).evmScriptExecutor();
@@ -229,7 +229,6 @@ contract UpgradeConfig is IUpgradeConfig {
 
         LIDO_DEPOSITS_RESERVE_TARGET = coreUpgradeParams.lidoDepositsReserveTarget;
         CURATED_MODULE_COMMITTEE = coreUpgradeParams.curatedModuleCommittee;
-        CONSOLIDATION_GATEWAY_GATE_SEAL = coreUpgradeParams.consolidationGatewayGateSeal;
         TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
         TW_MAX_EXIT_REQUESTS_LIMIT = coreUpgradeParams.twMaxExitRequestsLimit;
         TW_EXITS_PER_FRAME = coreUpgradeParams.twExitsPerFrame;
@@ -307,7 +306,6 @@ contract UpgradeConfig is IUpgradeConfig {
         CSM_EJECTOR = csmUpgradeParams.ejector;
         CSM_IDENTIFIED_COMMUNITY_STAKERS_GATE_MANAGER = csmUpgradeParams.identifiedCommunityStakersGateManager;
         CSM_GATE_SEAL = csmUpgradeParams.gateSeal;
-        CSM_GATE_SEAL_V3 = csmUpgradeParams.gateSealV3;
         CSM_GENERAL_DELAYED_PENALTY_REPORTER = csmUpgradeParams.generalDelayedPenaltyReporter;
         CSM_PENALTIES_MANAGER = csmUpgradeParams.penaltiesManager;
 
@@ -349,6 +347,7 @@ contract UpgradeConfig is IUpgradeConfig {
             lido: LIDO,
             burner: BURNER,
             resealManager: RESEAL_MANAGER,
+            circuitBreaker: CIRCUIT_BREAKER,
             easyTrack: EASY_TRACK,
             easyTrackEVMScriptExecutor: EASY_TRACK_EVM_SCRIPT_EXECUTOR,
             stakingRouter: STAKING_ROUTER,
@@ -418,7 +417,6 @@ contract UpgradeConfig is IUpgradeConfig {
             topUpGateway: TOP_UP_GATEWAY,
             // params
             lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
-            consolidationGatewayGateSeal: CONSOLIDATION_GATEWAY_GATE_SEAL,
             curatedModuleCommittee: CURATED_MODULE_COMMITTEE,
             topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
             // twGateway limits
@@ -461,7 +459,6 @@ contract UpgradeConfig is IUpgradeConfig {
             ejector: CSM_EJECTOR,
             identifiedCommunityStakersGateManager: CSM_IDENTIFIED_COMMUNITY_STAKERS_GATE_MANAGER,
             gateSeal: CSM_GATE_SEAL,
-            gateSealV3: CSM_GATE_SEAL_V3,
             generalDelayedPenaltyReporter: CSM_GENERAL_DELAYED_PENALTY_REPORTER,
             penaltiesManager: CSM_PENALTIES_MANAGER
         });

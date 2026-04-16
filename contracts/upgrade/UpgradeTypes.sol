@@ -230,6 +230,7 @@ struct UpgradeParameters {
     address voting;
     address dualGovernance;
     address resealManager;
+    address circuitBreaker;
     address easyTrack;
 
     EasyTrackNewFactories newFactories;
@@ -293,7 +294,6 @@ struct CoreUpgradeParams {
 
     // params
     uint256 lidoDepositsReserveTarget;
-    address consolidationGatewayGateSeal;
     address curatedModuleCommittee;
     address topUpGatewayDepositor;
 
@@ -332,7 +332,6 @@ struct CSMUpgradeParams {
     address ejector;
     address identifiedCommunityStakersGateManager;
     address gateSeal;
-    address gateSealV3;
     address generalDelayedPenaltyReporter;
     address penaltiesManager;
 }
@@ -358,6 +357,7 @@ struct GlobalConfig {
     address lido;
     address burner;
     address resealManager;
+    address circuitBreaker;
     address easyTrack;
     address easyTrackEVMScriptExecutor;
     address stakingRouter;
@@ -404,7 +404,6 @@ struct CoreUpgradeConfig {
     address topUpGateway;
 
     uint256 lidoDepositsReserveTarget;
-    address consolidationGatewayGateSeal;
     address curatedModuleCommittee;
     address topUpGatewayDepositor;
 
@@ -445,7 +444,6 @@ struct CSMUpgradeConfig {
     address ejector;
     address identifiedCommunityStakersGateManager;
     address gateSeal;
-    address gateSealV3;
     address generalDelayedPenaltyReporter;
     address penaltiesManager;
 }

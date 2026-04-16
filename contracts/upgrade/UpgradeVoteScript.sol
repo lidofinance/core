@@ -360,6 +360,7 @@ contract UpgradeVoteScript is OmnibusBase {
             CSMUpgradeConfig memory c = config.getCSMUpgradeConfig();
             address csm = c.csm;
             address gateSeal = c.gateSeal;
+            address cb = g.circuitBreaker;
             address vettedGate = c.vettedGate;
             // --- Proxy upgrades ---
 
@@ -527,31 +528,31 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to GateSealV3 on CSModule",
+                description: "Grant PAUSE_ROLE to CircuitBreaker on CSModule",
                 to: csm,
                 role: PAUSE_ROLE,
-                account: c.gateSealV3
+                account: cb
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to GateSealV3 on Accounting",
+                description: "Grant PAUSE_ROLE to CircuitBreaker on Accounting",
                 to: c.accounting,
                 role: PAUSE_ROLE,
-                account: c.gateSealV3
+                account: cb
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to GateSealV3 on FeeOracle",
+                description: "Grant PAUSE_ROLE to CircuitBreaker on FeeOracle",
                 to: c.feeOracle,
                 role: PAUSE_ROLE,
-                account: c.gateSealV3
+                account: cb
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to GateSealV3 on VettedGate",
+                description: "Grant PAUSE_ROLE to CircuitBreaker on VettedGate",
                 to: vettedGate,
                 role: PAUSE_ROLE,
-                account: c.gateSealV3
+                account: cb
             });
 
             items[i++] = _ozGrantRoleItem({

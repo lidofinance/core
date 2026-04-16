@@ -1,12 +1,11 @@
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { DepositSecurityModule, IGateSealFactory, IOracleReportSanityChecker_preV4, LidoLocator } from "typechain-types";
+import { DepositSecurityModule, IOracleReportSanityChecker_preV4, LidoLocator } from "typechain-types";
 
-import { findEventsWithInterfaces } from "lib";
 import { loadContract } from "lib/contract";
 import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
-import { getAddress, readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -33,6 +32,7 @@ export async function main() {
     throw new Error("Deposit contract address is missing in the state file");
   }
   const resealManagerAddress = state[Sk.resealManager].address;
+  const circuitBreakerAddress = state[Sk.circuitBreaker].address;
 
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
 
@@ -142,7 +142,10 @@ export async function main() {
     parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
     parameters.depositSecurityModule.maxOperatorsPerUnvetting,
   ]);
-  const depositSecurityModule = await loadContract<DepositSecurityModule>("DepositSecurityModule", depositSecurityModule_.address);
+  const depositSecurityModule = await loadContract<DepositSecurityModule>(
+    "DepositSecurityModule",
+    depositSecurityModule_.address,
+  );
   await depositSecurityModule.setOwner(tempAdmin.address);
 
   //
@@ -286,39 +289,6 @@ export async function main() {
   const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 
   //
-  // GateSeal
-  //
-
-  const gateSealFactory = await loadContract<IGateSealFactory>(
-    "IGateSealFactory",
-    getAddress(Sk.gateSealFactory, state),
-  );
-
-  // Calculate expiryTimestamp as current block timestamp + 1 year (in seconds)
-  const latestBlock = await ethers.provider.getBlock("latest");
-  const expiryTimestamp = latestBlock!.timestamp + 365 * 24 * 60 * 60;
-
-  const gateSealReceipt = await makeTx(
-    gateSealFactory,
-    "create_gate_seal",
-    [
-      parameters.consolidationGatewayGateSeal.sealingCommittee,
-      parameters.consolidationGatewayGateSeal.sealDuration,
-      [consolidationGateway.address],
-      expiryTimestamp,
-    ],
-    { from: deployer },
-  );
-  const consolidationGateSealAddress = await findEventsWithInterfaces(gateSealReceipt, "GateSealCreated", [
-    gateSealFactory.interface,
-  ])[0].args.gate_seal;
-  console.log("GateSeal address", consolidationGateSealAddress);
-
-  updateObjectInState(Sk.gateSealConsolidationGW, {
-    address: consolidationGateSealAddress,
-  });
-
-  //
   // Complete setup: grant all roles to agent, transfer admin
   //
   await makeTx(
@@ -328,10 +298,10 @@ export async function main() {
       lidoLocatorImpl.address,
       easyTrackAddress,
       resealManagerAddress,
+      circuitBreakerAddress,
       consolidationMigrator.address,
       parameters.consolidationMigrator.committee,
       consolidationBus.address,
-      consolidationGateSealAddress,
       parameters.topUpGateway.depositor,
       await locator.depositSecurityModule(),
     ],
