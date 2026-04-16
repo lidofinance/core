@@ -88,11 +88,11 @@ epochsPerFrame = 4                    # Epochs per consensus frame
 
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
-consensusVersion = 5                  # Consensus version
-maxValidatorsPerRequest = 600         # Maximum validators per request
-maxExitRequestsLimit = 13000          # Maximum exit requests limit
-exitsPerFrame = 1                     # Exits per frame
+maxValidatorsPerReport = 600         # Maximum validators per request
+maxExitBalanceEth = 416000
+balancePerFrameEth = 32
 frameDurationInSec = 48               # Frame duration in seconds
+consensusVersion = 5                  # Consensus version
 
 # Deposit security module configuration
 [depositSecurityModule]

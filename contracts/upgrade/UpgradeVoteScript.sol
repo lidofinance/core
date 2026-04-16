@@ -130,12 +130,16 @@ contract UpgradeVoteScript is OmnibusBase {
 
         UpgradeConfig config = UpgradeConfig(CONFIG);
         GlobalConfig memory g = config.getGlobalConfig();
-        (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = config.getEasyTrackConfig();
         address easyTrack = g.easyTrack;
 
+        // (EasyTrackNewFactories memory etn, EasyTrackOldFactories memory eto) = config.getEasyTrackConfig();
+        (EasyTrackNewFactories memory etn, ) = config.getEasyTrackConfig();
+
+        //
         // Delete old EasyTrack Factories
-        // items[i++] = _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, o.CSMSettleElStealingPenalty);
-        // items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, o.CSMSetVettedGateTree);
+        //
+        // items[i++] = _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, eto.CSMSettleElStealingPenalty);
+        // items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, eto.CSMSetVettedGateTree);
 
         //
         // Add new EasyTrack Factories
@@ -147,14 +151,14 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] = _addETFactoryItem(
                 "Add UpdateStakingModuleShareLimits ET factory",
                 easyTrack,
-                n.UpdateStakingModuleShareLimits,
+                etn.UpdateStakingModuleShareLimits,
                 bytes.concat(bytes20(g.stakingRouter), bytes4(IStakingRouter.updateModuleShares.selector))
             );
 
             items[i++] = _addETFactoryItem(
                 "Add AllowConsolidationPair ET factory",
                 easyTrack,
-                n.AllowConsolidationPair,
+                etn.AllowConsolidationPair,
                 bytes.concat(bytes20(c.consolidationMigrator), bytes4(IConsolidationMigrator.allowPair.selector))
             );
         }
@@ -165,21 +169,21 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] = _addETFactoryItem(
                 "Add SetMerkleGateTree CSM ET factory",
                 easyTrack,
-                n.SetMerkleGateTreeForCSM,
-                _setMerkleGateTreePermissions(n.AllowedMerkleGatesRegistryForCSM)
+                etn.SetMerkleGateTreeForCSM,
+                _setMerkleGateTreePermissions(etn.AllowedMerkleGatesRegistryForCSM)
             );
 
             items[i++] = _addETFactoryItem(
                 "Add ReportWithdrawalsForSlashedValidators CSM ET factory",
                 easyTrack,
-                n.ReportWithdrawalsForSlashedValidatorsForCSM,
+                etn.ReportWithdrawalsForSlashedValidatorsForCSM,
                 bytes.concat(bytes20(c.csm), bytes4(IBaseModuleV3.reportSlashedWithdrawnValidators.selector))
             );
 
             items[i++] = _addETFactoryItem(
                 "Add SettleGeneralDelayedPenalty CSM ET factory",
                 easyTrack,
-                n.SettleGeneralDelayedPenaltyForCSM,
+                etn.SettleGeneralDelayedPenaltyForCSM,
                 bytes.concat(bytes20(c.csm), bytes4(IBaseModuleV3.settleGeneralDelayedPenalty.selector))
             );
         }
@@ -190,28 +194,28 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] = _addETFactoryItem(
                 "Add SetMerkleGateTree CM ET factory",
                 easyTrack,
-                n.SetMerkleGateTreeForCM,
-                _setMerkleGateTreePermissions(n.AllowedMerkleGatesRegistryForCM)
+                etn.SetMerkleGateTreeForCM,
+                _setMerkleGateTreePermissions(etn.AllowedMerkleGatesRegistryForCM)
             );
 
             items[i++] = _addETFactoryItem(
                 "Add ReportWithdrawalsForSlashedValidators CM ET factory",
                 easyTrack,
-                n.ReportWithdrawalsForSlashedValidatorsForCM,
+                etn.ReportWithdrawalsForSlashedValidatorsForCM,
                 bytes.concat(bytes20(c.module), bytes4(IBaseModuleV3.reportSlashedWithdrawnValidators.selector))
             );
 
             items[i++] = _addETFactoryItem(
                 "Add SettleGeneralDelayedPenalty CM ET factory",
                 easyTrack,
-                n.SettleGeneralDelayedPenaltyForCM,
+                etn.SettleGeneralDelayedPenaltyForCM,
                 bytes.concat(bytes20(c.module), bytes4(IBaseModuleV3.settleGeneralDelayedPenalty.selector))
             );
 
             items[i++] = _addETFactoryItem(
                 "Add CreateOrUpdateOperatorGroup CM ET factory",
                 easyTrack,
-                n.CreateOrUpdateOperatorGroup,
+                etn.CreateOrUpdateOperatorGroup,
                 bytes.concat(bytes20(c.metaRegistry), bytes4(IMetaRegistry.createOrUpdateOperatorGroup.selector))
             );
         }

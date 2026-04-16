@@ -78,6 +78,14 @@ export async function main() {
       twExitsPerFrame: parameters.triggerableWithdrawalsGateway.exitsPerFrame,
       twFrameDurationInSec: parameters.triggerableWithdrawalsGateway.frameDurationInSec,
 
+      // Oracle configs
+      aoConsensusVersion: parameters.accountingOracle.consensusVersion,
+      veboMaxValidatorsPerReport: parameters.validatorsExitBusOracle.maxValidatorsPerReport,
+      veboMaxExitBalanceEth: parameters.validatorsExitBusOracle.maxExitBalanceEth,
+      veboBalancePerFrameEth: parameters.validatorsExitBusOracle.balancePerFrameEth,
+      veboFrameDurationInSec: parameters.validatorsExitBusOracle.frameDurationInSec,
+      veboConsensusVersion: parameters.validatorsExitBusOracle.consensusVersion,
+
       // Consolidation
       consolidationBus: getAddress(Sk.consolidationBus, state),
 

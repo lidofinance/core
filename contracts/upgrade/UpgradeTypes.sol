@@ -35,6 +35,7 @@ interface ITimeConstraints {
 
 interface IBaseOracle is IAccessControlEnumerable, IVersioned {
     function getConsensusContract() external view returns (address);
+    function getConsensusVersion() external view returns (uint256);
 }
 
 interface IEasyTrack {
@@ -300,6 +301,16 @@ struct CoreUpgradeParams {
     uint256 twMaxExitRequestsLimit;
     uint256 twExitsPerFrame;
     uint256 twFrameDurationInSec;
+
+    // accounting oracle
+    uint256 aoConsensusVersion;
+
+    // validators exit bus oracle
+    uint256 veboMaxValidatorsPerReport;
+    uint256 veboMaxExitBalanceEth;
+    uint256 veboBalancePerFrameEth;
+    uint256 veboFrameDurationInSec;
+    uint256 veboConsensusVersion;
 }
 
 struct CSMUpgradeParams {
@@ -351,9 +362,6 @@ struct GlobalConfig {
     address easyTrackEVMScriptExecutor;
     address stakingRouter;
     address triggerableWithdrawalsGateway;
-    // address accountingOracle;
-    // address topUpGateway;
-    // address withdrawalVault;
 }
 
 struct CoreUpgradeConfig {
@@ -403,6 +411,13 @@ struct CoreUpgradeConfig {
     uint256 twMaxExitRequestsLimit;
     uint256 twExitsPerFrame;
     uint256 twFrameDurationInSec;
+
+    uint256 aoConsensusVersion;
+    uint256 veboMaxValidatorsPerReport;
+    uint256 veboMaxExitBalanceEth;
+    uint256 veboBalancePerFrameEth;
+    uint256 veboFrameDurationInSec;
+    uint256 veboConsensusVersion;
 }
 
 struct CSMUpgradeConfig {

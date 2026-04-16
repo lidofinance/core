@@ -58,6 +58,18 @@ maxExitRequestsLimit = 250
 exitsPerFrame = 1
 frameDurationInSec = 240
 
+# Accounting oracle configuration
+[accountingOracle]
+consensusVersion = 6
+
+# Validators exit bus oracle configuration
+[validatorsExitBusOracle]
+maxValidatorsPerReport = 600
+maxExitBalanceEth = 416000
+balancePerFrameEth = 32
+frameDurationInSec = 48
+consensusVersion = 5
+
 # Deposit security module configuration
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling

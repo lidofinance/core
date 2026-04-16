@@ -101,6 +101,12 @@ contract UpgradeConfig is IUpgradeConfig {
     uint256 internal immutable TW_MAX_EXIT_REQUESTS_LIMIT;
     uint256 internal immutable TW_EXITS_PER_FRAME;
     uint256 internal immutable TW_FRAME_DURATION_IN_SEC;
+    uint256 internal immutable AO_CONSENSUS_VERSION;
+    uint256 internal immutable VEBO_MAX_VALIDATORS_PER_REPORT;
+    uint256 internal immutable VEBO_MAX_EXIT_BALANCE_ETH;
+    uint256 internal immutable VEBO_BALANCE_PER_FRAME_ETH;
+    uint256 internal immutable VEBO_FRAME_DURATION_IN_SEC;
+    uint256 internal immutable VEBO_CONSENSUS_VERSION;
 
     // -------- EasyTrack addresses --------
     //
@@ -228,6 +234,13 @@ contract UpgradeConfig is IUpgradeConfig {
         TW_MAX_EXIT_REQUESTS_LIMIT = coreUpgradeParams.twMaxExitRequestsLimit;
         TW_EXITS_PER_FRAME = coreUpgradeParams.twExitsPerFrame;
         TW_FRAME_DURATION_IN_SEC = coreUpgradeParams.twFrameDurationInSec;
+
+        AO_CONSENSUS_VERSION = coreUpgradeParams.aoConsensusVersion;
+        VEBO_MAX_VALIDATORS_PER_REPORT = coreUpgradeParams.veboMaxValidatorsPerReport;
+        VEBO_MAX_EXIT_BALANCE_ETH = coreUpgradeParams.veboMaxExitBalanceEth;
+        VEBO_BALANCE_PER_FRAME_ETH = coreUpgradeParams.veboBalancePerFrameEth;
+        VEBO_FRAME_DURATION_IN_SEC = coreUpgradeParams.veboFrameDurationInSec;
+        VEBO_CONSENSUS_VERSION = coreUpgradeParams.veboConsensusVersion;
 
         // EasyTrack new factories
         EasyTrackNewFactories memory newFactories = params.newFactories;
@@ -411,7 +424,14 @@ contract UpgradeConfig is IUpgradeConfig {
             // twGateway limits
             twMaxExitRequestsLimit: TW_MAX_EXIT_REQUESTS_LIMIT,
             twExitsPerFrame: TW_EXITS_PER_FRAME,
-            twFrameDurationInSec: TW_FRAME_DURATION_IN_SEC
+            twFrameDurationInSec: TW_FRAME_DURATION_IN_SEC,
+            // oracles parameters
+            aoConsensusVersion: AO_CONSENSUS_VERSION,
+            veboMaxValidatorsPerReport: VEBO_MAX_VALIDATORS_PER_REPORT,
+            veboMaxExitBalanceEth: VEBO_MAX_EXIT_BALANCE_ETH,
+            veboBalancePerFrameEth: VEBO_BALANCE_PER_FRAME_ETH,
+            veboFrameDurationInSec: VEBO_FRAME_DURATION_IN_SEC,
+            veboConsensusVersion: VEBO_CONSENSUS_VERSION
         });
     }
 

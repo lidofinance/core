@@ -272,10 +272,11 @@ const OracleSchema = z.object({
 });
 
 const ValidatorsExitBusOracleSchema = OracleSchema.extend({
-  maxValidatorsPerRequest: PositiveIntSchema,
-  maxExitRequestsLimit: PositiveIntSchema,
-  exitsPerFrame: PositiveIntSchema,
+  maxValidatorsPerReport: PositiveIntSchema,
+  maxExitBalanceEth: PositiveIntSchema,
+  balancePerFrameEth: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
+  consensusVersion: PositiveIntSchema,
 });
 
 // Deposit security module schema
@@ -393,6 +394,8 @@ export const UpgradeParametersSchema = z.object({
   stakingRouter: StakingRouterSchema,
   withdrawalVault: WithdrawalVaultSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  accountingOracle: OracleSchema,
+  validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
 
   // csm
   csmUpgrade: CSMUpgradeConfigSchema,

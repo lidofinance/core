@@ -55,6 +55,18 @@ maxExitRequestsLimit = 250
 exitsPerFrame = 1
 frameDurationInSec = 240
 
+# Accounting oracle configuration
+[accountingOracle]
+consensusVersion = 6
+
+# Validators exit bus oracle configuration
+[validatorsExitBusOracle]
+maxValidatorsPerReport = 600
+maxExitBalanceEth = 416000
+balancePerFrameEth = 32
+frameDurationInSec = 48
+consensusVersion = 5
+
 [depositSecurityModule]
 maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
 pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
@@ -79,6 +91,8 @@ sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
 #TODO  update upon deployment
 committee = "0x00000000000000000000000000000000000abc02"
+
+       # Frame duration in seconds
 
 # Gate seal configuration for vault operations
 [consolidationGatewayGateSeal]
