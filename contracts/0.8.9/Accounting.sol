@@ -11,6 +11,7 @@ import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
 
+import {IRedeemsBuffer} from "contracts/common/interfaces/IRedeemsBuffer.sol";
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 
 import {WithdrawalQueue} from "./WithdrawalQueue.sol";
@@ -44,6 +45,7 @@ contract Accounting {
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
         IStakingRouter stakingRouter;
         IVaultHub vaultHub;
+        IRedeemsBuffer redeemsBuffer;
     }
 
     /// @notice snapshot of the protocol state that may be changed during the report
@@ -57,6 +59,7 @@ contract Accounting {
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
+        uint256 redeemedEther;
     }
 
     /// @notice precalculated values that is used to change the state of the protocol during the report
@@ -75,6 +78,8 @@ contract Accounting {
         uint256 totalSharesToBurn;
         /// @notice number of stETH shares to mint as a protocol fee
         uint256 sharesToMintAsFees;
+        /// @notice redeemed stETH shares derived from the buffer's redeemedEther at the pre-report rate
+        uint256 redeemedShares;
         /// @notice amount of NO fees to transfer to each module
         FeeDistribution feeDistribution;
         /// @notice amount of CL ether that is not rewards earned during this report period
@@ -159,6 +164,18 @@ contract Accounting {
         } else {
             pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
         }
+
+        pre.redeemedEther = _getRedeemedEther(_contracts, isSimulation);
+    }
+
+    function _getRedeemedEther(Contracts memory _contracts, bool _isSimulation) internal view returns (uint256) {
+        if (address(_contracts.redeemsBuffer) == address(0)) return 0;
+
+        if (_isSimulation) {
+            return _contracts.redeemsBuffer.getRedeemedEther();
+        } else {
+            return _contracts.redeemsBuffer.getRedeemedEtherForReport();
+        }
     }
 
     /// @dev calculates all the state changes that is required to apply the report
@@ -179,6 +196,8 @@ contract Accounting {
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clValidatorsBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
+        update.redeemedShares = LIDO.getSharesByPooledEth(_pre.redeemedEther);
+
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
         // and/or leaving some shares unburnt on Burner to be processed on future reports
@@ -188,23 +207,24 @@ contract Accounting {
             update.sharesToBurnForWithdrawals,
             update.totalSharesToBurn // shares to burn from Burner balance
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
-            _pre.totalPooledEther - _pre.externalEther, // we need to change the base as shareRate is now calculated on
-            _pre.totalShares - _pre.externalShares,     // internal ether and shares, but inside it's still total
+            _pre.totalPooledEther - _pre.externalEther - _pre.redeemedEther, // we need to change the base as shareRate is now calculated on
+            _pre.totalShares - _pre.externalShares - update.redeemedShares,  // internal ether and shares, but inside it's still total
             update.principalClBalance,
             _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
-            _report.sharesRequestedToBurn,
+            _report.sharesRequestedToBurn - update.redeemedShares,
             update.etherToFinalizeWQ,
             update.sharesToFinalizeWQ
         );
 
         uint256 postInternalSharesBeforeFees = _pre.totalShares -
             _pre.externalShares - // internal shares before
-            update.totalSharesToBurn; // shares to be burned for withdrawals and cover
+            update.totalSharesToBurn - // shares to be burned for withdrawals and cover
+            update.redeemedShares;
 
         update.postInternalEther =
-            _pre.totalPooledEther - _pre.externalEther // internal ether before
+            _pre.totalPooledEther - _pre.externalEther - _pre.redeemedEther // internal ether before
             + _report.clValidatorsBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
             + update.elRewardsVaultTransfer
             - update.etherToFinalizeWQ;
@@ -366,8 +386,11 @@ contract Accounting {
             LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
         }
 
-        if (_update.totalSharesToBurn > 0) {
-            _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
+        {
+            uint256 totalBurn = _update.totalSharesToBurn + _update.redeemedShares;
+            if (totalBurn > 0) {
+                _contracts.burner.commitSharesToBurn(totalBurn, _update.redeemedShares);
+            }
         }
 
         LIDO.collectRewardsAndProcessWithdrawals(
@@ -378,7 +401,8 @@ contract Accounting {
             _update.elRewardsVaultTransfer,
             lastWithdrawalRequestToFinalize,
             _report.simulatedShareRate,
-            _update.etherToFinalizeWQ
+            _update.etherToFinalizeWQ,
+            _pre.redeemedEther
         );
 
         if (_update.sharesToMintAsFees > 0) {
@@ -502,6 +526,8 @@ contract Accounting {
             address vaultHub
         ) = LIDO_LOCATOR.oracleReportComponents();
 
+        address redeemsBuffer = LIDO_LOCATOR.redeemsBuffer();
+
         return
             Contracts(
                 accountingOracle,
@@ -510,7 +536,8 @@ contract Accounting {
                 WithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
                 IStakingRouter(stakingRouter),
-                IVaultHub(vaultHub)
+                IVaultHub(vaultHub),
+                IRedeemsBuffer(redeemsBuffer)
             );
     }
 

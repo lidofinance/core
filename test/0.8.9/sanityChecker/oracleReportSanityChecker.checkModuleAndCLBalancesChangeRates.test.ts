@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -171,6 +172,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
         topUpGateway: deployer.address,
+        redeemsBuffer: ZeroAddress,
       },
     ]);
 
@@ -270,6 +272,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
         topUpGateway: deployer.address,
+        redeemsBuffer: ZeroAddress,
       },
     ]);
 

@@ -38,6 +38,8 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     operatorGrid: certainAddress("dummy-locator:operatorGrid"),
     lazyOracle: certainAddress("dummy-locator:lazyOracle"),
     topUpGateway: certainAddress("dummy-locator:topUpGateway"),
+    // Optional: tests that exercise the redeems flow override this with a real address.
+    redeemsBuffer: ethers.ZeroAddress,
     ...config,
   });
 
@@ -122,6 +124,7 @@ async function getLocatorConfig(locatorAddress: string): Promise<LidoLocator.Con
     "lazyOracle",
     "operatorGrid",
     "topUpGateway",
+    "redeemsBuffer",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

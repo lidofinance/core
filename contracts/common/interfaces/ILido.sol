@@ -64,7 +64,8 @@ interface ILido is IERC20, IVersioned {
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _withdrawalsShareRate,
-        uint256 _etherToLockOnWithdrawalQueue
+        uint256 _etherToLockOnWithdrawalQueue,
+        uint256 _redeemedEther
     ) external;
 
     function emitTokenRebase(
@@ -82,4 +83,14 @@ interface ILido is IERC20, IVersioned {
     function mintShares(address _recipient, uint256 _sharesAmount) external;
 
     function internalizeExternalBadDebt(uint256 _amountOfShares) external;
+
+    function getRedeemsReserveTarget() external view returns (uint256);
+
+    function getRedeemsReserveGrowthShare() external view returns (uint256);
+
+    function getWithdrawalsReserve() external view returns (uint256);
+
+    function getDepositableEther() external view returns (uint256);
+
+    function getRedeemsReserve() external view returns (uint256);
 }

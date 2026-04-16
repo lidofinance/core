@@ -4,6 +4,9 @@
 pragma solidity 0.8.9;
 
 contract Lido__MockForAccounting {
+    uint256 internal constant MOCK_TOTAL_POOLED_ETHER = 3201 ether;
+    uint256 internal constant MOCK_TOTAL_SHARES = 1 ether;
+
     uint256 public depositedValidatorsValue;
     uint256 public reportClValidators;
     uint256 public reportClBalance;
@@ -25,7 +28,8 @@ contract Lido__MockForAccounting {
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _withdrawalsShareRate,
-        uint256 _etherToLockOnWithdrawalQueue
+        uint256 _etherToLockOnWithdrawalQueue,
+        uint256 _redeemedEther
     );
     /**
      * @notice An executed shares transfer from `sender` to `recipient`.
@@ -75,11 +79,16 @@ contract Lido__MockForAccounting {
     }
 
     function getTotalPooledEther() external pure returns (uint256) {
-        return 3201000000000000000000;
+        return MOCK_TOTAL_POOLED_ETHER;
     }
 
     function getTotalShares() external pure returns (uint256) {
-        return 1000000000000000000;
+        return MOCK_TOTAL_SHARES;
+    }
+
+    function getSharesByPooledEth(uint256 _ethAmount) external pure returns (uint256) {
+        // Mirrors the real Lido formula at the constant rate exposed above.
+        return (_ethAmount * MOCK_TOTAL_SHARES) / MOCK_TOTAL_POOLED_ETHER;
     }
 
     function getExternalShares() external pure returns (uint256) {
@@ -98,7 +107,8 @@ contract Lido__MockForAccounting {
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _simulatedShareRate,
-        uint256 _etherToLockOnWithdrawalQueue
+        uint256 _etherToLockOnWithdrawalQueue,
+        uint256 _redeemedEther
     ) external {
         emit Mock__CollectRewardsAndProcessWithdrawals(
             _reportTimestamp,
@@ -108,7 +118,8 @@ contract Lido__MockForAccounting {
             _elRewardsToWithdraw,
             _lastWithdrawalRequestToFinalize,
             _simulatedShareRate,
-            _etherToLockOnWithdrawalQueue
+            _etherToLockOnWithdrawalQueue,
+            _redeemedEther
         );
     }
 

@@ -14,8 +14,11 @@ interface IBurner {
      * Commit cover/non-cover burning requests and logs cover/non-cover shares amount just burnt.
      *
      * NB: The real burn enactment to be invoked after the call (via internal Lido._burnShares())
+     *
+     * @param _sharesToBurn total shares to burn this report
+     * @param _guaranteedNonCover minimum shares to draw from non-cover before the cover-first split
      */
-    function commitSharesToBurn(uint256 _sharesToBurn) external;
+    function commitSharesToBurn(uint256 _sharesToBurn, uint256 _guaranteedNonCover) external;
 
     /**
      * Request burn shares

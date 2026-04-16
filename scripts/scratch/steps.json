@@ -11,6 +11,7 @@
     "scratch/steps/0080-issue-tokens",
     "scratch/steps/0083-deploy-core",
     "scratch/steps/0085-deploy-vaults",
+    "scratch/steps/0086-deploy-redeems-buffer",
     "scratch/steps/0090-upgrade-locator",
     "scratch/steps/0100-gate-seal",
     "scratch/steps/0110-finalize-dao",

@@ -161,6 +161,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         predepositGuarantee: deployer.address,
         operatorGrid: deployer.address,
         topUpGateway: deployer.address,
+        redeemsBuffer: ZeroAddress,
       },
     ]);
 

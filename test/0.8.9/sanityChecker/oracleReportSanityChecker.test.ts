@@ -105,6 +105,7 @@ describe("OracleReportSanityChecker.sol", () => {
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
         topUpGateway: deployer.address,
+        redeemsBuffer: ZeroAddress,
       },
     ]);
 
@@ -162,6 +163,7 @@ describe("OracleReportSanityChecker.sol", () => {
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
         topUpGateway: deployer.address,
+        redeemsBuffer: ZeroAddress,
       },
     ]);
 

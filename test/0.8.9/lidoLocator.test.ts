@@ -36,6 +36,7 @@ type ArrayToUnion<A extends readonly unknown[]> = A[number];
 type Service = ArrayToUnion<typeof services>;
 type Config = Record<Service, string> & {
   postTokenRebaseReceiver: string; // can be ZeroAddress
+  redeemsBuffer: string; // can be ZeroAddress (feature gate)
 };
 
 function randomConfig(): Config {
@@ -45,6 +46,7 @@ function randomConfig(): Config {
       return config;
     }, {} as Config),
     postTokenRebaseReceiver: ZeroAddress,
+    redeemsBuffer: ZeroAddress,
   };
 }
 

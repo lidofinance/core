@@ -114,6 +114,8 @@ export enum Sk {
   validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
   topUpGateway = "topUpGateway",
+  redeemsBuffer = "redeemsBuffer",
+  refSlotStore = "refSlotStore",
   v3TemporaryAdmin = "v3TemporaryAdmin",
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
@@ -160,6 +162,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.dgDualGovernance:
     case Sk.dgEmergencyProtectedTimelock:
     case Sk.topUpGateway:
+    case Sk.redeemsBuffer:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
@@ -191,6 +194,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationGateway:
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
+    case Sk.refSlotStore:
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:

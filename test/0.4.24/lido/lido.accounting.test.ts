@@ -397,7 +397,7 @@ describe("Lido:accounting", () => {
       expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveBefore - lockAmount);
     });
 
-    type ArgsTuple = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+    type ArgsTuple = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
 
     interface Args {
       reportTimestamp: bigint;
@@ -408,6 +408,7 @@ describe("Lido:accounting", () => {
       lastWithdrawalRequestToFinalize: bigint;
       simulatedShareRate: bigint;
       etherToLockOnWithdrawalQueue: bigint;
+      redeemedEther: bigint;
     }
 
     function args(overrides?: Partial<Args>): ArgsTuple {
@@ -420,6 +421,7 @@ describe("Lido:accounting", () => {
         lastWithdrawalRequestToFinalize: 0n,
         simulatedShareRate: 0n,
         etherToLockOnWithdrawalQueue: 0n,
+        redeemedEther: 0n,
         ...overrides,
       }) as ArgsTuple;
     }
