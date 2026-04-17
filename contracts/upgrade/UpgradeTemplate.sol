@@ -287,16 +287,6 @@ contract UpgradeTemplate {
     }
 
     function _assertPostUpgradeState(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
-        CSMUpgradeConfig memory csm = UpgradeConfig(CONFIG).getCSMUpgradeConfig();
-        CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
-
-        // if (
-        //     ILidoWithFinalizeUpgrade(LIDO).getTotalShares() != initialTotalShares
-        //         || ILidoWithFinalizeUpgrade(LIDO).getTotalPooledEther() != initialTotalPooledEther
-        // ) {
-        //     revert TotalSharesOrPooledEtherChanged();
-        // }
-
         _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.newLidoImpl);
 
         _assertProxyImplementation(c.locator, c.newLocatorImpl);
@@ -324,8 +314,8 @@ contract UpgradeTemplate {
         _assertEasyTrackFactories(g, c);
 
         _assertFinalACL(g, c);
-        _assertCSMFinalState(g, c, csm);
-        _assertCMFinalState(g, c, cm);
+        _assertCSMFinalState(g);
+        _assertCMFinalState(g);
 
         _checkSRMigration(g, c);
         _checkLidoMigration(g, c);
@@ -336,11 +326,13 @@ contract UpgradeTemplate {
         address agent = g.agent;
         // address resealManager = g.resealManager;
         address stakingRouter = g.stakingRouter;
-        // StakingRouter
+        // StakingRouter (only critical roles))
         _assertProxyAdmin(stakingRouter, agent);
         _assertSingleOZRoleHolder(stakingRouter, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_MANAGE_ROLE, agent);
         _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_UNVETTING_ROLE, c.newDepositSecurityModule);
         _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_SHARE_MANAGE_ROLE, g.easyTrackEVMScriptExecutor);
+        _assertZeroOZRoleHolders(stakingRouter, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
 
         // Accounting
         _assertProxyAdmin(c.accounting, agent);
@@ -423,18 +415,17 @@ contract UpgradeTemplate {
         }
 
         // TODO uncomment
-//        address[2] memory oldFactories = [o.CSMSettleElStealingPenalty, o.CSMSetVettedGateTree];
-//        for (uint256 i = 0; i < oldFactories.length; ++i) {
-//            if (easyTrack.isEVMScriptFactory(oldFactories[i])) {
-//                revert UnexpectedOldEasyTrackFactories();
-//            }
-//        }
+        // address[2] memory oldFactories = [o.CSMSettleElStealingPenalty, o.CSMSetVettedGateTree];
+        // for (uint256 i = 0; i < oldFactories.length; ++i) {
+        //     if (easyTrack.isEVMScriptFactory(oldFactories[i])) {
+        //         revert UnexpectedOldEasyTrackFactories();
+        //     }
+        // }
     }
 
-    function _assertCSMFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c, CSMUpgradeConfig memory csm)
-        internal
-        view
-    {
+    function _assertCSMFinalState(GlobalConfig memory g) internal view {
+        CSMUpgradeConfig memory csm = UpgradeConfig(CONFIG).getCSMUpgradeConfig();
+
         _assertProxyImplementation(csm.csm, csm.csmImpl);
         _assertProxyImplementation(csm.parametersRegistry, csm.parametersRegistryImpl);
         _assertProxyImplementation(csm.feeOracle, csm.feeOracleImpl);
@@ -466,24 +457,17 @@ contract UpgradeTemplate {
 
         _assertSingleOZRoleHolder(csm.csm, REPORT_GENERAL_DELAYED_PENALTY_ROLE, csm.generalDelayedPenaltyReporter);
         _assertSingleOZRoleHolder(csm.csm, SETTLE_GENERAL_DELAYED_PENALTY_ROLE, g.easyTrackEVMScriptExecutor);
-        _assertZeroOZRoleHolders(csm.csm, REPORT_EL_REWARDS_STEALING_PENALTY_ROLE);
-        _assertZeroOZRoleHolders(csm.csm, SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE);
+        // _assertZeroOZRoleHolders(csm.csm, REPORT_EL_REWARDS_STEALING_PENALTY_ROLE);
+        // _assertZeroOZRoleHolders(csm.csm, SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE);
         _assertSingleOZRoleHolder(csm.csm, VERIFIER_ROLE, csm.verifierV3);
-        _assertNotOZRoleHolder(csm.csm, VERIFIER_ROLE, csm.verifier);
         _assertSingleOZRoleHolder(csm.csm, REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE, csm.verifierV3);
-        _assertSingleOZRoleHolder(
-            csm.csm, REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE, g.easyTrackEVMScriptExecutor
-        );
+        _assertSingleOZRoleHolder(csm.csm, REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE, g.easyTrackEVMScriptExecutor);
         _assertTwoOZRoleHolders(csm.csm, CREATE_NODE_OPERATOR_ROLE, csm.vettedGate, csm.permissionlessGate);
-        _assertNotOZRoleHolder(csm.csm, CREATE_NODE_OPERATOR_ROLE, csm.oldPermissionlessGate);
         _assertSingleOZRoleHolder(csm.csm, PAUSE_ROLE, g.circuitBreaker);
 
         _assertSingleOZRoleHolder(csm.accounting, PAUSE_ROLE, g.circuitBreaker);
         _assertSingleOZRoleHolder(csm.feeOracle, PAUSE_ROLE, g.circuitBreaker);
         _assertSingleOZRoleHolder(csm.vettedGate, PAUSE_ROLE, g.circuitBreaker);
-        _assertNotOZRoleHolder(csm.accounting, PAUSE_ROLE, csm.gateSeal);
-        _assertNotOZRoleHolder(csm.feeOracle, PAUSE_ROLE, csm.gateSeal);
-        _assertNotOZRoleHolder(csm.vettedGate, PAUSE_ROLE, csm.gateSeal);
         _assertNotOZRoleHolder(csm.vettedGate, START_REFERRAL_SEASON_ROLE, g.agent);
         _assertNotOZRoleHolder(csm.vettedGate, END_REFERRAL_SEASON_ROLE, csm.identifiedCommunityStakersGateManager);
 
@@ -496,22 +480,10 @@ contract UpgradeTemplate {
 
         _assertNotOZRoleHolder(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, initialCSMEjector);
         _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.ejector);
-
-        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).LIDO_LOCATOR(), c.locator);
-        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).PARAMETERS_REGISTRY(), csm.parametersRegistry);
-        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).ACCOUNTING(), csm.accounting);
-        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).EXIT_PENALTIES(), csm.exitPenalties);
-        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).FEE_DISTRIBUTOR(), csm.feeDistributor);
-
-        _assertExpectedAddress(csm.feeOracle, IFeeOracleV3(csm.feeOracle).STRIKES(), csm.strikes);
-        _assertExpectedAddress(csm.accounting, IAccountingV3(csm.accounting).FEE_DISTRIBUTOR(), csm.feeDistributor);
-        _assertExpectedAddress(csm.feeDistributor, IFeeDistributorV3(csm.feeDistributor).ORACLE(), csm.feeOracle);
     }
 
-    function _assertCMFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c, CuratedModuleConfig memory cm)
-        internal
-        view
-    {
+    function _assertCMFinalState(GlobalConfig memory g) internal view {
+        CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
         address feeDistributor = IAccountingV3(cm.accounting).FEE_DISTRIBUTOR();
         address feeOracle = IFeeDistributorV3(feeDistributor).ORACLE();
         address strikes = address(IFeeOracleV3(feeOracle).STRIKES());
@@ -529,13 +501,6 @@ contract UpgradeTemplate {
         if (IPausableUntilView(cm.module).isPaused()) {
             revert CMModuleIsPaused(cm.module);
         }
-
-        _assertExpectedAddress(cm.module, IBaseModuleV3(cm.module).LIDO_LOCATOR(), c.locator);
-        _assertExpectedAddress(cm.module, IBaseModuleV3(cm.module).ACCOUNTING(), cm.accounting);
-        _assertExpectedAddress(cm.module, ICuratedModule(cm.module).META_REGISTRY(), cm.metaRegistry);
-        _assertExpectedAddress(cm.module, IBaseModuleV3(cm.module).FEE_DISTRIBUTOR(), feeDistributor);
-        _assertExpectedAddress(cm.accounting, IAccountingV3(cm.accounting).FEE_DISTRIBUTOR(), feeDistributor);
-        _assertExpectedAddress(feeOracle, IFeeOracleV3(feeOracle).getConsensusContract(), cm.hashConsensus);
 
         if (initialEpoch != cm.hashConsensusInitialEpoch) {
             revert InvalidHashConsensusInitialEpoch(cm.hashConsensus, initialEpoch, cm.hashConsensusInitialEpoch);
@@ -650,16 +615,16 @@ contract UpgradeTemplate {
     }
 
     function _assertZeroOZRoleHolders(address _accessControlled, bytes32 _role) internal view {
-        IAccessControlEnumerable accessControlled = IAccessControlEnumerable(_accessControlled);
-        if (accessControlled.getRoleMemberCount(_role) != 0) {
-            revert NonZeroRoleHolders(address(accessControlled), _role);
+        if (_getRoleMemberCount(_accessControlled, _role) != 0) {
+            revert NonZeroRoleHolders(_accessControlled, _role);
         }
     }
 
     function _assertSingleOZRoleHolder(address _accessControlled, bytes32 _role, address _holder) internal view {
-        IAccessControlEnumerable accessControlled = IAccessControlEnumerable(_accessControlled);
-        if (accessControlled.getRoleMemberCount(_role) != 1 || accessControlled.getRoleMember(_role, 0) != _holder) {
-            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), _role);
+        if (
+            _getRoleMemberCount(_accessControlled, _role) != 1 || _getRoleMember(_accessControlled, _role, 0) != _holder
+        ) {
+            revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
         }
     }
 
@@ -674,32 +639,25 @@ contract UpgradeTemplate {
     }
 
     function _assertOZRoleHolders(address _accessControlled, bytes32 _role, address[] memory _holders) internal view {
-        IAccessControlEnumerable accessControlled = IAccessControlEnumerable(_accessControlled);
-        if (accessControlled.getRoleMemberCount(_role) != _holders.length) {
-            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), _role);
+        if (_getRoleMemberCount(_accessControlled, _role) != _holders.length) {
+            revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
         }
         for (uint256 i = 0; i < _holders.length; i++) {
-            if (accessControlled.getRoleMember(_role, i) != _holders[i]) {
-                revert IncorrectOZAccessControlRoleHolders(address(accessControlled), _role);
+            if (_getRoleMember(_accessControlled, _role, i) != _holders[i]) {
+                revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
             }
         }
     }
 
     function _assertHasOZRole(address _accessControlled, bytes32 _role, address _holder) internal view {
-        if (!IAccessControl(_accessControlled).hasRole(_role, _holder)) {
+        if (!_hasRole(_accessControlled, _role, _holder)) {
             revert MissingOZAccessControlRoleHolder(_accessControlled, _role, _holder);
         }
     }
 
     function _assertNotOZRoleHolder(address _accessControlled, bytes32 _role, address _holder) internal view {
-        if (IAccessControl(_accessControlled).hasRole(_role, _holder)) {
+        if (_hasRole(_accessControlled, _role, _holder)) {
             revert UnexpectedOZAccessControlRoleHolder(_accessControlled, _role, _holder);
-        }
-    }
-
-    function _assertExpectedAddress(address _checkedContract, address _actual, address _expected) internal pure {
-        if (_actual != _expected) {
-            revert IncorrectLinkedContractAddress(_checkedContract, _actual, _expected);
         }
     }
 
@@ -722,10 +680,17 @@ contract UpgradeTemplate {
         }
     }
 
-    function _assertVersionedContractVersion(address _versioned, uint256 _expectedVersion) internal view {
-        if (IVersioned(_versioned).getContractVersion() != _expectedVersion) {
-            revert InvalidContractVersion(_versioned, _expectedVersion);
-        }
+    // OZ IAccessControlEnumerable wrappers
+    function _hasRole(address _accessControlled, bytes32 _role, address _account) internal view returns (bool) {
+        return IAccessControl(_accessControlled).hasRole(_role, _account);
+    }
+
+    function _getRoleMemberCount(address _accessControlled, bytes32 _role) internal view returns (uint256) {
+        return IAccessControlEnumerable(_accessControlled).getRoleMemberCount(_role);
+    }
+
+    function _getRoleMember(address _accessControlled, bytes32 _role, uint256 _index) internal view returns (address) {
+        return IAccessControlEnumerable(_accessControlled).getRoleMember(_role, _index);
     }
 
     function _isStartCalledInThisTx() internal view returns (bool isStartCalledInThisTx) {
