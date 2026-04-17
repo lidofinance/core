@@ -1,5 +1,7 @@
 {
   "steps": [
+    "upgrade/steps/0200-deploy-upgrade-template",
+    "upgrade/steps/0300-deploy-upgrade-vote-script",
     "upgrade/steps/1000-devnet-new-vote"
   ]
 }

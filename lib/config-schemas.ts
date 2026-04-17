@@ -386,7 +386,6 @@ export const ScratchParametersSchema = z.object({
 export const UpgradeParametersSchema = z.object({
   lido: LidoSchema,
   easyTrack: EasyTrackSchema,
-  circuitBreaker: CircuitBreakerSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerSchema,
   consolidationGateway: ConsolidationGatewaySchema,

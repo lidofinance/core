@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { processAragonVoting } from "scripts/utils/upgrade";
+import { mockAragonVoting } from "scripts/utils/upgrade";
 
 export async function main() {
   const holderAddress = process.env.HOLDER || process.env.DEPLOYER || "";
@@ -7,5 +7,5 @@ export async function main() {
   const voteDescription = process.env.VOTE_DESCRIPTION || "vote-description";
   const voteId = BigInt(process.env.VOTE_ID || "");
 
-  await processAragonVoting(holder, voteId, voteDescription);
+  await mockAragonVoting(holder, voteId, voteDescription);
 }

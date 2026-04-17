@@ -13,7 +13,7 @@ export LOCAL_RPC_URL=${RPC_URL:="http://127.0.0.1:8545"}
 export DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 # first acc of default mnemonic "test test ..."
 export MODE=forking
 
-export STEPS_FILE="upgrade/steps-devnet-fork-new-vote.json"
+export STEPS_FILE="upgrade/steps-devnet-fork.json"
 export VOTE_DESCRIPTION="upgrade-v4-devnet"
 export PROPOSAL_METADATA="upgrade-v4-devnet"
 

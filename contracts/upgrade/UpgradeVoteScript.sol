@@ -8,12 +8,12 @@ import {StakingModuleConfig} from "contracts/0.8.25/sr/SRTypes.sol";
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 import {UpgradeTemplate, UpgradeConfig} from "./UpgradeTemplate.sol";
 import {CallsScriptBuilder} from "./utils/CallScriptBuilder.sol";
-
+import {IForwarder} from "./interfaces/IForwarder.sol";
 import {
-    ITimeConstraints,
+    // ITimeConstraints,
     GlobalConfig,
     EasyTrackNewFactories,
-    EasyTrackOldFactories,
+    // EasyTrackOldFactories,
     CoreUpgradeConfig,
     CSMUpgradeConfig,
     CuratedModuleConfig,
@@ -119,6 +119,16 @@ contract UpgradeVoteScript is OmnibusBase {
     }
 
     /// @dev DG voting items
+    function getVoteItemsRaw() external view  returns (VoteItem[] memory) {
+        // set prefix to `1`, so all item's description will transform to `1.N. Description...`
+        return _wrapItemsPrefixNumber(_getVoteItems(), 1, 1);
+    }
+
+    function getVoteItemsPacked() external view returns (VoteItem[] memory) {
+        string memory description = "All vote DG items packed in one call to the Agent";
+        return _wrapItemsForwardPacked(_getVoteItems(), AGENT, description);
+    }
+
     function getVoteItems() public view override returns (VoteItem[] memory) {
         // set prefix to `1`, so all item's description will transform to `1.N. Description...`
         return _wrapItemsPrefixNumberForward(_getVoteItems(), AGENT, 1, 1);
@@ -133,7 +143,7 @@ contract UpgradeVoteScript is OmnibusBase {
         address easyTrack = g.easyTrack;
 
         // (EasyTrackNewFactories memory etn, EasyTrackOldFactories memory eto) = config.getEasyTrackConfig();
-        (EasyTrackNewFactories memory etn, ) = config.getEasyTrackConfig();
+        (EasyTrackNewFactories memory etn,) = config.getEasyTrackConfig();
 
         //
         // Delete old EasyTrack Factories
@@ -694,6 +704,20 @@ contract UpgradeVoteScript is OmnibusBase {
         return items;
     }
 
+    function _wrapItemsPrefixNumber(VoteItem[] memory items, uint256 prefixNum, uint256 startNum)
+        internal
+        pure
+        returns (VoteItem[] memory)
+    {
+        string memory prefix = string.concat(prefixNum.toString(), ".");
+        for (uint256 i = 0; i < items.length; ++i) {
+            uint256 num = i + startNum;
+            items[i].description = _addPrefixedNumber(items[i].description, prefix, num);
+        }
+
+        return items;
+    }
+
     /// @dev Wrap item with prefix, add number and forwarded `forwarder`
     function _wrapItemsPrefixNumberForward(
         VoteItem[] memory items,
@@ -709,6 +733,23 @@ contract UpgradeVoteScript is OmnibusBase {
         }
 
         return items;
+    }
+
+    function _wrapItemsForwardPacked(VoteItem[] memory items, address forwarder, string memory description)
+        internal
+        pure
+        returns (VoteItem[] memory)
+    {
+        VoteItem[] memory itemsPacked = new VoteItem[](1);
+        CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
+        for (uint256 i = 0; i < items.length; ++i) {
+            scriptBuilder.addCall(items[i].call.to, items[i].call.data);
+        }
+
+        itemsPacked[0].description = description;
+        itemsPacked[0].call = _votingCall(forwarder, abi.encodeCall(IForwarder.forward, scriptBuilder.getResult()));
+
+        return itemsPacked;
     }
 
     function _item(string memory description, address to, bytes memory data) internal pure returns (VoteItem memory) {

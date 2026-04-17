@@ -71,7 +71,6 @@ export enum Sk {
   gateSealV3 = "gateSealV3",
   gateSealFactory = "gateSealFactory",
   gateSealTW = "gateSealTW",
-  gateSealConsolidationGW = "gateSealConsolidationGW",
   resealManager = "resealManager",
   stakingRouter = "stakingRouter",
   burner = "burner",
@@ -185,7 +184,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.gateSeal:
     case Sk.gateSealV3:
     case Sk.gateSealTW:
-    case Sk.gateSealConsolidationGW:
     case Sk.resealManager:
     case Sk.hashConsensusForAccountingOracle:
     case Sk.hashConsensusForValidatorsExitBusOracle:

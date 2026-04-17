@@ -62,6 +62,8 @@ contract UpgradeTemplate {
     bytes32 internal constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
     bytes32 internal constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
     bytes32 internal constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
+    bytes32 internal constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
+
     // sr roles
     bytes32 internal constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
     bytes32 internal constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
@@ -280,19 +282,11 @@ contract UpgradeTemplate {
         // StakingRouter
         _assertProxyAdmin(stakingRouter, agent);
         _assertSingleOZRoleHolder(stakingRouter, DEFAULT_ADMIN_ROLE, agent);
-        _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_MANAGE_ROLE, agent);
         _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_UNVETTING_ROLE, c.newDepositSecurityModule);
-        _assertSingleOZRoleHolder(stakingRouter, REPORT_REWARDS_MINTED_ROLE, c.accounting);
-        _assertSingleOZRoleHolder(stakingRouter, REPORT_EXITED_VALIDATORS_ROLE, c.accountingOracle);
-        _assertSingleOZRoleHolder(stakingRouter, REPORT_VALIDATOR_EXITING_STATUS_ROLE, c.validatorsExitBusOracle);
-        _assertSingleOZRoleHolder(stakingRouter, REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE, c.withdrawalVault);
         _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_SHARE_MANAGE_ROLE, g.easyTrackEVMScriptExecutor);
-        _assertZeroOZRoleHolders(stakingRouter, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
-        _assertZeroOZRoleHolders(stakingRouter, UNSAFE_SET_EXITED_VALIDATORS_ROLE);
 
         // Accounting
         _assertProxyAdmin(c.accounting, agent);
-        _assertSingleOZRoleHolder(c.accounting, DEFAULT_ADMIN_ROLE, agent);
 
         // AccountingOracle
         _assertProxyAdmin(c.accountingOracle, agent);
@@ -315,7 +309,8 @@ contract UpgradeTemplate {
         _assertProxyAdmin(c.consolidationBus, agent);
         _assertSingleOZRoleHolder(c.consolidationBus, DEFAULT_ADMIN_ROLE, agent);
         _assertSingleOZRoleHolder(c.consolidationBus, PUBLISH_ROLE, c.consolidationMigrator);
-        _assertSingleOZRoleHolder(c.consolidationBus, REMOVE_ROLE, agent);
+        _assertZeroOZRoleHolders(c.consolidationBus, MANAGE_ROLE);
+        _assertZeroOZRoleHolders(c.consolidationBus, REMOVE_ROLE);
 
         _assertProxyAdmin(c.consolidationMigrator, agent);
         _assertSingleOZRoleHolder(c.consolidationMigrator, DEFAULT_ADMIN_ROLE, agent);
@@ -348,8 +343,8 @@ contract UpgradeTemplate {
         }
     }
 
-    function _assertEasyTrackFactories(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
-        (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = CONFIG.getEasyTrackConfig();
+    function _assertEasyTrackFactories(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
+        (EasyTrackNewFactories memory n,) = CONFIG.getEasyTrackConfig();
         IEasyTrack easyTrack = IEasyTrack(g.easyTrack);
 
         address[9] memory newFactories = [
@@ -380,7 +375,7 @@ contract UpgradeTemplate {
         // }
     }
 
-    function _checkSRMigration(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+    function _checkSRMigration(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
         CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
 
         IStakingRouter sr = IStakingRouter(g.stakingRouter);
@@ -407,14 +402,13 @@ contract UpgradeTemplate {
         }
     }
 
-    function _checkLidoMigration(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+    function _checkLidoMigration(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
         uint256 bufferedEther = ILidoWithFinalizeUpgrade(g.lido).getBufferedEther();
         if (bufferedEther != initialBufferedEther) {
             revert LidoMigrationIncorrectBufferedEther();
         }
 
-        (uint256 depositedValidators, uint256 clValidators, uint256 beaconBalance) =
-            ILidoWithFinalizeUpgrade(g.lido).getBeaconStat();
+        (uint256 depositedValidators, uint256 clValidators,) = ILidoWithFinalizeUpgrade(g.lido).getBeaconStat();
 
         if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
             revert LidoMigrationIncorrectDepositedValidators();

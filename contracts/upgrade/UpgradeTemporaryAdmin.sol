@@ -22,6 +22,7 @@ contract UpgradeTemporaryAdmin {
     bytes32 internal constant ALLOW_PAIR_ROLE = keccak256("ALLOW_PAIR_ROLE");
     bytes32 internal constant DISALLOW_PAIR_ROLE = keccak256("DISALLOW_PAIR_ROLE");
     bytes32 internal constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
+    bytes32 internal constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
     bytes32 internal constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
     bytes32 internal constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
@@ -88,6 +89,8 @@ contract UpgradeTemporaryAdmin {
 
     function _setupConsolidationBus(address _bus, address _migrator) private {
         IAccessControl(_bus).grantRole(PUBLISH_ROLE, _migrator);
+        IAccessControl(_bus).renounceRole(MANAGE_ROLE, address(this));
+        IAccessControl(_bus).renounceRole(REMOVE_ROLE, address(this));
 
         _transferAdminToAgent(_bus);
     }
