@@ -21,8 +21,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     error SenderNotAllowed();
     error UnexpectedRequestsDataLength();
 
-    event WarnDataIncompleteProcessing(uint256 indexed refSlot, uint256 requestsProcessed, uint256 requestsCount);
-
     struct DataProcessingState {
         uint64 refSlot;
         uint64 requestsCount;
@@ -210,13 +208,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     function _handleConsensusReport(
         ConsensusReport memory /* report */,
         uint256 /* prevSubmittedRefSlot */,
-        uint256 prevProcessingRefSlot
-    ) internal override {
-        DataProcessingState memory state = _storageDataProcessingState().value;
-        if (state.refSlot == prevProcessingRefSlot && state.requestsProcessed < state.requestsCount) {
-            emit WarnDataIncompleteProcessing(prevProcessingRefSlot, state.requestsProcessed, state.requestsCount);
-        }
-    }
+        uint256 /* prevProcessingRefSlot */
+    ) internal override {}
 
     function _checkMsgSenderIsAllowedToSubmitData() internal view {
         address sender = _msgSender();
