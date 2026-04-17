@@ -195,7 +195,6 @@ const CSMUpgradeConfigSchema = z.object({
   permissionlessGate: EthereumAddressSchema,
   ejector: EthereumAddressSchema,
   gateSeal: EthereumAddressSchema,
-  gateSealV3: EthereumAddressSchema,
   identifiedCommunityStakersGateManager: EthereumAddressSchema,
   generalDelayedPenaltyReporter: EthereumAddressSchema,
   penaltiesManager: EthereumAddressSchema,

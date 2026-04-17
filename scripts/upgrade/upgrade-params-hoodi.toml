@@ -142,8 +142,6 @@ permissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
 # TODO: replace with new deployed ejector
 ejector = "0x00000000000000000000000000000000000dac02"
 gateSeal = "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65"
-# TODO: replace with deployed gate seal v3
-gateSealV3 = "0x00000000000000000000000000000000000dac03"
 identifiedCommunityStakersGateManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 generalDelayedPenaltyReporter = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 penaltiesManager = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
