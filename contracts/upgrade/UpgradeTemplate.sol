@@ -10,11 +10,13 @@ import {
 } from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
 
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 import {ModuleStateConfig, StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 import {
     UpgradeParameters,
     GlobalConfig,
     CoreUpgradeConfig,
+    CSMUpgradeConfig,
     CuratedModuleConfig,
     EasyTrackNewFactories,
     EasyTrackOldFactories,
@@ -29,10 +31,24 @@ import {
     IWithdrawalVault,
     IWithdrawalsManagerProxy,
     IStakingRouter,
-    IDepositSecurityModule
+    IDepositSecurityModule,
+    IBaseModuleV3,
+    ICuratedModule,
+    IFeeOracleV3,
+    IAccountingV3,
+    IFeeDistributorV3,
+    IValidatorStrikesV3
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
+
+interface IPausableUntilView {
+    function isPaused() external view returns (bool);
+}
+
+interface IInitializedVersionView {
+    function getInitializedVersion() external view returns (uint64);
+}
 
 /**
  * @title Lido Upgrade Template
@@ -63,6 +79,26 @@ contract UpgradeTemplate {
     bytes32 internal constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
     bytes32 internal constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
     bytes32 internal constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
+    // csm roles
+    bytes32 internal constant REPORT_EL_REWARDS_STEALING_PENALTY_ROLE =
+        keccak256("REPORT_EL_REWARDS_STEALING_PENALTY_ROLE");
+    bytes32 internal constant SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE =
+        keccak256("SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE");
+    bytes32 internal constant REPORT_GENERAL_DELAYED_PENALTY_ROLE = keccak256("REPORT_GENERAL_DELAYED_PENALTY_ROLE");
+    bytes32 internal constant SETTLE_GENERAL_DELAYED_PENALTY_ROLE = keccak256("SETTLE_GENERAL_DELAYED_PENALTY_ROLE");
+    bytes32 internal constant REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE =
+        keccak256("REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE");
+    bytes32 internal constant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE =
+        keccak256("REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE");
+    bytes32 internal constant START_REFERRAL_SEASON_ROLE = keccak256("START_REFERRAL_SEASON_ROLE");
+    bytes32 internal constant END_REFERRAL_SEASON_ROLE = keccak256("END_REFERRAL_SEASON_ROLE");
+    bytes32 internal constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
+    bytes32 internal constant CREATE_NODE_OPERATOR_ROLE = keccak256("CREATE_NODE_OPERATOR_ROLE");
+    bytes32 internal constant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE =
+        keccak256("MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE");
+    bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
+    bytes32 internal constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
+    bytes32 internal constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
 
     // sr roles
     bytes32 internal constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
@@ -106,6 +142,19 @@ contract UpgradeTemplate {
     uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_VERSION = 3;
     uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION = 5;
     uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
+    uint256 public constant EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION = 3;
+
+    uint64 public constant EXPECTED_FINAL_CSM_MODULE_INITIALIZED_VERSION = 3;
+    uint64 public constant EXPECTED_FINAL_CSM_PARAMETERS_REGISTRY_INITIALIZED_VERSION = 3;
+    uint64 public constant EXPECTED_FINAL_CSM_ACCOUNTING_INITIALIZED_VERSION = 3;
+    uint64 public constant EXPECTED_FINAL_CSM_FEE_DISTRIBUTOR_INITIALIZED_VERSION = 3;
+    uint64 public constant EXPECTED_FINAL_CSM_VALIDATOR_STRIKES_INITIALIZED_VERSION = 1;
+    uint64 public constant EXPECTED_FINAL_CSM_VETTED_GATE_INITIALIZED_VERSION = 1;
+
+    uint64 public constant EXPECTED_FINAL_CM_MODULE_INITIALIZED_VERSION = 1;
+    uint64 public constant EXPECTED_FINAL_CM_ACCOUNTING_INITIALIZED_VERSION = 3;
+    uint64 public constant EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION = 3;
+    uint64 public constant EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION = 1;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -140,6 +189,7 @@ contract UpgradeTemplate {
     uint256 internal initialModulesCount;
     address[] internal initialDSMGuardians;
     uint256 internal initialDSMGuardianQuorum;
+    address internal initialCSMEjector;
 
     //
     // Slots for transient storage
@@ -163,6 +213,7 @@ contract UpgradeTemplate {
         UpgradeConfig config = UpgradeConfig(CONFIG);
         GlobalConfig memory g = config.getGlobalConfig();
         CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
+        CSMUpgradeConfig memory csm = config.getCSMUpgradeConfig();
 
         if (msg.sender != g.agent) revert OnlyAgentCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
@@ -183,6 +234,7 @@ contract UpgradeTemplate {
 
         initialDSMGuardians = IDepositSecurityModule(c.oldDepositSecurityModule).getGuardians();
         initialDSMGuardianQuorum = IDepositSecurityModule(c.oldDepositSecurityModule).getGuardianQuorum();
+        initialCSMEjector = IValidatorStrikesV3(csm.strikes).ejector();
 
         _assertPreUpgradeState(g, c);
 
@@ -235,6 +287,9 @@ contract UpgradeTemplate {
     }
 
     function _assertPostUpgradeState(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+        CSMUpgradeConfig memory csm = UpgradeConfig(CONFIG).getCSMUpgradeConfig();
+        CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
+
         // if (
         //     ILidoWithFinalizeUpgrade(LIDO).getTotalShares() != initialTotalShares
         //         || ILidoWithFinalizeUpgrade(LIDO).getTotalPooledEther() != initialTotalPooledEther
@@ -269,6 +324,8 @@ contract UpgradeTemplate {
         _assertEasyTrackFactories(g, c);
 
         _assertFinalACL(g, c);
+        _assertCSMFinalState(g, c, csm);
+        _assertCMFinalState(g, c, cm);
 
         _checkSRMigration(g, c);
         _checkLidoMigration(g, c);
@@ -344,7 +401,7 @@ contract UpgradeTemplate {
     }
 
     function _assertEasyTrackFactories(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
-        (EasyTrackNewFactories memory n,) = CONFIG.getEasyTrackConfig();
+        (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = CONFIG.getEasyTrackConfig();
         IEasyTrack easyTrack = IEasyTrack(g.easyTrack);
 
         address[9] memory newFactories = [
@@ -365,14 +422,124 @@ contract UpgradeTemplate {
             }
         }
 
-        // address[2] memory oldFactories =
-        //     [o.CSMSettleElStealingPenalty, o.CSMSetVettedGateTree];
+        // TODO uncomment
+//        address[2] memory oldFactories = [o.CSMSettleElStealingPenalty, o.CSMSetVettedGateTree];
+//        for (uint256 i = 0; i < oldFactories.length; ++i) {
+//            if (easyTrack.isEVMScriptFactory(oldFactories[i])) {
+//                revert UnexpectedOldEasyTrackFactories();
+//            }
+//        }
+    }
 
-        // for (uint256 i = 0; i < newFactories.length; ++i) {
-        //     if (easyTrack.isEVMScriptFactory(newFactories[i])) {
-        //         revert UnexpectedOldEasyTrackFactories();
-        //     }
-        // }
+    function _assertCSMFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c, CSMUpgradeConfig memory csm)
+        internal
+        view
+    {
+        _assertProxyImplementation(csm.csm, csm.csmImpl);
+        _assertProxyImplementation(csm.parametersRegistry, csm.parametersRegistryImpl);
+        _assertProxyImplementation(csm.feeOracle, csm.feeOracleImpl);
+        _assertProxyImplementation(csm.vettedGate, csm.vettedGateImpl);
+        _assertProxyImplementation(csm.accounting, csm.accountingImpl);
+        _assertProxyImplementation(csm.feeDistributor, csm.feeDistributorImpl);
+        _assertProxyImplementation(csm.exitPenalties, csm.exitPenaltiesImpl);
+        _assertProxyImplementation(csm.strikes, csm.strikesImpl);
+
+        _assertProxyAdmin(csm.csm, g.agent);
+        _assertProxyAdmin(csm.parametersRegistry, g.agent);
+        _assertProxyAdmin(csm.feeOracle, g.agent);
+        _assertProxyAdmin(csm.vettedGate, g.agent);
+        _assertProxyAdmin(csm.accounting, g.agent);
+        _assertProxyAdmin(csm.feeDistributor, g.agent);
+        _assertProxyAdmin(csm.exitPenalties, g.agent);
+        _assertProxyAdmin(csm.strikes, g.agent);
+
+        _assertInitializedContractVersion(csm.csm, EXPECTED_FINAL_CSM_MODULE_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(
+            csm.parametersRegistry, EXPECTED_FINAL_CSM_PARAMETERS_REGISTRY_INITIALIZED_VERSION
+        );
+        _assertContractVersion(csm.feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
+        _assertOracleConsensusVersion(csm.feeOracle, csm.feeOracleConsensusVersion);
+        _assertInitializedContractVersion(csm.vettedGate, EXPECTED_FINAL_CSM_VETTED_GATE_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(csm.accounting, EXPECTED_FINAL_CSM_ACCOUNTING_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(csm.feeDistributor, EXPECTED_FINAL_CSM_FEE_DISTRIBUTOR_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(csm.strikes, EXPECTED_FINAL_CSM_VALIDATOR_STRIKES_INITIALIZED_VERSION);
+
+        _assertSingleOZRoleHolder(csm.csm, REPORT_GENERAL_DELAYED_PENALTY_ROLE, csm.generalDelayedPenaltyReporter);
+        _assertSingleOZRoleHolder(csm.csm, SETTLE_GENERAL_DELAYED_PENALTY_ROLE, g.easyTrackEVMScriptExecutor);
+        _assertZeroOZRoleHolders(csm.csm, REPORT_EL_REWARDS_STEALING_PENALTY_ROLE);
+        _assertZeroOZRoleHolders(csm.csm, SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE);
+        _assertSingleOZRoleHolder(csm.csm, VERIFIER_ROLE, csm.verifierV3);
+        _assertNotOZRoleHolder(csm.csm, VERIFIER_ROLE, csm.verifier);
+        _assertSingleOZRoleHolder(csm.csm, REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE, csm.verifierV3);
+        _assertSingleOZRoleHolder(
+            csm.csm, REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE, g.easyTrackEVMScriptExecutor
+        );
+        _assertTwoOZRoleHolders(csm.csm, CREATE_NODE_OPERATOR_ROLE, csm.vettedGate, csm.permissionlessGate);
+        _assertNotOZRoleHolder(csm.csm, CREATE_NODE_OPERATOR_ROLE, csm.oldPermissionlessGate);
+        _assertSingleOZRoleHolder(csm.csm, PAUSE_ROLE, g.circuitBreaker);
+
+        _assertSingleOZRoleHolder(csm.accounting, PAUSE_ROLE, g.circuitBreaker);
+        _assertSingleOZRoleHolder(csm.feeOracle, PAUSE_ROLE, g.circuitBreaker);
+        _assertSingleOZRoleHolder(csm.vettedGate, PAUSE_ROLE, g.circuitBreaker);
+        _assertNotOZRoleHolder(csm.accounting, PAUSE_ROLE, csm.gateSeal);
+        _assertNotOZRoleHolder(csm.feeOracle, PAUSE_ROLE, csm.gateSeal);
+        _assertNotOZRoleHolder(csm.vettedGate, PAUSE_ROLE, csm.gateSeal);
+        _assertNotOZRoleHolder(csm.vettedGate, START_REFERRAL_SEASON_ROLE, g.agent);
+        _assertNotOZRoleHolder(csm.vettedGate, END_REFERRAL_SEASON_ROLE, csm.identifiedCommunityStakersGateManager);
+
+        _assertSingleOZRoleHolder(
+            csm.parametersRegistry, MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE, csm.penaltiesManager
+        );
+
+        _assertNotOZRoleHolder(g.burner, REQUEST_BURN_SHARES_ROLE, csm.accounting);
+        _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, csm.accounting);
+
+        _assertNotOZRoleHolder(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, initialCSMEjector);
+        _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.ejector);
+
+        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).LIDO_LOCATOR(), c.locator);
+        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).PARAMETERS_REGISTRY(), csm.parametersRegistry);
+        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).ACCOUNTING(), csm.accounting);
+        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).EXIT_PENALTIES(), csm.exitPenalties);
+        _assertExpectedAddress(csm.csm, IBaseModuleV3(csm.csm).FEE_DISTRIBUTOR(), csm.feeDistributor);
+
+        _assertExpectedAddress(csm.feeOracle, IFeeOracleV3(csm.feeOracle).STRIKES(), csm.strikes);
+        _assertExpectedAddress(csm.accounting, IAccountingV3(csm.accounting).FEE_DISTRIBUTOR(), csm.feeDistributor);
+        _assertExpectedAddress(csm.feeDistributor, IFeeDistributorV3(csm.feeDistributor).ORACLE(), csm.feeOracle);
+    }
+
+    function _assertCMFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c, CuratedModuleConfig memory cm)
+        internal
+        view
+    {
+        address feeDistributor = IAccountingV3(cm.accounting).FEE_DISTRIBUTOR();
+        address feeOracle = IFeeDistributorV3(feeDistributor).ORACLE();
+        address strikes = address(IFeeOracleV3(feeOracle).STRIKES());
+        (uint256 initialEpoch,) = IHashConsensus(cm.hashConsensus).getFrameConfig();
+
+        _assertInitializedContractVersion(cm.module, EXPECTED_FINAL_CM_MODULE_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(cm.accounting, EXPECTED_FINAL_CM_ACCOUNTING_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(feeDistributor, EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION);
+        _assertContractVersion(feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
+        _assertInitializedContractVersion(strikes, EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION);
+
+        _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, cm.accounting);
+        _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, cm.ejector);
+        _assertNotOZRoleHolder(cm.module, RESUME_ROLE, g.agent);
+        if (IPausableUntilView(cm.module).isPaused()) {
+            revert CMModuleIsPaused(cm.module);
+        }
+
+        _assertExpectedAddress(cm.module, IBaseModuleV3(cm.module).LIDO_LOCATOR(), c.locator);
+        _assertExpectedAddress(cm.module, IBaseModuleV3(cm.module).ACCOUNTING(), cm.accounting);
+        _assertExpectedAddress(cm.module, ICuratedModule(cm.module).META_REGISTRY(), cm.metaRegistry);
+        _assertExpectedAddress(cm.module, IBaseModuleV3(cm.module).FEE_DISTRIBUTOR(), feeDistributor);
+        _assertExpectedAddress(cm.accounting, IAccountingV3(cm.accounting).FEE_DISTRIBUTOR(), feeDistributor);
+        _assertExpectedAddress(feeOracle, IFeeOracleV3(feeOracle).getConsensusContract(), cm.hashConsensus);
+
+        if (initialEpoch != cm.hashConsensusInitialEpoch) {
+            revert InvalidHashConsensusInitialEpoch(cm.hashConsensus, initialEpoch, cm.hashConsensusInitialEpoch);
+        }
     }
 
     function _checkSRMigration(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
@@ -518,6 +685,31 @@ contract UpgradeTemplate {
         }
     }
 
+    function _assertHasOZRole(address _accessControlled, bytes32 _role, address _holder) internal view {
+        if (!IAccessControl(_accessControlled).hasRole(_role, _holder)) {
+            revert MissingOZAccessControlRoleHolder(_accessControlled, _role, _holder);
+        }
+    }
+
+    function _assertNotOZRoleHolder(address _accessControlled, bytes32 _role, address _holder) internal view {
+        if (IAccessControl(_accessControlled).hasRole(_role, _holder)) {
+            revert UnexpectedOZAccessControlRoleHolder(_accessControlled, _role, _holder);
+        }
+    }
+
+    function _assertExpectedAddress(address _checkedContract, address _actual, address _expected) internal pure {
+        if (_actual != _expected) {
+            revert IncorrectLinkedContractAddress(_checkedContract, _actual, _expected);
+        }
+    }
+
+    function _assertInitializedContractVersion(address _versioned, uint64 _expectedVersion) internal view {
+        uint64 actualVersion = IInitializedVersionView(_versioned).getInitializedVersion();
+        if (actualVersion != _expectedVersion) {
+            revert InvalidInitializedContractVersion(_versioned, actualVersion, _expectedVersion);
+        }
+    }
+
     function _assertContractVersion(address _versioned, uint256 _expectedVersion) internal view {
         if (IVersioned(_versioned).getContractVersion() != _expectedVersion) {
             revert InvalidContractVersion(_versioned, _expectedVersion);
@@ -559,8 +751,14 @@ contract UpgradeTemplate {
     error InvalidContractVersion(address contractAddress, uint256 actualVersion);
     error InvalidOracleConsensusVersion(address oracle, uint256 actualVersion);
     error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
+    error MissingOZAccessControlRoleHolder(address contractAddress, bytes32 role, address holder);
+    error UnexpectedOZAccessControlRoleHolder(address contractAddress, bytes32 role, address holder);
     error NonZeroRoleHolders(address contractAddress, bytes32 role);
     error IncorrectAragonKernelImplementation(address kernel, address implementation);
+    error IncorrectLinkedContractAddress(address contractAddress, address actualAddress, address expectedAddress);
+    error InvalidHashConsensusInitialEpoch(address consensus, uint256 actualEpoch, uint256 expectedEpoch);
+    error CMModuleIsPaused(address module);
+    error InvalidInitializedContractVersion(address contractAddress, uint64 actualVersion, uint64 expectedVersion);
 
     error LidoMigrationIncorrectBufferedEther();
     error LidoMigrationIncorrectDepositedValidators();
