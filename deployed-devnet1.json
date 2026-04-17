@@ -779,7 +779,7 @@
     "address": "0x0000000000000000000000000000000000000111",
     "note": "The reseal manager contract is not deployed, the address is set to the deployer address as a placeholder."
   },
-  "scratchDeployGasUsed": "460000989",
+  "scratchDeployGasUsed": "471860029",
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleName": "SimpleDVT",
@@ -879,7 +879,7 @@
   },
   "upgradeTemplate": {
     "contract": "contracts/upgrade/UpgradeTemplate.sol",
-    "address": "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
+    "address": "0xCA491E0B70F35e10ea80a45500c7f16148fFff36",
     "constructorArgs": [
       {
         "locator": "0x85cB33Fc344275709c0c194Bc7D1c5C32736C8B9",
@@ -914,17 +914,17 @@
           "oldStakingRouterImpl": "0x6fDA176cb71b4f2b85c17E398b58803797f721e4",
           "oldWithdrawalVaultImpl": "0x97b20dE03D78Db78fB59C9c92769ECabb183d1bA",
           "oldValidatorsExitBusOracleImpl": "0x8A28E51A50CB8b532457486443a4ab56000D0811",
-          "newLocatorImpl": "0xc6e7DF5E7b4f2A278906862b61205850344D4e7d",
-          "newLidoImpl": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-          "newAccountingImpl": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-          "newAccountingOracleImpl": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-          "newStakingRouterImpl": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
-          "newWithdrawalVaultImpl": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
-          "newValidatorsExitBusOracleImpl": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-          "consolidationBusImpl": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
-          "consolidationMigratorImpl": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE",
-          "topUpGatewayImpl": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
-          "topUpGateway": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+          "newLocatorImpl": "0xc50f6b8AcBc6C5852A44371ef31b52122F43c349",
+          "newLidoImpl": "0xa923c38662D9a0120629156a36c5029bA273d43f",
+          "newAccountingImpl": "0xbEDe43672Ef2A96F7426F91C1F4F6D4618C3E688",
+          "newAccountingOracleImpl": "0x8603eb738b381BCcbC264c4a4568650D99aec1e3",
+          "newStakingRouterImpl": "0x0A26f3D2c486e09d6D1D53De27a2CED2bDD17B34",
+          "newWithdrawalVaultImpl": "0x325cC427128Ae28Cd547D5D112cabD65EE79719A",
+          "newValidatorsExitBusOracleImpl": "0x0dbbEDA8D62db7bdB8929da9f8db3318b0299067",
+          "consolidationBusImpl": "0x6BDfDD18391507eFc8534752328b8cbAbeBfc480",
+          "consolidationMigratorImpl": "0xA08Ff9f3262A0E42e241cBDeBFBED1D3d601A12a",
+          "topUpGatewayImpl": "0x8aD9e7419e0954606f955F8A8d5864a244F2e432",
+          "topUpGateway": "0x6fBC704F5a3B7Cc7C1Cf6991483508EdeddBf169",
           "topUpGatewayDepositor": "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
           "twMaxExitRequestsLimit": 250,
           "twExitsPerFrame": 1,
@@ -935,8 +935,8 @@
           "veboBalancePerFrameEth": 32,
           "veboFrameDurationInSec": 48,
           "veboConsensusVersion": 5,
-          "consolidationBus": "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1",
-          "consolidationMigrator": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
+          "consolidationBus": "0xAd9cfEB98bD1D4769C45Bd2Ec551197096e26e64",
+          "consolidationMigrator": "0x36dD4b2B46a27A33b1caAe819F53E4E7a0cE785b",
           "curatedModuleCommittee": "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
           "lidoDepositsReserveTarget": "1000000000000000000000"
         },
@@ -957,8 +957,7 @@
           "verifierV3": "0x50d6EDfE6669e91dcab40503E5Aa1f49A6933F19",
           "permissionlessGate": "0xD29438F352dF79e948B9F79f273e3Fda528C5C06",
           "ejector": "0xE9D7a318F531AB07abb7E5560aa55E23365a9515",
-          "gateSeal": "0x0000000000000000000000000000000000000000",
-          "gateSealV3": "0x0000000000000000000000000000000000000000",
+          "gateSeal": "0xE25583099BA105D9ec0A67f5Ae86D90e50036425",
           "identifiedCommunityStakersGateManager": "0xE25583099BA105D9ec0A67f5Ae86D90e50036425",
           "generalDelayedPenaltyReporter": "0xE25583099BA105D9ec0A67f5Ae86D90e50036425",
           "penaltiesManager": "0xE25583099BA105D9ec0A67f5Ae86D90e50036425"
@@ -985,9 +984,9 @@
   },
   "upgradeVoteScript": {
     "contract": "contracts/upgrade/UpgradeVoteScript.sol",
-    "address": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
+    "address": "0xe23D0FF9A9b9e3A8db061F554ccA4403dA731d5c",
     "constructorArgs": [
-      ["0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1", "0x2a30F5aC03187674553024296bed35Aa49749DDa", 0, 86400]
+      ["0xCA491E0B70F35e10ea80a45500c7f16148fFff36", "0x2a30F5aC03187674553024296bed35Aa49749DDa", 0, 86400]
     ]
   },
   "validatorConsolidationRequests": {
