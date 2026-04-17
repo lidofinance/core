@@ -108,8 +108,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     }
 
     /**
-     * @notice Method verifying Merkle proofs on validators, making check of age of slot's proof
-     * and proceeding to top up validators via StakingRouter.topUp(stakingModuleId, keyIndices, operatorIds, pubkeysPacked, topUpLimitsGwei)
+     * @notice Method verifying Merkle proofs on validators and proceeding to top up validators
+     * via StakingRouter.topUp(stakingModuleId, keyIndices, operatorIds, pubkeys, topUpLimits)
      * @param _topUps TopUpData structure, containing validators' container fields, pending deposits
      *  and Merkle proofs on inclusion of each container in Beacon State tree
      * @dev Only callable by accounts with TOP_UP_ROLE.
@@ -123,7 +123,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
      *  - validatorIndices is empty, or any of keyIndices, operatorIds, validatorWitness,
      *    pendingBalanceGwei has a length different from validatorIndices
      *    (`WrongArrayLength`);
-     *  - validatorIndices length maxValidatorsPerTopUp (`MaxValidatorsPerTopUpExceeded`);
+     *  - validatorIndices length exceeds maxValidatorsPerTopUp (`MaxValidatorsPerTopUpExceeded`);
      *  - validatorIndices is not strictly increasing (not sorted or contains duplicates) (`InvalidValidatorIndicesSortOrder`);
      *  - fewer than minBlockDistance blocks have passed since the last top-up (`MinBlockDistanceNotMet`);
      *  - the beacon root is older than maxRootAge relative to block.timestamp (`RootIsTooOld`);
@@ -148,7 +148,6 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
             revert WrongArrayLength();
         }
 
-        // length should be less than or eq maxValidatorsPerTopUp
         if (validatorsCount > $.maxValidatorsPerTopUp) {
             revert MaxValidatorsPerTopUpExceeded();
         }
