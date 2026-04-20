@@ -51,6 +51,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     clBalanceOraclesErrorUpperBPLimit: 50n,
     consolidationEthAmountPerDayLimit: 0n,
     exitedValidatorEthAmountLimit: 1n,
+    externalPendingBalanceCapEth: 0n,
   };
 
   let originalState: string;

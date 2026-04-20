@@ -58,6 +58,7 @@ describe("OracleReportSanityChecker.sol", () => {
     clBalanceOraclesErrorUpperBPLimit: 50n,
     consolidationEthAmountPerDayLimit: 10n,
     exitedValidatorEthAmountLimit: 1n,
+    externalPendingBalanceCapEth: 0n,
   };
 
   let originalState: string;
@@ -214,6 +215,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(limits.clBalanceOraclesErrorUpperBPLimit).to.equal(defaultLimits.clBalanceOraclesErrorUpperBPLimit);
       expect(limits.consolidationEthAmountPerDayLimit).to.equal(defaultLimits.consolidationEthAmountPerDayLimit);
       expect(limits.exitedValidatorEthAmountLimit).to.equal(defaultLimits.exitedValidatorEthAmountLimit);
+      expect(limits.externalPendingBalanceCapEth).to.equal(defaultLimits.externalPendingBalanceCapEth);
     });
 
     it("returns max positive token rebase and max CL decrease BP", async () => {
@@ -236,6 +238,7 @@ describe("OracleReportSanityChecker.sol", () => {
         appearedEthAmountPerDayLimit: 88n,
         consolidationEthAmountPerDayLimit: 7n,
         exitedValidatorEthAmountLimit: 2n,
+        externalPendingBalanceCapEth: 9n,
       };
 
       await checker.connect(admin).grantRole(await checker.ALL_LIMITS_MANAGER_ROLE(), manager.address);
@@ -252,13 +255,16 @@ describe("OracleReportSanityChecker.sol", () => {
         .to.emit(checker, "ConsolidationEthAmountPerDayLimitSet")
         .withArgs(7n)
         .to.emit(checker, "ExitedValidatorEthAmountLimitSet")
-        .withArgs(2n);
+        .withArgs(2n)
+        .to.emit(checker, "ExternalPendingBalanceCapEthSet")
+        .withArgs(9n);
 
       const limits = await checker.getOracleReportLimits();
       expect(limits.exitedEthAmountPerDayLimit).to.equal(42n);
       expect(limits.appearedEthAmountPerDayLimit).to.equal(88n);
       expect(limits.consolidationEthAmountPerDayLimit).to.equal(7n);
       expect(limits.exitedValidatorEthAmountLimit).to.equal(2n);
+      expect(limits.externalPendingBalanceCapEth).to.equal(9n);
     });
 
     it("setExitedEthAmountPerDayLimit: validates bounds", async () => {
@@ -351,6 +357,30 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(
         checker.connect(manager).setExitedValidatorEthAmountLimit(OVER_UINT16),
       ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
+    });
+
+    it("setExternalPendingBalanceCapEth: ACL, bounds and update", async () => {
+      await checker
+        .connect(admin)
+        .grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+
+      await expect(
+        checker.connect(stranger).setExternalPendingBalanceCapEth(5n),
+      ).to.be.revertedWithOZAccessControlError(
+        stranger.address,
+        await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(),
+      );
+
+      await expect(checker.connect(manager).setExternalPendingBalanceCapEth(OVER_UINT16)).to.be.revertedWithCustomError(
+        checker,
+        "IncorrectLimitValue",
+      );
+
+      await expect(checker.connect(manager).setExternalPendingBalanceCapEth(5n))
+        .to.emit(checker, "ExternalPendingBalanceCapEthSet")
+        .withArgs(5n);
+
+      expect((await checker.getOracleReportLimits()).externalPendingBalanceCapEth).to.equal(5n);
     });
 
     it("setRequestTimestampMargin validates uint32 bound", async () => {
@@ -728,6 +758,16 @@ describe("OracleReportSanityChecker.sol", () => {
       ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
     });
 
+    it("setOracleReportLimits rejects invalid externalPendingBalanceCapEth", async () => {
+      await checker.connect(admin).grantRole(await checker.ALL_LIMITS_MANAGER_ROLE(), manager.address);
+
+      await expect(
+        checker
+          .connect(manager)
+          .setOracleReportLimits({ ...defaultLimits, externalPendingBalanceCapEth: OVER_UINT16 }, ZeroAddress),
+      ).to.be.revertedWithCustomError(checker, "IncorrectLimitValue");
+    });
+
     it("setOracleReportLimits rejects invalid annualBalanceIncreaseBPLimit", async () => {
       await checker.connect(admin).grantRole(await checker.ALL_LIMITS_MANAGER_ROLE(), manager.address);
 
@@ -782,6 +822,7 @@ describe("OracleReportSanityChecker.sol", () => {
         clBalanceOraclesErrorUpperBPLimit: TOTAL_BASIS_POINTS,
         consolidationEthAmountPerDayLimit: OVER_UINT32 - 1n,
         exitedValidatorEthAmountLimit: OVER_UINT16 - 1n,
+        externalPendingBalanceCapEth: OVER_UINT16 - 1n,
       };
 
       const roundtrip = await wrapper.roundtripRawLimits(maxPackedLimits);
@@ -803,6 +844,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(roundtrip.clBalanceOraclesErrorUpperBPLimit).to.equal(maxPackedLimits.clBalanceOraclesErrorUpperBPLimit);
       expect(roundtrip.consolidationEthAmountPerDayLimit).to.equal(maxPackedLimits.consolidationEthAmountPerDayLimit);
       expect(roundtrip.exitedValidatorEthAmountLimit).to.equal(maxPackedLimits.exitedValidatorEthAmountLimit);
+      expect(roundtrip.externalPendingBalanceCapEth).to.equal(maxPackedLimits.externalPendingBalanceCapEth);
     });
 
     it("packAndStore caches packed limits in wrapper storage", async () => {
@@ -832,6 +874,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(accountingPacked.clBalanceOraclesErrorUpperBPLimit).to.equal(
         defaultLimits.clBalanceOraclesErrorUpperBPLimit,
       );
+      expect(accountingPacked.externalPendingBalanceCapEth).to.equal(defaultLimits.externalPendingBalanceCapEth);
 
       const operationalPacked = await wrapper.exposeOperationalPackedLimits();
       expect(operationalPacked.maxBalanceExitRequestedPerReportInEth).to.equal(
@@ -879,6 +922,9 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(afterAccountingUpdate.requestTimestampMargin).to.equal(afterOperationalUpdate.requestTimestampMargin);
       expect(afterAccountingUpdate.maxItemsPerExtraDataTransaction).to.equal(
         afterOperationalUpdate.maxItemsPerExtraDataTransaction,
+      );
+      expect(afterAccountingUpdate.externalPendingBalanceCapEth).to.equal(
+        afterOperationalUpdate.externalPendingBalanceCapEth,
       );
     });
 
@@ -1027,6 +1073,19 @@ describe("OracleReportSanityChecker.sol", () => {
         await expect(checker.checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, unexpectedPendingWei, 0n, noDeposits))
           .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
           .withArgs(0n, unexpectedPendingWei);
+      });
+
+      it("allows a positive first report within external pending balance cap", async () => {
+        const externalPendingBalanceCapEth = 1n;
+        const reportedPendingWei = externalPendingBalanceCapEth * ether("1");
+
+        await checker
+          .connect(admin)
+          .grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+        await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+
+        await expect(checker.checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, reportedPendingWei, 0n, noDeposits)).not
+          .to.be.reverted;
       });
 
       it("allows the first-report total CL increase up to deposits", async () => {
@@ -1335,6 +1394,107 @@ describe("OracleReportSanityChecker.sol", () => {
       )
         .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
         .withArgs(0n, 1n);
+    });
+
+    it("allows pending above the funded envelope within external pending balance cap on accounting path", async () => {
+      const externalPendingBalanceCapEth = 2n;
+      const preCLBalanceWei = ether("100");
+      const reportedPendingWei = (externalPendingBalanceCapEth - 1n) * ether("1");
+
+      await checker
+        .connect(admin)
+        .grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+      await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(
+          ...report({
+            preCLBalance: preCLBalanceWei,
+            postCLBalance: preCLBalanceWei,
+            preCLPendingBalance: 0n,
+            postCLPendingBalance: reportedPendingWei,
+            deposits: 0n,
+          }),
+        ),
+      ).not.to.be.reverted;
+    });
+
+    it("allows pending exactly at external pending balance cap on accounting path", async () => {
+      const externalPendingBalanceCapEth = 2n;
+      const totalCLBalanceWei = ether("100");
+      const reportedPendingWei = externalPendingBalanceCapEth * ether("1");
+
+      await checker
+        .connect(admin)
+        .grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+      await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(
+          ...report({
+            preCLBalance: totalCLBalanceWei,
+            postCLBalance: totalCLBalanceWei,
+            preCLPendingBalance: 0n,
+            postCLPendingBalance: reportedPendingWei,
+            deposits: 0n,
+          }),
+        ),
+      ).not.to.be.reverted;
+    });
+
+    it("reverts when pending exceeds external pending balance cap on accounting path", async () => {
+      const externalPendingBalanceCapEth = 2n;
+      const totalCLBalanceWei = ether("100");
+      const pendingBalanceCapWei = externalPendingBalanceCapEth * ether("1");
+      const reportedPendingWei = pendingBalanceCapWei + 1n;
+
+      await checker
+        .connect(admin)
+        .grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+      await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(
+          ...report({
+            preCLBalance: totalCLBalanceWei,
+            postCLBalance: totalCLBalanceWei,
+            preCLPendingBalance: 0n,
+            postCLPendingBalance: reportedPendingWei,
+            deposits: 0n,
+          }),
+        ),
+      )
+        .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
+        .withArgs(pendingBalanceCapWei, reportedPendingWei);
+    });
+
+    it("does not count external pending balance cap as activation budget on accounting path", async () => {
+      const externalPendingBalanceCapEth = 2n;
+      const preCLBalanceWei = ether("100");
+      const reportedPendingWei = (externalPendingBalanceCapEth - 1n) * ether("1");
+      const allowedValidatorsIncreaseWei = ether("10");
+      const reportedValidatorsIncreaseWei = allowedValidatorsIncreaseWei + ether("1");
+      const postCLBalanceWei = preCLBalanceWei + reportedPendingWei + reportedValidatorsIncreaseWei;
+
+      await checker
+        .connect(admin)
+        .grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+      await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+
+      await expect(
+        checker.connect(accountingSigner).checkAccountingOracleReport(
+          ...report({
+            timeElapsed: 365n * 24n * 60n * 60n,
+            preCLBalance: preCLBalanceWei,
+            postCLBalance: postCLBalanceWei,
+            preCLPendingBalance: 0n,
+            postCLPendingBalance: reportedPendingWei,
+            deposits: 0n,
+          }),
+        ),
+      )
+        .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
+        .withArgs(allowedValidatorsIncreaseWei, reportedValidatorsIncreaseWei);
     });
 
     it("reverts when validator decrease is hidden by pending increase", async () => {
