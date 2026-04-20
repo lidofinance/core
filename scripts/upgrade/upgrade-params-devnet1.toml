@@ -151,7 +151,7 @@ stakingModuleFee = 800
 treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
-hashConsensusInitialEpoch = 1796 # Thu Apr 16 16:02:55 CEST 2026
+hashConsensusInitialEpoch = 2694 # Mon Apr 20 15:50:07 CEST 2026
 
 [upgradeVoteScript]
 # Expiry timestamp after which the upgrade transaction will revert
