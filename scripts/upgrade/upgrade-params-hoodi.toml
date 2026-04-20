@@ -99,16 +99,17 @@ committee = "0x00000000000000000000000000000000000abc02"
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
-maxValidatorsPerTopUp = 100           # Maximum validators per top-up call
-minBlockDistance = 1                  # Minimum block distance between top-ups
-maxRootAge = 300                      # Maximum allowed age of beacon root relative to current block timestamp
-targetBalanceGwei = 2046750000000
-minTopUpGwei = 1000000000
+maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process _minBlockDistance 1 Minimum block distance between topUp calls
+minBlockDistance = 1
+maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove validator state
+targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
+minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
 # Generalized indices for validator/balance/pending state verification
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
+# Pivot slot for fork-aware gIndex selection
 pivotSlot = 0
-#TODO  update upon deployment           # Pivot slot for fork-aware gIndex selection
+#TODO  update upon deployment
 depositor = "0x00000000000000000000000000000000000abc04"
 
 # StakingRouter configuration

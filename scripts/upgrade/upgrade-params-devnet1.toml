@@ -92,7 +92,6 @@ executor="0x8943545177806ED17B9F23F0a21ee5948eCaa776"  # dummu field devnet depl
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-#TODO  update upon deployment
 committee = "0x8943545177806ED17B9F23F0a21ee5948eCaa776"        # devnet deployer
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
@@ -105,8 +104,8 @@ minTopUpGwei = 1000000000
 # Generalized indices for validator/balance/pending state verification
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
+# Pivot slot for fork-aware gIndex selection
 pivotSlot = 0
-#TODO  update upon deployment           # Pivot slot for fork-aware gIndex selection
 depositor = "0x8943545177806ED17B9F23F0a21ee5948eCaa776" # devnet deployer
 
 # StakingRouter configuration
