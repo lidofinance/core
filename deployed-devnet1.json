@@ -779,7 +779,7 @@
     "address": "0x0000000000000000000000000000000000000111",
     "note": "The reseal manager contract is not deployed, the address is set to the deployer address as a placeholder."
   },
-  "scratchDeployGasUsed": "471860029",
+  "scratchDeployGasUsed": "483719081",
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleName": "SimpleDVT",
@@ -879,7 +879,7 @@
   },
   "upgradeTemplate": {
     "contract": "contracts/upgrade/UpgradeTemplate.sol",
-    "address": "0xCA491E0B70F35e10ea80a45500c7f16148fFff36",
+    "address": "0x4869a340FEe68f625bb16bbeBa5aE56cb9eBCac0",
     "constructorArgs": [
       {
         "locator": "0x85cB33Fc344275709c0c194Bc7D1c5C32736C8B9",
@@ -971,7 +971,7 @@
           "treasuryFee": 200,
           "maxDepositsPerBlock": 30,
           "minDepositBlockDistance": 25,
-          "hashConsensusInitialEpoch": 1796
+          "hashConsensusInitialEpoch": 2694
         }
       },
       1780272000
@@ -984,9 +984,9 @@
   },
   "upgradeVoteScript": {
     "contract": "contracts/upgrade/UpgradeVoteScript.sol",
-    "address": "0xe23D0FF9A9b9e3A8db061F554ccA4403dA731d5c",
+    "address": "0xDD51dfACb742c5f97104328DeCEeceB7c560dF2c",
     "constructorArgs": [
-      ["0xCA491E0B70F35e10ea80a45500c7f16148fFff36", "0x2a30F5aC03187674553024296bed35Aa49749DDa", 0, 86400]
+      ["0x4869a340FEe68f625bb16bbeBa5aE56cb9eBCac0", "0x2a30F5aC03187674553024296bed35Aa49749DDa", 0, 86400]
     ]
   },
   "validatorConsolidationRequests": {
