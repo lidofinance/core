@@ -1,17 +1,82 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { DepositSecurityModule, IOracleReportSanityChecker_preV4, LidoLocator } from "typechain-types";
+import {
+  Accounting__factory,
+  AccountingOracle__factory,
+  ConsolidationBus,
+  ConsolidationBus__factory,
+  ConsolidationGateway__factory,
+  ConsolidationMigrator,
+  ConsolidationMigrator__factory,
+  DepositSecurityModule,
+  DepositSecurityModule__factory,
+  IOracleReportSanityChecker_preV4,
+  Lido__factory,
+  LidoLocator,
+  LidoLocator__factory,
+  OracleReportSanityChecker__factory,
+  StakingRouter__factory,
+  TopUpGateway,
+  TopUpGateway__factory,
+  UpgradeTemporaryAdmin,
+  UpgradeTemporaryAdmin__factory,
+  ValidatorsExitBusOracle__factory,
+  WithdrawalVault__factory,
+} from "typechain-types";
 
-import { loadContract } from "lib/contract";
-import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
-import { getAddress, readNetworkState, Sk } from "lib/state-file";
+import {
+  bl,
+  checkConfirm,
+  ConstructorArgs,
+  deployBehindOssifiableProxy,
+  deployImplementation,
+  deployWithoutProxy,
+  getAddress,
+  gr,
+  InitializeArgs,
+  loadContract,
+  log,
+  logArgs,
+  makeTx,
+  MethodArgs,
+  mg,
+  readNetworkState,
+  Sk,
+} from "lib";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function initEncode(contractName: string, initArgs: any[]) {
+  const contractInterface = await ethers.getContractFactory(contractName);
+  const initData = contractInterface.interface.encodeFunctionData("initialize", initArgs);
+  return initData;
+}
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
 
+  const deployerBalance = await ethers.provider.getBalance(deployer);
+  const { chainId } = await ethers.provider.getNetwork();
+
+  log.splitter();
+  log.header("SRv3/CMv2 — Deploy & setup Base Contracts");
+  log.splitter();
+
+  log.info("Network", {
+    "name": mg(network.name),
+    "chain ID": mg(chainId.toString()),
+  });
+
+  log.info("Deployer", {
+    address: bl(deployer),
+    balance: `${gr(ethers.formatEther(deployerBalance))} ETH`,
+  });
+
+  //
+  //  Collect all param values
+  //
   const agentAddress = getAddress(Sk.appAgent, state);
   const treasuryAddress = agentAddress;
   const lidoAddress = getAddress(Sk.appLido, state);
@@ -19,6 +84,7 @@ export async function main() {
   const locatorAddress = getAddress(Sk.lidoLocator, state);
   const stakingRouterAddress = getAddress(Sk.stakingRouter, state);
   const accountingAddress = getAddress(Sk.accounting, state);
+  // const accountingOracleAddress = getAddress(Sk.accountingOracle, state);
   const withdrawalVaultAddress = getAddress(Sk.withdrawalVault, state);
   const triggerableWithdrawalsGatewayAddress = getAddress(Sk.triggerableWithdrawalsGateway, state);
   const validatorExitDelayVerifierAddress = getAddress(Sk.validatorExitDelayVerifier, state);
@@ -35,128 +101,12 @@ export async function main() {
   const circuitBreakerAddress = state[Sk.circuitBreaker].address;
 
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
-
-  //
-  // Deploy TemporaryAdmin
-  //
-  const tempAdmin = await deployWithoutProxy(Sk.upgradeTemporaryAdmin, "UpgradeTemporaryAdmin", deployer, [
-    agentAddress,
-  ]);
-
-  //
-  // Deploy Lido new implementation
-  //
-  await deployImplementation(Sk.appLido, "Lido", deployer);
-
-  //
-  // Deploy Accounting & AccountingOracle
-  //
-  await deployImplementation(Sk.accounting, "Accounting", deployer, [locatorAddress, lidoAddress]);
-  await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, [
-    locatorAddress,
-    Number(chainSpec.secondsPerSlot),
-    Number(chainSpec.genesisTime),
-  ]);
-
-  //
-  // Deploy ValidatorsExitBusOracle
-  //
-  await deployImplementation(Sk.validatorsExitBusOracle, "ValidatorsExitBusOracle", deployer, [
-    Number(chainSpec.secondsPerSlot),
-    Number(chainSpec.genesisTime),
-    locatorAddress,
-  ]);
-
-  //
-  // Deploy libraries & StakingRouter
-  //
-  const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
-  const minFirstAllocationStrategy = await deployWithoutProxy(
-    Sk.minFirstAllocationStrategy,
-    "MinFirstAllocationStrategy",
-    deployer,
-  );
-  const srLib = await deployWithoutProxy(Sk.srLib, "SRLib", deployer, [], "address", true, {
-    libraries: {
-      MinFirstAllocationStrategy: minFirstAllocationStrategy.address,
-    },
-  });
-
-  await deployImplementation(
-    Sk.stakingRouter,
-    "StakingRouter",
-    deployer,
-    [
-      depositContractAddress,
-      lidoAddress,
-      locatorAddress,
-      parameters.stakingRouter.maxEBType1,
-      parameters.stakingRouter.maxEBType2,
-    ],
-    {
-      libraries: {
-        BeaconChainDepositor: beaconChainDepositor.address,
-        SRLib: srLib.address,
-      },
-    },
-  );
-
-  //
-  // Deploy TopUpGateway
-  //
-  const topUpGatewayInterface = await ethers.getContractFactory("TopUpGateway");
-  const topUpGatewayInitData = topUpGatewayInterface.interface.encodeFunctionData("initialize", [
-    tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin
-    parameters.topUpGateway.maxValidatorsPerTopUp,
-    parameters.topUpGateway.minBlockDistance,
-    parameters.topUpGateway.maxRootAge,
-    parameters.topUpGateway.targetBalanceGwei,
-    parameters.topUpGateway.minTopUpGwei,
-  ]);
-
-  const topUpGateway = await deployBehindOssifiableProxy(
-    Sk.topUpGateway,
-    "TopUpGateway",
-    proxyContractsOwner,
-    deployer,
-    [
-      locatorAddress,
-      parameters.topUpGateway.gIFirstValidatorPrev,
-      parameters.topUpGateway.gIFirstValidatorCurr,
-      parameters.topUpGateway.pivotSlot,
-      chainSpec.slotsPerEpoch,
-    ],
-    null, // implementation
-    true, // withStateFile
-    undefined, // factoryOptions
-    topUpGatewayInitData,
-  );
-
-  //
-  // Deploy  DepositSecurityModule
-  //
-  const depositSecurityModule_ = await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
-    lidoAddress,
-    depositContractAddress,
-    stakingRouterAddress,
-    parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
-    parameters.depositSecurityModule.maxOperatorsPerUnvetting,
-  ]);
-  const depositSecurityModule = await loadContract<DepositSecurityModule>(
-    "DepositSecurityModule",
-    depositSecurityModule_.address,
-  );
-  await depositSecurityModule.setOwner(tempAdmin.address);
-
-  //
-  // Deploy OracleReportSanityChecker
-  //
+  // old sanity checker
   const oldSanityChecker = await loadContract<IOracleReportSanityChecker_preV4>(
     "IOracleReportSanityChecker_preV4",
     await locator.oracleReportSanityChecker(),
   );
   const oldCheckerLimits = await oldSanityChecker.getOracleReportLimits();
-
   // TODO: confirm that old values for some params are correct
   const newCheckerLimits = {
     exitedEthAmountPerDayLimit: parameters.oracleReportSanityChecker.exitedEthAmountPerDayLimit,
@@ -176,85 +126,269 @@ export async function main() {
     exitedValidatorEthAmountLimit: parameters.oracleReportSanityChecker.exitedValidatorEthAmountLimit,
   };
 
+  //
+  // Deploy TemporaryAdmin
+  //
+  const tempAdminConstructorArgs: ConstructorArgs<UpgradeTemporaryAdmin__factory> = [agentAddress];
+  log.splitter();
+  await logArgs("UpgradeTemporaryAdmin", tempAdminConstructorArgs);
+  await checkConfirm();
+
+  const tempAdmin = await deployWithoutProxy(
+    Sk.upgradeTemporaryAdmin,
+    "UpgradeTemporaryAdmin",
+    deployer,
+    tempAdminConstructorArgs,
+  );
+
+  log.success("UpgradeTemporaryAdmin deployed: ", bl(tempAdmin.address));
+
+  const constructorArgs: {
+    Lido: ConstructorArgs<Lido__factory>;
+    Accounting: ConstructorArgs<Accounting__factory>;
+    AccountingOracle: ConstructorArgs<AccountingOracle__factory>;
+    ValidatorsExitBusOracle: ConstructorArgs<ValidatorsExitBusOracle__factory>;
+    StakingRouter: ConstructorArgs<StakingRouter__factory>;
+    TopUpGateway: ConstructorArgs<TopUpGateway__factory>;
+    DepositSecurityModule: ConstructorArgs<DepositSecurityModule__factory>;
+    OracleReportSanityChecker: ConstructorArgs<OracleReportSanityChecker__factory>;
+    ConsolidationGateway: ConstructorArgs<ConsolidationGateway__factory>;
+  } = {
+    Lido: [],
+    Accounting: [locatorAddress, lidoAddress],
+    AccountingOracle: [locatorAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
+    ValidatorsExitBusOracle: [Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime), locatorAddress],
+    StakingRouter: [
+      depositContractAddress,
+      lidoAddress,
+      locatorAddress,
+      parameters.stakingRouter.maxEBType1,
+      parameters.stakingRouter.maxEBType2,
+    ],
+    TopUpGateway: [
+      locatorAddress,
+      parameters.topUpGateway.gIFirstValidatorPrev,
+      parameters.topUpGateway.gIFirstValidatorCurr,
+      parameters.topUpGateway.pivotSlot,
+      chainSpec.slotsPerEpoch,
+    ],
+    DepositSecurityModule: [
+      lidoAddress,
+      depositContractAddress,
+      stakingRouterAddress,
+      parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
+      parameters.depositSecurityModule.maxOperatorsPerUnvetting,
+    ],
+    OracleReportSanityChecker: [locatorAddress, accountingAddress, agentAddress, newCheckerLimits],
+    ConsolidationGateway: [
+      tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin,
+      locatorAddress,
+      parameters.consolidationGateway.maxConsolidationRequestsLimit,
+      parameters.consolidationGateway.consolidationsPerFrame,
+      parameters.consolidationGateway.frameDurationInSec,
+      parameters.consolidationGateway.gIFirstValidatorPrev,
+      parameters.consolidationGateway.gIFirstValidatorCurr,
+      parameters.consolidationGateway.pivotSlot,
+    ],
+  };
+
+  const topUpGatewayInitArgs: InitializeArgs<TopUpGateway> = [
+    tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin
+    parameters.topUpGateway.maxValidatorsPerTopUp,
+    parameters.topUpGateway.minBlockDistance,
+    parameters.topUpGateway.maxRootAge,
+    parameters.topUpGateway.targetBalanceGwei,
+    parameters.topUpGateway.minTopUpGwei,
+  ];
+
+  log.splitter();
+  await logArgs("Lido", constructorArgs.Lido);
+  await logArgs("Accounting", constructorArgs.Accounting);
+  await logArgs("AccountingOracle", constructorArgs.AccountingOracle);
+  await logArgs("ValidatorsExitBusOracle", constructorArgs.ValidatorsExitBusOracle);
+  await logArgs("StakingRouter", constructorArgs.StakingRouter);
+  await logArgs("TopUpGateway", constructorArgs.TopUpGateway);
+  await logArgs("TopUpGateway", topUpGatewayInitArgs, "initialize", "proxy init.");
+  await logArgs("DepositSecurityModule", constructorArgs.DepositSecurityModule);
+  await logArgs("OracleReportSanityChecker", constructorArgs.OracleReportSanityChecker);
+  log.info(``, {
+    param: "_limitsList",
+    ...newCheckerLimits,
+  });
+  await logArgs("ConsolidationGateway", constructorArgs.ConsolidationGateway);
+  await checkConfirm();
+
+  //
+  // Deploy Lido new implementation
+  //
+  await deployImplementation(Sk.appLido, "Lido", deployer, constructorArgs.Lido);
+
+  //
+  // Deploy Accounting & AccountingOracle
+  //
+  await deployImplementation(Sk.accounting, "Accounting", deployer, constructorArgs.Accounting);
+  await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, constructorArgs.AccountingOracle);
+
+  //
+  // Deploy ValidatorsExitBusOracle
+  //
+  await deployImplementation(
+    Sk.validatorsExitBusOracle,
+    "ValidatorsExitBusOracle",
+    deployer,
+    constructorArgs.ValidatorsExitBusOracle,
+  );
+
+  //
+  // Deploy libraries & StakingRouter
+  //
+  const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
+  const minFirstAllocationStrategy = await deployWithoutProxy(
+    Sk.minFirstAllocationStrategy,
+    "MinFirstAllocationStrategy",
+    deployer,
+  );
+  const srLib = await deployWithoutProxy(Sk.srLib, "SRLib", deployer, [], "address", true, {
+    libraries: {
+      MinFirstAllocationStrategy: minFirstAllocationStrategy.address,
+    },
+  });
+
+  await deployImplementation(Sk.stakingRouter, "StakingRouter", deployer, constructorArgs.StakingRouter, {
+    libraries: {
+      BeaconChainDepositor: beaconChainDepositor.address,
+      SRLib: srLib.address,
+    },
+  });
+
+  //
+  // Deploy TopUpGateway
+  //
+  const topUpGateway = await deployBehindOssifiableProxy(
+    Sk.topUpGateway,
+    "TopUpGateway",
+    proxyContractsOwner,
+    deployer,
+    constructorArgs.TopUpGateway,
+    null, // implementation
+    true, // withStateFile
+    undefined, // factoryOptions
+    await initEncode("TopUpGateway", topUpGatewayInitArgs),
+  );
+
+  //
+  // Deploy  DepositSecurityModule
+  //
+  const depositSecurityModule_ = await deployWithoutProxy(
+    Sk.depositSecurityModule,
+    "DepositSecurityModule",
+    deployer,
+    constructorArgs.DepositSecurityModule,
+  );
+  const depositSecurityModule = await loadContract<DepositSecurityModule>(
+    "DepositSecurityModule",
+    depositSecurityModule_.address,
+  );
+  await depositSecurityModule.setOwner(tempAdmin.address);
+
+  //
+  // Deploy OracleReportSanityChecker
+  //
   const newSanityChecker = await deployWithoutProxy(
     Sk.oracleReportSanityChecker,
     "OracleReportSanityChecker",
     deployer,
-    [locatorAddress, accountingAddress, agentAddress, newCheckerLimits],
+    constructorArgs.OracleReportSanityChecker,
   );
 
   //
   // Deploy Consolidation Gateway
   //
-  const consolidationGateway = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
-    tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin,
-    locatorAddress,
-    parameters.consolidationGateway.maxConsolidationRequestsLimit,
-    parameters.consolidationGateway.consolidationsPerFrame,
-    parameters.consolidationGateway.frameDurationInSec,
-    parameters.consolidationGateway.gIFirstValidatorPrev,
-    parameters.consolidationGateway.gIFirstValidatorCurr,
-    parameters.consolidationGateway.pivotSlot,
-  ]);
+  const consolidationGateway = await deployWithoutProxy(
+    Sk.consolidationGateway,
+    "ConsolidationGateway",
+    deployer,
+    constructorArgs.ConsolidationGateway,
+  );
 
   //
   // Deploy Consolidation Bus
   //
-  const consolidationBusInterface = await ethers.getContractFactory("ConsolidationBus");
-  const consolidationBusInitData = consolidationBusInterface.interface.encodeFunctionData("initialize", [
+  const consolidationBusConstructorArgs: ConstructorArgs<ConsolidationBus__factory> = [consolidationGateway.address];
+  const consolidationBusInitArgs: InitializeArgs<ConsolidationBus> = [
     tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin
     parameters.consolidationBus.initialBatchSize,
     parameters.consolidationBus.initialMaxGroupsInBatch,
     parameters.consolidationBus.initialExecutionDelay,
-  ]);
+  ];
+  log.splitter();
+  await logArgs("ConsolidationBus", consolidationBusConstructorArgs);
+  await logArgs("ConsolidationBus", consolidationBusInitArgs, "initialize", "proxy init.");
+  await checkConfirm("Check ConsolidationBus params");
+
   const consolidationBus = await deployBehindOssifiableProxy(
     Sk.consolidationBus,
     "ConsolidationBus",
     proxyContractsOwner,
     deployer,
-    [consolidationGateway.address],
+    consolidationBusConstructorArgs,
     null, // implementation
     true, // withStateFile
     undefined, // factoryOptions
-    consolidationBusInitData,
+    await initEncode("ConsolidationBus", consolidationBusInitArgs),
   );
 
   //
   // Deploy Consolidation Migrator
   //
-  const consolidationMigratorInterface = await ethers.getContractFactory("ConsolidationMigrator");
-  const consolidationMigratorInitData = consolidationMigratorInterface.interface.encodeFunctionData("initialize", [
+  const consolidationMigratorConstructorArgs: ConstructorArgs<ConsolidationMigrator__factory> = [
+    stakingRouterAddress,
+    consolidationBus.address,
+    parameters.consolidationMigrator.sourceModuleId,
+    parameters.consolidationMigrator.targetModuleId,
+  ];
+  const consolidationMigratorInitArgs: InitializeArgs<ConsolidationMigrator> = [
     tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin
-  ]);
+  ];
+  log.splitter();
+  await logArgs("ConsolidationMigrator", consolidationMigratorConstructorArgs);
+  await logArgs("ConsolidationMigrator", consolidationMigratorInitArgs, "initialize", "proxy init.");
+  await checkConfirm("Check ConsolidationMigrator params");
+
+  // const consolidationMigratorInterface = await ethers.getContractFactory("ConsolidationMigrator");
+  // const consolidationMigratorInitData = consolidationMigratorInterface.interface.encodeFunctionData(
+  //   "initialize",
+  //   consolidationMigratorInitArgs,
+  // );
 
   const consolidationMigrator = await deployBehindOssifiableProxy(
     Sk.consolidationMigrator,
     "ConsolidationMigrator",
     proxyContractsOwner,
     deployer,
-    [
-      stakingRouterAddress,
-      consolidationBus.address,
-      parameters.consolidationMigrator.sourceModuleId,
-      parameters.consolidationMigrator.targetModuleId,
-    ],
+    consolidationMigratorConstructorArgs,
     null, // implementation
     true, // withStateFile
     undefined, // factoryOptions
-    consolidationMigratorInitData,
+    await initEncode("ConsolidationMigrator", consolidationMigratorInitArgs),
   );
 
   //
   // Deploy Withdrawal Vault implementation
   //
-  await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
+  const withdrawalVaultConstructorArgs: ConstructorArgs<WithdrawalVault__factory> = [
     lidoAddress,
     treasuryAddress,
     triggerableWithdrawalsGatewayAddress,
     consolidationGateway.address,
     parameters.withdrawalVault.withdrawalRequestContract,
     parameters.withdrawalVault.consolidationRequestContract,
-  ]);
+  ];
+  log.splitter();
+  await logArgs("WithdrawalVault", withdrawalVaultConstructorArgs);
+  await checkConfirm("Check WithdrawalVault params");
+
+  await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, withdrawalVaultConstructorArgs);
 
   //
   // Deploy Lido Locator new implementation
@@ -286,11 +420,40 @@ export async function main() {
     topUpGateway: topUpGateway.address,
   };
 
-  const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
+  const lidoLocatorConstructorArgs: ConstructorArgs<LidoLocator__factory> = [locatorConfig];
+  log.splitter();
+  await logArgs("LidoLocator", lidoLocatorConstructorArgs);
+  log.info(``, {
+    param: "_config",
+    ...locatorConfig,
+  });
+  await checkConfirm("Check LidoLocator params");
+
+  const lidoLocatorImpl = await deployImplementation(
+    Sk.lidoLocator,
+    "LidoLocator",
+    deployer,
+    lidoLocatorConstructorArgs,
+  );
 
   //
   // Complete setup: grant all roles to agent, transfer admin
   //
+  const tempAdminCompleteSetupArgs: MethodArgs<UpgradeTemporaryAdmin, "completeSetup"> = [
+    lidoLocatorImpl.address,
+    easyTrackAddress,
+    resealManagerAddress,
+    circuitBreakerAddress,
+    consolidationMigrator.address,
+    parameters.consolidationMigrator.committee,
+    consolidationBus.address,
+    parameters.topUpGateway.depositor,
+    await locator.depositSecurityModule(),
+  ];
+  log.splitter();
+  await logArgs("UpgradeTemporaryAdmin", tempAdminCompleteSetupArgs, "completeSetup", "complete initial setup");
+  await checkConfirm("Check UpgradeTemporaryAdmin params");
+
   await makeTx(
     tempAdmin,
     "completeSetup",
@@ -309,4 +472,7 @@ export async function main() {
       from: deployer,
     },
   );
+
+  log.splitter();
+  log.success("Contracts deploy completed successfully!");
 }
