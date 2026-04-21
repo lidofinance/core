@@ -87,7 +87,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
 
       const depositedBalance = (depositedValidators - clValidators) * ether("32");
 
-      await expect(lido.finalizeUpgrade_v4()).to.not.be.reverted;
+      await expect(lido.finalizeUpgrade_v4()).to.emit(lido, "DepositedPostReportUpdated").withArgs(depositedBalance);
 
       expect(await lido.getBufferedEther()).to.equal(bufferedEther);
       expect((await lido.getBeaconStat()).beaconBalance).to.equal(clBalance);

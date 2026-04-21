@@ -94,7 +94,9 @@ describe("Lido:accounting", () => {
         ),
       )
         .to.emit(lido, "CLBalancesUpdated")
-        .withArgs(0n, 100n, 50n);
+        .withArgs(0n, 100n, 50n)
+        .and.to.emit(lido, "DepositedPostReportUpdated")
+        .withArgs(0n);
     });
 
     type ArgsTuple = [bigint, bigint, bigint];

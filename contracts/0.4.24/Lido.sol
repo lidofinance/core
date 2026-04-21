@@ -137,9 +137,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION =
         0x8d3ed945c7718edcdb639b1235f2bbe3fa81f4a6cec7a436d8ea13fbc502d957;
 
-    /// @dev CL validators balance and deposited balance since last report
+    /// @dev CL validators and pending balances packed into one slot
     /// |----- 128 bit ------------|------ 128 bit -------|
-    /// | CL validators balance    |  CL pending balance  |
+    /// |   CL pending balance     | CL validators balance|
     /// keccak256("lido.Lido.clValidatorsBalanceAndClPendingBalance");
     bytes32 internal constant CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
         0x096e465397f38e659238ccd5d5a2c434ced54a63fd8d694045bfb058ab9d8112;
@@ -187,7 +187,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // Emitted when CL balances are updated by the oracle
     event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
-    // Emitted when CL pending balance is updated during deposits to CL
+    // Emitted when depositedPostReport is updated
     event DepositedPostReportUpdated(uint256 depositedPostReport);
 
     // Emitted when depositedValidators value is changed
@@ -1488,6 +1488,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     function _setDepositedPostReport(uint256 _newDepositedPostReport) internal {
         BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.setHighUint128(_newDepositedPostReport);
+        emit DepositedPostReportUpdated(_newDepositedPostReport);
     }
 
     function _setBufferedEtherAndDepositedPostReport(uint256 _newBufferedEther, uint256 _newDepositedPostReport)
@@ -1496,6 +1497,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.setLowAndHighUint128(
             _newBufferedEther, _newDepositedPostReport
         );
+        emit DepositedPostReportUpdated(_newDepositedPostReport);
     }
 
     function _getDepositedNextReportAndLastDepositNonce() internal view returns (uint256, uint256) {
