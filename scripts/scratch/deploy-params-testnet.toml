@@ -121,7 +121,7 @@ maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
-externalPendingBalanceCapEth = 500                           # Extra external pending balance cap for bounded side deposits / top-ups
+externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
 # Oracle daemon configuration
 [oracleDaemonConfig]
