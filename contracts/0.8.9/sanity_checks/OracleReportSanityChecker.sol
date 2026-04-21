@@ -961,7 +961,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         result.activatedBalanceWithGap =
             activatedBalance +
             _calculateValidatorsBalanceAprSafetyCap(
-                _checkParams.preCLValidatorsBalance + activatedBalance,,
+                _checkParams.preCLValidatorsBalance + activatedBalance,
                 uint256(_limitsList.annualBalanceIncreaseBPLimit) * result.effectiveTimeElapsed
             );
     }
