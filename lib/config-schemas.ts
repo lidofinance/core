@@ -304,6 +304,7 @@ const OracleReportSanityCheckerSchema = z.object({
   clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
   consolidationEthAmountPerDayLimit: NonNegativeIntSchema,
   exitedValidatorEthAmountLimit: PositiveIntSchema,
+  externalPendingBalanceCapEth: NonNegativeIntSchema,
 });
 
 // Oracle daemon config schema

@@ -48,6 +48,7 @@ export const updateOracleReportLimits = async (
     consolidationEthAmountPerDayLimit:
       patch.consolidationEthAmountPerDayLimit ?? currentLimits.consolidationEthAmountPerDayLimit,
     exitedValidatorEthAmountLimit: patch.exitedValidatorEthAmountLimit ?? currentLimits.exitedValidatorEthAmountLimit,
+    externalPendingBalanceCapEth: patch.externalPendingBalanceCapEth ?? currentLimits.externalPendingBalanceCapEth,
   };
 
   await sanityChecker.connect(agent).grantRole(role, agent.address);

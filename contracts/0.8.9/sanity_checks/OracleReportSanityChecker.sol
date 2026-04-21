@@ -112,6 +112,10 @@ struct LimitsList {
     ///     in the exited ETH amount per day check.
     /// @dev Stored in whole ETH units. Must fit into uint16.
     uint256 exitedValidatorEthAmountLimit;
+    /// @notice Extra protocol-level pending balance cap to tolerate bounded side deposits
+    ///     or same-validator top-ups that were not funded by Lido.
+    /// @dev Stored in whole ETH units. Must fit into uint16.
+    uint256 externalPendingBalanceCapEth;
 }
 
 /// @dev The packed accounting/rebase limits persisted in a single storage slot
@@ -125,6 +129,7 @@ struct AccountingCoreLimitsPacked {
     uint16 maxCLBalanceDecreaseBP;
     uint16 clBalanceOraclesErrorUpperBPLimit;
     uint16 exitedValidatorEthAmountLimit;
+    uint16 externalPendingBalanceCapEth;
 }
 
 /// @dev The packed operational limits persisted in a single storage slot
@@ -189,6 +194,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         keccak256("CONSOLIDATION_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE");
     bytes32 public constant EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE =
         keccak256("EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE");
+    bytes32 public constant EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE =
+        keccak256("EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE");
     bytes32 public constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
         keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
     bytes32 public constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
@@ -367,6 +374,17 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkLimitValue(_exitedValidatorEthAmountLimit, 1, type(uint16).max);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
         limits.exitedValidatorEthAmountLimit = SafeCast.toUint16(_exitedValidatorEthAmountLimit);
+        _updateAccountingCoreLimits(limits);
+    }
+
+    /// @notice Sets the extra external pending balance cap tolerated above Lido-funded pending.
+    /// @dev Stored in whole ETH units to keep accounting core limits within a single storage slot.
+    function setExternalPendingBalanceCapEth(
+        uint256 _externalPendingBalanceCapEth
+    ) external onlyRole(EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE) {
+        _checkLimitValue(_externalPendingBalanceCapEth, 0, type(uint16).max);
+        AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
+        limits.externalPendingBalanceCapEth = SafeCast.toUint16(_externalPendingBalanceCapEth);
         _updateAccountingCoreLimits(limits);
     }
 
@@ -909,7 +927,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return (_amountPerDay * _effectiveTimeElapsed) / SECONDS_PER_DAY;
     }
 
-    function _calculateAprAndGiftSafetyCap(
+    function _calculateValidatorsBalanceAprSafetyCap(
         uint256 _preCLValidatorsBalance,
         uint256 _annualBalanceIncreaseMultiplier
     ) internal pure returns (uint256) {
@@ -922,12 +940,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) internal pure returns (ActivationBalanceCheckResult memory result) {
         result.effectiveTimeElapsed = _getTimeElapsedForAllowanceChecks(_checkParams.timeElapsed);
 
-        uint256 pendingBalanceWithDeposits = _checkParams.preCLPendingBalance + _checkParams.deposits;
-        if (_checkParams.postCLPendingBalance > pendingBalanceWithDeposits) {
-            revert IncorrectTotalPendingBalance(pendingBalanceWithDeposits, _checkParams.postCLPendingBalance);
+        uint256 fundedPendingBalance = _checkParams.preCLPendingBalance + _checkParams.deposits;
+        uint256 pendingBalanceCap = fundedPendingBalance + uint256(_limitsList.externalPendingBalanceCapEth) * 1 ether;
+        if (_checkParams.postCLPendingBalance > pendingBalanceCap) {
+            revert IncorrectTotalPendingBalance(pendingBalanceCap, _checkParams.postCLPendingBalance);
         }
 
-        uint256 activatedBalance = pendingBalanceWithDeposits - _checkParams.postCLPendingBalance;
+        uint256 activatedBalance = fundedPendingBalance > _checkParams.postCLPendingBalance
+            ? fundedPendingBalance - _checkParams.postCLPendingBalance
+            : 0;
+
         uint256 appearedEthLimitPerPeriod = _calculateAmountForPeriod(
             uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether,
             result.effectiveTimeElapsed
@@ -938,8 +960,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         result.activatedBalanceWithGap =
             activatedBalance +
-            _calculateAprAndGiftSafetyCap(
-                _checkParams.preCLValidatorsBalance + activatedBalance,
+            _calculateValidatorsBalanceAprSafetyCap(
+                _checkParams.preCLValidatorsBalance + activatedBalance,,
                 uint256(_limitsList.annualBalanceIncreaseBPLimit) * result.effectiveTimeElapsed
             );
     }
@@ -1376,6 +1398,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkLimitValue(_limitsList.appearedEthAmountPerDayLimit, 0, type(uint32).max);
         _checkLimitValue(_limitsList.consolidationEthAmountPerDayLimit, 0, type(uint32).max);
         _checkLimitValue(_limitsList.exitedValidatorEthAmountLimit, 1, type(uint16).max);
+        _checkLimitValue(_limitsList.externalPendingBalanceCapEth, 0, type(uint16).max);
         _checkLimitValue(_limitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
         _checkLimitValue(_limitsList.simulatedShareRateDeviationBPLimit, 0, MAX_BASIS_POINTS);
         _checkLimitValue(_limitsList.maxBalanceExitRequestedPerReportInEth, 0, type(uint16).max);
@@ -1403,6 +1426,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
         if (_oldLimits.exitedValidatorEthAmountLimit != _newLimits.exitedValidatorEthAmountLimit) {
             emit ExitedValidatorEthAmountLimitSet(_newLimits.exitedValidatorEthAmountLimit);
+        }
+        if (_oldLimits.externalPendingBalanceCapEth != _newLimits.externalPendingBalanceCapEth) {
+            emit ExternalPendingBalanceCapEthSet(_newLimits.externalPendingBalanceCapEth);
         }
         if (_oldLimits.annualBalanceIncreaseBPLimit != _newLimits.annualBalanceIncreaseBPLimit) {
             emit AnnualBalanceIncreaseBPLimitSet(_newLimits.annualBalanceIncreaseBPLimit);
@@ -1452,6 +1478,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event AppearedEthAmountPerDayLimitSet(uint256 appearedEthAmountPerDayLimit);
     event ConsolidationEthAmountPerDayLimitSet(uint256 consolidationEthAmountPerDayLimit);
     event ExitedValidatorEthAmountLimitSet(uint256 exitedValidatorEthAmountLimit);
+    event ExternalPendingBalanceCapEthSet(uint256 externalPendingBalanceCapEth);
     event SecondOpinionOracleChanged(ISecondOpinionOracle indexed secondOpinionOracle);
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
@@ -1528,6 +1555,7 @@ library LimitsListPacker {
         res.maxCLBalanceDecreaseBP = toBasisPoints(_limitsList.maxCLBalanceDecreaseBP);
         res.clBalanceOraclesErrorUpperBPLimit = toBasisPoints(_limitsList.clBalanceOraclesErrorUpperBPLimit);
         res.exitedValidatorEthAmountLimit = SafeCast.toUint16(_limitsList.exitedValidatorEthAmountLimit);
+        res.externalPendingBalanceCapEth = SafeCast.toUint16(_limitsList.externalPendingBalanceCapEth);
     }
 
     function packOperational(
@@ -1569,5 +1597,6 @@ library LimitsListUnpacker {
         res.clBalanceOraclesErrorUpperBPLimit = _accountingLimits.clBalanceOraclesErrorUpperBPLimit;
         res.consolidationEthAmountPerDayLimit = _accountingLimits.consolidationEthAmountPerDayLimit;
         res.exitedValidatorEthAmountLimit = _accountingLimits.exitedValidatorEthAmountLimit;
+        res.externalPendingBalanceCapEth = _accountingLimits.externalPendingBalanceCapEth;
     }
 }

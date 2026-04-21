@@ -45,6 +45,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     clBalanceOraclesErrorUpperBPLimit: 50n,
     consolidationEthAmountPerDayLimit: 10n,
     exitedValidatorEthAmountLimit: 1n,
+    externalPendingBalanceCapEth: 0n,
   };
 
   let checker: OracleReportSanityCheckerWrapper;
@@ -582,6 +583,106 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     )
       .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
       .withArgs(previousPendingWei, reportedPendingWei);
+  });
+
+  it("allows module-reported pending to exceed funded protocol pending within external pending balance cap", async () => {
+    const externalPendingBalanceCapEth = 2n;
+    const previousPendingWei = ether("10");
+    const maxAllowedPendingWei = previousPendingWei + externalPendingBalanceCapEth * ether("1");
+    const reportedPendingWei = maxAllowedPendingWei - ether("1");
+
+    await checker.connect(admin).grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+    await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n }]);
+
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: reportedPendingWei }], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
+    ).not.to.be.reverted;
+  });
+
+  it("allows module-reported pending exactly at external pending balance cap", async () => {
+    const externalPendingBalanceCapEth = 2n;
+    const previousPendingWei = ether("10");
+    const maxAllowedPendingWei = previousPendingWei + externalPendingBalanceCapEth * ether("1");
+
+    await checker.connect(admin).grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+    await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n }]);
+
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: maxAllowedPendingWei }], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
+    ).not.to.be.reverted;
+  });
+
+  it("reverts when module-reported pending exceeds external pending balance cap", async () => {
+    const externalPendingBalanceCapEth = 2n;
+    const previousPendingWei = ether("10");
+    const maxAllowedPendingWei = previousPendingWei + externalPendingBalanceCapEth * ether("1");
+    const reportedPendingWei = previousPendingWei + (externalPendingBalanceCapEth + 1n) * ether("1");
+
+    await checker.connect(admin).grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+    await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n }]);
+
+    await expect(
+      check([{ id: 1n, validatorsBalanceWei: 0n, pendingWei: reportedPendingWei }], {
+        preCLPendingBalanceWei: previousPendingWei,
+      }),
+    )
+      .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
+      .withArgs(maxAllowedPendingWei, reportedPendingWei);
+  });
+
+  it("does not treat external pending balance cap as activated balance budget on the module path", async () => {
+    const externalPendingBalanceCapEth = 2n;
+    const reportedPendingWei = (externalPendingBalanceCapEth - 1n) * ether("1");
+    const validatorsIncreaseWei = ether("1");
+
+    await checker.connect(admin).grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+    await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+    await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n }]);
+
+    await expect(check([{ id: 1n, validatorsBalanceWei: validatorsIncreaseWei, pendingWei: reportedPendingWei }]))
+      .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
+      .withArgs(0n, validatorsIncreaseWei);
+  });
+
+  it("does not treat external pending balance cap as aggregate module activation budget", async () => {
+    const externalPendingBalanceCapEth = 2n;
+    const previousModuleValidatorsWei = ether("109500");
+    const previousPendingWei = 0n;
+    const reportedPendingWei = ether("1");
+    const totalPreviousValidatorsWei = previousModuleValidatorsWei * 2n;
+    const validatorsAprSafetyCapWei =
+      (totalPreviousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+    const expectedModuleIncreaseLimitWei =
+      validatorsAprSafetyCapWei + limits.consolidationEthAmountPerDayLimit * ether("1");
+
+    await checker.connect(admin).grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
+    await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
+    await seedPreviousBalances([
+      { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei },
+      { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei },
+    ]);
+
+    await expect(
+      check(
+        [
+          { id: 1n, validatorsBalanceWei: previousModuleValidatorsWei + ether("71"), pendingWei: reportedPendingWei },
+          { id: 2n, validatorsBalanceWei: previousModuleValidatorsWei - ether("11"), pendingWei: 0n },
+        ],
+        {
+          preCLPendingBalanceWei: previousPendingWei,
+          postCLPendingBalanceWei: reportedPendingWei,
+        },
+      ),
+    )
+      .to.be.revertedWithCustomError(checker, "IncorrectTotalModuleValidatorsBalanceIncrease")
+      .withArgs(expectedModuleIncreaseLimitWei, ether("71"));
   });
 
   it("allows pending-to-validators activation within a module when module total is unchanged", async () => {
