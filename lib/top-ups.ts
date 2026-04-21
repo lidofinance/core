@@ -1,45 +1,28 @@
 import { ethers } from "hardhat";
 
-import { SSZBLSHelpers, SSZValidatorsMerkleTree } from "typechain-types";
+import { SSZValidatorsMerkleTree } from "typechain-types";
 
 import { generateValidator } from "lib";
 
 const DEFAULT_GI_VALIDATOR_0 = "0x0000000000000000000000000000000000000000000000000096000000000028";
 
 export const prepareLocalMerkleTree = async (giValidator0: string = DEFAULT_GI_VALIDATOR_0) => {
-  // deploy helper tree validators+balances
   const stateTree: SSZValidatorsMerkleTree = await ethers.deployContract("SSZValidatorsMerkleTree", [giValidator0], {});
 
-  // generate first validator
-  const firstValidator = generateValidator();
+  // leafCount before adding = offset to validators field (22*2^40 for mainnet GI)
+  const firstValidatorLeafIndex = await stateTree.leafCount();
 
+  // generate first validator to initialize the tree
+  const firstValidator = generateValidator();
   await stateTree.addValidatorsLeaf(firstValidator.container);
 
-  // Index of first validator leafCount-1
-  const validatorsLeafCount = await stateTree.validatorsLeafCount();
-
-  const firstValidatorLeafIndex = validatorsLeafCount - 1n;
-
-  // generalized for validators[firstValidatorLeafIndex]
-  const gIFirstValidator = await stateTree.getValidatorGeneralizedIndex(firstValidatorLeafIndex);
-  if (BigInt(gIFirstValidator) >> 8n === 0n) throw new Error("Broken GIndex setup");
-
-  const addValidator = async (validator: SSZBLSHelpers.ValidatorStruct) => {
-    await stateTree.addValidatorsLeaf(validator);
-
-    const newValidatorsLeafCount = await stateTree.validatorsLeafCount();
-    const validatorIndex = Number(newValidatorsLeafCount - 1n - firstValidatorLeafIndex);
-
-    return {
-      validatorIndex,
-    };
-  };
+  // GI of validator[0] is known from the spec
+  const gIFirstValidator = giValidator0;
 
   return {
     stateTree,
     gIFirstValidator,
     firstValidatorLeafIndex,
     firstValidator,
-    addValidator,
   };
 };

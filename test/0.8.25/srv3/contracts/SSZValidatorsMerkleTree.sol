@@ -8,12 +8,12 @@ import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {SSZBLSHelpers} from "../../vaults/predepositGuarantee/contracts/SSZBLSHelpers.sol";
 
-/// Merkle tree implementation
+/// Merkle tree implementation aligned with CL state tree structure
 /// NOT gas optimized, for testing purposes only
 contract SSZValidatorsMerkleTree is SSZBLSHelpers {
-    uint256 public immutable VALIDATORS_DEPTH;
+    uint256 public immutable TREE_DEPTH;
 
-    uint256 public validatorsLeafCount = 0; // Number of leaves in the tree
+    uint256 public leafCount = 0;
 
     uint256 public immutable VALIDATORS_BASE_INDEX;
 
@@ -21,17 +21,13 @@ contract SSZValidatorsMerkleTree is SSZBLSHelpers {
 
     /// @notice Initializes the Merkle tree with a given depth and pre-filled nodes so GIndex can closely match CL
     constructor(GIndex validatorsBase) {
-        uint256 depthValidators = depth(validatorsBase);
+        TREE_DEPTH = depth(validatorsBase);
 
-        VALIDATORS_DEPTH = depthValidators;
-
-        // allows to simulate middle part of the tree
-        validatorsLeafCount = validatorsBase.index() - (1 << VALIDATORS_DEPTH);
+        // offset to the start of validators field in the state tree
+        leafCount = validatorsBase.index() - (1 << TREE_DEPTH);
 
         VALIDATORS_BASE_INDEX = validatorsBase.index();
     }
-
-    // Below methods copied and adapted versions of methods from  ../vaults/SSZMerkleTree.sol
 
     /// @notice Adds a new leaf to the validators tree
     /// @param validator The leaf value
@@ -39,13 +35,13 @@ contract SSZValidatorsMerkleTree is SSZBLSHelpers {
     function addValidatorsLeaf(SSZBLSHelpers.Validator calldata validator) public returns (uint256) {
         bytes32 leaf = validatorHashTreeRootCalldata(validator);
 
-        require(validatorsLeafCount < (1 << VALIDATORS_DEPTH), "Validators tree is full");
+        require(leafCount < (1 << TREE_DEPTH), "Tree is full");
 
-        uint256 gi = VALIDATORS_BASE_INDEX + validatorsLeafCount;
+        uint256 gi = (1 << TREE_DEPTH) + leafCount;
         nodes[gi] = leaf;
-        validatorsLeafCount++;
+        leafCount++;
 
-        _updateTree(gi); // Update the Merkle tree structure
+        _updateTree(gi);
 
         return gi;
     }
@@ -55,27 +51,23 @@ contract SSZValidatorsMerkleTree is SSZBLSHelpers {
     }
 
     function getValidatorProof(uint256 leafIndex) public view returns (bytes32[] memory) {
-        require(leafIndex < validatorsLeafCount, "Invalid leaf index");
-        uint256 gi = VALIDATORS_BASE_INDEX + leafIndex;
+        require(leafIndex < leafCount, "Invalid leaf index");
+        uint256 gi = (1 << TREE_DEPTH) + leafIndex;
         return _getMerkleProof(gi);
     }
 
     /// generalized index for validators[position]
     function getValidatorGeneralizedIndex(uint256 position) public view returns (GIndex) {
-        require(position < (1 << VALIDATORS_DEPTH), "Invalid position");
-        uint256 gi = VALIDATORS_BASE_INDEX + position;
-        return pack(gi, uint8(VALIDATORS_DEPTH));
+        require(position < (1 << TREE_DEPTH), "Invalid position");
+        uint256 gi = (1 << TREE_DEPTH) + position;
+        return pack(gi, uint8(TREE_DEPTH));
     }
 
     /// @notice Computes and returns the Merkle proof for a given *global* index
     function _getMerkleProof(uint256 index) internal view returns (bytes32[] memory) {
-        // Use fls(index) to get actual tree depth, not TREE_DEPTH which may be incorrect
-        // for indices that overflow to next power of 2
-        // floor(log2)
-        uint256 actualDepth = fls(index);
-        bytes32[] memory proof = new bytes32[](actualDepth);
+        bytes32[] memory proof = new bytes32[](TREE_DEPTH);
 
-        for (uint256 i = 0; i < actualDepth; ++i) {
+        for (uint256 i = 0; i < TREE_DEPTH; ++i) {
             uint256 siblingIndex = index % 2 == 0 ? index + 1 : index - 1;
             proof[i] = nodes[siblingIndex];
             index /= 2;

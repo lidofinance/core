@@ -198,6 +198,37 @@ describe("TopUpGateway.sol", () => {
       ).to.be.revertedWithCustomError(gateway, "ZeroValue");
     });
 
+    it("reverts when admin is zero address", async () => {
+      const impl = await ethers.deployContract("TopUpGateway__Harness", [
+        await locator.getAddress(),
+        G_INDEX,
+        G_INDEX,
+        0,
+        SLOTS_PER_EPOCH,
+      ]);
+      const [gateway] = await proxify<TopUpGateway__Harness>({ impl, admin });
+      await expect(
+        gateway.initialize(
+          ethers.ZeroAddress,
+          DEFAULT_MAX_VALIDATORS,
+          DEFAULT_MIN_BLOCK_DISTANCE,
+          DEFAULT_MAX_ROOT_AGE,
+          DEFAULT_TARGET_BALANCE_GWEI,
+          DEFAULT_MIN_TOP_UP_GWEI,
+        ),
+      )
+        .to.be.revertedWithCustomError(gateway, "ZeroArgument")
+        .withArgs("_admin");
+    });
+
+    it("reverts when lidoLocator is zero address (constructor)", async () => {
+      await expect(
+        ethers.deployContract("TopUpGateway__Harness", [ethers.ZeroAddress, G_INDEX, G_INDEX, 0, SLOTS_PER_EPOCH]),
+      )
+        .to.be.revertedWithCustomError(await ethers.getContractFactory("TopUpGateway__Harness"), "ZeroArgument")
+        .withArgs("_lidoLocator");
+    });
+
     it("reverts when calling initialize on the implementation directly", async () => {
       const impl = await ethers.deployContract("TopUpGateway__Harness", [
         await locator.getAddress(),
@@ -342,7 +373,7 @@ describe("TopUpGateway.sol", () => {
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
-        "DuplicateValidatorIndex",
+        "InvalidValidatorIndicesSortOrder",
       );
     });
 

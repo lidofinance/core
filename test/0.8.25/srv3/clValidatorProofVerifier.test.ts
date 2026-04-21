@@ -190,7 +190,7 @@ describe("CLTopUpProofVerifier", () => {
     await sszMerkleTree.addValidatorsLeaf(v.container);
 
     // Compute its index in validators[i]
-    const leafCount = await sszMerkleTree.validatorsLeafCount();
+    const leafCount = await sszMerkleTree.leafCount();
     // Index = (current leaves - 1) - firstValidatorLeafIndex
     const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
 
@@ -251,7 +251,7 @@ describe("CLTopUpProofVerifier", () => {
 
     await sszMerkleTree.addValidatorsLeaf(v.container);
 
-    const leafCount = await sszMerkleTree.validatorsLeafCount();
+    const leafCount = await sszMerkleTree.leafCount();
     const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
 
     const SLOT = 3200; // epoch = 100
@@ -302,7 +302,7 @@ describe("CLTopUpProofVerifier", () => {
 
     await sszMerkleTree.addValidatorsLeaf(v.container);
 
-    const leafCount = await sszMerkleTree.validatorsLeafCount();
+    const leafCount = await sszMerkleTree.leafCount();
     const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
 
     const SLOT = 3200;
@@ -346,7 +346,7 @@ describe("CLTopUpProofVerifier", () => {
     v.container.withdrawableEpoch = FAR_FUTURE;
     const expectedWC = v.container.withdrawalCredentials;
     await sszMerkleTree.addValidatorsLeaf(v.container);
-    const leafCount = await sszMerkleTree.validatorsLeafCount();
+    const leafCount = await sszMerkleTree.leafCount();
     const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
     const SLOT = 3200; // epoch=100
     const stateRoot = await sszMerkleTree.getStateRoot();
@@ -386,7 +386,7 @@ describe("CLTopUpProofVerifier", () => {
     v.container.withdrawableEpoch = FAR_FUTURE;
     const expectedWC = v.container.withdrawalCredentials;
     await sszMerkleTree.addValidatorsLeaf(v.container);
-    const leafCount = await sszMerkleTree.validatorsLeafCount();
+    const leafCount = await sszMerkleTree.leafCount();
     const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
     const stateRoot = await sszMerkleTree.getStateRoot();
     const header = await generateBeaconHeader(stateRoot, SLOT);
