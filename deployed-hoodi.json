@@ -456,7 +456,16 @@
     "constructorArgs": ["0x3508A952176b3c15387C97BE809eaffB1982176a", "0x0534aA41907c9631fae990960bCC72d75fA7cfeD"]
   },
   "circuitBreaker": {
-    "address": "0x0534aA41907c9631fae990960bCC72d75fA7cfeD"
+    "address": "0x44a5789dFeDa59cD176Ab5709ec2F4829dE4d555",
+    "constructorArgs": {
+      "admin": "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
+      "initialHeartbeatInterval": 31536000,
+      "initialPauseDuration": 3600,
+      "maxHeartbeatInterval": 94608000,
+      "maxPauseDuration": 2592000,
+      "minHeartbeatInterval": 60,
+      "minPauseDuration": 60
+    }
   },
   "gateSeal": {
     "address": "0x73d76Bd3D589B2b2185c402da82cdAfbc18b958D",
