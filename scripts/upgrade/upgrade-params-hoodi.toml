@@ -88,14 +88,12 @@ pivotSlot = 0                         # Pivot slot for fork-aware gIndex selecti
 initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 86400         # Delay before pending batch execution
-#TODO  update upon deployment
-executor = "0x00000000000000000000000000000000000abc01"
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-#TODO  update upon deployment
-committee = "0x00000000000000000000000000000000000abc02"
+
+committee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" #m-sig
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
@@ -109,8 +107,7 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 # Pivot slot for fork-aware gIndex selection
 pivotSlot = 0
-#TODO  update upon deployment
-depositor = "0x00000000000000000000000000000000000abc04"
+depositor = "0x9b186cE78Ddd6fF098b4a533Dd17a139e1FFeD76" # depositor bot
 
 # StakingRouter configuration
 [stakingRouter]
