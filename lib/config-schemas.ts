@@ -98,7 +98,6 @@ const ConsolidationBusSchema = z.object({
   initialBatchSize: PositiveIntSchema,
   initialMaxGroupsInBatch: PositiveIntSchema,
   initialExecutionDelay: NonNegativeIntSchema,
-  executor: EthereumAddressSchema,
 });
 
 const ConsolidationMigratorSchema = z.object({

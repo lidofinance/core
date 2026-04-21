@@ -87,7 +87,6 @@ pivotSlot = 0                         # Pivot slot for fork-aware gIndex selecti
 initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 0             # Delay before pending batch execution
-executor="0x8943545177806ED17B9F23F0a21ee5948eCaa776"  # dummu field devnet deployer
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID

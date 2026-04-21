@@ -83,8 +83,6 @@ pivotSlot = 0                         # Pivot slot for fork-aware gIndex selecti
 initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 86400         # Delay before pending batch execution
-#TODO  update upon deployment
-executor = "0x00000000000000000000000000000000000abc01"
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
