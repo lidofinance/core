@@ -416,6 +416,9 @@
     "address": "0x3Ff49B57A7cc523c26567AF97F51C09f572A200A",
     "constructorArgs": []
   },
+  "easyTrack": {
+    "address": "0x284D91a7D47850d21A6DEaaC6E538AC7E5E6fc2a"
+  },
   "easyTrackEVMScriptExecutor": {
     "address": "0x79a20FD0FA36453B2F45eAbab19bfef43575Ba9E"
   },
@@ -720,6 +723,9 @@
         0
       ]
     }
+  },
+  "resealManager": {
+    "address": "0x05172CbCDb7307228F781436b327679e4DAE166B"
   },
   "scratchDeployGasUsed": "57329468",
   "simpleDvt": {
