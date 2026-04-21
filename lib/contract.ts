@@ -3,6 +3,34 @@ import { artifacts, ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+import { NonPayableOverrides } from "typechain-types/common";
+
+// constructor args
+// example:  const constructorArgs:  ConstructorArgs<UpgradeTemporaryAdmin__factory>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FactoryWithDeploy = { deploy: (...args: any[]) => any };
+type DeployArgs<F extends FactoryWithDeploy> = Parameters<F["deploy"]>;
+type RequiredDeployArgs<F extends FactoryWithDeploy> = Required<DeployArgs<F>>;
+export type ConstructorArgs<F extends FactoryWithDeploy> =
+  RequiredDeployArgs<F> extends [...infer Args, infer Last]
+    ? Last extends NonPayableOverrides & { from?: string }
+      ? Args
+      : DeployArgs<F>
+    : DeployArgs<F>;
+
+// initialize method args
+// example: const initArgs: InitializeArgs<TopUpGateway> = [param1, param2];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type InitializeArgs<T extends { initialize: (...args: any[]) => any }> = Parameters<T["initialize"]>;
+
+// finalizeUpgrade_xxx method args
+// example: for finalizeUpgrade_v5() -  const finArgs: FinalizeUpgradeArgs<StakingRouter, "v5">;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type MethodArgs<T, K extends keyof T> = T[K] extends (...args: any[]) => any ? Parameters<T[K]> : never;
+type FinalizeUpgradeMethod<T, Suffix extends string> = Extract<keyof T, `finalizeUpgrade_${Suffix}`>;
+export type FinalizeUpgradeArgs<T, Suffix extends string> = MethodArgs<T, FinalizeUpgradeMethod<T, Suffix>>;
+
 interface LoadedContractHelper {
   name: string;
   contractPath: string;
