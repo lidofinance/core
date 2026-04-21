@@ -9,6 +9,7 @@ coverage/
 state-mate/
 
 coverage.json
+localhost.json
 
 typechain/
 typechain-types/
@@ -25,11 +26,13 @@ foundry/out/
 lib/abi/*.json
 
 .env
+.env.*
+!.env.example
+!.env.*.example
 accounts.json
 deployed-local.json
 deployed-local-devnet.json
 deployed-hardhat.json
-deployed-local-devnet.json
 deployed-mainnet-upgrade.json
 
 # MacOS

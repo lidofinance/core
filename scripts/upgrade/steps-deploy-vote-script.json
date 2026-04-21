@@ -1,5 +1,0 @@
-{
-  "steps": [
-    "upgrade/steps/0300-deploy-upgrade-vote-script"
-  ]
-}
