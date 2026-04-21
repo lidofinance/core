@@ -561,6 +561,7 @@ export async function main() {
     clBalanceOraclesErrorUpperBPLimit: sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
     consolidationEthAmountPerDayLimit: sanityCheckerParams.consolidationEthAmountPerDayLimit,
     exitedValidatorEthAmountLimit: sanityCheckerParams.exitedValidatorEthAmountLimit,
+    externalPendingBalanceCapEth: sanityCheckerParams.externalPendingBalanceCapEth,
   };
 
   const oracleReportSanityCheckerArgs = [locator.address, accounting.address, admin, sanityLimits];

@@ -170,6 +170,7 @@ async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string,
       clBalanceOraclesErrorUpperBPLimit: 0n,
       consolidationEthAmountPerDayLimit: 0n,
       exitedValidatorEthAmountLimit: 1n,
+      externalPendingBalanceCapEth: 0n,
     }),
   );
 }
