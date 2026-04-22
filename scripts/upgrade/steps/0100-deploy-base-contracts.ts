@@ -1,4 +1,4 @@
-import { ethers, network } from "hardhat";
+import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
@@ -26,53 +26,31 @@ import {
 } from "typechain-types";
 
 import {
-  bl,
-  checkConfirm,
   ConstructorArgs,
   deployBehindOssifiableProxy,
   deployImplementation,
   deployWithoutProxy,
+  encodeFunctionCall,
   getAddress,
-  gr,
   InitializeArgs,
   loadContract,
   log,
   logArgs,
+  logConfirmReview as logConfirmReview,
+  logScriptHeader,
+  logStartReview as logStartReview,
   makeTx,
   MethodArgs,
-  mg,
   readNetworkState,
   Sk,
 } from "lib";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function initEncode(contractName: string, initArgs: any[]) {
-  const contractInterface = await ethers.getContractFactory(contractName);
-  const initData = contractInterface.interface.encodeFunctionData("initialize", initArgs);
-  return initData;
-}
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
 
-  const deployerBalance = await ethers.provider.getBalance(deployer);
-  const { chainId } = await ethers.provider.getNetwork();
-
-  log.splitter();
-  log.header("SRv3/CMv2 — Deploy & setup Base Contracts");
-  log.splitter();
-
-  log.info("Network", {
-    "name": mg(network.name),
-    "chain ID": mg(chainId.toString()),
-  });
-
-  log.info("Deployer", {
-    address: bl(deployer),
-    balance: `${gr(ethers.formatEther(deployerBalance))} ETH`,
-  });
+  await logScriptHeader("SRv3/CMv2 — Deploy & setup Base Contracts", deployer);
 
   //
   //  Collect all param values
@@ -131,9 +109,9 @@ export async function main() {
   // Deploy TemporaryAdmin
   //
   const tempAdminConstructorArgs: ConstructorArgs<UpgradeTemporaryAdmin__factory> = [agentAddress];
-  log.splitter();
+  logStartReview();
   await logArgs("UpgradeTemporaryAdmin", tempAdminConstructorArgs);
-  await checkConfirm();
+  await logConfirmReview();
 
   const tempAdmin = await deployWithoutProxy(
     Sk.upgradeTemporaryAdmin,
@@ -141,8 +119,6 @@ export async function main() {
     deployer,
     tempAdminConstructorArgs,
   );
-
-  log.success("UpgradeTemporaryAdmin deployed: ", bl(tempAdmin.address));
 
   const constructorArgs: {
     Lido: ConstructorArgs<Lido__factory>;
@@ -202,7 +178,7 @@ export async function main() {
     parameters.topUpGateway.minTopUpGwei,
   ];
 
-  log.splitter();
+  logStartReview();
   await logArgs("Lido", constructorArgs.Lido);
   await logArgs("Accounting", constructorArgs.Accounting);
   await logArgs("AccountingOracle", constructorArgs.AccountingOracle);
@@ -217,7 +193,7 @@ export async function main() {
     ...newCheckerLimits,
   });
   await logArgs("ConsolidationGateway", constructorArgs.ConsolidationGateway);
-  await checkConfirm();
+  await logConfirmReview();
 
   //
   // Deploy Lido new implementation
@@ -274,7 +250,7 @@ export async function main() {
     null, // implementation
     true, // withStateFile
     undefined, // factoryOptions
-    await initEncode("TopUpGateway", topUpGatewayInitArgs),
+    await encodeFunctionCall<InitializeArgs<TopUpGateway>>("TopUpGateway", "initialize", topUpGatewayInitArgs),
   );
 
   //
@@ -322,10 +298,11 @@ export async function main() {
     parameters.consolidationBus.initialMaxGroupsInBatch,
     parameters.consolidationBus.initialExecutionDelay,
   ];
-  log.splitter();
+
+  logStartReview();
   await logArgs("ConsolidationBus", consolidationBusConstructorArgs);
   await logArgs("ConsolidationBus", consolidationBusInitArgs, "initialize", "proxy init.");
-  await checkConfirm("Check ConsolidationBus params");
+  await logConfirmReview();
 
   const consolidationBus = await deployBehindOssifiableProxy(
     Sk.consolidationBus,
@@ -336,7 +313,11 @@ export async function main() {
     null, // implementation
     true, // withStateFile
     undefined, // factoryOptions
-    await initEncode("ConsolidationBus", consolidationBusInitArgs),
+    await encodeFunctionCall<InitializeArgs<ConsolidationBus>>(
+      "ConsolidationBus",
+      "initialize",
+      consolidationBusInitArgs,
+    ),
   );
 
   //
@@ -351,16 +332,11 @@ export async function main() {
   const consolidationMigratorInitArgs: InitializeArgs<ConsolidationMigrator> = [
     tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin
   ];
-  log.splitter();
+
+  logStartReview();
   await logArgs("ConsolidationMigrator", consolidationMigratorConstructorArgs);
   await logArgs("ConsolidationMigrator", consolidationMigratorInitArgs, "initialize", "proxy init.");
-  await checkConfirm("Check ConsolidationMigrator params");
-
-  // const consolidationMigratorInterface = await ethers.getContractFactory("ConsolidationMigrator");
-  // const consolidationMigratorInitData = consolidationMigratorInterface.interface.encodeFunctionData(
-  //   "initialize",
-  //   consolidationMigratorInitArgs,
-  // );
+  await logConfirmReview();
 
   const consolidationMigrator = await deployBehindOssifiableProxy(
     Sk.consolidationMigrator,
@@ -371,7 +347,11 @@ export async function main() {
     null, // implementation
     true, // withStateFile
     undefined, // factoryOptions
-    await initEncode("ConsolidationMigrator", consolidationMigratorInitArgs),
+    await encodeFunctionCall<InitializeArgs<ConsolidationMigrator>>(
+      "ConsolidationMigrator",
+      "initialize",
+      consolidationMigratorInitArgs,
+    ),
   );
 
   //
@@ -385,9 +365,10 @@ export async function main() {
     parameters.withdrawalVault.withdrawalRequestContract,
     parameters.withdrawalVault.consolidationRequestContract,
   ];
-  log.splitter();
+
+  logStartReview();
   await logArgs("WithdrawalVault", withdrawalVaultConstructorArgs);
-  await checkConfirm("Check WithdrawalVault params");
+  await logConfirmReview();
 
   await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, withdrawalVaultConstructorArgs);
 
@@ -422,13 +403,14 @@ export async function main() {
   };
 
   const lidoLocatorConstructorArgs: ConstructorArgs<LidoLocator__factory> = [locatorConfig];
-  log.splitter();
+
+  logStartReview();
   await logArgs("LidoLocator", lidoLocatorConstructorArgs);
   log.info(``, {
     param: "_config",
     ...locatorConfig,
   });
-  await checkConfirm("Check LidoLocator params");
+  await logConfirmReview();
 
   const lidoLocatorImpl = await deployImplementation(
     Sk.lidoLocator,
@@ -451,9 +433,10 @@ export async function main() {
     parameters.topUpGateway.depositor,
     await locator.depositSecurityModule(),
   ];
-  log.splitter();
+
+  logStartReview();
   await logArgs("UpgradeTemporaryAdmin", tempAdminCompleteSetupArgs, "completeSetup", "complete initial setup");
-  await checkConfirm("Check UpgradeTemporaryAdmin params");
+  await logConfirmReview();
 
   await makeTx(
     tempAdmin,
@@ -473,7 +456,4 @@ export async function main() {
       from: deployer,
     },
   );
-
-  log.splitter();
-  log.success("Contracts deploy completed successfully!");
 }

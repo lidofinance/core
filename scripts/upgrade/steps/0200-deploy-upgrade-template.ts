@@ -1,10 +1,16 @@
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { IAragonKernel, IWithdrawalsManagerProxy__factory, OssifiableProxy__factory } from "typechain-types";
+import {
+  IAragonKernel,
+  IWithdrawalsManagerProxy__factory,
+  OssifiableProxy__factory,
+  UpgradeTemplate__factory,
+} from "typechain-types";
 import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
 
-import { loadContract } from "lib/contract";
+import { cy, log, logArgs, logConfirmReview, logScriptHeader, logStartReview } from "lib";
+import { ConstructorArgs, loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
 import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
@@ -12,6 +18,8 @@ export async function main() {
   const deployer = await ethers.provider.getSigner();
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
+
+  await logScriptHeader("SRv3/CMv2 — Deploy UpgradeTemplate contract", deployer.address);
 
   const locatorAddress = getAddress(Sk.lidoLocator, state);
   const locatorProxy = OssifiableProxy__factory.connect(locatorAddress, deployer);
@@ -93,8 +101,38 @@ export async function main() {
     curatedModule: parameters.curatedModule,
   };
 
-  await deployWithoutProxy(Sk.upgradeTemplate, "UpgradeTemplate", deployer.address, [
+  const upgradeTemplateConstructorArgs: ConstructorArgs<UpgradeTemplate__factory> = [
     upgradeParams,
     parameters.upgradeVoteScript.expiryTimestamp,
-  ]);
+  ];
+
+  logStartReview();
+  await logArgs("UpgradeTemplate", upgradeTemplateConstructorArgs);
+  log.info(``, {
+    param: `${cy("_params")}`,
+    ...upgradeParams,
+  });
+  log.info(``, {
+    param: `${cy("_params.newFactories")}`,
+    ...upgradeParams.newFactories,
+  });
+  log.info(``, {
+    param: `${cy("_params.oldFactories")}`,
+    ...upgradeParams.oldFactories,
+  });
+  log.info(``, {
+    param: `${cy("_params.coreUpgrade")}`,
+    ...upgradeParams.coreUpgrade,
+  });
+  log.info(``, {
+    param: `${cy("_params.coreUpgrade")}`,
+    ...upgradeParams.coreUpgrade,
+  });
+  log.info(``, {
+    param: `${cy("_params.curatedModule")}`,
+    ...upgradeParams.curatedModule,
+  });
+  await logConfirmReview();
+
+  await deployWithoutProxy(Sk.upgradeTemplate, "UpgradeTemplate", deployer.address, upgradeTemplateConstructorArgs);
 }

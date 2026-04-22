@@ -10,12 +10,19 @@ BigInt.prototype.toJSON = function () {
 
 export type ConvertibleToString = string | number | boolean | { toString(): string };
 
-export const rd = (s: ConvertibleToString) => chalk.red(s);
-export const yl = (s: ConvertibleToString) => chalk.yellow(s);
-export const gr = (s: ConvertibleToString) => chalk.green(s);
-export const bl = (s: ConvertibleToString) => chalk.blue(s);
-export const cy = (s: ConvertibleToString) => chalk.cyan(s);
-export const mg = (s: ConvertibleToString) => chalk.magenta(s);
+export const rd = chalk.keyword("red"); // more intense than chalk.red
+export const yl = chalk.yellow;
+export const gr = chalk.green;
+export const bl = chalk.keyword("dodgerblue"); //chalk.blue;
+export const cy = chalk.cyan;
+export const mg = chalk.keyword("violet"); // not so jarring
+export const or = chalk.keyword("orange");
+export const br = chalk.keyword("brown");
+export const dp = chalk.keyword("deeppink");
+export const gy = chalk.keyword("greenyellow");
+export const yg = chalk.keyword("yellowgreen");
+export const nv = chalk.keyword("navy");
+export const bk = chalk.keyword("black");
 
 export const log = (...args: ConvertibleToString[]) => {
   if (!shouldLog("info")) return;
@@ -54,7 +61,7 @@ const _splitter = (minLength = LINE_LENGTH, ...args: ConvertibleToString[]) => {
 
   if (minLength < MIN_LINE_LENGTH) minLength = MIN_LINE_LENGTH;
 
-  console.error(cy(_line(0, minLength)));
+  console.error(bk(_line(0, minLength)));
 
   if (args.length) {
     console.error(...args);
@@ -73,7 +80,7 @@ const _header = (minLength = 20, ...args: ConvertibleToString[]) => {
   const paddedTitle = title.padStart((totalLength + title.length) / 2).padEnd(totalLength);
 
   console.error(`${cy(line)}`);
-  console.error(`${cy("=")} ${mg(paddedTitle)} ${cy("=")}`);
+  console.error(`${cy("=")} ${dp(paddedTitle)} ${cy("=")}`);
   console.error(`${cy(line)}`);
 
   if (args.length > 1) {
@@ -85,11 +92,11 @@ const _header = (minLength = 20, ...args: ConvertibleToString[]) => {
 
 const _title = (title: string) => {
   if (!shouldLog("debug")) return;
-  log(mg(title));
+  log(br(title));
 };
 
 const _record = (label: string, value: ConvertibleToString) => {
-  log(`${chalk.grey(label)}: ${yl(value.toString())}`);
+  log(`${nv(label)}: ${yl(value.toString())}`);
 };
 
 // TODO: add logging to file
@@ -141,12 +148,12 @@ log.withArguments = (firstLine: string, args: ConvertibleToString[]) => {
   }
 
   if (args.length === 1) {
-    log(`${mg(JSON.stringify(args[0]))})`);
+    log(`${or(JSON.stringify(args[0]))})`);
     return;
   }
 
   log.emptyLine();
-  args.forEach((arg) => log(` ${mg(JSON.stringify(arg))},`));
+  args.forEach((arg) => log(` ${or(JSON.stringify(arg))},`));
   log(`)`);
 };
 
@@ -193,7 +200,7 @@ log.txLink = async (txHash: string) => {
   const link = await getTxLink(txHash);
   if (link) {
     log.info("🔗 Transaction", {
-      Link: link,
+      Link: chalk.blue.underline(link),
     });
   }
 };
