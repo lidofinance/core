@@ -290,7 +290,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event RedeemsReserveSet(uint256 reserve);
 
     // Emitted when ETH is returned from RedeemsBuffer
-    event ReceivedFromRedeemsBuffer(uint256 amount);
+    event EtherReceivedFromRedeemsBuffer(uint256 amount);
 
     /**
      * @notice Initializer function for scratch deploy of Lido contract
@@ -594,10 +594,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     struct BufferedEtherAllocation {
         uint256 total;
-        uint256 redeemsReserve;
         uint256 unreserved;
         uint256 depositsReserve;
         uint256 withdrawalsReserve;
+        uint256 redeemsReserve;
     }
 
     /**
@@ -613,10 +613,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      *      Between reports, bufferedEther > Lido.balance by the reserve amount.
      *
      *      ┌──────────────── bufferedEther ────────────────┐
-     *      ├───────────┬────────────────────┬──────────────┼─────┬──────────────┐
-     *      │▓▓▓▓▓▓▓▓▓▓▓│●●●●●●●●●●●●●●●●●●●●│●●●●●●●●●●●●●●●○○○○○│○○○○○○○○○○○○○○│
-     *      ├───────────┼────────────────────┼──────────────┼─────┼──────────────┤
-     *      └─ Redeems ─┼─ Deposits Reserve ─┼─ WQ Reserve ─┘     ├─ Unreserved ─┘
+     *      ├───────────┬────────────────────┬──────────────┼──────┬──────────────┐
+     *      │▓▓▓▓▓▓▓▓▓▓▓│●●●●●●●●●●●●●●●●●●●●│●●●●●●●●●●●●●●●○○○○○○│○○○○○○○○○○○○○○│
+     *      ├───────────┼────────────────────┼──────────────┼──────┼──────────────┤
+     *      └─ Redeems ─┼─ Deposits Reserve ─┼─ WQ Reserve ─┘      ├─ Unreserved ─┘
      *        Reserve   │                    └── Unfinalized stETH ┘
      *                  │
      *      ▓ - physically on RedeemsBuffer (soft-reserved in bufferedEther)
@@ -640,8 +640,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Returns the redeems reserve bucket of the current buffered-ether allocation
+     * @notice Returns the currently effective redeems reserve — buffer portion soft-reserved for instant redemptions
      * @dev Equals `min(bufferedEther, REDEEMS_RESERVE_POSITION)`. The stored slot is updated on oracle reports.
+     * @return Amount soft-reserved for redemptions in wei
      */
     function getRedeemsReserve() external view returns (uint256) {
         return _getBufferedEtherAllocation().redeemsReserve;
@@ -704,46 +705,46 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Sets redeems reserve target ratio as basis points of internal ether.
-     *         The buffer is replenished to this target on each oracle report.
+     * @notice Sets redeems reserve target ratio in basis points of internal ether
+     * @dev The buffer is replenished to this target on each oracle report.
      * @param _ratioBP Target ratio in basis points [0-10000]
      */
     function setRedeemsReserveTargetRatio(uint256 _ratioBP) external {
         _auth(BUFFER_RESERVE_MANAGER_ROLE);
-        require(_ratioBP <= TOTAL_BASIS_POINTS, "INVALID_RATIO");
+        require(_ratioBP <= TOTAL_BASIS_POINTS, "INVALID_REDEEMS_RESERVE_RATIO");
         REDEEMS_RESERVE_TARGET_RATIO_POSITION.setStorageUint256(_ratioBP);
         emit RedeemsReserveTargetRatioSet(_ratioBP);
     }
 
     /**
-     * @return the redeems reserve target ratio in basis points
+     * @notice Returns the redeems reserve target ratio in basis points
      */
     function getRedeemsReserveTargetRatio() external view returns (uint256) {
         return REDEEMS_RESERVE_TARGET_RATIO_POSITION.getStorageUint256();
     }
 
     /**
-     * @notice Sets the per-report reserve growth floor (basis points of `withdrawalsReserve + unreserved`)
+     * @notice Sets the per-report reserve growth floor in basis points of `withdrawalsReserve + unreserved`
      * @dev See `_growRedeemsReserve`. `_shareBP = 0` means reserve grows only from unreserved surplus.
      * @param _shareBP Growth share in basis points [0-10000]
      */
     function setRedeemsReserveGrowthShare(uint256 _shareBP) external {
         _auth(BUFFER_RESERVE_MANAGER_ROLE);
-        require(_shareBP <= TOTAL_BASIS_POINTS, "INVALID_SHARE");
+        require(_shareBP <= TOTAL_BASIS_POINTS, "INVALID_REDEEMS_RESERVE_GROWTH_SHARE");
         REDEEMS_RESERVE_GROWTH_SHARE_POSITION.setStorageUint256(_shareBP);
         emit RedeemsReserveGrowthShareSet(_shareBP);
     }
 
     /**
-     * @return the redeems reserve growth share in basis points
+     * @notice Returns the redeems reserve growth share in basis points
      */
     function getRedeemsReserveGrowthShare() external view returns (uint256) {
         return REDEEMS_RESERVE_GROWTH_SHARE_POSITION.getStorageUint256();
     }
 
     /**
-     * @notice Returns the current redeems reserve target in absolute ETH,
-     *         computed from the ratio and current internal ether.
+     * @notice Returns the current redeems reserve target in wei
+     * @dev Computed from the ratio and current internal ether.
      */
     function getRedeemsReserveTarget() external view returns (uint256) {
         return _getRedeemsReserveTarget();
@@ -756,13 +757,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Receives ETH back from RedeemsBuffer (unredeemed return on report).
-     * @dev bufferedEther is NOT modified — ETH was already counted in bufferedEther.
+     * @notice Receives ETH back from RedeemsBuffer (unredeemed return on report)
+     * @dev `bufferedEther` is NOT modified — ETH was already counted in `bufferedEther` while it sat on the buffer.
      */
     function receiveFromRedeemsBuffer() external payable {
-        _auth(_getLidoLocator().redeemsBuffer());
+        address buffer = _getLidoLocator().redeemsBuffer();
+        require(buffer != address(0), "REDEEMS_BUFFER_NOT_CONFIGURED");
+        _auth(buffer);
         if (msg.value > 0) {
-            emit ReceivedFromRedeemsBuffer(msg.value);
+            emit EtherReceivedFromRedeemsBuffer(msg.value);
         }
     }
 
@@ -1114,6 +1117,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _withdrawalsShareRate share rate used to fulfill withdrawal requests
      * @param _etherToLockOnWithdrawalQueue amount of ETH to lock on the WithdrawalQueue to fulfill withdrawal requests
      * @param _redeemedEther redeemed ether snapshot reconciled against `bufferedEther` and the buffer counters
+     * @param _redeemedShares redeemed shares snapshot consumed from the buffer for this report
      */
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
@@ -1124,17 +1128,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _withdrawalsShareRate,
         uint256 _etherToLockOnWithdrawalQueue,
-        uint256 _redeemedEther
+        uint256 _redeemedEther,
+        uint256 _redeemedShares
     ) external {
         _whenNotStopped();
 
         ILidoLocator locator = _getLidoLocator();
         _auth(_accounting(locator));
 
-        // --- 1. Buffer round-trip: withdraw unredeemed ETH, reconcile bufferedEther ---
+        // --- 1. Buffer round-trip: reconcile buffer state, reconcile bufferedEther ---
         address buffer = locator.redeemsBuffer();
         if (buffer != address(0)) {
-            IRedeemsBuffer(buffer).withdrawUnredeemed(_redeemedEther);
+            IRedeemsBuffer(buffer).reconcile(_redeemedEther, _redeemedShares);
             if (_redeemedEther > 0) {
                 _setBufferedEther(_getBufferedEther().sub(_redeemedEther));
             }
@@ -1184,10 +1189,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         }
     }
 
-    /// @dev Grows the redeems reserve first (priority), then resets the deposits reserve slot to its target.
+    /// @dev Resets the deposits reserve slot to its target, then grows the redeems reserve.
     function _updateBufferedEtherAllocation() internal {
-        _growRedeemsReserve();
         _resetDepositsReserve();
+        _growRedeemsReserve();
     }
 
     function _resetDepositsReserve() internal {
@@ -1201,16 +1206,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ///      capped by `target = ratio × internalEther`. Also shrinks the reserve when target is lowered.
     function _growRedeemsReserve() internal {
         uint256 target = _getRedeemsReserveTarget();
-        BufferedEtherAllocation memory a = _getBufferedEtherAllocation();
+        BufferedEtherAllocation memory allocation = _getBufferedEtherAllocation();
 
         uint256 growthShareBP = REDEEMS_RESERVE_GROWTH_SHARE_POSITION.getStorageUint256();
-        uint256 availableEther = a.withdrawalsReserve.add(a.unreserved);
+        uint256 availableEther = allocation.withdrawalsReserve.add(allocation.unreserved);
         uint256 minGrowth = availableEther.mul(growthShareBP) / TOTAL_BASIS_POINTS;
-        uint256 growth = Math256.max(a.unreserved, minGrowth);
+        uint256 growth = Math256.max(allocation.unreserved, minGrowth);
 
-        uint256 newRedeemsReserve = Math256.min(a.redeemsReserve.add(growth), target);
+        uint256 newRedeemsReserve = Math256.min(allocation.redeemsReserve.add(growth), target);
 
-        if (newRedeemsReserve != a.redeemsReserve) {
+        if (newRedeemsReserve != allocation.redeemsReserve) {
             _setRedeemsReserve(newRedeemsReserve);
         }
     }
@@ -1352,17 +1357,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @dev Get the total amount of ether controlled by the protocol internally
     /// (buffered ether + CL validators balance + CL pending balance + deposited since last report)
-    /// Note: bufferedEther already includes redeems reserve (soft-reserved, physically on RedeemsBuffer)
     function _getInternalEther() internal view returns (uint256) {
         (uint256 bufferedEther, uint256 depositedPostReport) = _getBufferedEtherAndDepositedPostReport();
         (uint256 clValidatorsBalance, uint256 clPendingBalance) = _getClValidatorsBalanceAndClPendingBalance();
 
         // With balance-based accounting, we don't need to calculate transientEther
         // as pending deposits are already included in clPendingBalance
-        return bufferedEther
-            .add(clValidatorsBalance)
-            .add(clPendingBalance)
-            .add(depositedPostReport);
+        return bufferedEther.add(clValidatorsBalance).add(clPendingBalance).add(depositedPostReport);
     }
 
     /// @dev Calculate the amount of ether controlled by external entities

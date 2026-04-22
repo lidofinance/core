@@ -173,13 +173,13 @@ describe("Integration: Redeems reserve — buffer allocation", () => {
     await redeemExact(lido, holder, fix, redeemAmount);
 
     // Verify: redeem shares pending on burner
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther);
 
     // --- Reconciliation report: burn redeem shares before capturing buffer state ---
     await doReport(ctx);
 
     // Verify: all redeem shares burned, counters reset
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     const afterRedeem = await captureBufferState(ctx);
     await assertReserveAllocationInvariant(lido);

@@ -79,7 +79,7 @@ describe("Integration: Redeems reserve — cover starvation and RefSlot deferral
     return ((numerator - denominator) * LIMITER_PRECISION_BASE) / denominator;
   }
 
-  it("cover starvation: redeem nonCover burns first via _guaranteedNonCover, events correct", async () => {
+  it("cover starvation: redeem nonCover burns first via _minNonCoverSharesToBurn, events correct", async () => {
     const { lido, burner } = ctx.contracts;
 
     const RATIO_BP = 2000n; // 20% reserve
@@ -106,7 +106,7 @@ describe("Integration: Redeems reserve — cover starvation and RefSlot deferral
     const redeemEther = await lido.getPooledEthByShares(redeemShares);
     await redeemExact(lido, holder, fix, redeemAmount);
 
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther);
 
     const nonCoverBurntBefore = await burner.getNonCoverSharesBurnt();
     const stateBeforeReport: ProtocolState = await captureState(lido);
@@ -124,7 +124,7 @@ describe("Integration: Redeems reserve — cover starvation and RefSlot deferral
     // Burner's getNonCoverSharesBurnt increased by at least redeemShares worth
     const nonCoverBurntAfter = await burner.getNonCoverSharesBurnt();
     const nonCoverBurntDelta = nonCoverBurntAfter - nonCoverBurntBefore;
-    // The redeem shares are burned as nonCover via _guaranteedNonCover. The eth-to-shares roundtrip
+    // The redeem shares are burned as nonCover via _minNonCoverSharesToBurn. The eth-to-shares roundtrip
     // can lose up to 1 wei, so we allow tolerance.
     const burnedRedeemShares = await lido.getSharesByPooledEth(redeemEther);
     expect(nonCoverBurntDelta).to.be.gte(burnedRedeemShares);
@@ -137,7 +137,7 @@ describe("Integration: Redeems reserve — cover starvation and RefSlot deferral
     expect(rebase).to.be.lte(MAX_REBASE + 1n);
 
     // Redeem ether counter reset to 0
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     await setMaxPositiveTokenRebase(ctx, savedRebase);
   });
@@ -209,7 +209,7 @@ describe("Integration: Redeems reserve — cover starvation and RefSlot deferral
     expect(remainNonCover).to.equal(0n);
 
     // Redeem counters should be reset
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     await assertReserveAllocationInvariant(lido);
 
@@ -230,17 +230,17 @@ describe("Integration: Redeems reserve — cover starvation and RefSlot deferral
     const redeemAmount1 = ether("5");
     await redeemExact(lido, holder, fix, redeemAmount1);
 
-    const liveValue = await fix.vault.getRedeemedEther();
+    const liveValue = (await fix.vault.getRedeemed())[0];
     expect(liveValue).to.be.gt(0n);
 
     // Within the same frame: snapshot returns start-of-frame value (before redeem write)
-    const snapshotInFrame = await fix.vault.getRedeemedEtherForReport();
+    const snapshotInFrame = (await fix.vault.getRedeemedForLastRefSlot())[0];
     expect(snapshotInFrame).to.equal(0n);
 
     // doReport advances to next frame → snapshot now returns the live value
     await doReport(ctx);
 
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     const state1: ProtocolState = await captureState(lido);
     expect(state1.shareRate).to.equal(state0.shareRate);
@@ -248,11 +248,11 @@ describe("Integration: Redeems reserve — cover starvation and RefSlot deferral
 
     // ---- Cycle 2: redeem 3 ETH ----
     await redeemExact(lido, holder, fix, ether("3"));
-    expect(await fix.vault.getRedeemedEther()).to.be.gt(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.be.gt(0n);
 
     await doReport(ctx);
 
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
     expect((await captureState(lido)).shareRate).to.equal(state1.shareRate);
     await assertReserveAllocationInvariant(lido);
   });

@@ -7,8 +7,8 @@ pragma solidity >=0.4.24;
 
 interface IRedeemsBuffer {
     function fundReserve() external payable;
-    function withdrawUnredeemed(uint256 _settledEther) external;
-    function getRedeemedEther() external view returns (uint256);
-    function getRedeemedEtherForReport() external view returns (uint256);
+    function reconcile(uint256 _redeemedEtherForLastRefSlot, uint256 _redeemedSharesForLastRefSlot) external;
+    function getRedeemed() external view returns (uint256 redeemedEther, uint256 redeemedShares);
+    function getRedeemedForLastRefSlot() external view returns (uint256 redeemedEther, uint256 redeemedShares);
     function getReserveBalance() external view returns (uint256);
 }

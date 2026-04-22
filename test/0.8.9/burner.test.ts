@@ -695,7 +695,7 @@ describe("Burner.sol", () => {
     });
   });
 
-  context("commitSharesToBurn with _guaranteedNonCover", () => {
+  context("commitSharesToBurn with _minNonCoverSharesToBurn", () => {
     beforeEach(async () => {
       await expect(steth.approve(burner, MaxUint256))
         .to.emit(steth, "Approval")
@@ -704,7 +704,7 @@ describe("Burner.sol", () => {
       expect(await steth.allowance(holder, burner)).to.equal(MaxUint256);
     });
 
-    it("burns nonCover first when _guaranteedNonCover > 0", async () => {
+    it("burns nonCover first when _minNonCoverSharesToBurn > 0", async () => {
       const coverShares = ether("3");
       const nonCoverShares = ether("2");
 
@@ -745,7 +745,7 @@ describe("Burner.sol", () => {
       expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt + nonCoverShares);
     });
 
-    it("clamps _guaranteedNonCover to available nonCover", async () => {
+    it("clamps _minNonCoverSharesToBurn to available nonCover", async () => {
       const coverShares = ether("3");
       const nonCoverShares = ether("1");
 
@@ -766,7 +766,7 @@ describe("Burner.sol", () => {
       const coverBurnShares = ether("2"); // 3 - 1 = 2 cover shares (nonCover clamped to 1)
       const coverSteth = await steth.getPooledEthByShares(coverBurnShares);
 
-      // commitSharesToBurn(3, 2) — _guaranteedNonCover=2 clamped to available nonCover=1, then 2 cover
+      // commitSharesToBurn(3, 2) — _minNonCoverSharesToBurn=2 clamped to available nonCover=1, then 2 cover
       await expect(burner.connect(accountingSigner).commitSharesToBurn(ether("3"), ether("2")))
         .to.emit(burner, "StETHBurnt")
         .withArgs(false, nonCoverSteth, nonCoverShares) // 1 nonCover (clamped)
@@ -786,7 +786,7 @@ describe("Burner.sol", () => {
       expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt + nonCoverShares);
     });
 
-    it("works with _guaranteedNonCover = 0 (legacy cover-first behavior)", async () => {
+    it("works with _minNonCoverSharesToBurn = 0 (legacy cover-first behavior)", async () => {
       const coverShares = ether("2");
       const nonCoverShares = ether("2");
 

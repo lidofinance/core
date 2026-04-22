@@ -65,7 +65,8 @@ interface ILido is IERC20, IVersioned {
         uint256 _lastWithdrawalRequestToFinalize,
         uint256 _withdrawalsShareRate,
         uint256 _etherToLockOnWithdrawalQueue,
-        uint256 _redeemedEther
+        uint256 _redeemedEther,
+        uint256 _redeemedShares
     ) external;
 
     function emitTokenRebase(
@@ -84,13 +85,18 @@ interface ILido is IERC20, IVersioned {
 
     function internalizeExternalBadDebt(uint256 _amountOfShares) external;
 
-    function getRedeemsReserveTarget() external view returns (uint256);
+    function isStopped() external view returns (bool);
 
-    function getRedeemsReserveGrowthShare() external view returns (uint256);
+    function receiveFromRedeemsBuffer() external payable;
+
+    // --- buffer allocation getters (primarily for off-chain monitoring) ---
+    function getDepositableEther() external view returns (uint256);
 
     function getWithdrawalsReserve() external view returns (uint256);
 
-    function getDepositableEther() external view returns (uint256);
-
     function getRedeemsReserve() external view returns (uint256);
+
+    function getRedeemsReserveTarget() external view returns (uint256);
+
+    function getRedeemsReserveGrowthShare() external view returns (uint256);
 }

@@ -52,7 +52,7 @@ export interface BunkerCheckpoint {
   unfinalizedStETH: bigint;
 }
 
-/** Deploys RefSlotStore + RedeemsBuffer, grants roles, installs on the LidoLocator. Call once in before(). */
+/** Deploys RedeemsBuffer, grants roles, installs on the LidoLocator. Call once in before(). */
 export async function setupVault(
   ctx: ProtocolContext,
   admin: HardhatEthersSigner,
@@ -61,23 +61,15 @@ export async function setupVault(
   const { burner, locator } = ctx.contracts;
   const agent = await ctx.getSigner("agent");
 
-  // Deploy RefSlotStore
-  const hashConsensusAddr = await ctx.contracts.hashConsensus.getAddress();
-  const storeFactory = await ethers.getContractFactory("RefSlotStore");
-  const store = await storeFactory.connect(admin).deploy(hashConsensusAddr, admin.address);
-
   // Deploy RedeemsBuffer
   const factory = await ethers.getContractFactory("RedeemsBuffer");
   const lidoAddr = await ctx.contracts.lido.getAddress();
   const burnerAddr = await burner.getAddress();
   const wqAddr = await ctx.contracts.withdrawalQueue.getAddress();
-  const impl = await factory.connect(admin).deploy(lidoAddr, burnerAddr, wqAddr, await store.getAddress());
+  const hashConsensusAddr = await ctx.contracts.hashConsensus.getAddress();
+  const impl = await factory.connect(admin).deploy(lidoAddr, burnerAddr, wqAddr, hashConsensusAddr);
   const [vault] = await proxify({ impl, admin });
   await vault.initialize(admin.address);
-
-  // Grant WRITER_ROLE on RefSlotStore to the buffer
-  const writerRole = await store.WRITER_ROLE();
-  await store.connect(admin).grantRole(writerRole, await vault.getAddress());
 
   const burnRole = await burner.REQUEST_BURN_SHARES_ROLE();
   await burner.connect(agent).grantRole(burnRole, await vault.getAddress());
@@ -88,6 +80,9 @@ export async function setupVault(
   for (const signer of extraRedeemers) {
     await vault.connect(admin).grantRole(redeemerRole, signer.address);
   }
+
+  const recoverRole = await vault.RECOVER_ROLE();
+  await vault.connect(admin).grantRole(recoverRole, admin.address);
 
   // Sanity: locator must now resolve to the new buffer.
   if ((await locator.redeemsBuffer()) !== (await vault.getAddress())) {

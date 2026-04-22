@@ -108,7 +108,7 @@ describe("Integration: Redeems reserve — skipped report", () => {
     await assertReserveAllocationInvariant(lido);
 
     // Verify: redeem shares pending on burner
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther1);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther1);
 
     // --- Report to refill reserve ---
     await doReport(ctx);
@@ -116,7 +116,7 @@ describe("Integration: Redeems reserve — skipped report", () => {
     const state2: ProtocolState = await captureState(lido);
 
     // Verify: shares burned, counters reset, reserve refilled
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
     expect(state2.totalPooledEther).to.equal(state0.totalPooledEther - redeemEther1);
     expect(state2.totalShares).to.equal(state0.totalShares - redeemShares1);
     expect(state2.shareRate).to.equal(state0.shareRate);
@@ -165,7 +165,7 @@ describe("Integration: Redeems reserve — skipped report", () => {
     await assertReserveAllocationInvariant(lido);
 
     // Verify: redeem shares pending on burner
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther2);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther2);
 
     // --- Report to refill reserve to new higher target ---
     await doReport(ctx);
@@ -173,7 +173,7 @@ describe("Integration: Redeems reserve — skipped report", () => {
     const state5: ProtocolState = await captureState(lido);
 
     // Verify: shares burned, counters reset, reserve refilled to new target
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
     assertReserveState(state5, RATIO_BP);
     expect(state5.reserveTarget).to.be.closeTo(targetAfterDeposit - expectedReserveTarget(redeemEther2, RATIO_BP), 10n);
     await assertReserveAllocationInvariant(lido);

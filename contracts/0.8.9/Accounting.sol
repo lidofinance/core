@@ -60,6 +60,7 @@ contract Accounting {
         uint256 externalEther;
         uint256 badDebtToInternalize;
         uint256 redeemedEther;
+        uint256 redeemedShares;
     }
 
     /// @notice precalculated values that is used to change the state of the protocol during the report
@@ -78,8 +79,6 @@ contract Accounting {
         uint256 totalSharesToBurn;
         /// @notice number of stETH shares to mint as a protocol fee
         uint256 sharesToMintAsFees;
-        /// @notice redeemed stETH shares derived from the buffer's redeemedEther at the pre-report rate
-        uint256 redeemedShares;
         /// @notice amount of NO fees to transfer to each module
         FeeDistribution feeDistribution;
         /// @notice amount of CL ether that is not rewards earned during this report period
@@ -165,17 +164,17 @@ contract Accounting {
             pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
         }
 
-        pre.redeemedEther = _getRedeemedEther(_contracts, isSimulation);
+        (pre.redeemedEther, pre.redeemedShares) = _getRedeemed(_contracts, isSimulation);
     }
 
-    function _getRedeemedEther(Contracts memory _contracts, bool _isSimulation) internal view returns (uint256) {
-        if (address(_contracts.redeemsBuffer) == address(0)) return 0;
-
-        if (_isSimulation) {
-            return _contracts.redeemsBuffer.getRedeemedEther();
-        } else {
-            return _contracts.redeemsBuffer.getRedeemedEtherForReport();
-        }
+    function _getRedeemed(Contracts memory _contracts, bool _isSimulation)
+        internal
+        view
+        returns (uint256 redeemedEther, uint256 redeemedShares)
+    {
+        if (address(_contracts.redeemsBuffer) == address(0)) return (0, 0);
+        if (_isSimulation) return _contracts.redeemsBuffer.getRedeemed();
+        return _contracts.redeemsBuffer.getRedeemedForLastRefSlot();
     }
 
     /// @dev calculates all the state changes that is required to apply the report
@@ -196,8 +195,6 @@ contract Accounting {
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clValidatorsBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
-        update.redeemedShares = LIDO.getSharesByPooledEth(_pre.redeemedEther);
-
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
         // and/or leaving some shares unburnt on Burner to be processed on future reports
@@ -208,12 +205,12 @@ contract Accounting {
             update.totalSharesToBurn // shares to burn from Burner balance
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
             _pre.totalPooledEther - _pre.externalEther - _pre.redeemedEther, // we need to change the base as shareRate is now calculated on
-            _pre.totalShares - _pre.externalShares - update.redeemedShares,  // internal ether and shares, but inside it's still total
+            _pre.totalShares - _pre.externalShares - _pre.redeemedShares,    // internal ether and shares, but inside it's still total
             update.principalClBalance,
             _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
-            _report.sharesRequestedToBurn - update.redeemedShares,
+            _report.sharesRequestedToBurn - _pre.redeemedShares,
             update.etherToFinalizeWQ,
             update.sharesToFinalizeWQ
         );
@@ -221,7 +218,7 @@ contract Accounting {
         uint256 postInternalSharesBeforeFees = _pre.totalShares -
             _pre.externalShares - // internal shares before
             update.totalSharesToBurn - // shares to be burned for withdrawals and cover
-            update.redeemedShares;
+            _pre.redeemedShares;
 
         update.postInternalEther =
             _pre.totalPooledEther - _pre.externalEther - _pre.redeemedEther // internal ether before
@@ -387,9 +384,9 @@ contract Accounting {
         }
 
         {
-            uint256 totalBurn = _update.totalSharesToBurn + _update.redeemedShares;
+            uint256 totalBurn = _update.totalSharesToBurn + _pre.redeemedShares;
             if (totalBurn > 0) {
-                _contracts.burner.commitSharesToBurn(totalBurn, _update.redeemedShares);
+                _contracts.burner.commitSharesToBurn(totalBurn, _pre.redeemedShares);
             }
         }
 
@@ -402,7 +399,8 @@ contract Accounting {
             lastWithdrawalRequestToFinalize,
             _report.simulatedShareRate,
             _update.etherToFinalizeWQ,
-            _pre.redeemedEther
+            _pre.redeemedEther,
+            _pre.redeemedShares
         );
 
         if (_update.sharesToMintAsFees > 0) {

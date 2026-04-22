@@ -12,7 +12,7 @@ contract Lido__MockForRedeemsBuffer {
     event TransferSharesCalled(address to, uint256 sharesAmount);
     event RequestBurnSharesCalled(address from, uint256 sharesAmount);
     event ApproveCalled(address spender, uint256 amount);
-    event ReceivedFromRedeemsBuffer(uint256 amount);
+    event EtherReceivedFromRedeemsBuffer(uint256 amount);
 
     receive() external payable {}
 
@@ -53,7 +53,7 @@ contract Lido__MockForRedeemsBuffer {
 
     function receiveFromRedeemsBuffer() external payable {
         receivedETH += msg.value;
-        emit ReceivedFromRedeemsBuffer(msg.value);
+        emit EtherReceivedFromRedeemsBuffer(msg.value);
     }
 
     // Test helpers

@@ -10,7 +10,6 @@ import {
   HashConsensus__MockForRedeemsBuffer,
   Lido__MockForRedeemsBuffer,
   RedeemsBuffer,
-  RefSlotStore,
   WithdrawalQueue__MockForRedeemsBuffer,
 } from "typechain-types";
 
@@ -28,7 +27,6 @@ describe("RedeemsBuffer.sol", () => {
   let burner: Burner__MockForRedeemsBuffer;
   let wq: WithdrawalQueue__MockForRedeemsBuffer;
   let consensus: HashConsensus__MockForRedeemsBuffer;
-  let store: RefSlotStore;
   let buffer: RedeemsBuffer;
 
   let lidoSigner: HardhatEthersSigner;
@@ -46,24 +44,17 @@ describe("RedeemsBuffer.sol", () => {
     wq = await ethers.deployContract("WithdrawalQueue__MockForRedeemsBuffer", []);
     consensus = await ethers.deployContract("HashConsensus__MockForRedeemsBuffer", [DEFAULT_REF_SLOT]);
 
-    // Deploy real RefSlotStore
-    store = await ethers.deployContract("RefSlotStore", [await consensus.getAddress(), admin.address]);
-
     // Deploy RedeemsBuffer behind OssifiableProxy
     const bufferImpl = await ethers.deployContract("RedeemsBuffer", [
       await lido.getAddress(),
       await burner.getAddress(),
       await wq.getAddress(),
-      await store.getAddress(),
+      await consensus.getAddress(),
     ]);
     [buffer] = await proxify<RedeemsBuffer>({ impl: bufferImpl, admin });
 
     // Initialize
     await buffer.initialize(admin.address);
-
-    // Grant WRITER_ROLE on store to the buffer
-    const WRITER_ROLE = await store.WRITER_ROLE();
-    await store.connect(admin).grantRole(WRITER_ROLE, await buffer.getAddress());
 
     // Grant REDEEMER_ROLE to redeemer
     const REDEEMER_ROLE = await buffer.REDEEMER_ROLE();
@@ -79,7 +70,7 @@ describe("RedeemsBuffer.sol", () => {
     const RECOVER_ROLE = await buffer.RECOVER_ROLE();
     await buffer.connect(admin).grantRole(RECOVER_ROLE, admin.address);
 
-    // Impersonate Lido for calling fundReserve / withdrawUnredeemed
+    // Impersonate Lido for calling fundReserve / reconcile
     lidoSigner = await impersonate(await lido.getAddress(), ether("100"));
   });
 
@@ -93,7 +84,7 @@ describe("RedeemsBuffer.sol", () => {
         await lido.getAddress(),
         await burner.getAddress(),
         await wq.getAddress(),
-        await store.getAddress(),
+        await consensus.getAddress(),
       ]);
       const [freshBuffer] = await proxify<RedeemsBuffer>({ impl: freshImpl, admin });
       await expect(freshBuffer.initialize(ZeroAddress)).to.be.revertedWithCustomError(freshBuffer, "AdminCannotBeZero");
@@ -108,7 +99,7 @@ describe("RedeemsBuffer.sol", () => {
         await lido.getAddress(),
         await burner.getAddress(),
         await wq.getAddress(),
-        await store.getAddress(),
+        await consensus.getAddress(),
       ]);
       await expect(impl.initialize(admin.address)).to.be.revertedWithCustomError(impl, "InvalidInitialization");
     });
@@ -201,18 +192,17 @@ describe("RedeemsBuffer.sol", () => {
         .to.emit(buffer, "Redeemed")
         .withArgs(redeemer.address, recipient.address, redeemAmount, redeemAmount, redeemAmount);
 
-      // Check store was updated (1:1 rate, so redeemed == amount)
-      const redeemedEther = await buffer.getRedeemedEther();
+      const [redeemedEther, redeemedShares] = await buffer.getRedeemed();
       expect(redeemedEther).to.equal(redeemAmount);
+      expect(redeemedShares).to.equal(redeemAmount);
 
-      // Check ETH was sent to recipient
       const recipientBalanceAfter = await ethers.provider.getBalance(recipient.address);
       expect(recipientBalanceAfter - recipientBalanceBefore).to.equal(redeemAmount);
     });
   });
 
   context("uint104 overflow on redeemedEther", () => {
-    it("reverts via SafeCast when cumulative redeemedEther would exceed type(uint104).max", async () => {
+    it("reverts on arithmetic overflow when cumulative redeemedEther would exceed type(uint104).max", async () => {
       const MAX_UINT104 = (1n << 104n) - 1n;
 
       const HUGE_BALANCE = MAX_UINT104 + ether("10");
@@ -220,14 +210,10 @@ describe("RedeemsBuffer.sol", () => {
 
       await buffer.connect(lidoSigner).fundReserve({ value: MAX_UINT104 + 1n });
 
-      // First redeem: brings the counter exactly to uint104.max — stored correctly.
       await buffer.connect(redeemer).redeem(MAX_UINT104, recipient.address);
-      expect(await buffer.getRedeemedEther()).to.equal(MAX_UINT104);
+      expect((await buffer.getRedeemed())[0]).to.equal(MAX_UINT104);
 
-      // Second redeem: redeemedBefore + etherAmount = uint104.max + 1 — SafeCast reverts.
-      await expect(buffer.connect(redeemer).redeem(1n, recipient.address))
-        .to.be.revertedWithCustomError(buffer, "SafeCastOverflowedUintDowncast")
-        .withArgs(104, MAX_UINT104 + 1n);
+      await expect(buffer.connect(redeemer).redeem(1n, recipient.address)).to.be.revertedWithPanic(0x11);
     });
   });
 
@@ -257,56 +243,42 @@ describe("RedeemsBuffer.sol", () => {
     });
   });
 
-  context("withdrawUnredeemed", () => {
+  context("reconcile", () => {
     it("reverts when caller is not Lido", async () => {
-      await expect(buffer.connect(stranger).withdrawUnredeemed(0)).to.be.revertedWithCustomError(buffer, "NotLido");
+      await expect(buffer.connect(stranger).reconcile(0, 0)).to.be.revertedWithCustomError(buffer, "NotLido");
     });
 
     it("returns unredeemed ETH to Lido", async () => {
-      // Fund 10 ETH
       await buffer.connect(lidoSigner).fundReserve({ value: ether("10") });
-
-      // Redeem 3 ETH
       await buffer.connect(redeemer).redeem(ether("3"), recipient.address);
 
-      // withdrawUnredeemed with settledEther = redeemed (3 ETH) => carry = 0, unredeemed = 7 ETH
       const receivedBefore = await lido.receivedETH();
-      await buffer.connect(lidoSigner).withdrawUnredeemed(ether("3"));
+      await buffer.connect(lidoSigner).reconcile(ether("3"), ether("3"));
       const receivedAfter = await lido.receivedETH();
 
-      // Lido mock should have received 7 ETH via receiveFromRedeemsBuffer
       expect(receivedAfter - receivedBefore).to.equal(ether("7"));
-
-      // Reserve should be zeroed
       expect(await buffer.getReserveBalance()).to.equal(0);
     });
 
-    it("carries post-refSlot redeems (settled < redeemed)", async () => {
-      // Fund 10 ETH
+    it("preserves post-refSlot redeems when the snapshot is smaller than live", async () => {
       await buffer.connect(lidoSigner).fundReserve({ value: ether("10") });
-
-      // Redeem 5 ETH
       await buffer.connect(redeemer).redeem(ether("5"), recipient.address);
+      await buffer.connect(lidoSigner).reconcile(ether("2"), ether("2"));
 
-      // settled = 2 ETH => carry = 5 - 2 = 3 ETH, unredeemed = 10 - 5 = 5 ETH
-      await buffer.connect(lidoSigner).withdrawUnredeemed(ether("2"));
-
-      // After withdrawal, store should have carry value = 3 ETH
-      expect(await buffer.getRedeemedEther()).to.equal(ether("3"));
+      const [postRefSlotRedeemedEther, postRefSlotRedeemedShares] = await buffer.getRedeemed();
+      expect(postRefSlotRedeemedEther).to.equal(ether("3"));
+      expect(postRefSlotRedeemedShares).to.equal(ether("3"));
       expect(await buffer.getReserveBalance()).to.equal(0);
     });
 
-    it("zeroes when settled == redeemed", async () => {
-      // Fund 10 ETH
+    it("zeroes when snapshot == live", async () => {
       await buffer.connect(lidoSigner).fundReserve({ value: ether("10") });
-
-      // Redeem 4 ETH
       await buffer.connect(redeemer).redeem(ether("4"), recipient.address);
+      await buffer.connect(lidoSigner).reconcile(ether("4"), ether("4"));
 
-      // settled == redeemed => carry = 0
-      await buffer.connect(lidoSigner).withdrawUnredeemed(ether("4"));
-
-      expect(await buffer.getRedeemedEther()).to.equal(0);
+      const [postRefSlotRedeemedEther, postRefSlotRedeemedShares] = await buffer.getRedeemed();
+      expect(postRefSlotRedeemedEther).to.equal(0);
+      expect(postRefSlotRedeemedShares).to.equal(0);
       expect(await buffer.getReserveBalance()).to.equal(0);
     });
   });

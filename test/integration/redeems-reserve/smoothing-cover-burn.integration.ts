@@ -132,7 +132,7 @@ describe("Integration: Redeems reserve — smoothing interaction with cover burn
     const redeemEther = await lido.getPooledEthByShares(redeemShares);
     await redeemExact(lido, holder, fix, redeemAmount);
 
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther);
 
     const coverBurntBefore_B = await burner.getCoverSharesBurnt();
     await doReport(ctx, {
@@ -147,7 +147,7 @@ describe("Integration: Redeems reserve — smoothing interaction with cover burn
     const rebase_B = computeRebase(stateBeforeReport, stateAfterReport_B);
     await assertReserveAllocationInvariant(lido);
 
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     // ── Assertions ──
 
@@ -158,7 +158,7 @@ describe("Integration: Redeems reserve — smoothing interaction with cover burn
     expect(rebase_B).to.be.lte(MAX_REBASE + 1n);
 
     // 2. Path B burns LESS cover — redeem shares are guaranteed from nonCover
-    //    via _guaranteedNonCover parameter, so cover budget is not expanded by redeems.
+    //    via _minNonCoverSharesToBurn parameter, so cover budget is not expanded by redeems.
     //    Cover insurance application is deferred to subsequent frames.
     expect(coverBurned_B).to.be.lt(coverBurned_A);
 

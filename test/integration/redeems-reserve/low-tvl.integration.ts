@@ -99,7 +99,7 @@ describe("Integration: Redeems reserve — low TVL impact", () => {
     const state1: ProtocolState = await captureState(lido);
 
     // Verify: pending shares on burner, available reserve ≈ 0 (tracked reserve stale, vault drained)
-    expect(state1.reserve - (await fix.vault.getRedeemedEther())).to.be.closeTo(0n, 10n);
+    expect(state1.reserve - (await fix.vault.getRedeemed())[0]).to.be.closeTo(0n, 10n);
     expect(state1.shareRate).to.equal(state0.shareRate);
     await assertReserveAllocationInvariant(lido);
 
@@ -123,7 +123,7 @@ describe("Integration: Redeems reserve — low TVL impact", () => {
     const appliedRewards = EL_REWARDS - deferredRewards;
 
     // Verify: shares burned, counters reset
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     expect(requestStatus.isFinalized).to.equal(true);
     expect(await withdrawalQueue.unfinalizedStETH()).to.equal(0n);

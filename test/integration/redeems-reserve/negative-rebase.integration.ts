@@ -8,10 +8,12 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
+  report,
   reportVaultDataWithProof,
   resetCLBalanceDecreaseWindow,
   setupLidoForVaults,
   upDefaultTierShareLimit,
+  waitNextAvailableReportTime,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -24,6 +26,7 @@ import {
   doReport,
   expectedReserveTarget,
   getRedeemAmount,
+  mineBlocks,
   ProtocolState,
   quoteShares,
   redeemExact,
@@ -105,14 +108,14 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     await redeemExact(lido, holder, fix, REDEEM_AMOUNT);
 
     // Verify: redeem shares pending on burner
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther);
 
     await doReport(ctx, { clDiff: CL_LOSS });
     const state2: ProtocolState = await captureState(lido);
     await assertReserveAllocationInvariant(lido);
 
     // Verify: all redeem shares burned, counters reset
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     // --- Compare paths: reserve auto-shrinks to new target in both ---
     assertReserveState(state2, RATIO_BP);
@@ -151,7 +154,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     await redeemExact(lido, holder, fix, REDEEM_AMOUNT);
 
     // Verify: redeem shares pending on burner
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther);
 
     await doReport(ctx, { clDiff: CL_LOSS });
     const state2: ProtocolState = await captureState(lido);
@@ -159,7 +162,7 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     assertReserveState(state2, RATIO_BP);
 
     // Verify: all redeem shares burned, counters reset
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     // --- Compare paths: redeem amplifies loss per remaining share ---
     // Verify: both paths produced a negative rebase — rate dropped from pre-rebase baseline
@@ -269,6 +272,46 @@ describe("Integration: Redeems reserve — negative rebase", () => {
     expect(await ethers.provider.getBalance(holder.address)).to.equal(recipientBalBefore + redeemQuoteAfterLoss.ether);
 
     // Verify: redeem shares pending on burner (burn deferred to next report)
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemQuoteAfterLoss.ether);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemQuoteAfterLoss.ether);
+  });
+
+  it("post-refSlot redeems surviving a negative rebase report the shares that were actually redeemed", async () => {
+    const { lido } = ctx.contracts;
+
+    // Redeem must land in frame N+1 before report-for-N so it becomes post-refSlot state.
+    const { reportRefSlot: refSlotN } = await waitNextAvailableReportTime(ctx);
+    await mineBlocks(3);
+
+    const REDEEM_AMOUNT = ether("5");
+    const sharesAtRedeem = await lido.getSharesByPooledEth(REDEEM_AMOUNT);
+    const etherAtRedeem = await lido.getPooledEthByShares(sharesAtRedeem);
+    await redeemExact(lido, holder, fix, REDEEM_AMOUNT);
+
+    const [snapEther, snapShares] = await fix.vault.getRedeemedForLastRefSlot();
+    expect(snapEther).to.equal(0n);
+    expect(snapShares).to.equal(0n);
+
+    await report(ctx, {
+      clDiff: CL_LOSS,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+      refSlot: refSlotN,
+      waitNextReportTime: false,
+    });
+
+    const [postRefSlotRedeemedEther, postRefSlotRedeemedShares] = await fix.vault.getRedeemed();
+    expect(postRefSlotRedeemedEther).to.equal(etherAtRedeem);
+    expect(postRefSlotRedeemedShares).to.equal(sharesAtRedeem);
+
+    // Rederiving shares from the preserved ether at the post-rebase rate yields a value that
+    // does NOT match the shares actually transferred to Burner — the tracked share counter
+    // exists precisely to avoid this mismatch.
+    const totalSharesPostRebase = await lido.getTotalShares();
+    const totalPooledPostRebase = await lido.getTotalPooledEther();
+    const rederivedSharesAtNewRate = (postRefSlotRedeemedEther * totalSharesPostRebase) / totalPooledPostRebase;
+    expect(await lido.getSharesByPooledEth(postRefSlotRedeemedEther)).to.equal(rederivedSharesAtNewRate);
+    expect(rederivedSharesAtNewRate).to.not.equal(postRefSlotRedeemedShares);
+
+    await assertReserveAllocationInvariant(lido);
   });
 });

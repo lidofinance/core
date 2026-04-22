@@ -99,7 +99,7 @@ describe("Integration: Redeems reserve — positive rebase", () => {
     await redeemExact(lido, holder, fix, REDEEM_AMOUNT);
 
     // Verify: redeem shares pending on burner, redeemed ether tracked on vault
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther);
 
     await doReport(ctx, { excludeVaultsBalances: false, reportElVault: true, reportWithdrawalsVault: false });
     const state2: ProtocolState = await captureState(lido);
@@ -107,7 +107,7 @@ describe("Integration: Redeems reserve — positive rebase", () => {
     assertReserveState(state2, RATIO_BP);
 
     // Verify: all redeem shares burned, counters reset
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     // --- Compare paths: difference is only the redeemed ETH and shares ---
     expect(state1.totalPooledEther).to.equal(state0.totalPooledEther + REWARDS);
@@ -167,7 +167,7 @@ describe("Integration: Redeems reserve — positive rebase", () => {
     await redeemExact(lido, holder, fix, REDEEM_AMOUNT);
 
     // Verify: redeem shares pending on burner, redeemed ether tracked on vault
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(redeemEther);
 
     await doReport(ctx, {
       excludeVaultsBalances: false,
@@ -183,7 +183,7 @@ describe("Integration: Redeems reserve — positive rebase", () => {
     const [coverAfter, nonCoverAfter] = await burner.getSharesRequestedToBurn();
     expect(coverAfter).to.equal(0n);
     expect(nonCoverAfter).to.equal(0n);
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
     expect(await lido.getRedeemsReserve()).to.equal(await ethers.provider.getBalance(fix.address));
 
     // --- Compare paths: difference is only the redeemed ETH and shares ---

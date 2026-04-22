@@ -93,7 +93,7 @@ describe("Integration: Redeems reserve — additional push-specific scenarios", 
     expect(trackedReserve).to.equal(before.reserve);
 
     // Verify: all redeemed shares accumulated on burner
-    expect(await fix.vault.getRedeemedEther()).to.equal(totalEther);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(totalEther);
 
     // Verify: rate exactly unchanged between reports (stale overcount cancels deferred burn)
     expect(await lido.getPooledEthByShares(ether("1"))).to.equal(before.shareRate);
@@ -105,7 +105,7 @@ describe("Integration: Redeems reserve — additional push-specific scenarios", 
     const after: ProtocolState = await captureState(lido);
 
     // Verify: all shares burned, counters reset
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     // Verify: tracked == actual (reconciled)
     expect(await lido.getRedeemsReserve()).to.equal(await ethers.provider.getBalance(fix.address));

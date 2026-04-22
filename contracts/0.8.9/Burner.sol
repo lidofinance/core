@@ -345,12 +345,10 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
      * Does nothing if zero amount passed.
      *
      * @param _sharesToBurn amount of shares to be burnt
-     * @param _guaranteedNonCover amount of shares to burn from nonCover before applying cover-first
-     *        priority to the remainder. Guarantees that at least this many shares come from
-     *        the nonCover counter, used by Accounting to ensure redeem shares burn correctly
-     *        even when large cover deposits are pending.
+     * @param _minNonCoverSharesToBurn floor on shares drawn from non-cover before the cover-first split applies to
+     *        the remainder. At least this many shares will come from the non-cover counter (capped by what's requested).
      */
-    function commitSharesToBurn(uint256 _sharesToBurn, uint256 _guaranteedNonCover) external virtual override {
+    function commitSharesToBurn(uint256 _sharesToBurn, uint256 _minNonCoverSharesToBurn) external virtual override {
         if (msg.sender != LOCATOR.accounting()) revert AppAuthFailed();
 
         if (_sharesToBurn == 0) {
@@ -365,23 +363,23 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
             revert BurnAmountExceedsActual(_sharesToBurn, memCoverSharesBurnRequested + memNonCoverSharesBurnRequested);
         }
 
-        uint256 nonCoverGuaranteed = Math.min(_guaranteedNonCover, memNonCoverSharesBurnRequested);
-        uint256 remaining = _sharesToBurn - nonCoverGuaranteed;
+        uint256 nonCoverFloor = Math.min(_minNonCoverSharesToBurn, memNonCoverSharesBurnRequested);
+        uint256 remaining = _sharesToBurn - nonCoverFloor;
         uint256 coverToBurn = Math.min(remaining, memCoverSharesBurnRequested);
-        uint256 nonCoverToBurn = nonCoverGuaranteed + Math.min(
+        uint256 nonCoverToBurn = nonCoverFloor + Math.min(
             remaining - coverToBurn,
-            memNonCoverSharesBurnRequested - nonCoverGuaranteed
+            memNonCoverSharesBurnRequested - nonCoverFloor
         );
 
         if (nonCoverToBurn > 0) {
             $.totalNonCoverSharesBurnt += nonCoverToBurn;
             $.nonCoverSharesBurnRequested -= nonCoverToBurn;
-            emit StETHBurnt(false, LIDO.getPooledEthByShares(nonCoverToBurn), nonCoverToBurn);
+            emit StETHBurnt(false /* isCover */, LIDO.getPooledEthByShares(nonCoverToBurn), nonCoverToBurn);
         }
         if (coverToBurn > 0) {
             $.totalCoverSharesBurnt += coverToBurn;
             $.coverSharesBurnRequested -= coverToBurn;
-            emit StETHBurnt(true, LIDO.getPooledEthByShares(coverToBurn), coverToBurn);
+            emit StETHBurnt(true /* isCover */, LIDO.getPooledEthByShares(coverToBurn), coverToBurn);
         }
 
         LIDO.burnShares(_sharesToBurn);

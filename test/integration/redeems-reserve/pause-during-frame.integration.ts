@@ -86,7 +86,7 @@ describe("Integration: Redeems reserve — pause during frame", () => {
       fix.vault.connect(holder).redeem(REDEEM_AMOUNT, holder.address, { gasPrice: 0 }),
     ).to.be.revertedWithCustomError(fix.vault, "ResumedExpected");
 
-    // --- Oracle report proceeds despite pause (withdrawUnredeemed/fundReserve not gated) ---
+    // --- Oracle report proceeds despite pause (reconcile/fundReserve not gated) ---
     await doReport(ctx);
 
     const stateDuringPause = await captureState(lido);
@@ -105,7 +105,7 @@ describe("Integration: Redeems reserve — pause during frame", () => {
     const etherAmount = await lido.getPooledEthByShares(shares);
     await redeemExact(lido, holder, fix, REDEEM_AMOUNT);
 
-    expect(await fix.vault.getRedeemedEther()).to.equal(etherAmount);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(etherAmount);
     expect(await ethers.provider.getBalance(fix.address)).to.equal(expectedTarget - etherAmount);
   });
 });

@@ -16,9 +16,9 @@ interface IBurner {
      * NB: The real burn enactment to be invoked after the call (via internal Lido._burnShares())
      *
      * @param _sharesToBurn total shares to burn this report
-     * @param _guaranteedNonCover minimum shares to draw from non-cover before the cover-first split
+     * @param _minNonCoverSharesToBurn floor on shares drawn from non-cover before the cover-first split
      */
-    function commitSharesToBurn(uint256 _sharesToBurn, uint256 _guaranteedNonCover) external;
+    function commitSharesToBurn(uint256 _sharesToBurn, uint256 _minNonCoverSharesToBurn) external;
 
     /**
      * Request burn shares

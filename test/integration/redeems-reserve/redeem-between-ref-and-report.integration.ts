@@ -150,20 +150,14 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     const redeemEther = await lido.getPooledEthByShares(redeemShares);
     await redeemExact(lido, holder, fix, redeemAmount);
 
-    // Verify: pending shares on burner
-    expect(await fix.vault.getRedeemedEther()).to.equal(redeemEther);
-
-    // Snapshot the share count Accounting will derive from redeemedEther at the *pre-report*
-    // share rate. This is the amount actually committed to Burner in commitSharesToBurn,
-    // which can undercount the buffer's stored redeemShares by up to ~1 wei due to
-    // integer floor in the eth→shares roundtrip. The residue stays on Burner as nonCover
-    // and is consumed in the next report.
-    const burnedRedeemShares = await lido.getSharesByPooledEth(redeemEther);
+    const [redeemedEtherBuffer, redeemedSharesBuffer] = await fix.vault.getRedeemed();
+    expect(redeemedEtherBuffer).to.equal(redeemEther);
+    expect(redeemedSharesBuffer).to.equal(redeemShares);
 
     // Compute post-reconciliation headroom: Lido's IE is stale (doesn't reflect the drain yet),
     // subtracting the vault's tracked redeemed amount gives the real post-drain IE
     const headroomDrained = await getHeadroomFor(
-      (await captureState(lido)).internalEther - (await fix.vault.getRedeemedEther()),
+      (await captureState(lido)).internalEther - (await fix.vault.getRedeemed())[0],
     );
 
     await doReport(ctx, { excludeVaultsBalances: false, reportElVault: true });
@@ -173,7 +167,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     const appliedRewards = headroomFull - deferredRewards;
 
     // Verify: shares burned, counters reset
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     // --- Compare paths: drain caused deferred rewards ---
     // Verify: some rewards were deferred (smoothing kicked in due to smaller post-drain base)
@@ -183,8 +177,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     expect(appliedRewards + deferredRewards).to.equal(headroomFull);
 
     expect(state2.totalPooledEther).to.equal(state1.totalPooledEther - deferredRewards - redeemEther);
-    expect(state2.totalShares).to.equal(state1.totalShares - burnedRedeemShares);
-    expect(redeemShares - burnedRedeemShares).to.be.lessThanOrEqual(1n);
+    expect(state2.totalShares).to.equal(state1.totalShares - redeemShares);
 
     const expectedShareRate2 = (state2.totalPooledEther * ether("1")) / state2.totalShares;
     expect(state2.shareRate).to.equal(expectedShareRate2);
@@ -294,7 +287,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     // Compute post-reconciliation headroom: Lido's IE is stale (doesn't reflect the drain yet),
     // subtracting the vault's tracked redeemed amount gives the real post-drain IE
     const headroomAfterDrain = await getHeadroomFor(
-      (await captureState(lido)).internalEther - (await fix.vault.getRedeemedEther()),
+      (await captureState(lido)).internalEther - (await fix.vault.getRedeemed())[0],
     );
 
     // Verify: pending shares on burner
@@ -368,7 +361,7 @@ describe("Integration: Redeems reserve — redeem between refSlot and report", (
     // Verify: rewards fit within post-drain headroom (no smoothing → full deviation applies).
     // Lido's IE is stale — subtracting vault's tracked redeemed amount gives the real post-drain IE.
     const stateBefore: ProtocolState = await captureState(lido);
-    const reconciledIE = stateBefore.internalEther - (await fix.vault.getRedeemedEther());
+    const reconciledIE = stateBefore.internalEther - (await fix.vault.getRedeemed())[0];
     const maxRebase = await ctx.contracts.oracleReportSanityChecker.getMaxPositiveTokenRebase();
     const headroomPostDrain = (reconciledIE * maxRebase) / LIMITER_PRECISION_BASE;
     expect(headroomPostDrain).to.equal(await getHeadroomFor(reconciledIE));

@@ -112,7 +112,7 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
     // All redeemed shares burned — none deferred
     const [, nonCoverAfter] = await burner.getSharesRequestedToBurn();
     expect(nonCoverAfter).to.equal(0n);
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
 
     // Shares decreased (exact delta depends on fee shares minted from rewards)
     const afterShares = await lido.getTotalShares();
@@ -226,12 +226,12 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
 
     const { etherAmount } = await redeemWithReceipt(holder, ether("10"), holder.address);
 
-    expect(await fix.vault.getRedeemedEther()).to.equal(etherAmount);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(etherAmount);
 
     await doReport(ctx);
 
     // Both counters reset (shares by flushSharesToBurner, ether by resetRedeemedEther)
-    expect(await fix.vault.getRedeemedEther()).to.equal(0n);
+    expect((await fix.vault.getRedeemed())[0]).to.equal(0n);
   });
 
   // ═══════════════════════════════════════════════════════════════════════
