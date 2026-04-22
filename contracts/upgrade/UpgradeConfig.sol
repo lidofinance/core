@@ -2,8 +2,8 @@
 pragma solidity 0.8.25;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IUpgradeConfig} from "./interfaces/IUpgradeConfig.sol";
 import {
-    IUpgradeConfig,
     UpgradeParameters,
     EasyTrackNewFactories,
     EasyTrackOldFactories,

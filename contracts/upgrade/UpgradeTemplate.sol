@@ -12,14 +12,13 @@ import {
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 import {ModuleStateConfig, StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
+import {IUpgradeTemplate} from "./interfaces/IUpgradeTemplate.sol";
 import {
     UpgradeParameters,
     GlobalConfig,
     CoreUpgradeConfig,
     CSMUpgradeConfig,
     CuratedModuleConfig,
-    EasyTrackNewFactories,
-    EasyTrackOldFactories,
     ILidoWithFinalizeUpgrade,
     IBaseOracle,
     IValidatorsExitBusOracle,
@@ -27,28 +26,19 @@ import {
     IWithdrawalsManagerProxy,
     IAragonKernel,
     IVersioned,
-    IEasyTrack,
     IWithdrawalVault,
     IWithdrawalsManagerProxy,
     IStakingRouter,
     IDepositSecurityModule,
-    IBaseModuleV3,
-    ICuratedModule,
     IFeeOracleV3,
     IAccountingV3,
     IFeeDistributorV3,
-    IValidatorStrikesV3
+    IValidatorStrikesV3,
+    IPausableUntilView,
+    IInitializedVersionView
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
-
-interface IPausableUntilView {
-    function isPaused() external view returns (bool);
-}
-
-interface IInitializedVersionView {
-    function getInitializedVersion() external view returns (uint64);
-}
 
 /**
  * @title Lido Upgrade Template
@@ -57,7 +47,7 @@ interface IInitializedVersionView {
  *   - `startUpgrade()` before upgrading LidoLocator and before everything else
  *   - `finishUpgrade()` as the last step of the upgrade
  */
-contract UpgradeTemplate {
+contract UpgradeTemplate is IUpgradeTemplate {
     //
     // Events
     //
@@ -163,7 +153,7 @@ contract UpgradeTemplate {
     uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
 
     // Upgrade config (self deployed internal contract)
-    UpgradeConfig public immutable CONFIG;
+    address public immutable CONFIG;
     address public immutable AGENT;
 
     // Timestamp since which startUpgrade()
@@ -203,7 +193,7 @@ contract UpgradeTemplate {
     /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
     constructor(UpgradeParameters memory _params, uint256 _expireSinceInclusive) {
         UpgradeConfig config = new UpgradeConfig(_params);
-        CONFIG = config;
+        CONFIG = address(config);
         AGENT = config.AGENT();
         EXPIRE_SINCE_INCLUSIVE = _expireSinceInclusive;
     }
@@ -252,6 +242,7 @@ contract UpgradeTemplate {
 
         isUpgradeFinished = true;
 
+        // todo move to votescript and call via proxy__upgradeToAndCall
         ILidoWithFinalizeUpgrade(g.lido).finalizeUpgrade_v4();
         IWithdrawalVault(c.withdrawalVault).finalizeUpgrade_v3();
         IAccountingOracle(c.accountingOracle).finalizeUpgrade_v5(c.aoConsensusVersion);
@@ -264,6 +255,7 @@ contract UpgradeTemplate {
                 c.veboConsensusVersion
             );
 
+        // todo check added module id === migrator target module id
         _assertPostUpgradeState(g, c);
 
         emit UpgradeFinished();
@@ -310,8 +302,6 @@ contract UpgradeTemplate {
             c.validatorsExitBusOracle, EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION
         );
         _assertContractVersion(c.withdrawalVault, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
-
-        _assertEasyTrackFactories(g, c);
 
         _assertFinalACL(g, c);
         _assertCSMFinalState(g);
@@ -390,37 +380,6 @@ contract UpgradeTemplate {
         for (uint256 i = 0; i < roles.length; ++i) {
             _assertZeroOZRoleHolders(c.newOracleReportSanityChecker, roles[i]);
         }
-    }
-
-    function _assertEasyTrackFactories(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
-        (EasyTrackNewFactories memory n, EasyTrackOldFactories memory o) = CONFIG.getEasyTrackConfig();
-        IEasyTrack easyTrack = IEasyTrack(g.easyTrack);
-
-        address[9] memory newFactories = [
-            n.UpdateStakingModuleShareLimits,
-            n.AllowConsolidationPair,
-            n.SetMerkleGateTreeForCSM,
-            n.ReportWithdrawalsForSlashedValidatorsForCSM,
-            n.SettleGeneralDelayedPenaltyForCSM,
-            n.SetMerkleGateTreeForCM,
-            n.ReportWithdrawalsForSlashedValidatorsForCM,
-            n.SettleGeneralDelayedPenaltyForCM,
-            n.CreateOrUpdateOperatorGroup
-        ];
-
-        for (uint256 i = 0; i < newFactories.length; ++i) {
-            if (!easyTrack.isEVMScriptFactory(newFactories[i])) {
-                revert UnexpectedNewEasyTrackFactories();
-            }
-        }
-
-        // TODO uncomment
-        // address[2] memory oldFactories = [o.CSMSettleElStealingPenalty, o.CSMSetVettedGateTree];
-        // for (uint256 i = 0; i < oldFactories.length; ++i) {
-        //     if (easyTrack.isEVMScriptFactory(oldFactories[i])) {
-        //         revert UnexpectedOldEasyTrackFactories();
-        //     }
-        // }
     }
 
     function _assertCSMFinalState(GlobalConfig memory g) internal view {
@@ -737,7 +696,4 @@ contract UpgradeTemplate {
     error DSMMigrationIncorrectOwner();
     error DSMMigrationIncorrectGuardianQuorum();
     error DSMMigrationIncorrectGuardians();
-
-    error UnexpectedNewEasyTrackFactories();
-    error UnexpectedOldEasyTrackFactories();
 }

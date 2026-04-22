@@ -203,21 +203,14 @@ interface IMetaRegistry {
     function createOrUpdateOperatorGroup(uint256 groupId, OperatorGroup calldata groupInfo) external;
 }
 
-// ============================
-// Shared types
-// ============================
-
-interface IUpgradeConfig {
-    function LOCATOR() external view returns (address);
-    function AGENT() external view returns (address);
-    function VOTING() external view returns (address);
-    function DUAL_GOVERNANCE() external view returns (address);
-
-    function getGlobalConfig() external view returns (GlobalConfig memory);
-    function getCoreUpgradeConfig() external view returns (CoreUpgradeConfig memory);
-    function getCSMUpgradeConfig() external view returns (CSMUpgradeConfig memory);
-    function getCuratedModuleConfig() external view returns (CuratedModuleConfig memory);
+interface IPausableUntilView {
+    function isPaused() external view returns (bool);
 }
+
+interface IInitializedVersionView {
+    function getInitializedVersion() external view returns (uint64);
+}
+
 
 //
 // ------ Template deploy configuration params ------
