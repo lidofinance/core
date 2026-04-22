@@ -6,6 +6,9 @@ on:
     branches:
       - "main"
       - "develop"
+  pull_request:
+    paths:
+      - ".github/workflows/verify-state.yml"
   schedule:
     - cron: "0 0 * * *" # runs every day at midnight UTC
 
@@ -34,13 +37,13 @@ jobs:
         run: corepack enable
 
       - name: Install dependencies
-        run: yarn install
+        run: yarn install --immutable
 
-      - name: Run state-mate (V3 Hoodi Testnet)
-        run: yarn start configs/lidov3/hoodi/lidov3-testnet.yaml
+      - name: Run state-mate (Hoodi Testnet)
+        run: yarn start configs/lido/hoodi/lido-testnet.yaml
 
-      - name: Run state-mate (V3 Hoodi Easy Track)
-        run: yarn start configs/lidov3/hoodi/lidov3-et-testnet.yml
+      - name: Run state-mate (Hoodi Easy Track)
+        run: yarn start configs/lido/hoodi/lido-et-testnet.yaml
 
   run_state_mate_mainnet:
     name: Mainnet State
@@ -48,7 +51,7 @@ jobs:
     timeout-minutes: 120
     env:
       STATE_MATE_BRANCH: "main"
-      REMOTE_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
+      MAINNET_REMOTE_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
 
     steps:
       - name: Checkout state-mate
@@ -66,10 +69,10 @@ jobs:
         run: corepack enable
 
       - name: Install dependencies
-        run: yarn install
+        run: yarn install --immutable
 
-      - name: Run state-mate (V3 Mainnet)
-        run: yarn start configs/lidov3/mainnet/lidov3-core-post-phase-2.yaml
+      - name: Run state-mate (Mainnet)
+        run: yarn start configs/lido/mainnet/lido.yaml
 
-      - name: Run state-mate (V3 Mainnet Easy Track)
-        run: yarn start configs/lidov3/mainnet/lidov3-et-post-vote-phase-2.yml
+      - name: Run state-mate (Mainnet Easy Track)
+        run: yarn start configs/lido/mainnet/lido-et.yaml
