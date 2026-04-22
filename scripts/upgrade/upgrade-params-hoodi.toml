@@ -44,6 +44,7 @@ maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
+externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
 [lido]
 lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
@@ -162,6 +163,6 @@ hashConsensusInitialEpoch = 47480
 # The upgrade transaction must be executed before this deadline
 # TODO set actual
 expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
-timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"
-enabledDaySpanStart = 25200 # 07:00 UTC
-enabledDaySpanEnd = 82800 # 23:00 UTC
+timeConstraintsContract = "0xB26Fd3b50280AbC55c572EE73071778A51088408"
+enabledDaySpanStart = 0 # 00:00:000 UTC
+enabledDaySpanEnd = 86399 # 23:59:59 UTC

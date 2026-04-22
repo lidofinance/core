@@ -124,6 +124,7 @@ export async function main() {
     clBalanceOraclesErrorUpperBPLimit: oldCheckerLimits.clBalanceOraclesErrorUpperBPLimit,
     consolidationEthAmountPerDayLimit: parameters.oracleReportSanityChecker.consolidationEthAmountPerDayLimit,
     exitedValidatorEthAmountLimit: parameters.oracleReportSanityChecker.exitedValidatorEthAmountLimit,
+    externalPendingBalanceCapEth: parameters.oracleReportSanityChecker.externalPendingBalanceCapEth,
   };
 
   //
