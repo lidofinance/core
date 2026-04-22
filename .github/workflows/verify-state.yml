@@ -6,6 +6,9 @@ on:
     branches:
       - "main"
       - "develop"
+  pull_request:
+    paths:
+      - ".github/workflows/verify-state.yml"
   schedule:
     - cron: "0 0 * * *" # runs every day at midnight UTC
 
