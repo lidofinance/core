@@ -26,7 +26,6 @@ CSMSetVettedGateTree = "0xBc5642bDD6F2a54b01A75605aAe9143525D97308"
 [oracleReportSanityChecker]
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
-deprecatedOneOffCLBalanceDecreaseBPLimit = 500         # Deprecated one-off CL balance decrease limit (BP)
 annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
 simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
 maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)

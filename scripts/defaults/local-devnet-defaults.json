@@ -117,7 +117,6 @@
     "deployParameters": {
       "exitedEthAmountPerDayLimit": 57600,
       "appearedEthAmountPerDayLimit": 57600,
-      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
       "annualBalanceIncreaseBPLimit": 1000,
       "simulatedShareRateDeviationBPLimit": 250,
       "maxBalanceExitRequestedPerReportInEth": 19200,

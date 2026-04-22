@@ -290,7 +290,6 @@ const DepositSecurityModuleSchema = z.object({
 const OracleReportSanityCheckerSchema = z.object({
   exitedEthAmountPerDayLimit: PositiveIntSchema,
   appearedEthAmountPerDayLimit: PositiveIntSchema,
-  deprecatedOneOffCLBalanceDecreaseBPLimit: BasisPointsSchema,
   annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
   maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
