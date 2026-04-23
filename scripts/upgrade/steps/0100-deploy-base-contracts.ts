@@ -34,7 +34,6 @@ import {
   getAddress,
   InitializeArgs,
   loadContract,
-  log,
   logArgs,
   logConfirmReview as logConfirmReview,
   logScriptHeader,
@@ -188,10 +187,6 @@ export async function main() {
   await logArgs("TopUpGateway", topUpGatewayInitArgs, "initialize", "proxy init.");
   await logArgs("DepositSecurityModule", constructorArgs.DepositSecurityModule);
   await logArgs("OracleReportSanityChecker", constructorArgs.OracleReportSanityChecker);
-  log.info(``, {
-    param: "_limitsList",
-    ...newCheckerLimits,
-  });
   await logArgs("ConsolidationGateway", constructorArgs.ConsolidationGateway);
   await logConfirmReview();
 
@@ -406,10 +401,6 @@ export async function main() {
 
   logStartReview();
   await logArgs("LidoLocator", lidoLocatorConstructorArgs);
-  log.info(``, {
-    param: "_config",
-    ...locatorConfig,
-  });
   await logConfirmReview();
 
   const lidoLocatorImpl = await deployImplementation(

@@ -2,7 +2,7 @@ import readline from "node:readline";
 
 import { artifacts, ethers, network } from "hardhat";
 
-import { bl, ConvertibleToString, gr, gy, log, or, rd, yg, yl } from "lib";
+import { bl, ConvertibleToString, cy, gr, gy, log, or, rd, yg, yl } from "lib";
 
 export async function confirm(question: string): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -55,29 +55,23 @@ export async function logConfirmReview(msg?: string) {
   log.emptyLine();
 }
 
-export async function buildArgsLog(
+export async function buildArgRecords(
   contract: string,
   args: readonly ConvertibleToString[],
   method: string = "constructor",
-): Promise<Record<string, string>> {
-  if (args.length === 0) {
-    return { [`${method} args`]: yl("-") };
-  }
+) {
+  if (args.length === 0) return { [`${method} args`]: args };
 
-  const artifact = await artifacts.readArtifact(contract);
-  const constructorAbi = artifact.abi.find(
+  const constructorAbi = (await artifacts.readArtifact(contract)).abi.find(
     (entry) => entry.type === method || (entry.type === "function" && entry.name === method),
   );
   const argNames =
     constructorAbi?.inputs?.map((input: { name?: string }, index: number) => input.name || `arg${index}`) ?? [];
 
-  const data: Record<string, string> = {};
-  args.forEach((arg, index) => {
-    const name = argNames[index] || `arg${index}`;
-    data[`${method} arg [${index}] ${or(name)}`] =
-      typeof arg === "string" && ethers.isAddress(arg) ? bl(arg) : yl(arg.toString());
-  });
-  return data;
+  return args.reduce<Record<string, ConvertibleToString>>(
+    (r, a, i) => ((r[`${method} arg [${i}] ${or(argNames[i] || `arg${i}`)}`] = a), r),
+    {},
+  );
 }
 
 export async function logArgs(
@@ -87,7 +81,7 @@ export async function logArgs(
   note: string = "new impl.",
 ) {
   log.info(`${contract} ${note}`, {
-    contract: `${yg(contract)}::${gy(method)}`,
-    ...(await buildArgsLog(contract, args, method)),
+    [cy("call method")]: `${yg(contract)}::${gy(method)}`,
+    ...(await buildArgRecords(contract, args, method)),
   });
 }

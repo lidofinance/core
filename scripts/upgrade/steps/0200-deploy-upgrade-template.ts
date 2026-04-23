@@ -9,7 +9,7 @@ import {
 } from "typechain-types";
 import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
 
-import { cy, log, logArgs, logConfirmReview, logScriptHeader, logStartReview } from "lib";
+import { logArgs, logConfirmReview, logScriptHeader, logStartReview } from "lib";
 import { ConstructorArgs, loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
 import { getAddress, readNetworkState, Sk } from "lib/state-file";
@@ -108,30 +108,6 @@ export async function main() {
 
   logStartReview();
   await logArgs("UpgradeTemplate", upgradeTemplateConstructorArgs);
-  log.info(``, {
-    param: `${cy("_params")}`,
-    ...upgradeParams,
-  });
-  log.info(``, {
-    param: `${cy("_params.newFactories")}`,
-    ...upgradeParams.newFactories,
-  });
-  log.info(``, {
-    param: `${cy("_params.oldFactories")}`,
-    ...upgradeParams.oldFactories,
-  });
-  log.info(``, {
-    param: `${cy("_params.coreUpgrade")}`,
-    ...upgradeParams.coreUpgrade,
-  });
-  log.info(``, {
-    param: `${cy("_params.coreUpgrade")}`,
-    ...upgradeParams.coreUpgrade,
-  });
-  log.info(``, {
-    param: `${cy("_params.curatedModule")}`,
-    ...upgradeParams.curatedModule,
-  });
   await logConfirmReview();
 
   await deployWithoutProxy(Sk.upgradeTemplate, "UpgradeTemplate", deployer.address, upgradeTemplateConstructorArgs);

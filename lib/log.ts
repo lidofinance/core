@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { isAddress } from "ethers";
 import path from "path";
 
 import { getTxLink } from "./explorer";
@@ -95,8 +96,61 @@ const _title = (title: string) => {
   log(br(title));
 };
 
+const FORMAT_INDENT = 2;
+
+const _indent = (depth: number) => " ".repeat(depth * FORMAT_INDENT);
+
+const _formatRecordValue = (value: unknown, depth = 0, seen = new WeakSet<object>()): string => {
+  if (value === null) return chalk.gray("null");
+  if (value === undefined) return chalk.gray("undefined");
+
+  if (typeof value === "string") {
+    return isAddress(value) ? bl(value) : yl(value);
+  }
+
+  if (typeof value === "number" || typeof value === "bigint") {
+    return gr(value.toString());
+  }
+
+  if (typeof value === "boolean") {
+    return mg(value.toString());
+  }
+
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return chalk.gray("[Circular]");
+    if (value.length === 0) return chalk.gray("[]");
+
+    seen.add(value);
+    const lines = value.map((item) => `${_indent(depth + 1)}${_formatRecordValue(item, depth + 1, seen)}`);
+    seen.delete(value);
+    return `[\n${lines.join(",\n")}\n${_indent(depth)}]`;
+  }
+
+  if (typeof value === "object") {
+    if (seen.has(value)) return chalk.gray("{Circular}");
+    const entries = Object.entries(value);
+    if (entries.length === 0) return chalk.gray("{}");
+
+    seen.add(value);
+    const lines = entries.map(
+      ([key, nested]) => `${_indent(depth + 1)}${or(key)}: ${_formatRecordValue(nested, depth + 1, seen)}`,
+    );
+    seen.delete(value);
+    return `{\n${lines.join(",\n")}\n${_indent(depth)}}`;
+  }
+
+  return yl(String(value));
+};
+
 const _record = (label: string, value: ConvertibleToString) => {
-  log(`${nv(label)}: ${yl(value.toString())}`);
+  const formattedValue = _formatRecordValue(value, 2);
+  // if (formattedValue.includes("\n")) {
+  //   log(`${nv(label)}:`);
+  //   log(formattedValue.replace(/^/gm, _indent(2)));
+  //   return;
+  // }
+
+  log(`${nv(label)}: ${formattedValue}`);
 };
 
 // TODO: add logging to file
@@ -184,7 +238,7 @@ log.debug = (title: string, records: Record<string, ConvertibleToString> = {}) =
   if (!shouldLog("debug")) return;
 
   _title(title);
-  Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
+  Object.keys(records).forEach((label) => _record(`${_indent(1)}${label}`, records[label]));
   log.emptyLine();
 };
 
@@ -192,7 +246,7 @@ log.info = (title: string, records: Record<string, ConvertibleToString> = {}) =>
   if (!shouldLog("info")) return;
 
   _title(title);
-  Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
+  Object.keys(records).forEach((label) => _record(`${_indent(1)}${label}`, records[label]));
   log.emptyLine();
 };
 
