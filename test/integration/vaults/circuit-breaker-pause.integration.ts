@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, PredepositGuarantee, StakingVault, VaultHub } from "typechain-types";
 
-import { ether, generateValidator } from "lib";
+import { ether, generateValidator, impersonate } from "lib";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
@@ -113,8 +113,7 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
     }
 
     for (const address of new Set([vaultHubPauserAddress, predepositGuaranteePauserAddress])) {
-      await ethers.provider.send("hardhat_impersonateAccount", [address]);
-      await ethers.provider.send("hardhat_setBalance", [address, "0x56BC75E2D63100000"]); // 100 ETH
+      await impersonate(address, ether("100"));
     }
 
     vaultHubPauser = await ethers.getSigner(vaultHubPauserAddress);
