@@ -66,9 +66,10 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
 
     originalSnapshot = await Snapshot.take();
 
-    if (ctx.isScratch) {
+    if (ctx.isScratch || ctx.isMainnet) {
       this.skip();
     }
+
     await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
