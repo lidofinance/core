@@ -226,7 +226,13 @@ export const depositValidatorsWithoutReport = async (ctx: ProtocolContext, modul
   const { lido } = ctx.contracts;
 
   const ethToDeposit = depositsCount * DEPOSIT_SIZE;
-  const depositableEther = await lido.getDepositableEther();
+  let depositableEther = await lido.getDepositableEther();
+
+  const submitValue = depositableEther < ethToDeposit ? ethToDeposit - depositableEther + ether("1") : 0n;
+  const ethHolder = await impersonate(certainAddress("provision:eth:whale"), submitValue + ether("1"));
+  await lido.connect(ethHolder).submit(ZeroAddress, { value: submitValue });
+
+  depositableEther = await lido.getDepositableEther();
   if (depositableEther < ethToDeposit) {
     throw new Error(`Not enough depositable ether for staking module ${moduleId}`);
   }
