@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
+import {Bytes32String} from "contracts/common/lib/Bytes32String.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IUpgradeConfig} from "./interfaces/IUpgradeConfig.sol";
 import {
@@ -174,8 +175,7 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CURATED_STRIKES;
     address internal immutable CURATED_EJECTOR;
     address internal immutable CURATED_HASH_CONSENSUS;
-    // save in storage
-    string internal _curatedModuleName;
+    bytes32 internal immutable CURATED_MODULE_NAME;
     uint256 internal immutable CURATED_STAKE_SHARE_LIMIT;
     uint256 internal immutable CURATED_PRIORITY_EXIT_SHARE_THRESHOLD;
     uint256 internal immutable CURATED_STAKING_MODULE_FEE;
@@ -324,8 +324,7 @@ contract UpgradeConfig is IUpgradeConfig {
         CuratedModuleParams memory curatedModuleParams = params.curatedModule;
 
         CURATED_MODULE = curatedModuleParams.module;
-        /// @dev save in storage
-        _curatedModuleName = curatedModuleParams.moduleName;
+        CURATED_MODULE_NAME = Bytes32String.toBytes32(curatedModuleParams.moduleName);
         CURATED_STAKE_SHARE_LIMIT = curatedModuleParams.stakeShareLimit;
         CURATED_PRIORITY_EXIT_SHARE_THRESHOLD = curatedModuleParams.priorityExitShareThreshold;
         CURATED_STAKING_MODULE_FEE = curatedModuleParams.stakingModuleFee;
@@ -476,7 +475,7 @@ contract UpgradeConfig is IUpgradeConfig {
             feeOracle: CURATED_FEE_ORACLE,
             hashConsensus: CURATED_HASH_CONSENSUS,
             strikes: CURATED_STRIKES,
-            moduleName: _curatedModuleName,
+            moduleName: Bytes32String.toString(CURATED_MODULE_NAME),
             stakeShareLimit: CURATED_STAKE_SHARE_LIMIT,
             priorityExitShareThreshold: CURATED_PRIORITY_EXIT_SHARE_THRESHOLD,
             stakingModuleFee: CURATED_STAKING_MODULE_FEE,
