@@ -22,12 +22,12 @@ import {
     CuratedModuleConfig,
     IAragonKernel,
     IAragonACL,
-    ILidoWithFinalizeUpgrade,
+    ILidoUpgrade,
     IEasyTrack,
-    IStakingRouter,
-    IAccountingOracle,
-    IValidatorsExitBusOracle,
-    IWithdrawalVault,
+    IStakingRouterUpgrade,
+    IAccountingOracleUpgrade,
+    IValidatorsExitBusOracleUpgrade,
+    IWithdrawalVaultUpgrade,
     IConsolidationMigrator,
     IWithdrawalsManagerProxy,
     IOssifiableProxyV2,
@@ -42,7 +42,7 @@ import {
     IAllowedMerkleGatesRegistry,
     IMerkleGate,
     IMetaRegistry,
-    ITriggerableWithdrawalsGateway
+    ITriggerableWithdrawalsGatewayUpgrade
 } from "./UpgradeTypes.sol";
 
 /// @title UpgradeVoteScript
@@ -61,6 +61,8 @@ contract UpgradeVoteScript is OmnibusBase {
 
     // Aragon Kernel APP_BASES_NAMESPACE
     bytes32 internal constant KERNEL_APP_BASES_NAMESPACE = keccak256("base");
+    bytes32 internal constant APP_MANAGER_ROLE = keccak256("APP_MANAGER_ROLE");
+    bytes32 internal constant BUFFER_RESERVE_MANAGER_ROLE = keccak256("BUFFER_RESERVE_MANAGER_ROLE");
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
 
@@ -172,7 +174,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 "Add UpdateStakingModuleShareLimits ET factory",
                 easyTrack,
                 etn.UpdateStakingModuleShareLimits,
-                bytes.concat(bytes20(g.stakingRouter), bytes4(IStakingRouter.updateModuleShares.selector))
+                bytes.concat(bytes20(g.stakingRouter), bytes4(IStakingRouterUpgrade.updateModuleShares.selector))
             );
 
             items[i++] = _addETFactoryItem(
@@ -276,36 +278,12 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Upgrade LidoLocator implementation", to: c.locator, impl: c.newLocatorImpl
             });
 
-            items[i++] = _item({
-                description: "Grant Aragon APP_MANAGER_ROLE to the AGENT",
-                to: c.acl,
-                data: abi.encodeCall(IAragonACL.grantPermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
-            });
-
-            items[i++] = _item({
-                description: "Set Lido implementation in Kernel",
-                to: c.kernel,
-                data: abi.encodeCall(IAragonKernel.setApp, (KERNEL_APP_BASES_NAMESPACE, c.lidoAppId, c.newLidoImpl))
-            });
-
-            items[i++] = _item({
-                description: "Call finalizeUpgrade_v4 on Lido",
-                to: g.lido,
-                data: abi.encodeCall(ILidoWithFinalizeUpgrade.finalizeUpgrade_v4, ())
-            });
-
-            items[i++] = _item({
-                description: "Revoke Aragon APP_MANAGER_ROLE from the AGENT",
-                to: c.acl,
-                data: abi.encodeCall(IAragonACL.revokePermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
-            });
-
             /// @notice updating StakingRouter implementation and call finalizeUpgrade_v4
             items[i++] = _proxyUpgradeToAndCallItem({
                 description: "Upgrade StakingRouter implementation",
                 to: stakingRouter,
                 impl: c.newStakingRouterImpl,
-                data: abi.encodeCall(IStakingRouter.finalizeUpgrade_v4, ())
+                data: abi.encodeCall(IStakingRouterUpgrade.finalizeUpgrade_v4, ())
             });
 
             /// @notice updating AccountingOracle implementation and call finalizeUpgrade_v5
@@ -313,7 +291,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Upgrade AccountingOracle implementation",
                 to: c.accountingOracle,
                 impl: c.newAccountingOracleImpl,
-                data: abi.encodeCall(IAccountingOracle.finalizeUpgrade_v5, (c.aoConsensusVersion))
+                data: abi.encodeCall(IAccountingOracleUpgrade.finalizeUpgrade_v5, (c.aoConsensusVersion))
             });
 
             /// @notice updating ValidatorsExitBusOracle implementation and call finalizeUpgrade_v3
@@ -322,7 +300,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 to: c.validatorsExitBusOracle,
                 impl: c.newValidatorsExitBusOracleImpl,
                 data: abi.encodeCall(
-                    IValidatorsExitBusOracle.finalizeUpgrade_v3,
+                    IValidatorsExitBusOracleUpgrade.finalizeUpgrade_v3,
                     (
                         c.veboMaxValidatorsPerReport,
                         c.veboMaxExitBalanceEth,
@@ -344,8 +322,38 @@ contract UpgradeVoteScript is OmnibusBase {
                 to: c.withdrawalVault,
                 data: abi.encodeCall(
                     IWithdrawalsManagerProxy.proxy_upgradeTo,
-                    (c.newWithdrawalVaultImpl, abi.encodeCall(IWithdrawalVault.finalizeUpgrade_v3, ()))
+                    (c.newWithdrawalVaultImpl, abi.encodeCall(IWithdrawalVaultUpgrade.finalizeUpgrade_v3, ()))
                 )
+            });
+
+            items[i++] = _item({
+                description: "Grant Aragon APP_MANAGER_ROLE to the AGENT",
+                to: c.acl,
+                data: abi.encodeCall(IAragonACL.grantPermission, (agent, c.kernel, APP_MANAGER_ROLE))
+            });
+
+            items[i++] = _item({
+                description: "Set Lido implementation in Kernel",
+                to: c.kernel,
+                data: abi.encodeCall(IAragonKernel.setApp, (KERNEL_APP_BASES_NAMESPACE, c.lidoAppId, c.newLidoImpl))
+            });
+
+            items[i++] = _item({
+                description: "Revoke Aragon APP_MANAGER_ROLE from the AGENT",
+                to: c.acl,
+                data: abi.encodeCall(IAragonACL.revokePermission, (agent, c.kernel, APP_MANAGER_ROLE))
+            });
+
+            items[i++] = _item({
+                description: "Create and grant Aragon BUFFER_RESERVE_MANAGER_ROLE to the AGENT",
+                to: c.acl,
+                data: abi.encodeCall(IAragonACL.createPermission, (agent, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent))
+            });
+
+            items[i++] = _item({
+                description: "Call finalizeUpgrade_v4 on Lido",
+                to: g.lido,
+                data: abi.encodeCall(ILidoUpgrade.finalizeUpgrade_v4, ())
             });
 
             /// @notice grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor
@@ -383,7 +391,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Set TWGateway exit request limits",
                 to: g.triggerableWithdrawalsGateway,
                 data: abi.encodeCall(
-                    ITriggerableWithdrawalsGateway.setExitRequestLimit,
+                    ITriggerableWithdrawalsGatewayUpgrade.setExitRequestLimit,
                     (c.twMaxExitRequestsLimit, c.twExitsPerFrame, c.twFrameDurationInSec)
                 )
             });
@@ -644,7 +652,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Add Curated module to StakingRouter",
                 to: stakingRouter,
                 data: abi.encodeCall(
-                    IStakingRouter.addStakingModule,
+                    IStakingRouterUpgrade.addStakingModule,
                     (
                         c.moduleName,
                         c.module,

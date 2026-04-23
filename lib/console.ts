@@ -4,7 +4,14 @@ import { artifacts, ethers, network } from "hardhat";
 
 import { bl, ConvertibleToString, cy, gr, gy, log, or, rd, yg, yl } from "lib";
 
+const AUTO_CONFIRM = !!process.env.AUTO_CONFIRM;
+
 export async function confirm(question: string): Promise<void> {
+  if (AUTO_CONFIRM) {
+    log.warning(" •", rd(`Auto-confirming!`));
+    return;
+  }
+
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve, reject) => {
     rl.question(question, (answer) => {

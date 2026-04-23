@@ -15,9 +15,13 @@ interface IAragonKernel {
     function getApp(bytes32 _namespace, bytes32 _appId) external view returns (address);
     function setApp(bytes32 _namespace, bytes32 _appId, address _app) external;
     function APP_BASES_NAMESPACE() external view returns (bytes32);
+    function APP_MANAGER_ROLE() external view returns (bytes32);
 }
 
 interface IAragonACL {
+    function hasPermission(address _who, address _where, bytes32 _what) external view returns (bool);
+    function getPermissionManager(address _app, bytes32 _role) external view returns (address);
+    function createPermission(address _entity, address _app, bytes32 _role, address _manager) external;
     function grantPermission(address _entity, address _app, bytes32 _role) external;
     function revokePermission(address _entity, address _app, bytes32 _role) external;
 }
@@ -46,7 +50,7 @@ interface IEasyTrack {
     function removeEVMScriptFactory(address _evmScriptFactory) external;
 }
 
-interface IStakingRouter is IAccessControlEnumerable {
+interface IStakingRouterUpgrade is IAccessControlEnumerable {
     // existing roles
 
     function getWithdrawalCredentials() external view returns (bytes32);
@@ -66,6 +70,9 @@ interface IStakingRouter is IAccessControlEnumerable {
         external
         view
         returns (ModuleStateConfig memory stateConfig);
+
+    function STAKING_MODULE_SHARE_MANAGE_ROLE() external view returns (bytes32);
+    function STAKING_MODULE_UNVETTING_ROLE() external view returns (bytes32);
 }
 
 interface IDepositSecurityModule {
@@ -90,16 +97,16 @@ interface IMerkleGate {
     function setTreeParams(bytes32 treeRoot, string calldata treeCid) external;
 }
 
-interface ILidoWithFinalizeUpgrade is ILido {
+interface ILidoUpgrade is ILido {
     function getBufferedEther() external view returns (uint256);
     function finalizeUpgrade_v4() external;
 }
 
-interface IAccountingOracle is IBaseOracle {
+interface IAccountingOracleUpgrade is IBaseOracle {
     function finalizeUpgrade_v5(uint256 consensusVersion) external;
 }
 
-interface IValidatorsExitBusOracle is IBaseOracle {
+interface IValidatorsExitBusOracleUpgrade is IBaseOracle {
     function finalizeUpgrade_v3(
         uint256 maxValidatorsPerReport,
         uint256 maxExitBalanceEth,
@@ -109,7 +116,7 @@ interface IValidatorsExitBusOracle is IBaseOracle {
     ) external;
 }
 
-interface IWithdrawalVault {
+interface IWithdrawalVaultUpgrade {
     function finalizeUpgrade_v3() external;
 }
 
@@ -176,9 +183,10 @@ interface IValidatorStrikesV3 {
     function setEjector(address newEjector) external;
 }
 
-interface ITriggerableWithdrawalsGateway {
+interface ITriggerableWithdrawalsGatewayUpgrade is IAccessControlEnumerable {
     function setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
         external;
+    function TW_EXIT_LIMIT_MANAGER_ROLE() external view returns (bytes32);
 }
 
 interface IHashConsensusV3 {
@@ -206,7 +214,6 @@ interface IMetaRegistry {
 interface IInitializedVersionView {
     function getInitializedVersion() external view returns (uint64);
 }
-
 
 //
 // ------ Template deploy configuration params ------

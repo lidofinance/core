@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
+import { readUpgradeParameters, skipIfContractInState } from "scripts/utils/upgrade";
 
 import {
   Accounting__factory,
@@ -34,20 +34,27 @@ import {
   getAddress,
   InitializeArgs,
   loadContract,
+  log,
   logArgs,
   logConfirmReview as logConfirmReview,
   logScriptHeader,
   logStartReview as logStartReview,
   makeTx,
   MethodArgs,
+  or,
   readNetworkState,
   Sk,
 } from "lib";
 
 export async function main() {
-  const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState();
+  if (skipIfContractInState(state, Sk.upgradeTemporaryAdmin)) {
+    log.warning(`Skipping step due to contract ${or(Sk.upgradeTemporaryAdmin)} is already in state`);
+    return;
+  }
+
   const parameters = readUpgradeParameters();
+  const deployer = (await ethers.provider.getSigner()).address;
 
   await logScriptHeader("SRv3/CMv2 — Deploy & setup Base Contracts", deployer);
 

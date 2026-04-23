@@ -44,6 +44,7 @@ import { encodeCallScript, VoteItem } from "./omnibus";
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
 const PROPOSAL_ID = process.env.PROPOSAL_ID || "";
 const PROPOSAL_METADATA = process.env.PROPOSAL_METADATA || "proposal-metadata";
+const SKIP_IF_CONTRACT_IN_STATE = !!process.env.SKIP_IF_CONTRACT_IN_STATE;
 
 export { UpgradeParameters };
 
@@ -71,6 +72,10 @@ export function readUpgradeParameters(skipValidation: boolean = false): UpgradeP
   } catch (error) {
     throw new Error(`Invalid upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
   }
+}
+
+export function skipIfContractInState(state: DeploymentState, key: Sk) {
+  return SKIP_IF_CONTRACT_IN_STATE && state[key] && (state[key].address || state[key].proxy.address);
 }
 
 export const newCombinedAragonVoting = async (

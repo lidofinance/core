@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
+import { readUpgradeParameters, skipIfContractInState } from "scripts/utils/upgrade";
 
 import {
   IAragonKernel,
@@ -9,15 +9,20 @@ import {
 } from "typechain-types";
 import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
 
-import { logArgs, logConfirmReview, logScriptHeader, logStartReview } from "lib";
+import { log, logArgs, logConfirmReview, logScriptHeader, logStartReview, or } from "lib";
 import { ConstructorArgs, loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
 import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 export async function main() {
-  const deployer = await ethers.provider.getSigner();
   const state = readNetworkState();
+  if (skipIfContractInState(state, Sk.upgradeTemplate)) {
+    log.warning(`Skipping step due to contract ${or(Sk.upgradeTemplate)} is already in state`);
+    return;
+  }
+
   const parameters = readUpgradeParameters();
+  const deployer = await ethers.provider.getSigner();
 
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeTemplate contract", deployer.address);
 

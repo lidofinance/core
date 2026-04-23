@@ -84,6 +84,7 @@ export async function encodeFunctionCall<T extends readonly unknown[] = readonly
   method: string,
   args: T,
 ) {
-  const contractInterface = await ethers.getContractFactory(contractName);
-  return contractInterface.interface.encodeFunctionData(method, args);
+  const artifact = await artifacts.readArtifact(contractName);
+  const contractInterface = new ethers.Interface(artifact.abi);
+  return contractInterface.encodeFunctionData(method, args);
 }

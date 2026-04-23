@@ -1,18 +1,23 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
+import { readUpgradeParameters, skipIfContractInState } from "scripts/utils/upgrade";
 
 import { UpgradeVoteScript__factory } from "typechain-types";
 import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript";
 
-import { ConstructorArgs, logArgs, logConfirmReview, logScriptHeader, logStartReview } from "lib";
+import { ConstructorArgs, log, logArgs, logConfirmReview, logScriptHeader, logStartReview, or } from "lib";
 import { deployWithoutProxy } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
 
 export async function main() {
+  const state = readNetworkState();
+  if (skipIfContractInState(state, Sk.upgradeVoteScript)) {
+    log.warning(`Skipping step due to contract ${or(Sk.upgradeVoteScript)} is already in state`);
+    return;
+  }
+
+  const parameters = readUpgradeParameters();
   const deployer = (await ethers.provider.getSigner()).address;
 
-  const state = readNetworkState();
-  const parameters = readUpgradeParameters();
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeVotingScript contract", deployer);
 
   const template = state[Sk.upgradeTemplate];

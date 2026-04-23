@@ -20,13 +20,14 @@ import {
     CoreUpgradeConfig,
     CSMUpgradeConfig,
     CuratedModuleConfig,
-    ILidoWithFinalizeUpgrade,
+    ILidoUpgrade,
     IBaseOracle,
     IWithdrawalsManagerProxy,
     IAragonKernel,
+    IAragonACL,
     IVersioned,
     IWithdrawalsManagerProxy,
-    IStakingRouter,
+    IStakingRouterUpgrade,
     IDepositSecurityModule,
     IValidatorStrikesV3,
     IInitializedVersionView
@@ -94,6 +95,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
     bytes32 internal constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
+    bytes32 internal constant BUFFER_RESERVE_MANAGER_ROLE = keccak256("BUFFER_RESERVE_MANAGER_ROLE");
 
     //sanitychecker roles
     bytes32 internal constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
@@ -208,11 +210,11 @@ contract UpgradeTemplate is IUpgradeTemplate {
         assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
         upgradeBlockNumber = block.number;
 
-        initialBufferedEther = ILidoWithFinalizeUpgrade(g.lido).getBufferedEther();
+        initialBufferedEther = ILidoUpgrade(g.lido).getBufferedEther();
         (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) =
-            ILidoWithFinalizeUpgrade(g.lido).getBeaconStat();
+            ILidoUpgrade(g.lido).getBeaconStat();
 
-        IStakingRouter sr = IStakingRouter(g.stakingRouter);
+        IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
         initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
 
@@ -318,6 +320,10 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         // WithdrawalVault
         _assertWithdrawalsManagerProxyAdmin(c.withdrawalVault, agent);
+
+        // Lido
+        _assertAragonPermissionManager(c.acl, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent);
+        _assertHasAragonPermission(c.acl, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent);
 
         // Consolidation rollout
         _assertSingleOZRoleHolder(c.consolidationGateway, DEFAULT_ADMIN_ROLE, agent);
@@ -448,7 +454,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     function _checkSRMigration(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
         CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
 
-        IStakingRouter sr = IStakingRouter(g.stakingRouter);
+        IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
         bytes32 newWithdrawalCredentials = sr.getWithdrawalCredentials();
         if (newWithdrawalCredentials != initialWithdrawalCredentials) {
             revert SRMigrationIncorrectWithdrawalCredentials();
@@ -473,13 +479,13 @@ contract UpgradeTemplate is IUpgradeTemplate {
     }
 
     function _checkLidoMigration(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
-        uint256 bufferedEther = ILidoWithFinalizeUpgrade(g.lido).getBufferedEther();
+        uint256 bufferedEther = ILidoUpgrade(g.lido).getBufferedEther();
         if (bufferedEther != initialBufferedEther) {
             revert LidoMigrationIncorrectBufferedEther();
         }
 
         // slither-disable-next-line unused-return
-        (uint256 depositedValidators, uint256 clValidators,) = ILidoWithFinalizeUpgrade(g.lido).getBeaconStat();
+        (uint256 depositedValidators, uint256 clValidators,) = ILidoUpgrade(g.lido).getBeaconStat();
 
         if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
             revert LidoMigrationIncorrectDepositedValidators();
@@ -490,7 +496,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport,
             uint256 depositedForCurrentReport
-        ) = ILidoWithFinalizeUpgrade(g.lido).getBalanceStats();
+        ) = ILidoUpgrade(g.lido).getBalanceStats();
 
         if (clValidatorsBalanceAtLastReport != initialBeaconBalance || clPendingBalanceAtLastReport != 0) {
             revert LidoMigrationIncorrectBeaconBalance();
@@ -550,6 +556,25 @@ contract UpgradeTemplate is IUpgradeTemplate {
         address actualImplementation = IWithdrawalsManagerProxy(_proxy).implementation();
         if (actualImplementation != _implementation) {
             revert IncorrectProxyImplementation(_proxy, actualImplementation);
+        }
+    }
+
+    function _assertHasAragonPermission(address _acl, address _accessControlled, bytes32 _role, address _holder)
+        internal
+        view
+    {
+        if (!IAragonACL(_acl).hasPermission(_holder, _accessControlled, _role)) {
+            revert MissingAragonPermissionHolder(_accessControlled, _role, _holder);
+        }
+    }
+
+    function _assertAragonPermissionManager(address _acl, address _accessControlled, bytes32 _role, address _holder)
+        internal
+        view
+    {
+        address permissionManager = IAragonACL(_acl).getPermissionManager(_accessControlled, _role);
+        if (permissionManager != _holder) {
+            revert UnexpectedAragonPermissionManager(_accessControlled, _role, permissionManager, _holder);
         }
     }
 
@@ -649,6 +674,10 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error IncorrectProxyImplementation(address proxy, address implementation);
     error InvalidContractVersion(address contractAddress, uint256 actualVersion);
     error InvalidOracleConsensusVersion(address oracle, uint256 actualVersion);
+    error MissingAragonPermissionHolder(address contractAddress, bytes32 role, address holder);
+    error UnexpectedAragonPermissionManager(
+        address contractAddress, bytes32 role, address actualManager, address expectedManager
+    );
     error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
     error MissingOZAccessControlRoleHolder(address contractAddress, bytes32 role, address holder);
     error UnexpectedOZAccessControlRoleHolder(address contractAddress, bytes32 role, address holder);
