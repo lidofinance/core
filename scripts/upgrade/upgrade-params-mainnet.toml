@@ -1,9 +1,6 @@
 # Lido Protocol Upgrade Parameters - Mainnet Configuration
 # This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum mainnet
 
-# Predeposit guarantee configuration for validator deposit guarantees
-[predepositGuarantee]
-genesisForkVersion = "0x00000000"     # Ethereum mainnet genesis fork version: https://github.com/ethereum/consensus-specs/blob/01b53691dcc36d37a5ad8994b3a32d8de69fb1aa/configs/mainnet.yaml#L30
-gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification: https://research.lido.fi/t/lip-27-ensuring-compatibility-with-ethereum-s-pectra-upgrade/9444#p-20086-update-gindexes-5
-gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028" # Required for hardfork upgrades, the same for now
-changeSlot = 0                        # Slot number when the change takes effect
+# Vault hub configuration
+[vaultHub]
+maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)
