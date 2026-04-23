@@ -4,23 +4,30 @@ pragma solidity 0.8.25;
 import {Strings} from "@openzeppelin/contracts-v5.2/utils/Strings.sol";
 import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {ICircuitBreaker} from "contracts/common/interfaces/ICircuitBreaker.sol";
 import {StakingModuleConfig} from "contracts/0.8.25/sr/SRTypes.sol";
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 import {UpgradeTemplate, UpgradeConfig} from "./UpgradeTemplate.sol";
 import {CallsScriptBuilder} from "./utils/CallScriptBuilder.sol";
 import {IForwarder} from "./interfaces/IForwarder.sol";
 import {
+
     // ITimeConstraints,
     GlobalConfig,
     EasyTrackNewFactories,
+
     // EasyTrackOldFactories,
     CoreUpgradeConfig,
     CSMUpgradeConfig,
     CuratedModuleConfig,
     IAragonKernel,
     IAragonACL,
+    ILidoWithFinalizeUpgrade,
     IEasyTrack,
     IStakingRouter,
+    IAccountingOracle,
+    IValidatorsExitBusOracle,
+    IWithdrawalVault,
     IConsolidationMigrator,
     IWithdrawalsManagerProxy,
     IOssifiableProxyV2,
@@ -49,9 +56,11 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 internal constant DG_ITEMS_COUNT = 57;
+    uint256 public constant DG_ITEMS_COUNT = 57;
     uint256 public constant VOTING_ITEMS_COUNT = 9;
 
+    // Aragon Kernel APP_BASES_NAMESPACE
+    bytes32 internal constant KERNEL_APP_BASES_NAMESPACE = keccak256("base");
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
 
@@ -119,7 +128,7 @@ contract UpgradeVoteScript is OmnibusBase {
     }
 
     /// @dev DG voting items
-    function getVoteItemsRaw() external view  returns (VoteItem[] memory) {
+    function getVoteItemsRaw() external view returns (VoteItem[] memory) {
         // set prefix to `1`, so all item's description will transform to `1.N. Description...`
         return _wrapItemsPrefixNumber(_getVoteItems(), 1, 1);
     }
@@ -143,6 +152,7 @@ contract UpgradeVoteScript is OmnibusBase {
         address easyTrack = g.easyTrack;
 
         // (EasyTrackNewFactories memory etn, EasyTrackOldFactories memory eto) = config.getEasyTrackConfig();
+
         (EasyTrackNewFactories memory etn,) = config.getEasyTrackConfig();
 
         //
@@ -275,9 +285,13 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] = _item({
                 description: "Set Lido implementation in Kernel",
                 to: c.kernel,
-                data: abi.encodeCall(
-                    IAragonKernel.setApp, (IAragonKernel(c.kernel).APP_BASES_NAMESPACE(), c.lidoAppId, c.newLidoImpl)
-                )
+                data: abi.encodeCall(IAragonKernel.setApp, (KERNEL_APP_BASES_NAMESPACE, c.lidoAppId, c.newLidoImpl))
+            });
+
+            items[i++] = _item({
+                description: "Call finalizeUpgrade_v4 on Lido",
+                to: g.lido,
+                data: abi.encodeCall(ILidoWithFinalizeUpgrade.finalizeUpgrade_v4, ())
             });
 
             items[i++] = _item({
@@ -286,13 +300,52 @@ contract UpgradeVoteScript is OmnibusBase {
                 data: abi.encodeCall(IAragonACL.revokePermission, (agent, c.kernel, keccak256("APP_MANAGER_ROLE")))
             });
 
-            /// @notice updating implementation and calling finalizeUpgrade
-            /// @dev finalizeUpgrade_v4 must be called before any other actions to migrate storage and OZ roles
+            /// @notice updating StakingRouter implementation and call finalizeUpgrade_v4
             items[i++] = _proxyUpgradeToAndCallItem({
-                description: "Upgrade StakingRouter implementation and finalize v4 migration",
+                description: "Upgrade StakingRouter implementation",
                 to: stakingRouter,
                 impl: c.newStakingRouterImpl,
                 data: abi.encodeCall(IStakingRouter.finalizeUpgrade_v4, ())
+            });
+
+            /// @notice updating AccountingOracle implementation and call finalizeUpgrade_v5
+            items[i++] = _proxyUpgradeToAndCallItem({
+                description: "Upgrade AccountingOracle implementation",
+                to: c.accountingOracle,
+                impl: c.newAccountingOracleImpl,
+                data: abi.encodeCall(IAccountingOracle.finalizeUpgrade_v5, (c.aoConsensusVersion))
+            });
+
+            /// @notice updating ValidatorsExitBusOracle implementation and call finalizeUpgrade_v3
+            items[i++] = _proxyUpgradeToAndCallItem({
+                description: "Upgrade ValidatorsExitBusOracle implementation",
+                to: c.validatorsExitBusOracle,
+                impl: c.newValidatorsExitBusOracleImpl,
+                data: abi.encodeCall(
+                    IValidatorsExitBusOracle.finalizeUpgrade_v3,
+                    (
+                        c.veboMaxValidatorsPerReport,
+                        c.veboMaxExitBalanceEth,
+                        c.veboBalancePerFrameEth,
+                        c.veboFrameDurationInSec,
+                        c.veboConsensusVersion
+                    )
+                )
+            });
+
+            /// @notice updating Accounting implementation (no finalizeUpgrade)
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade Accounting implementation", to: c.accounting, impl: c.newAccountingImpl
+            });
+
+            /// @notice updating WithdrawalVault implementation and call finalizeUpgrade_v3
+            items[i++] = _item({
+                description: "Upgrade WithdrawalVault implementation",
+                to: c.withdrawalVault,
+                data: abi.encodeCall(
+                    IWithdrawalsManagerProxy.proxy_upgradeTo,
+                    (c.newWithdrawalVaultImpl, abi.encodeCall(IWithdrawalVault.finalizeUpgrade_v3, ()))
+                )
             });
 
             /// @notice grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor
@@ -319,33 +372,6 @@ contract UpgradeVoteScript is OmnibusBase {
                 account: c.newDepositSecurityModule
             });
 
-            /// @notice updating AccountingOracle implementation
-            /// @dev finalizeUpgrade will be called in UpgradeTemplate.finishUpgrade()
-            items[i++] = _proxyUpgradeToItem({
-                description: "Upgrade AccountingOracle implementation",
-                to: c.accountingOracle,
-                impl: c.newAccountingOracleImpl
-            });
-
-            /// @notice updating Accounting implementation
-            items[i++] = _proxyUpgradeToItem({
-                description: "Upgrade Accounting implementation", to: c.accounting, impl: c.newAccountingImpl
-            });
-
-            items[i++] = _proxyUpgradeToItem({
-                description: "Upgrade ValidatorsExitBusOracle implementation",
-                to: c.validatorsExitBusOracle,
-                impl: c.newValidatorsExitBusOracleImpl
-            });
-
-            /// @notice updating WithdrawalVault implementation
-            /// @dev finalizeUpgrade will be called in UpgradeTemplate.finishUpgrade()
-            items[i++] = _item({
-                description: "Upgrade WithdrawalVault implementation",
-                to: c.withdrawalVault,
-                data: abi.encodeCall(IWithdrawalsManagerProxy.proxy_upgradeTo, (c.newWithdrawalVaultImpl, bytes("")))
-            });
-
             items[i++] = _ozGrantRoleItem({
                 description: "Grant TW_EXIT_LIMIT_MANAGER_ROLE to Agent on TWGateway",
                 to: g.triggerableWithdrawalsGateway,
@@ -360,6 +386,12 @@ contract UpgradeVoteScript is OmnibusBase {
                     ITriggerableWithdrawalsGateway.setExitRequestLimit,
                     (c.twMaxExitRequestsLimit, c.twExitsPerFrame, c.twFrameDurationInSec)
                 )
+            });
+
+            items[i++] = _item({
+                description: "Register CM Committee as CircuitBreaker Pauser for ConsolidationGateway",
+                to: g.circuitBreaker,
+                data: abi.encodeCall(ICircuitBreaker.registerPauser, (c.consolidationGateway, c.curatedModuleCommittee))
             });
         }
 
@@ -538,10 +570,7 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to CircuitBreaker on CSModule",
-                to: csm,
-                role: PAUSE_ROLE,
-                account: cb
+                description: "Grant PAUSE_ROLE to CircuitBreaker on CSModule", to: csm, role: PAUSE_ROLE, account: cb
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -743,6 +772,7 @@ contract UpgradeVoteScript is OmnibusBase {
         VoteItem[] memory itemsPacked = new VoteItem[](1);
         CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
         for (uint256 i = 0; i < items.length; ++i) {
+            // slither-disable-next-line unused-return
             scriptBuilder.addCall(items[i].call.to, items[i].call.data);
         }
 

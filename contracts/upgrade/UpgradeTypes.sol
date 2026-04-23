@@ -203,10 +203,6 @@ interface IMetaRegistry {
     function createOrUpdateOperatorGroup(uint256 groupId, OperatorGroup calldata groupInfo) external;
 }
 
-interface IPausableUntilView {
-    function isPaused() external view returns (bool);
-}
-
 interface IInitializedVersionView {
     function getInitializedVersion() external view returns (uint64);
 }
@@ -445,7 +441,10 @@ struct CuratedModuleConfig {
     address module;
     address accounting;
     address ejector;
+    address feeDistributor;
+    address feeOracle;
     address hashConsensus;
+    address strikes;
     string moduleName;
     uint256 stakeShareLimit;
     uint256 priorityExitShareThreshold;

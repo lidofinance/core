@@ -169,6 +169,9 @@ contract UpgradeConfig is IUpgradeConfig {
     // CMv2
     address internal immutable CURATED_MODULE;
     address internal immutable CURATED_ACCOUNTING;
+    address internal immutable CURATED_FEE_DISTRIBUTOR;
+    address internal immutable CURATED_FEE_ORACLE;
+    address internal immutable CURATED_STRIKES;
     address internal immutable CURATED_EJECTOR;
     address internal immutable CURATED_HASH_CONSENSUS;
     // save in storage
@@ -334,11 +337,11 @@ contract UpgradeConfig is IUpgradeConfig {
         ICuratedModule curatedModule = ICuratedModule(CURATED_MODULE);
         CURATED_META_REGISTRY = curatedModule.META_REGISTRY();
         CURATED_ACCOUNTING = curatedModule.ACCOUNTING();
-        address curatedFeeDistributor = curatedModule.FEE_DISTRIBUTOR();
-        address curatedFeeOracle = IFeeDistributorV3(curatedFeeDistributor).ORACLE();
-        CURATED_HASH_CONSENSUS = IFeeOracleV3(curatedFeeOracle).getConsensusContract();
-        address curatedStrikes = IFeeOracleV3(curatedFeeOracle).STRIKES();
-        CURATED_EJECTOR = IValidatorStrikesV3(curatedStrikes).ejector();
+        CURATED_FEE_DISTRIBUTOR = curatedModule.FEE_DISTRIBUTOR();
+        CURATED_FEE_ORACLE = IFeeDistributorV3(CURATED_FEE_DISTRIBUTOR).ORACLE();
+        CURATED_HASH_CONSENSUS = IFeeOracleV3(CURATED_FEE_ORACLE).getConsensusContract();
+        CURATED_STRIKES = IFeeOracleV3(CURATED_FEE_ORACLE).STRIKES();
+        CURATED_EJECTOR = IValidatorStrikesV3(CURATED_STRIKES).ejector();
     }
 
     function getGlobalConfig() external view returns (GlobalConfig memory) {
@@ -469,7 +472,10 @@ contract UpgradeConfig is IUpgradeConfig {
             module: CURATED_MODULE,
             accounting: CURATED_ACCOUNTING,
             ejector: CURATED_EJECTOR,
+            feeDistributor: CURATED_FEE_DISTRIBUTOR,
+            feeOracle: CURATED_FEE_ORACLE,
             hashConsensus: CURATED_HASH_CONSENSUS,
+            strikes: CURATED_STRIKES,
             moduleName: _curatedModuleName,
             stakeShareLimit: CURATED_STAKE_SHARE_LIMIT,
             priorityExitShareThreshold: CURATED_PRIORITY_EXIT_SHARE_THRESHOLD,

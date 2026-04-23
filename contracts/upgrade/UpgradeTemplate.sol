@@ -11,6 +11,7 @@ import {
 
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
+import {IPausableUntil} from "contracts/common/interfaces/IPausableUntil.sol";
 import {ModuleStateConfig, StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 import {IUpgradeTemplate} from "./interfaces/IUpgradeTemplate.sol";
 import {
@@ -21,20 +22,13 @@ import {
     CuratedModuleConfig,
     ILidoWithFinalizeUpgrade,
     IBaseOracle,
-    IValidatorsExitBusOracle,
-    IAccountingOracle,
     IWithdrawalsManagerProxy,
     IAragonKernel,
     IVersioned,
-    IWithdrawalVault,
     IWithdrawalsManagerProxy,
     IStakingRouter,
     IDepositSecurityModule,
-    IFeeOracleV3,
-    IAccountingV3,
-    IFeeDistributorV3,
     IValidatorStrikesV3,
-    IPausableUntilView,
     IInitializedVersionView
 } from "./UpgradeTypes.sol";
 
@@ -146,11 +140,11 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint64 public constant EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION = 3;
     uint64 public constant EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION = 1;
 
-    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
+    bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
 
     // Initial value of upgradeBlockNumber storage variable
-    uint256 public constant UPGRADE_NOT_STARTED = 0;
-    uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
+    uint256 internal constant UPGRADE_NOT_STARTED = 0;
+    uint256 internal constant INFINITE_ALLOWANCE = type(uint256).max;
 
     // Upgrade config (self deployed internal contract)
     address public immutable CONFIG;
@@ -187,7 +181,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     // Slot for the upgrade started flag
     // / keccak256("UpgradeTemplate.upgradeStartedFlag");
-    bytes32 public constant UPGRADE_STARTED_SLOT = 0x058d69f67a3d86c424c516d23a070ff8bed34431617274caa2049bd702675e3f;
+    bytes32 public constant UPGRADE_STARTED_SLOT = 0x35b46117eef044799338cc40f60a0c4c38c26772e3f81f535801c8d814ecc33d;
 
     /// @param _params Params required to initialize the addresses contract
     /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
@@ -241,19 +235,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
 
         isUpgradeFinished = true;
-
-        // todo move to votescript and call via proxy__upgradeToAndCall
-        ILidoWithFinalizeUpgrade(g.lido).finalizeUpgrade_v4();
-        IWithdrawalVault(c.withdrawalVault).finalizeUpgrade_v3();
-        IAccountingOracle(c.accountingOracle).finalizeUpgrade_v5(c.aoConsensusVersion);
-        IValidatorsExitBusOracle(c.validatorsExitBusOracle)
-            .finalizeUpgrade_v3(
-                c.veboMaxValidatorsPerReport,
-                c.veboMaxExitBalanceEth,
-                c.veboBalancePerFrameEth,
-                c.veboFrameDurationInSec,
-                c.veboConsensusVersion
-            );
 
         // todo check added module id === migrator target module id
         _assertPostUpgradeState(g, c);
@@ -443,24 +424,22 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     function _assertCMFinalState(GlobalConfig memory g) internal view {
         CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
-        address feeDistributor = IAccountingV3(cm.accounting).FEE_DISTRIBUTOR();
-        address feeOracle = IFeeDistributorV3(feeDistributor).ORACLE();
-        address strikes = address(IFeeOracleV3(feeOracle).STRIKES());
-        (uint256 initialEpoch,) = IHashConsensus(cm.hashConsensus).getFrameConfig();
 
         _assertInitializedContractVersion(cm.module, EXPECTED_FINAL_CM_MODULE_INITIALIZED_VERSION);
         _assertInitializedContractVersion(cm.accounting, EXPECTED_FINAL_CM_ACCOUNTING_INITIALIZED_VERSION);
-        _assertInitializedContractVersion(feeDistributor, EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION);
-        _assertContractVersion(feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
-        _assertInitializedContractVersion(strikes, EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(cm.feeDistributor, EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION);
+        _assertContractVersion(cm.feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
+        _assertInitializedContractVersion(cm.strikes, EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION);
 
         _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, cm.accounting);
         _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, cm.ejector);
         _assertNotOZRoleHolder(cm.module, RESUME_ROLE, g.agent);
-        if (IPausableUntilView(cm.module).isPaused()) {
+        if (IPausableUntil(cm.module).isPaused()) {
             revert CMModuleIsPaused(cm.module);
         }
 
+        // slither-disable-next-line unused-return
+        (uint256 initialEpoch,) = IHashConsensus(cm.hashConsensus).getFrameConfig();
         if (initialEpoch != cm.hashConsensusInitialEpoch) {
             revert InvalidHashConsensusInitialEpoch(cm.hashConsensus, initialEpoch, cm.hashConsensusInitialEpoch);
         }
@@ -499,6 +478,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             revert LidoMigrationIncorrectBufferedEther();
         }
 
+        // slither-disable-next-line unused-return
         (uint256 depositedValidators, uint256 clValidators,) = ILidoWithFinalizeUpgrade(g.lido).getBeaconStat();
 
         if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
@@ -656,11 +636,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         assembly {
             isStartCalledInThisTx := tload(UPGRADE_STARTED_SLOT)
         }
-    }
-
-    function _transferAdminToAgent(address _contract) private {
-        IAccessControl(_contract).grantRole(DEFAULT_ADMIN_ROLE, AGENT);
-        IAccessControl(_contract).renounceRole(DEFAULT_ADMIN_ROLE, address(this));
     }
 
     error OnlyAgentCanUpgrade();
