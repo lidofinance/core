@@ -143,6 +143,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint64 public constant EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION = 1;
 
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
+    // Hoodi currently has a legacy dev EOA with STAKING_MODULE_MANAGE_ROLE in pre-upgrade state.
+    address internal constant HOODI_LEGACY_STAKING_MODULE_MANAGER = 0xE28f573b732632fdE03BD5507A7d475383e8512E;
 
     // Initial value of upgradeBlockNumber storage variable
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
@@ -302,7 +304,9 @@ contract UpgradeTemplate is IUpgradeTemplate {
         // StakingRouter (only critical roles))
         _assertProxyAdmin(stakingRouter, agent);
         _assertSingleOZRoleHolder(stakingRouter, DEFAULT_ADMIN_ROLE, agent);
-        _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_MANAGE_ROLE, agent);
+        _assertTwoOZRoleHolders(
+            stakingRouter, STAKING_MODULE_MANAGE_ROLE, agent, HOODI_LEGACY_STAKING_MODULE_MANAGER
+        );
         _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_UNVETTING_ROLE, c.newDepositSecurityModule);
         _assertSingleOZRoleHolder(stakingRouter, STAKING_MODULE_SHARE_MANAGE_ROLE, g.easyTrackEVMScriptExecutor);
         _assertZeroOZRoleHolders(stakingRouter, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
@@ -409,11 +413,11 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertSingleOZRoleHolder(csm.csm, REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE, csm.verifierV3);
         _assertSingleOZRoleHolder(csm.csm, REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE, g.easyTrackEVMScriptExecutor);
         _assertTwoOZRoleHolders(csm.csm, CREATE_NODE_OPERATOR_ROLE, csm.vettedGate, csm.permissionlessGate);
-        _assertSingleOZRoleHolder(csm.csm, PAUSE_ROLE, g.circuitBreaker);
+        _assertTwoOZRoleHolders(csm.csm, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
 
-        _assertSingleOZRoleHolder(csm.accounting, PAUSE_ROLE, g.circuitBreaker);
-        _assertSingleOZRoleHolder(csm.feeOracle, PAUSE_ROLE, g.circuitBreaker);
-        _assertSingleOZRoleHolder(csm.vettedGate, PAUSE_ROLE, g.circuitBreaker);
+        _assertTwoOZRoleHolders(csm.accounting, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(csm.feeOracle, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(csm.vettedGate, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
         _assertNotOZRoleHolder(csm.vettedGate, START_REFERRAL_SEASON_ROLE, g.agent);
         _assertNotOZRoleHolder(csm.vettedGate, END_REFERRAL_SEASON_ROLE, csm.identifiedCommunityStakersGateManager);
 
@@ -607,7 +611,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
         }
         for (uint256 i = 0; i < _holders.length; i++) {
-            if (_getRoleMember(_accessControlled, _role, i) != _holders[i]) {
+            if (!_hasRole(_accessControlled, _role, _holders[i])) {
                 revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
             }
         }

@@ -56,7 +56,7 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 public constant DG_ITEMS_COUNT = 57;
+    uint256 public constant DG_ITEMS_COUNT = 60;
     uint256 public constant VOTING_ITEMS_COUNT = 9;
 
     // Aragon Kernel APP_BASES_NAMESPACE
