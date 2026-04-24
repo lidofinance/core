@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters, skipIfContractInState } from "scripts/utils/upgrade";
+import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
   Accounting__factory,
@@ -32,27 +32,30 @@ import {
   deployWithoutProxy,
   encodeFunctionCall,
   getAddress,
+  getAddressValidated,
   InitializeArgs,
+  isContractDeployed,
   loadContract,
-  log,
   logArgs,
   logConfirmReview as logConfirmReview,
   logScriptHeader,
   logStartReview as logStartReview,
   makeTx,
   MethodArgs,
-  or,
   readNetworkState,
   Sk,
 } from "lib";
 
+export async function skip(): Promise<boolean> {
+  const state = readNetworkState();
+  // NOT skip if contract object exists in deployed state but address set as empty string or zero address
+  const address = getAddressValidated(Sk.upgradeTemporaryAdmin, state);
+  // NOT skip if contract not deployed yet
+  return !!(address && (await isContractDeployed(address)));
+}
+
 export async function main() {
   const state = readNetworkState();
-  if (skipIfContractInState(state, Sk.upgradeTemporaryAdmin)) {
-    log.warning(`Skipping step due to contract ${or(Sk.upgradeTemporaryAdmin)} is already in state`);
-    return;
-  }
-
   const parameters = readUpgradeParameters();
   const deployer = (await ethers.provider.getSigner()).address;
 

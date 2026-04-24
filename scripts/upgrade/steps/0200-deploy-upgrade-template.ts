@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters, skipIfContractInState } from "scripts/utils/upgrade";
+import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
   IAragonKernel,
@@ -9,18 +9,31 @@ import {
 } from "typechain-types";
 import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
 
-import { log, logArgs, logConfirmReview, logScriptHeader, logStartReview, or } from "lib";
-import { ConstructorArgs, loadContract } from "lib/contract";
-import { deployWithoutProxy } from "lib/deploy";
-import { getAddress, readNetworkState, Sk } from "lib/state-file";
+import {
+  ConstructorArgs,
+  deployWithoutProxy,
+  getAddress,
+  getAddressValidated,
+  isContractDeployed,
+  loadContract,
+  logArgs,
+  logConfirmReview,
+  logScriptHeader,
+  logStartReview,
+  readNetworkState,
+  Sk,
+} from "lib";
+
+export async function skip(): Promise<boolean> {
+  const state = readNetworkState();
+  // NOT skip if contract object exists in deployed state but address set as empty string or zero address
+  const address = getAddressValidated(Sk.upgradeTemplate, state);
+  // NOT skip if contract not deployed yet
+  return !!(address && (await isContractDeployed(address)));
+}
 
 export async function main() {
   const state = readNetworkState();
-  if (skipIfContractInState(state, Sk.upgradeTemplate)) {
-    log.warning(`Skipping step due to contract ${or(Sk.upgradeTemplate)} is already in state`);
-    return;
-  }
-
   const parameters = readUpgradeParameters();
   const deployer = await ethers.provider.getSigner();
 

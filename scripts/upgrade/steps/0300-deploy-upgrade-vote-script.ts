@@ -1,20 +1,32 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters, skipIfContractInState } from "scripts/utils/upgrade";
+import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { UpgradeVoteScript__factory } from "typechain-types";
 import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript";
 
-import { ConstructorArgs, log, logArgs, logConfirmReview, logScriptHeader, logStartReview, or } from "lib";
-import { deployWithoutProxy } from "lib/deploy";
-import { readNetworkState, Sk } from "lib/state-file";
+import {
+  ConstructorArgs,
+  deployWithoutProxy,
+  getAddressValidated,
+  isContractDeployed,
+  logArgs,
+  logConfirmReview,
+  logScriptHeader,
+  logStartReview,
+  readNetworkState,
+  Sk,
+} from "lib";
+
+export async function skip(): Promise<boolean> {
+  const state = readNetworkState();
+  // NOT skip if contract object exists in deployed state but address set as empty string or zero address
+  const address = getAddressValidated(Sk.upgradeVoteScript, state);
+  // NOT skip if contract not deployed yet
+  return !!(address && (await isContractDeployed(address)));
+}
 
 export async function main() {
   const state = readNetworkState();
-  if (skipIfContractInState(state, Sk.upgradeVoteScript)) {
-    log.warning(`Skipping step due to contract ${or(Sk.upgradeVoteScript)} is already in state`);
-    return;
-  }
-
   const parameters = readUpgradeParameters();
   const deployer = (await ethers.provider.getSigner()).address;
 
