@@ -1,11 +1,5 @@
 # Lido Protocol Upgrade Parameters - Hoodi Configuration
-# This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum Hoodi testnet
 
-
-
-[easyTrack]
-# TODO:  update upon deployment
-trustedCaller = "0x00000000000000000000000000000000000eee00"
 [easyTrack.newFactories]
 UpdateStakingModuleShareLimits = "0xD63cf25df1bA6144db27A81A98120Dfc53dE4540"
 AllowConsolidationPair = "0x22D36e7616F541A527989C5652fDA4d527bB461C"
@@ -88,7 +82,7 @@ initialExecutionDelay = 86400         # Delay before pending batch execution
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
-targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
+targetModuleId = 5                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
 
 committee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" #m-sig
 

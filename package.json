@@ -98,7 +98,6 @@
     "chai": "4.5.0",
     "chalk": "4.1.2",
     "dotenv": "16.5.0",
-    "dotenv-cli": "11.0.0",
     "eslint": "9.28.0",
     "eslint-config-prettier": "10.1.5",
     "eslint-plugin-no-only-tests": "3.3.0",

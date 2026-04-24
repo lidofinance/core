@@ -1,10 +1,5 @@
-# Lido Protocol Upgrade Parameters - Hoodi Configuration
-# This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum Hoodi testnet
+# Lido Protocol Upgrade Parameters - Devnet Configuration
 
-
-
-[easyTrack]
-trustedCaller = "0xE25583099BA105D9ec0A67f5Ae86D90e50036425"
 [easyTrack.newFactories]
 UpdateStakingModuleShareLimits = "0x7ed96eEfB57E1e4C6d64D19818F3A78664318829"
 AllowConsolidationPair = "0xD6aC302915790074c7291c3bD64ddD5aeC5A7708"

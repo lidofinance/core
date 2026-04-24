@@ -1,7 +1,5 @@
 # Lido Protocol Upgrade Parameters - Mainnet Configuration
 
-[easyTrack]
-trustedCaller = "0x00000000000000000000000000000000000eee00"
 [easyTrack.newFactories]
 # TODO: fill with deployed Easy Track factory address before execution
 UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"

@@ -126,7 +126,7 @@ const StakingRouterSchema = z.object({
 
 // Easy track schema
 const EasyTrackSchema = z.object({
-  // trustedCaller: EthereumAddressSchema,
+  trustedCaller: EthereumAddressSchema.optional(),
   newFactories: z.object({
     // v3
     // AlterTiersInOperatorGrid: EthereumAddressSchema,
