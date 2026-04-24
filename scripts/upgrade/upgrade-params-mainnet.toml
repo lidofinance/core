@@ -7,12 +7,10 @@ trustedCaller = "0x00000000000000000000000000000000000eee00"
 UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
 AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
 
-AllowedMerkleGatesRegistryForCSM = "0x00000000000000000000000000000000000eee08"
 SetMerkleGateTreeForCSM = "0x00000000000000000000000000000000000eee09"
 ReportWithdrawalsForSlashedValidatorsForCSM = "0x00000000000000000000000000000000000eee10"
 SettleGeneralDelayedPenaltyForCSM = "0x00000000000000000000000000000000000eee11"
 
-AllowedMerkleGatesRegistryForCM = "0x00000000000000000000000000000000000eee12"
 SetMerkleGateTreeForCM = "0x00000000000000000000000000000000000eee13"
 ReportWithdrawalsForSlashedValidatorsForCM = "0x00000000000000000000000000000000000eee14"
 SettleGeneralDelayedPenaltyForCM = "0x00000000000000000000000000000000000eee15"
@@ -114,6 +112,12 @@ maxEBType2 = "2048000000000000000000"
 csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"
 csmImpl = "0x1eB6d4da13ca9566c17F526aE0715325d7a07665"
 vettedGateProxy = "0xB314D4A76C457c93150d308787939063F4Cc67E0"
+# TODO: replace with deployed IDVTC gate before execution
+identifiedDVTClusterGate = "0x0000000000000000000000000000000000000000"
+# TODO: replace with deployed IDVTC curve setup before execution
+identifiedDVTClusterCurveSetup = "0x0000000000000000000000000000000000000000"
+# TODO: replace with expected IDVTC bond curve id before execution
+identifiedDVTClusterBondCurveId = 0
 parametersRegistryImpl = "0x25fdC3BE9977CD4da679dF72A64C8B6Bd5216A78"
 feeOracleImpl = "0xe0B234f99E413E27D9Bc31aBba9A49A3e570Da97"
 feeOracleConsensusVersion = 4
@@ -123,20 +127,30 @@ feeDistributorImpl = "0x5DCF7cF7c6645E9E822a379dF046a8b0390251A1"
 exitPenaltiesImpl = "0xDa22fA1CEa40d05Fe4CD536967afdD839586D546"
 strikesImpl = "0x3E5021424c9e13FC853e523Cd68ebBec848956a0"
 oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
-verifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
-# TODO: replace with deployed verifier v3
-verifierV3 = "0x00000000000000000000000000000000000dac01"
-permissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
+oldVerifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
+# TODO: replace with deployed new verifier
+newVerifier = "0x00000000000000000000000000000000000dac01"
+newPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 # TODO: replace with new deployed ejector
 ejector = "0x00000000000000000000000000000000000dac02"
-identifiedCommunityStakersGateManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
-gateSeal = "0xE1686C2E90eb41a48356c1cC7FaA17629af3ADB3"
-generalDelayedPenaltyReporter = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
-penaltiesManager = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
+csmCommittee = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 
 [curatedModule]
 # TODO: replace with deployed curated module addresses
 module = "0x00000000000000000000000000000000000cac01"
+# TODO: replace with deployed curated gates before execution
+curatedGates = [
+    "0x0000000000000000000000000000000000000000",
+    "0x0000000000000000000000000000000000000000",
+    "0x0000000000000000000000000000000000000000",
+    "0x0000000000000000000000000000000000000000",
+    "0x0000000000000000000000000000000000000000",
+    "0x0000000000000000000000000000000000000000",
+    "0x0000000000000000000000000000000000000000",
+]
+# TODO: replace with deployed curated verifier before execution
+verifier = "0x00000000000000000000000000000000000cac02"
+circuitBreakerPauser = "0x00000000000000000000000000000000000abc02"
 moduleName = "curated-onchain-v1"
 stakeShareLimit = 2000
 priorityExitShareThreshold = 2500
@@ -144,6 +158,7 @@ stakingModuleFee = 800
 treasuryFee = 200
 maxDepositsPerBlock = 30
 minDepositBlockDistance = 25
+feeOracleConsensusVersion = 4
 hashConsensusInitialEpoch = 47480
 
 [upgradeVoteScript]

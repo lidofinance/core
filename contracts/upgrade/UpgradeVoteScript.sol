@@ -15,8 +15,7 @@ import {
     // ITimeConstraints,
     GlobalConfig,
     EasyTrackNewFactories,
-
-    // EasyTrackOldFactories,
+    EasyTrackOldFactories,
     CoreUpgradeConfig,
     CSMUpgradeConfig,
     CuratedModuleConfig,
@@ -38,9 +37,10 @@ import {
     IAccountingV3,
     IFeeDistributorV3,
     IValidatorStrikesV3,
+    IUpdateStakingModuleShareLimits,
     IBaseModuleV3,
-    IAllowedMerkleGatesRegistry,
     IMerkleGate,
+    IOneShotCurveSetup,
     IMetaRegistry,
     ITriggerableWithdrawalsGatewayUpgrade
 } from "./UpgradeTypes.sol";
@@ -52,12 +52,13 @@ contract UpgradeVoteScript is OmnibusBase {
     using CallsScriptBuilder for CallsScriptBuilder.Context;
 
     error InvalidItemsCount(uint256 actual, uint256 expected);
+    error InvalidMerkleGateAddress();
     //
     // Constants
     //
     // TODO set upon finish with items
-    uint256 public constant DG_ITEMS_COUNT = 60;
-    uint256 public constant VOTING_ITEMS_COUNT = 9;
+    uint256 public constant DG_ITEMS_COUNT = 65;
+    uint256 public constant VOTING_ITEMS_COUNT = 11;
 
     // Aragon Kernel APP_BASES_NAMESPACE
     bytes32 internal constant KERNEL_APP_BASES_NAMESPACE = keccak256("base");
@@ -80,6 +81,9 @@ contract UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant END_REFERRAL_SEASON_ROLE = keccak256("END_REFERRAL_SEASON_ROLE");
     bytes32 internal constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
     bytes32 internal constant CREATE_NODE_OPERATOR_ROLE = keccak256("CREATE_NODE_OPERATOR_ROLE");
+    bytes32 internal constant SET_BOND_CURVE_ROLE = keccak256("SET_BOND_CURVE_ROLE");
+    bytes32 internal constant MANAGE_BOND_CURVES_ROLE = keccak256("MANAGE_BOND_CURVES_ROLE");
+    bytes32 internal constant MANAGE_CURVE_PARAMETERS_ROLE = keccak256("MANAGE_CURVE_PARAMETERS_ROLE");
     bytes32 internal constant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE =
         keccak256("MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE");
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
@@ -153,15 +157,15 @@ contract UpgradeVoteScript is OmnibusBase {
         GlobalConfig memory g = config.getGlobalConfig();
         address easyTrack = g.easyTrack;
 
-        // (EasyTrackNewFactories memory etn, EasyTrackOldFactories memory eto) = config.getEasyTrackConfig();
-
-        (EasyTrackNewFactories memory etn,) = config.getEasyTrackConfig();
+        (EasyTrackNewFactories memory etn, EasyTrackOldFactories memory eto) = config.getEasyTrackConfig();
 
         //
         // Delete old EasyTrack Factories
         //
-        // items[i++] = _delETFactoryItem("Remove CSMSettleElStealingPenalty ET factory", easyTrack, eto.CSMSettleElStealingPenalty);
-        // items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, eto.CSMSetVettedGateTree);
+        items[i++] = _delETFactoryItem(
+            "Remove CSMSettleElStealingPenalty ET factory", easyTrack, eto.CSMSettleElStealingPenalty
+        );
+        items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, eto.CSMSetVettedGateTree);
 
         //
         // Add new EasyTrack Factories
@@ -174,7 +178,12 @@ contract UpgradeVoteScript is OmnibusBase {
                 "Add UpdateStakingModuleShareLimits ET factory",
                 easyTrack,
                 etn.UpdateStakingModuleShareLimits,
-                bytes.concat(bytes20(g.stakingRouter), bytes4(IStakingRouterUpgrade.updateModuleShares.selector))
+                bytes.concat(
+                    bytes20(etn.UpdateStakingModuleShareLimits),
+                    bytes4(IUpdateStakingModuleShareLimits.validateParams.selector),
+                    bytes20(g.stakingRouter),
+                    bytes4(IStakingRouterUpgrade.updateModuleShares.selector)
+                )
             );
 
             items[i++] = _addETFactoryItem(
@@ -188,11 +197,15 @@ contract UpgradeVoteScript is OmnibusBase {
         {
             CSMUpgradeConfig memory c = config.getCSMUpgradeConfig();
 
+            address[] memory csmGates = new address[](2);
+            csmGates[0] = c.vettedGate;
+            csmGates[1] = c.identifiedDVTClusterGate;
+
             items[i++] = _addETFactoryItem(
                 "Add SetMerkleGateTree CSM ET factory",
                 easyTrack,
                 etn.SetMerkleGateTreeForCSM,
-                _setMerkleGateTreePermissions(etn.AllowedMerkleGatesRegistryForCSM)
+                _setMerkleGateTreePermissions(csmGates)
             );
 
             items[i++] = _addETFactoryItem(
@@ -217,7 +230,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 "Add SetMerkleGateTree CM ET factory",
                 easyTrack,
                 etn.SetMerkleGateTreeForCM,
-                _setMerkleGateTreePermissions(etn.AllowedMerkleGatesRegistryForCM)
+                _setMerkleGateTreePermissions(c.curatedGates)
             );
 
             items[i++] = _addETFactoryItem(
@@ -409,8 +422,6 @@ contract UpgradeVoteScript is OmnibusBase {
         {
             CSMUpgradeConfig memory c = config.getCSMUpgradeConfig();
             address csm = c.csm;
-            address gateSeal = c.gateSeal;
-            address cb = g.circuitBreaker;
             address vettedGate = c.vettedGate;
             // --- Proxy upgrades ---
 
@@ -469,11 +480,25 @@ contract UpgradeVoteScript is OmnibusBase {
                 data: abi.encodeCall(IValidatorStrikesV3.setEjector, (c.ejector))
             });
 
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke REPORT_EL_REWARDS_STEALING_PENALTY_ROLE",
+                to: csm,
+                role: REPORT_EL_REWARDS_STEALING_PENALTY_ROLE,
+                account: c.csmCommittee
+            });
+
             items[i++] = _ozGrantRoleItem({
                 description: "Grant REPORT_GENERAL_DELAYED_PENALTY_ROLE",
                 to: csm,
                 role: REPORT_GENERAL_DELAYED_PENALTY_ROLE,
-                account: c.generalDelayedPenaltyReporter
+                account: c.csmCommittee
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE",
+                to: csm,
+                role: SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE,
+                account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -484,32 +509,18 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke REPORT_EL_REWARDS_STEALING_PENALTY_ROLE",
-                to: csm,
-                role: REPORT_EL_REWARDS_STEALING_PENALTY_ROLE,
-                account: c.generalDelayedPenaltyReporter
-            });
-
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE",
-                to: csm,
-                role: SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE,
-                account: evmScriptExecutor
-            });
-
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke VERIFIER_ROLE from old verifier", to: csm, role: VERIFIER_ROLE, account: c.verifier
+                description: "Revoke VERIFIER_ROLE from old verifier", to: csm, role: VERIFIER_ROLE, account: c.oldVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant VERIFIER_ROLE to VerifierV3", to: csm, role: VERIFIER_ROLE, account: c.verifierV3
+                description: "Grant VERIFIER_ROLE to new verifier", to: csm, role: VERIFIER_ROLE, account: c.newVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
                 description: "Grant REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE to VerifierV3",
                 to: csm,
                 role: REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE,
-                account: c.verifierV3
+                account: c.newVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -530,37 +541,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Grant CREATE_NODE_OPERATOR_ROLE to new PermissionlessGate",
                 to: csm,
                 role: CREATE_NODE_OPERATOR_ROLE,
-                account: c.permissionlessGate
-            });
-
-            // --- Gate seal migration ---
-
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke PAUSE_ROLE from old gate seal on CSModule",
-                to: csm,
-                role: PAUSE_ROLE,
-                account: gateSeal
-            });
-
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke PAUSE_ROLE from old gate seal on Accounting",
-                to: c.accounting,
-                role: PAUSE_ROLE,
-                account: gateSeal
-            });
-
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke PAUSE_ROLE from old gate seal on FeeOracle",
-                to: c.feeOracle,
-                role: PAUSE_ROLE,
-                account: gateSeal
-            });
-
-            items[i++] = _ozRevokeRoleItem({
-                description: "Revoke PAUSE_ROLE from old gate seal on VettedGate",
-                to: vettedGate,
-                role: PAUSE_ROLE,
-                account: gateSeal
+                account: c.newPermissionlessGate
             });
 
             items[i++] = _ozRevokeRoleItem({
@@ -574,39 +555,60 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Revoke END_REFERRAL_SEASON_ROLE",
                 to: vettedGate,
                 role: END_REFERRAL_SEASON_ROLE,
-                account: c.identifiedCommunityStakersGateManager
+                account: c.csmCommittee
+            });
+
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "CSM new verifier", g.circuitBreaker, c.newVerifier, c.csmCommittee
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "CSM Ejector", g.circuitBreaker, c.ejector, c.csmCommittee
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "CSM identified DVT cluster gate", g.circuitBreaker, c.identifiedDVTClusterGate, c.csmCommittee
+            );
+
+            // --- New IDVTC type ---
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CREATE_NODE_OPERATOR_ROLE to identified DVT cluster gate",
+                to: csm,
+                role: CREATE_NODE_OPERATOR_ROLE,
+                account: c.identifiedDVTClusterGate
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to CircuitBreaker on CSModule", to: csm, role: PAUSE_ROLE, account: cb
-            });
-
-            items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to CircuitBreaker on Accounting",
+                description: "Grant SET_BOND_CURVE_ROLE to identified DVT cluster gate",
                 to: c.accounting,
-                role: PAUSE_ROLE,
-                account: cb
+                role: SET_BOND_CURVE_ROLE,
+                account: c.identifiedDVTClusterGate
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to CircuitBreaker on FeeOracle",
-                to: c.feeOracle,
-                role: PAUSE_ROLE,
-                account: cb
+                description: "Grant MANAGE_BOND_CURVES_ROLE to identified DVT cluster curve setup",
+                to: c.accounting,
+                role: MANAGE_BOND_CURVES_ROLE,
+                account: c.identifiedDVTClusterCurveSetup
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant PAUSE_ROLE to CircuitBreaker on VettedGate",
-                to: vettedGate,
-                role: PAUSE_ROLE,
-                account: cb
+                description: "Grant MANAGE_CURVE_PARAMETERS_ROLE to identified DVT cluster curve setup",
+                to: c.parametersRegistry,
+                role: MANAGE_CURVE_PARAMETERS_ROLE,
+                account: c.identifiedDVTClusterCurveSetup
+            });
+
+            // The setup contract renounces its temporary Accounting/Registry roles during execute().
+            items[i++] = _item({
+                description: "Execute identified DVT cluster curve setup",
+                to: c.identifiedDVTClusterCurveSetup,
+                data: abi.encodeCall(IOneShotCurveSetup.execute, ())
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE to penaltiesManager",
+                description: "Grant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE to CSM Committee",
                 to: c.parametersRegistry,
                 role: MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE,
-                account: c.penaltiesManager
+                account: c.csmCommittee
             });
 
             // --- Burner role migration ---
@@ -631,7 +633,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Revoke TWG full-withdrawal role from old Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
-                account: IValidatorStrikesV3(c.strikes).ejector()
+                account: c.oldEjector
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -706,6 +708,21 @@ contract UpgradeVoteScript is OmnibusBase {
                 to: c.hashConsensus,
                 data: abi.encodeCall(IHashConsensusV3.updateInitialEpoch, (c.hashConsensusInitialEpoch))
             });
+
+            items[i++] =
+                _registerCircuitBreakerPauserItem("CuratedModule", g.circuitBreaker, c.module, c.circuitBreakerPauser);
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated Accounting", g.circuitBreaker, c.accounting, c.circuitBreakerPauser
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated FeeOracle", g.circuitBreaker, c.feeOracle, c.circuitBreakerPauser
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated Verifier", g.circuitBreaker, c.verifier, c.circuitBreakerPauser
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated Ejector", g.circuitBreaker, c.ejector, c.circuitBreakerPauser
+            );
         }
 
         //
@@ -794,13 +811,26 @@ contract UpgradeVoteScript is OmnibusBase {
         return VoteItem({description: description, call: _votingCall(to, data)});
     }
 
-    function _setMerkleGateTreePermissions(address allowedMerkleGatesRegistry)
+    function _registerCircuitBreakerPauserItem(
+        string memory label,
+        address circuitBreaker,
+        address pausable,
+        address pauser
+    ) private pure returns (VoteItem memory) {
+        return _item({
+            description: string.concat("Register CircuitBreaker pauser for ", label),
+            to: circuitBreaker,
+            data: abi.encodeCall(ICircuitBreaker.registerPauser, (pausable, pauser))
+        });
+    }
+
+    function _setMerkleGateTreePermissions(address[] memory gates)
         private
-        view
+        pure
         returns (bytes memory permissions)
     {
-        address[] memory gates = IAllowedMerkleGatesRegistry(allowedMerkleGatesRegistry).getAllowedGates();
         for (uint256 i = 0; i < gates.length; ++i) {
+            if (gates[i] == address(0)) revert InvalidMerkleGateAddress();
             permissions = bytes.concat(permissions, bytes20(gates[i]), bytes4(IMerkleGate.setTreeParams.selector));
         }
     }

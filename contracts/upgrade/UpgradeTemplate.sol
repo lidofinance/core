@@ -12,6 +12,7 @@ import {
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 import {IPausableUntil} from "contracts/common/interfaces/IPausableUntil.sol";
+import {ICircuitBreaker} from "contracts/common/interfaces/ICircuitBreaker.sol";
 import {ModuleStateConfig, StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 import {IUpgradeTemplate} from "./interfaces/IUpgradeTemplate.sol";
 import {
@@ -29,8 +30,9 @@ import {
     IWithdrawalsManagerProxy,
     IStakingRouterUpgrade,
     IDepositSecurityModule,
-    IValidatorStrikesV3,
-    IInitializedVersionView
+    IInitializedVersionView,
+    IMerkleGate,
+    IOneShotCurveSetup
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
@@ -79,6 +81,9 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant END_REFERRAL_SEASON_ROLE = keccak256("END_REFERRAL_SEASON_ROLE");
     bytes32 internal constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
     bytes32 internal constant CREATE_NODE_OPERATOR_ROLE = keccak256("CREATE_NODE_OPERATOR_ROLE");
+    bytes32 internal constant SET_BOND_CURVE_ROLE = keccak256("SET_BOND_CURVE_ROLE");
+    bytes32 internal constant MANAGE_BOND_CURVES_ROLE = keccak256("MANAGE_BOND_CURVES_ROLE");
+    bytes32 internal constant MANAGE_CURVE_PARAMETERS_ROLE = keccak256("MANAGE_CURVE_PARAMETERS_ROLE");
     bytes32 internal constant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE =
         keccak256("MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE");
     bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
@@ -138,6 +143,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint64 public constant EXPECTED_FINAL_CSM_VETTED_GATE_INITIALIZED_VERSION = 1;
 
     uint64 public constant EXPECTED_FINAL_CM_MODULE_INITIALIZED_VERSION = 1;
+    uint64 public constant EXPECTED_FINAL_CM_PARAMETERS_REGISTRY_INITIALIZED_VERSION = 3;
     uint64 public constant EXPECTED_FINAL_CM_ACCOUNTING_INITIALIZED_VERSION = 3;
     uint64 public constant EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION = 3;
     uint64 public constant EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION = 1;
@@ -172,7 +178,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint256 internal initialBeaconBalance;
     bytes32 internal initialWithdrawalCredentials;
     uint256 internal initialModulesCount;
-    address internal initialCSMEjector;
 
     //
     // Slots for transient storage
@@ -196,8 +201,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         UpgradeConfig config = UpgradeConfig(CONFIG);
         GlobalConfig memory g = config.getGlobalConfig();
         CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
-        CSMUpgradeConfig memory csm = config.getCSMUpgradeConfig();
-
         if (msg.sender != g.agent) revert OnlyAgentCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
@@ -214,8 +217,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
         initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
-
-        initialCSMEjector = IValidatorStrikesV3(csm.strikes).ejector();
 
         _assertPreUpgradeState(g, c);
 
@@ -391,37 +392,55 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertInitializedContractVersion(
             csm.parametersRegistry, EXPECTED_FINAL_CSM_PARAMETERS_REGISTRY_INITIALIZED_VERSION
         );
-        _assertContractVersion(csm.feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
-        _assertOracleConsensusVersion(csm.feeOracle, csm.feeOracleConsensusVersion);
         _assertInitializedContractVersion(csm.vettedGate, EXPECTED_FINAL_CSM_VETTED_GATE_INITIALIZED_VERSION);
         _assertInitializedContractVersion(csm.accounting, EXPECTED_FINAL_CSM_ACCOUNTING_INITIALIZED_VERSION);
         _assertInitializedContractVersion(csm.feeDistributor, EXPECTED_FINAL_CSM_FEE_DISTRIBUTOR_INITIALIZED_VERSION);
         _assertInitializedContractVersion(csm.strikes, EXPECTED_FINAL_CSM_VALIDATOR_STRIKES_INITIALIZED_VERSION);
+        _assertContractVersion(csm.feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
+        _assertOracleConsensusVersion(csm.feeOracle, csm.feeOracleConsensusVersion);
 
-        _assertSingleOZRoleHolder(csm.csm, REPORT_GENERAL_DELAYED_PENALTY_ROLE, csm.generalDelayedPenaltyReporter);
+        _assertZeroOZRoleHolders(csm.csm, REPORT_EL_REWARDS_STEALING_PENALTY_ROLE);
+        _assertZeroOZRoleHolders(csm.csm, SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE);
+        _assertSingleOZRoleHolder(csm.csm, REPORT_GENERAL_DELAYED_PENALTY_ROLE, csm.csmCommittee);
         _assertSingleOZRoleHolder(csm.csm, SETTLE_GENERAL_DELAYED_PENALTY_ROLE, g.easyTrackEVMScriptExecutor);
-        // _assertZeroOZRoleHolders(csm.csm, REPORT_EL_REWARDS_STEALING_PENALTY_ROLE);
-        // _assertZeroOZRoleHolders(csm.csm, SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE);
-        _assertSingleOZRoleHolder(csm.csm, VERIFIER_ROLE, csm.verifierV3);
-        _assertSingleOZRoleHolder(csm.csm, REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE, csm.verifierV3);
+        _assertSingleOZRoleHolder(csm.csm, VERIFIER_ROLE, csm.newVerifier);
+        _assertSingleOZRoleHolder(csm.csm, REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE, csm.newVerifier);
         _assertSingleOZRoleHolder(csm.csm, REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE, g.easyTrackEVMScriptExecutor);
-        _assertTwoOZRoleHolders(csm.csm, CREATE_NODE_OPERATOR_ROLE, csm.vettedGate, csm.permissionlessGate);
         _assertTwoOZRoleHolders(csm.csm, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertThreeOZRoleHolders(
+            csm.csm, CREATE_NODE_OPERATOR_ROLE, csm.vettedGate, csm.newPermissionlessGate, csm.identifiedDVTClusterGate
+        );
 
         _assertTwoOZRoleHolders(csm.accounting, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
         _assertTwoOZRoleHolders(csm.feeOracle, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
         _assertTwoOZRoleHolders(csm.vettedGate, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(csm.identifiedDVTClusterGate, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(csm.newVerifier, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(csm.ejector, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+
+        _assertCircuitBreakerPauser(g.circuitBreaker, csm.identifiedDVTClusterGate, csm.csmCommittee);
+        _assertCircuitBreakerPauser(g.circuitBreaker, csm.newVerifier, csm.csmCommittee);
+        _assertCircuitBreakerPauser(g.circuitBreaker, csm.ejector, csm.csmCommittee);
+
         _assertNotOZRoleHolder(csm.vettedGate, START_REFERRAL_SEASON_ROLE, g.agent);
-        _assertNotOZRoleHolder(csm.vettedGate, END_REFERRAL_SEASON_ROLE, csm.identifiedCommunityStakersGateManager);
+        _assertNotOZRoleHolder(csm.vettedGate, END_REFERRAL_SEASON_ROLE, csm.csmCommittee);
+
+        _assertHasOZRole(csm.accounting, SET_BOND_CURVE_ROLE, csm.identifiedDVTClusterGate);
+
+        _assertNotOZRoleHolder(csm.accounting, MANAGE_BOND_CURVES_ROLE, csm.identifiedDVTClusterCurveSetup);
+        _assertNotOZRoleHolder(
+            csm.parametersRegistry, MANAGE_CURVE_PARAMETERS_ROLE, csm.identifiedDVTClusterCurveSetup
+        );
+        _assertIdentifiedDVTClusterCurve(csm);
 
         _assertSingleOZRoleHolder(
-            csm.parametersRegistry, MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE, csm.penaltiesManager
+            csm.parametersRegistry, MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE, csm.csmCommittee
         );
 
         _assertNotOZRoleHolder(g.burner, REQUEST_BURN_SHARES_ROLE, csm.accounting);
         _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, csm.accounting);
 
-        _assertNotOZRoleHolder(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, initialCSMEjector);
+        _assertNotOZRoleHolder(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.oldEjector);
         _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.ejector);
     }
 
@@ -429,13 +448,30 @@ contract UpgradeTemplate is IUpgradeTemplate {
         CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
 
         _assertInitializedContractVersion(cm.module, EXPECTED_FINAL_CM_MODULE_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(
+            cm.parametersRegistry, EXPECTED_FINAL_CM_PARAMETERS_REGISTRY_INITIALIZED_VERSION
+        );
         _assertInitializedContractVersion(cm.accounting, EXPECTED_FINAL_CM_ACCOUNTING_INITIALIZED_VERSION);
         _assertInitializedContractVersion(cm.feeDistributor, EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION);
-        _assertContractVersion(cm.feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
         _assertInitializedContractVersion(cm.strikes, EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION);
+        _assertContractVersion(cm.feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
+        _assertOracleConsensusVersion(cm.feeOracle, cm.feeOracleConsensusVersion);
 
         _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, cm.accounting);
         _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, cm.ejector);
+
+        _assertTwoOZRoleHolders(cm.module, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(cm.accounting, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(cm.feeOracle, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(cm.verifier, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+        _assertTwoOZRoleHolders(cm.ejector, PAUSE_ROLE, g.circuitBreaker, g.resealManager);
+
+        _assertCircuitBreakerPauser(g.circuitBreaker, cm.module, cm.circuitBreakerPauser);
+        _assertCircuitBreakerPauser(g.circuitBreaker, cm.accounting, cm.circuitBreakerPauser);
+        _assertCircuitBreakerPauser(g.circuitBreaker, cm.feeOracle, cm.circuitBreakerPauser);
+        _assertCircuitBreakerPauser(g.circuitBreaker, cm.verifier, cm.circuitBreakerPauser);
+        _assertCircuitBreakerPauser(g.circuitBreaker, cm.ejector, cm.circuitBreakerPauser);
+
         _assertNotOZRoleHolder(cm.module, RESUME_ROLE, g.agent);
         if (IPausableUntil(cm.module).isPaused()) {
             revert CMModuleIsPaused(cm.module);
@@ -599,6 +635,20 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertOZRoleHolders(_accessControlled, _role, holders);
     }
 
+    function _assertThreeOZRoleHolders(
+        address _accessControlled,
+        bytes32 _role,
+        address _holder1,
+        address _holder2,
+        address _holder3
+    ) internal view {
+        address[] memory holders = new address[](3);
+        holders[0] = _holder1;
+        holders[1] = _holder2;
+        holders[2] = _holder3;
+        _assertOZRoleHolders(_accessControlled, _role, holders);
+    }
+
     function _assertOZRoleHolders(address _accessControlled, bytes32 _role, address[] memory _holders) internal view {
         if (_getRoleMemberCount(_accessControlled, _role) != _holders.length) {
             revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
@@ -619,6 +669,36 @@ contract UpgradeTemplate is IUpgradeTemplate {
     function _assertNotOZRoleHolder(address _accessControlled, bytes32 _role, address _holder) internal view {
         if (_hasRole(_accessControlled, _role, _holder)) {
             revert UnexpectedOZAccessControlRoleHolder(_accessControlled, _role, _holder);
+        }
+    }
+
+    function _assertCircuitBreakerPauser(address _circuitBreaker, address _pausable, address _expectedPauser)
+        internal
+        view
+    {
+        address actualPauser = ICircuitBreaker(_circuitBreaker).getPauser(_pausable);
+        if (actualPauser != _expectedPauser) {
+            revert InvalidCircuitBreakerPauser(_pausable, actualPauser, _expectedPauser);
+        }
+    }
+
+    function _assertIdentifiedDVTClusterCurve(CSMUpgradeConfig memory _csm) internal view {
+        IOneShotCurveSetup curveSetup = IOneShotCurveSetup(_csm.identifiedDVTClusterCurveSetup);
+        if (!curveSetup.executed()) {
+            revert IdentifiedDVTClusterCurveSetupNotExecuted(_csm.identifiedDVTClusterCurveSetup);
+        }
+
+        uint256 expectedCurveId = _csm.identifiedDVTClusterBondCurveId;
+        uint256 actualSetupCurveId = curveSetup.deployedCurveId();
+        if (actualSetupCurveId != expectedCurveId) {
+            revert InvalidIdentifiedDVTClusterCurveId(
+                _csm.identifiedDVTClusterCurveSetup, actualSetupCurveId, expectedCurveId
+            );
+        }
+
+        uint256 actualGateCurveId = IMerkleGate(_csm.identifiedDVTClusterGate).curveId();
+        if (actualGateCurveId != expectedCurveId) {
+            revert InvalidIdentifiedDVTClusterCurveId(_csm.identifiedDVTClusterGate, actualGateCurveId, expectedCurveId);
         }
     }
 
@@ -684,6 +764,9 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error InvalidHashConsensusInitialEpoch(address consensus, uint256 actualEpoch, uint256 expectedEpoch);
     error CMModuleIsPaused(address module);
     error InvalidInitializedContractVersion(address contractAddress, uint64 actualVersion, uint64 expectedVersion);
+    error InvalidCircuitBreakerPauser(address pausable, address actualPauser, address expectedPauser);
+    error IdentifiedDVTClusterCurveSetupNotExecuted(address curveSetup);
+    error InvalidIdentifiedDVTClusterCurveId(address contractAddress, uint256 actualCurveId, uint256 expectedCurveId);
 
     error LidoMigrationIncorrectBufferedEther();
     error LidoMigrationIncorrectDepositedValidators();

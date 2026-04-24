@@ -89,12 +89,15 @@ interface IConsolidationMigrator {
     function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external;
 }
 
-interface IAllowedMerkleGatesRegistry {
-    function getAllowedGates() external view returns (address[] memory);
+interface IMerkleGate {
+    function curveId() external view returns (uint256);
+    function setTreeParams(bytes32 treeRoot, string calldata treeCid) external;
 }
 
-interface IMerkleGate {
-    function setTreeParams(bytes32 treeRoot, string calldata treeCid) external;
+interface IOneShotCurveSetup {
+    function executed() external view returns (bool);
+    function deployedCurveId() external view returns (uint256);
+    function execute() external returns (uint256 curveId);
 }
 
 interface ILidoUpgrade is ILido {
@@ -183,6 +186,17 @@ interface IValidatorStrikesV3 {
     function setEjector(address newEjector) external;
 }
 
+interface IUpdateStakingModuleShareLimits {
+    struct ModuleShareParams {
+        uint16 currentStakeShareLimit;
+        uint16 newStakeShareLimit;
+        uint16 currentPriorityExitShareThreshold;
+        uint16 newPriorityExitShareThreshold;
+    }
+
+    function validateParams(ModuleShareParams calldata params) external view;
+}
+
 interface ITriggerableWithdrawalsGatewayUpgrade is IAccessControlEnumerable {
     function setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
         external;
@@ -244,12 +258,10 @@ struct EasyTrackNewFactories {
     address UpdateStakingModuleShareLimits;
     address AllowConsolidationPair;
     // CSM
-    address AllowedMerkleGatesRegistryForCSM;
     address SetMerkleGateTreeForCSM;
     address ReportWithdrawalsForSlashedValidatorsForCSM;
     address SettleGeneralDelayedPenaltyForCSM;
     // CM
-    address AllowedMerkleGatesRegistryForCM;
     address SetMerkleGateTreeForCM;
     address ReportWithdrawalsForSlashedValidatorsForCM;
     address SettleGeneralDelayedPenaltyForCM;
@@ -313,6 +325,9 @@ struct CSMUpgradeParams {
     address csmProxy;
     address csmImpl;
     address vettedGateProxy;
+    address identifiedDVTClusterGate;
+    address identifiedDVTClusterCurveSetup;
+    uint256 identifiedDVTClusterBondCurveId;
     address parametersRegistryImpl;
     address feeOracleImpl;
     uint256 feeOracleConsensusVersion;
@@ -322,18 +337,18 @@ struct CSMUpgradeParams {
     address exitPenaltiesImpl;
     address strikesImpl;
     address oldPermissionlessGate;
-    address permissionlessGate;
-    address verifier;
-    address verifierV3;
+    address newPermissionlessGate;
+    address oldVerifier;
+    address newVerifier;
     address ejector;
-    address identifiedCommunityStakersGateManager;
-    address gateSeal;
-    address generalDelayedPenaltyReporter;
-    address penaltiesManager;
+    address csmCommittee;
 }
 
 struct CuratedModuleParams {
     address module;
+    address[] curatedGates;
+    address verifier;
+    address circuitBreakerPauser;
     string moduleName;
     uint256 stakeShareLimit;
     uint256 priorityExitShareThreshold;
@@ -341,6 +356,7 @@ struct CuratedModuleParams {
     uint256 treasuryFee;
     uint256 maxDepositsPerBlock;
     uint256 minDepositBlockDistance;
+    uint256 feeOracleConsensusVersion;
     uint256 hashConsensusInitialEpoch;
 }
 
@@ -424,6 +440,9 @@ struct CSMUpgradeConfig {
     address feeOracleImpl;
     uint256 feeOracleConsensusVersion;
     address vettedGate;
+    address identifiedDVTClusterGate;
+    address identifiedDVTClusterCurveSetup;
+    uint256 identifiedDVTClusterBondCurveId;
     address vettedGateImpl;
     address accounting;
     address accountingImpl;
@@ -434,20 +453,22 @@ struct CSMUpgradeConfig {
     address strikes;
     address strikesImpl;
     address oldPermissionlessGate;
-    address verifier;
-    address verifierV3;
-    address permissionlessGate;
+    address oldVerifier;
+    address newVerifier;
+    address newPermissionlessGate;
+    address oldEjector;
     address ejector;
-    address identifiedCommunityStakersGateManager;
-    address gateSeal;
-    address generalDelayedPenaltyReporter;
-    address penaltiesManager;
+    address csmCommittee;
 }
 
 struct CuratedModuleConfig {
     address module;
+    address[] curatedGates;
+    address parametersRegistry;
     address accounting;
     address ejector;
+    address verifier;
+    address circuitBreakerPauser;
     address feeDistributor;
     address feeOracle;
     address hashConsensus;
@@ -459,6 +480,7 @@ struct CuratedModuleConfig {
     uint256 treasuryFee;
     uint256 maxDepositsPerBlock;
     uint256 minDepositBlockDistance;
+    uint256 feeOracleConsensusVersion;
     uint256 hashConsensusInitialEpoch;
     address metaRegistry;
 }

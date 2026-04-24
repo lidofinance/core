@@ -118,12 +118,10 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS;
     address internal immutable ETF_NEW_ALLOW_CONSOLIDATION_PAIR;
     // CSM Factories
-    address internal immutable ETF_NEW_ALLOWED_MERKLE_GATES_REGISTRY_FOR_CSM;
     address internal immutable ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CSM;
     address internal immutable ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CSM;
     address internal immutable ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CSM;
     // CM Factories
-    address internal immutable ETF_NEW_ALLOWED_MERKLE_GATES_REGISTRY_FOR_CM;
     address internal immutable ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM;
     address internal immutable ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM;
     address internal immutable ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM;
@@ -148,6 +146,9 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CSM_FEE_ORACLE_IMPL;
     uint256 internal immutable CSM_FEE_ORACLE_CONSENSUS_VERSION;
     address internal immutable CSM_VETTED_GATE;
+    address internal immutable CSM_IDENTIFIED_DVT_CLUSTER_GATE;
+    address internal immutable CSM_IDENTIFIED_DVT_CLUSTER_CURVE_SETUP;
+    uint256 internal immutable CSM_IDENTIFIED_DVT_CLUSTER_BOND_CURVE_ID;
     address internal immutable CSM_VETTED_GATE_IMPL;
     address internal immutable CSM_ACCOUNTING;
     address internal immutable CSM_ACCOUNTING_IMPL;
@@ -158,18 +159,20 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CSM_STRIKES;
     address internal immutable CSM_STRIKES_IMPL;
     address internal immutable CSM_OLD_PERMISSIONLESS_GATE;
-    address internal immutable CSM_VERIFIER;
-    address internal immutable CSM_VERIFIER_V3;
-    address internal immutable CSM_PERMISSIONLESS_GATE;
+    address internal immutable CSM_OLD_VERIFIER;
+    address internal immutable CSM_NEW_VERIFIER;
+    address internal immutable CSM_NEW_PERMISSIONLESS_GATE;
+    address internal immutable CSM_OLD_EJECTOR;
     address internal immutable CSM_EJECTOR;
-    address internal immutable CSM_IDENTIFIED_COMMUNITY_STAKERS_GATE_MANAGER;
-    address internal immutable CSM_GATE_SEAL;
-    address internal immutable CSM_GENERAL_DELAYED_PENALTY_REPORTER;
-    address internal immutable CSM_PENALTIES_MANAGER;
+    address internal immutable CSM_COMMITTEE;
 
     // CMv2
     address internal immutable CURATED_MODULE;
+    address[] internal CURATED_GATES;
+    address internal immutable CURATED_PARAMETERS_REGISTRY;
     address internal immutable CURATED_ACCOUNTING;
+    address internal immutable CURATED_VERIFIER;
+    address internal immutable CURATED_CIRCUIT_BREAKER_PAUSER;
     address internal immutable CURATED_FEE_DISTRIBUTOR;
     address internal immutable CURATED_FEE_ORACLE;
     address internal immutable CURATED_STRIKES;
@@ -182,6 +185,7 @@ contract UpgradeConfig is IUpgradeConfig {
     uint256 internal immutable CURATED_TREASURY_FEE;
     uint256 internal immutable CURATED_MAX_DEPOSITS_PER_BLOCK;
     uint256 internal immutable CURATED_MIN_DEPOSIT_BLOCK_DISTANCE;
+    uint256 internal immutable CURATED_FEE_ORACLE_CONSENSUS_VERSION;
     uint256 internal immutable CURATED_HASH_CONSENSUS_INITIAL_EPOCH;
     address internal immutable CURATED_META_REGISTRY;
 
@@ -248,12 +252,10 @@ contract UpgradeConfig is IUpgradeConfig {
         EasyTrackNewFactories memory newFactories = params.newFactories;
         ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS = newFactories.UpdateStakingModuleShareLimits;
         ETF_NEW_ALLOW_CONSOLIDATION_PAIR = newFactories.AllowConsolidationPair;
-        ETF_NEW_ALLOWED_MERKLE_GATES_REGISTRY_FOR_CSM = newFactories.AllowedMerkleGatesRegistryForCSM;
         ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CSM = newFactories.SetMerkleGateTreeForCSM;
         ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CSM =
         newFactories.ReportWithdrawalsForSlashedValidatorsForCSM;
         ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CSM = newFactories.SettleGeneralDelayedPenaltyForCSM;
-        ETF_NEW_ALLOWED_MERKLE_GATES_REGISTRY_FOR_CM = newFactories.AllowedMerkleGatesRegistryForCM;
         ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM = newFactories.SetMerkleGateTreeForCM;
         ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM =
         newFactories.ReportWithdrawalsForSlashedValidatorsForCM;
@@ -297,20 +299,20 @@ contract UpgradeConfig is IUpgradeConfig {
         CSM_FEE_ORACLE_IMPL = csmUpgradeParams.feeOracleImpl;
         CSM_FEE_ORACLE_CONSENSUS_VERSION = csmUpgradeParams.feeOracleConsensusVersion;
         CSM_VETTED_GATE = csmUpgradeParams.vettedGateProxy;
+        CSM_IDENTIFIED_DVT_CLUSTER_GATE = csmUpgradeParams.identifiedDVTClusterGate;
+        CSM_IDENTIFIED_DVT_CLUSTER_CURVE_SETUP = csmUpgradeParams.identifiedDVTClusterCurveSetup;
+        CSM_IDENTIFIED_DVT_CLUSTER_BOND_CURVE_ID = csmUpgradeParams.identifiedDVTClusterBondCurveId;
         CSM_VETTED_GATE_IMPL = csmUpgradeParams.vettedGateImpl;
         CSM_ACCOUNTING_IMPL = csmUpgradeParams.accountingImpl;
         CSM_FEE_DISTRIBUTOR_IMPL = csmUpgradeParams.feeDistributorImpl;
         CSM_EXIT_PENALTIES_IMPL = csmUpgradeParams.exitPenaltiesImpl;
         CSM_STRIKES_IMPL = csmUpgradeParams.strikesImpl;
         CSM_OLD_PERMISSIONLESS_GATE = csmUpgradeParams.oldPermissionlessGate;
-        CSM_VERIFIER = csmUpgradeParams.verifier;
-        CSM_VERIFIER_V3 = csmUpgradeParams.verifierV3;
-        CSM_PERMISSIONLESS_GATE = csmUpgradeParams.permissionlessGate;
+        CSM_OLD_VERIFIER = csmUpgradeParams.oldVerifier;
+        CSM_NEW_VERIFIER = csmUpgradeParams.newVerifier;
+        CSM_NEW_PERMISSIONLESS_GATE = csmUpgradeParams.newPermissionlessGate;
         CSM_EJECTOR = csmUpgradeParams.ejector;
-        CSM_IDENTIFIED_COMMUNITY_STAKERS_GATE_MANAGER = csmUpgradeParams.identifiedCommunityStakersGateManager;
-        CSM_GATE_SEAL = csmUpgradeParams.gateSeal;
-        CSM_GENERAL_DELAYED_PENALTY_REPORTER = csmUpgradeParams.generalDelayedPenaltyReporter;
-        CSM_PENALTIES_MANAGER = csmUpgradeParams.penaltiesManager;
+        CSM_COMMITTEE = csmUpgradeParams.csmCommittee;
 
         IBaseModuleV3 csm = IBaseModuleV3(CSM);
         CSM_PARAMETERS_REGISTRY = csm.PARAMETERS_REGISTRY();
@@ -319,11 +321,15 @@ contract UpgradeConfig is IUpgradeConfig {
         CSM_FEE_DISTRIBUTOR = csm.FEE_DISTRIBUTOR();
         CSM_FEE_ORACLE = IFeeDistributorV3(CSM_FEE_DISTRIBUTOR).ORACLE();
         CSM_STRIKES = IFeeOracleV3(CSM_FEE_ORACLE).STRIKES();
+        CSM_OLD_EJECTOR = IValidatorStrikesV3(CSM_STRIKES).ejector();
 
         // CMv2
         CuratedModuleParams memory curatedModuleParams = params.curatedModule;
 
         CURATED_MODULE = curatedModuleParams.module;
+        for (uint256 i = 0; i < curatedModuleParams.curatedGates.length; ++i) {
+            CURATED_GATES.push(curatedModuleParams.curatedGates[i]);
+        }
         CURATED_MODULE_NAME = Bytes32String.toBytes32(curatedModuleParams.moduleName);
         CURATED_STAKE_SHARE_LIMIT = curatedModuleParams.stakeShareLimit;
         CURATED_PRIORITY_EXIT_SHARE_THRESHOLD = curatedModuleParams.priorityExitShareThreshold;
@@ -331,10 +337,14 @@ contract UpgradeConfig is IUpgradeConfig {
         CURATED_TREASURY_FEE = curatedModuleParams.treasuryFee;
         CURATED_MAX_DEPOSITS_PER_BLOCK = curatedModuleParams.maxDepositsPerBlock;
         CURATED_MIN_DEPOSIT_BLOCK_DISTANCE = curatedModuleParams.minDepositBlockDistance;
+        CURATED_FEE_ORACLE_CONSENSUS_VERSION = curatedModuleParams.feeOracleConsensusVersion;
         CURATED_HASH_CONSENSUS_INITIAL_EPOCH = curatedModuleParams.hashConsensusInitialEpoch;
+        CURATED_VERIFIER = curatedModuleParams.verifier;
+        CURATED_CIRCUIT_BREAKER_PAUSER = curatedModuleParams.circuitBreakerPauser;
 
         ICuratedModule curatedModule = ICuratedModule(CURATED_MODULE);
         CURATED_META_REGISTRY = curatedModule.META_REGISTRY();
+        CURATED_PARAMETERS_REGISTRY = curatedModule.PARAMETERS_REGISTRY();
         CURATED_ACCOUNTING = curatedModule.ACCOUNTING();
         CURATED_FEE_DISTRIBUTOR = curatedModule.FEE_DISTRIBUTOR();
         CURATED_FEE_ORACLE = IFeeDistributorV3(CURATED_FEE_DISTRIBUTOR).ORACLE();
@@ -362,11 +372,9 @@ contract UpgradeConfig is IUpgradeConfig {
             EasyTrackNewFactories({
                 UpdateStakingModuleShareLimits: ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS,
                 AllowConsolidationPair: ETF_NEW_ALLOW_CONSOLIDATION_PAIR,
-                AllowedMerkleGatesRegistryForCSM: ETF_NEW_ALLOWED_MERKLE_GATES_REGISTRY_FOR_CSM,
                 SetMerkleGateTreeForCSM: ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CSM,
                 ReportWithdrawalsForSlashedValidatorsForCSM: ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CSM,
                 SettleGeneralDelayedPenaltyForCSM: ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CSM,
-                AllowedMerkleGatesRegistryForCM: ETF_NEW_ALLOWED_MERKLE_GATES_REGISTRY_FOR_CM,
                 SetMerkleGateTreeForCM: ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM,
                 ReportWithdrawalsForSlashedValidatorsForCM: ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM,
                 SettleGeneralDelayedPenaltyForCM: ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM,
@@ -445,6 +453,9 @@ contract UpgradeConfig is IUpgradeConfig {
             feeOracleImpl: CSM_FEE_ORACLE_IMPL,
             feeOracleConsensusVersion: CSM_FEE_ORACLE_CONSENSUS_VERSION,
             vettedGate: CSM_VETTED_GATE,
+            identifiedDVTClusterGate: CSM_IDENTIFIED_DVT_CLUSTER_GATE,
+            identifiedDVTClusterCurveSetup: CSM_IDENTIFIED_DVT_CLUSTER_CURVE_SETUP,
+            identifiedDVTClusterBondCurveId: CSM_IDENTIFIED_DVT_CLUSTER_BOND_CURVE_ID,
             vettedGateImpl: CSM_VETTED_GATE_IMPL,
             accounting: CSM_ACCOUNTING,
             accountingImpl: CSM_ACCOUNTING_IMPL,
@@ -455,22 +466,24 @@ contract UpgradeConfig is IUpgradeConfig {
             strikes: CSM_STRIKES,
             strikesImpl: CSM_STRIKES_IMPL,
             oldPermissionlessGate: CSM_OLD_PERMISSIONLESS_GATE,
-            verifier: CSM_VERIFIER,
-            verifierV3: CSM_VERIFIER_V3,
-            permissionlessGate: CSM_PERMISSIONLESS_GATE,
+            oldVerifier: CSM_OLD_VERIFIER,
+            newVerifier: CSM_NEW_VERIFIER,
+            newPermissionlessGate: CSM_NEW_PERMISSIONLESS_GATE,
+            oldEjector: CSM_OLD_EJECTOR,
             ejector: CSM_EJECTOR,
-            identifiedCommunityStakersGateManager: CSM_IDENTIFIED_COMMUNITY_STAKERS_GATE_MANAGER,
-            gateSeal: CSM_GATE_SEAL,
-            generalDelayedPenaltyReporter: CSM_GENERAL_DELAYED_PENALTY_REPORTER,
-            penaltiesManager: CSM_PENALTIES_MANAGER
+            csmCommittee: CSM_COMMITTEE
         });
     }
 
     function getCuratedModuleConfig() external view returns (CuratedModuleConfig memory) {
         return CuratedModuleConfig({
             module: CURATED_MODULE,
+            curatedGates: CURATED_GATES,
+            parametersRegistry: CURATED_PARAMETERS_REGISTRY,
             accounting: CURATED_ACCOUNTING,
             ejector: CURATED_EJECTOR,
+            verifier: CURATED_VERIFIER,
+            circuitBreakerPauser: CURATED_CIRCUIT_BREAKER_PAUSER,
             feeDistributor: CURATED_FEE_DISTRIBUTOR,
             feeOracle: CURATED_FEE_ORACLE,
             hashConsensus: CURATED_HASH_CONSENSUS,
@@ -482,6 +495,7 @@ contract UpgradeConfig is IUpgradeConfig {
             treasuryFee: CURATED_TREASURY_FEE,
             maxDepositsPerBlock: CURATED_MAX_DEPOSITS_PER_BLOCK,
             minDepositBlockDistance: CURATED_MIN_DEPOSIT_BLOCK_DISTANCE,
+            feeOracleConsensusVersion: CURATED_FEE_ORACLE_CONSENSUS_VERSION,
             hashConsensusInitialEpoch: CURATED_HASH_CONSENSUS_INITIAL_EPOCH,
             metaRegistry: CURATED_META_REGISTRY
         });
