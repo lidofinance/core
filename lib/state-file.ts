@@ -219,6 +219,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
   }
 }
 export function getAddressValidated(contractKey: Sk, state: DeploymentState): string | null {
+  if (!state[contractKey]) return null;
   // allow error throw on missed items
   let address = getAddress(contractKey, state);
   try {

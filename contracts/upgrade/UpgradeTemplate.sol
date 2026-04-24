@@ -166,17 +166,12 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint256 public upgradeBlockNumber = UPGRADE_NOT_STARTED;
     bool public isUpgradeFinished;
 
-    // uint256 public initialOldBurnerStethSharesBalance;
-    // uint256 public initialTotalShares;
-    // uint256 public initialTotalPooledEther;
     uint256 internal initialBufferedEther;
     uint256 internal initialDepositedValidators;
     uint256 internal initialBeaconValidators;
     uint256 internal initialBeaconBalance;
     bytes32 internal initialWithdrawalCredentials;
     uint256 internal initialModulesCount;
-    address[] internal initialDSMGuardians;
-    uint256 internal initialDSMGuardianQuorum;
     address internal initialCSMEjector;
 
     //
@@ -220,8 +215,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
 
-        initialDSMGuardians = IDepositSecurityModule(c.oldDepositSecurityModule).getGuardians();
-        initialDSMGuardianQuorum = IDepositSecurityModule(c.oldDepositSecurityModule).getGuardianQuorum();
         initialCSMEjector = IValidatorStrikesV3(csm.strikes).ejector();
 
         _assertPreUpgradeState(g, c);
