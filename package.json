@@ -47,11 +47,12 @@
     "typecheck": "tsc --noEmit",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
-    "upgrade:fork-node": "bash scripts/fork-node-hardhat.sh",
+    "upgrade:fork-node": "bash scripts/run-fork-node.sh",
     "upgrade:helper:run": "bash scripts/dao-upgrade.sh",
     "upgrade:helper:run:fork": "MODE=forking yarn upgrade:helper:run",
     "upgrade:deploy:base": "STEPS_FILE=upgrade/steps-deploy-base.json yarn upgrade:helper:run",
     "upgrade:deploy:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn upgrade:helper:run",
+    "upgrade:test": "STEPS_FILE=upgrade/steps-mock-voting.json yarn upgrade:helper:run:fork",
     "postinstall": "husky"
   },
   "lint-staged": {

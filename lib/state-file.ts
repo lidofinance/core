@@ -134,6 +134,9 @@ export enum Sk {
   upgradeTemplate = "upgradeTemplate",
   upgradeVoteScript = "upgradeVoteScript",
   upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
+  // csm & cm
+  csm_CSM = "csm:CSM",
+  csm_CM = "csm:CM",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
