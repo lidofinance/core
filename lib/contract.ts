@@ -88,3 +88,8 @@ export async function encodeFunctionCall<T extends readonly unknown[] = readonly
   const contractInterface = new ethers.Interface(artifact.abi);
   return contractInterface.encodeFunctionData(method, args);
 }
+
+export async function isContractDeployed(address: string): Promise<boolean> {
+  const code = await ethers.provider.getCode(address);
+  return code !== "0x";
+}

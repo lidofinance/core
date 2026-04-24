@@ -227,6 +227,14 @@ log.scriptFinish = (filename: string) => {
   log.emptyLine();
 };
 
+log.scriptSkip = (filename: string) => {
+  if (!shouldLog("info")) return;
+
+  log.splitter();
+  log.warning(`Skipped script: ${bl(path.basename(filename))}`);
+  log.emptyLine();
+};
+
 log.done = (message: string) => {
   if (!shouldLog("info")) return;
 

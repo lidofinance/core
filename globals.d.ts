@@ -10,6 +10,9 @@ declare namespace NodeJS {
     /* Test execution mode: 'scratch' for fresh network, 'fork' for forked network */
     MODE?: "scratch" | "forking"; // default: "scratch"
 
+    /* Extends MODE=forking, if set, the tests will run in upgrade mode */
+    UPGRADE?: boolean;
+
     /* Block number to fork from. If not set, the fork will start from the latest block. */
     FORKING_BLOCK_NUMBER?: number; // default: undefined
 
@@ -94,8 +97,11 @@ declare namespace NodeJS {
     LOCAL_DEVNET_EXPLORER_API_URL?: string;
     LOCAL_DEVNET_EXPLORER_URL?: string;
 
-    /* scratch deploy environment variables */
+    /* scratch & upgrade deploy environment variables */
     NETWORK_STATE_FILE?: string;
+    /* migration steps file */
+    STEPS_FILE?: string;
+    ALLOW_SKIP_STEPS?: "true" | "false" | "1" | "0";
 
     /* hardhat plugins options */
     SKIP_CONTRACT_SIZE?: boolean;

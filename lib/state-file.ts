@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { network as hardhatNetwork } from "hardhat";
+import { ethers, network as hardhatNetwork } from "hardhat";
 import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch";
 
 const NETWORK_STATE_FILE_PREFIX = "deployed-";
@@ -209,12 +209,23 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.beaconChainDepositor:
     case Sk.vaultsAdapter:
     case Sk.easyTrack:
+    case Sk.upgradeTemporaryAdmin:
     case Sk.upgradeTemplate:
     case Sk.upgradeVoteScript:
     case Sk.gateSealFactory:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
+  }
+}
+export function getAddressValidated(contractKey: Sk, state: DeploymentState): string | null {
+  // allow error throw on missed items
+  let address = getAddress(contractKey, state);
+  try {
+    address = ethers.getAddress(address);
+    return address !== "0x0000000000000000000000000000000000000000" ? address : null;
+  } catch {
+    return null;
   }
 }
 
