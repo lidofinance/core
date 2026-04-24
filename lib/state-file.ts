@@ -274,13 +274,13 @@ export function setValueInState(key: Sk, value: unknown): DeploymentState {
   return state;
 }
 
-export function incrementGasUsed(increment: bigint | number, useStateFile = true) {
+export function incrementGasUsed(increment: bigint | number, useStateFile = true, key: Sk = Sk.scratchDeployGasUsed) {
   if (!useStateFile) {
     return;
   }
 
   const state = readNetworkState();
-  state[Sk.scratchDeployGasUsed] = (BigInt(state[Sk.scratchDeployGasUsed] || 0) + BigInt(increment)).toString();
+  state[key] = (BigInt(state[key] || 0) + BigInt(increment)).toString();
   persistNetworkState(state);
 }
 

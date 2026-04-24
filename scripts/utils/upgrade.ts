@@ -30,12 +30,13 @@ import {
   findEventsWithInterfaces,
   getCurrentBlockTimestamp,
   impersonate,
+  loadContract,
+  LoadedContract,
   log,
 } from "lib";
 import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
-import { loadContract, LoadedContract } from "lib/contract";
 import { getTxLink } from "lib/explorer";
-import { DeploymentState, getAddress, readNetworkState, Sk } from "lib/state-file";
+import { DeploymentState, getAddress, readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite";
 
@@ -51,15 +52,8 @@ export { UpgradeParameters };
 /// ---- Upgrade helpers ----
 ///
 export function readUpgradeParameters(skipValidation: boolean = false): UpgradeParameters {
-  if (!UPGRADE_PARAMETERS_FILE) {
-    throw new Error("UPGRADE_PARAMETERS_FILE is not set");
-  }
-
-  if (!fs.existsSync(UPGRADE_PARAMETERS_FILE)) {
-    throw new Error(`Upgrade parameters file not found: ${UPGRADE_PARAMETERS_FILE}`);
-  }
-
-  const rawData = fs.readFileSync(UPGRADE_PARAMETERS_FILE, "utf8");
+  const filePath = getUpgradeParametersFilePath();
+  const rawData = fs.readFileSync(filePath, "utf8");
   const parsedData = toml.parse(rawData);
 
   if (skipValidation) {
@@ -70,6 +64,66 @@ export function readUpgradeParameters(skipValidation: boolean = false): UpgradeP
     return validateUpgradeParameters(parsedData);
   } catch (error) {
     throw new Error(`Invalid upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
+  }
+}
+
+function getUpgradeParametersFilePath(): string {
+  if (!UPGRADE_PARAMETERS_FILE) {
+    throw new Error("UPGRADE_PARAMETERS_FILE is not set");
+  }
+
+  if (!fs.existsSync(UPGRADE_PARAMETERS_FILE)) {
+    throw new Error(`Upgrade parameters file not found: ${UPGRADE_PARAMETERS_FILE}`);
+  }
+
+  return UPGRADE_PARAMETERS_FILE;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getLineEnding(content: string): string {
+  return content.includes("\r\n") ? "\r\n" : "\n";
+}
+
+/**
+ * Updates a single key in TOML section while preserving the rest of the file as-is.
+ * If the key doesn't exist in the section, appends it at the end of the section.
+ */
+export function writeUpgradeEasyTrackFactoryAddress(sectionName: string, paramKey: string, address: string): void {
+  const filePath = getUpgradeParametersFilePath();
+  const content = fs.readFileSync(filePath, "utf8");
+
+  const sectionHeaderRegex = new RegExp(`^\\s*\\[${escapeRegExp(sectionName)}\\]\\s*$`, "m");
+  const sectionHeaderMatch = sectionHeaderRegex.exec(content);
+  if (!sectionHeaderMatch) {
+    throw new Error(`Section [${sectionName}] not found in ${filePath}`);
+  }
+
+  const sectionStart = sectionHeaderMatch.index + sectionHeaderMatch[0].length;
+  const contentAfterSectionHeader = content.slice(sectionStart);
+  const nextSectionMatch = /^\s*\[[^\]]+\]\s*$/m.exec(contentAfterSectionHeader);
+  const sectionEnd = nextSectionMatch ? sectionStart + nextSectionMatch.index : content.length;
+
+  const beforeSection = content.slice(0, sectionStart);
+  const sectionContent = content.slice(sectionStart, sectionEnd);
+  const afterSection = content.slice(sectionEnd);
+
+  const keyLineRegex = new RegExp(`^(\\s*${escapeRegExp(paramKey)}\\s*=\\s*")([^"]*)(".*)$`, "m");
+  let updatedSectionContent: string;
+
+  if (keyLineRegex.test(sectionContent)) {
+    updatedSectionContent = sectionContent.replace(keyLineRegex, `$1${address}$3`);
+  } else {
+    const lineEnding = getLineEnding(content);
+    const separator = sectionContent.endsWith("\n") || sectionContent.endsWith("\r\n") ? "" : lineEnding;
+    updatedSectionContent = `${sectionContent}${separator}${paramKey} = "${address}"${lineEnding}`;
+  }
+
+  const updatedContent = `${beforeSection}${updatedSectionContent}${afterSection}`;
+  if (updatedContent !== content) {
+    fs.writeFileSync(filePath, updatedContent, "utf8");
   }
 }
 
@@ -117,8 +171,20 @@ export const newCombinedAragonVoting = async (
 };
 
 export const mockAragonVoting = async (holder: HardhatEthersSigner, voteId: bigint, voteDescription: string) => {
+  const state = readNetworkState();
+  if (!voteId) {
+    voteId = state[Sk.upgradeVoteScript].voteState?.voteId;
+  }
   if (!voteId) {
     voteId = await newCombinedAragonVoting(holder, voteDescription);
+
+    // save voteId in deployed state
+    updateObjectInState(Sk.upgradeVoteScript, {
+      voteState: {
+        voteId,
+        voteDescription,
+      },
+    });
   } else {
     log("Using existing voteId:", voteId);
   }

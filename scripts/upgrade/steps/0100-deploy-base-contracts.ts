@@ -64,37 +64,33 @@ export async function main() {
   //
   //  Collect all param values
   //
-  const agentAddress = getAddress(Sk.appAgent, state);
-  const treasuryAddress = agentAddress;
-  const lidoAddress = getAddress(Sk.appLido, state);
-  const easyTrackAddress = getAddress(Sk.easyTrack, state);
-  const locatorAddress = getAddress(Sk.lidoLocator, state);
-  const stakingRouterAddress = getAddress(Sk.stakingRouter, state);
-  const accountingAddress = getAddress(Sk.accounting, state);
-  // const accountingOracleAddress = getAddress(Sk.accountingOracle, state);
-  const withdrawalVaultAddress = getAddress(Sk.withdrawalVault, state);
-  const triggerableWithdrawalsGatewayAddress = getAddress(Sk.triggerableWithdrawalsGateway, state);
-  const validatorExitDelayVerifierAddress = getAddress(Sk.validatorExitDelayVerifier, state);
-  const wstETHAddress = getAddress(Sk.wstETH, state);
-
-  const proxyContractsOwner = agentAddress;
-
   const chainSpec = state[Sk.chainSpec];
   const depositContractAddress = chainSpec.depositContract ?? chainSpec.depositContractAddress;
   if (!depositContractAddress) {
     throw new Error("Deposit contract address is missing in the state file");
   }
-  const resealManagerAddress = state[Sk.resealManager].address;
-  const circuitBreakerAddress = state[Sk.circuitBreaker].address;
 
+  const agentAddress = getAddress(Sk.appAgent, state);
+  const easyTrackAddress = getAddress(Sk.easyTrack, state);
+  const resealManagerAddress = getAddress(Sk.resealManager, state);
+  const circuitBreakerAddress = getAddress(Sk.circuitBreaker, state);
+  const locatorAddress = getAddress(Sk.lidoLocator, state);
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
+
+  const lidoAddress = await locator.lido();
+  const stakingRouterAddress = await locator.stakingRouter();
+  const accountingAddress = await locator.accounting();
+  const triggerableWithdrawalsGatewayAddress = await locator.triggerableWithdrawalsGateway();
+
+  const treasuryAddress = agentAddress;
+  const proxyContractsOwner = agentAddress;
+
   // old sanity checker
   const oldSanityChecker = await loadContract<IOracleReportSanityChecker_preV4>(
     "IOracleReportSanityChecker_preV4",
     await locator.oracleReportSanityChecker(),
   );
   const oldCheckerLimits = await oldSanityChecker.getOracleReportLimits();
-  // TODO: confirm that old values for some params are correct
   const newCheckerLimits = {
     exitedEthAmountPerDayLimit: parameters.oracleReportSanityChecker.exitedEthAmountPerDayLimit,
     appearedEthAmountPerDayLimit: parameters.oracleReportSanityChecker.appearedEthAmountPerDayLimit,
@@ -377,6 +373,7 @@ export async function main() {
 
   await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, withdrawalVaultConstructorArgs);
 
+  // todo match locator vs state
   //
   // Deploy Lido Locator new implementation
   //
@@ -392,14 +389,14 @@ export async function main() {
     treasury: await locator.treasury(),
     validatorsExitBusOracle: await locator.validatorsExitBusOracle(),
     withdrawalQueue: await locator.withdrawalQueue(),
-    withdrawalVault: withdrawalVaultAddress,
+    withdrawalVault: await locator.withdrawalVault(),
     oracleDaemonConfig: await locator.oracleDaemonConfig(),
-    validatorExitDelayVerifier: validatorExitDelayVerifierAddress,
+    validatorExitDelayVerifier: await locator.validatorExitDelayVerifier(),
     triggerableWithdrawalsGateway: triggerableWithdrawalsGatewayAddress,
     consolidationGateway: consolidationGateway.address,
     accounting: accountingAddress,
     predepositGuarantee: await locator.predepositGuarantee(),
-    wstETH: wstETHAddress,
+    wstETH: await locator.wstETH(),
     vaultHub: await locator.vaultHub(),
     vaultFactory: await locator.vaultFactory(),
     lazyOracle: await locator.lazyOracle(),
