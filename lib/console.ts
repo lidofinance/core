@@ -2,11 +2,10 @@ import readline from "node:readline";
 
 import { artifacts, ethers, network } from "hardhat";
 
-import { bl, ConvertibleToString, cy, gr, gy, log, or, rd, yg, yl } from "lib";
-
-const AUTO_CONFIRM = !!process.env.AUTO_CONFIRM;
+import { bl, ConvertibleToString, cy, gr, gy, log, or, rd, toBool, yg, yl } from "lib";
 
 export async function confirm(question: string): Promise<void> {
+  const AUTO_CONFIRM = toBool(process.env.AUTO_CONFIRM);
   if (AUTO_CONFIRM) {
     log.warning(" •", rd(`Auto-confirming!`));
     return;

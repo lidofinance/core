@@ -102,6 +102,8 @@ declare namespace NodeJS {
     /* migration steps file */
     STEPS_FILE?: string;
     ALLOW_SKIP_STEPS?: "true" | "false" | "1" | "0";
+    /* auto-confirm tx's params review prompts */
+    AUTO_CONFIRM?: "true" | "false" | "1" | "0";
 
     /* hardhat plugins options */
     SKIP_CONTRACT_SIZE?: boolean;
