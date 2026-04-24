@@ -148,7 +148,7 @@ const EasyTrackSchema = z.object({
     SetMerkleGateTreeForCM: EthereumAddressSchema,
     ReportWithdrawalsForSlashedValidatorsForCM: EthereumAddressSchema,
     SettleGeneralDelayedPenaltyForCM: EthereumAddressSchema,
-    CreateOrUpdateOperatorGroup: EthereumAddressSchema,
+    CreateOrUpdateOperatorGroupForCM: EthereumAddressSchema,
   }),
   oldFactories: z.object({
     CSMSettleElStealingPenalty: EthereumAddressSchema,

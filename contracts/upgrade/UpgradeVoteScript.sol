@@ -237,7 +237,7 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] = _addETFactoryItem(
                 "Add CreateOrUpdateOperatorGroup CM ET factory",
                 easyTrack,
-                etn.CreateOrUpdateOperatorGroup,
+                etn.CreateOrUpdateOperatorGroupForCM,
                 bytes.concat(bytes20(c.metaRegistry), bytes4(IMetaRegistry.createOrUpdateOperatorGroup.selector))
             );
         }

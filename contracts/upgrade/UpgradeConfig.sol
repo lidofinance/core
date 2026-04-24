@@ -258,7 +258,7 @@ contract UpgradeConfig is IUpgradeConfig {
         ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM =
         newFactories.ReportWithdrawalsForSlashedValidatorsForCM;
         ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM = newFactories.SettleGeneralDelayedPenaltyForCM;
-        ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP = newFactories.CreateOrUpdateOperatorGroup;
+        ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP = newFactories.CreateOrUpdateOperatorGroupForCM;
 
         // EasyTrack old factories
         EasyTrackOldFactories memory oldFactories = params.oldFactories;
@@ -370,7 +370,7 @@ contract UpgradeConfig is IUpgradeConfig {
                 SetMerkleGateTreeForCM: ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM,
                 ReportWithdrawalsForSlashedValidatorsForCM: ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM,
                 SettleGeneralDelayedPenaltyForCM: ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM,
-                CreateOrUpdateOperatorGroup: ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP
+                CreateOrUpdateOperatorGroupForCM: ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP
             }),
             EasyTrackOldFactories({
                 CSMSettleElStealingPenalty: ETF_OLD_SETTLE_EL_STEALING_PENALTY,

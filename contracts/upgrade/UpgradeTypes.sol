@@ -253,7 +253,7 @@ struct EasyTrackNewFactories {
     address SetMerkleGateTreeForCM;
     address ReportWithdrawalsForSlashedValidatorsForCM;
     address SettleGeneralDelayedPenaltyForCM;
-    address CreateOrUpdateOperatorGroup;
+    address CreateOrUpdateOperatorGroupForCM;
 }
 
 struct EasyTrackOldFactories {

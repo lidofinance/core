@@ -899,7 +899,7 @@
           "SetMerkleGateTreeForCM": "0x9BC48d538C9d8dd7a559f4460CCb2327fF39C1f4",
           "ReportWithdrawalsForSlashedValidatorsForCM": "0x612d23ba265ad1fDc62B2e3A08722668E1D0ECa3",
           "SettleGeneralDelayedPenaltyForCM": "0xd51c0d3C9BF00FF5690f901BBB8E85e976374BAE",
-          "CreateOrUpdateOperatorGroup": "0x29D272Db50946716466cf00bC7d4bc435d8Ea44E"
+          "CreateOrUpdateOperatorGroupForCM": "0x29D272Db50946716466cf00bC7d4bc435d8Ea44E"
         },
         "oldFactories": {
           "CSMSettleElStealingPenalty": "0x00000000000000000000000000000000000eee07",
