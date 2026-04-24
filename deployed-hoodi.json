@@ -356,24 +356,24 @@
   "consolidationBus": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
-      "address": "0xA481394d7f050FCe74Ba41D2D819c3acc3808f44",
+      "address": "0xe09fBcE63826468867eE66Eda491E444829E022A",
       "constructorArgs": [
-        "0x9C98cFf16A89fb6dCde0bC0Fc1FF2ac6d4E3E163",
+        "0x27Ff16a465c1A00a727dd3Dbd479c5F3De275a1f",
         "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
-        "0x4ec81af10000000000000000000000009e0a534371e3ea5651a26725008cd4507b2e0804000000000000000000000000000000000000000000000000000000000000015e000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000015180"
+        "0x4ec81af1000000000000000000000000c676167aaea6de6af3e1ed34c0595de449e0de7b000000000000000000000000000000000000000000000000000000000000015e000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000015180"
       ]
     },
     "implementation": {
       "contract": "contracts/0.8.25/consolidation/ConsolidationBus.sol",
-      "address": "0x9C98cFf16A89fb6dCde0bC0Fc1FF2ac6d4E3E163",
-      "constructorArgs": ["0xce93710b849e0dC202AaC513837e05bEA9D7DdFD"]
+      "address": "0x27Ff16a465c1A00a727dd3Dbd479c5F3De275a1f",
+      "constructorArgs": ["0xC9991Bb865d025364BCbBd99f36e85889Fb68e69"]
     }
   },
   "consolidationGateway": {
     "contract": "contracts/0.8.25/consolidation/ConsolidationGateway.sol",
-    "address": "0xce93710b849e0dC202AaC513837e05bEA9D7DdFD",
+    "address": "0xC9991Bb865d025364BCbBd99f36e85889Fb68e69",
     "constructorArgs": [
-      "0x9E0A534371e3eA5651A26725008CD4507B2E0804",
+      "0xC676167aAea6de6Af3e1ED34C0595de449E0de7b",
       "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
       2900,
       1,
@@ -386,21 +386,21 @@
   "consolidationMigrator": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
-      "address": "0x0bE7A0052cC0c4B3717DA84C0D83df1B844f7d9e",
+      "address": "0x747d357F5b6410B80Eb63406FaC5E2A91131B4f8",
       "constructorArgs": [
-        "0xD48FcD19c5ba7fF62834cCE2844FE0fAedc4f3B9",
+        "0x2A8585201BFD6830944f0bf008B774e7e32b380d",
         "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
-        "0xc4d66de80000000000000000000000009e0a534371e3ea5651a26725008cd4507b2e0804"
+        "0xc4d66de8000000000000000000000000c676167aaea6de6af3e1ed34c0595de449e0de7b"
       ]
     },
     "implementation": {
       "contract": "contracts/0.8.25/consolidation/ConsolidationMigrator.sol",
-      "address": "0xD48FcD19c5ba7fF62834cCE2844FE0fAedc4f3B9",
+      "address": "0x2A8585201BFD6830944f0bf008B774e7e32b380d",
       "constructorArgs": [
         "0xCc820558B39ee15C7C45B59390B503b83fb499A8",
-        "0xA481394d7f050FCe74Ba41D2D819c3acc3808f44",
+        "0xe09fBcE63826468867eE66Eda491E444829E022A",
         1,
-        4
+        5
       ]
     }
   },
@@ -636,7 +636,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0x9b110E022a13583679536B303d0C22467d1b567A",
+      "address": "0x2C33BE7c09bfBC8e41E7648d611d857fD4831b68",
       "constructorArgs": [
         {
           "accountingOracle": "0xcb883B1bD0a41512b42D2dB267F2A2cd919FB216",
@@ -654,7 +654,7 @@
           "oracleDaemonConfig": "0x2a833402e3F46fFC1ecAb3598c599147a78731a9",
           "validatorExitDelayVerifier": "0xa5F5A9360275390fF9728262a29384399f38d2f0",
           "triggerableWithdrawalsGateway": "0x6679090D92b08a2a686eF8614feECD8cDFE209db",
-          "consolidationGateway": "0xce93710b849e0dC202AaC513837e05bEA9D7DdFD",
+          "consolidationGateway": "0xC9991Bb865d025364BCbBd99f36e85889Fb68e69",
           "accounting": "0x9b5b78D1C9A3238bF24662067e34c57c83E8c354",
           "predepositGuarantee": "0xa5F55f3402beA2B14AE15Dae1b6811457D43581d",
           "wstETH": "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
@@ -801,7 +801,7 @@
   "resealManager": {
     "address": "0x05172CbCDb7307228F781436b327679e4DAE166B"
   },
-  "scratchDeployGasUsed": "102759346",
+  "scratchDeployGasUsed": "111867134",
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleTypeId": "curated-onchain-v1",
@@ -897,7 +897,7 @@
   },
   "upgradeTemporaryAdmin": {
     "contract": "contracts/upgrade/UpgradeTemporaryAdmin.sol",
-    "address": "0x9E0A534371e3eA5651A26725008CD4507B2E0804",
+    "address": "0xC676167aAea6de6Af3e1ED34C0595de449E0de7b",
     "constructorArgs": ["0x0534aA41907c9631fae990960bCC72d75fA7cfeD"]
   },
   "v3Template": {
