@@ -409,11 +409,9 @@ contract UpgradeVoteScript is OmnibusBase {
                 )
             });
 
-            items[i++] = _item({
-                description: "Register CM Committee as CircuitBreaker Pauser for ConsolidationGateway",
-                to: g.circuitBreaker,
-                data: abi.encodeCall(ICircuitBreaker.registerPauser, (c.consolidationGateway, c.curatedModuleCommittee))
-            });
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, c.curatedModuleCommittee
+            );
         }
 
         //
@@ -509,7 +507,10 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke VERIFIER_ROLE from old verifier", to: csm, role: VERIFIER_ROLE, account: c.oldVerifier
+                description: "Revoke VERIFIER_ROLE from old verifier",
+                to: csm,
+                role: VERIFIER_ROLE,
+                account: c.oldVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -558,12 +559,9 @@ contract UpgradeVoteScript is OmnibusBase {
                 account: c.csmCommittee
             });
 
-            items[i++] = _registerCircuitBreakerPauserItem(
-                "CSM new verifier", g.circuitBreaker, c.newVerifier, c.csmCommittee
-            );
-            items[i++] = _registerCircuitBreakerPauserItem(
-                "CSM Ejector", g.circuitBreaker, c.ejector, c.csmCommittee
-            );
+            items[i++] =
+                _registerCircuitBreakerPauserItem("CSM new verifier", g.circuitBreaker, c.newVerifier, c.csmCommittee);
+            items[i++] = _registerCircuitBreakerPauserItem("CSM Ejector", g.circuitBreaker, c.ejector, c.csmCommittee);
             items[i++] = _registerCircuitBreakerPauserItem(
                 "CSM identified DVT cluster gate", g.circuitBreaker, c.identifiedDVTClusterGate, c.csmCommittee
             );
@@ -824,11 +822,7 @@ contract UpgradeVoteScript is OmnibusBase {
         });
     }
 
-    function _setMerkleGateTreePermissions(address[] memory gates)
-        private
-        pure
-        returns (bytes memory permissions)
-    {
+    function _setMerkleGateTreePermissions(address[] memory gates) private pure returns (bytes memory permissions) {
         for (uint256 i = 0; i < gates.length; ++i) {
             if (gates[i] == address(0)) revert InvalidMerkleGateAddress();
             permissions = bytes.concat(permissions, bytes20(gates[i]), bytes4(IMerkleGate.setTreeParams.selector));
