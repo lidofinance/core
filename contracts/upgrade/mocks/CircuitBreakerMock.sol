@@ -5,17 +5,23 @@ import {ICircuitBreaker} from "contracts/common/interfaces/ICircuitBreaker.sol";
 import {IPausableUntil} from "contracts/common/interfaces/IPausableUntil.sol";
 
 contract CircuitBreakerMock is ICircuitBreaker {
-    error NotPauser(address caller, address pausable, address expectedPauser);
+    error SenderNotPauser();
+    error PauseFailed();
 
+    uint256 internal immutable PAUSE_DURATION;
     mapping(address pausable => address pauser) private _pausers;
 
-    function pause(address _pausable) external {
-        address pauser = _pausers[_pausable];
-        if (msg.sender != pauser) {
-            revert NotPauser(msg.sender, _pausable, pauser);
-        }
+    constructor(uint256 _duration) {
+        PAUSE_DURATION = _duration;
+    }
 
-        IPausableUntil(_pausable).pauseFor(60); // 60 sec
+    function pause(address _pausable) external {
+        if (msg.sender != _pausers[_pausable]) revert SenderNotPauser();
+
+        _pausers[_pausable] = address(0);
+        IPausableUntil pausable = IPausableUntil(_pausable);
+        pausable.pauseFor(PAUSE_DURATION);
+        if (!pausable.isPaused()) revert PauseFailed();
     }
 
     function registerPauser(address _pausable, address _newPauser) external {

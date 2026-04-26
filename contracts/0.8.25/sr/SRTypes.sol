@@ -10,7 +10,7 @@ import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/Enumerab
 
 interface ILido {
     function getDepositableEther() external view returns (uint256);
-    function withdrawDepositableEther(uint256 _amount, uint256 _depositsCount) external;
+    function withdrawDepositableEther(uint256 _amount, uint256 _seedDepositsCount) external;
 }
 
 interface IAccountingOracle {

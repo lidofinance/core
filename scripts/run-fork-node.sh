@@ -2,7 +2,9 @@
 set -e +u
 set -o pipefail
 
-. .env
+if [ -f .env ]; then
+  . .env
+fi
 
 if [[ -z ${NETWORK} ]]; then
   echo "Error: Environment variable NETWORK must be set"

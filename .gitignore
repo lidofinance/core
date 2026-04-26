@@ -33,7 +33,9 @@ accounts.json
 deployed-local.json
 deployed-local-devnet.json
 deployed-hardhat.json
-deployed-mainnet-upgrade.json
+deployed-*-upgrade.json
 **/upgrade-params-local.toml
+**/upgrade-params-*-upgrade.toml
+
 # MacOS
 .DS_Store

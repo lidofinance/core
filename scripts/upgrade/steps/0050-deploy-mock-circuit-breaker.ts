@@ -14,5 +14,5 @@ export async function main() {
   log.splitter();
   log.header("[Mocks] Deploy CircuitBreakerMock contract");
 
-  await deployWithoutProxy(Sk.circuitBreaker, "CircuitBreakerMock", deployer, []);
+  await deployWithoutProxy(Sk.circuitBreaker, "CircuitBreakerMock", deployer, [60]);
 }

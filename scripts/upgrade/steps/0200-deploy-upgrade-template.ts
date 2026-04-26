@@ -92,7 +92,7 @@ export async function main() {
       // TopUp GW
       topUpGatewayImpl: state[Sk.topUpGateway].implementation.address,
       topUpGateway: getAddress(Sk.topUpGateway, state),
-      topUpGatewayDepositor: parameters.topUpGateway.depositor,
+      topUpGatewayDepositor: parameters.topUpGateway.depositor!,
 
       // TW GW
       twMaxExitRequestsLimit: parameters.triggerableWithdrawalsGateway.maxExitRequestsLimit,
@@ -111,7 +111,7 @@ export async function main() {
       consolidationBus: getAddress(Sk.consolidationBus, state),
 
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
-      curatedModuleCommittee: parameters.consolidationMigrator.committee,
+      curatedModuleCommittee: parameters.consolidationMigrator.committee!,
 
       lidoDepositsReserveTarget: parameters.lido.lidoDepositsReserveTarget,
     },

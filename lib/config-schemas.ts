@@ -103,7 +103,7 @@ const ConsolidationBusSchema = z.object({
 const ConsolidationMigratorSchema = z.object({
   sourceModuleId: PositiveIntSchema,
   targetModuleId: PositiveIntSchema,
-  committee: EthereumAddressSchema,
+  committee: EthereumAddressSchema.optional(),
 });
 
 // Top-up gateway schema
@@ -116,7 +116,7 @@ const TopUpGatewaySchema = z.object({
   gIFirstValidatorPrev: HexStringSchema,
   gIFirstValidatorCurr: HexStringSchema,
   pivotSlot: NonNegativeIntSchema,
-  depositor: EthereumAddressSchema,
+  depositor: EthereumAddressSchema.optional(),
 });
 
 const StakingRouterSchema = z.object({

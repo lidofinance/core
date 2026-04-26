@@ -426,9 +426,9 @@ export async function main() {
     resealManagerAddress,
     circuitBreakerAddress,
     consolidationMigrator.address,
-    parameters.consolidationMigrator.committee,
+    parameters.consolidationMigrator.committee!,
     consolidationBus.address,
-    parameters.topUpGateway.depositor,
+    parameters.topUpGateway.depositor!,
     await locator.depositSecurityModule(),
   ];
 
@@ -445,9 +445,9 @@ export async function main() {
       resealManagerAddress,
       circuitBreakerAddress,
       consolidationMigrator.address,
-      parameters.consolidationMigrator.committee,
+      parameters.consolidationMigrator.committee!,
       consolidationBus.address,
-      parameters.topUpGateway.depositor,
+      parameters.topUpGateway.depositor!,
       await locator.depositSecurityModule(),
     ],
     {

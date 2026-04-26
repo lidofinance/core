@@ -9,7 +9,7 @@ import {
   TriggerableWithdrawalsGateway,
 } from "typechain-types";
 
-import { getContractPath, loadContract } from "lib/contract";
+import { encodeFunctionCall, getContractPath, InitializeArgs, loadContract } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
   deployContract,
@@ -173,12 +173,7 @@ export async function main() {
   });
 
   const stakingRouterParams = state[Sk.stakingRouter].deployParameters;
-  const stakingRouterInterface = await ethers.getContractFactory("StakingRouter");
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
-  const stakingRouterInitData = stakingRouterInterface.interface.encodeFunctionData("initialize", [
-    admin,
-    withdrawalCredentials,
-  ]);
 
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
@@ -194,7 +189,10 @@ export async function main() {
         SRLib: srLib.address,
       },
     },
-    stakingRouterInitData,
+    await encodeFunctionCall<InitializeArgs<StakingRouter>>("StakingRouter", "initialize", [
+      admin,
+      withdrawalCredentials,
+    ]),
   );
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
 
@@ -224,15 +222,6 @@ export async function main() {
   //
 
   const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
-  const topUpGatewayInterface = await ethers.getContractFactory("TopUpGateway");
-  const topUpGatewayInitData = topUpGatewayInterface.interface.encodeFunctionData("initialize", [
-    admin,
-    topUpGatewayParams.maxValidatorsPerTopUp,
-    topUpGatewayParams.minBlockDistance,
-    topUpGatewayParams.maxRootAge,
-    topUpGatewayParams.targetBalanceGwei,
-    topUpGatewayParams.minTopUpGwei,
-  ]);
 
   const topUpGateway_ = await deployBehindOssifiableProxy(
     Sk.topUpGateway,
@@ -249,7 +238,14 @@ export async function main() {
     null, // implementation
     true, // withStateFile
     undefined, // factoryOptions
-    topUpGatewayInitData,
+    await encodeFunctionCall<InitializeArgs<TopUpGateway>>("TopUpGateway", "initialize", [
+      admin,
+      topUpGatewayParams.maxValidatorsPerTopUp,
+      topUpGatewayParams.minBlockDistance,
+      topUpGatewayParams.maxRootAge,
+      topUpGatewayParams.targetBalanceGwei,
+      topUpGatewayParams.minTopUpGwei,
+    ]),
   );
   await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
 
@@ -346,6 +342,7 @@ export async function main() {
   // Deploy Triggerable Withdrawals Gateway
   //
 
+  const triggerableWithdrawalsGatewayParams = state[Sk.triggerableWithdrawalsGateway].deployParameters;
   const triggerableWithdrawalsGateway_ = await deployWithoutProxy(
     Sk.triggerableWithdrawalsGateway,
     "TriggerableWithdrawalsGateway",
@@ -353,9 +350,9 @@ export async function main() {
     [
       admin,
       locator.address,
-      validatorsExitBusOracleParams.maxExitRequestsLimit,
-      validatorsExitBusOracleParams.exitsPerFrame,
-      validatorsExitBusOracleParams.frameDurationInSec,
+      triggerableWithdrawalsGatewayParams.maxExitRequestsLimit,
+      triggerableWithdrawalsGatewayParams.exitsPerFrame,
+      triggerableWithdrawalsGatewayParams.frameDurationInSec,
     ],
   );
   await makeTx(

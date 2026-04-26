@@ -2,6 +2,8 @@
 pragma solidity 0.8.25;
 
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
+import {IAccessControlEnumerable as IAccessControlEnumerableV4} from "@openzeppelin/contracts-v4.4/access/IAccessControlEnumerable.sol";
+
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ModuleStateConfig, StakingModuleConfig} from "contracts/0.8.25/sr/SRTypes.sol";
@@ -37,7 +39,7 @@ interface ITimeConstraints {
     function checkTimeWithinDayTimeAndEmit(uint32 startDayTime, uint32 endDayTime) external;
 }
 
-interface IBaseOracle is IAccessControlEnumerable, IVersioned {
+interface IBaseOracle is IAccessControlEnumerableV4, IVersioned {
     function getConsensusContract() external view returns (address);
     function getConsensusVersion() external view returns (uint256);
 }
