@@ -2,11 +2,11 @@
 pragma solidity 0.8.25;
 
 import {ICircuitBreaker} from "contracts/common/interfaces/ICircuitBreaker.sol";
-
-error NotPauser(address caller, address pausable, address expectedPauser);
-error PauseCallFailed(address pausable);
+import {IPausableUntil} from "contracts/common/interfaces/IPausableUntil.sol";
 
 contract CircuitBreakerMock is ICircuitBreaker {
+    error NotPauser(address caller, address pausable, address expectedPauser);
+
     mapping(address pausable => address pauser) private _pausers;
 
     function pause(address _pausable) external {
@@ -15,10 +15,7 @@ contract CircuitBreakerMock is ICircuitBreaker {
             revert NotPauser(msg.sender, _pausable, pauser);
         }
 
-        (bool success,) = _pausable.call(abi.encodeWithSignature("pauseFor(uint256)", 60)); // 60 sec
-        if (!success) {
-            revert PauseCallFailed(_pausable);
-        }
+        IPausableUntil(_pausable).pauseFor(60); // 60 sec
     }
 
     function registerPauser(address _pausable, address _newPauser) external {

@@ -7,7 +7,7 @@ pragma solidity >=0.4.24 <0.9.0;
 
 /// @notice Minimal stub for IEVMScriptFactory.
 contract EasyTrackFactoryMock {
-    function createEVMScript(address _creator, bytes memory _evmScriptCallData) external returns (bytes memory) {
+    function createEVMScript(address, bytes memory _evmScriptCallData) external returns (bytes memory) {
         return _evmScriptCallData;
     }
 }

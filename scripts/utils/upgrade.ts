@@ -1,27 +1,11 @@
-import {
-  ContractTransactionReceipt,
-  ContractTransactionResponse,
-  Log,
-  LogDescription,
-  TransactionReceipt,
-  TransactionResponse,
-} from "ethers";
+import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
 import fs from "fs";
 import { getMode } from "hardhat.helpers";
 
 import * as toml from "@iarna/toml";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  IDualGovernance,
-  ITimelock,
-  Lido,
-  StakingRouter,
-  TokenManager,
-  UpgradeTemplate,
-  UpgradeVoteScript,
-  Voting,
-} from "typechain-types";
+import { IDualGovernance, ITimelock, TokenManager, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types";
 
 import {
   advanceChainTime,
@@ -29,6 +13,7 @@ import {
   ether,
   findEventsWithInterfaces,
   getCurrentBlockTimestamp,
+  getSignerOrImpersonate,
   impersonate,
   loadContract,
   LoadedContract,
@@ -36,15 +21,18 @@ import {
 } from "lib";
 import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
 import { getTxLink } from "lib/explorer";
-import { DeploymentState, getAddress, readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { DeploymentState, getAddress, Sk, updateObjectInState } from "lib/state-file";
 
 import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite";
 
 import { encodeCallScript, VoteItem } from "./omnibus";
 
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
-const PROPOSAL_ID = process.env.PROPOSAL_ID || "";
+const PROPOSAL_ID = BigInt(process.env.PROPOSAL_ID || "0");
 const PROPOSAL_METADATA = process.env.PROPOSAL_METADATA || "proposal-metadata";
+const VOTE_ID = BigInt(process.env.VOTE_ID || "0");
+const VOTE_DESCRIPTION = process.env.VOTE_DESCRIPTION || "vote-description";
+const VOTE_MODE = process.env.VOTE_MODE || "dg"; // DG mode by default
 
 export { UpgradeParameters };
 
@@ -127,56 +115,23 @@ export function writeUpgradeEasyTrackFactoryAddress(sectionName: string, paramKe
   }
 }
 
-export const newCombinedAragonVoting = async (
-  holder: HardhatEthersSigner,
-  voteDescription: string,
-): Promise<bigint> => {
-  const { tm, voting, voteScript } = await loadCtx();
-  let voteItems: VoteItem[] = [];
-  // dg, et, any
-  const mode = process.env.VOTE_MODE || "";
+export const mockAragonVoting = async (state: DeploymentState) => {
+  const holderAddress = process.env.HOLDER || process.env.DEPLOYER || "";
+  const holder = await getSignerOrImpersonate(holderAddress, ether("100"));
+  log("Starting mock Aragon voting...");
 
-  log("Creating new vote with description:", voteDescription);
-  if (mode !== "dg") {
-    const items = (await voteScript.getVotingVoteItems()) as VoteItem[];
-    voteItems = voteItems.concat(items);
-  }
+  let voteId = VOTE_ID;
 
-  if (mode !== "et") {
-    const items = (await voteScript.getVoteItemsPacked()) as VoteItem[];
-    voteItems = voteItems.concat(items);
-  }
-  log("items:");
-  log(voteItems.map(({ description }) => description));
-  const evmScript = encodeCallScript(voteItems.map(({ call }) => ({ to: call.to, data: call.data })));
-  const evmScriptNewVote = encodeCallScript([
-    {
-      to: voting.address,
-      data: voting.interface.encodeFunctionData("newVote(bytes,string,bool,bool)", [
-        evmScript,
-        voteDescription,
-        true,
-        true,
-      ]),
-    },
-  ]);
-
-  // console.log("estimateGas newVote", await tm.connect(holder).forward.estimateGas(evmScriptNewVote));
-  log("Forwarding evmScript via TokenManager to create a new vote...");
-  const tx = await tm.connect(holder).forward(evmScriptNewVote);
-  const receipt = await _tx(tx);
-  const voteId = await findEventsWithInterfaces(receipt, "StartVote", [voting.interface])[0].args.voteId;
-  log.success("New vote created. voteId:", voteId);
-  return voteId;
-};
-
-export const mockAragonVoting = async (holder: HardhatEthersSigner, voteId: bigint, voteDescription: string) => {
-  const state = readNetworkState();
   if (!voteId) {
+    // try to get voteId from state
     voteId = state[Sk.upgradeVoteScript].voteState?.voteId;
+  } else {
+    log.warning("Using provided voteId:", voteId);
   }
   if (!voteId) {
-    voteId = await newCombinedAragonVoting(holder, voteDescription);
+    // create new vote
+    const voteDescription = VOTE_DESCRIPTION;
+    voteId = await newAragonVoting(state, holder, voteDescription);
 
     // save voteId in deployed state
     updateObjectInState(Sk.upgradeVoteScript, {
@@ -186,17 +141,77 @@ export const mockAragonVoting = async (holder: HardhatEthersSigner, voteId: bigi
       },
     });
   } else {
-    log("Using existing voteId:", voteId);
+    log.warning("Using saved in state voteId:", voteId);
   }
-  const { voting } = await loadCtx();
+
+  let receipt = await mockEnactAragonVoting(state, voteId, holder);
+
+  if (VOTE_MODE === "dg") {
+    const { dg } = await upgCtx(state);
+    const proposalId = findEventsWithInterfaces(receipt, "ProposalSubmitted", [dg.interface])[0].args.proposalId;
+    log.success("submitted proposalId:", proposalId);
+    const agent = await impersonate(getAddress(Sk.appAgent, state), ether("100"));
+    receipt = await mockEnactDGProposal(state, proposalId, agent);
+  }
+  const { template } = await upgCtx(state);
+  const event = findEventsWithInterfaces(receipt, "UpgradeFinished", [template.interface])[0];
+  if (!event) {
+    throw new Error("UpgradeFinished event not found");
+  }
+};
+
+async function newAragonVoting(
+  state: DeploymentState,
+  holder: HardhatEthersSigner,
+  voteDescription: string,
+): Promise<bigint> {
+  const { tm, voting, voteScript } = await upgCtx(state);
+  let voteItems: VoteItem[] = [];
+  let evmScriptNewVote;
+  if (VOTE_MODE === "dg") {
+    evmScriptNewVote = await voteScript.getNewVoteCallBytecode(VOTE_DESCRIPTION, PROPOSAL_METADATA);
+  } else {
+    log("Creating new vote (no DG):", voteDescription);
+    if (VOTE_MODE !== "skipVotingItems") {
+      const items = (await voteScript.getVotingVoteItems()) as VoteItem[];
+      voteItems = voteItems.concat(items);
+    }
+
+    if (VOTE_MODE !== "skipDGItems") {
+      const items = (await voteScript.getVoteItems()) as VoteItem[];
+      voteItems = voteItems.concat(items);
+    }
+    log("items:");
+    log(voteItems.map(({ description }) => description));
+    const evmScript = encodeCallScript(voteItems.map(({ call }) => ({ to: call.to, data: call.data })));
+    evmScriptNewVote = encodeCallScript([
+      {
+        to: voting.address,
+        data: voting.interface.encodeFunctionData("newVote(bytes,string,bool,bool)", [
+          evmScript,
+          voteDescription,
+          false,
+          false,
+        ]),
+      },
+    ]);
+  }
+
+  log("Forwarding evmScript via TokenManager to create a new vote...");
+  const tx = await tm.connect(holder).forward(evmScriptNewVote);
+  const receipt = await _tx(tx);
+  const voteId = findEventsWithInterfaces(receipt, "StartVote", [voting.interface])[0].args.voteId;
+  log.success("New vote created. voteId:", voteId);
+  return voteId;
+}
+
+async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, holder: HardhatEthersSigner) {
+  const { voting } = await upgCtx(state);
 
   const vote = await voting.getVote(voteId);
-  if (!vote.startDate) {
-    log.error("Vote with id", voteId, "does not exist");
-    return;
-  } else if (vote.executed) {
-    log.warning("Vote is already executed, nothing to do");
-    return;
+
+  if (!vote.startDate || vote.executed) {
+    throw new Error(`VoteId ${voteId} does not exist or already executed`);
   }
 
   if ((await voting.canVote(voteId, holder)) && (await voting.getVoterState(voteId, holder)) !== 1n) {
@@ -212,11 +227,6 @@ export const mockAragonVoting = async (holder: HardhatEthersSigner, voteId: bigi
     const voteTime = await voting.voteTime();
     const endTime = vote.startDate + voteTime;
     const currentTime = await getCurrentBlockTimestamp();
-    console.log({
-      currentTime,
-      voteTime,
-      endTime,
-    });
     if (currentTime < endTime) {
       const timeToAdvance = endTime - currentTime + 60n;
       log.warning(`Advancing chain time by ${timeToAdvance} seconds to reach vote start time...`);
@@ -230,40 +240,108 @@ export const mockAragonVoting = async (holder: HardhatEthersSigner, voteId: bigi
     const receipt = await _tx(execTx);
     log.success("executed voteId:", voteId);
 
-    const { template, lido, stakingRouter } = await loadCtx();
-    const { eventsByContract, skipped } = parseLEventsWithContracts(receipt.logs, [
-      template,
-      lido,
-      stakingRouter,
-      voting,
-    ]);
-    if (skipped.length > 0) {
-      log.warning("not parsed logs:", skipped.length);
+    if (receipt.gasUsed > FUSAKA_TX_GAS_LIMIT) {
+      throw new Error("Gas used exceeds FUSAKA_TX_GAS_LIMIT");
     }
 
-    console.log("Events:");
-    logContractEvents("UpgradeTemplate", eventsByContract[template.address]);
-    // logContractEvents("Lido", eventsByContract[lido.address]);
-    // logContractEvents("StakingRouter", eventsByContract[stakingRouter.address]);
-    // logContractEvents("Voting", eventsByContract[voting.address]);
+    return receipt;
   } else {
-    log.warning("VoteId", voteId, "is not ready for execution");
+    throw new Error(`VoteId ${voteId} is not ready for execution`);
   }
-};
+}
 
-export async function mockDGAragonVoting(state: DeploymentState): Promise<{
-  proposalId: bigint;
-  scheduleReceipt: TransactionReceipt | null;
-  executeReceipt: TransactionReceipt | null;
-}> {
-  log("Starting mock Aragon voting...");
+async function mockEnactDGProposal(state: DeploymentState, proposalId: bigint, executor: HardhatEthersSigner) {
+  const { dg, timelock } = await upgCtx(state);
 
-  // https://dg.lido.fi/proposals/{proposalId}
-  let proposalId = BigInt(PROPOSAL_ID ?? "0");
+  const afterSubmitDelay = await timelock.getAfterSubmitDelay();
+  const afterScheduleDelay = await timelock.getAfterScheduleDelay();
+
+  let { status } = await timelock.getProposalDetails(proposalId);
+
+  if (status < 1n || status > 2n) {
+    throw new Error("Proposal not submitted or already executed");
+  }
+
+  if (status == 1n) {
+    log("Proposal submitted, try for schedule...");
+    let canSchedule = await timelock.canSchedule(proposalId);
+    if (!canSchedule) {
+      await advanceChainTime(afterSubmitDelay);
+      canSchedule = await timelock.canSchedule(proposalId);
+      if (!canSchedule) {
+        throw new Error("Proposal can't be scheduled");
+      }
+    }
+
+    const scheduleTx = await dg.connect(executor).scheduleProposal(proposalId);
+    const scheduleReceipt = (await scheduleTx.wait())!;
+    log.success("Proposal scheduled: gas used", scheduleReceipt.gasUsed);
+    ({ status } = await timelock.getProposalDetails(proposalId));
+  }
+
+  if (status == 2n) {
+    log("Proposal scheduled, try for execute...");
+    let canExecute = await timelock.canExecute(proposalId);
+    if (!canExecute) {
+      await advanceChainTime(afterScheduleDelay);
+      canExecute = await timelock.canExecute(proposalId);
+      if (!canExecute) {
+        throw new Error("Proposal can't be executed");
+      }
+    }
+
+    let execTx: ContractTransactionResponse;
+    let revertedDueToTimeConstraints: boolean = true;
+    let attempts: number = 0;
+    let lastError: unknown;
+
+    while (revertedDueToTimeConstraints && attempts < 24) {
+      try {
+        execTx = await timelock.connect(executor).execute(proposalId);
+        revertedDueToTimeConstraints = false;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (e: any) {
+        // const data = e?.data ?? e?.error?.data ?? e?.revert?.data;
+        // if (data) {
+        //   try {
+        //     const { name, args } = template.interface.parseError(data)!;
+        //     log.error("Error name:", name);
+        //     log.error("Error args:", args);
+        //   } catch {
+        //     log.error("Can't parse error:", data);
+        //   }
+        // }
+
+        await advanceChainTime(ONE_HOUR);
+        attempts++;
+        lastError = e;
+      }
+    }
+    if (revertedDueToTimeConstraints) {
+      log.error("Failed to execute proposal", proposalId);
+      throw lastError;
+    }
+    // const execTx = await timelock.connect(executor).execute(proposalId);
+    const receipt = await _tx(execTx!);
+    log.success("executed proposalId:", proposalId);
+
+    if (receipt.gasUsed > FUSAKA_TX_GAS_LIMIT) {
+      throw new Error("Gas used exceeds FUSAKA_TX_GAS_LIMIT");
+    }
+    return receipt;
+  }
+
+  throw new Error("Proposal not scheduled");
+}
+
+export async function mockDGAragonVoting(state: DeploymentState) {
+  log("Starting mock DG Aragon voting...");
+
+  let proposalId = PROPOSAL_ID;
 
   const agent = await impersonate(getAddress(Sk.appAgent, state), ether("100"));
 
-  const { template, dg, voteScript: vs, timelock } = await loadCtx();
+  const { dg, voteScript } = await upgCtx(state);
 
   const proposers = await dg.getProposers();
   if (!proposers.length) {
@@ -271,20 +349,12 @@ export async function mockDGAragonVoting(state: DeploymentState): Promise<{
   }
   const proposer = await impersonate(proposers[0].account, ether("100"));
 
-  log.info("Contracts prepared for DG execution", {
-    voteScript: vs.address,
-    template: template.address,
-    dualGovernance: dg.address,
-    timelock: timelock.address,
-    proposer: proposer.address,
-  });
-
   if (proposalId) {
     log.warning("Using provided proposal ID:", proposalId);
   } else {
     // const evmScript =   await script.getEVMScript(proposalMetadata);
     // console.log(evmScript);
-    const dgItems = await vs.getVoteItems();
+    const dgItems = await voteScript.getVoteItems();
     const proposalMetadata = PROPOSAL_METADATA;
     const proposalCalls = dgItems.map(({ call: { to, data } }) => ({ target: to, value: 0n, payload: data }));
     log.info("Collect DG proposal", {
@@ -304,90 +374,12 @@ export async function mockDGAragonVoting(state: DeploymentState): Promise<{
     log.success("Proposal submit gas used", submitReceipt.gasUsed);
   }
 
-  const afterSubmitDelay = await timelock.getAfterSubmitDelay();
-  const afterScheduleDelay = await timelock.getAfterScheduleDelay();
-
-  let scheduleReceipt: TransactionReceipt | null = null;
-  let executeReceipt: TransactionReceipt | null = null;
-
-  let { status } = await timelock.getProposalDetails(proposalId);
-
-  if (status < 1n || status > 2n) {
-    throw new Error("Proposal not submitted or already executed");
+  const receipt = await mockEnactDGProposal(state, proposalId, agent);
+  const { template } = await upgCtx(state);
+  const event = findEventsWithInterfaces(receipt, "UpgradeFinished", [template.interface])[0];
+  if (!event) {
+    throw new Error("UpgradeFinished event not found");
   }
-
-  if (status == 1n) {
-    log.info("Proposal submitted, try for schedule...");
-    let canSchedule = await timelock.canSchedule(proposalId);
-    if (!canSchedule) {
-      await advanceChainTime(afterSubmitDelay);
-      canSchedule = await timelock.canSchedule(proposalId);
-      log.info("time pass: canSchedule", { canSchedule });
-      if (!canSchedule) {
-        throw new Error("Proposal can't be scheduled");
-      }
-    }
-
-    const scheduleTx = await dg.connect(agent).scheduleProposal(proposalId);
-    scheduleReceipt = (await scheduleTx.wait())!;
-    log.success("Proposal scheduled: gas used", scheduleReceipt.gasUsed);
-    ({ status } = await timelock.getProposalDetails(proposalId));
-  }
-
-  if (status == 2n) {
-    log.info("Proposal scheduled, try for execute...");
-    let canExecute = await timelock.canExecute(proposalId);
-    if (!canExecute) {
-      await advanceChainTime(afterScheduleDelay);
-      canExecute = await timelock.canExecute(proposalId);
-      log.info("time pass: canExecute", { canExecute });
-      if (!canExecute) {
-        throw new Error("Proposal can't be executed");
-      }
-    }
-
-    let executeTx: TransactionResponse;
-    let revertedDueToTimeConstraints: boolean = true;
-    let attempts: number = 0;
-    let lastError: unknown;
-
-    while (revertedDueToTimeConstraints && attempts < 24) {
-      try {
-        log.info("exec try", { attempts });
-        executeTx = await timelock.connect(agent).execute(proposalId);
-        revertedDueToTimeConstraints = false;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (e: any) {
-        const data = e?.data ?? e?.error?.data ?? e?.revert?.data;
-        if (data) {
-          try {
-            const { name, args } = template.interface.parseError(data)!;
-            log.error("Error name:", name);
-            log.error("Error args:", args);
-          } catch {
-            log.error("Can't parse error:", data);
-          }
-        }
-
-        await advanceChainTime(ONE_HOUR);
-        attempts++;
-        lastError = e;
-      }
-    }
-    if (revertedDueToTimeConstraints) {
-      log.error("Failed to execute proposal", proposalId);
-      throw lastError;
-    }
-
-    executeReceipt = (await executeTx!.wait())!;
-    log.success("Proposal executed: gas used", executeReceipt.gasUsed);
-
-    if (executeReceipt.gasUsed > FUSAKA_TX_GAS_LIMIT) {
-      throw new Error("Gas used exceeds FUSAKA_TX_GAS_LIMIT");
-    }
-  }
-
-  return { proposalId, scheduleReceipt, executeReceipt };
 }
 
 /// ----  helpers ----
@@ -399,26 +391,21 @@ type Ctx = {
   template: LoadedContract<UpgradeTemplate>;
   voteScript: LoadedContract<UpgradeVoteScript>;
   timelock: LoadedContract<ITimelock>;
-  lido: LoadedContract<Lido>;
-  stakingRouter: LoadedContract<StakingRouter>;
 };
 
 let ctxPromise: Promise<Ctx> | undefined;
 
-export const loadCtx = (): Promise<Ctx> => {
+export const upgCtx = (state: DeploymentState): Promise<Ctx> => {
   if (!ctxPromise) {
     ctxPromise = (async () => {
       try {
-        const state = readNetworkState();
-        const [tm, dg, voting, template, voteScript, timelock, lido, stakingRouter] = await Promise.all([
+        const [tm, dg, voting, template, voteScript, timelock] = await Promise.all([
           loadContract<TokenManager>("TokenManager", getAddress(Sk.appTokenManager, state)),
           loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state)),
           loadContract<Voting>("Voting", getAddress(Sk.appVoting, state)),
           loadContract<UpgradeTemplate>("UpgradeTemplate", getAddress(Sk.upgradeTemplate, state)),
           loadContract<UpgradeVoteScript>("UpgradeVoteScript", getAddress(Sk.upgradeVoteScript, state)),
           loadContract<ITimelock>("ITimelock", getAddress(Sk.dgEmergencyProtectedTimelock, state)),
-          loadContract<Lido>("Lido", getAddress(Sk.appLido, state)),
-          loadContract<StakingRouter>("StakingRouter", getAddress(Sk.stakingRouter, state)),
         ]);
 
         return {
@@ -428,8 +415,6 @@ export const loadCtx = (): Promise<Ctx> => {
           template,
           voteScript,
           timelock,
-          lido,
-          stakingRouter,
         };
       } catch (error) {
         ctxPromise = undefined;
@@ -457,62 +442,3 @@ export const _tx = async (tx: ContractTransactionResponse): Promise<ContractTran
   log.info("Transaction", logData);
   return receipt;
 };
-
-function logContractEvents(c: string, ce: ContractEvents) {
-  log(`${c} - parsed: ${ce.parsed.length} events, unparsed: ${ce.unparsed.length} events`);
-  for (const evt of ce.parsed) {
-    console.log(evt);
-  }
-}
-export type EventArgs = Record<string, unknown>;
-export type ContractEvents = {
-  parsed: EventArgs[];
-  unparsed: Log[];
-};
-export type ContractEvents1 = Record<string, ContractEvents>;
-
-export function toEventArgs(l: LogDescription): EventArgs {
-  const args = Object.fromEntries(l.fragment.inputs.map((a, i) => [a.name || String(i), l.args[i]]));
-
-  return {
-    [l.signature]: args,
-  };
-}
-
-export function parseLEventsWithContracts(
-  logs: readonly Log[],
-  contracts: readonly LoadedContract[],
-): {
-  eventsByContract: Record<string, ContractEvents>;
-  skipped: Log[];
-} {
-  const eventsByContract: Record<string, ContractEvents> = {};
-  const contractsByAddress = new Map<string, LoadedContract>();
-  const skipped: Log[] = [];
-
-  for (const contract of contracts) {
-    eventsByContract[contract.address] = { parsed: [], unparsed: [] };
-    contractsByAddress.set(contract.address.toLowerCase(), contract);
-  }
-
-  for (const entry of logs) {
-    const contract = contractsByAddress.get(entry.address.toLowerCase());
-    if (!contract) {
-      skipped.push(entry);
-      continue;
-    }
-
-    try {
-      const parsedEvent = contract.interface.parseLog(entry);
-      if (parsedEvent) {
-        eventsByContract[contract.address].parsed.push(toEventArgs(parsedEvent));
-      } else {
-        eventsByContract[contract.address].unparsed.push(entry);
-      }
-    } catch {
-      eventsByContract[contract.address].unparsed.push(entry);
-    }
-  }
-
-  return { eventsByContract, skipped };
-}
