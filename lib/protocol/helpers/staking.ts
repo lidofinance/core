@@ -223,14 +223,16 @@ const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint
 };
 
 export const depositValidatorsWithoutReport = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
-  const { lido } = ctx.contracts;
+  const { lido, withdrawalQueue } = ctx.contracts;
 
   const ethToDeposit = depositsCount * DEPOSIT_SIZE;
   let depositableEther = await lido.getDepositableEther();
 
-  const submitValue = depositableEther < ethToDeposit ? ethToDeposit - depositableEther + ether("1") : 0n;
-  const ethHolder = await impersonate(certainAddress("provision:eth:whale"), submitValue + ether("1"));
-  await lido.connect(ethHolder).submit(ZeroAddress, { value: submitValue });
+  if (depositableEther < ethToDeposit) {
+    const submitValue = (await withdrawalQueue.unfinalizedStETH()) + ethToDeposit - depositableEther + ether("1");
+    const ethHolder = await impersonate(certainAddress("provision:eth:whale"), submitValue + ether("1"));
+    await lido.connect(ethHolder).submit(ZeroAddress, { value: submitValue });
+  }
 
   depositableEther = await lido.getDepositableEther();
   if (depositableEther < ethToDeposit) {

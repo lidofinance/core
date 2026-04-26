@@ -33,7 +33,6 @@
     "test:integration:fulltrace": "MODE=forking hardhat test test/integration/**/*.ts --fulltrace --disabletracer",
     "test:integration:upgrade": "MODE=forking UPGRADE=true bash scripts/run-test-integration-upgrade.sh",
     "test:integration:upgrade-template": "TEMPLATE_TEST=true yarn test:integration:upgrade",
-    "test:integration:upgrade:hoodi": "NETWORK=hoodi yarn test:integration:upgrade",
     "test:integration:upgrade:mainnet": "NETWORK=mainnet yarn test:integration:upgrade",
     "test:integration:scratch": "DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true SKIP_GAS_REPORT=true GENESIS_TIME=1639659600 GAS_PRIORITY_FEE=1 GAS_MAX_FEE=100 yarn test:integration:scratch:helper test/integration/**/*.ts",
     "test:integration:scratch:helper": "MODE=scratch hardhat test",

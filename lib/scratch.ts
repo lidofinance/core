@@ -52,11 +52,6 @@ async function applySteps(steps: string[]) {
 }
 
 export async function deployUpgrade(networkName: string, stepsFile: string): Promise<void> {
-  // Hardhat network is a fork of mainnet so we need to use the mainnet-fork steps
-  if (networkName === "hardhat") {
-    networkName = "mainnet-fork";
-  }
-
   try {
     const steps = loadSteps(stepsFile);
     await applySteps(steps);

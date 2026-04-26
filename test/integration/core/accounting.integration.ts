@@ -220,17 +220,11 @@ describe("Integration: Accounting", () => {
 
     const stakingModulesCount = await stakingRouter.getStakingModulesCount();
 
-    const numberOfCSMModules = (await stakingRouter.getStakingModules()).filter(
-      (module) => module.name === "Community Staking",
-    ).length;
-
     const { amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
     const hasWithdrawals = amountOfETHLocked !== 0n;
 
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
-    const expectedRewardsDistributionEventsCount = noRewards
-      ? 0n
-      : BigInt(stakingModulesCount) + BigInt(numberOfCSMModules) + 2n;
+    const expectedRewardsDistributionEventsCount = noRewards ? 0n : BigInt(stakingModulesCount) + 2n;
     const expectedWithdrawalsTransferEventCount = hasWithdrawals ? 1n : 0n;
     expect(transferSharesEvents.length).to.equal(
       expectedWithdrawalsTransferEventCount + expectedRewardsDistributionEventsCount,
