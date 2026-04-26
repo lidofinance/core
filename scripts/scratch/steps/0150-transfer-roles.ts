@@ -52,9 +52,19 @@ export async function main() {
     state.burner.proxy.address,
   ];
 
+  const sepoliaDepositAdapterAddress = state[Sk.sepoliaDepositAdapter]?.proxy?.address;
+  if (sepoliaDepositAdapterAddress) {
+    ossifiableProxyAdminChanges.push(sepoliaDepositAdapterAddress);
+  }
+
   for (const proxyAddress of ossifiableProxyAdminChanges) {
     const proxy = await loadContract("OssifiableProxy", proxyAddress);
     await makeTx(proxy, "proxy__changeAdmin", [agent], { from: deployer });
+  }
+
+  if (sepoliaDepositAdapterAddress) {
+    const sepoliaDepositAdapter = await loadContract("SepoliaDepositAdapter", sepoliaDepositAdapterAddress);
+    await makeTx(sepoliaDepositAdapter, "transferOwnership", [agent], { from: deployer });
   }
 
   // Change DepositSecurityModule admin if not using a predefined address

@@ -85,6 +85,7 @@ export enum Sk {
   validatorsExitBusOracle = "validatorsExitBusOracle",
   withdrawalQueueERC721 = "withdrawalQueueERC721",
   depositContract = "depositContract",
+  sepoliaDepositAdapter = "sepoliaDepositAdapter",
   wstETH = "wstETH",
   lidoLocator = "lidoLocator",
   chainSpec = "chainSpec",
@@ -152,6 +153,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.vaultHub:
     case Sk.dgDualGovernance:
     case Sk.dgEmergencyProtectedTimelock:
+    case Sk.sepoliaDepositAdapter:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:

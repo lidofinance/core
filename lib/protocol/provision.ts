@@ -9,6 +9,7 @@ import {
   ensureDsmGuardians,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
+  ensureSepoliaDepositAdapterFunded,
   ensureSomeOddShareRate,
   ensureStakeLimit,
   norSdvtEnsureOperators,
@@ -41,6 +42,9 @@ export const provision = async (ctx: ProtocolContext) => {
 
   await unpauseStaking(ctx);
   await unpauseWithdrawalQueue(ctx);
+
+  // On Sepolia the deposit contract is a BEPOLIA-gated adapter and must be pre-funded.
+  await ensureSepoliaDepositAdapterFunded(ctx);
 
   await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 10n, 15n, 10n);
 

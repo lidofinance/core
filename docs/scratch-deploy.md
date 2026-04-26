@@ -10,6 +10,24 @@ anvil -p 8555 --base-fee 0 --gas-price 0
 bash scripts/dao-local-deploy.sh
 ```
 
+### Agent / CI mode (quiet logs)
+
+The scripts above print full deploy + test output to the terminal — gas reports, per-tx traces, and ~700 mocha test ticks. That is fine for a human watching interactively but wasteful for automation / LLM agents.
+
+Agent-friendly variants tee the full output to a file and forward only milestones, mocha counts (`N passing / N pending / N failing`), failure bullets, assertion/provider errors, and the tail of the log to the terminal:
+
+```shell
+# Full deploy + tests, log at logs/scratch-deploy.log (override via LOG_FILE env):
+bash scripts/dao-local-deploy-agent.sh
+
+# Just the test suites, with their own log files:
+yarn test:integration:fork:local:agent   # logs/integration-fork-local.log
+yarn test:integration:scratch:agent      # logs/integration-scratch.log
+yarn test:integration:agent              # logs/integration-tests.log (forking mode)
+```
+
+All three yarn variants and the deploy wrapper route through `scripts/run-logged.sh <logfile> <command...>`, which you can use to wrap any long-running command the same way.
+
 ## Requirements
 
 Same as for the rest of the repo, see [CONTRIBUTING.md](../CONTRIBUTING.md).
