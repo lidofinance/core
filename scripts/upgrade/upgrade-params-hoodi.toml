@@ -114,12 +114,9 @@ feeOracleProxy = "0xe7314f561B2e72f9543F1004e741bab6Fc51028B"
 feeOracleImpl = "0x27d1Ff0353AF6b7480CBc902169d0F89b49334B5"
 feeOracleConsensusVersion = 4
 vettedGateProxy = "0x10a254E724fe2b7f305F76f3F116a3969c53845f"
-# TODO: replace with deployed IDVTC gate before execution
-identifiedDVTClusterGate = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed IDVTC curve setup before execution
-identifiedDVTClusterCurveSetup = "0x0000000000000000000000000000000000000000"
-# TODO: replace with expected IDVTC bond curve id before execution
-identifiedDVTClusterBondCurveId = 0
+identifiedDVTClusterGate = "0x887F8512F9998045f4b5993e6eaa6BCfE5F02A94"
+identifiedDVTClusterCurveSetup = "0x75CC99052fB05eEb4D9f80Ba94A5D077e3a721C1"
+identifiedDVTClusterBondCurveId = 4
 vettedGateImpl = "0x3b834c6d043F4CE5C61d84723bA737D405B2e276"
 accountingProxy = "0xA54b90BA34C5f326BC1485054080994e38FB4C60"
 accountingImpl = "0x3a18675fFB2C37A4296dD794A7Ed94644225F881"
