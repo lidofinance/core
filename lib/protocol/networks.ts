@@ -141,6 +141,8 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
     stakingVaultBeacon: state[Sk.stakingVaultBeacon]?.address,
     operatorGrid: state[Sk.operatorGrid]?.proxy.address,
     validatorConsolidationRequests: state[Sk.validatorConsolidationRequests]?.address,
+    consolidationBus: state[Sk.consolidationBus]?.proxy.address,
+    consolidationMigrator: state[Sk.consolidationMigrator]?.proxy.address,
   };
 
   const chainId = state[Sk.chainId];
