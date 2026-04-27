@@ -15,3 +15,5 @@ export const ZERO_HASH = new Uint8Array(32).fill(0);
 export const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 
 export const VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP = 10_00n;
+
+export const FUSAKA_TX_GAS_LIMIT = 2n ** 24n; // 16M =  16_777_216

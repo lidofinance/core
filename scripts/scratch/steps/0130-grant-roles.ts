@@ -46,9 +46,6 @@ export async function main() {
     [await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), accountingOracleAddress],
     { from: deployer },
   );
-  await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), lidoAddress], {
-    from: deployer,
-  });
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
     from: deployer,
   });

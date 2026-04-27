@@ -3,13 +3,13 @@ set -e +u
 set -o pipefail
 
 # Check for required environment variables
-if [[ -z "${DEPLOYER}" ]]; then
+if [[ -z ${DEPLOYER} ]]; then
   echo "Error: Environment variable DEPLOYER must be set"
   exit 1
 fi
 echo "DEPLOYER is $DEPLOYER"
 
-if [[ -z "${NETWORK}" ]]; then
+if [[ -z ${NETWORK} ]]; then
   echo "Error: Environment variable NETWORK must be set"
   exit 1
 fi
@@ -24,6 +24,9 @@ yarn compile
 export STEPS_FILE=scratch/steps.json
 
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
+
+# Need this to get sure the last transactions are mined
+yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 
 # TODO
 # yarn hardhat --network $NETWORK run --no-compile scripts/scratch/steps/90-check-dao.ts

@@ -4,6 +4,7 @@ export * from "./bigint-math";
 export * from "./bytes";
 export * from "./constants";
 export * from "./contract";
+export * from "./console";
 export * from "./deploy";
 export * from "./deposit";
 export * from "./dsm";

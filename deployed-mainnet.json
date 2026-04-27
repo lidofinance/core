@@ -256,6 +256,20 @@
     "secondsPerSlot": 12,
     "genesisTime": 1606824023
   },
+  "circuitBreaker": {
+    "address": "0x00000000000000000000000000000000000000cb",
+    "note": "TODO: replace with real address upon deployment",
+    "constructorArgs": {
+      "admin": "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
+      "initialHeartbeatInterval": 31536000,
+      "initialPauseDuration": 3600,
+      "maxHeartbeatInterval": 94608000,
+      "maxPauseDuration": 2592000,
+      "minHeartbeatInterval": 60,
+      "minPauseDuration": 60
+    }
+  },
+
   "createAppReposTx": "0xf48cb21c6be021dd18bd8e02ce89ac7b924245b859f0a8b7c47e88a39016ed41",
   "daoAragonId": "lido-dao",
   "daoFactoryAddress": "0x7378ad1ba8f3c8e64bbb2a04473edd35846360f1",

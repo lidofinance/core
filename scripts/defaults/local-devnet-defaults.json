@@ -99,6 +99,10 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
+      "maxValidatorsPerReport": 600,
+      "maxExitBalanceEth": 416000,
+      "balancePerFrameEth": 32,
+      "frameDurationInSec": 48,
       "consensusVersion": 5
     }
   },
@@ -113,7 +117,6 @@
     "deployParameters": {
       "exitedEthAmountPerDayLimit": 57600,
       "appearedEthAmountPerDayLimit": 57600,
-      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
       "annualBalanceIncreaseBPLimit": 1000,
       "simulatedShareRateDeviationBPLimit": 250,
       "maxBalanceExitRequestedPerReportInEth": 19200,

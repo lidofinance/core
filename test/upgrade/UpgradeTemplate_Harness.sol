@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.25;
 
-import {V3Template} from "contracts/upgrade/V3Template.sol";
+import {UpgradeTemplate} from "contracts/upgrade/UpgradeTemplate.sol";
 
-contract V3Template__Harness {
-    V3Template public immutable TEMPLATE;
+contract UpgradeTemplate_Harness {
+    UpgradeTemplate public immutable TEMPLATE;
 
     constructor(address _template) {
-        TEMPLATE = V3Template(_template);
+        TEMPLATE = UpgradeTemplate(_template);
     }
 
     function startUpgradeTwice() external {

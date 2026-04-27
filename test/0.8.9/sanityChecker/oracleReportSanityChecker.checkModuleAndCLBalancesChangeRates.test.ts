@@ -333,7 +333,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const postPendingBalanceWei = ether("20");
     const activatedBalanceWei = prePendingBalanceWei - postPendingBalanceWei;
     const expectedValidatorsGrowthLimitWei =
-      activatedBalanceWei + (previousValidatorsBalanceWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+      activatedBalanceWei +
+      ((previousValidatorsBalanceWei + activatedBalanceWei) * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
 
     const problematicModuleReport = () =>
       checkerWithRouter.checkModuleAndCLBalancesChangeRates(
@@ -700,7 +701,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const currentIncreasePerDay = ether("121");
     const previousPendingWei = ether("60");
     const expectedValidatorsGrowthLimitWei =
-      previousPendingWei + (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+      previousPendingWei +
+      ((previousValidatorsWei + previousPendingWei) * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
 
     await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei }]);
 
@@ -720,7 +722,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const totalPositiveModuleIncreaseWei = ether("131");
     const expectedModuleIncreaseLimitWei =
       previousPendingWei +
-      (totalPreviousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n) +
+      ((totalPreviousValidatorsWei + previousPendingWei) * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n) +
       limits.consolidationEthAmountPerDayLimit * ether("1");
 
     await seedPreviousBalances([
@@ -774,7 +776,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   it("reverts with IncorrectTotalCLBalanceIncrease when reported validators balance growth exceeds consumed pending", async () => {
     const consumedPendingWei = ether("20");
     const reportedValidatorsGrowthWei = ether("60");
-    const expectedValidatorsGrowthLimitWei = consumedPendingWei;
+    const expectedValidatorsGrowthLimitWei =
+      consumedPendingWei + (consumedPendingWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
 
     await seedPreviousBalances([
       { id: 1n, validatorsBalanceWei: 0n },
@@ -800,7 +803,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const previousValidatorsWei = ether("3650");
     const previousPendingWei = ether("10");
     const consumedPendingWei = ether("9");
-    const safetyCapWei = (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+    const safetyCapWei =
+      ((previousValidatorsWei + consumedPendingWei) * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
     const maxAllowedValidatorsGrowthWei = consumedPendingWei + safetyCapWei;
     const currentPendingWei = previousPendingWei - consumedPendingWei;
     const requiredValidatorsIncreaseWei = maxAllowedValidatorsGrowthWei;
@@ -827,7 +831,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const previousValidatorsWei = ether("3650");
     const previousPendingWei = ether("10");
     const consumedPendingWei = ether("9");
-    const safetyCapWei = (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
+    const safetyCapWei =
+      ((previousValidatorsWei + consumedPendingWei) * limits.annualBalanceIncreaseBPLimit) / (365n * 10_000n);
     const safetyCapOverflowWei = ether("1");
     const maxAllowedValidatorsGrowthWei = consumedPendingWei + safetyCapWei;
     const reportedValidatorsGrowthWei = maxAllowedValidatorsGrowthWei + safetyCapOverflowWei;
@@ -910,7 +915,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     const halfDay = ONE_DAY / 2n;
     const activatedWei = ether("50");
     const safetyCapWei =
-      (previousValidatorsWei * limits.annualBalanceIncreaseBPLimit * halfDay) / (365n * ONE_DAY * 10_000n);
+      ((previousValidatorsWei + activatedWei) * limits.annualBalanceIncreaseBPLimit * halfDay) /
+      (365n * ONE_DAY * 10_000n);
     const allowedValidatorsGrowthWei = activatedWei + safetyCapWei;
 
     await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: previousValidatorsWei }]);

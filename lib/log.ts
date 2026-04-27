@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { isAddress } from "ethers";
 import path from "path";
 
 import { getTxLink } from "./explorer";
@@ -10,12 +11,19 @@ BigInt.prototype.toJSON = function () {
 
 export type ConvertibleToString = string | number | boolean | { toString(): string };
 
-export const rd = (s: ConvertibleToString) => chalk.red(s);
-export const yl = (s: ConvertibleToString) => chalk.yellow(s);
-export const gr = (s: ConvertibleToString) => chalk.green(s);
-export const bl = (s: ConvertibleToString) => chalk.blue(s);
-export const cy = (s: ConvertibleToString) => chalk.cyan(s);
-export const mg = (s: ConvertibleToString) => chalk.magenta(s);
+export const rd = chalk.keyword("red"); // more intense than chalk.red
+export const yl = chalk.yellow;
+export const gr = chalk.green;
+export const bl = chalk.keyword("dodgerblue"); //chalk.blue;
+export const cy = chalk.cyan;
+export const mg = chalk.keyword("violet"); // not so jarring
+export const or = chalk.keyword("orange");
+export const br = chalk.keyword("brown");
+export const dp = chalk.keyword("deeppink");
+export const gy = chalk.keyword("greenyellow");
+export const yg = chalk.keyword("yellowgreen");
+export const nv = chalk.keyword("navy");
+export const bk = chalk.keyword("black");
 
 export const log = (...args: ConvertibleToString[]) => {
   if (!shouldLog("info")) return;
@@ -54,7 +62,7 @@ const _splitter = (minLength = LINE_LENGTH, ...args: ConvertibleToString[]) => {
 
   if (minLength < MIN_LINE_LENGTH) minLength = MIN_LINE_LENGTH;
 
-  console.error(cy(_line(0, minLength)));
+  console.error(bk(_line(0, minLength)));
 
   if (args.length) {
     console.error(...args);
@@ -73,7 +81,7 @@ const _header = (minLength = 20, ...args: ConvertibleToString[]) => {
   const paddedTitle = title.padStart((totalLength + title.length) / 2).padEnd(totalLength);
 
   console.error(`${cy(line)}`);
-  console.error(`${cy("=")} ${mg(paddedTitle)} ${cy("=")}`);
+  console.error(`${cy("=")} ${dp(paddedTitle)} ${cy("=")}`);
   console.error(`${cy(line)}`);
 
   if (args.length > 1) {
@@ -85,11 +93,64 @@ const _header = (minLength = 20, ...args: ConvertibleToString[]) => {
 
 const _title = (title: string) => {
   if (!shouldLog("debug")) return;
-  log(mg(title));
+  log(br(title));
+};
+
+const FORMAT_INDENT = 2;
+
+const _indent = (depth: number) => " ".repeat(depth * FORMAT_INDENT);
+
+const _formatRecordValue = (value: unknown, depth = 0, seen = new WeakSet<object>()): string => {
+  if (value === null) return chalk.gray("null");
+  if (value === undefined) return chalk.gray("undefined");
+
+  if (typeof value === "string") {
+    return isAddress(value) ? bl(value) : yl(value);
+  }
+
+  if (typeof value === "number" || typeof value === "bigint") {
+    return gr(value.toString());
+  }
+
+  if (typeof value === "boolean") {
+    return mg(value.toString());
+  }
+
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return chalk.gray("[Circular]");
+    if (value.length === 0) return chalk.gray("[]");
+
+    seen.add(value);
+    const lines = value.map((item) => `${_indent(depth + 1)}${_formatRecordValue(item, depth + 1, seen)}`);
+    seen.delete(value);
+    return `[\n${lines.join(",\n")}\n${_indent(depth)}]`;
+  }
+
+  if (typeof value === "object") {
+    if (seen.has(value)) return chalk.gray("{Circular}");
+    const entries = Object.entries(value);
+    if (entries.length === 0) return chalk.gray("{}");
+
+    seen.add(value);
+    const lines = entries.map(
+      ([key, nested]) => `${_indent(depth + 1)}${or(key)}: ${_formatRecordValue(nested, depth + 1, seen)}`,
+    );
+    seen.delete(value);
+    return `{\n${lines.join(",\n")}\n${_indent(depth)}}`;
+  }
+
+  return yl(String(value));
 };
 
 const _record = (label: string, value: ConvertibleToString) => {
-  log(`${chalk.grey(label)}: ${yl(value.toString())}`);
+  const formattedValue = _formatRecordValue(value, 2);
+  // if (formattedValue.includes("\n")) {
+  //   log(`${nv(label)}:`);
+  //   log(formattedValue.replace(/^/gm, _indent(2)));
+  //   return;
+  // }
+
+  log(`${nv(label)}: ${formattedValue}`);
 };
 
 // TODO: add logging to file
@@ -141,12 +202,12 @@ log.withArguments = (firstLine: string, args: ConvertibleToString[]) => {
   }
 
   if (args.length === 1) {
-    log(`${mg(JSON.stringify(args[0]))})`);
+    log(`${or(JSON.stringify(args[0]))})`);
     return;
   }
 
   log.emptyLine();
-  args.forEach((arg) => log(` ${mg(JSON.stringify(arg))},`));
+  args.forEach((arg) => log(` ${or(JSON.stringify(arg))},`));
   log(`)`);
 };
 
@@ -166,6 +227,14 @@ log.scriptFinish = (filename: string) => {
   log.emptyLine();
 };
 
+log.scriptSkip = (filename: string) => {
+  if (!shouldLog("info")) return;
+
+  log.splitter();
+  log.warning(`Skipped script: ${bl(path.basename(filename))}`);
+  log.emptyLine();
+};
+
 log.done = (message: string) => {
   if (!shouldLog("info")) return;
 
@@ -177,7 +246,7 @@ log.debug = (title: string, records: Record<string, ConvertibleToString> = {}) =
   if (!shouldLog("debug")) return;
 
   _title(title);
-  Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
+  Object.keys(records).forEach((label) => _record(`${_indent(1)}${label}`, records[label]));
   log.emptyLine();
 };
 
@@ -185,7 +254,7 @@ log.info = (title: string, records: Record<string, ConvertibleToString> = {}) =>
   if (!shouldLog("info")) return;
 
   _title(title);
-  Object.keys(records).forEach((label) => _record(`  ${label}`, records[label]));
+  Object.keys(records).forEach((label) => _record(`${_indent(1)}${label}`, records[label]));
   log.emptyLine();
 };
 
@@ -193,7 +262,7 @@ log.txLink = async (txHash: string) => {
   const link = await getTxLink(txHash);
   if (link) {
     log.info("🔗 Transaction", {
-      Link: link,
+      Link: chalk.blue.underline(link),
     });
   }
 };

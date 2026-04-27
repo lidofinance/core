@@ -12,7 +12,6 @@ import {
   ConsolidationMigrator,
   DepositSecurityModule,
   HashConsensus,
-  ICSModule,
   IStakingModule,
   Kernel,
   LazyOracle,
@@ -105,7 +104,6 @@ export interface ContractTypes {
   HashConsensus: HashConsensus;
   PredepositGuarantee: PredepositGuarantee;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
-  ICSModule: ICSModule;
   WstETH: WstETH;
   TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
   ConsolidationGateway: ConsolidationGateway;
