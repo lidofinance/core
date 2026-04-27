@@ -99,8 +99,8 @@ describe("Integration: TopUpGateway gas measurement", () => {
     const TOP_UP_ROLE = await topUpGateway.TOP_UP_ROLE();
     const MANAGE_LIMITS_ROLE = await topUpGateway.MANAGE_LIMITS_ROLE();
 
-    await topUpGateway.connect(deployer).grantRole(TOP_UP_ROLE, caller.address);
-    await topUpGateway.connect(deployer).grantRole(MANAGE_LIMITS_ROLE, deployer.address);
+    await topUpGateway.connect(agentSigner).grantRole(TOP_UP_ROLE, caller.address);
+    await topUpGateway.connect(agentSigner).grantRole(MANAGE_LIMITS_ROLE, deployer.address);
     await topUpGateway.connect(deployer).setMaxValidatorsPerTopUp(NUM_VALIDATORS);
 
     // =========================================
