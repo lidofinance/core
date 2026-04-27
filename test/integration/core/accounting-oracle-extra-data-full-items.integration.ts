@@ -241,7 +241,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
       // This suite also relies on the reward-bearing main report to enter
       // TransferredToModule before extra-data finalization. Snapshot protocol
       // pending first so the original reward-bearing path remains reachable.
-      await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
+      await seedProtocolPendingBaseline(ctx, SDVT_MODULE_ID);
 
       // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
       // safety cap enough elapsed time after snapshotting the pending baseline.

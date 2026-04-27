@@ -71,6 +71,8 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
+    globalSnapshot = await Snapshot.take();
+
     [, executor, submitter, stranger] = await ethers.getSigners();
 
     // Get real contracts from protocol context
@@ -209,8 +211,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
 
     // Allow the consolidation pair with submitter
     await consolidationMigrator.connect(agentSigner).allowPair(sourceOperatorId, targetOperatorId, submitter.address);
-
-    globalSnapshot = await Snapshot.take();
   });
 
   after(async () => await Snapshot.restore(globalSnapshot));

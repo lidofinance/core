@@ -18,9 +18,6 @@ export SCRATCH_DEPLOY_CONFIG="scripts/scratch/deploy-params-testnet.toml"
 
 bash scripts/dao-deploy.sh
 
-# Need this to get sure the last transactions are mined
-yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
-
 # Run acceptance tests
 export INTEGRATION_WITH_CSM="off"
 yarn test:integration:fork:local

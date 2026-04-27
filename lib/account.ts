@@ -8,6 +8,27 @@ import { randomAddress } from "./address";
 import { getNetworkName } from "./network";
 import { ether } from "./units";
 
+export async function getSignerOrImpersonate(
+  address: string | Addressable,
+  balance: bigint = ether("100"),
+): Promise<HardhatEthersSigner> {
+  if (typeof address !== "string") {
+    address = await address.getAddress();
+  }
+
+  const signers = await ethers.getSigners();
+  const signer = signers.find((item) => item.address.toLowerCase() === address.toLowerCase());
+  if (signer) {
+    return signer;
+  }
+
+  try {
+    return await impersonate(address, balance);
+  } catch {
+    throw new Error(`Can't get a signer or impersonation for ${address}.`);
+  }
+}
+
 export async function impersonate(address: string | Addressable, balance?: bigint): Promise<HardhatEthersSigner> {
   if (typeof address !== "string") {
     address = await address.getAddress();

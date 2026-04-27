@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: UNLICENSED
 
-
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity ^0.8.25;
@@ -36,5 +35,5 @@ interface IDualGovernance {
     /// @return proposers An array of `Proposer` structs containing the data of all registered proposers.
     function getProposers() external view returns (Proposer[] memory proposers);
 
-    event ProposalSubmitted(uint256 indexed id, address indexed executor, ExternalCall[] calls);
+    event ProposalSubmitted(address indexed proposerAccount, uint256 indexed proposalId, string metadata);
 }

@@ -91,11 +91,11 @@ epochsPerFrame = 4                    # Epochs per consensus frame
 
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
-consensusVersion = 5                  # Consensus version
-maxValidatorsPerRequest = 600         # Maximum validators per request
-maxExitRequestsLimit = 13000          # Maximum exit requests limit
-exitsPerFrame = 1                     # Exits per frame
+maxValidatorsPerReport = 600         # Maximum validators per request
+maxExitBalanceEth = 416000
+balancePerFrameEth = 32
 frameDurationInSec = 48               # Frame duration in seconds
+consensusVersion = 5                  # Consensus version
 
 # Deposit security module configuration
 [depositSecurityModule]
@@ -107,7 +107,6 @@ pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
 [oracleReportSanityChecker]
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
-deprecatedOneOffCLBalanceDecreaseBPLimit = 500         # Deprecated one-off CL balance decrease limit (BP)
 annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
 simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
 maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
@@ -121,7 +120,7 @@ maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
-externalPendingBalanceCapEth = 500                           # Extra external pending balance cap for bounded side deposits / top-ups
+externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
 # Oracle daemon configuration
 [oracleDaemonConfig]
@@ -172,14 +171,14 @@ shardCommitteePeriodInSeconds = 98304      # Shard committee period in seconds (
 
 # Triggerable withdrawals gateway for managing validator exit requests
 [triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 13000          # Maximum number of exit requests that can be processed
+maxExitRequestsLimit = 250          # Maximum number of exit requests that can be processed
 exitsPerFrame = 1                     # Number of exits processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
+frameDurationInSec = 240               # Duration of each processing frame in seconds
 
 [consolidationGateway]
-maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
+maxConsolidationRequestsLimit = 2900  # Maximum number of consolidations requests that can be processed
 consolidationsPerFrame = 1            # Number of consolidations processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
+frameDurationInSec = 36               # Duration of each processing frame in seconds
 gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (before fork)
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection

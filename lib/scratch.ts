@@ -4,6 +4,7 @@ import path from "node:path";
 import { ethers } from "hardhat";
 
 import { log } from "./log";
+import { toBool } from "./string";
 
 class StepsFileNotFoundError extends Error {
   constructor(filePath: string) {
@@ -26,6 +27,13 @@ class MigrationMainFunctionError extends Error {
   }
 }
 
+class MigrationSkipFunctionError extends Error {
+  constructor(filePath: string) {
+    super(`Migration file ${filePath} exports 'skip' but it is not a function!`);
+    this.name = "MigrationSkipFunctionError";
+  }
+}
+
 const deployedSteps: string[] = [];
 
 async function applySteps(steps: string[]) {
@@ -44,11 +52,6 @@ async function applySteps(steps: string[]) {
 }
 
 export async function deployUpgrade(networkName: string, stepsFile: string): Promise<void> {
-  // Hardhat network is a fork of mainnet so we need to use the mainnet-fork steps
-  if (networkName === "hardhat") {
-    networkName = "mainnet-fork";
-  }
-
   try {
     const steps = loadSteps(stepsFile);
     await applySteps(steps);
@@ -97,13 +100,23 @@ export const resolveMigrationFile = (step: string): string => {
  */
 export async function applyMigrationScript(migrationFile: string): Promise<void> {
   const fullPath = path.resolve(migrationFile);
-  const { main } = await import(fullPath);
+  const { main, skip } = await import(fullPath);
+  const allowSkipSteps = toBool(process.env.ALLOW_SKIP_STEPS);
 
   if (typeof main !== "function") {
     throw new MigrationMainFunctionError(migrationFile);
   }
 
+  if (skip !== undefined && typeof skip !== "function") {
+    throw new MigrationSkipFunctionError(migrationFile);
+  }
+
   try {
+    if (allowSkipSteps && skip && (await skip())) {
+      log.scriptSkip(migrationFile);
+      return;
+    }
+
     log.scriptStart(migrationFile);
     await main();
     log.scriptFinish(migrationFile);

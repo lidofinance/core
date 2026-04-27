@@ -961,7 +961,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         result.activatedBalanceWithGap =
             activatedBalance +
             _calculateValidatorsBalanceAprSafetyCap(
-                _checkParams.preCLValidatorsBalance,
+                _checkParams.preCLValidatorsBalance + activatedBalance,
                 uint256(_limitsList.annualBalanceIncreaseBPLimit) * result.effectiveTimeElapsed
             );
     }
@@ -971,15 +971,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         CLBalanceChangeCheckParams memory _checkParams,
         uint256 _clWithdrawals
     ) internal pure {
-        if (_clWithdrawals > _checkParams.preCLValidatorsBalance) {
-            revert InvalidClBalancesData();
-        }
-
         ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(
             _limitsList,
             _checkParams
         );
-        uint256 preCLValidatorsBalanceAfterWithdrawals = _checkParams.preCLValidatorsBalance - _clWithdrawals;
+        uint256 preCLValidatorsBalanceAfterWithdrawals = _clWithdrawals >= _checkParams.preCLValidatorsBalance
+            ? 0
+            : _checkParams.preCLValidatorsBalance - _clWithdrawals;
         if (_checkParams.postCLValidatorsBalance > preCLValidatorsBalanceAfterWithdrawals) {
             uint256 validatorsBalanceIncrease =
                 _checkParams.postCLValidatorsBalance - preCLValidatorsBalanceAfterWithdrawals;

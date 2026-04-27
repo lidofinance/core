@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, OperatorGrid, StakingVault, VaultHub } from "typechain-types";
 
-import { ether, MAX_SANE_SETTLED_GROWTH } from "lib";
+import { ether, MAX_SANE_SETTLED_GROWTH, randomValidatorPubkey } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -301,13 +301,16 @@ describe("Integration: OperatorGrid", () => {
       agentSigner = await ctx.getSigner("agent");
     });
 
-    it("Vault in jail can't mint stETH", async () => {
+    it("Vault in jail can't mint stETH and partial withdrawals are not allowed", async () => {
       // Put vault in jail before disconnecting
       await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
       expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
 
       // Verify vault is jailed and can't mint normally
       await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+      await expect(
+        dashboard.triggerValidatorWithdrawals(randomValidatorPubkey(), [100n], owner),
+      ).to.be.revertedWithCustomError(vaultHub, "PartialValidatorWithdrawalNotAllowed");
     });
 
     it("Vault can mint again after being removed from jail", async () => {

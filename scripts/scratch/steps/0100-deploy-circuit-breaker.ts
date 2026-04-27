@@ -5,7 +5,7 @@ import { ethers, network as hardhatNetwork } from "hardhat";
 import os from "os";
 import path from "path";
 
-import { cy, log } from "lib/log";
+import { cy, deployWithoutProxy, log } from "lib";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 const CIRCUIT_BREAKER_REPO = "https://github.com/lidofinance/circuit-breaker.git";
@@ -18,6 +18,15 @@ export async function main() {
   // Check if CircuitBreaker address is already specified
   if (state[Sk.circuitBreaker].address) {
     log(`Using the specified CircuitBreaker address: ${cy(state[Sk.circuitBreaker].address)}`);
+    log.emptyLine();
+    return;
+  }
+
+  // deploy mock in case the network="hardhat" (there is no rpcUrl for in-memory node instance)
+  if (hardhatNetwork.name == "hardhat") {
+    log("In-memory 'hardhat' network detected, deploy CircuitBreakerMock contract...");
+    const cb = await deployWithoutProxy(Sk.circuitBreaker, "CircuitBreakerMock", deployer, [60]);
+    log(`CircuitBreakerMock deployed at: ${cy(cb.address)}`);
     log.emptyLine();
     return;
   }

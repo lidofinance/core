@@ -1,5 +1,7 @@
 import { ethers } from "hardhat";
 
+import { StakingRouter } from "typechain-types";
+
 import { WithdrawalCredentialsType } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -29,7 +31,7 @@ export async function main() {
   const state = readNetworkState({ deployer });
 
   // Get contract instances
-  const stakingRouter = await loadContract("StakingRouter", state.stakingRouter.proxy.address);
+  const stakingRouter = await loadContract<StakingRouter>("StakingRouter", state.stakingRouter.proxy.address);
 
   // Grant STAKING_MODULE_MANAGE_ROLE to deployer
   await makeTx(stakingRouter, "grantRole", [STAKING_MODULE_MANAGE_ROLE, deployer], { from: deployer });
@@ -76,4 +78,9 @@ export async function main() {
 
   // Renounce STAKING_MODULE_MANAGE_ROLE from deployer
   await makeTx(stakingRouter, "renounceRole", [STAKING_MODULE_MANAGE_ROLE, deployer], { from: deployer });
+
+  // assert
+  if (await stakingRouter.hasRole(STAKING_MODULE_MANAGE_ROLE, deployer)) {
+    throw new Error("Failed to renounce STAKING_MODULE_MANAGE_ROLE");
+  }
 }

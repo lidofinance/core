@@ -216,21 +216,35 @@ describe("Integration: Accounting", () => {
     reportTxReceipt: ContractTransactionReceipt,
     noRewards: boolean = false,
   ): Promise<bigint> {
-    const { stakingRouter } = ctx.contracts;
-
-    const stakingModulesCount = await stakingRouter.getStakingModulesCount();
-
-    const numberOfCSMModules = (await stakingRouter.getStakingModules()).filter(
-      (module) => module.name === "Community Staking",
-    ).length;
+    const { stakingRouter, csm, cmv2 } = ctx.contracts;
 
     const { amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
     const hasWithdrawals = amountOfETHLocked !== 0n;
 
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
-    const expectedRewardsDistributionEventsCount = noRewards
-      ? 0n
-      : BigInt(stakingModulesCount) + BigInt(numberOfCSMModules) + 2n;
+    let expectedRewardsDistributionEventsCount = 0n;
+
+    if (!noRewards) {
+      expectedRewardsDistributionEventsCount = BigInt(await stakingRouter.getStakingModulesCount()) + 2n; // +1 initial mint, +1 for the treasury
+      if (csm !== undefined) {
+        if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
+          // +1 for the CSM internal transfer
+          expectedRewardsDistributionEventsCount += 1n;
+        } else {
+          // no reward transfer to modules with 0 validators balance
+          expectedRewardsDistributionEventsCount -= 1n;
+        }
+      }
+      if (cmv2 !== undefined) {
+        if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
+          // +1 for the CSM internal transfer
+          expectedRewardsDistributionEventsCount += 1n;
+        } else {
+          // no reward transfer to modules with 0 validators balance
+          expectedRewardsDistributionEventsCount -= 1n;
+        }
+      }
+    }
     const expectedWithdrawalsTransferEventCount = hasWithdrawals ? 1n : 0n;
     expect(transferSharesEvents.length).to.equal(
       expectedWithdrawalsTransferEventCount + expectedRewardsDistributionEventsCount,
@@ -409,15 +423,15 @@ describe("Integration: Accounting", () => {
     await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-    const { clValidatorsBalanceAtLastReport } = await lido.getBalanceStats();
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
     // `report()` submits the raw post-vs-pre CL delta. In this seeded scenario the
     // pending baseline is activated inside the same report, so the raw boundary is
-    // the validators-based safety-cap component rather than `pending + safetyCap`.
+    // the safety-cap component computed from the post-activation validators base.
     let rebaseAmount =
-      (clValidatorsBalanceAtLastReport * annualBalanceIncreaseBPLimit * timeElapsed) /
+      ((clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) * annualBalanceIncreaseBPLimit * timeElapsed) /
       (365n * ONE_DAY) /
       MAX_BASIS_POINTS;
     rebaseAmount = roundToGwei(rebaseAmount);

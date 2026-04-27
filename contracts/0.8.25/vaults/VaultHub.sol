@@ -892,22 +892,23 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 minPartialAmountInGwei = type(uint256).max;
+        bool hasPartialWithdrawals = false;
         for (uint256 i = 0; i < _amountsInGwei.length; i++) {
-            if (_amountsInGwei[i] > 0 && _amountsInGwei[i] < minPartialAmountInGwei) {
-                minPartialAmountInGwei = _amountsInGwei[i];
+            if (_amountsInGwei[i] > 0) {
+                hasPartialWithdrawals = true;
+                break;
             }
         }
 
-        if (minPartialAmountInGwei < type(uint256).max) {
+        if (hasPartialWithdrawals) {
+            if (_operatorGrid().isVaultInJail(_vault)) revert PartialValidatorWithdrawalNotAllowed();
             _requireFreshReport(_vault, record);
 
             /// @dev NB: Disallow partial withdrawals when the vault has obligations shortfall in order to prevent the
             ///      vault owner from clogging the consensus layer withdrawal queue by front-running and delaying the
-            ///      forceful validator exits required for rebalancing the vault. Partial withdrawals only allowed if
-            ///      the requested amount of withdrawals is enough to cover the uncovered obligations.
+            ///      forceful validator exits required for rebalancing the vault.
             uint256 obligationsShortfallAmount = _obligationsShortfallValue(_vault, connection, record);
-            if (obligationsShortfallAmount > 0 && minPartialAmountInGwei * 1e9 < obligationsShortfallAmount) {
+            if (obligationsShortfallAmount > 0) {
                 revert PartialValidatorWithdrawalNotAllowed();
             }
         }
@@ -1106,8 +1107,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reportMaxLiabilityShares,
         uint256 _reportSlashingReserve
     ) internal {
-        _record.cumulativeLidoFees = uint128(_reportCumulativeLidoFees);
-        _record.minimalReserve = uint128(Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve));
+        _record.cumulativeLidoFees = SafeCast.toUint128(_reportCumulativeLidoFees);
+        _record.minimalReserve = SafeCast.toUint128(Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve));
 
         // We want to prevent 1 tx looping here:
         // 1. bring ETH (TV+)
@@ -1120,8 +1121,10 @@ contract VaultHub is PausableUntilWithRoles {
         // if any stETH is minted on funds added after the refslot
         // in that case we don't update it (preventing unlock)
         if (_record.maxLiabilityShares == _reportMaxLiabilityShares) {
-            _record.maxLiabilityShares = uint96(Math256.max(_record.liabilityShares, _reportLiabilityShares));
+            _record.maxLiabilityShares = SafeCast.toUint96(Math256.max(_record.liabilityShares, _reportLiabilityShares));
         }
+
+        // report values is not safecasted because they're checked extensively in LazyOracle
         _record.report = Report({
             totalValue: uint104(_reportTotalValue),
             inOutDelta: int104(_reportInOutDelta),

@@ -36,6 +36,10 @@ contract OperatorGrid__MockForVaultHub {
         tierParams.reservationFeeBP = uint16(_tierParams.reservationFeeBP);
     }
 
+    function isVaultInJail(address) external pure returns (bool) {
+        return false;
+    }
+
     function vaultTierInfo(
         address _vault
     )

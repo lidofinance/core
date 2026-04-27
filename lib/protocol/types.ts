@@ -12,7 +12,6 @@ import {
   ConsolidationMigrator,
   DepositSecurityModule,
   HashConsensus,
-  ICSModule,
   IStakingModule,
   Kernel,
   LazyOracle,
@@ -36,6 +35,7 @@ import {
   WithdrawalVault,
   WstETH,
 } from "typechain-types";
+import { StakingModuleStructOutput } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
 
 export type LogDescriptionExtended = LogDescription & {
   address?: string;
@@ -73,6 +73,7 @@ export type ProtocolNetworkItems = {
   nor: string;
   sdvt: string;
   csm: string;
+  cmv2: string;
   // hash consensus
   hashConsensus: string;
   // vaults
@@ -105,7 +106,6 @@ export interface ContractTypes {
   HashConsensus: HashConsensus;
   PredepositGuarantee: PredepositGuarantee;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
-  ICSModule: ICSModule;
   WstETH: WstETH;
   TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
   ConsolidationGateway: ConsolidationGateway;
@@ -159,6 +159,14 @@ export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
   csm?: LoadedContract<IStakingModule>;
+  cmv2?: LoadedContract<IStakingModule>;
+};
+
+export type StakingModules = {
+  nor: StakingModuleStructOutput;
+  sdvt: StakingModuleStructOutput;
+  csm?: StakingModuleStructOutput;
+  cmv2?: StakingModuleStructOutput;
 };
 
 export type StakingModuleName = "nor" | "sdvt" | "csm";
@@ -198,10 +206,12 @@ export type Signer = keyof ProtocolSigners;
 
 export type ProtocolContextFlags = {
   withCSM: boolean;
+  withCMv2: boolean;
 };
 
 export type ProtocolContext = {
   contracts: ProtocolContracts;
+  modules: StakingModules;
   signers: ProtocolSigners;
   interfaces: Array<BaseContract["interface"]>;
   flags: ProtocolContextFlags;
