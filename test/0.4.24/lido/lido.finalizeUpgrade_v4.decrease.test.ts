@@ -92,8 +92,7 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance decrease sanity check", () => {
       const firstReportFreshCLWithdrawals = ether("10");
       const firstReportVaultBalanceBeforeTransfer = migrationVaultBaseline + firstReportFreshCLWithdrawals;
       const firstReportVaultTransfer = ether("90");
-      const firstReportVaultBalanceAfterTransfer =
-        firstReportVaultBalanceBeforeTransfer - firstReportVaultTransfer;
+      const firstReportVaultBalanceAfterTransfer = firstReportVaultBalanceBeforeTransfer - firstReportVaultTransfer;
       const secondReportFreshCLWithdrawals = ether("1");
       const secondReportVaultBalanceBeforeTransfer =
         firstReportVaultBalanceAfterTransfer + secondReportFreshCLWithdrawals;

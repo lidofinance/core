@@ -76,8 +76,11 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
     );
     const migrationVaultBalance = maxAllowedValidatorsBalanceIncrease + 1n;
 
-    const { accounting, checker: checkerWithMigratedVaultBaseline, deployStandaloneChecker } =
-      await fixture.deployAccountingAndChecker(migrationVaultBalance);
+    const {
+      accounting,
+      checker: checkerWithMigratedVaultBaseline,
+      deployStandaloneChecker,
+    } = await fixture.deployAccountingAndChecker(migrationVaultBalance);
     const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
 
     // Step 2. The first report is neutral: no CL increase and the same WV balance
@@ -93,9 +96,8 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
 
     // Production path: migrated WV is the baseline, so it is not counted as fresh withdrawals.
     await checkerWithMigratedVaultBaseline.migrateBaselineSnapshot();
-    await expect(
-      checkAccountingOracleReport(checkerWithMigratedVaultBaseline, accountingSigner, firstReportCheck),
-    ).not.to.be.reverted;
+    await expect(checkAccountingOracleReport(checkerWithMigratedVaultBaseline, accountingSigner, firstReportCheck)).not
+      .to.be.reverted;
 
     // Step 3. Counterfactual: if migration did not seed the WV baseline, the same
     // WV balance would look like fresh CL withdrawals.
@@ -193,10 +195,7 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
         const balanceStats = await moveToFirstPostMigrationReportFrame();
 
         // Step 2. Split migrated deposits into activated ETH and still-pending ETH.
-        const aprCap = calcAnnualValidatorsBalanceIncreaseLimit(
-          balanceStats.clValidatorsBalanceAtLastReport,
-          oneDay,
-        );
+        const aprCap = calcAnnualValidatorsBalanceIncreaseLimit(balanceStats.clValidatorsBalanceAtLastReport, oneDay);
         const postCLPendingBalance = transientDeposits - activatedDeposits;
         const maxAllowedValidatorsBalanceIncrease = activatedDeposits + aprCap;
 
@@ -214,7 +213,8 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
           withdrawalVaultBalance: noWithdrawalVaultBalance,
           depositsForReport: balanceStats.depositedForCurrentReport,
         });
-        await expect(checkAccountingOracleReport(allowedChecker, accountingSigner, maxAllowedReport)).not.to.be.reverted;
+        await expect(checkAccountingOracleReport(allowedChecker, accountingSigner, maxAllowedReport)).not.to.be
+          .reverted;
 
         // Step 4. One wei above that boundary must fail as excessive CL balance increase.
         const excessiveReport = buildCLBalanceIncreaseReport({
