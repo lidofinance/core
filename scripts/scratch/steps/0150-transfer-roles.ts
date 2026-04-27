@@ -28,6 +28,7 @@ export async function main() {
     { name: "ConsolidationGateway", address: state[Sk.consolidationGateway].address },
     { name: "ConsolidationBus", address: state[Sk.consolidationBus].proxy.address },
     { name: "ConsolidationMigrator", address: state[Sk.consolidationMigrator].proxy.address },
+    { name: "TopUpGateway", address: state[Sk.topUpGateway].proxy.address },
     { name: "VaultHub", address: state[Sk.vaultHub].proxy.address },
     { name: "PredepositGuarantee", address: state[Sk.predepositGuarantee].proxy.address },
     { name: "OperatorGrid", address: state[Sk.operatorGrid].proxy.address },
