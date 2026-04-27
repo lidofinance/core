@@ -163,7 +163,7 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
     // These boundary cases fix how migrated transient deposits affect CL increase:
     // 1. Only the part that activates may be counted above the APR cap.
     // 2. The remaining part must stay in postCLPendingBalance.
-    // 3. The checker accepts exactly activated deposits plus APR cap and rejects +1 wei.
+    // 3. The checker accepts exactly activated deposits plus its APR safety cap and rejects +1 wei.
     for (const { name, transientDeposits, activatedDeposits } of [
       {
         name: "without migrated transient deposits",
@@ -195,9 +195,11 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
         const balanceStats = await moveToFirstPostMigrationReportFrame();
 
         // Step 2. Split migrated deposits into activated ETH and still-pending ETH.
-        const aprCap = calcAnnualValidatorsBalanceIncreaseLimit(balanceStats.clValidatorsBalanceAtLastReport, oneDay);
+        // The checker adds the APR safety cap on top of the already activated balance.
         const postCLPendingBalance = transientDeposits - activatedDeposits;
-        const maxAllowedValidatorsBalanceIncrease = activatedDeposits + aprCap;
+        const clBalanceForAprSafetyCap = balanceStats.clValidatorsBalanceAtLastReport + activatedDeposits;
+        const aprSafetyCap = calcAnnualValidatorsBalanceIncreaseLimit(clBalanceForAprSafetyCap, oneDay);
+        const maxAllowedValidatorsBalanceIncrease = activatedDeposits + aprSafetyCap;
 
         expect(balanceStats.clValidatorsBalanceAtLastReport).to.equal(mainnetLikeMigratedNetwork.clValidatorsBalance);
         expect(balanceStats.clPendingBalanceAtLastReport).to.equal(0n);
