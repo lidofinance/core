@@ -10,404 +10,223 @@ import {
   expectedCLDecreaseLimitLossFromMigrationBootstrap,
   hoodiLikeMigratedNetwork,
   mainnetLikeMigratedNetwork,
-  maxWithdrawalsByChurnLimitPerReport,
-  MigratedNetworkScenario,
   oneDay,
   useFinalizeUpgradeV4Fixture,
 } from "./lido.finalizeUpgrade_v4.helpers";
 
-describe("Lido.sol:finalizeUpgrade_v4 CL balance decrease sanity check invariants", () => {
+describe("Lido.sol:finalizeUpgrade_v4 CL balance decrease sanity check", () => {
   const fixture = useFinalizeUpgradeV4Fixture();
+  const noWithdrawalVaultBalance = 0n;
 
-  const prepareCheckerAfterFirstReportWithMigrationVaultBalance = async (
-    migratedNetwork: MigratedNetworkScenario,
-    withdrawalVaultBalanceAtMigration: bigint,
-    withdrawalsVaultTransferAtFirstReport = 0n,
-  ) => {
-    // Shared setup for 36-day window checks: run the real migration, then accept
-    // a first report whose CL decrease equals the migration-time vault balance.
-    const balanceStats = await fixture.migrateNetworkV3State(migratedNetwork);
-    const { accounting, deployChecker } = await fixture.deployAccountingAndChecker(withdrawalVaultBalanceAtMigration);
-    const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+  context("migration-time withdrawal vault balance in CL decrease checks", () => {
+    for (const migratedNetwork of [hoodiLikeMigratedNetwork, mainnetLikeMigratedNetwork]) {
+      // This boundary test fixes first-report CL decrease behavior for each network size:
+      // 1. Migration seeds current WV as the checker vault baseline.
+      // 2. The first report sees the same WV, so it records zero fresh CL withdrawals.
+      // 3. That WV-sized CL decrease may only fit inside the migration-adjusted 36-day window.
+      it(`must bound first-report CL decrease from migration-time WV on ${migratedNetwork.name}`, async () => {
+        const balanceStats = await fixture.migrateNetworkV3State(migratedNetwork);
 
-    // The bootstrap snapshot already contains maxWithdrawalsByChurnLimitPerReport,
-    // so the available decrease window is smaller than raw 3.6% of CL balance.
-    const bootstrapAdjustedFullWindowCLDecreaseLimit = calcMaxAllowedFirstReportCLBalanceDecrease(
-      balanceStats.clValidatorsBalanceAtLastReport,
-    );
-    const firstReportPreCLValidatorsBalance = balanceStats.clValidatorsBalanceAtLastReport;
-    const firstReportPreCLPendingBalance = balanceStats.clPendingBalanceAtLastReport;
-    const firstReportCLValidatorsBalanceDecrease = withdrawalVaultBalanceAtMigration;
-    const firstReportWithdrawalVaultBalance = withdrawalVaultBalanceAtMigration;
-    const firstReportDepositsForReport = balanceStats.depositedForCurrentReport;
-    const firstReportCheck = buildCLBalanceDecreaseReport({
-      preCLValidatorsBalance: firstReportPreCLValidatorsBalance,
-      preCLPendingBalance: firstReportPreCLPendingBalance,
-      clBalanceDecrease: firstReportCLValidatorsBalanceDecrease,
-      withdrawalVaultBalance: firstReportWithdrawalVaultBalance,
-      depositsForReport: firstReportDepositsForReport,
-      withdrawalsVaultTransfer: withdrawalsVaultTransferAtFirstReport,
-    });
+        // Step 1. Fix the exact first-report limit for this migrated network.
+        // The limit depends on CL balance, so Hoodi-like and Mainnet-like networks
+        // must keep different explicit expected values.
+        const maxAllowedFirstReportCLDecrease = calcMaxAllowedFirstReportCLBalanceDecrease(
+          balanceStats.clValidatorsBalanceAtLastReport,
+        );
 
-    const migratedBaselineChecker = await deployChecker();
-    await migratedBaselineChecker.migrateBaselineSnapshot();
+        expect(maxAllowedFirstReportCLDecrease).to.equal(
+          migratedNetwork.expectedBootstrapAdjustedFirstReportCLDecreaseLimit,
+        );
 
-    // This first report records migration-time WV pressure in the checker window
-    // and returns the state that the next report will see.
-    await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, firstReportCheck)).not.to.be
-      .reverted;
+        const { accounting, deployStandaloneChecker } =
+          await fixture.deployAccountingAndChecker(noWithdrawalVaultBalance);
+        const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
 
-    return {
-      migratedBaselineChecker,
-      accountingSigner,
-      bootstrapAdjustedFullWindowCLDecreaseLimit,
-      migrationTimeCLDecrease: firstReportCLValidatorsBalanceDecrease,
-      nextReportPreCLValidatorsBalance: firstReportCheck.postCLValidatorsBalance,
-      nextReportPreCLPendingBalance: firstReportCheck.postCLPendingBalance,
-      nextReportWithdrawalVaultBalance: firstReportWithdrawalVaultBalance - withdrawalsVaultTransferAtFirstReport,
-    };
-  };
+        const maxSafeMigrationVaultBalance = maxAllowedFirstReportCLDecrease;
+        const excessiveMigrationVaultBalance = maxAllowedFirstReportCLDecrease + 1n;
+
+        // Step 2. Exactly the migration-adjusted limit is still accepted.
+        await fixture.setWithdrawalVaultBalance(maxSafeMigrationVaultBalance);
+        const maxSafeChecker = await deployStandaloneChecker();
+        await maxSafeChecker.migrateBaselineSnapshot();
+
+        const maxSafeReport = buildCLBalanceDecreaseReport({
+          preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
+          preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
+          clBalanceDecrease: maxSafeMigrationVaultBalance,
+          withdrawalVaultBalance: maxSafeMigrationVaultBalance,
+          depositsForReport: balanceStats.depositedForCurrentReport,
+        });
+        expect(maxSafeReport.timeElapsed).to.equal(oneDay);
+
+        await expect(checkAccountingOracleReport(maxSafeChecker, accountingSigner, maxSafeReport)).not.to.be.reverted;
+
+        // Step 3. One wei more than the migration-adjusted limit must fail.
+        await fixture.setWithdrawalVaultBalance(excessiveMigrationVaultBalance);
+        const excessiveChecker = await deployStandaloneChecker();
+        await excessiveChecker.migrateBaselineSnapshot();
+
+        const excessiveReport = buildCLBalanceDecreaseReport({
+          preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
+          preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
+          clBalanceDecrease: excessiveMigrationVaultBalance,
+          withdrawalVaultBalance: excessiveMigrationVaultBalance,
+          depositsForReport: balanceStats.depositedForCurrentReport,
+        });
+
+        await expect(checkAccountingOracleReport(excessiveChecker, accountingSigner, excessiveReport))
+          .to.be.revertedWithCustomError(excessiveChecker, "IncorrectCLBalanceDecrease")
+          .withArgs(excessiveMigrationVaultBalance, maxAllowedFirstReportCLDecrease);
+      });
+    }
+  });
 
   context("post-migration withdrawal vault delta", () => {
-    it("counts only withdrawal vault balance delta after migration as CL withdrawals", async () => {
-      const withdrawalVaultBalanceAtMigration = ether("100000");
-
-      // Add new withdrawals after migration. Only this delta should be counted as
-      // CL withdrawals; the migration-time balance is already the checker baseline.
-      const freshCLWithdrawalsAfterMigration = ether("1000");
-      const withdrawalVaultBalanceAtFirstReportRefSlot =
-        withdrawalVaultBalanceAtMigration + freshCLWithdrawalsAfterMigration;
-      const clWithdrawalsSinceMigration =
-        withdrawalVaultBalanceAtFirstReportRefSlot - withdrawalVaultBalanceAtMigration;
-      const firstReportCLValidatorsBalanceDecrease = freshCLWithdrawalsAfterMigration;
+    // This test fixes the report-to-report WV baseline transition:
+    // 1. The first report may transfer part of WV into the Lido buffer.
+    // 2. The checker must store the after-transfer WV balance as the next baseline.
+    // 3. The next report then counts only the new WV delta as fresh CL withdrawals.
+    it("uses first-report after-transfer withdrawal vault balance as baseline for the next report", async () => {
       const balanceStats = await fixture.migrateMainnetLikeV3State();
-      const { accounting, deployChecker } = await fixture.deployAccountingAndChecker(withdrawalVaultBalanceAtMigration);
-      const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
-
-      const preCLValidatorsBalance = balanceStats.clValidatorsBalanceAtLastReport;
-      const preCLPendingBalance = balanceStats.clPendingBalanceAtLastReport;
-      const depositsForReport = balanceStats.depositedForCurrentReport;
-      expect(clWithdrawalsSinceMigration).to.equal(freshCLWithdrawalsAfterMigration);
-
-      // Match the CL decrease to only the fresh post-migration withdrawals.
-      const firstReportCheck = buildCLBalanceDecreaseReport({
-        preCLValidatorsBalance,
-        preCLPendingBalance,
-        clBalanceDecrease: firstReportCLValidatorsBalanceDecrease,
-        withdrawalVaultBalance: withdrawalVaultBalanceAtFirstReportRefSlot,
-        depositsForReport,
-      });
-
-      const migratedBaselineChecker = await deployChecker();
-      await migratedBaselineChecker.migrateBaselineSnapshot();
-
-      // The actual vault balance at the report reference slot must match the report payload.
-      await fixture.setWithdrawalVaultBalance(withdrawalVaultBalanceAtFirstReportRefSlot);
-
-      await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, firstReportCheck)).not.to.be
-        .reverted;
-    });
-
-    it("uses the first-report after-transfer vault balance as the next CL withdrawals baseline", async () => {
-      const withdrawalVaultBalanceAtMigration = ether("100000");
-
-      // First report observes new withdrawals, then Accounting transfers part of
-      // the vault balance to the buffer after the report is processed.
-      const firstReportCLWithdrawals = ether("20000");
-      const firstReportWithdrawalVaultBalance = withdrawalVaultBalanceAtMigration + firstReportCLWithdrawals;
-      const firstReportWithdrawalsVaultTransfer = ether("50000");
+      const migrationVaultBaseline = ether("100");
+      const firstReportFreshCLWithdrawals = ether("10");
+      const firstReportVaultBalanceBeforeTransfer = migrationVaultBaseline + firstReportFreshCLWithdrawals;
+      const firstReportVaultTransfer = ether("90");
       const firstReportVaultBalanceAfterTransfer =
-        firstReportWithdrawalVaultBalance - firstReportWithdrawalsVaultTransfer;
+        firstReportVaultBalanceBeforeTransfer - firstReportVaultTransfer;
+      const secondReportFreshCLWithdrawals = ether("1");
+      const secondReportVaultBalanceBeforeTransfer =
+        firstReportVaultBalanceAfterTransfer + secondReportFreshCLWithdrawals;
 
-      // Second report should measure new withdrawals from the after-transfer balance,
-      // not from the first report reference-slot balance.
-      const secondReportCLWithdrawals = ether("10000");
-      const secondReportWithdrawalVaultBalance = firstReportVaultBalanceAfterTransfer + secondReportCLWithdrawals;
-      const balanceStats = await fixture.migrateMainnetLikeV3State();
-      const { accounting, deployChecker } = await fixture.deployAccountingAndChecker(withdrawalVaultBalanceAtMigration);
+      const { accounting, checker } = await fixture.deployAccountingAndChecker(migrationVaultBaseline);
       const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+      await checker.migrateBaselineSnapshot();
 
-      const firstReportPreCLValidatorsBalance = balanceStats.clValidatorsBalanceAtLastReport;
-      const firstReportPreCLPendingBalance = balanceStats.clPendingBalanceAtLastReport;
-      const firstReportDepositsForReport = balanceStats.depositedForCurrentReport;
-      expect(firstReportWithdrawalVaultBalance - withdrawalVaultBalanceAtMigration).to.equal(firstReportCLWithdrawals);
+      // Step 1. Make the WV sequence around the first report explicit:
+      //   migration baseline: 100 ETH
+      //   before transfer:    110 ETH = 100 ETH baseline + 10 ETH fresh withdrawals
+      //   after transfer:      20 ETH = 110 ETH - 90 ETH moved to the Lido buffer
+      expect(firstReportVaultBalanceBeforeTransfer).to.equal(ether("110"));
+      expect(firstReportVaultBalanceAfterTransfer).to.equal(ether("20"));
 
-      // First report also records withdrawalsVaultTransfer, which updates the private
-      // vault baseline to the after-transfer balance for subsequent reports.
-      const firstReportCheck = buildCLBalanceDecreaseReport({
-        preCLValidatorsBalance: firstReportPreCLValidatorsBalance,
-        preCLPendingBalance: firstReportPreCLPendingBalance,
-        clBalanceDecrease: firstReportCLWithdrawals,
-        withdrawalVaultBalance: firstReportWithdrawalVaultBalance,
-        depositsForReport: firstReportDepositsForReport,
-        withdrawalsVaultTransfer: firstReportWithdrawalsVaultTransfer,
-      });
-
-      const migratedBaselineChecker = await deployChecker();
-      await migratedBaselineChecker.migrateBaselineSnapshot();
-      await fixture.setWithdrawalVaultBalance(firstReportWithdrawalVaultBalance);
-      await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, firstReportCheck)).not.to.be
-        .reverted;
-
-      const secondReportPreCLValidatorsBalance = firstReportCheck.postCLValidatorsBalance;
-      const secondReportPreCLPendingBalance = firstReportCheck.postCLPendingBalance;
-      const secondReportDepositsForReport = 0n;
-      expect(secondReportWithdrawalVaultBalance - firstReportVaultBalanceAfterTransfer).to.equal(
-        secondReportCLWithdrawals,
-      );
-
-      // Now the second report passes only if the checker baseline was updated to
-      // firstReportVaultBalanceAfterTransfer.
-      const secondReportCheck = buildCLBalanceDecreaseReport({
-        preCLValidatorsBalance: secondReportPreCLValidatorsBalance,
-        preCLPendingBalance: secondReportPreCLPendingBalance,
-        clBalanceDecrease: secondReportCLWithdrawals,
-        withdrawalVaultBalance: secondReportWithdrawalVaultBalance,
-        depositsForReport: secondReportDepositsForReport,
-      });
-
-      await fixture.setWithdrawalVaultBalance(secondReportWithdrawalVaultBalance);
-      await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, secondReportCheck)).not.to.be
-        .reverted;
-    });
-  });
-
-  context("migration-time withdrawal vault balance in the CL decrease window", () => {
-    it("does not offset first-report CL decrease with migration-time withdrawal vault balance", async () => {
-      const withdrawalVaultBalanceAtMigration = ether("400000");
-
-      // No fresh WV delta exists after migration, but CL balance decreases by the
-      // full migration-time WV amount. The decrease checker must not offset it.
-      const withdrawalVaultBalanceAtFirstReportRefSlot = withdrawalVaultBalanceAtMigration;
-      const clWithdrawalsSinceMigration =
-        withdrawalVaultBalanceAtFirstReportRefSlot - withdrawalVaultBalanceAtMigration;
-      const clValidatorsBalanceDecrease = withdrawalVaultBalanceAtMigration;
-      const balanceStats = await fixture.migrateMainnetLikeV3State();
-      const { accounting, deployChecker } = await fixture.deployAccountingAndChecker(withdrawalVaultBalanceAtMigration);
-      const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
-
-      const preCLValidatorsBalance = balanceStats.clValidatorsBalanceAtLastReport;
-      const preCLPendingBalance = balanceStats.clPendingBalanceAtLastReport;
-      const depositsForReport = balanceStats.depositedForCurrentReport;
-      expect(clWithdrawalsSinceMigration).to.equal(0n);
-
-      // Since clWithdrawalsSinceMigration is zero, this entire decrease is checked
-      // against the bootstrap-adjusted CL balance decrease limit.
-      const firstReportCheck = buildCLBalanceDecreaseReport({
-        preCLValidatorsBalance,
-        preCLPendingBalance,
-        clBalanceDecrease: clValidatorsBalanceDecrease,
-        withdrawalVaultBalance: withdrawalVaultBalanceAtFirstReportRefSlot,
-        depositsForReport,
-      });
-
-      const migratedBaselineChecker = await deployChecker();
-      await migratedBaselineChecker.migrateBaselineSnapshot();
-
-      const maxAllowedCLBalanceDecrease = calcMaxAllowedFirstReportCLBalanceDecrease(preCLValidatorsBalance);
-
-      await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, firstReportCheck))
-        .to.be.revertedWithCustomError(migratedBaselineChecker, "IncorrectCLBalanceDecrease")
-        .withArgs(clValidatorsBalanceDecrease, maxAllowedCLBalanceDecrease);
-    });
-
-    const prepareFirstReportDecreaseAtMigrationVaultBalance = async (
-      migratedNetwork: MigratedNetworkScenario,
-      withdrawalVaultBalanceAtMigration: bigint,
-    ) => {
-      const balanceStats = await fixture.migrateNetworkV3State(migratedNetwork);
-      const preCLValidatorsBalance = balanceStats.clValidatorsBalanceAtLastReport;
-
-      // The safe migration WV cap is network-size dependent because the decrease
-      // limit is proportional to migrated CL validator balance.
-      const maxSafeMigrationWithdrawalVaultBalance =
-        calcMaxAllowedFirstReportCLBalanceDecrease(preCLValidatorsBalance);
-      expect(maxSafeMigrationWithdrawalVaultBalance).to.equal(
-        migratedNetwork.expectedBootstrapAdjustedFirstReportCLDecreaseLimit,
-      );
-
-      // Boundary cases isolate migration-time WV: no additional WV delta appears
-      // between migration and the first report reference slot.
-      const withdrawalVaultBalanceAtFirstReportRefSlot = withdrawalVaultBalanceAtMigration;
-      const clWithdrawalsSinceMigration =
-        withdrawalVaultBalanceAtFirstReportRefSlot - withdrawalVaultBalanceAtMigration;
-      expect(clWithdrawalsSinceMigration).to.equal(0n);
-
-      const { accounting, deployChecker } = await fixture.deployAccountingAndChecker(withdrawalVaultBalanceAtMigration);
-      const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
-      const firstReportCLValidatorsBalanceDecrease = withdrawalVaultBalanceAtMigration;
-      const firstReportCheck = buildCLBalanceDecreaseReport({
-        preCLValidatorsBalance,
+      // Step 2. The first report records only the 10 ETH fresh WV delta,
+      // then finalizes the checker baseline to the 20 ETH after-transfer balance.
+      await fixture.setWithdrawalVaultBalance(firstReportVaultBalanceBeforeTransfer);
+      const firstReport = buildCLBalanceDecreaseReport({
+        preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
         preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
-        clBalanceDecrease: firstReportCLValidatorsBalanceDecrease,
-        withdrawalVaultBalance: withdrawalVaultBalanceAtFirstReportRefSlot,
+        clBalanceDecrease: firstReportFreshCLWithdrawals,
+        withdrawalVaultBalance: firstReportVaultBalanceBeforeTransfer,
         depositsForReport: balanceStats.depositedForCurrentReport,
+        withdrawalsVaultTransfer: firstReportVaultTransfer,
       });
+      await expect(checkAccountingOracleReport(checker, accountingSigner, firstReport)).not.to.be.reverted;
 
-      const migratedBaselineChecker = await deployChecker();
-      await migratedBaselineChecker.migrateBaselineSnapshot();
+      expect(secondReportVaultBalanceBeforeTransfer).to.equal(ether("21"));
+      expect(secondReportVaultBalanceBeforeTransfer).to.be.lt(firstReportVaultBalanceBeforeTransfer);
 
-      return {
-        migratedBaselineChecker,
-        accountingSigner,
-        firstReportCheck,
-        firstReportCLValidatorsBalanceDecrease,
-        maxSafeMigrationWithdrawalVaultBalance,
-      };
-    };
-
-    for (const migratedNetwork of [hoodiLikeMigratedNetwork, mainnetLikeMigratedNetwork]) {
-      context(migratedNetwork.name, () => {
-        it("accepts a first-report decrease one wei below the maximum safe migration vault balance", async () => {
-          // One wei below the derived cap must still pass for this network size.
-          const withdrawalVaultBalanceAtMigration =
-            migratedNetwork.expectedBootstrapAdjustedFirstReportCLDecreaseLimit - 1n;
-          const { migratedBaselineChecker, accountingSigner, firstReportCheck } =
-            await prepareFirstReportDecreaseAtMigrationVaultBalance(migratedNetwork, withdrawalVaultBalanceAtMigration);
-
-          await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, firstReportCheck)).not.to
-            .be.reverted;
-        });
-
-        it("reverts a first-report decrease one wei above the maximum safe migration vault balance", async () => {
-          // One wei above the same cap must fail and expose the exact cap in revert args.
-          const withdrawalVaultBalanceAtMigration =
-            migratedNetwork.expectedBootstrapAdjustedFirstReportCLDecreaseLimit + 1n;
-          const {
-            migratedBaselineChecker,
-            accountingSigner,
-            firstReportCheck,
-            firstReportCLValidatorsBalanceDecrease,
-            maxSafeMigrationWithdrawalVaultBalance,
-          } = await prepareFirstReportDecreaseAtMigrationVaultBalance(migratedNetwork, withdrawalVaultBalanceAtMigration);
-
-          await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, firstReportCheck))
-            .to.be.revertedWithCustomError(migratedBaselineChecker, "IncorrectCLBalanceDecrease")
-            .withArgs(firstReportCLValidatorsBalanceDecrease, maxSafeMigrationWithdrawalVaultBalance);
-        });
+      // Step 3. The second report sees 21 ETH in WV. It is below the first
+      // report's 110 ETH before-transfer balance, so it can only pass and record
+      // 1 ETH of fresh withdrawals if the checker uses the 20 ETH baseline.
+      await fixture.setWithdrawalVaultBalance(secondReportVaultBalanceBeforeTransfer);
+      const secondReport = buildCLBalanceDecreaseReport({
+        preCLValidatorsBalance: firstReport.postCLValidatorsBalance,
+        preCLPendingBalance: firstReport.postCLPendingBalance,
+        clBalanceDecrease: secondReportFreshCLWithdrawals,
+        withdrawalVaultBalance: secondReportVaultBalanceBeforeTransfer,
+        withdrawalsVaultTransfer: 0n,
       });
-    }
+      await expect(checkAccountingOracleReport(checker, accountingSigner, secondReport)).not.to.be.reverted;
+
+      const reportDataCount = await checker.getReportDataCount();
+      const secondReportData = await checker.reportData(reportDataCount - 1n);
+      expect(secondReportData.clWithdrawals).to.equal(secondReportFreshCLWithdrawals);
+    });
   });
 
-  context("36-day CL decrease headroom after migration-time vault balance", () => {
-    const required36DayCLDecreaseHeadroom = ether("50000");
+  context("36-day CL decrease window after migration", () => {
+    // This test fixes the long-window effect of migration:
+    // 1. The migration bootstrap writes 57_600 ETH of analytical CL withdrawals
+    //    into reportData, which lowers the 36-day decrease limit.
+    // 2. WV already present at migration is seeded as the vault baseline.
+    //    If the first report sees the same WV, it records zero fresh CL withdrawals.
+    // 3. A first-report CL decrease equal to that migrated WV therefore spends
+    //    the ordinary 36-day headroom, and the next report may spend only the remainder.
+    it("must leave only remaining 36-day CL decrease headroom after first report spends migration-time WV", async () => {
+      const balanceStats = await fixture.migrateMainnetLikeV3State();
+      const migrationTimeVaultBalance = ether("100000");
 
-    for (const migratedNetwork of [hoodiLikeMigratedNetwork, mainnetLikeMigratedNetwork]) {
-      context(migratedNetwork.name, () => {
-        it("keeps the chosen CL decrease headroom when migration vault balance is capped", async () => {
-          // Compare raw 36-day decrease capacity with the bootstrap-adjusted capacity;
-          // the synthetic bootstrap withdrawal flow consumes part of the window.
-          const rawFullWindowCLDecreaseLimit = calcMaxAllowedWindowCLBalanceDecrease(
-            migratedNetwork.clValidatorsBalance,
-            0n,
-            0n,
-          );
-          const bootstrapAdjustedFullWindowCLDecreaseLimit = calcMaxAllowedWindowCLBalanceDecrease(
-            migratedNetwork.clValidatorsBalance,
-            0n,
-            maxWithdrawalsByChurnLimitPerReport,
-          );
-          expect(bootstrapAdjustedFullWindowCLDecreaseLimit).to.equal(
-            migratedNetwork.expectedBootstrapAdjustedFirstReportCLDecreaseLimit,
-          );
-          expect(rawFullWindowCLDecreaseLimit - bootstrapAdjustedFullWindowCLDecreaseLimit).to.equal(
-            expectedCLDecreaseLimitLossFromMigrationBootstrap,
-          );
+      // Step 1. Fix the total 36-day budget after migration bootstrap.
+      // Mainnet-like 9M ETH would allow 324,000 ETH at 3.6%, but the
+      // analytical 57,600 ETH bootstrap withdrawal reduces it to 321,926.4 ETH.
+      const maxCLDecreaseWithoutMigrationBootstrap = calcMaxAllowedWindowCLBalanceDecrease(
+        balanceStats.clValidatorsBalanceAtLastReport,
+        0n,
+        0n,
+      );
+      const maxCLDecreaseWithMigrationBootstrap = calcMaxAllowedFirstReportCLBalanceDecrease(
+        balanceStats.clValidatorsBalanceAtLastReport,
+      );
+      const remainingHeadroomAfterFirstReport = maxCLDecreaseWithMigrationBootstrap - migrationTimeVaultBalance;
 
-          // Choose migration WV so exactly the requested headroom remains for
-          // decreases reported before the 36-day window closes.
-          const maxMigrationWithdrawalVaultBalanceKeepingHeadroom =
-            bootstrapAdjustedFullWindowCLDecreaseLimit - required36DayCLDecreaseHeadroom;
-          const withdrawalVaultBalanceAtMigration = maxMigrationWithdrawalVaultBalanceKeepingHeadroom;
-          const remaining36DayCLDecreaseHeadroom =
-            bootstrapAdjustedFullWindowCLDecreaseLimit - withdrawalVaultBalanceAtMigration;
-          expect(remaining36DayCLDecreaseHeadroom).to.equal(required36DayCLDecreaseHeadroom);
+      expect(maxCLDecreaseWithMigrationBootstrap).to.equal(
+        maxCLDecreaseWithoutMigrationBootstrap - expectedCLDecreaseLimitLossFromMigrationBootstrap,
+      );
+      expect(maxCLDecreaseWithMigrationBootstrap).to.equal(ether("321926.4"));
+      expect(remainingHeadroomAfterFirstReport).to.equal(ether("221926.4"));
 
-          const {
-            migratedBaselineChecker,
-            accountingSigner,
-            migrationTimeCLDecrease,
-            nextReportPreCLValidatorsBalance,
-            nextReportPreCLPendingBalance,
-            nextReportWithdrawalVaultBalance,
-          } = await prepareCheckerAfterFirstReportWithMigrationVaultBalance(
-            migratedNetwork,
-            withdrawalVaultBalanceAtMigration,
-          );
+      const { accounting, deployStandaloneChecker } =
+        await fixture.deployAccountingAndChecker(migrationTimeVaultBalance);
+      const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
 
-          // The next report is placed at day 36; together with the first report it
-          // exactly fills the bootstrap-adjusted sliding window.
-          const elapsedSinceFirstReportToClose36DayWindow = 35n * oneDay;
-          expect(oneDay + elapsedSinceFirstReportToClose36DayWindow).to.equal(36n * oneDay);
-          const day36CLValidatorsBalanceDecrease = remaining36DayCLDecreaseHeadroom;
-          const totalCLDecreaseInsideWindow = migrationTimeCLDecrease + day36CLValidatorsBalanceDecrease;
-          expect(totalCLDecreaseInsideWindow).to.equal(bootstrapAdjustedFullWindowCLDecreaseLimit);
+      const passFirstPostMigrationReport = async () => {
+        const checker = await deployStandaloneChecker();
+        await checker.migrateBaselineSnapshot();
 
-          const day36ReportCheck = buildCLBalanceDecreaseReport({
-            timeElapsed: elapsedSinceFirstReportToClose36DayWindow,
-            preCLValidatorsBalance: nextReportPreCLValidatorsBalance,
-            preCLPendingBalance: nextReportPreCLPendingBalance,
-            clBalanceDecrease: day36CLValidatorsBalanceDecrease,
-            withdrawalVaultBalance: nextReportWithdrawalVaultBalance,
-          });
-
-          await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, day36ReportCheck)).not.to
-            .be.reverted;
+        // Step 2. Spend 100,000 ETH of the 36-day budget on the first report.
+        // The same 100,000 ETH was already in WV at migration, so the checker
+        // records zero fresh CL withdrawals and treats the CL drop as window usage.
+        const firstReport = buildCLBalanceDecreaseReport({
+          preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
+          preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
+          clBalanceDecrease: migrationTimeVaultBalance,
+          withdrawalVaultBalance: migrationTimeVaultBalance,
+          depositsForReport: balanceStats.depositedForCurrentReport,
         });
+        await expect(checkAccountingOracleReport(checker, accountingSigner, firstReport)).not.to.be.reverted;
 
-        it("reverts one wei above the migration vault balance cap that preserves the chosen headroom", async () => {
-          // Start from the same network-size dependent window limit.
-          const bootstrapAdjustedFullWindowCLDecreaseLimit = calcMaxAllowedWindowCLBalanceDecrease(
-            migratedNetwork.clValidatorsBalance,
-            0n,
-            maxWithdrawalsByChurnLimitPerReport,
-          );
-          expect(bootstrapAdjustedFullWindowCLDecreaseLimit).to.equal(
-            migratedNetwork.expectedBootstrapAdjustedFirstReportCLDecreaseLimit,
-          );
+        const reportDataCount = await checker.getReportDataCount();
+        const firstReportData = await checker.reportData(reportDataCount - 1n);
+        expect(firstReportData.clWithdrawals).to.equal(0n);
 
-          // Add one wei too much migration WV, leaving one wei less than the chosen
-          // future headroom inside the 36-day window.
-          const maxMigrationWithdrawalVaultBalanceKeepingHeadroom =
-            bootstrapAdjustedFullWindowCLDecreaseLimit - required36DayCLDecreaseHeadroom;
-          const withdrawalVaultBalanceAtMigration = maxMigrationWithdrawalVaultBalanceKeepingHeadroom + 1n;
-          const remaining36DayCLDecreaseHeadroom =
-            bootstrapAdjustedFullWindowCLDecreaseLimit - withdrawalVaultBalanceAtMigration;
-          expect(remaining36DayCLDecreaseHeadroom).to.equal(required36DayCLDecreaseHeadroom - 1n);
+        return { checker, firstReport };
+      };
 
-          const {
-            migratedBaselineChecker,
-            accountingSigner,
-            migrationTimeCLDecrease,
-            nextReportPreCLValidatorsBalance,
-            nextReportPreCLPendingBalance,
-            nextReportWithdrawalVaultBalance,
-          } = await prepareCheckerAfterFirstReportWithMigrationVaultBalance(
-            migratedNetwork,
-            withdrawalVaultBalanceAtMigration,
-          );
-
-          // Asking for the original headroom now exceeds the remaining 36-day
-          // decrease window by exactly one wei.
-          const elapsedSinceFirstReportToClose36DayWindow = 35n * oneDay;
-          expect(oneDay + elapsedSinceFirstReportToClose36DayWindow).to.equal(36n * oneDay);
-          const day36CLValidatorsBalanceDecrease = required36DayCLDecreaseHeadroom;
-          const totalCLDecreaseInsideWindow = migrationTimeCLDecrease + day36CLValidatorsBalanceDecrease;
-          expect(totalCLDecreaseInsideWindow).to.equal(bootstrapAdjustedFullWindowCLDecreaseLimit + 1n);
-
-          const day36ReportCheck = buildCLBalanceDecreaseReport({
-            timeElapsed: elapsedSinceFirstReportToClose36DayWindow,
-            preCLValidatorsBalance: nextReportPreCLValidatorsBalance,
-            preCLPendingBalance: nextReportPreCLPendingBalance,
-            clBalanceDecrease: day36CLValidatorsBalanceDecrease,
-            withdrawalVaultBalance: nextReportWithdrawalVaultBalance,
-          });
-
-          await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, day36ReportCheck))
-            .to.be.revertedWithCustomError(migratedBaselineChecker, "IncorrectCLBalanceDecrease")
-            .withArgs(totalCLDecreaseInsideWindow, bootstrapAdjustedFullWindowCLDecreaseLimit);
-        });
+      // Step 3a. The exact remaining headroom is still accepted.
+      const { checker: allowedChecker, firstReport: allowedFirstReport } = await passFirstPostMigrationReport();
+      const allowedSecondReport = buildCLBalanceDecreaseReport({
+        preCLValidatorsBalance: allowedFirstReport.postCLValidatorsBalance,
+        preCLPendingBalance: allowedFirstReport.postCLPendingBalance,
+        clBalanceDecrease: remainingHeadroomAfterFirstReport,
+        withdrawalVaultBalance: migrationTimeVaultBalance,
       });
-    }
+
+      await expect(checkAccountingOracleReport(allowedChecker, accountingSigner, allowedSecondReport)).not.to.be
+        .reverted;
+
+      // Step 3b. One wei above the remaining headroom must revert against the
+      // same 321,926.4 ETH total window limit.
+      const { checker: excessiveChecker, firstReport: excessiveFirstReport } = await passFirstPostMigrationReport();
+      const excessiveSecondReport = buildCLBalanceDecreaseReport({
+        preCLValidatorsBalance: excessiveFirstReport.postCLValidatorsBalance,
+        preCLPendingBalance: excessiveFirstReport.postCLPendingBalance,
+        clBalanceDecrease: remainingHeadroomAfterFirstReport + 1n,
+        withdrawalVaultBalance: migrationTimeVaultBalance,
+      });
+
+      await expect(checkAccountingOracleReport(excessiveChecker, accountingSigner, excessiveSecondReport))
+        .to.be.revertedWithCustomError(excessiveChecker, "IncorrectCLBalanceDecrease")
+        .withArgs(maxCLDecreaseWithMigrationBootstrap + 1n, maxCLDecreaseWithMigrationBootstrap);
+    });
   });
 });

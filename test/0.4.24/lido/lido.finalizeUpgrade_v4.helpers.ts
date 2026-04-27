@@ -95,7 +95,7 @@ export const expectedCLDecreaseLimitLossFromMigrationBootstrap =
 const annualBalanceIncreaseDenominator = 365n * oneDay * TOTAL_BASIS_POINTS;
 
 export const hoodiLikeMigratedNetwork: MigratedNetworkScenario = {
-  name: "Hoodi-like 2M ETH migrated network",
+  name: "Hoodi-like 2M ETH migrated protocol",
   depositedValidators: 62_500n,
   clValidators: 62_500n,
   clValidatorsBalance: ether("2000000"),
@@ -103,7 +103,7 @@ export const hoodiLikeMigratedNetwork: MigratedNetworkScenario = {
 };
 
 export const mainnetLikeMigratedNetwork: MigratedNetworkScenario = {
-  name: "Mainnet-like 9M ETH migrated network",
+  name: "Mainnet-like 9M ETH migrated protocol",
   depositedValidators: 281_250n,
   clValidators: 281_250n,
   clValidatorsBalance: ether("9000000"),
@@ -269,10 +269,21 @@ export const useFinalizeUpgradeV4Fixture = () => {
       deployer,
     )) as Accounting;
 
+    const deployStandaloneChecker = async () =>
+      (await ethers.deployContract("OracleReportSanityChecker", [
+        await locator.getAddress(),
+        await accounting.getAddress(),
+        deployer.address,
+        sanityCheckerLimits,
+      ])) as OracleReportSanityChecker;
+
+    const checker = await deployStandaloneChecker();
+
     await updateLidoLocatorImplementation(
       await locator.getAddress(),
       {
         accounting: await accounting.getAddress(),
+        oracleReportSanityChecker: await checker.getAddress(),
         withdrawalVault: withdrawalVault.address,
         elRewardsVault: elRewardsVault.address,
         burner: await burner.getAddress(),
@@ -281,15 +292,7 @@ export const useFinalizeUpgradeV4Fixture = () => {
       deployer,
     );
 
-    const deployChecker = async () =>
-      (await ethers.deployContract("OracleReportSanityChecker", [
-        await locator.getAddress(),
-        await accounting.getAddress(),
-        deployer.address,
-        sanityCheckerLimits,
-      ])) as OracleReportSanityChecker;
-
-    return { accounting, deployChecker };
+    return { accounting, checker, deployStandaloneChecker };
   };
 
   return {

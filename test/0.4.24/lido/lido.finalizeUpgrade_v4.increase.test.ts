@@ -9,15 +9,20 @@ import {
   buildCLBalanceIncreaseReport,
   calcAnnualValidatorsBalanceIncreaseLimit,
   checkAccountingOracleReport,
-  initialValue,
   mainnetLikeMigratedNetwork,
-  maxWithdrawalsByChurnLimitPerReport,
+  oneDay,
+  sanityCheckerLimits,
   useFinalizeUpgradeV4Fixture,
 } from "./lido.finalizeUpgrade_v4.helpers";
 
-describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check invariants", () => {
+describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
   const fixture = useFinalizeUpgradeV4Fixture();
   const lastVaultBalanceAfterTransferSlot = 4n;
+  const depositSize = ether("32");
+  const noWithdrawalVaultBalance = 0n;
+  const migrationRefSlot = 1n;
+  const firstPostMigrationReportRefSlot = migrationRefSlot + 1n;
+  const appearedEthLimitPerDay = ether(sanityCheckerLimits.appearedEthAmountPerDayLimit.toString());
 
   const setLastVaultBalanceAfterTransfer = async (checker: OracleReportSanityChecker, value: bigint) => {
     await ethers.provider.send("hardhat_setStorageAt", [
@@ -27,193 +32,248 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check invariant
     ]);
   };
 
-  context("migrated deposits", () => {
-    it("keeps depositedForCurrentReport zero in the migration frame and seeds zero checker bootstrap deposits", async () => {
-      const migratedCLValidators = mainnetLikeMigratedNetwork.clValidators;
-      const migratedCLValidatorsBalance = mainnetLikeMigratedNetwork.clValidatorsBalance;
+  const migrateMainnetLikeStateWithTransientDeposits = async (transientDeposits: bigint) => {
+    expect(transientDeposits % depositSize).to.equal(0n);
 
-      // Simulate validators deposited before migration, but not yet visible as CL validators.
-      const transientDepositedValidators = 1_800n;
-      const migratedDepositedValidators = migratedCLValidators + transientDepositedValidators;
-      const migratedDepositsForReport = transientDepositedValidators * ether("32");
-      expect(migratedDepositsForReport).to.equal(maxWithdrawalsByChurnLimitPerReport);
-
-      // In the migration frame Lido keeps transient deposits in depositedSinceLastReport,
-      // while depositedForCurrentReport remains zero until the next oracle frame.
-      const balanceStats = await fixture.migrateV3State({
-        bufferedEther: initialValue,
-        depositedValidators: migratedDepositedValidators,
-        clValidatorsBalance: migratedCLValidatorsBalance,
-        clValidators: migratedCLValidators,
-      });
-      expect(balanceStats.depositedSinceLastReport).to.equal(migratedDepositsForReport);
-      expect(balanceStats.depositedForCurrentReport).to.equal(0n);
-
-      const { deployChecker } = await fixture.deployAccountingAndChecker(0n);
-      const migratedBaselineChecker = await deployChecker();
-
-      // Checker bootstrap uses Lido's current report frame, so migrated deposits are not
-      // included as checker deposits yet; only the synthetic churn-limited flow is seeded.
-      await expect(migratedBaselineChecker.migrateBaselineSnapshot())
-        .to.emit(migratedBaselineChecker, "BaselineSnapshotMigrated")
-        .withArgs(migratedCLValidatorsBalance, 0n, maxWithdrawalsByChurnLimitPerReport);
-
-      // Two snapshots are created: the historical baseline and the bootstrap flow snapshot.
-      const baselineSnapshot = await migratedBaselineChecker.reportData(0n);
-      const bootstrapFlowSnapshot = await migratedBaselineChecker.reportData(1n);
-      expect(baselineSnapshot.clBalance).to.equal(migratedCLValidatorsBalance);
-      expect(baselineSnapshot.deposits).to.equal(0n);
-      expect(baselineSnapshot.clWithdrawals).to.equal(0n);
-      expect(bootstrapFlowSnapshot.clBalance).to.equal(migratedCLValidatorsBalance);
-      expect(bootstrapFlowSnapshot.deposits).to.equal(0n);
-      expect(bootstrapFlowSnapshot.clWithdrawals).to.equal(maxWithdrawalsByChurnLimitPerReport);
+    const transientValidators = transientDeposits / depositSize;
+    return fixture.migrateNetworkV3State({
+      ...mainnetLikeMigratedNetwork,
+      depositedValidators: mainnetLikeMigratedNetwork.clValidators + transientValidators,
     });
+  };
 
-    it("requires migrated transient deposits to fund validators increase while migrated pending balance stays zero", async () => {
-      const migratedCLValidators = mainnetLikeMigratedNetwork.clValidators;
-      const migratedCLValidatorsBalance = mainnetLikeMigratedNetwork.clValidatorsBalance;
+  const moveToFirstPostMigrationReportFrame = async () => {
+    await fixture.accountingOracle.mock_setProcessingState(firstPostMigrationReportRefSlot, true, true);
+    return fixture.lido.getBalanceStats();
+  };
 
-      // Use a non-trivial transient deposit amount that is much larger than the daily APR cap.
-      const transientDepositedValidators = 1_000n;
-      const migratedDepositedValidators = migratedCLValidators + transientDepositedValidators;
-      const migratedDepositsForReport = transientDepositedValidators * ether("32");
-      expect(migratedDepositsForReport).to.equal(ether("32000"));
+  const deployCheckersAtMigrationFrame = async (count: number) => {
+    const { accounting, deployStandaloneChecker } = await fixture.deployAccountingAndChecker(noWithdrawalVaultBalance);
+    const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+    const checkers: OracleReportSanityChecker[] = [];
 
-      // Migration stores no pending balance, but preserves the transient deposit amount.
-      const balanceStatsAtMigration = await fixture.migrateV3State({
-        bufferedEther: initialValue,
-        depositedValidators: migratedDepositedValidators,
-        clValidatorsBalance: migratedCLValidatorsBalance,
-        clValidators: migratedCLValidators,
-      });
-      expect(balanceStatsAtMigration.clPendingBalanceAtLastReport).to.equal(0n);
-      expect(balanceStatsAtMigration.depositedSinceLastReport).to.equal(migratedDepositsForReport);
-      expect(balanceStatsAtMigration.depositedForCurrentReport).to.equal(0n);
+    for (let i = 0; i < count; ++i) {
+      const checker = await deployStandaloneChecker();
+      await checker.migrateBaselineSnapshot();
+      checkers.push(checker);
+    }
 
-      const { accounting, deployChecker } = await fixture.deployAccountingAndChecker(0n);
-      const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+    return { accountingSigner, checkers };
+  };
 
-      const migratedBaselineChecker = await deployChecker();
-      await expect(migratedBaselineChecker.migrateBaselineSnapshot())
-        .to.emit(migratedBaselineChecker, "BaselineSnapshotMigrated")
-        .withArgs(migratedCLValidatorsBalance, 0n, maxWithdrawalsByChurnLimitPerReport);
+  // This test fixes the CL increase risk from an unseeded WV baseline:
+  // 1. Choose migration-time WV equal to the first-report APR cap plus 1 wei.
+  // 2. Production migration seeds that WV as baseline, so a neutral report passes.
+  // 3. A zero WV baseline would count the same WV as fresh CL withdrawals and
+  //    make the neutral report look like excessive CL balance increase.
+  it("must seed migration-time withdrawal vault balance so unaccounted vault ETH is not interpreted as CL balance increase", async () => {
+    // Step 1. Pick the smallest migration-time WV that would exceed the
+    // first-report annual-growth gap if it were counted as fresh withdrawals.
+    const balanceStats = await fixture.migrateMainnetLikeV3State();
+    const maxAllowedValidatorsBalanceIncrease = calcAnnualValidatorsBalanceIncreaseLimit(
+      balanceStats.clValidatorsBalanceAtLastReport,
+      oneDay,
+    );
+    const migrationVaultBalance = maxAllowedValidatorsBalanceIncrease + 1n;
 
-      // Move into the next oracle frame: the same migrated transient deposits now become
-      // depositedForCurrentReport and may fund the validators balance increase.
-      await fixture.accountingOracle.mock_setProcessingState(2, true, true);
-      const balanceStatsAtFirstReport = await fixture.lido.getBalanceStats();
-      expect(balanceStatsAtFirstReport.clPendingBalanceAtLastReport).to.equal(0n);
-      expect(balanceStatsAtFirstReport.depositedSinceLastReport).to.equal(migratedDepositsForReport);
-      expect(balanceStatsAtFirstReport.depositedForCurrentReport).to.equal(migratedDepositsForReport);
+    const { accounting, checker: checkerWithMigratedVaultBaseline, deployStandaloneChecker } =
+      await fixture.deployAccountingAndChecker(migrationVaultBalance);
+    const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
 
-      const preCLValidatorsBalance = balanceStatsAtFirstReport.clValidatorsBalanceAtLastReport;
-      const preCLPendingBalance = balanceStatsAtFirstReport.clPendingBalanceAtLastReport;
-      const depositsForReport = balanceStatsAtFirstReport.depositedForCurrentReport;
-      const reportFundedByMigratedDeposits = buildCLBalanceIncreaseReport({
-        preCLValidatorsBalance,
-        preCLPendingBalance,
-        clBalanceIncrease: migratedDepositsForReport,
-        depositsForReport,
-      });
-
-      // Positive path: activation is accepted because Accounting passes migrated deposits
-      // into the report, even though migrated pending balance is always zero.
-      await expect(
-        checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, reportFundedByMigratedDeposits),
-      ).not.to.be.reverted;
-
-      // Counterfactual: the same activation without depositsForReport is checked only
-      // against APR and should be rejected.
-      const reportWithoutMigratedDeposits = {
-        ...reportFundedByMigratedDeposits,
-        depositsForReport: 0n,
-      };
-      const maxAllowedValidatorsBalanceIncreaseWithoutDeposits = calcAnnualValidatorsBalanceIncreaseLimit(
-        preCLValidatorsBalance,
-        reportWithoutMigratedDeposits.timeElapsed,
-      );
-
-      const checkerWithoutMigratedDeposits = await deployChecker();
-      await checkerWithoutMigratedDeposits.migrateBaselineSnapshot();
-      await expect(
-        checkAccountingOracleReport(checkerWithoutMigratedDeposits, accountingSigner, reportWithoutMigratedDeposits),
-      )
-        .to.be.revertedWithCustomError(checkerWithoutMigratedDeposits, "IncorrectTotalCLBalanceIncrease")
-        .withArgs(maxAllowedValidatorsBalanceIncreaseWithoutDeposits, migratedDepositsForReport);
+    // Step 2. The first report is neutral: no CL increase and the same WV balance
+    // as at migration. Production baseline seeding must make this pass.
+    const firstReportCheck = buildCLBalanceIncreaseReport({
+      preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
+      preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
+      clBalanceIncrease: 0n,
+      withdrawalVaultBalance: migrationVaultBalance,
+      depositsForReport: balanceStats.depositedForCurrentReport,
     });
+    expect(firstReportCheck.timeElapsed).to.equal(oneDay);
+
+    // Production path: migrated WV is the baseline, so it is not counted as fresh withdrawals.
+    await checkerWithMigratedVaultBaseline.migrateBaselineSnapshot();
+    await expect(
+      checkAccountingOracleReport(checkerWithMigratedVaultBaseline, accountingSigner, firstReportCheck),
+    ).not.to.be.reverted;
+
+    // Step 3. Counterfactual: if migration did not seed the WV baseline, the same
+    // WV balance would look like fresh CL withdrawals.
+    const checkerWithZeroVaultBaseline = await deployStandaloneChecker();
+    await checkerWithZeroVaultBaseline.migrateBaselineSnapshot();
+    await setLastVaultBalanceAfterTransfer(checkerWithZeroVaultBaseline, 0n);
+
+    // Step 4. Fresh CL withdrawals lower the checker-side preCLValidatorsBalance.
+    // Since the report itself keeps postCLValidatorsBalance unchanged, the same
+    // amount appears as artificial CL balance increase and exceeds the APR cap.
+    const unseededVaultBaseline = 0n;
+    const unseededCLWithdrawals = migrationVaultBalance - unseededVaultBaseline;
+    const preCLValidatorsBalanceAfterWithdrawals = firstReportCheck.preCLValidatorsBalance - unseededCLWithdrawals;
+    const apparentValidatorsBalanceIncrease =
+      firstReportCheck.postCLValidatorsBalance - preCLValidatorsBalanceAfterWithdrawals;
+    expect(unseededCLWithdrawals).to.equal(migrationVaultBalance);
+    expect(firstReportCheck.postCLValidatorsBalance).to.equal(firstReportCheck.preCLValidatorsBalance);
+    expect(apparentValidatorsBalanceIncrease).to.equal(maxAllowedValidatorsBalanceIncrease + 1n);
+
+    await expect(checkAccountingOracleReport(checkerWithZeroVaultBaseline, accountingSigner, firstReportCheck))
+      .to.be.revertedWithCustomError(checkerWithZeroVaultBaseline, "IncorrectTotalCLBalanceIncrease")
+      .withArgs(maxAllowedValidatorsBalanceIncrease, apparentValidatorsBalanceIncrease);
   });
 
-  context("migration-time withdrawal vault balance", () => {
-    it("does not treat migration-time withdrawal vault balance as first-report CL withdrawals", async () => {
-      const migrationVaultBalance = ether("3000");
-      const balanceStats = await fixture.migrateMainnetLikeV3State();
+  context("migrated transient deposits on a mainnet-like network", () => {
+    // These cases fix where migrated transient deposits are visible:
+    // 1. In the migration frame, preCLPendingBalance is reset to zero and
+    //    depositedForCurrentReport is still zero.
+    // 2. In the first post-migration report frame, the same transient amount
+    //    becomes depositedForCurrentReport.
+    // 3. The checker funding input is therefore preCLPendingBalance + deposits.
+    for (const transientDeposits of [0n, depositSize, ether("57600"), ether("57632")]) {
+      it(`must preserve ${ethers.formatEther(transientDeposits)} migrated transient ETH as preCLPendingBalance plus deposits`, async () => {
+        // Step 1. Same frame as migration: the transient amount exists in Lido's
+        // depositedSinceLastReport state but is not fed to the checker yet.
+        const sameFrameBalanceStats = await migrateMainnetLikeStateWithTransientDeposits(transientDeposits);
 
-      // deployAccountingAndChecker seeds the checker with the vault balance that exists
-      // at migration time; it must become the baseline, not a fresh withdrawal.
-      const { accounting, deployChecker } = await fixture.deployAccountingAndChecker(migrationVaultBalance);
-      const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+        expect(sameFrameBalanceStats.clValidatorsBalanceAtLastReport).to.equal(
+          mainnetLikeMigratedNetwork.clValidatorsBalance,
+        );
+        expect(sameFrameBalanceStats.clPendingBalanceAtLastReport).to.equal(0n);
+        expect(sameFrameBalanceStats.depositedSinceLastReport).to.equal(transientDeposits);
+        expect(sameFrameBalanceStats.depositedForCurrentReport).to.equal(0n);
+        expect(
+          sameFrameBalanceStats.clPendingBalanceAtLastReport + sameFrameBalanceStats.depositedForCurrentReport,
+        ).to.equal(0n);
 
-      // First report has no CL change and the same vault balance as at migration.
-      const preCLValidatorsBalance = balanceStats.clValidatorsBalanceAtLastReport;
-      const preCLPendingBalance = balanceStats.clPendingBalanceAtLastReport;
-      const depositsForReport = balanceStats.depositedForCurrentReport;
-      const firstReportCheck = buildCLBalanceIncreaseReport({
-        preCLValidatorsBalance,
-        preCLPendingBalance,
-        clBalanceIncrease: 0n,
-        withdrawalVaultBalance: migrationVaultBalance,
-        depositsForReport,
+        // Step 2. First post-migration report frame: the transient amount becomes
+        // depositsForReport and funds the checker together with preCLPendingBalance.
+        const nextFrameBalanceStats = await moveToFirstPostMigrationReportFrame();
+        expect(nextFrameBalanceStats.clValidatorsBalanceAtLastReport).to.equal(
+          mainnetLikeMigratedNetwork.clValidatorsBalance,
+        );
+        expect(nextFrameBalanceStats.clPendingBalanceAtLastReport).to.equal(0n);
+        expect(nextFrameBalanceStats.depositedSinceLastReport).to.equal(transientDeposits);
+        expect(nextFrameBalanceStats.depositedForCurrentReport).to.equal(transientDeposits);
+        expect(
+          nextFrameBalanceStats.clPendingBalanceAtLastReport + nextFrameBalanceStats.depositedForCurrentReport,
+        ).to.equal(transientDeposits);
       });
+    }
 
-      const migratedBaselineChecker = await deployChecker();
-      await migratedBaselineChecker.migrateBaselineSnapshot();
-      await expect(checkAccountingOracleReport(migratedBaselineChecker, accountingSigner, firstReportCheck)).not.to.be
-        .reverted;
-    });
+    // These boundary cases fix how migrated transient deposits affect CL increase:
+    // 1. Only the part that activates may be counted above the APR cap.
+    // 2. The remaining part must stay in postCLPendingBalance.
+    // 3. The checker accepts exactly activated deposits plus APR cap and rejects +1 wei.
+    for (const { name, transientDeposits, activatedDeposits } of [
+      {
+        name: "without migrated transient deposits",
+        transientDeposits: 0n,
+        activatedDeposits: 0n,
+      },
+      {
+        name: "when all migrated transient deposits remain pending",
+        transientDeposits: ether("57600"),
+        activatedDeposits: 0n,
+      },
+      {
+        name: "when part of migrated transient deposits activates",
+        transientDeposits: ether("57600"),
+        activatedDeposits: ether("19200"),
+      },
+      {
+        name: "when all migrated transient deposits activate within appeared limit",
+        transientDeposits: ether("57600"),
+        activatedDeposits: ether("57600"),
+      },
+    ]) {
+      it(`must allow only activated migrated deposits plus APR cap ${name}`, async () => {
+        // Step 1. Move from the migration frame into the first report frame where
+        // migrated transient deposits are visible as depositedForCurrentReport.
+        await migrateMainnetLikeStateWithTransientDeposits(transientDeposits);
+        const { accountingSigner, checkers } = await deployCheckersAtMigrationFrame(2);
+        const [allowedChecker, excessiveChecker] = checkers;
+        const balanceStats = await moveToFirstPostMigrationReportFrame();
 
-    it("counterfactual: missing migration-time vault baseline triggers the CL increase check against APR cap only", async () => {
-      const migrationVaultBalance = ether("3000");
-      const balanceStats = await fixture.migrateMainnetLikeV3State();
-      const { accounting, deployChecker } = await fixture.deployAccountingAndChecker(migrationVaultBalance);
-      const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+        // Step 2. Split migrated deposits into activated ETH and still-pending ETH.
+        const aprCap = calcAnnualValidatorsBalanceIncreaseLimit(
+          balanceStats.clValidatorsBalanceAtLastReport,
+          oneDay,
+        );
+        const postCLPendingBalance = transientDeposits - activatedDeposits;
+        const maxAllowedValidatorsBalanceIncrease = activatedDeposits + aprCap;
 
-      // Keep the real first-report payload: no CL increase, no migrated deposits,
-      // and the vault still contains only the migration-time balance.
-      const preCLValidatorsBalance = balanceStats.clValidatorsBalanceAtLastReport;
-      const preCLPendingBalance = balanceStats.clPendingBalanceAtLastReport;
-      const depositsForReport = balanceStats.depositedForCurrentReport;
-      expect(preCLPendingBalance).to.equal(0n);
-      expect(depositsForReport).to.equal(0n);
-      const firstReportCheck = buildCLBalanceIncreaseReport({
-        preCLValidatorsBalance,
-        preCLPendingBalance,
-        clBalanceIncrease: 0n,
-        withdrawalVaultBalance: migrationVaultBalance,
-        depositsForReport,
+        expect(balanceStats.clValidatorsBalanceAtLastReport).to.equal(mainnetLikeMigratedNetwork.clValidatorsBalance);
+        expect(balanceStats.clPendingBalanceAtLastReport).to.equal(0n);
+        expect(balanceStats.depositedForCurrentReport).to.equal(transientDeposits);
+        expect(activatedDeposits).to.be.lte(appearedEthLimitPerDay);
+
+        // Step 3. Boundary: exactly activated deposits plus APR cap is accepted.
+        const maxAllowedReport = buildCLBalanceIncreaseReport({
+          preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
+          preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
+          postCLPendingBalance,
+          clBalanceIncrease: maxAllowedValidatorsBalanceIncrease,
+          withdrawalVaultBalance: noWithdrawalVaultBalance,
+          depositsForReport: balanceStats.depositedForCurrentReport,
+        });
+        await expect(checkAccountingOracleReport(allowedChecker, accountingSigner, maxAllowedReport)).not.to.be.reverted;
+
+        // Step 4. One wei above that boundary must fail as excessive CL balance increase.
+        const excessiveReport = buildCLBalanceIncreaseReport({
+          preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
+          preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
+          postCLPendingBalance,
+          clBalanceIncrease: maxAllowedValidatorsBalanceIncrease + 1n,
+          withdrawalVaultBalance: noWithdrawalVaultBalance,
+          depositsForReport: balanceStats.depositedForCurrentReport,
+        });
+        await expect(checkAccountingOracleReport(excessiveChecker, accountingSigner, excessiveReport))
+          .to.be.revertedWithCustomError(excessiveChecker, "IncorrectTotalCLBalanceIncrease")
+          .withArgs(maxAllowedValidatorsBalanceIncrease, maxAllowedValidatorsBalanceIncrease + 1n);
       });
+    }
 
-      const zeroBaselineChecker = await deployChecker();
-      await zeroBaselineChecker.migrateBaselineSnapshot();
+    // This boundary test fixes that the cap applies to activated migrated deposits,
+    // not to the raw migrated transient deposits amount:
+    // 1. Put more than 57,600 ETH of migrated transient deposits into the first frame.
+    // 2. A report activating exactly 57,600 ETH is accepted.
+    // 3. A report activating 57,600 ETH + 1 wei is rejected.
+    it("must cap activated migrated deposits when transient deposits exceed the appeared ETH limit", async () => {
+      const transientDeposits = appearedEthLimitPerDay + depositSize;
+      const maxAllowedActivatedDeposits = appearedEthLimitPerDay;
+      const excessiveActivatedDeposits = maxAllowedActivatedDeposits + 1n;
 
-      // Break only the private vault baseline to model a migration that forgot to seed it.
-      await setLastVaultBalanceAfterTransfer(zeroBaselineChecker, 0n);
+      // Step 1. Move 57,632 ETH of migrated transient deposits into depositsForReport.
+      await migrateMainnetLikeStateWithTransientDeposits(transientDeposits);
+      const { accountingSigner, checkers } = await deployCheckersAtMigrationFrame(2);
+      const [allowedChecker, excessiveChecker] = checkers;
+      const balanceStats = await moveToFirstPostMigrationReportFrame();
 
-      // With a zero baseline, migration-time vault ETH looks like fresh CL withdrawals,
-      // which inflates the apparent validators balance increase.
-      const clWithdrawalsIfMigrationVaultBalanceWasNotSeeded = firstReportCheck.withdrawalVaultBalance - 0n;
-      const apparentValidatorsBalanceIncrease = clWithdrawalsIfMigrationVaultBalanceWasNotSeeded;
-      expect(clWithdrawalsIfMigrationVaultBalanceWasNotSeeded).to.equal(firstReportCheck.withdrawalVaultBalance);
+      expect(balanceStats.depositedForCurrentReport).to.equal(transientDeposits);
 
-      // The inflated increase is far above the one-day APR allowance, so the report reverts.
-      const maxAllowedValidatorsBalanceIncrease = calcAnnualValidatorsBalanceIncreaseLimit(
-        preCLValidatorsBalance,
-        firstReportCheck.timeElapsed,
-      );
-      expect(maxAllowedValidatorsBalanceIncrease).to.be.lessThan(apparentValidatorsBalanceIncrease);
+      // Step 2. The raw deposits amount is above the appeared limit, but only
+      // exactly 57,600 ETH activates; the remaining 32 ETH stays pending.
+      const maxAllowedReport = buildCLBalanceIncreaseReport({
+        preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
+        preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
+        postCLPendingBalance: transientDeposits - maxAllowedActivatedDeposits,
+        clBalanceIncrease: maxAllowedActivatedDeposits,
+        withdrawalVaultBalance: noWithdrawalVaultBalance,
+        depositsForReport: balanceStats.depositedForCurrentReport,
+      });
+      await expect(checkAccountingOracleReport(allowedChecker, accountingSigner, maxAllowedReport)).not.to.be.reverted;
 
-      await expect(checkAccountingOracleReport(zeroBaselineChecker, accountingSigner, firstReportCheck))
-        .to.be.revertedWithCustomError(zeroBaselineChecker, "IncorrectTotalCLBalanceIncrease")
-        .withArgs(maxAllowedValidatorsBalanceIncrease, apparentValidatorsBalanceIncrease);
+      // Step 3. Activating one wei above the appeared limit fails before APR can
+      // expand the CL balance increase window.
+      const excessiveReport = buildCLBalanceIncreaseReport({
+        preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
+        preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
+        postCLPendingBalance: transientDeposits - excessiveActivatedDeposits,
+        clBalanceIncrease: excessiveActivatedDeposits,
+        withdrawalVaultBalance: noWithdrawalVaultBalance,
+        depositsForReport: balanceStats.depositedForCurrentReport,
+      });
+      await expect(checkAccountingOracleReport(excessiveChecker, accountingSigner, excessiveReport))
+        .to.be.revertedWithCustomError(excessiveChecker, "IncorrectTotalActivatedBalance")
+        .withArgs(appearedEthLimitPerDay, excessiveActivatedDeposits);
     });
   });
 });
