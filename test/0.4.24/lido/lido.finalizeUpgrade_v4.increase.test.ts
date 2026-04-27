@@ -163,7 +163,7 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
     // These boundary cases fix how migrated transient deposits affect CL increase:
     // 1. Only the part that activates may be counted above the APR cap.
     // 2. The remaining part must stay in postCLPendingBalance.
-    // 3. The checker accepts exactly activated deposits plus APR cap and rejects a clear excess.
+    // 3. The checker accepts exactly activated deposits plus APR cap and rejects +1 wei.
     for (const { name, transientDeposits, activatedDeposits } of [
       {
         name: "without migrated transient deposits",
@@ -216,19 +216,18 @@ describe("Lido.sol:finalizeUpgrade_v4 CL balance increase sanity check", () => {
         await expect(checkAccountingOracleReport(allowedChecker, accountingSigner, maxAllowedReport)).not.to.be
           .reverted;
 
-        // Step 4. A clear excess above that boundary must fail as excessive CL balance increase.
-        const excessiveValidatorsBalanceIncrease = maxAllowedValidatorsBalanceIncrease + ether("1");
+        // Step 4. One wei above that boundary must fail as excessive CL balance increase.
         const excessiveReport = buildCLBalanceIncreaseReport({
           preCLValidatorsBalance: balanceStats.clValidatorsBalanceAtLastReport,
           preCLPendingBalance: balanceStats.clPendingBalanceAtLastReport,
           postCLPendingBalance,
-          clBalanceIncrease: excessiveValidatorsBalanceIncrease,
+          clBalanceIncrease: maxAllowedValidatorsBalanceIncrease + 1n,
           withdrawalVaultBalance: noWithdrawalVaultBalance,
           depositsForReport: balanceStats.depositedForCurrentReport,
         });
         await expect(checkAccountingOracleReport(excessiveChecker, accountingSigner, excessiveReport))
           .to.be.revertedWithCustomError(excessiveChecker, "IncorrectTotalCLBalanceIncrease")
-          .withArgs(maxAllowedValidatorsBalanceIncrease, excessiveValidatorsBalanceIncrease);
+          .withArgs(maxAllowedValidatorsBalanceIncrease, maxAllowedValidatorsBalanceIncrease + 1n);
       });
     }
 
