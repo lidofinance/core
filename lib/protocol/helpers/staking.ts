@@ -15,7 +15,12 @@ import { ZERO_HASH } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
-import { report, submitReportDataWithConsensusAndEmptyExtraData } from "./accounting";
+import {
+  buildConservedModuleBalancesGwei,
+  report,
+  StakingModuleWithBalanceGwei,
+  submitReportDataWithConsensusAndEmptyExtraData,
+} from "./accounting";
 
 const DEPOSIT_SIZE = ether("32");
 
@@ -77,21 +82,51 @@ const buildModuleAccountingReportParams = async (
   ctx: ProtocolContext,
   {
     validatorsDeltaGweiByModule = new Map<bigint, bigint>(),
+    clDiff,
+    clPendingBalanceGwei,
   }: {
     validatorsDeltaGweiByModule?: Map<bigint, bigint>;
+    clDiff?: bigint;
+    clPendingBalanceGwei?: bigint;
   } = {},
 ): Promise<ModuleAccountingReportParams> => {
-  const { stakingRouter } = ctx.contracts;
+  const { lido, stakingRouter } = ctx.contracts;
 
   const stakingModuleIds = await stakingRouter.getStakingModuleIds();
   // Router balance reporting now requires all registered modules in router order.
   const stakingModuleIdsWithUpdatedBalance = [...stakingModuleIds];
-  const validatorBalancesGweiByStakingModule: bigint[] = [];
 
+  const modulesWithBalance: StakingModuleWithBalanceGwei[] = [];
   for (const moduleId of stakingModuleIds) {
     const [currentValidatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-    const validatorsBalanceGwei = currentValidatorsBalanceGwei + (validatorsDeltaGweiByModule.get(moduleId) ?? 0n);
-    validatorBalancesGweiByStakingModule.push(validatorsBalanceGwei);
+    const moduleBalanceGwei = currentValidatorsBalanceGwei + (validatorsDeltaGweiByModule.get(moduleId) ?? 0n);
+    modulesWithBalance.push({ moduleId, moduleBalanceGwei });
+  }
+
+  // Conserve only when the caller declares the report's intended global (via clDiff and/or
+  // clPendingBalanceGwei). Without that, return raw SR per-module values — many tests craft
+  // per-module overrides on top and rely on raw values for their own arithmetic.
+  // Conservation matters in upgrade mode: right after StakingRouter migration, SR seeds
+  // per-module balances as activeValidators × MAX_EFFECTIVE_BALANCE, which can sum to more
+  // than Lido's globally tracked CL validators balance — the sanity checker requires the
+  // per-module sum to equal the report's declared clValidatorsBalanceGwei.
+  const shouldConserve = clDiff !== undefined || clPendingBalanceGwei !== undefined;
+  let validatorBalancesGweiByStakingModule: bigint[];
+
+  if (shouldConserve) {
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const targetClValidatorsBalanceGwei =
+      (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + (clDiff ?? 0n)) / ONE_GWEI -
+      (clPendingBalanceGwei ?? 0n);
+
+    const reportedById = new Map(
+      buildConservedModuleBalancesGwei(targetClValidatorsBalanceGwei, modulesWithBalance).map(
+        ({ moduleId, moduleReportedBalanceGwei }) => [moduleId, moduleReportedBalanceGwei],
+      ),
+    );
+    validatorBalancesGweiByStakingModule = stakingModuleIds.map((moduleId) => reportedById.get(moduleId) ?? 0n);
+  } else {
+    validatorBalancesGweiByStakingModule = modulesWithBalance.map(({ moduleBalanceGwei }) => moduleBalanceGwei);
   }
 
   return {
@@ -261,8 +296,12 @@ export const depositValidatorsWithoutReport = async (ctx: ProtocolContext, modul
 
 export const getCurrentModuleAccountingReportParams = async (
   ctx: ProtocolContext,
+  opts: {
+    clDiff?: bigint;
+    clPendingBalanceGwei?: bigint;
+  } = {},
 ): Promise<ModuleAccountingReportParams> => {
-  return buildModuleAccountingReportParams(ctx);
+  return buildModuleAccountingReportParams(ctx, opts);
 };
 
 export const seedProtocolPendingBaseline = async (
@@ -273,15 +312,18 @@ export const seedProtocolPendingBaseline = async (
   await depositValidatorsWithoutReport(ctx, moduleId, depositsCount);
 
   const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
+  const pendingBaselineGwei = depositedSinceLastReport / ONE_GWEI;
   const { data } = await report(ctx, {
     clDiff: depositedSinceLastReport,
     dryRun: true,
     excludeVaultsBalances: true,
     skipWithdrawals: true,
-    ...(await buildModuleAccountingReportParams(ctx)),
+    ...(await buildModuleAccountingReportParams(ctx, {
+      clDiff: depositedSinceLastReport,
+      clPendingBalanceGwei: pendingBaselineGwei,
+    })),
   });
 
-  const pendingBaselineGwei = depositedSinceLastReport / ONE_GWEI;
   return submitReportDataWithConsensusAndEmptyExtraData(ctx, {
     ...data,
     clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei,
@@ -367,7 +409,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     clDiff: ethToDeposit,
     clAppearedValidators: depositsCount,
     skipWithdrawals: true,
-    ...(await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule })),
+    ...(await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule, clDiff: ethToDeposit })),
   });
 
   const after = await lido.getBalanceStats();

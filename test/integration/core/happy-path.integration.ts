@@ -322,7 +322,10 @@ describe("Scenario: Protocol Happy Path", () => {
       dryRun: true,
       excludeVaultsBalances: true,
       skipWithdrawals: true,
-      ...(await getCurrentModuleAccountingReportParams(ctx)),
+      ...(await getCurrentModuleAccountingReportParams(ctx, {
+        clDiff: depositedSinceLastReport,
+        clPendingBalanceGwei: norPendingDepositsGwei,
+      })),
     });
     await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
       ...pendingBaselineData,

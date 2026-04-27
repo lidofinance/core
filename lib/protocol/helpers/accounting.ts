@@ -63,12 +63,12 @@ const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
 const CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS = 37n * 24n * 60n * 60n;
 
-type StakingModuleWithBalanceGwei = {
+export type StakingModuleWithBalanceGwei = {
   moduleId: bigint;
   moduleBalanceGwei: bigint;
 };
 
-type StakingModuleWithReportedBalanceGwei = {
+export type StakingModuleWithReportedBalanceGwei = {
   moduleId: bigint;
   moduleReportedBalanceGwei: bigint;
 };
@@ -77,7 +77,7 @@ type StakingModuleWithReportedBalanceGwei = {
  * Build module balances in gwei with exact total conservation.
  * Uses proportional split over remaining totals; the last module gets the remainder.
  */
-const buildConservedModuleBalancesGwei = (
+export const buildConservedModuleBalancesGwei = (
   totalBalanceGwei: bigint,
   modulesWithBalance: StakingModuleWithBalanceGwei[],
 ): StakingModuleWithReportedBalanceGwei[] => {
@@ -261,8 +261,9 @@ export const report = async (
     }
 
     const activeModulesWithBalance = modulesWithBalance.filter(({ moduleBalanceGwei }) => moduleBalanceGwei > 0n);
+    const targetClValidatorsBalanceGwei = postCLBalance / ONE_GWEI - clPendingBalanceGwei;
     const modulesWithReportedBalance = new Map(
-      buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, activeModulesWithBalance).map(
+      buildConservedModuleBalancesGwei(targetClValidatorsBalanceGwei, activeModulesWithBalance).map(
         ({ moduleId, moduleReportedBalanceGwei }) => [moduleId, moduleReportedBalanceGwei],
       ),
     );
