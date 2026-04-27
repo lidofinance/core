@@ -13,6 +13,7 @@ import {
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
+  report,
 } from "lib/protocol/helpers";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 import { LoadedContract } from "lib/protocol/types";
@@ -69,9 +70,22 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
   let globalSnapshot: string;
   let testSnapshot: string;
 
-  before(async () => {
+  before(async function () {
     ctx = await getProtocolContext();
+
     globalSnapshot = await Snapshot.take();
+
+    // ToDo: adapt tests for non-scratch contexts (forking/upgrade).
+    // This suite assumes both source and target modules resolve to NOR (module 1),
+    // which is only true on scratch deploys. In forking/upgrade mode the migrator's
+    // targetModuleId points at CMv2, so the NOR-based fixtures here would mismatch.
+    if (!ctx.isScratch) {
+      // Post-migration alignment: report() with no explicit per-module balances
+      // produces a self-consistent first report.
+      await report(ctx);
+
+      this.skip();
+    }
 
     [, executor, submitter, stranger] = await ethers.getSigners();
 
