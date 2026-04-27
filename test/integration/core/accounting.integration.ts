@@ -216,15 +216,35 @@ describe("Integration: Accounting", () => {
     reportTxReceipt: ContractTransactionReceipt,
     noRewards: boolean = false,
   ): Promise<bigint> {
-    const { stakingRouter } = ctx.contracts;
-
-    const stakingModulesCount = await stakingRouter.getStakingModulesCount();
+    const { stakingRouter, csm, cmv2 } = ctx.contracts;
 
     const { amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
     const hasWithdrawals = amountOfETHLocked !== 0n;
 
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
-    const expectedRewardsDistributionEventsCount = noRewards ? 0n : BigInt(stakingModulesCount) + 2n;
+    let expectedRewardsDistributionEventsCount = 0n;
+
+    if (!noRewards) {
+      expectedRewardsDistributionEventsCount = BigInt(await stakingRouter.getStakingModulesCount()) + 2n; // +1 initial mint, +1 for the treasury
+      if (csm !== undefined) {
+        if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
+          // +1 for the CSM internal transfer
+          expectedRewardsDistributionEventsCount += 1n;
+        } else {
+          // no reward transfer to modules with 0 validators balance
+          expectedRewardsDistributionEventsCount -= 1n;
+        }
+      }
+      if (cmv2 !== undefined) {
+        if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
+          // +1 for the CSM internal transfer
+          expectedRewardsDistributionEventsCount += 1n;
+        } else {
+          // no reward transfer to modules with 0 validators balance
+          expectedRewardsDistributionEventsCount -= 1n;
+        }
+      }
+    }
     const expectedWithdrawalsTransferEventCount = hasWithdrawals ? 1n : 0n;
     expect(transferSharesEvents.length).to.equal(
       expectedWithdrawalsTransferEventCount + expectedRewardsDistributionEventsCount,

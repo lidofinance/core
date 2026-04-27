@@ -18,6 +18,10 @@ export const withCSM = () => {
   return process.env.INTEGRATION_WITH_CSM !== "off";
 };
 
+export const withCMv2 = () => {
+  return process.env.INTEGRATION_WITH_CMv2 !== "off";
+};
+
 export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
   const { operatorGrid } = ctx.contracts;
   if (!operatorGrid) return;
@@ -61,20 +65,23 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
     await deployUpgrade(hre.network.name, process.env.STEPS_FILE!);
   }
 
-  const { contracts, signers } = await discover(skipV3Contracts);
+  const { contracts, signers, modules } = await discover(skipV3Contracts);
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
 
   // By default, all flags are "on"
   const flags = {
     withCSM: withCSM(),
+    withCMv2: withCMv2(),
   } as ProtocolContextFlags;
 
   log.debug("Protocol context flags", {
     "With CSM": flags.withCSM,
+    "With CMv2": flags.withCMv2,
   });
 
   const context = {
     contracts,
+    modules,
     signers,
     interfaces,
     flags,
