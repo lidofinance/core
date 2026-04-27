@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { advanceChainTime, ether, impersonate, updateBalance } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { finalizeWQViaSubmit, getProtocolContext, ProtocolContext, report, setStakingLimit } from "lib/protocol";
 
 import { Snapshot, ZERO_HASH } from "test/suite";
 
@@ -24,6 +24,9 @@ describe("Integration: Deposits reserve", () => {
 
     [holder, stranger] = await ethers.getSigners();
     reserveManager = holder;
+
+    await setStakingLimit(ctx, ether("200000"), ether("20"));
+    await finalizeWQViaSubmit(ctx);
 
     const { acl, lido } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
