@@ -26,7 +26,7 @@ export async function main(): Promise<void> {
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const lidoAddress = state[Sk.appLido].proxy.address;
   const hashConsensusAddress = state[Sk.hashConsensusForAccountingOracle].address;
-  const { maxRelativeShareLimitBP } = readUpgradeParameters(true).vaultHub;
+  const { maxRelativeShareLimitBP } = readUpgradeParameters(true).vaultHub!;
   if (maxRelativeShareLimitBP === undefined) {
     throw new Error("vaultHub.maxRelativeShareLimitBP is not set in upgrade parameters");
   }
