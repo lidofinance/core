@@ -874,7 +874,7 @@ describe("VaultHub.sol:owner-functions", () => {
       ).to.not.be.reverted;
     });
 
-    it("allows partial withdrawals when vault is unhealthy and requested amount is enough to cover rebalance shortfall", async () => {
+    it("forbids partial withdrawals when vault is unhealthy and requested amount is enough to cover rebalance shortfall", async () => {
       // Make vault unhealthy
       await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
       await reportVault({ totalValue: ether("11") });
@@ -894,7 +894,7 @@ describe("VaultHub.sol:owner-functions", () => {
         vaultHub
           .connect(vaultOwner)
           .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [amount], recipient, { value: FEE }),
-      ).to.not.be.reverted;
+      ).to.be.revertedWithCustomError(vaultHub, "PartialValidatorWithdrawalNotAllowed");
     });
 
     it("allows full withdrawals when vault is unhealthy", async () => {

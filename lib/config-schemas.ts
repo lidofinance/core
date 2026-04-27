@@ -33,10 +33,10 @@ const ValidatorExitDelayVerifierSchema = z.object({
 });
 
 // Vault hub schema
-// const VaultHubSchema = z.object({
-//   relativeShareLimitBP: BasisPointsSchema.optional(),
-//   maxRelativeShareLimitBP: BasisPointsSchema.optional(),
-// });
+const VaultHubSchema = z.object({
+  relativeShareLimitBP: BasisPointsSchema.optional(),
+  maxRelativeShareLimitBP: BasisPointsSchema.optional(),
+});
 
 // Lazy oracle schema
 const LazyOracleSchema = z.object({
@@ -406,6 +406,7 @@ export const UpgradeParametersSchema = z.object({
   upgradeVoteScript: UpgradeVoteScriptSchema,
 
   // old and optional
+  vaultHub: VaultHubSchema.optional(),
   chainSpec: ChainSpecSchema.extend({
     genesisTime: z.number().int(),
     depositContract: EthereumAddressSchema,

@@ -165,3 +165,6 @@ expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
 timeConstraintsContract = "0xB26Fd3b50280AbC55c572EE73071778A51088408"
 enabledDaySpanStart = 0 # 00:00:000 UTC
 enabledDaySpanEnd = 86399 # 23:59:59 UTC
+# Vault hub configuration
+[vaultHub]
+maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)
