@@ -147,10 +147,16 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
       }
     }
 
-    // Return shares (not ether) since internalizeBadDebt expects shares
+    // The model is approximate (rate-vs-batch-rate drift, integer rounding, vault rebalance
+    // ordering during the report), so the real protocol can flip the smoothing decision
+    // within a small window around the model boundary. Apply a 20% safety margin in both
+    // directions so callers stay comfortably inside the intended regime. The min side is
+    // also capped to externalShares — Lido.internalizeExternalBadDebt rejects amounts above
+    // that.
+    const inflatedMin = high + high / 5n;
     return {
-      minBadDebtToTrigger: high,
-      maxBadDebtWithoutTrigger: low,
+      minBadDebtToTrigger: inflatedMin > stateBefore.externalShares ? stateBefore.externalShares : inflatedMin,
+      maxBadDebtWithoutTrigger: low - low / 5n,
     };
   };
 
