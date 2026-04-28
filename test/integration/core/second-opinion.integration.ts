@@ -4,7 +4,13 @@ import { ethers } from "hardhat";
 import { SecondOpinionOracle__Mock } from "typechain-types";
 
 import { ether, log, ONE_GWEI } from "lib";
-import { depositValidatorsWithoutReport, getProtocolContext, ProtocolContext, report, resetCLBalanceDecreaseWindow } from "lib/protocol";
+import {
+  depositValidatorsWithoutReport,
+  getProtocolContext,
+  ProtocolContext,
+  report,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 

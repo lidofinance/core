@@ -9,7 +9,6 @@ import {
   getDepositedSinceLastReport,
   getProtocolContext,
   ProtocolContext,
-  report,
   reportWithEffectiveClDiff,
   resetCLBalanceDecreaseWindow,
 } from "lib/protocol";
