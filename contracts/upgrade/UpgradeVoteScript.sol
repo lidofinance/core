@@ -407,7 +407,7 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _registerCircuitBreakerPauserItem(
-                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, c.curatedModuleCommittee
+                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, c.consolidationGatewayPauser
             );
         }
 
