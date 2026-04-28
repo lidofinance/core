@@ -81,16 +81,20 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
 
     const [, , ethToFinalizeWithoutBadDebt, sharesToFinalize] = finalizedEvent.args;
 
-    // Total shares that need to be burned
-    const totalSharesToBurn = sharesToFinalize + stateBefore.burnerShares;
+    // Total shares that need to be burned. finalizeWithdrawals passes reportBurner: false,
+    // so any pre-existing Burner balance on the fork is excluded from the report and does
+    // not contribute to the burn — only the WQ-finalized shares count here.
+    const totalSharesToBurn = sharesToFinalize;
 
     // Get rebase limit
     const limits = await oracleReportSanityChecker.getOracleReportLimits();
     const maxPositiveTokenRebase = limits.maxPositiveTokenRebase;
     const rebaseLimitPlus1 = maxPositiveTokenRebase + LIMITER_PRECISION_BASE;
 
-    // Current share rate (this is batchShareRate in prefinalize)
-    const currentShareRate = stateBefore.shareRate;
+    // batchShareRate as seen by WQ.prefinalize: stETH/shares of the actual finalized batch.
+    // It's derived from the dry-run event because Lido.submit / requestWithdrawals round
+    // shares with floor, so batchShareRate is slightly *below* the protocol's currentShareRate.
+    const batchShareRate = (ethToFinalizeWithoutBadDebt * SHARE_RATE_PRECISION) / sharesToFinalize;
 
     // Calculate maxSharesToBurn for a given badDebtShares amount
     const calculateMaxSharesToBurn = (badDebtShares: bigint): bigint => {
@@ -105,7 +109,7 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
 
       // Step 2: Calculate etherToLock in prefinalize
       let etherToLock: bigint;
-      if (currentShareRate > simulatedShareRate) {
+      if (batchShareRate > simulatedShareRate) {
         etherToLock = (sharesToFinalize * simulatedShareRate) / SHARE_RATE_PRECISION;
       } else {
         etherToLock = ethToFinalizeWithoutBadDebt;
@@ -178,11 +182,17 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     const limits = await oracleReportSanityChecker.getOracleReportLimits();
     await advanceChainTime(limits.requestTimestampMargin + 1n);
 
-    // Perform report which will finalize withdrawals
+    // Perform report which will finalize withdrawals.
+    // reportBurner: false — pre-existing Burner balance on the fork must not bleed into
+    //   the burn, otherwise totalSharesToBurn no longer matches our threshold model.
+    // excludeVaultsBalances: true — EL/withdrawal vault balances on the fork would be
+    //   added to internal ether by the rebase limiter (increaseEther) and shrink real
+    //   maxSharesToBurn below what the model predicts, breaking the threshold edge.
     const { reportTx } = await report(ctx, {
       clDiff: 0n,
-      excludeVaultsBalances: false,
+      excludeVaultsBalances: true,
       skipWithdrawals: false,
+      reportBurner: false,
       waitNextReportTime: true,
     });
 
@@ -221,7 +231,7 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     await upDefaultTierShareLimit(ctx, increaseBy);
 
     // Make the sanity checker more sensitive to the activation of smoothen token rebase
-    const maxPositiveTokenRebase = 1000n;
+    const maxPositiveTokenRebase = 5000n;
     const agent = await ctx.getSigner("agent");
     await oracleReportSanityChecker
       .connect(agent)

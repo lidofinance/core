@@ -576,15 +576,21 @@ describe("Integration: Vault with bad debt", () => {
       const rebasedEvent = ctx.getEvents(receipt!, "TokenRebased")[0];
       const sharesMintedAsFees = rebasedEvent.args.sharesMintedAsFees;
 
+      // Burner may burn committed cover/non-cover shares during the report — that path is
+      // independent from bad-debt internalization but still moves total shares.
+      const sharesBurntEvents = ctx.getEvents(receipt!, "SharesBurnt");
+      const sharesBurnt = sharesBurntEvents.reduce((sum, ev) => sum + (ev.args.sharesAmount as bigint), 0n);
+
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(0n, "Bad debt reset to 0");
       expect(await lido.getExternalShares()).to.be.equal(
         externalSharesBefore - badDebtShares,
         "External shares decreased",
       );
-      // Total shares increase only by minted fees (bad debt is transferred from external to internal, not creating new shares)
+      // Bad debt internalization moves shares from external to internal without changing total,
+      // so total shares delta = minted fees - shares burnt by the Burner.
       expect(await lido.getTotalShares()).to.be.equal(
-        totalSharesBefore + sharesMintedAsFees,
-        "Total shares increased exactly by minted fees",
+        totalSharesBefore + sharesMintedAsFees - sharesBurnt,
+        "Total shares delta matches minted fees minus burnt shares",
       );
     });
 
