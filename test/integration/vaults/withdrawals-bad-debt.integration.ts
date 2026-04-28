@@ -230,7 +230,8 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     const increaseBy = maxLimit - existingTierParams.shareLimit;
     await upDefaultTierShareLimit(ctx, increaseBy);
 
-    // Make the sanity checker more sensitive to the activation of smoothen token rebase
+    // Make the sanity checker less sensitive to smoothen token rebase activation
+    // by increasing the positive rebase threshold, so smoothening triggers later.
     const maxPositiveTokenRebase = 5000n;
     const agent = await ctx.getSigner("agent");
     await oracleReportSanityChecker
