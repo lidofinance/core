@@ -712,7 +712,10 @@ describe("Integration: Accounting", () => {
 
     await expectStateChanges(stateBefore, {
       internalShares: -1n * sharesBurntAmount,
-      burnerShares: -1n * sharesLimit,
+      // On Hoodi, this report can finalize withdrawal requests at the same time.
+      // WQ shares first arrive in Burner, and smoothing may leave part of them for
+      // the next report; sharesLimit itself is checked separately from withdrawal burn below.
+      burnerShares: sharesToBurn - sharesBurntAmount,
       internalEther: -1n * amountOfETHLocked,
       lidoBalance: -1n * amountOfETHLocked,
     });

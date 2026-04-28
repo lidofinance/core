@@ -191,8 +191,10 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       consolidationEthAmountPerDayLimit: 0n,
     });
 
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
-    await depositValidatorsWithoutReport(ctx, SDVT_MODULE_ID, 1n);
+    // On Hoodi after SRv3 allocation, SDVT does not accept a direct deposit (`ZeroDeposits()`).
+    // This check depends on the global pending budget in Lido, so create two pending validators
+    // through NOR, then craft module growth in both NOR and SDVT below.
+    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 2n);
 
     const balanceStatsBeforeReport = await ctx.contracts.lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
@@ -224,8 +226,10 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
     const moduleGrowthExcessGwei = ONE_ETH / ONE_GWEI;
 
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
-    await depositValidatorsWithoutReport(ctx, SDVT_MODULE_ID, 1n);
+    // On Hoodi after SRv3 allocation, SDVT does not accept a direct deposit (`ZeroDeposits()`).
+    // This sanity check compares the global pending budget with total per-module growth, so
+    // pending can be created through NOR while the excess is crafted in module balances.
+    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 2n);
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const { reportTimeElapsed } = await getNextReportContext(ctx);

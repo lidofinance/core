@@ -82,10 +82,14 @@ describe("Integration: Negative rebase", () => {
     await ensureAtLeastOneStoredReport();
     const reportDataCountBefore = await oracleReportSanityChecker.getReportDataCount();
 
-    await report(ctx, {
-      clDiff: ether("0"),
+    // On Hoodi after the SRv3 migration, Lido has pending deposits.
+    // `report(ctx, { clDiff: 0 })` means raw postCL - preCL = 0, which looks
+    // to the sanity checker like a CL decrease by the amount of those deposits.
+    // This report must be effective-neutral relative to principal CL balance.
+    await reportWithEffectiveClDiff(ctx, 0n, {
       skipWithdrawals: true,
       clAppearedValidators: 0n,
+      reportElVault: false,
       stakingModuleIdsWithNewlyExitedValidators: [1n],
       numExitedValidatorsByStakingModule: [reportExitedValidators + 2n],
     });
@@ -107,7 +111,13 @@ describe("Integration: Negative rebase", () => {
 
     expect(await locator.oracleReportSanityChecker()).to.equal(oracleReportSanityChecker.address);
 
-    await resetCLBalanceDecreaseWindow(ctx);
+    // After migration, the sanity checker stores the current withdrawal vault balance as baseline.
+    // The reset report must not report the withdrawal vault as 0, otherwise `_getCLWithdrawals`
+    // fails before the negative rebase check.
+    await resetCLBalanceDecreaseWindow(ctx, {
+      excludeVaultsBalances: false,
+      reportElVault: false,
+    });
     await ensureAtLeastOneStoredReport();
 
     const REPORTS_REPEATED = 10;
@@ -121,7 +131,6 @@ describe("Integration: Negative rebase", () => {
 
       await reportWithEffectiveClDiff(ctx, CL_DIFF_PER_REPORT, {
         skipWithdrawals: true,
-        reportWithdrawalsVault: false,
         reportElVault: false,
       });
 
@@ -141,9 +150,10 @@ describe("Integration: Negative rebase", () => {
   // Tests the sliding window CL decrease check by calling checkAccountingOracleReport
   // directly with zero deposits/withdrawals (so adjustedBase == raw baseline balance).
   it("Should revert with IncorrectCLBalanceDecrease on gradual negative rebases", async () => {
-    const { oracleReportSanityChecker, accounting } = ctx.contracts;
+    const { oracleReportSanityChecker, accounting, withdrawalVault } = ctx.contracts;
 
     const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+    const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault);
 
     const reportDataCount = await oracleReportSanityChecker.getReportDataCount();
     let currentBalance =
@@ -151,10 +161,24 @@ describe("Integration: Negative rebase", () => {
         ? ether("1000000")
         : (await oracleReportSanityChecker.reportData(reportDataCount - 1n)).clBalance;
 
+    // This direct call bypasses helper report(), so it must pass the reported withdrawal vault balance itself.
+    // On Hoodi after migration, the sanity checker baseline is non-zero; passing 0 here masks
+    // the intended IncorrectCLBalanceDecrease check with a withdrawal vault balance error.
     const reportFromAccounting = (preBalance: bigint, postBalance: bigint) =>
       oracleReportSanityChecker
         .connect(accountingSigner)
-        .checkAccountingOracleReport(24n * 60n * 60n, preBalance, 0n, postBalance, 0n, 0n, 0n, 0n, 0n, 0n);
+        .checkAccountingOracleReport(
+          24n * 60n * 60n,
+          preBalance,
+          0n,
+          postBalance,
+          0n,
+          withdrawalVaultBalance,
+          0n,
+          0n,
+          0n,
+          0n,
+        );
 
     // REPORTS_WINDOW in contract is 36 (private constant, no getter).
     // Fill window + 1 neutral data points to fully control the baseline.

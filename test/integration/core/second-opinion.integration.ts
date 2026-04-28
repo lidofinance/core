@@ -3,10 +3,10 @@ import { ethers } from "hardhat";
 
 import { SecondOpinionOracle__Mock } from "typechain-types";
 
-import { ether, impersonate, log, ONE_GWEI } from "lib";
-import { getProtocolContext, ProtocolContext, report, resetCLBalanceDecreaseWindow } from "lib/protocol";
+import { ether, log, ONE_GWEI } from "lib";
+import { depositValidatorsWithoutReport, getProtocolContext, ProtocolContext, report, resetCLBalanceDecreaseWindow } from "lib/protocol";
 
-import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
 const AMOUNT = ether("100");
 const CURATED_MODULE_ID = 1n;
@@ -31,7 +31,7 @@ describe("Integration: Second opinion", () => {
 
     snapshot = await Snapshot.take();
 
-    const { lido, depositSecurityModule, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
 
     const { chainId } = await ethers.provider.getNetwork();
     // Sepolia-specific initialization
@@ -48,8 +48,9 @@ describe("Integration: Second opinion", () => {
       await bepoliaToken.connect(bepiloaSigner).transfer(adapterAddr, BEPOLIA_TO_TRANSFER);
     }
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-    await stakingRouter.connect(dsmSigner).deposit(CURATED_MODULE_ID, ZERO_HASH);
+    // On Hoodi after SRv3 allocation, a raw router deposit into NOR can return `ZeroDeposits()`
+    // unless the test first prepares Lido buffered ETH and module deposit limits.
+    await depositValidatorsWithoutReport(ctx, CURATED_MODULE_ID, 1n);
 
     secondOpinion = await ethers.deployContract("SecondOpinionOracle__Mock", []);
     const soAddress = await secondOpinion.getAddress();
