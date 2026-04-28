@@ -23,7 +23,7 @@ if [[ -z ${RPC_URL} ]]; then
   echo "RPC_URL derived from \${${RPC_VAR}}"
   export RPC_URL
 fi
-echo "RPC_URL: $RPC_URL"
+# echo "RPC_URL: $RPC_URL"
 
 # Generic migration steps files
 export NETWORK_STATE_FILE=${NETWORK_STATE_FILE-"deployed-${NETWORK}.json"}
@@ -62,7 +62,7 @@ if [[ ${MODE:-} == "forking" ]]; then
   export DEPLOYER="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
   export ALLOW_SKIP_STEPS=${ALLOW_SKIP_STEPS-"true"}
   echo "ALLOW_SKIP_STEPS: $ALLOW_SKIP_STEPS"
-  export AUTO_CONFIRM=${AUTO_CONFIRM-"true"}
+  export AUTO_CONFIRM=${AUTO_CONFIRM-"false"}
   echo "AUTO_CONFIRM: $AUTO_CONFIRM"
   # export GAS_LIMIT=16000000
   export GAS_PRIORITY_FEE=1

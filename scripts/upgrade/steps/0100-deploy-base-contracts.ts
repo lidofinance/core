@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
   Accounting__factory,
@@ -32,9 +32,7 @@ import {
   deployWithoutProxy,
   encodeFunctionCall,
   getAddress,
-  getAddressValidated,
   InitializeArgs,
-  isContractDeployed,
   loadContract,
   logArgs,
   logConfirmReview as logConfirmReview,
@@ -47,11 +45,7 @@ import {
 } from "lib";
 
 export async function skip(): Promise<boolean> {
-  const state = readNetworkState();
-  // NOT skip if contract object exists in deployed state but address set as empty string or zero address
-  const address = getAddressValidated(Sk.upgradeTemporaryAdmin, state);
-  // NOT skip if contract not deployed yet
-  return !!(address && (await isContractDeployed(address)));
+  return await checkArtifactDeployedAndLog(Sk.upgradeTemporaryAdmin);
 }
 
 export async function main() {

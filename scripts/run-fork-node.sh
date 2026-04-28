@@ -37,7 +37,14 @@ fi
 
 echo "RPC_URL: $RPC_URL"
 echo "FORKING_BLOCK_NUMBER: $FORKING_BLOCK_NUMBER"
+
+FORK_NODE=${FORK_NODE:-hardhat}
+echo "FORK_NODE: $FORK_NODE"
+
 BLOCK_ARG=${FORKING_BLOCK_NUMBER:+--fork-block-number $FORKING_BLOCK_NUMBER}
 
-yarn hardhat node --fork $RPC_URL $BLOCK_ARG --nocompile --trace --gascost --vvv
-# anvil -f $RPC_URL $BLOCK_ARG --chain-id 1 --config-out localhost.json --timeout 90000 --print-traces --steps-tracing --auto-impersonate
+if [[ ${FORK_NODE:-} == "anvil" ]]; then
+  anvil -f $RPC_URL $BLOCK_ARG --chain-id 1 --config-out localhost.json --timeout 90000 --print-traces --steps-tracing --auto-impersonate
+else
+  yarn hardhat node --fork $RPC_URL $BLOCK_ARG --nocompile --trace --gascost --vvv
+fi
