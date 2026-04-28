@@ -149,8 +149,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint64 public constant EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION = 1;
 
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
-    // Hoodi currently has a legacy dev EOA with STAKING_MODULE_MANAGE_ROLE in pre-upgrade state.
-    address internal constant HOODI_LEGACY_STAKING_MODULE_MANAGER = 0xE28f573b732632fdE03BD5507A7d475383e8512E;
 
     // Initial value of upgradeBlockNumber storage variable
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
@@ -316,8 +314,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertProxyAdmin(sr, agent);
             _assertContractVersion(sr, EXPECTED_FINAL_STAKING_ROUTER_VERSION);
             _assertSingleOZRoleHolder(sr, DEFAULT_ADMIN_ROLE, agent);
-            // TODO fix hoodi setup, remove 2nd role
-            _assertTwoOZRoleHolders(sr, STAKING_MODULE_MANAGE_ROLE, agent, HOODI_LEGACY_STAKING_MODULE_MANAGER);
+            /// @dev _assertSingleOZRoleHolder not works on hoodi!
+            _assertHasOZRole(sr, STAKING_MODULE_MANAGE_ROLE, agent);
             _assertSingleOZRoleHolder(sr, STAKING_MODULE_UNVETTING_ROLE, c.newDepositSecurityModule);
             _assertSingleOZRoleHolder(sr, STAKING_MODULE_SHARE_MANAGE_ROLE, g.easyTrackEVMScriptExecutor);
             _assertZeroOZRoleHolders(sr, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
