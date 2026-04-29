@@ -7,14 +7,12 @@ import {
   getCurrentModuleAccountingReportParams,
   getNextReportContext,
   getProtocolContext,
-  getStakingModuleBalances,
   ProtocolContext,
   report,
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   updateOracleReportLimits,
 } from "lib/protocol";
-import { NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 
@@ -45,9 +43,13 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
-  const getCurrentModuleReportState = async () => {
+  const getCurrentModuleReportState = async ({
+    validatorsDeltaGweiByModule = new Map<bigint, bigint>(),
+  }: {
+    validatorsDeltaGweiByModule?: Map<bigint, bigint>;
+  } = {}) => {
     const { stakingModuleIdsWithUpdatedBalance, validatorBalancesGweiByStakingModule } =
-      await getCurrentModuleAccountingReportParams(ctx);
+      await getCurrentModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule });
     const moduleIndexById = new Map(
       stakingModuleIdsWithUpdatedBalance.map((moduleId, index) => [moduleId, index] as const),
     );
@@ -58,17 +60,17 @@ describe("Integration: AccountingOracle module balances sanity", () => {
   const withUpdatedModuleBalances = (
     currentValidatorBalancesGweiByStakingModule: bigint[],
     moduleIndexById: Map<bigint, number>,
-    overrides: Array<[bigint, bigint]>,
+    balancesDeltaGweiByModule: Array<[bigint, bigint]>,
   ) => {
     const updatedValidatorBalancesGweiByStakingModule = [...currentValidatorBalancesGweiByStakingModule];
 
-    for (const [moduleId, updatedValidatorsBalanceGwei] of overrides) {
+    for (const [moduleId, balanceDeltaGwei] of balancesDeltaGweiByModule) {
       const index = moduleIndexById.get(moduleId);
       if (index === undefined) {
         throw new Error(`Missing staking module ${moduleId} in router order`);
       }
 
-      updatedValidatorBalancesGweiByStakingModule[index] = updatedValidatorsBalanceGwei;
+      updatedValidatorBalancesGweiByStakingModule[index] += balanceDeltaGwei;
     }
 
     return updatedValidatorBalancesGweiByStakingModule;
@@ -86,8 +88,8 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     clPendingBalanceGwei: bigint;
   }) => {
     const { data } = await report(ctx, {
-      clDiff,
-      clPendingBalanceGwei,
+      clDiff: clDiff + clPendingBalanceGwei * ONE_GWEI, //simulate full total increase
+      clPendingBalanceGwei: 0n,
       dryRun: true,
       excludeVaultsBalances: true,
       skipWithdrawals: true,
@@ -95,11 +97,10 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       validatorBalancesGweiByStakingModule,
       waitNextReportTime: true,
     });
-
-    const totalClBalanceGwei = getBigInt(data.clValidatorsBalanceGwei) + getBigInt(data.clPendingBalanceGwei);
     return {
       ...data,
-      clValidatorsBalanceGwei: totalClBalanceGwei - clPendingBalanceGwei,
+      // extract pending balance from simulated total clBalance
+      clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - clPendingBalanceGwei,
       clPendingBalanceGwei,
     };
   };
@@ -117,11 +118,10 @@ describe("Integration: AccountingOracle module balances sanity", () => {
   it("should accept a report that moves one module's pending balance into validators", async () => {
     const { lido } = ctx.contracts;
 
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
+    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, 1n);
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
-    const norBefore = await getStakingModuleBalances(ctx, NOR_MODULE_ID);
     const norPendingBalanceBeforeGwei = balanceStatsBeforeReport.depositedSinceLastReport / ONE_GWEI;
     const totalPendingBalanceBeforeGwei = norPendingBalanceBeforeGwei;
     const totalValidatorsBalanceBeforeGwei = sumBigints(moduleReportState.validatorBalancesGweiByStakingModule);
@@ -134,7 +134,13 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     const reportedValidatorsBalancesGwei = withUpdatedModuleBalances(
       moduleReportState.validatorBalancesGweiByStakingModule,
       moduleReportState.moduleIndexById,
-      [[NOR_MODULE_ID, norBefore.validatorsBalanceGwei + pendingConsumedGwei]],
+      [...validatorsDeltaGweiByModule].reduce<Array<[bigint, bigint]>>((acc, [moduleId, delta]) => {
+        if (delta > 0n) {
+          expect(delta).to.equal(pendingConsumedGwei);
+          acc.push([moduleId, delta]);
+        }
+        return acc;
+      }, []),
     );
     const validatorsBalanceAfterGwei = sumBigints(reportedValidatorsBalancesGwei);
     const pendingBalanceAfterGwei = 0n;
@@ -155,7 +161,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
   it("should reject a report whose module validators balances do not add up to the reported CL validators total", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
 
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
+    await depositValidatorsWithoutReport(ctx, 1n);
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
@@ -191,16 +197,9 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       consolidationEthAmountPerDayLimit: 0n,
     });
 
-    // On Hoodi after SRv3 allocation, SDVT does not accept a direct deposit (`ZeroDeposits()`).
-    // This check depends on the global pending budget in Lido, so create two pending validators
-    // through NOR, then craft module growth in both NOR and SDVT below.
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 2n);
-
+    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, 2n);
     const balanceStatsBeforeReport = await ctx.contracts.lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
-    const norBefore = await getStakingModuleBalances(ctx, NOR_MODULE_ID);
-    const sdvtBefore = await getStakingModuleBalances(ctx, SDVT_MODULE_ID);
-    const pendingConsumedPerModuleGwei = ONE_VALIDATOR_BALANCE / ONE_GWEI;
 
     const data = await buildReportData({
       clDiff: balanceStatsBeforeReport.depositedSinceLastReport,
@@ -208,10 +207,12 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       validatorBalancesGweiByStakingModule: withUpdatedModuleBalances(
         moduleReportState.validatorBalancesGweiByStakingModule,
         moduleReportState.moduleIndexById,
-        [
-          [NOR_MODULE_ID, norBefore.validatorsBalanceGwei + pendingConsumedPerModuleGwei],
-          [SDVT_MODULE_ID, sdvtBefore.validatorsBalanceGwei + pendingConsumedPerModuleGwei],
-        ],
+        [...validatorsDeltaGweiByModule].reduce<Array<[bigint, bigint]>>((acc, [moduleId, delta]) => {
+          if (delta > 0n) {
+            acc.push([moduleId, delta]);
+          }
+          return acc;
+        }, []),
       ),
       clPendingBalanceGwei: 0n,
     });
@@ -226,10 +227,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
     const moduleGrowthExcessGwei = ONE_ETH / ONE_GWEI;
 
-    // On Hoodi after SRv3 allocation, SDVT does not accept a direct deposit (`ZeroDeposits()`).
-    // This sanity check compares the global pending budget with total per-module growth, so
-    // pending can be created through NOR while the excess is crafted in module balances.
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 2n);
+    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, 2n);
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const { reportTimeElapsed } = await getNextReportContext(ctx);
@@ -245,22 +243,40 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     });
 
     const moduleReportState = await getCurrentModuleReportState();
-    const norBefore = await getStakingModuleBalances(ctx, NOR_MODULE_ID);
-    const sdvtBefore = await getStakingModuleBalances(ctx, SDVT_MODULE_ID);
     const totalValidatorsBalanceBeforeGwei = sumBigints(moduleReportState.validatorBalancesGweiByStakingModule);
-
     expect(totalPendingBalanceBeforeWei).to.equal(2n * ONE_VALIDATOR_BALANCE);
-    expect(sdvtBefore.validatorsBalanceGwei).to.be.gt(
-      moduleGrowthExcessGwei,
-      "test precondition failed: SDVT must have enough previous balance to offset the crafted excess",
+
+    const maxDeltaEntry = [...validatorsDeltaGweiByModule.entries()].reduce<[bigint, bigint] | undefined>(
+      (best, entry) => {
+        const [, delta] = entry;
+        return best === undefined || delta > best[1] ? entry : best;
+      },
+      undefined,
     );
+    expect(maxDeltaEntry, "no module with positive validator delta found").to.not.equal(undefined);
+    const [grownModuleId] = maxDeltaEntry!;
+
+    const donorModuleEntry = moduleReportState.stakingModuleIdsWithUpdatedBalance
+      .map((moduleId, index) => {
+        const balanceGwei = moduleReportState.validatorBalancesGweiByStakingModule[index];
+        return [moduleId, balanceGwei] as const;
+      })
+      .find(([moduleId, balanceGwei]) => {
+        return moduleId !== grownModuleId && balanceGwei > moduleGrowthExcessGwei;
+      });
+
+    expect(
+      donorModuleEntry,
+      "no other module has enough validators balance to offset moduleGrowthExcessGwei",
+    ).to.not.equal(undefined);
+    const [donorModuleId] = donorModuleEntry!;
 
     const reportedValidatorsBalancesGwei = withUpdatedModuleBalances(
       moduleReportState.validatorBalancesGweiByStakingModule,
       moduleReportState.moduleIndexById,
       [
-        [NOR_MODULE_ID, norBefore.validatorsBalanceGwei + totalPendingBalanceBeforeGwei + moduleGrowthExcessGwei],
-        [SDVT_MODULE_ID, sdvtBefore.validatorsBalanceGwei - moduleGrowthExcessGwei],
+        [grownModuleId, totalPendingBalanceBeforeGwei + moduleGrowthExcessGwei],
+        [donorModuleId, -moduleGrowthExcessGwei],
       ],
     );
     const validatorsBalanceAfterGwei = sumBigints(reportedValidatorsBalancesGwei);
@@ -284,14 +300,16 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
     await updateOracleReportLimits(ctx, { annualBalanceIncreaseBPLimit: 1n });
 
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, 1n);
+    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, 1n);
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
-    const norBefore = await getStakingModuleBalances(ctx, NOR_MODULE_ID);
     const totalPendingBalanceBeforeGwei = balanceStatsBeforeReport.depositedSinceLastReport / ONE_GWEI;
     const totalValidatorsBalanceBeforeGwei = sumBigints(moduleReportState.validatorBalancesGweiByStakingModule);
 
+    expect(balanceStatsBeforeReport.clValidatorsBalanceAtLastReport / ONE_GWEI).to.equal(
+      totalValidatorsBalanceBeforeGwei,
+    );
     expect(balanceStatsBeforeReport.clValidatorsBalanceAtLastReport).to.be.gt(0n);
     expect(balanceStatsBeforeReport.depositedSinceLastReport).to.equal(ONE_VALIDATOR_BALANCE);
     expect(totalPendingBalanceBeforeGwei).to.be.gt(0n);
@@ -307,16 +325,21 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     const reportedValidatorsBalancesGwei = withUpdatedModuleBalances(
       moduleReportState.validatorBalancesGweiByStakingModule,
       moduleReportState.moduleIndexById,
-      [[NOR_MODULE_ID, norBefore.validatorsBalanceGwei + excessiveValidatorsGrowthGwei]],
+      [...validatorsDeltaGweiByModule].reduce<Array<[bigint, bigint]>>((acc, [moduleId, delta]) => {
+        if (delta > 0n) {
+          acc.push([moduleId, excessiveValidatorsGrowthGwei]);
+        }
+        return acc;
+      }, []),
     );
-    const validatorsBalanceAfterGwei = sumBigints(reportedValidatorsBalancesGwei);
-    const pendingBalanceAfterGwei = totalPendingBalanceBeforeGwei;
 
-    expect(pendingBalanceAfterGwei).to.equal(totalPendingBalanceBeforeGwei);
+    const validatorsBalanceAfterGwei = sumBigints(reportedValidatorsBalancesGwei);
+    // const pendingBalanceAfterGwei = totalPendingBalanceBeforeGwei;
+    // expect(pendingBalanceAfterGwei).to.equal(totalPendingBalanceBeforeGwei); ??
     expect(validatorsBalanceAfterGwei).to.equal(totalValidatorsBalanceBeforeGwei + excessiveValidatorsGrowthGwei);
 
     const data = await buildReportData({
-      clDiff: balanceStatsBeforeReport.depositedSinceLastReport + excessiveValidatorsGrowthWei,
+      clDiff: excessiveValidatorsGrowthWei,
       stakingModuleIdsWithUpdatedBalance: moduleReportState.stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule: reportedValidatorsBalancesGwei,
       clPendingBalanceGwei: totalPendingBalanceBeforeGwei,

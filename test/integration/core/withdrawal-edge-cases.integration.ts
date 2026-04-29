@@ -102,7 +102,7 @@ describe("Integration: Withdrawal edge cases", () => {
   };
 
   const activateDepositedValidators = async (depositsCount: bigint) => {
-    await depositValidatorsWithoutReport(ctx, NOR_MODULE_ID, depositsCount);
+    await depositValidatorsWithoutReport(ctx, depositsCount);
 
     const { stakingRouter, lido: lidoContract } = ctx.contracts;
     const stakingModuleIds = [...(await stakingRouter.getStakingModuleIds())];

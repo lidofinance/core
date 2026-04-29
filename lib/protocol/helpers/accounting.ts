@@ -83,32 +83,68 @@ const buildConservedModuleBalancesGwei = (
 ): StakingModuleWithReportedBalanceGwei[] => {
   if (modulesWithBalance.length === 0) return [];
 
-  const totalModulesBalanceGwei = modulesWithBalance.reduce((sum, module) => sum + module.moduleBalanceGwei, 0n);
+  const totalModulesBalanceGwei = modulesWithBalance.reduce(
+    (sum, { moduleBalanceGwei }) => sum + moduleBalanceGwei,
+    0n,
+  );
+
+  if (totalBalanceGwei < totalModulesBalanceGwei) {
+    throw new Error(`Total balance ${totalBalanceGwei} is less than total modules balance ${totalModulesBalanceGwei}`);
+  }
+
   if (totalModulesBalanceGwei === 0n) {
     return modulesWithBalance.map(({ moduleId }) => ({ moduleId, moduleReportedBalanceGwei: 0n }));
   }
+  const lastNonZeroIndex = modulesWithBalance.reduce<number>((lastIndex, { moduleBalanceGwei }, index) => {
+    return moduleBalanceGwei > 0n ? index : lastIndex;
+  }, 0);
 
   let remainingTotalBalanceGwei = totalBalanceGwei;
-  let remainingModulesBalanceGwei = totalModulesBalanceGwei;
   const modulesWithReportedBalances: StakingModuleWithReportedBalanceGwei[] = [];
 
   for (let index = 0; index < modulesWithBalance.length; ++index) {
     const { moduleId, moduleBalanceGwei } = modulesWithBalance[index];
-    const isLastModule = index === modulesWithBalance.length - 1;
 
     const moduleReportedBalanceGwei =
-      isLastModule || remainingModulesBalanceGwei === 0n
-        ? remainingTotalBalanceGwei
-        : (remainingTotalBalanceGwei * moduleBalanceGwei) / remainingModulesBalanceGwei;
+      moduleBalanceGwei === 0n
+        ? 0n
+        : index === lastNonZeroIndex
+          ? remainingTotalBalanceGwei
+          : (totalBalanceGwei * moduleBalanceGwei) / totalModulesBalanceGwei;
 
     modulesWithReportedBalances.push({ moduleId, moduleReportedBalanceGwei });
-
     remainingTotalBalanceGwei -= moduleReportedBalanceGwei;
-    remainingModulesBalanceGwei -= moduleBalanceGwei;
   }
 
   return modulesWithReportedBalances;
 };
+
+export function adjustReportModuleBalances(
+  {
+    stakingModuleIdsWithUpdatedBalance = [],
+    validatorBalancesGweiByStakingModule = [],
+  }: {
+    stakingModuleIdsWithUpdatedBalance: bigint[];
+    validatorBalancesGweiByStakingModule: bigint[];
+  },
+  clValidatorsBalanceGwei: bigint,
+) {
+  const moduleBalances: StakingModuleWithBalanceGwei[] = [];
+  for (let i = 0; i < stakingModuleIdsWithUpdatedBalance.length; i++) {
+    const moduleId = stakingModuleIdsWithUpdatedBalance[i];
+    const moduleBalanceGwei = validatorBalancesGweiByStakingModule[i];
+    moduleBalances.push({ moduleId, moduleBalanceGwei });
+  }
+
+  const modulesWithReportedBalance = buildConservedModuleBalancesGwei(clValidatorsBalanceGwei, moduleBalances);
+  for (let i = 0; i < moduleBalances.length; i++) {
+    validatorBalancesGweiByStakingModule[i] = modulesWithReportedBalance[i].moduleReportedBalanceGwei;
+  }
+  return {
+    stakingModuleIdsWithUpdatedBalance,
+    validatorBalancesGweiByStakingModule,
+  };
+}
 
 /**
  * Prepare and push oracle report.
@@ -152,9 +188,14 @@ export const report = async (
 
   refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
-  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
-    await lido.getBalanceStats();
-  clDiff = clDiff ?? depositedSinceLastReport;
+  const {
+    clValidatorsBalanceAtLastReport,
+    clPendingBalanceAtLastReport,
+    depositedForCurrentReport,
+    depositedSinceLastReport,
+  } = await lido.getBalanceStats();
+  const deposited = waitNextReportTime ? depositedForCurrentReport : depositedSinceLastReport;
+  clDiff = clDiff ?? deposited;
   const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
   elRewardsVaultBalance = elRewardsVaultBalance ?? (await ethers.provider.getBalance(elRewardsVault.address));
@@ -260,17 +301,23 @@ export const report = async (
       modulesWithBalance.push({ moduleId, moduleBalanceGwei: moduleBalance / ONE_GWEI });
     }
 
-    const activeModulesWithBalance = modulesWithBalance.filter(({ moduleBalanceGwei }) => moduleBalanceGwei > 0n);
-    const modulesWithReportedBalance = new Map(
-      buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, activeModulesWithBalance).map(
-        ({ moduleId, moduleReportedBalanceGwei }) => [moduleId, moduleReportedBalanceGwei],
-      ),
-    );
-
-    for (const { moduleId } of modulesWithBalance) {
+    const modulesWithReportedBalance = buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, modulesWithBalance);
+    for (let i = 0; i < modulesWithBalance.length; i++) {
+      const moduleId = modulesWithBalance[i].moduleId;
       stakingModuleIdsWithUpdatedBalance.push(moduleId);
-      validatorBalancesGweiByStakingModule.push(modulesWithReportedBalance.get(moduleId) ?? 0n);
+      validatorBalancesGweiByStakingModule.push(modulesWithReportedBalance[i].moduleReportedBalanceGwei);
     }
+  } else {
+    // const moduleBalances: StakingModuleWithBalanceGwei[] = [];
+    // for (let i = 0; i < stakingModuleIdsWithUpdatedBalance.length; i++) {
+    //   const moduleId = stakingModuleIdsWithUpdatedBalance[i];
+    //   const moduleBalanceGwei = validatorBalancesGweiByStakingModule[i];
+    //   moduleBalances.push({ moduleId, moduleBalanceGwei });
+    // }
+    // const modulesWithReportedBalance = buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, moduleBalances);
+    // for (let i = 0; i < moduleBalances.length; i++) {
+    //   validatorBalancesGweiByStakingModule[i] = modulesWithReportedBalance[i].moduleReportedBalanceGwei;
+    // }
   }
 
   const reportData = {

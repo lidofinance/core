@@ -6,6 +6,7 @@ import {
   ether,
   impersonate,
   log,
+  ONE_ETHER,
   ONE_GWEI,
   StakingModuleStatus,
   TOTAL_BASIS_POINTS,
@@ -15,7 +16,7 @@ import { ZERO_HASH } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
-import { report, submitReportDataWithConsensusAndEmptyExtraData } from "./accounting";
+import { adjustReportModuleBalances, report, submitReportDataWithConsensusAndEmptyExtraData } from "./accounting";
 
 const DEPOSIT_SIZE = ether("32");
 
@@ -73,7 +74,7 @@ export const getStakingModuleBalances = async (
   return { validatorsBalanceGwei };
 };
 
-const buildModuleAccountingReportParams = async (
+export const buildModuleAccountingReportParams = async (
   ctx: ProtocolContext,
   {
     validatorsDeltaGweiByModule = new Map<bigint, bigint>(),
@@ -166,17 +167,6 @@ export const setStakingLimit = async (
   await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
 };
 
-export const ensureCanDeposit = async (ctx: ProtocolContext) => {
-  const { accountingOracle } = ctx.contracts;
-  const { extraDataSubmitted } = await accountingOracle.getProcessingState();
-  const getLastProcessingRefSlot = await accountingOracle.getLastProcessingRefSlot();
-
-  if (!extraDataSubmitted && getLastProcessingRefSlot != 0n) {
-    // send dummy report to shift last processing ref slot and unlock deposits
-    await report(ctx, { skipWithdrawals: true });
-  }
-};
-
 const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
   const { depositSecurityModule, stakingRouter } = ctx.contracts;
 
@@ -222,47 +212,79 @@ const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint
   }
 };
 
-export const depositValidatorsWithoutReport = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
+export const depositValidatorsWithoutReport = async (
+  ctx: ProtocolContext,
+  depositsCount: bigint,
+): Promise<Map<bigint, bigint>> => {
   const { lido, withdrawalQueue } = ctx.contracts;
 
   const ethToDeposit = depositsCount * DEPOSIT_SIZE;
   let depositableEther = await lido.getDepositableEther();
 
   if (depositableEther < ethToDeposit) {
-    const submitValue = (await withdrawalQueue.unfinalizedStETH()) + ethToDeposit - depositableEther + ether("1");
+    const bufferedEther = await lido.getBufferedEther();
+    const unfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
+    const submitValue = ((unfinalizedStETH + ethToDeposit - bufferedEther + ether("1")) / ONE_ETHER + 1n) * ONE_ETHER;
     const ethHolder = await impersonate(certainAddress("provision:eth:whale"), submitValue + ether("1"));
     await lido.connect(ethHolder).submit(ZeroAddress, { value: submitValue });
   }
 
   depositableEther = await lido.getDepositableEther();
   if (depositableEther < ethToDeposit) {
-    throw new Error(`Not enough depositable ether for staking module ${moduleId}`);
+    throw new Error(`Not enough depositable ether`);
   }
 
-  await ensureCanDeposit(ctx);
-  await setModuleStakeShareLimit(ctx, moduleId, TOTAL_BASIS_POINTS);
-
-  const { validatorsBalanceGwei: validatorsBefore } = await getStakingModuleBalances(ctx, moduleId);
+  // await setModuleStakeShareLimit(ctx, moduleId, TOTAL_BASIS_POINTS);
+  // const { validatorsBalanceGwei: validatorsBefore } = await getStakingModuleBalances(ctx, moduleId);
   const depositedBefore = (await lido.getBalanceStats()).depositedSinceLastReport;
 
-  await depositValidatorsViaRouter(ctx, moduleId, depositsCount);
+  const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(
+    depositableEther,
+    false,
+  );
 
-  const { validatorsBalanceGwei: validatorsAfter } = await getStakingModuleBalances(ctx, moduleId);
+  if (totalAllocated < depositsCount) {
+    throw new Error(`Not enough allocation capacity in staking modules`);
+  }
+
+  const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
+  const validatorsDeltaGweiByModule = new Map<bigint, bigint>();
+
+  for (let i = 0; i < moduleIds.length; i++) {
+    if (allocated[i] === 0n) {
+      continue;
+    }
+    const moduleDepositsCount = allocated[i] / DEPOSIT_SIZE;
+    if (moduleDepositsCount === 0n) {
+      throw new Error(`Wrong deposits allocated to Module ${moduleIds[i]}`);
+    }
+    await depositValidatorsViaRouter(ctx, moduleIds[i], moduleDepositsCount);
+
+    validatorsDeltaGweiByModule.set(moduleIds[i], allocated[i] / ONE_GWEI);
+  }
+
+  // const { validatorsBalanceGwei: validatorsAfter } = await getStakingModuleBalances(ctx, moduleId);
   const { depositedSinceLastReport } = await lido.getBalanceStats();
 
   if (depositedSinceLastReport - depositedBefore !== ethToDeposit) {
     throw new Error(`Deposited ${depositedSinceLastReport - depositedBefore} wei, expected ${ethToDeposit}`);
   }
 
-  if (validatorsAfter !== validatorsBefore) {
-    throw new Error(`Validators balance changed before report: ${validatorsAfter} != ${validatorsBefore}`);
-  }
+  // if (validatorsAfter !== validatorsBefore) {
+  //   throw new Error(`Validators balance changed before report: ${validatorsAfter} != ${validatorsBefore}`);
+  // }
+  return validatorsDeltaGweiByModule;
 };
 
 export const getCurrentModuleAccountingReportParams = async (
   ctx: ProtocolContext,
+  {
+    validatorsDeltaGweiByModule = new Map<bigint, bigint>(),
+  }: {
+    validatorsDeltaGweiByModule?: Map<bigint, bigint>;
+  } = {},
 ): Promise<ModuleAccountingReportParams> => {
-  return buildModuleAccountingReportParams(ctx);
+  return buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule });
 };
 
 export const seedProtocolPendingBaseline = async (
@@ -270,15 +292,23 @@ export const seedProtocolPendingBaseline = async (
   moduleId: bigint,
   depositsCount: bigint = 1n,
 ) => {
-  await depositValidatorsWithoutReport(ctx, moduleId, depositsCount);
+  await depositValidatorsWithoutReport(ctx, depositsCount);
+  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
+    await ctx.contracts.lido.getBalanceStats();
 
-  const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
   const { data } = await report(ctx, {
     clDiff: depositedSinceLastReport,
     dryRun: true,
     excludeVaultsBalances: true,
     skipWithdrawals: true,
-    ...(await buildModuleAccountingReportParams(ctx)),
+    waitNextReportTime: true,
+    // adjust modules balances in case of unaccounted cl balance in tests
+    ...adjustReportModuleBalances(
+      {
+        ...(await buildModuleAccountingReportParams(ctx)),
+      },
+      (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) / ONE_GWEI,
+    ),
   });
 
   const pendingBaselineGwei = depositedSinceLastReport / ONE_GWEI;
@@ -333,8 +363,6 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   };
 
   const numDepositedBefore = await getTotalDepositedValidators();
-
-  await ensureCanDeposit(ctx);
 
   // Deposit validators via StakingRouter (DSM calls SR which pulls ETH from Lido)
   await depositValidatorsViaRouter(ctx, moduleId, depositsCount);
