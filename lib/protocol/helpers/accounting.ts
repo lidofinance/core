@@ -75,7 +75,8 @@ type StakingModuleWithReportedBalanceGwei = {
 
 /**
  * Build module balances in gwei with exact total conservation.
- * Uses proportional split over remaining totals; the last module gets the remainder.
+ * Uses proportional split over existing module balances; the last non-zero module gets the remainder.
+ * This supports both positive CL growth and negative CL rebase reports.
  */
 const buildConservedModuleBalancesGwei = (
   totalBalanceGwei: bigint,
@@ -87,10 +88,6 @@ const buildConservedModuleBalancesGwei = (
     (sum, { moduleBalanceGwei }) => sum + moduleBalanceGwei,
     0n,
   );
-
-  if (totalBalanceGwei < totalModulesBalanceGwei) {
-    throw new Error(`Total balance ${totalBalanceGwei} is less than total modules balance ${totalModulesBalanceGwei}`);
-  }
 
   if (totalModulesBalanceGwei === 0n) {
     return modulesWithBalance.map(({ moduleId }) => ({ moduleId, moduleReportedBalanceGwei: 0n }));

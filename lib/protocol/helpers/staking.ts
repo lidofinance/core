@@ -238,12 +238,9 @@ export const depositValidatorsWithoutReport = async (
   // const { validatorsBalanceGwei: validatorsBefore } = await getStakingModuleBalances(ctx, moduleId);
   const depositedBefore = (await lido.getBalanceStats()).depositedSinceLastReport;
 
-  const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(
-    depositableEther,
-    false,
-  );
+  const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(ethToDeposit, false);
 
-  if (totalAllocated < depositsCount) {
+  if (totalAllocated < ethToDeposit) {
     throw new Error(`Not enough allocation capacity in staking modules`);
   }
 
@@ -391,11 +388,15 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
 
   // Add new validators to beacon chain
   const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[moduleId, ethToDeposit / ONE_GWEI]]);
+  const moduleReportParams = await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule });
+  const clValidatorsBalanceGwei =
+    (before.clValidatorsBalanceAtLastReport + before.clPendingBalanceAtLastReport + ethToDeposit) / ONE_GWEI;
+
   await report(ctx, {
     clDiff: ethToDeposit,
     clAppearedValidators: depositsCount,
     skipWithdrawals: true,
-    ...(await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule })),
+    ...adjustReportModuleBalances(moduleReportParams, clValidatorsBalanceGwei),
   });
 
   const after = await lido.getBalanceStats();
