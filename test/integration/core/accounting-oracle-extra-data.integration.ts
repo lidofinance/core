@@ -46,6 +46,14 @@ describe("Integration: AccountingOracle extra data", () => {
     }
 
     {
+      const { lido } = ctx.contracts;
+      const reserveTarget = await lido.getDepositsReserveTarget();
+      if (reserveTarget > 0n) {
+        const agent = await ctx.getSigner("agent");
+        await lido.connect(agent).setDepositsReserveTarget(0n);
+      }
+    }
+    {
       // Prepare exited keys extra data for reusing in tests
       const { oracleReportSanityChecker } = ctx.contracts;
 

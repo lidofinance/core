@@ -300,7 +300,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
       const { oracleReportSanityChecker, lido } = ctx.contracts;
 
-      // Submit a neutral report to establish a fresh CL balance baseline
+      // Submit a neutral report to establish the current CL balance baseline
       await report(ctx);
 
       // Get current protocol state to calculate dynamic slashing limit
@@ -309,8 +309,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       const limits = await oracleReportSanityChecker.getOracleReportLimits();
       const maxAllowedNegativeRebase = (preCLBalance * limits.maxCLBalanceDecreaseBP) / 10_000n;
 
-      // CL decrease exactly at limit minus 1 wei should pass
-      const clSlashing = -(maxAllowedNegativeRebase - 1n);
+      // Oracle reports CL balances in gwei, so keep the reported decrease below the limit after gwei rounding.
+      const clSlashing = -(maxAllowedNegativeRebase - ONE_GWEI);
 
       const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
       await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);

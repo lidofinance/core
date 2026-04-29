@@ -6,8 +6,8 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { advanceChainTime, batch, ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
 import {
+  buildModuleAccountingReportParams,
   finalizeWQViaElVault,
-  getCurrentModuleAccountingReportParams,
   getProtocolContext,
   norSdvtEnsureOperators,
   OracleReportParams,
@@ -322,7 +322,7 @@ describe("Scenario: Protocol Happy Path", () => {
       dryRun: true,
       excludeVaultsBalances: true,
       skipWithdrawals: true,
-      ...(await getCurrentModuleAccountingReportParams(ctx)),
+      ...(await buildModuleAccountingReportParams(ctx)),
     });
     await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
       ...pendingBaselineData,

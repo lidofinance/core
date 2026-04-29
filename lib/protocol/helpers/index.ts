@@ -1,6 +1,5 @@
 export {
   depositAndReportValidators,
-  getCurrentModuleAccountingReportParams,
   depositValidatorsWithoutReport,
   ensureStakeLimit,
   seedProtocolPendingBaseline,

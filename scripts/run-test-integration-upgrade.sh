@@ -20,7 +20,7 @@ if [[ -z ${RPC_URL} ]]; then
     echo "Error: RPC_URL is not set and ${RPC_VAR} is also not set"
     exit 1
   fi
-  echo "RPC_URL derived from \${${RPC_VAR}}: $RPC_URL"
+  echo "RPC_URL derived from \${${RPC_VAR}}"
   export RPC_URL
 fi
 # echo "RPC_URL: $RPC_URL"
