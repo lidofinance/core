@@ -92,6 +92,7 @@ const ConsolidationGatewaySchema = z.object({
   gIFirstValidatorPrev: HexStringSchema,
   gIFirstValidatorCurr: HexStringSchema,
   pivotSlot: NonNegativeIntSchema,
+  pauser: EthereumAddressSchema.optional(),
 });
 
 const ConsolidationBusSchema = z.object({

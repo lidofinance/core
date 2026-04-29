@@ -76,6 +76,8 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
+pauser = "0x8943545177806ED17B9F23F0a21ee5948eCaa776" # devnet deployer
+
 [consolidationBus]
 initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch

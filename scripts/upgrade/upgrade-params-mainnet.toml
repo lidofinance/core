@@ -2,17 +2,17 @@
 
 [easyTrack.newFactories]
 # TODO: fill with deployed Easy Track factory address before execution
-UpdateStakingModuleShareLimits = "0x00000000000000000000000000000000000eee01"
-AllowConsolidationPair = "0x00000000000000000000000000000000000eee02"
+UpdateStakingModuleShareLimits = "0x0000000000000000000000000000000000000000"
+AllowConsolidationPair = "0x0000000000000000000000000000000000000000"
 
-SetMerkleGateTreeForCSM = "0x00000000000000000000000000000000000eee09"
-ReportWithdrawalsForSlashedValidatorsForCSM = "0x00000000000000000000000000000000000eee10"
-SettleGeneralDelayedPenaltyForCSM = "0x00000000000000000000000000000000000eee11"
+SetMerkleGateTreeForCSM = "0x0000000000000000000000000000000000000000"
+ReportWithdrawalsForSlashedValidatorsForCSM = "0x0000000000000000000000000000000000000000"
+SettleGeneralDelayedPenaltyForCSM = "0x0000000000000000000000000000000000000000"
 
-SetMerkleGateTreeForCM = "0x00000000000000000000000000000000000eee13"
-ReportWithdrawalsForSlashedValidatorsForCM = "0x00000000000000000000000000000000000eee14"
-SettleGeneralDelayedPenaltyForCM = "0x00000000000000000000000000000000000eee15"
-CreateOrUpdateOperatorGroupForCM = "0x00000000000000000000000000000000000eee16"
+SetMerkleGateTreeForCM = "0x0000000000000000000000000000000000000000"
+ReportWithdrawalsForSlashedValidatorsForCM = "0x0000000000000000000000000000000000000000"
+SettleGeneralDelayedPenaltyForCM = "0x0000000000000000000000000000000000000000"
+CreateOrUpdateOperatorGroupForCM = "0x0000000000000000000000000000000000000000"
 
 [easyTrack.oldFactories]
 CSMSettleElStealingPenalty = "0xF6B6E7997338C48Ea3a8BCfa4BB64a315fDa76f4"
@@ -75,6 +75,8 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
+pauser = "0xFFe21561251c49AdccFad065C94Fb4931dF49081" # DG reseal committee
+
 [consolidationBus]
 initialBatchSize = 350                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
@@ -84,7 +86,7 @@ initialExecutionDelay = 86400         # Delay before pending batch execution
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
 #TODO  update upon deployment
-committee = "0x00000000000000000000000000000000000abc02"
+committee = "0x0000000000000000000000000000000000000000"
 
        # Frame duration in seconds
 [topUpGateway]
@@ -100,7 +102,7 @@ gIFirstValidatorCurr = "0x000000000000000000000000000000000000000000000000009600
 # Pivot slot for fork-aware gIndex selection
 pivotSlot = 0
 #TODO  update upon deployment
-depositor = "0x00000000000000000000000000000000000abc04"
+depositor = "0x0000000000000000000000000000000000000000"
 
 [stakingRouter]
 maxEBType1 = "32000000000000000000"
@@ -127,15 +129,15 @@ strikesImpl = "0x3E5021424c9e13FC853e523Cd68ebBec848956a0"
 oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 oldVerifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
 # TODO: replace with deployed new verifier
-newVerifier = "0x00000000000000000000000000000000000dac01"
+newVerifier = "0x0000000000000000000000000000000000000000"
 newPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 # TODO: replace with new deployed ejector
-ejector = "0x00000000000000000000000000000000000dac02"
+ejector = "0x0000000000000000000000000000000000000000"
 csmCommittee = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 
 [curatedModule]
 # TODO: replace with deployed curated module addresses
-module = "0x00000000000000000000000000000000000cac01"
+module = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed curated gates before execution
 curatedGates = [
     "0x0000000000000000000000000000000000000000",
@@ -147,8 +149,8 @@ curatedGates = [
     "0x0000000000000000000000000000000000000000",
 ]
 # TODO: replace with deployed curated verifier before execution
-verifier = "0x00000000000000000000000000000000000cac02"
-circuitBreakerPauser = "0x00000000000000000000000000000000000abc02"
+verifier = "0x0000000000000000000000000000000000000000"
+circuitBreakerPauser = "0x0000000000000000000000000000000000000000"
 moduleName = "curated-onchain-v1"
 stakeShareLimit = 2000
 priorityExitShareThreshold = 2500

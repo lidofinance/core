@@ -52,6 +52,7 @@ export function logStartReview(msg?: string) {
   log.splitter();
   log.emptyLine();
 }
+
 export async function logConfirmReview(msg?: string) {
   log.splitter();
   log.warning(" •", rd(msg || `Please review ${or("↑↑↑")} and confirm!`));
