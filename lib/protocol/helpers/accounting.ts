@@ -19,9 +19,12 @@ import {
   log,
   ONE_GWEI,
   prepareExtraData,
+  toGwei,
 } from "lib";
 
 import { ProtocolContext } from "../types";
+
+import { buildModuleAccountingReportParams } from "./staking";
 
 export type OracleReportParams = {
   clDiff?: bigint;
@@ -63,59 +66,6 @@ const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
 const CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS = 37n * 24n * 60n * 60n;
 
-type StakingModuleWithBalanceGwei = {
-  moduleId: bigint;
-  moduleBalanceGwei: bigint;
-};
-
-type StakingModuleWithReportedBalanceGwei = {
-  moduleId: bigint;
-  moduleReportedBalanceGwei: bigint;
-};
-
-/**
- * Build module balances in gwei with exact total conservation.
- * Uses proportional split over existing module balances; the last non-zero module gets the remainder.
- * This supports both positive CL growth and negative CL rebase reports.
- */
-const buildConservedModuleBalancesGwei = (
-  totalBalanceGwei: bigint,
-  modulesWithBalance: StakingModuleWithBalanceGwei[],
-): StakingModuleWithReportedBalanceGwei[] => {
-  if (modulesWithBalance.length === 0) return [];
-
-  const totalModulesBalanceGwei = modulesWithBalance.reduce(
-    (sum, { moduleBalanceGwei }) => sum + moduleBalanceGwei,
-    0n,
-  );
-
-  if (totalModulesBalanceGwei === 0n) {
-    return modulesWithBalance.map(({ moduleId }) => ({ moduleId, moduleReportedBalanceGwei: 0n }));
-  }
-  const lastNonZeroIndex = modulesWithBalance.reduce<number>((lastIndex, { moduleBalanceGwei }, index) => {
-    return moduleBalanceGwei > 0n ? index : lastIndex;
-  }, 0);
-
-  let remainingTotalBalanceGwei = totalBalanceGwei;
-  const modulesWithReportedBalances: StakingModuleWithReportedBalanceGwei[] = [];
-
-  for (let index = 0; index < modulesWithBalance.length; ++index) {
-    const { moduleId, moduleBalanceGwei } = modulesWithBalance[index];
-
-    const moduleReportedBalanceGwei =
-      moduleBalanceGwei === 0n
-        ? 0n
-        : index === lastNonZeroIndex
-          ? remainingTotalBalanceGwei
-          : (totalBalanceGwei * moduleBalanceGwei) / totalModulesBalanceGwei;
-
-    modulesWithReportedBalances.push({ moduleId, moduleReportedBalanceGwei });
-    remainingTotalBalanceGwei -= moduleReportedBalanceGwei;
-  }
-
-  return modulesWithReportedBalances;
-};
-
 export function adjustReportModuleBalances(
   {
     stakingModuleIdsWithUpdatedBalance = [],
@@ -126,17 +76,28 @@ export function adjustReportModuleBalances(
   },
   clValidatorsBalanceGwei: bigint,
 ) {
-  const moduleBalances: StakingModuleWithBalanceGwei[] = [];
-  for (let i = 0; i < stakingModuleIdsWithUpdatedBalance.length; i++) {
-    const moduleId = stakingModuleIdsWithUpdatedBalance[i];
-    const moduleBalanceGwei = validatorBalancesGweiByStakingModule[i];
-    moduleBalances.push({ moduleId, moduleBalanceGwei });
+  const { lastIndex: lastNonZeroIndex, totalBalance: totalBalanceGwei } = validatorBalancesGweiByStakingModule.reduce<{
+    lastIndex: number;
+    totalBalance: bigint;
+  }>(
+    ({ lastIndex, totalBalance }, balance, index) => {
+      return { lastIndex: balance > 0n ? index : lastIndex, totalBalance: totalBalance + balance };
+    },
+    { lastIndex: 0, totalBalance: 0n },
+  );
+
+  let remainingTotalBalanceGwei = clValidatorsBalanceGwei;
+  for (let i = 0; i < validatorBalancesGweiByStakingModule.length; ++i) {
+    const balance = validatorBalancesGweiByStakingModule[i];
+    if (balance === 0n) continue;
+
+    const balanceNew =
+      i === lastNonZeroIndex ? remainingTotalBalanceGwei : (clValidatorsBalanceGwei * balance) / totalBalanceGwei;
+
+    remainingTotalBalanceGwei -= balanceNew;
+    validatorBalancesGweiByStakingModule[i] = balanceNew;
   }
 
-  const modulesWithReportedBalance = buildConservedModuleBalancesGwei(clValidatorsBalanceGwei, moduleBalances);
-  for (let i = 0; i < moduleBalances.length; i++) {
-    validatorBalancesGweiByStakingModule[i] = modulesWithReportedBalance[i].moduleReportedBalanceGwei;
-  }
   return {
     stakingModuleIdsWithUpdatedBalance,
     validatorBalancesGweiByStakingModule,
@@ -289,21 +250,10 @@ export const report = async (
   }
 
   if (stakingModuleIdsWithUpdatedBalance.length === 0) {
-    validatorBalancesGweiByStakingModule = [];
-    const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
-
-    const modulesWithBalance: StakingModuleWithBalanceGwei[] = [];
-    for (const moduleId of moduleIds) {
-      const moduleBalance = await ctx.contracts.stakingRouter.getModuleValidatorsBalance(moduleId);
-      modulesWithBalance.push({ moduleId, moduleBalanceGwei: moduleBalance / ONE_GWEI });
-    }
-
-    const modulesWithReportedBalance = buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, modulesWithBalance);
-    for (let i = 0; i < modulesWithBalance.length; i++) {
-      const moduleId = modulesWithBalance[i].moduleId;
-      stakingModuleIdsWithUpdatedBalance.push(moduleId);
-      validatorBalancesGweiByStakingModule.push(modulesWithReportedBalance[i].moduleReportedBalanceGwei);
-    }
+    ({ stakingModuleIdsWithUpdatedBalance, validatorBalancesGweiByStakingModule } = adjustReportModuleBalances(
+      await buildModuleAccountingReportParams(ctx),
+      toGwei(postCLBalance),
+    ));
   }
 
   const reportData = {

@@ -24,5 +24,5 @@ jobs:
         env:
           NETWORK: "hoodi"
           RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
-          FORKING_BLOCK_NUMBER: "2701101"
+          FORKING_BLOCK_NUMBER: "2715255"
           NETWORK_STATE_FILE: deployed-hoodi.json

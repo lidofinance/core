@@ -5,7 +5,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { advanceChainTime, ether, impersonate, updateBalance } from "lib";
-import { finalizeWQViaSubmit, getProtocolContext, ProtocolContext, report, setStakingLimit } from "lib/protocol";
+import {
+  depositValidatorsWithoutReport,
+  finalizeWQViaSubmit,
+  getProtocolContext,
+  ProtocolContext,
+  report,
+  setStakingLimit,
+} from "lib/protocol";
 
 import { Snapshot, ZERO_HASH } from "test/suite";
 
@@ -339,7 +346,7 @@ describe("Integration: Deposits reserve", () => {
   });
 
   it("Keeps fixed-refSlot finalization budget bounded after spending depositable ether post-refSlot", async () => {
-    const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
+    const { lido, withdrawalQueue } = ctx.contracts;
 
     const requestAmount = ether("20");
     await lido.connect(holder).submit(ZeroAddress, { value: ether("200") });
@@ -373,9 +380,8 @@ describe("Integration: Deposits reserve", () => {
       before.data.simulatedShareRate,
     );
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     const bufferedBeforeSpend = await lido.getBufferedEther();
-    await stakingRouter.connect(dsmSigner).deposit(1n, ZERO_HASH);
+    await depositValidatorsWithoutReport(ctx, 1n);
     const bufferedAfterSpend = await lido.getBufferedEther();
     expect(bufferedAfterSpend).to.be.lt(bufferedBeforeSpend);
 

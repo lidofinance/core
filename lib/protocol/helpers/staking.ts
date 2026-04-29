@@ -6,9 +6,9 @@ import {
   ether,
   impersonate,
   log,
-  ONE_ETHER,
   ONE_GWEI,
   StakingModuleStatus,
+  toGwei,
   TOTAL_BASIS_POINTS,
 } from "lib";
 
@@ -220,22 +220,23 @@ export const depositValidatorsWithoutReport = async (
 
   const ethToDeposit = depositsCount * DEPOSIT_SIZE;
   let depositableEther = await lido.getDepositableEther();
+  let submitValue = ethToDeposit;
 
   if (depositableEther < ethToDeposit) {
     const bufferedEther = await lido.getBufferedEther();
     const unfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
-    const submitValue = ((unfinalizedStETH + ethToDeposit - bufferedEther + ether("1")) / ONE_ETHER + 1n) * ONE_ETHER;
-    const ethHolder = await impersonate(certainAddress("provision:eth:whale"), submitValue + ether("1"));
-    await lido.connect(ethHolder).submit(ZeroAddress, { value: submitValue });
+    submitValue += unfinalizedStETH - bufferedEther;
+  } else {
+    submitValue -= ether("0.001"); // ensure consume buffer
   }
+  const ethHolder = await impersonate(certainAddress("provision:eth:whale"), submitValue + ether("1"));
+  await lido.connect(ethHolder).submit(ZeroAddress, { value: submitValue });
 
   depositableEther = await lido.getDepositableEther();
   if (depositableEther < ethToDeposit) {
     throw new Error(`Not enough depositable ether`);
   }
 
-  // await setModuleStakeShareLimit(ctx, moduleId, TOTAL_BASIS_POINTS);
-  // const { validatorsBalanceGwei: validatorsBefore } = await getStakingModuleBalances(ctx, moduleId);
   const depositedBefore = (await lido.getBalanceStats()).depositedSinceLastReport;
 
   const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(ethToDeposit, false);
@@ -269,17 +270,6 @@ export const depositValidatorsWithoutReport = async (
   return validatorsDeltaGweiByModule;
 };
 
-export const getCurrentModuleAccountingReportParams = async (
-  ctx: ProtocolContext,
-  {
-    validatorsDeltaGweiByModule = new Map<bigint, bigint>(),
-  }: {
-    validatorsDeltaGweiByModule?: Map<bigint, bigint>;
-  } = {},
-): Promise<ModuleAccountingReportParams> => {
-  return buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule });
-};
-
 export const seedProtocolPendingBaseline = async (
   ctx: ProtocolContext,
   moduleId: bigint,
@@ -297,14 +287,12 @@ export const seedProtocolPendingBaseline = async (
     waitNextReportTime: true,
     // adjust modules balances in case of unaccounted cl balance in tests
     ...adjustReportModuleBalances(
-      {
-        ...(await buildModuleAccountingReportParams(ctx)),
-      },
-      (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) / ONE_GWEI,
+      await buildModuleAccountingReportParams(ctx),
+      toGwei(clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport),
     ),
   });
 
-  const pendingBaselineGwei = depositedSinceLastReport / ONE_GWEI;
+  const pendingBaselineGwei = toGwei(depositedSinceLastReport);
   return submitReportDataWithConsensusAndEmptyExtraData(ctx, {
     ...data,
     clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei,
@@ -383,16 +371,17 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   });
 
   // Add new validators to beacon chain
-  const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[moduleId, ethToDeposit / ONE_GWEI]]);
-  const moduleReportParams = await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule });
-  const clValidatorsBalanceGwei =
-    (before.clValidatorsBalanceAtLastReport + before.clPendingBalanceAtLastReport + ethToDeposit) / ONE_GWEI;
+  const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[moduleId, toGwei(ethToDeposit)]]);
+  const postCLBalanceWei = before.clValidatorsBalanceAtLastReport + before.clPendingBalanceAtLastReport + ethToDeposit;
 
   await report(ctx, {
     clDiff: ethToDeposit,
     clAppearedValidators: depositsCount,
     skipWithdrawals: true,
-    ...adjustReportModuleBalances(moduleReportParams, clValidatorsBalanceGwei),
+    ...adjustReportModuleBalances(
+      await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule }),
+      toGwei(postCLBalanceWei),
+    ),
   });
 
   const after = await lido.getBalanceStats();

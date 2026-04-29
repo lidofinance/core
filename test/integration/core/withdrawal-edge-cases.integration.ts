@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -6,8 +7,10 @@ import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Lido, WithdrawalQueueERC721 } from "typechain-types";
 
-import { ether, findEventsWithInterfaces, ONE_GWEI } from "lib";
+import { certainAddress, ether, findEventsWithInterfaces, impersonate, toGwei } from "lib";
 import {
+  buildModuleAccountingReportParams,
+  depositValidatorsWithoutReport,
   finalizeWQViaSubmit,
   getProtocolContext,
   ProtocolContext,
@@ -15,7 +18,7 @@ import {
   reportWithEffectiveClDiff,
   resetCLBalanceDecreaseWindow,
 } from "lib/protocol";
-import { depositValidatorsWithoutReport } from "lib/protocol/helpers/staking";
+import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
@@ -46,45 +49,6 @@ describe("Integration: Withdrawal edge cases", () => {
     expect(withdrawalsReserve).to.be.lte(buffered, "Reserve should not exceed buffered ether");
   };
 
-  const getModuleAccountingReportParams = async (postCLBalanceWei: bigint) => {
-    const { stakingRouter } = ctx.contracts;
-    const stakingModuleIds = await stakingRouter.getStakingModuleIds();
-    const modules: { moduleId: bigint; validatorsBalanceGwei: bigint }[] = [];
-    let totalValidatorsBalanceGwei = 0n;
-
-    for (const moduleId of stakingModuleIds) {
-      const [validatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-      modules.push({ moduleId, validatorsBalanceGwei });
-      totalValidatorsBalanceGwei += validatorsBalanceGwei;
-    }
-
-    const totalReportedValidatorsBalanceGwei = postCLBalanceWei / ONE_GWEI;
-    const stakingModuleIdsWithUpdatedBalance: bigint[] = [];
-    const validatorBalancesGweiByStakingModule: bigint[] = [];
-    let remainingReportedValidatorsBalanceGwei = totalReportedValidatorsBalanceGwei;
-    let remainingValidatorsBalanceGwei = totalValidatorsBalanceGwei;
-
-    for (let index = 0; index < modules.length; ++index) {
-      const { moduleId, validatorsBalanceGwei } = modules[index];
-      const isLastModule = index === modules.length - 1;
-      const reportedValidatorsBalanceGwei =
-        isLastModule || remainingValidatorsBalanceGwei === 0n
-          ? remainingReportedValidatorsBalanceGwei
-          : (remainingReportedValidatorsBalanceGwei * validatorsBalanceGwei) / remainingValidatorsBalanceGwei;
-
-      stakingModuleIdsWithUpdatedBalance.push(moduleId);
-      validatorBalancesGweiByStakingModule.push(reportedValidatorsBalanceGwei);
-
-      remainingReportedValidatorsBalanceGwei -= reportedValidatorsBalanceGwei;
-      remainingValidatorsBalanceGwei -= validatorsBalanceGwei;
-    }
-
-    return {
-      stakingModuleIdsWithUpdatedBalance,
-      validatorBalancesGweiByStakingModule,
-    };
-  };
-
   const reportWithEffectiveClDiffUsingCurrentModuleBalances = async (
     effectiveClDiff: bigint,
     skipWithdrawals = false,
@@ -97,30 +61,27 @@ describe("Integration: Withdrawal edge cases", () => {
     await reportWithEffectiveClDiff(ctx, effectiveClDiff, {
       excludeVaultsBalances: true,
       skipWithdrawals,
-      ...(await getModuleAccountingReportParams(postCLBalanceWei)),
+      ...adjustReportModuleBalances(await buildModuleAccountingReportParams(ctx), toGwei(postCLBalanceWei)),
     });
   };
 
   const activateDepositedValidators = async (depositsCount: bigint) => {
     await depositValidatorsWithoutReport(ctx, depositsCount);
 
-    const { stakingRouter, lido: lidoContract } = ctx.contracts;
-    const stakingModuleIds = [...(await stakingRouter.getStakingModuleIds())];
-    const { depositedSinceLastReport } = await lidoContract.getBalanceStats();
-    const depositedValidatorsBalanceGwei = depositedSinceLastReport / ONE_GWEI;
+    const { lido: lidoContract } = ctx.contracts;
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
+      await lidoContract.getBalanceStats();
+
+    const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[NOR_MODULE_ID, toGwei(depositedSinceLastReport)]]);
+    const postCLBalanceWei = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport;
 
     await report(ctx, {
       clDiff: depositedSinceLastReport,
       excludeVaultsBalances: true,
       skipWithdrawals: true,
-      stakingModuleIdsWithUpdatedBalance: stakingModuleIds,
-      validatorBalancesGweiByStakingModule: await Promise.all(
-        stakingModuleIds.map(async (moduleId) => {
-          const [validatorsBalanceGwei] = await stakingRouter.getStakingModuleStateAccounting(moduleId);
-          return moduleId === NOR_MODULE_ID
-            ? validatorsBalanceGwei + depositedValidatorsBalanceGwei
-            : validatorsBalanceGwei;
-        }),
+      ...adjustReportModuleBalances(
+        await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule }),
+        toGwei(postCLBalanceWei),
       ),
     });
   };
@@ -228,6 +189,9 @@ describe("Integration: Withdrawal edge cases", () => {
     afterEach(async () => await Snapshot.restore(originalState));
 
     it("should handle missed oracle report", async () => {
+      const whale = await impersonate(certainAddress("provision:eth:whale"), ether("1000000"));
+      await lido.connect(whale).submit(ZeroAddress, { value: DEPOSITS_RESERVE_TARGET + ether("5") });
+
       const amount = ether("100");
 
       expect(await lido.balanceOf(holder.address)).to.equal(0);

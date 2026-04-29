@@ -3,8 +3,8 @@ import { getBigInt } from "ethers";
 
 import { ether, ONE_GWEI } from "lib";
 import {
+  buildModuleAccountingReportParams,
   depositValidatorsWithoutReport,
-  getCurrentModuleAccountingReportParams,
   getNextReportContext,
   getProtocolContext,
   ProtocolContext,
@@ -49,7 +49,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     validatorsDeltaGweiByModule?: Map<bigint, bigint>;
   } = {}) => {
     const { stakingModuleIdsWithUpdatedBalance, validatorBalancesGweiByStakingModule } =
-      await getCurrentModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule });
+      await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule });
     const moduleIndexById = new Map(
       stakingModuleIdsWithUpdatedBalance.map((moduleId, index) => [moduleId, index] as const),
     );
