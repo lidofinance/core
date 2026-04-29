@@ -21,6 +21,9 @@ artifacts/
 foundry/cache/
 foundry/out/
 
+# Dual Governance files
+dg/
+
 # Extracted ABI files
 lib/abi/*.json
 

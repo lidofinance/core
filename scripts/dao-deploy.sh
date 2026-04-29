@@ -17,6 +17,12 @@ echo "NETWORK is $NETWORK"
 
 rm -f "${NETWORK_STATE_FILE}"
 
+if [[ "${DG_DEPLOYMENT_ENABLED}" == "false" ]]; then
+  echo "DG deployment disabled; skip dg:install"
+else
+  yarn dg:install
+fi
+
 # Compile contracts
 yarn compile
 

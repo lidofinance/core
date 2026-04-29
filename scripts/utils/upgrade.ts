@@ -53,15 +53,13 @@ export async function mockDGAragonVoting(state: DeploymentState): Promise<{
   const deployer = await impersonate(agentAddress, ether("100"));
   const timelock = await loadContract<IEmergencyProtectedTimelock>(
     "IEmergencyProtectedTimelock",
-    state[Sk.dgEmergencyProtectedTimelock].proxy.address,
+    state[Sk.dgEmergencyProtectedTimelock].address,
   );
   const afterSubmitDelay = await timelock.getAfterSubmitDelay();
   const afterScheduleDelay = await timelock.getAfterScheduleDelay();
 
-  const dualGovernance = await loadContract<IDualGovernance>(
-    "IDualGovernance",
-    state[Sk.dgDualGovernance].proxy.address,
-  );
+  const dualGovernanceAddress = state[Sk.dgDualGovernance].proxy?.address ?? state[Sk.dgDualGovernance].address;
+  const dualGovernance = await loadContract<IDualGovernance>("IDualGovernance", dualGovernanceAddress);
 
   const proposalId = 6n; // https://dg.lido.fi/proposals/6
   log.success("Proposal submitted: proposalId", proposalId);

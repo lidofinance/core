@@ -42,6 +42,8 @@
     "test:fork:pdg-validator": "MODE=forking hardhat test test/integration/vaults/scenario/pdg-specific-validator.integration.ts",
     "validate:configs": "yarn hardhat validate-configs",
     "typecheck": "tsc --noEmit",
+    "dg:install": "yarn ts-node lib/dg-installation.ts",
+    "dg:regression-tests": "yarn ts-node lib/dg-regression-tests.ts",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
     "deploy:v3.0.2": "STEPS_FILE=upgrade/steps-deploy-v3-02.json hardhat run scripts/utils/migrate.ts",

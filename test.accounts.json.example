@@ -1,0 +1,6 @@
+{
+  "eth": {
+    "local": ["ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"]
+  },
+  "description": "The key $.eth.local above contains the private key of the first account of default mnemonic 'test test ...'"
+}

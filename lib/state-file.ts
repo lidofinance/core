@@ -113,8 +113,15 @@ export enum Sk {
   lazyOracle = "lazyOracle",
   v3TemporaryAdmin = "v3TemporaryAdmin",
   // Dual Governance
+  dualGovernanceConfig = "dualGovernanceConfig",
+  dgAdminExecutor = "dg:admin_executor",
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
+  dgConfigProvider = "dg:dual_governance_config_provider",
+  dgEmergencyGovernance = "dg:emergency_governance",
+  dgEscrowMasterCopy = "dg:escrow_master_copy",
+  dgResealManager = "dg:reseal_manager",
+  dgTiebreakerCoreCommittee = "dg:tiebreaker_core_committee",
   // Easy Track
   easyTrack = "easyTrack",
   easyTrackEVMScriptExecutor = "easyTrackEVMScriptExecutor",
@@ -151,8 +158,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.appSimpleDvt:
     case Sk.predepositGuarantee:
     case Sk.vaultHub:
-    case Sk.dgDualGovernance:
-    case Sk.dgEmergencyProtectedTimelock:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
@@ -186,6 +191,14 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
     case Sk.v3VoteScript:
+    case Sk.dgAdminExecutor:
+    case Sk.dgConfigProvider:
+    case Sk.dgEmergencyGovernance:
+    case Sk.dgEscrowMasterCopy:
+    case Sk.dgResealManager:
+    case Sk.dgTiebreakerCoreCommittee:
+    case Sk.dgDualGovernance:
+    case Sk.dgEmergencyProtectedTimelock:
     case Sk.easyTrack:
     case Sk.gateSealFactory:
       return state[contractKey].address;
