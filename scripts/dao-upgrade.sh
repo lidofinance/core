@@ -47,7 +47,7 @@ if [[ ${MODE:-} == "forking" ]]; then
   fi
 
   if [[ -f $UPGRADE_PARAMETERS_FILE ]]; then
-    TEMP_UPGRADE_PARAMETERS_FILE="upgrade-params-local.toml"
+    TEMP_UPGRADE_PARAMETERS_FILE="scripts/upgrade/upgrade-params-local.toml"
     if [[ ! -f $TEMP_UPGRADE_PARAMETERS_FILE ]]; then
       cp "$UPGRADE_PARAMETERS_FILE" "$TEMP_UPGRADE_PARAMETERS_FILE"
       echo "Copied $UPGRADE_PARAMETERS_FILE to $TEMP_UPGRADE_PARAMETERS_FILE"
