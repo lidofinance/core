@@ -334,8 +334,6 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     );
 
     const validatorsBalanceAfterGwei = sumBigints(reportedValidatorsBalancesGwei);
-    // const pendingBalanceAfterGwei = totalPendingBalanceBeforeGwei;
-    // expect(pendingBalanceAfterGwei).to.equal(totalPendingBalanceBeforeGwei); ??
     expect(validatorsBalanceAfterGwei).to.equal(totalValidatorsBalanceBeforeGwei + excessiveValidatorsGrowthGwei);
 
     const data = await buildReportData({

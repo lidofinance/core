@@ -260,16 +260,12 @@ export const depositValidatorsWithoutReport = async (
     validatorsDeltaGweiByModule.set(moduleIds[i], allocated[i] / ONE_GWEI);
   }
 
-  // const { validatorsBalanceGwei: validatorsAfter } = await getStakingModuleBalances(ctx, moduleId);
   const { depositedSinceLastReport } = await lido.getBalanceStats();
 
   if (depositedSinceLastReport - depositedBefore !== ethToDeposit) {
     throw new Error(`Deposited ${depositedSinceLastReport - depositedBefore} wei, expected ${ethToDeposit}`);
   }
 
-  // if (validatorsAfter !== validatorsBefore) {
-  //   throw new Error(`Validators balance changed before report: ${validatorsAfter} != ${validatorsBefore}`);
-  // }
   return validatorsDeltaGweiByModule;
 };
 

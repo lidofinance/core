@@ -304,17 +304,6 @@ export const report = async (
       stakingModuleIdsWithUpdatedBalance.push(moduleId);
       validatorBalancesGweiByStakingModule.push(modulesWithReportedBalance[i].moduleReportedBalanceGwei);
     }
-  } else {
-    // const moduleBalances: StakingModuleWithBalanceGwei[] = [];
-    // for (let i = 0; i < stakingModuleIdsWithUpdatedBalance.length; i++) {
-    //   const moduleId = stakingModuleIdsWithUpdatedBalance[i];
-    //   const moduleBalanceGwei = validatorBalancesGweiByStakingModule[i];
-    //   moduleBalances.push({ moduleId, moduleBalanceGwei });
-    // }
-    // const modulesWithReportedBalance = buildConservedModuleBalancesGwei(postCLBalance / ONE_GWEI, moduleBalances);
-    // for (let i = 0; i < moduleBalances.length; i++) {
-    //   validatorBalancesGweiByStakingModule[i] = modulesWithReportedBalance[i].moduleReportedBalanceGwei;
-    // }
   }
 
   const reportData = {
