@@ -9,19 +9,30 @@ import { IDualGovernance, ITimelock, TokenManager, UpgradeTemplate, UpgradeVoteS
 
 import {
   advanceChainTime,
+  bl,
   ConvertibleToString,
   ether,
   findEventsWithInterfaces,
   getCurrentBlockTimestamp,
   getSignerOrImpersonate,
   impersonate,
+  isContractDeployed,
   loadContract,
   LoadedContract,
   log,
+  or,
+  yl,
 } from "lib";
 import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
 import { getTxLink } from "lib/explorer";
-import { DeploymentState, getAddress, Sk, updateObjectInState } from "lib/state-file";
+import {
+  DeploymentState,
+  getAddress,
+  getAddressValidated,
+  readNetworkState,
+  Sk,
+  updateObjectInState,
+} from "lib/state-file";
 
 import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite";
 
@@ -199,7 +210,7 @@ async function newAragonVoting(
 
   log("Forwarding evmScript via TokenManager to create a new vote...");
   const tx = await tm.connect(holder).forward(evmScriptNewVote);
-  const receipt = await _tx(tx);
+  const receipt = await txWaitAndLog(tx);
   const voteId = findEventsWithInterfaces(receipt, "StartVote", [voting.interface])[0].args.voteId;
   log.success("New vote created. voteId:", voteId);
   return voteId;
@@ -217,7 +228,7 @@ async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, hol
   if ((await voting.canVote(voteId, holder)) && (await voting.getVoterState(voteId, holder)) !== 1n) {
     log("Try to cast...");
     const voteTx = await voting.connect(holder).vote(voteId, true, true);
-    await _tx(voteTx);
+    await txWaitAndLog(voteTx);
     log.success("Cast “Yes” on voteId:", voteId);
   } else {
     log.warning("Can't cast voteId:", voteId);
@@ -237,7 +248,7 @@ async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, hol
   if (await voting.canExecute(voteId)) {
     log("Try to execute...");
     const execTx = await voting.connect(holder).executeVote(voteId);
-    const receipt = await _tx(execTx);
+    const receipt = await txWaitAndLog(execTx);
     log.success("executed voteId:", voteId);
 
     if (receipt.gasUsed > FUSAKA_TX_GAS_LIMIT) {
@@ -322,7 +333,7 @@ async function mockEnactDGProposal(state: DeploymentState, proposalId: bigint, e
       throw lastError;
     }
     // const execTx = await timelock.connect(executor).execute(proposalId);
-    const receipt = await _tx(execTx!);
+    const receipt = await txWaitAndLog(execTx!);
     log.success("executed proposalId:", proposalId);
 
     if (receipt.gasUsed > FUSAKA_TX_GAS_LIMIT) {
@@ -426,7 +437,7 @@ export const upgCtx = (state: DeploymentState): Promise<Ctx> => {
   return ctxPromise;
 };
 
-export const _tx = async (tx: ContractTransactionResponse): Promise<ContractTransactionReceipt> => {
+export async function txWaitAndLog(tx: ContractTransactionResponse): Promise<ContractTransactionReceipt> {
   const receipt = await tx.wait();
   if (!receipt) {
     throw new Error(`Transaction ${tx.hash} did not return a receipt`);
@@ -441,4 +452,17 @@ export const _tx = async (tx: ContractTransactionResponse): Promise<ContractTran
 
   log.info("Transaction", logData);
   return receipt;
-};
+}
+
+export async function checkArtifactDeployedAndLog(artifactName: Sk): Promise<boolean> {
+  const state = readNetworkState();
+  // check if contract object exists in deployed state but address set as empty string or zero address
+  const address = getAddressValidated(artifactName, state);
+  // check if contract not deployed yet
+  const isDeployed = !!(address && (await isContractDeployed(address)));
+  if (isDeployed) {
+    log.splitter();
+    log(yl(`Artifact <${or(Sk.upgradeTemplate)}> exists and deployed at [${bl(address)}], skipping step...`));
+  }
+  return isDeployed;
+}

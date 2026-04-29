@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { UpgradeVoteScript__factory } from "typechain-types";
 import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript";
@@ -7,8 +7,6 @@ import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVote
 import {
   ConstructorArgs,
   deployWithoutProxy,
-  getAddressValidated,
-  isContractDeployed,
   logArgs,
   logConfirmReview,
   logScriptHeader,
@@ -18,11 +16,7 @@ import {
 } from "lib";
 
 export async function skip(): Promise<boolean> {
-  const state = readNetworkState();
-  // NOT skip if contract object exists in deployed state but address set as empty string or zero address
-  const address = getAddressValidated(Sk.upgradeVoteScript, state);
-  // NOT skip if contract not deployed yet
-  return !!(address && (await isContractDeployed(address)));
+  return await checkArtifactDeployedAndLog(Sk.upgradeVoteScript);
 }
 
 export async function main() {

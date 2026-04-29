@@ -144,12 +144,6 @@ const _formatRecordValue = (value: unknown, depth = 0, seen = new WeakSet<object
 
 const _record = (label: string, value: ConvertibleToString) => {
   const formattedValue = _formatRecordValue(value, 2);
-  // if (formattedValue.includes("\n")) {
-  //   log(`${nv(label)}:`);
-  //   log(formattedValue.replace(/^/gm, _indent(2)));
-  //   return;
-  // }
-
   log(`${nv(label)}: ${formattedValue}`);
 };
 

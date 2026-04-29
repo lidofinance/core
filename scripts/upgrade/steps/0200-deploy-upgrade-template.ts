@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
   IAragonKernel,
@@ -13,8 +13,6 @@ import {
   ConstructorArgs,
   deployWithoutProxy,
   getAddress,
-  getAddressValidated,
-  isContractDeployed,
   loadContract,
   logArgs,
   logConfirmReview,
@@ -25,11 +23,7 @@ import {
 } from "lib";
 
 export async function skip(): Promise<boolean> {
-  const state = readNetworkState();
-  // NOT skip if contract object exists in deployed state but address set as empty string or zero address
-  const address = getAddressValidated(Sk.upgradeTemplate, state);
-  // NOT skip if contract not deployed yet
-  return !!(address && (await isContractDeployed(address)));
+  return await checkArtifactDeployedAndLog(Sk.upgradeTemplate);
 }
 
 export async function main() {
