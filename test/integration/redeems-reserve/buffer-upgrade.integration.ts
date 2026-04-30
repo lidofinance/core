@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { RedeemsBuffer } from "typechain-types";
 
-import { ether, impersonate } from "lib";
+import { ether } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { proxify } from "lib/proxy";
 
@@ -35,7 +35,6 @@ describe("Integration: RedeemsBuffer upgrade (drain via report + atomic swap)", 
 
   let admin: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
-  let extraHolder: HardhatEthersSigner;
 
   let oldFix: VaultFixture;
 
@@ -43,7 +42,7 @@ describe("Integration: RedeemsBuffer upgrade (drain via report + atomic swap)", 
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    [admin, holder, extraHolder] = await ethers.getSigners();
+    [admin, holder] = await ethers.getSigners();
 
     const { acl, lido } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
@@ -74,7 +73,12 @@ describe("Integration: RedeemsBuffer upgrade (drain via report + atomic swap)", 
     const factory = await ethers.getContractFactory("RedeemsBuffer");
     const impl = await factory
       .connect(admin)
-      .deploy(await lido.getAddress(), await burner.getAddress(), await withdrawalQueue.getAddress(), await hashConsensus.getAddress());
+      .deploy(
+        await lido.getAddress(),
+        await burner.getAddress(),
+        await withdrawalQueue.getAddress(),
+        await hashConsensus.getAddress(),
+      );
     const [vault] = (await proxify({ impl, admin })) as [RedeemsBuffer, unknown];
     await vault.initialize(admin.address);
     return vault;
@@ -111,9 +115,7 @@ describe("Integration: RedeemsBuffer upgrade (drain via report + atomic swap)", 
     const newVault = await deployBuffer();
     const newAddress = await newVault.getAddress();
 
-    await expect(installRedeemsBufferOnLido(ctx, newAddress))
-      .to.emit(lido, "RedeemsBufferSet")
-      .withArgs(newAddress);
+    await expect(installRedeemsBufferOnLido(ctx, newAddress)).to.emit(lido, "RedeemsBufferSet").withArgs(newAddress);
 
     expect(await lido.getRedeemsBuffer()).to.equal(newAddress);
     expect(await oldFix.vault.isPaused()).to.equal(true);
