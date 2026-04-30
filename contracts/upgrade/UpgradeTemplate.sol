@@ -9,6 +9,7 @@ import {
     IAccessControlEnumerable
 } from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 import {IPausableUntil} from "contracts/common/interfaces/IPausableUntil.sol";
@@ -27,9 +28,9 @@ import {
     IAragonKernel,
     IAragonACL,
     IVersioned,
-    IWithdrawalsManagerProxy,
     IStakingRouterUpgrade,
     IDepositSecurityModule,
+    IConsolidationMigrator,
     IInitializedVersionView,
     IMerkleGate,
     IOneShotCurveSetup
@@ -101,6 +102,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 internal constant BUFFER_RESERVE_MANAGER_ROLE = keccak256("BUFFER_RESERVE_MANAGER_ROLE");
+    bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
 
     //sanitychecker roles
     bytes32 internal constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
@@ -231,7 +233,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         isUpgradeFinished = true;
 
-        // todo check added module id === migrator target module id
         _assertPostUpgradeState(g);
 
         emit UpgradeFinished();
@@ -270,7 +271,10 @@ contract UpgradeTemplate is IUpgradeTemplate {
     function _assertCoreFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
         address agent = g.agent;
 
-        _assertProxyImplementation(c.locator, c.newLocatorImpl);
+        // Locator
+        ILidoLocator locator = ILidoLocator(c.locator);
+        _assertProxyImplementation(address(locator), c.newLocatorImpl);
+        _assertLocatorAddress(locator.depositSecurityModule(), c.newDepositSecurityModule);
 
         // Lido
         _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.newLidoImpl);
@@ -325,23 +329,25 @@ contract UpgradeTemplate is IUpgradeTemplate {
         {
             address consGw = c.consolidationGateway;
             address consBus = c.consolidationBus;
-            address consManager = c.consolidationMigrator;
+            address consMigrator = c.consolidationMigrator;
             address resealManager = g.resealManager;
             address cb = g.circuitBreaker;
 
             _assertProxyImplementation(consBus, c.consolidationBusImpl);
             _assertProxyAdmin(consBus, agent);
             _assertSingleOZRoleHolder(consBus, DEFAULT_ADMIN_ROLE, agent);
-            _assertSingleOZRoleHolder(consBus, PUBLISH_ROLE, consManager);
+            _assertSingleOZRoleHolder(consBus, PUBLISH_ROLE, consMigrator);
             _assertZeroOZRoleHolders(consBus, MANAGE_ROLE);
             _assertZeroOZRoleHolders(consBus, REMOVE_ROLE);
 
-            _assertProxyImplementation(consManager, c.consolidationMigratorImpl);
-            _assertProxyAdmin(consManager, agent);
-            _assertSingleOZRoleHolder(consManager, DEFAULT_ADMIN_ROLE, agent);
-            _assertSingleOZRoleHolder(consManager, ALLOW_PAIR_ROLE, g.easyTrackEVMScriptExecutor);
-            _assertSingleOZRoleHolder(consManager, DISALLOW_PAIR_ROLE, c.curatedModuleCommittee);
+            _assertProxyImplementation(consMigrator, c.consolidationMigratorImpl);
+            _assertProxyAdmin(consMigrator, agent);
+            _assertSingleOZRoleHolder(consMigrator, DEFAULT_ADMIN_ROLE, agent);
+            _assertSingleOZRoleHolder(consMigrator, ALLOW_PAIR_ROLE, g.easyTrackEVMScriptExecutor);
+            _assertSingleOZRoleHolder(consMigrator, DISALLOW_PAIR_ROLE, c.curatedModuleCommittee);
+            /// @note correctness of TARGET_MODULE_ID is checked inside the SR migration checks
 
+            _assertLocatorAddress(locator.consolidationGateway(), consGw);
             _assertSingleOZRoleHolder(consGw, DEFAULT_ADMIN_ROLE, agent);
             _assertTwoOZRoleHolders(consGw, PAUSE_ROLE, cb, resealManager);
             _assertSingleOZRoleHolder(consGw, RESUME_ROLE, resealManager);
@@ -355,29 +361,39 @@ contract UpgradeTemplate is IUpgradeTemplate {
             address tuGw = c.topUpGateway;
             _assertProxyImplementation(tuGw, c.topUpGatewayImpl);
             _assertProxyAdmin(tuGw, agent);
+            _assertLocatorAddress(locator.topUpGateway(), tuGw);
+
             _assertSingleOZRoleHolder(tuGw, DEFAULT_ADMIN_ROLE, agent);
             _assertSingleOZRoleHolder(tuGw, TOP_UP_ROLE, c.topUpGatewayDepositor);
         }
 
-        // OracleReportSanityChecker
-        address checker = c.newOracleReportSanityChecker;
-        _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, agent);
-        bytes32[12] memory roles = [
-            ALL_LIMITS_MANAGER_ROLE,
-            EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
-            APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
-            ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE,
-            SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE,
-            MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
-            MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE,
-            MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE,
-            REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE,
-            MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE,
-            SECOND_OPINION_MANAGER_ROLE,
-            INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
-        ];
-        for (uint256 i = 0; i < roles.length; ++i) {
-            _assertZeroOZRoleHolders(checker, roles[i]);
+        // TW
+        {
+            _assertSingleOZRoleHolder(g.triggerableWithdrawalsGateway, TW_EXIT_LIMIT_MANAGER_ROLE, agent);
+        }
+
+        {
+            // OracleReportSanityChecker
+            address checker = c.newOracleReportSanityChecker;
+            _assertLocatorAddress(locator.oracleReportSanityChecker(), checker);
+            _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, agent);
+            bytes32[12] memory roles = [
+                ALL_LIMITS_MANAGER_ROLE,
+                EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
+                APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
+                ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE,
+                SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE,
+                MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
+                MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE,
+                MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE,
+                REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE,
+                MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE,
+                SECOND_OPINION_MANAGER_ROLE,
+                INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
+            ];
+            for (uint256 i = 0; i < roles.length; ++i) {
+                _assertZeroOZRoleHolders(checker, roles[i]);
+            }
         }
     }
 
@@ -503,7 +519,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
     }
 
-    function _checkSRMigration(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
+    function _checkSRMigration(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
         CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
 
         IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
@@ -518,7 +534,14 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
 
         uint256 newModuleId = moduleIds[moduleIds.length - 1];
-        // uint256 newModuleId = initialModulesCount; // the new module should be added
+
+        {
+            uint256 targetModuleId = IConsolidationMigrator(c.consolidationMigrator).targetModuleId();
+            if (newModuleId != targetModuleId) {
+                revert SRMigrationIncorrectConsolidationMigratorTargetModuleId(newModuleId, targetModuleId);
+            }
+        }
+
         ModuleStateConfig memory stateConfig = sr.getStakingModuleStateConfig(newModuleId);
         if (
             stateConfig.moduleAddress != cm.module || stateConfig.moduleFee != cm.stakingModuleFee
@@ -740,6 +763,12 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
     }
 
+    function _assertLocatorAddress(address _locatorAddress, address _appAddress) internal pure {
+        if (_locatorAddress != _appAddress) {
+            revert InvalidLocatorAppAddress(_locatorAddress, _appAddress);
+        }
+    }
+
     // OZ IAccessControlEnumerable wrappers
     function _hasRole(address _accessControlled, bytes32 _role, address _account) internal view returns (bool) {
         return IAccessControl(_accessControlled).hasRole(_role, _account);
@@ -770,6 +799,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error IncorrectProxyImplementation(address proxy, address implementation);
     error InvalidContractVersion(address contractAddress, uint256 actualVersion);
     error InvalidOracleConsensusVersion(address oracle, uint256 actualVersion);
+    error InvalidLocatorAppAddress(address locatorAddress, address appAddress);
     error MissingAragonPermissionHolder(address contractAddress, bytes32 role, address holder);
     error UnexpectedAragonPermissionManager(
         address contractAddress, bytes32 role, address actualManager, address expectedManager
@@ -795,6 +825,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error SRMigrationIncorrectAddStakingModule();
     error SRMigrationIncorrectModulesCount();
     error SRMigrationIncorrectWithdrawalCredentials();
+    error SRMigrationIncorrectConsolidationMigratorTargetModuleId(uint256 newModuleId, uint256 targetModuleId);
 
     error DSMMigrationIncorrectOwner();
     error DSMMigrationIncorrectGuardianQuorum();

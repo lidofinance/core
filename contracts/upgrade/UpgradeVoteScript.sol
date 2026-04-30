@@ -167,7 +167,6 @@ contract UpgradeVoteScript is OmnibusBase {
         //
         // Add new EasyTrack Factories
         //
-
         {
             CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
 
@@ -264,6 +263,7 @@ contract UpgradeVoteScript is OmnibusBase {
         address evmScriptExecutor = g.easyTrackEVMScriptExecutor;
         address stakingRouter = g.stakingRouter;
 
+        // TODO time constraints are not relevant on Hoodi testnet, but can be re-vised on mainnet
         // items[i++] = _item({
         //     description: "Ensure DG proposal execution is within defined time window",
         //     to: TIME_CONSTRAINTS,

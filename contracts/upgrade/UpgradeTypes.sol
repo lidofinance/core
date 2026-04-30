@@ -89,6 +89,8 @@ interface IDepositSecurityModule {
 interface IConsolidationMigrator {
     function allowPair(uint256 sourceOperatorId, uint256 targetOperatorId, address submitter) external;
     function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external;
+    function sourceModuleId() external view returns (uint256);
+    function targetModuleId() external view returns (uint256);
 }
 
 interface IMerkleGate {
