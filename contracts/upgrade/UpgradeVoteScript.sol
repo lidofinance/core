@@ -140,10 +140,12 @@ contract UpgradeVoteScript is OmnibusBase {
     }
 
     function getVoteItems() public view override returns (VoteItem[] memory) {
+        string memory description = "1. Submit a Dual Governance proposal";
+        return _wrapItemsForwardPacked(_getVoteItems(), AGENT, description);
+
+        /// @dev kept for future use
         // set prefix to `1`, so all item's description will transform to `1.N. Description...`
         // return _wrapItemsPrefixNumberForward(_getVoteItems(), AGENT, 1, 1);
-        string memory description = "All DG vote items packed in one call to the Agent";
-        return _wrapItemsForwardPacked(_getVoteItems(), AGENT, description);
     }
 
     function _getVotingVoteItems() internal view returns (VoteItem[] memory items) {
