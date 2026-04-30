@@ -266,7 +266,7 @@ export async function main() {
   //
   // Deploy OracleReportSanityChecker
   //
-  const newSanityChecker = await deployWithoutProxy(
+  const oracleReportSanityChecker = await deployWithoutProxy(
     Sk.oracleReportSanityChecker,
     "OracleReportSanityChecker",
     deployer,
@@ -376,7 +376,7 @@ export async function main() {
     depositSecurityModule: depositSecurityModule.address,
     elRewardsVault: await locator.elRewardsVault(),
     lido: lidoAddress,
-    oracleReportSanityChecker: newSanityChecker.address,
+    oracleReportSanityChecker: oracleReportSanityChecker.address,
     postTokenRebaseReceiver: await locator.postTokenRebaseReceiver(),
     burner: await locator.burner(),
     stakingRouter: stakingRouterAddress,
