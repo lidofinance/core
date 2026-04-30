@@ -303,8 +303,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
       const { oracleReportSanityChecker, lido } = ctx.contracts;
 
-      // Submit a neutral report to establish the current CL balance baseline
-      await report(ctx);
+      // Move past the migrated checker bootstrap entries so this test exercises the per-window max decrease.
+      await resetCLBalanceDecreaseWindow(ctx);
 
       // Get current protocol state to calculate dynamic slashing limit
       const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
