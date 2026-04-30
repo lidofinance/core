@@ -29,7 +29,7 @@ describe("Integration: Accounting", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    await report(ctx);
+    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, skipWithdrawals: true });
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -705,7 +705,7 @@ describe("Integration: Accounting", () => {
     const stateBefore = await readState();
 
     // Report
-    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
+    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, skipWithdrawals: true });
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
     const { sharesBurntAmount, sharesToBurn, amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);

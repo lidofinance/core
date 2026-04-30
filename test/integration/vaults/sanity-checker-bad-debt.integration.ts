@@ -285,6 +285,9 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await reportWithEffectiveClDiff(ctx, smallDecrease, {
         excludeVaultsBalances: true,
         skipWithdrawals: true,
+        // Burner state on the fork can hold pending cover/non-cover shares; burning them
+        // produces a positive rebase that masks the share-rate drop we want to observe here.
+        reportBurner: false,
         waitNextReportTime: true,
       });
 
