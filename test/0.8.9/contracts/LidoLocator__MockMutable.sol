@@ -31,7 +31,6 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address lazyOracle;
         address operatorGrid;
         address topUpGateway;
-        address redeemsBuffer;
     }
 
     error ZeroAddress();
@@ -60,7 +59,6 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable lazyOracle;
     address public immutable operatorGrid;
     address public immutable topUpGateway;
-    address public redeemsBuffer;
 
     constructor(Config memory _config) {
         accountingOracle = _assertNonZero(_config.accountingOracle);
@@ -87,7 +85,6 @@ contract LidoLocator__MockMutable is ILidoLocator {
         lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
         topUpGateway = _assertNonZero(_config.topUpGateway);
-        redeemsBuffer = _config.redeemsBuffer;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
@@ -121,9 +118,5 @@ contract LidoLocator__MockMutable is ILidoLocator {
 
     function mock___updateAccountingOracle(address newAddress) external {
         accountingOracle = newAddress;
-    }
-
-    function mock___updateRedeemsBuffer(address newAddress) external {
-        redeemsBuffer = newAddress;
     }
 }

@@ -30,7 +30,6 @@ interface ILidoLocator {
     function validatorExitDelayVerifier() external view returns (address);
     function triggerableWithdrawalsGateway() external view returns (address);
     function consolidationGateway() external view returns (address);
-    function redeemsBuffer() external view returns (address);
 
     /// @notice Returns core Lido protocol component addresses in a single call
     /// @dev This function provides a gas-efficient way to fetch multiple component addresses in a single call

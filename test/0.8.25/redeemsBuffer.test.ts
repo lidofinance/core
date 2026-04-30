@@ -283,6 +283,58 @@ describe("RedeemsBuffer.sol", () => {
     });
   });
 
+  context("validateReconciledAndPause", () => {
+    it("reverts when caller is not Lido", async () => {
+      await expect(buffer.connect(stranger).validateReconciledAndPause()).to.be.revertedWithCustomError(
+        buffer,
+        "NotLido",
+      );
+    });
+
+    it("reverts when reserve balance is non-zero", async () => {
+      await buffer.connect(lidoSigner).fundReserve({ value: ether("4") });
+
+      await expect(buffer.connect(lidoSigner).validateReconciledAndPause())
+        .to.be.revertedWithCustomError(buffer, "BufferNotReconciled")
+        .withArgs(ether("4"), 0, 0);
+    });
+
+    it("reverts when there are in-flight redeemed ether/shares", async () => {
+      await buffer.connect(lidoSigner).fundReserve({ value: ether("10") });
+      await buffer.connect(redeemer).redeem(ether("3"), recipient.address);
+      await buffer.connect(lidoSigner).reconcile(0, 0);
+
+      await expect(buffer.connect(lidoSigner).validateReconciledAndPause())
+        .to.be.revertedWithCustomError(buffer, "BufferNotReconciled")
+        .withArgs(0, ether("3"), ether("3"));
+    });
+
+    it("succeeds after a normal reconcile fully clears state and infinitely pauses", async () => {
+      await buffer.connect(lidoSigner).fundReserve({ value: ether("10") });
+      await buffer.connect(redeemer).redeem(ether("4"), recipient.address);
+      await buffer.connect(lidoSigner).reconcile(ether("4"), ether("4"));
+
+      expect(await buffer.getReserveBalance()).to.equal(0);
+      const [redeemedEther, redeemedShares] = await buffer.getRedeemed();
+      expect(redeemedEther).to.equal(0);
+      expect(redeemedShares).to.equal(0);
+
+      const receivedBefore = await lido.receivedETH();
+      await buffer.connect(lidoSigner).validateReconciledAndPause();
+      const receivedAfter = await lido.receivedETH();
+
+      expect(receivedAfter).to.equal(receivedBefore, "no ETH should move during validation");
+      expect(await buffer.isPaused()).to.equal(true);
+      await expect(buffer.connect(redeemer).redeem(ether("0.1"), recipient.address)).to.be.reverted;
+    });
+
+    it("succeeds on a freshly initialized buffer (all-zero state)", async () => {
+      expect(await buffer.getReserveBalance()).to.equal(0);
+      await buffer.connect(lidoSigner).validateReconciledAndPause();
+      expect(await buffer.isPaused()).to.equal(true);
+    });
+  });
+
   context("recoverERC20", () => {
     let token: ERC20__MockForRedeemsBuffer;
 

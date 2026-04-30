@@ -65,6 +65,12 @@ contract RedeemsBuffer is PausableUntil, AccessControlEnumerableUpgradeable {
     error StETHRecoveryNotAllowed();
     error DirectETHTransfer();
     error SnapshotExceedsLiveValue(uint256 snapshot, uint256 live);
+    error BufferNotReconciled(uint256 reserveBalance, uint256 redeemedEther, uint256 redeemedShares);
+
+    modifier onlyLido() {
+        if (msg.sender != address(LIDO)) revert NotLido();
+        _;
+    }
 
     constructor(address _lido, address _burner, address _withdrawalQueue, address _hashConsensus) {
         LIDO = ILido(_lido);
@@ -141,8 +147,7 @@ contract RedeemsBuffer is PausableUntil, AccessControlEnumerableUpgradeable {
     // ── Lido callbacks ──────────────────────────────────────────────────
 
     /// @notice Receives ETH from Lido to replenish the reserve. Lido-only.
-    function fundReserve() external payable {
-        if (msg.sender != address(LIDO)) revert NotLido();
+    function fundReserve() external payable onlyLido {
         _reserveBalance += msg.value;
         emit ReserveFunded(msg.value);
     }
@@ -150,10 +155,10 @@ contract RedeemsBuffer is PausableUntil, AccessControlEnumerableUpgradeable {
     /// @notice Reconciles the buffer with the processed oracle report and returns unredeemed ETH to Lido. Lido-only.
     /// @param _redeemedEtherForLastRefSlot ether snapshot Accounting consumed for this report
     /// @param _redeemedSharesForLastRefSlot shares snapshot Accounting consumed for this report
-    /// @dev Subtracts the consumed snapshots, preserving any post-refSlot residue as the next cycle's starting value.
-    function reconcile(uint256 _redeemedEtherForLastRefSlot, uint256 _redeemedSharesForLastRefSlot) external {
-        if (msg.sender != address(LIDO)) revert NotLido();
-
+    function reconcile(uint256 _redeemedEtherForLastRefSlot, uint256 _redeemedSharesForLastRefSlot)
+        external
+        onlyLido
+    {
         uint256 unredeemed = _reserveBalance - _redeemedEther.value;
         _reserveBalance = 0;
 
@@ -177,6 +182,18 @@ contract RedeemsBuffer is PausableUntil, AccessControlEnumerableUpgradeable {
         _cache.value = (_cache.value - _consumed).toUint104();
         _cache.valueOnRefSlot = 0;
         _cache.refSlot = _refSlot;
+    }
+
+    /// @notice Asserts the buffer is fully reconciled and infinitely pauses `redeem`. Lido-only.
+    function validateReconciledAndPause() external onlyLido {
+        uint256 reserveBalance = _reserveBalance;
+        uint256 redeemedEther = _redeemedEther.value;
+        uint256 redeemedShares = _redeemedShares.value;
+        if (reserveBalance != 0 || redeemedEther != 0 || redeemedShares != 0) {
+            revert BufferNotReconciled(reserveBalance, redeemedEther, redeemedShares);
+        }
+
+        _pauseFor(PAUSE_INFINITELY);
     }
 
     // ── Recovery ─────────────────────────────────────────────────────────

@@ -172,7 +172,6 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
         topUpGateway: deployer.address,
-        redeemsBuffer: ZeroAddress,
       },
     ]);
 
@@ -272,7 +271,6 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
         lazyOracle: deployer.address,
         operatorGrid: deployer.address,
         topUpGateway: deployer.address,
-        redeemsBuffer: ZeroAddress,
       },
     ]);
 

@@ -524,7 +524,7 @@ contract Accounting {
             address vaultHub
         ) = LIDO_LOCATOR.oracleReportComponents();
 
-        address redeemsBuffer = LIDO_LOCATOR.redeemsBuffer();
+        address redeemsBuffer = LIDO.getRedeemsBuffer();
 
         return
             Contracts(

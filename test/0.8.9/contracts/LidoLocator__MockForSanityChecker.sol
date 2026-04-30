@@ -32,7 +32,6 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address lazyOracle;
         address operatorGrid;
         address topUpGateway;
-        address redeemsBuffer;
     }
 
     address public immutable lido;
@@ -59,7 +58,6 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable lazyOracle;
     address public immutable operatorGrid;
     address public immutable topUpGateway;
-    address public immutable redeemsBuffer;
 
     constructor(ContractAddresses memory addresses) {
         lido = addresses.lido;
@@ -86,7 +84,6 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         lazyOracle = addresses.lazyOracle;
         operatorGrid = addresses.operatorGrid;
         topUpGateway = addresses.topUpGateway;
-        redeemsBuffer = addresses.redeemsBuffer;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {

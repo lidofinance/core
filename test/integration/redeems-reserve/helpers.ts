@@ -52,18 +52,18 @@ export interface BunkerCheckpoint {
   unfinalizedStETH: bigint;
 }
 
-/** Deploys RedeemsBuffer, grants roles, installs on the LidoLocator. Call once in before(). */
+/** Deploys RedeemsBuffer, grants roles, installs on Lido. Call once in before(). */
 export async function setupVault(
   ctx: ProtocolContext,
   admin: HardhatEthersSigner,
   extraRedeemers: HardhatEthersSigner[] = [],
 ): Promise<VaultFixture> {
-  const { burner, locator } = ctx.contracts;
+  const { burner, lido } = ctx.contracts;
   const agent = await ctx.getSigner("agent");
 
   // Deploy RedeemsBuffer
   const factory = await ethers.getContractFactory("RedeemsBuffer");
-  const lidoAddr = await ctx.contracts.lido.getAddress();
+  const lidoAddr = await lido.getAddress();
   const burnerAddr = await burner.getAddress();
   const wqAddr = await ctx.contracts.withdrawalQueue.getAddress();
   const hashConsensusAddr = await ctx.contracts.hashConsensus.getAddress();
@@ -73,7 +73,7 @@ export async function setupVault(
 
   const burnRole = await burner.REQUEST_BURN_SHARES_ROLE();
   await burner.connect(agent).grantRole(burnRole, await vault.getAddress());
-  await installRedeemsBufferOnLocator(ctx, await vault.getAddress());
+  await installRedeemsBufferOnLido(ctx, await vault.getAddress());
 
   const redeemerRole = await vault.REDEEMER_ROLE();
   await vault.connect(admin).grantRole(redeemerRole, admin.address);
@@ -84,62 +84,33 @@ export async function setupVault(
   const recoverRole = await vault.RECOVER_ROLE();
   await vault.connect(admin).grantRole(recoverRole, admin.address);
 
-  // Sanity: locator must now resolve to the new buffer.
-  if ((await locator.redeemsBuffer()) !== (await vault.getAddress())) {
-    throw new Error("setupVault: locator did not pick up the new RedeemsBuffer");
+  // Sanity: Lido must now resolve to the new buffer.
+  if ((await lido.getRedeemsBuffer()) !== (await vault.getAddress())) {
+    throw new Error("setupVault: Lido did not pick up the new RedeemsBuffer");
   }
 
   return { vault, address: await vault.getAddress() };
 }
 
 /**
- * Upgrades the LidoLocator proxy implementation to a new one with `redeemsBuffer` filled in.
- * All other addresses are read from the current locator and preserved verbatim.
- * Pass `ZeroAddress` to uninstall the buffer (feature-disabled mode).
+ * Atomically swaps Lido's active RedeemsBuffer to `bufferAddress`. If a buffer is currently
+ * installed, it is shut down (drained, caches zeroed, perma-paused) in the same transaction.
+ * Pass `ZeroAddress` to disable the feature.
  *
- * Requires the locator's OssifiableProxy admin to still be controllable (not ossified).
+ * Grants the agent the `BUFFER_RESERVE_MANAGER_ROLE` if it is not already held.
  */
-export async function installRedeemsBufferOnLocator(ctx: ProtocolContext, bufferAddress: string) {
-  const { locator } = ctx.contracts;
-  const locatorAddress = await locator.getAddress();
+export async function installRedeemsBufferOnLido(ctx: ProtocolContext, bufferAddress: string) {
+  const { lido, acl } = ctx.contracts;
+  const agent = await ctx.getSigner("agent");
+  const role = await lido.BUFFER_RESERVE_MANAGER_ROLE();
+  const lidoAddress = await lido.getAddress();
 
-  // Read current locator config so we can preserve all addresses.
-  const currentConfig = {
-    accountingOracle: await locator.accountingOracle(),
-    depositSecurityModule: await locator.depositSecurityModule(),
-    elRewardsVault: await locator.elRewardsVault(),
-    lido: await locator.lido(),
-    oracleReportSanityChecker: await locator.oracleReportSanityChecker(),
-    postTokenRebaseReceiver: await locator.postTokenRebaseReceiver(),
-    burner: await locator.burner(),
-    stakingRouter: await locator.stakingRouter(),
-    treasury: await locator.treasury(),
-    validatorsExitBusOracle: await locator.validatorsExitBusOracle(),
-    withdrawalQueue: await locator.withdrawalQueue(),
-    withdrawalVault: await locator.withdrawalVault(),
-    oracleDaemonConfig: await locator.oracleDaemonConfig(),
-    validatorExitDelayVerifier: await locator.validatorExitDelayVerifier(),
-    triggerableWithdrawalsGateway: await locator.triggerableWithdrawalsGateway(),
-    consolidationGateway: await locator.consolidationGateway(),
-    accounting: await locator.accounting(),
-    predepositGuarantee: await locator.predepositGuarantee(),
-    wstETH: await locator.wstETH(),
-    vaultHub: await locator.vaultHub(),
-    vaultFactory: await locator.vaultFactory(),
-    lazyOracle: await locator.lazyOracle(),
-    operatorGrid: await locator.operatorGrid(),
-    topUpGateway: await locator.topUpGateway(),
-    redeemsBuffer: bufferAddress,
-  };
+  const hasRole = await acl["hasPermission(address,address,bytes32)"](agent.address, lidoAddress, role);
+  if (!hasRole) {
+    await acl.connect(agent).grantPermission(agent.address, lidoAddress, role);
+  }
 
-  const ossifiable = await ethers.getContractAt("OssifiableProxy", locatorAddress);
-  const adminAddress = await ossifiable.proxy__getAdmin();
-  const adminSigner = await impersonate(adminAddress, ether("1"));
-
-  const factory = await ethers.getContractFactory("LidoLocator");
-  const newImpl = await factory.deploy(currentConfig);
-
-  await ossifiable.connect(adminSigner).proxy__upgradeTo(await newImpl.getAddress());
+  return lido.connect(agent).setRedeemsBuffer(bufferAddress);
 }
 
 /** Deposits ETH, applies initial rebase for non-1:1 rate, sets reserve ratio, runs report to fill reserve */

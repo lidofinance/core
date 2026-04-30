@@ -110,7 +110,6 @@ export async function main(): Promise<void> {
     operatorGrid: await locator.operatorGrid(),
     consolidationGateway: await locator.consolidationGateway(),
     topUpGateway: await locator.topUpGateway(),
-    redeemsBuffer: ethers.ZeroAddress,
   };
   const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
   const newLocatorAddress = await lidoLocatorImpl.getAddress();

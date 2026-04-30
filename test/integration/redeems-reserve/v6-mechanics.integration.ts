@@ -80,8 +80,8 @@ describe("Integration: Redeems reserve — v6 mechanics", () => {
       })
       .find((e) => e?.name === "Redeemed");
     return {
-      sharesAmount: event!.args.sharesAmount as bigint,
-      etherAmount: event!.args.etherAmount as bigint,
+      sharesAmount: event!.args.burnedShares as bigint,
+      etherAmount: event!.args.paidEther as bigint,
     };
   };
 

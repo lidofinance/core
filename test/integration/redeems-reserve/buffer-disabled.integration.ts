@@ -9,7 +9,7 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
-import { assertReserveAllocationInvariant, captureState, doReport, installRedeemsBufferOnLocator } from "./helpers";
+import { assertReserveAllocationInvariant, captureState, doReport, installRedeemsBufferOnLido } from "./helpers";
 
 const DEPOSIT = ether("1000");
 
@@ -41,10 +41,10 @@ describe("Integration: Redeems reserve — feature disabled (no buffer in locato
   });
 
   it("oracle report processes as a pass-through when redeemsBuffer is not installed", async () => {
-    const { lido, locator } = ctx.contracts;
+    const { lido } = ctx.contracts;
 
-    await installRedeemsBufferOnLocator(ctx, ZeroAddress);
-    expect(await locator.redeemsBuffer()).to.equal(ZeroAddress);
+    await installRedeemsBufferOnLido(ctx, ZeroAddress);
+    expect(await lido.getRedeemsBuffer()).to.equal(ZeroAddress);
 
     const stateBefore = await captureState(lido);
     expect(stateBefore.reserve).to.equal(0n);

@@ -39,7 +39,6 @@ export async function main() {
     lazyOracle: getAddress(Sk.lazyOracle, state),
     operatorGrid: getAddress(Sk.operatorGrid, state),
     topUpGateway: getAddress(Sk.topUpGateway, state),
-    redeemsBuffer: getAddress(Sk.redeemsBuffer, state),
   };
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locatorAddress, proxyContractsOwner, [locatorConfig]);
 }

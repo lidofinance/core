@@ -192,6 +192,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant REDEEMS_RESERVE_GROWTH_SHARE_POSITION =
         0x165efeb2acd150f40e68b22ff2e9492cf5007021f951e4109c407f04e4e36129;
 
+    /// @dev Storage slot for the RedeemsBuffer contract address.
+    /// keccak256("lido.Lido.redeemsBuffer")
+    bytes32 internal constant REDEEMS_BUFFER_POSITION =
+        0x7810ff65756f3e11a88a439949cb3ed187eb931bf70a02cfd97b01310f42eb2b;
+
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
     // Staking was resumed (accept user's ether submits)
@@ -291,6 +296,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // Emitted when ETH is returned from RedeemsBuffer
     event EtherReceivedFromRedeemsBuffer(uint256 amount);
+
+    // Emitted when the active RedeemsBuffer address is updated via `setRedeemsBuffer`
+    event RedeemsBufferSet(address newBuffer);
 
     /**
      * @notice Initializer function for scratch deploy of Lido contract
@@ -757,11 +765,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Receives ETH back from RedeemsBuffer (unredeemed return on report)
-     * @dev `bufferedEther` is NOT modified — ETH was already counted in `bufferedEther` while it sat on the buffer.
+     * @notice Receives ETH back from RedeemsBuffer (unredeemed return on report).
+     * @dev `bufferedEther` is unchanged — ETH was already counted while it sat on the buffer.
      */
     function receiveFromRedeemsBuffer() external payable {
-        address buffer = _getLidoLocator().redeemsBuffer();
+        address buffer = _getRedeemsBuffer();
         require(buffer != address(0), "REDEEMS_BUFFER_NOT_CONFIGURED");
         _auth(buffer);
         if (msg.value > 0) {
@@ -769,6 +777,39 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         }
     }
 
+    /**
+     * @notice Returns the address of the active RedeemsBuffer
+     */
+    function getRedeemsBuffer() external view returns (address) {
+        return _getRedeemsBuffer();
+    }
+
+    /**
+     * @notice Swaps the active RedeemsBuffer; the previous one must be fully reconciled.
+     * @param _newBuffer Address of the new RedeemsBuffer (or zero to disable the feature)
+     */
+    function setRedeemsBuffer(address _newBuffer) external {
+        _auth(BUFFER_RESERVE_MANAGER_ROLE);
+
+        address current = _getRedeemsBuffer();
+        if (current != address(0)) {
+            IRedeemsBuffer(current).validateReconciledAndPause();
+        }
+
+        REDEEMS_BUFFER_POSITION.setLowUint160(uint160(_newBuffer));
+        emit RedeemsBufferSet(_newBuffer);
+    }
+
+    /**
+     * @dev Reads the active RedeemsBuffer address from storage.
+     */
+    function _getRedeemsBuffer() internal view returns (address) {
+        return address(REDEEMS_BUFFER_POSITION.getLowUint160());
+    }
+
+    /**
+     * @dev Stores new redeems reserve value and emits RedeemsReserveSet event.
+     */
     function _setRedeemsReserve(uint256 _reserve) internal {
         REDEEMS_RESERVE_POSITION.setStorageUint256(_reserve);
         emit RedeemsReserveSet(_reserve);
@@ -1137,7 +1178,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(_accounting(locator));
 
         // --- 1. Buffer round-trip: reconcile buffer state, reconcile bufferedEther ---
-        address buffer = locator.redeemsBuffer();
+        address buffer = _getRedeemsBuffer();
         if (buffer != address(0)) {
             IRedeemsBuffer(buffer).reconcile(_redeemedEther, _redeemedShares);
             if (_redeemedEther > 0) {

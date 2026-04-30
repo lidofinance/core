@@ -352,7 +352,6 @@ export async function main() {
     lazyOracle: lazyOracle.address,
     operatorGrid: operatorGrid.address,
     topUpGateway: getAddress(Sk.topUpGateway, state),
-    redeemsBuffer: ethers.ZeroAddress,
   };
   const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 

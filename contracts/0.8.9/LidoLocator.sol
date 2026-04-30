@@ -38,7 +38,6 @@ contract LidoLocator is ILidoLocator {
         address lazyOracle;
         address operatorGrid;
         address topUpGateway;
-        address redeemsBuffer;
     }
 
     error ZeroAddress();
@@ -68,7 +67,6 @@ contract LidoLocator is ILidoLocator {
     address public immutable lazyOracle;
     address public immutable operatorGrid;
     address public immutable topUpGateway;
-    address public immutable redeemsBuffer;
     //solhint-enable immutable-vars-naming
 
     /**
@@ -101,7 +99,6 @@ contract LidoLocator is ILidoLocator {
         lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
         topUpGateway = _assertNonZero(_config.topUpGateway);
-        redeemsBuffer = _config.redeemsBuffer;
     }
 
     function coreComponents() external view returns (
