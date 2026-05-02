@@ -455,6 +455,9 @@
     "address": "0x9b108015fe433F173696Af3Aa0CF7CDb3E104258",
     "constructorArgs": ["0x3508A952176b3c15387C97BE809eaffB1982176a", "0x0534aA41907c9631fae990960bCC72d75fA7cfeD"]
   },
+  "circuitBreaker": {
+    "address": "0x44a5789dFeDa59cD176Ab5709ec2F4829dE4d555"
+  },
   "gateSeal": {
     "address": "0x73d76Bd3D589B2b2185c402da82cdAfbc18b958D",
     "factoryAddress": "0xA402349F560D45310D301E92B1AA4DeCABe147B3",
