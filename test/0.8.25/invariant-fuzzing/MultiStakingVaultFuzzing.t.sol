@@ -215,11 +215,10 @@ contract MultiStakingVaultsTest is Test {
         vaultHubProxy = VaultHub(payable(vaultHub_addr));
 
         bytes32 vaultMasterRole = vaultHubProxy.VAULT_MASTER_ROLE();
+        bytes32 validatorExitRole = vaultHubProxy.VALIDATOR_EXIT_ROLE();
+
         vm.prank(rootAccount);
         vaultHubProxy.grantRole(vaultMasterRole, rootAccount);
-
-        bytes32 validatorExitRole = vaultHubProxy.VALIDATOR_EXIT_ROLE();
-        vm.prank(rootAccount);
         vaultHubProxy.grantRole(validatorExitRole, rootAccount);
     }
 
