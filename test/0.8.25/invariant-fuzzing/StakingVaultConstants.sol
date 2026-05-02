@@ -21,10 +21,10 @@ library Constants {
     //LidoMock params
     uint256 public constant TOTAL_SHARES_MAINNET = 7810237 ether;
     uint256 public constant TOTAL_POOLED_ETHER_MAINNET = 9365361 ether;
-    uint256 public constant EXTERNAL_SHARES_MAINNET = 0;
+    uint256 public constant EXTERNAL_SHARES_MAINNET = 78102 ether; // ~1% of TOTAL_SHARES_MAINNET
 
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
-    uint256 public constant WITHDRAWAL_FEE = 3000;
+    uint256 public constant WITHDRAWAL_FEE = 1;
 
     //LazyOracle params
     uint64 public constant QUARANTINE_PERIOD = 3 days;

@@ -336,12 +336,12 @@ contract StakingVaultsTest is Test {
         uint256 lockedAmount = vaultHubProxy.locked(address(stakingVaultProxy));
         uint256 liabilityStETH = ILido(address(lido_addr)).getPooledEthBySharesRoundUp(record.liabilityShares);
 
-        uint256 minium_safety_buffer = (liabilityStETH * Constants.TOTAL_BASIS_POINTS) /
+        uint256 minimumSafetyBuffer = (liabilityStETH * Constants.TOTAL_BASIS_POINTS) /
             (Constants.TOTAL_BASIS_POINTS - forcedRebalanceThresholdBP);
 
         assertGe(
             lockedAmount,
-            Math256.max(Constants.CONNECT_DEPOSIT, minium_safety_buffer),
+            Math256.max(Constants.CONNECT_DEPOSIT, minimumSafetyBuffer),
             "Locked amount should be greater than or equal to max(connect deposit, slashing reserve, reserve ratio)"
         );
     }

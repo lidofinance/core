@@ -15,7 +15,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {LidoLocatorMock, ConsensusContractMock} from "./mocks/CommonMocks.sol";
 
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
-import {OperatorGridMock} from "./mocks/OperatorGridMock.sol";
+import {OperatorGridHarness} from "./mocks/OperatorGridHarness.sol";
 import {Constants} from "./StakingVaultConstants.sol";
 
 /// @title MultiStakingVaultHandler
@@ -29,7 +29,7 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
     VaultHub public vaultHub;
     StakingVault[] public stakingVaults;
     LazyOracle public lazyOracle;
-    OperatorGridMock public operatorGrid;
+    OperatorGridHarness public operatorGrid;
     ConsensusContractMock public consensusContract;
     address public accountingOracle;
 
@@ -69,7 +69,7 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         vaultHub = VaultHub(payable(lidoLocator.vaultHub()));
         stakingVaults = _stakingVaults;
         lazyOracle = LazyOracle(lidoLocator.lazyOracle());
-        operatorGrid = OperatorGridMock(lidoLocator.operatorGrid());
+        operatorGrid = OperatorGridHarness(lidoLocator.operatorGrid());
         consensusContract = ConsensusContractMock(lidoLocator.consensusContract());
         rootAccount = _rootAccount;
         userAccount = _userAccount;
@@ -384,6 +384,8 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         id = bound(id, 0, userAccount.length - 1);
         if (!vaultHub.isVaultConnected(address(stakingVaults[id]))) return;
 
+        _ensureFreshReport(id);
+
         uint256 obligationsShortfall = vaultHub.obligationsShortfallValue(address(stakingVaults[id]));
         if (obligationsShortfall == 0) return;
 
@@ -441,7 +443,7 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         _ensureFreshReport(id);
 
         address nodeOperator = stakingVaults[id].nodeOperator();
-        OperatorGridMock.Group memory nodeOperatorGroup = operatorGrid.group(nodeOperator);
+        OperatorGridHarness.Group memory nodeOperatorGroup = operatorGrid.group(nodeOperator);
         if (nodeOperatorGroup.tierIds.length <= 1) return;
 
         _requestedTierId = bound(_requestedTierId, 1, nodeOperatorGroup.tierIds.length - 1);
@@ -458,10 +460,13 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
             requestedTierShareLimit
         );
 
-        // changeTier can revert if the new tier's reserve ratio makes the vault unhealthy
-        // (VaultMintingCapacityExceeded), or if tier/group limits are exceeded
+        // changeTier requires dual confirmation (vault owner + node operator).
+        // First call from vault owner stores the confirmation, second call from node operator executes.
+        address vault = address(stakingVaults[id]);
         vm.prank(userAccount[id]);
-        try operatorGrid.changeTier(address(stakingVaults[id]), requestedTierId, _requestedShareLimit) {} catch {}
+        try operatorGrid.changeTier(vault, requestedTierId, _requestedShareLimit) {} catch {}
+        vm.prank(nodeOperator);
+        try operatorGrid.changeTier(vault, requestedTierId, _requestedShareLimit) {} catch {}
     }
 
     /// @notice Simulates OTC deposit to a staking vault

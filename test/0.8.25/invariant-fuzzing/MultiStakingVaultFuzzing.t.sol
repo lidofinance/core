@@ -15,7 +15,8 @@ import {MultiStakingVaultHandler} from "./MultiStakingVaultHandler.t.sol";
 import {Constants} from "./StakingVaultConstants.sol";
 
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
-import {OperatorGridMock, TierParams} from "./mocks/OperatorGridMock.sol";
+import {OperatorGridHarness} from "./mocks/OperatorGridHarness.sol";
+import {OperatorGrid, TierParams} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 import {
     PinnedBeaconProxyMock,
     VaultFactoryMock,
@@ -28,7 +29,7 @@ contract MultiStakingVaultsTest is Test {
     VaultHub vaultHubProxy;
     StakingVault[] stakingVaultProxies;
 
-    OperatorGridMock operatorGridProxy;
+    OperatorGridHarness operatorGridProxy;
 
     uint256[2] groupShareLimit = [1000 ether, 500 ether];
     MultiStakingVaultHandler msvHandler;
@@ -126,21 +127,21 @@ contract MultiStakingVaultsTest is Test {
             reservationFeeBP: Constants.RESERVATION_FEE_BP
         });
 
-        //Deploy OperatorGridMock
-        OperatorGridMock operatorGrid = new OperatorGridMock(ILidoLocator(address(lidoLocator_addr)));
+        //Deploy OperatorGridHarness
+        OperatorGridHarness operatorGrid = new OperatorGridHarness(ILidoLocator(address(lidoLocator_addr)));
 
         vm.prank(rootAccount);
         deployCodeTo(
             "ERC1967Proxy",
             abi.encode(
                 operatorGrid,
-                abi.encodeWithSelector(OperatorGridMock.initialize.selector, rootAccount, defaultTierParams)
+                abi.encodeWithSelector(OperatorGrid.initialize.selector, rootAccount, defaultTierParams)
             ),
             operatorGrid_addr
         );
 
         //register 2 Groups
-        operatorGridProxy = OperatorGridMock(payable(operatorGrid_addr));
+        operatorGridProxy = OperatorGridHarness(payable(operatorGrid_addr));
 
         //grantRole REGISTRY_ROLE
         vm.startPrank(rootAccount);
@@ -216,6 +217,10 @@ contract MultiStakingVaultsTest is Test {
         bytes32 vaultMasterRole = vaultHubProxy.VAULT_MASTER_ROLE();
         vm.prank(rootAccount);
         vaultHubProxy.grantRole(vaultMasterRole, rootAccount);
+
+        bytes32 validatorExitRole = vaultHubProxy.VALIDATOR_EXIT_ROLE();
+        vm.prank(rootAccount);
+        vaultHubProxy.grantRole(validatorExitRole, rootAccount);
     }
 
     function deployStakingVaults() internal {
@@ -233,8 +238,8 @@ contract MultiStakingVaultsTest is Test {
                 )
             );
             stakingVaultProxies.push(StakingVault(payable(address(proxy))));
+            vm.stopPrank();
         }
-        vm.stopPrank();
     }
 
     function setUp() public {
@@ -322,10 +327,10 @@ contract MultiStakingVaultsTest is Test {
     // Invariant 2: Sum of all tier liabilityShares in a group <= group's shareLimit
     function invariant2_group_tier_liabilities_below_group_limit() external {
         for (uint256 i = 0; i < nodeOpAccount.length; i++) {
-            OperatorGridMock.Group memory group = operatorGridProxy.group(nodeOpAccount[i]);
+            OperatorGridHarness.Group memory group = operatorGridProxy.group(nodeOpAccount[i]);
             uint256 sumTierLiabilities = 0;
             for (uint256 j = 0; j < group.tierIds.length; j++) {
-                OperatorGridMock.Tier memory tier = operatorGridProxy.tier(group.tierIds[j]);
+                OperatorGridHarness.Tier memory tier = operatorGridProxy.tier(group.tierIds[j]);
                 sumTierLiabilities += tier.liabilityShares;
             }
             assertLe(
@@ -339,7 +344,7 @@ contract MultiStakingVaultsTest is Test {
     // Invariant 3: Sum of vaults' liabilityShares in a tier == tier's liabilityShares
     function invariant3_tier_liability_consistency() external {
         for (uint256 i = 0; i < operatorGridProxy.tiersCount(); i++) {
-            OperatorGridMock.Tier memory tier = operatorGridProxy.tier(i);
+            OperatorGridHarness.Tier memory tier = operatorGridProxy.tier(i);
             address[] memory vaults = get_all_vaults_in_tier(i);
             uint256 sumVaultLiabilities = 0;
             for (uint256 j = 0; j < vaults.length; j++) {
@@ -356,7 +361,7 @@ contract MultiStakingVaultsTest is Test {
     // Invariant 4: Sum of vaults' liabilityShares in the default tier <= default tier shareLimit
     function invariant4_default_tier_liability_consistency() external {
         address[] memory vaults = get_all_vaults_in_tier(Constants.DEFAULT_TIER);
-        OperatorGridMock.Tier memory default_tier = operatorGridProxy.tier(Constants.DEFAULT_TIER);
+        OperatorGridHarness.Tier memory default_tier = operatorGridProxy.tier(Constants.DEFAULT_TIER);
         uint256 sumVaultLiabilities = 0;
         for (uint256 i = 0; i < vaults.length; i++) {
             sumVaultLiabilities += vaultHubProxy.liabilityShares(vaults[i]);
