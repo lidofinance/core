@@ -144,7 +144,7 @@
   },
   "nodeOperatorsRegistry": {
     "deployParameters": {
-      "stakingModuleName": "Curated",
+      "stakingModuleName": "curated-onchain-v1",
       "stakingModuleTypeId": "curated-onchain-v1",
       "exitDeadlineThresholdInSeconds": 86400
     }

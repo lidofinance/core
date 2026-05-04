@@ -137,7 +137,7 @@ EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS = 7200           # Lookback window for exit
 
 # Node operators registry configuration
 [nodeOperatorsRegistry]
-stakingModuleName = "Curated"         # Staking module name
+stakingModuleName = "curated-onchain-v1" # Staking module name
 stakingModuleTypeId = "curated-onchain-v1" # Staking module type ID
 stuckPenaltyDelay = 172800            # Stuck penalty delay in seconds (2 days)
 
