@@ -1716,7 +1716,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(third.clBalance).to.equal(ether("90"));
     });
 
-    it("uses absolute window diff between baseline and current balances", async () => {
+    it("does not treat a net window increase as a CL balance decrease", async () => {
       await checker.connect(admin).grantRole(await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE(), manager.address);
       await checker.connect(manager).setMaxCLBalanceDecreaseBP(1n);
 
@@ -1738,9 +1738,46 @@ describe("OracleReportSanityChecker.sol", () => {
         checker
           .connect(accountingSigner)
           .checkAccountingOracleReport(...report({ preCLBalance: ether("100020"), postCLBalance: ether("100015") })),
+      ).not.to.be.reverted;
+    });
+
+    it("reverts when CL balance drops from an intermediate window high watermark", async () => {
+      const initialCLBalance = ether("10");
+      const activatedPendingBalance = ether("5");
+      const windowHighWatermark = initialCLBalance + activatedPendingBalance;
+      const currentPostCLBalance = ether("14");
+      const expectedDecreaseFromHighWatermark = windowHighWatermark - currentPostCLBalance;
+      const expectedMaxAllowedDecrease = (windowHighWatermark * defaultLimits.maxCLBalanceDecreaseBP) /
+        TOTAL_BASIS_POINTS;
+
+      // Seed the oldest point in the 36-day window.
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(...report({ preCLBalance: initialCLBalance, postCLBalance: initialCLBalance }));
+
+      // Move from 10 ETH to 15 ETH through pending-funded activation. This is a valid increase,
+      // and the 15 ETH point should become the high watermark for later decrease checks.
+      await checker.connect(accountingSigner).checkAccountingOracleReport(
+        ...report({
+          preCLBalance: windowHighWatermark,
+          preCLPendingBalance: activatedPendingBalance,
+          postCLBalance: windowHighWatermark,
+          postCLPendingBalance: 0n,
+        }),
+      );
+
+      // Current implementation only compares against the oldest baseline:
+      // max(0, 10 ETH - 14 ETH) == 0, so this is red until the checker uses
+      // the intermediate 15 ETH high watermark and reports a 1 ETH decrease.
+      await expect(
+        checker
+          .connect(accountingSigner)
+          .checkAccountingOracleReport(
+            ...report({ preCLBalance: windowHighWatermark, postCLBalance: currentPostCLBalance }),
+          ),
       )
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
-        .withArgs(ether("15"), ether("10"));
+        .withArgs(expectedDecreaseFromHighWatermark, expectedMaxAllowedDecrease);
     });
 
     it("reverts with IncorrectCLBalanceDecrease when decrease exceeds limit and no second opinion", async () => {
