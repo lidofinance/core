@@ -1216,20 +1216,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _postCLBalance,
         uint256 _reportCount
     ) internal view returns (uint256 actualCLBalanceDiff, uint256 maxAllowedCLBalanceDiff) {
-        // Window formula:
-        // adjustedBase = B[baseline] + sum(deposits) - sum(clWithdrawals)
-        // actualDiff   = abs(B[baseline] - B[current])
-        // maxAllowed   = adjustedBase * limitBP / 10_000
         uint256 lastIndex = _reportCount - 1;
         uint256 lastTimestamp = reportData[lastIndex].timestamp;
         uint256 windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0;
         uint256 baselineIndex = _findWindowStartIndex(lastIndex, windowStart);
 
         uint256 baselineBalance = reportData[baselineIndex].clBalance;
-        actualCLBalanceDiff = baselineBalance > _postCLBalance
-            ? baselineBalance - _postCLBalance
-            : _postCLBalance - baselineBalance;
-
         uint256 totalDeposits;
         uint256 totalCLWithdrawals;
         for (uint256 i = baselineIndex + 1; i <= lastIndex; ++i) {
@@ -1237,13 +1229,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             totalCLWithdrawals += reportData[i].clWithdrawals;
         }
 
-        uint256 adjustedBase = baselineBalance + totalDeposits;
-        if (adjustedBase < totalCLWithdrawals) {
+        uint256 recreatedPostCLBalance = baselineBalance + totalDeposits;
+        if (recreatedPostCLBalance < totalCLWithdrawals) {
             revert IncorrectCLBalanceDecreaseWindowData(baselineBalance, totalDeposits, totalCLWithdrawals);
         }
-        adjustedBase -= totalCLWithdrawals;
+        recreatedPostCLBalance -= totalCLWithdrawals;
 
-        maxAllowedCLBalanceDiff = (adjustedBase * _maxDecreaseBP) / MAX_BASIS_POINTS;
+        actualCLBalanceDiff = recreatedPostCLBalance > _postCLBalance
+            ? recreatedPostCLBalance - _postCLBalance
+            : 0;
+        maxAllowedCLBalanceDiff = (recreatedPostCLBalance * _maxDecreaseBP) / MAX_BASIS_POINTS;
     }
 
     function _findWindowStartIndex(
