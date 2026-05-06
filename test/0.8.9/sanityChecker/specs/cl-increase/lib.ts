@@ -63,6 +63,11 @@ export type ClIncreaseCase = {
   };
 };
 
+export type ClIncreaseFixtureSet = {
+  title: string;
+  cases: ClIncreaseCase[];
+};
+
 export const report = ({
   timeElapsed = DAY,
   preValidatorsBalance,

@@ -12,7 +12,7 @@ import {
 
 import { ether, impersonate } from "lib";
 
-import { negativeRebaseFormulaCases } from "./fixtures";
+import { negativeRebaseFormulaFixtureSets } from "./fixtures/index";
 import {
   buildStoredReportsModel,
   calcExpectedWindowDiff,
@@ -118,33 +118,37 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
       );
   };
 
-  for (const testCase of negativeRebaseFormulaCases) {
-    it(testCase.title, async () => {
-      const checkedReport = testCase.reports[testCase.reports.length - 1];
-      const setupReports = testCase.reports.slice(0, -1);
-      const expected = calcExpectedWindowDiff(buildStoredReportsModel(testCase.reports));
+  for (const fixtureSet of negativeRebaseFormulaFixtureSets) {
+    describe(fixtureSet.title, () => {
+      for (const testCase of fixtureSet.cases) {
+        it(testCase.title, async () => {
+          const checkedReport = testCase.reports[testCase.reports.length - 1];
+          const setupReports = testCase.reports.slice(0, -1);
+          const expected = calcExpectedWindowDiff(buildStoredReportsModel(testCase.reports));
 
-      if (testCase.expected.window !== undefined) {
-        expect(expected.actualCLBalanceDiff, `${testCase.title}: actualCLBalanceDiff`).to.equal(
-          testCase.expected.window.actualCLBalanceDiff,
-        );
-        expect(expected.maxAllowedCLBalanceDiff, `${testCase.title}: maxAllowedCLBalanceDiff`).to.equal(
-          testCase.expected.window.maxAllowedCLBalanceDiff,
-        );
-      }
+          if (testCase.expected.window !== undefined) {
+            expect(expected.actualCLBalanceDiff, `${testCase.title}: actualCLBalanceDiff`).to.equal(
+              testCase.expected.window.actualCLBalanceDiff,
+            );
+            expect(expected.maxAllowedCLBalanceDiff, `${testCase.title}: maxAllowedCLBalanceDiff`).to.equal(
+              testCase.expected.window.maxAllowedCLBalanceDiff,
+            );
+          }
 
-      for (const report of setupReports) {
-        await expect(callCheck(report), `${testCase.title}: setup report '${report.label}'`).not.to.be.reverted;
-      }
+          for (const report of setupReports) {
+            await expect(callCheck(report), `${testCase.title}: setup report '${report.label}'`).not.to.be.reverted;
+          }
 
-      if (testCase.expected.outcome === "revert") {
-        await expect(callCheck(checkedReport))
-          .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
-          .withArgs(expected.actualCLBalanceDiff, expected.maxAllowedCLBalanceDiff);
-      } else {
-        await expect(callCheck(checkedReport))
-          .to.emit(checker, "NegativeCLRebaseAccepted")
-          .withArgs(0n, expected.postCLBalance, expected.actualCLBalanceDiff, expected.maxAllowedCLBalanceDiff);
+          if (testCase.expected.outcome === "revert") {
+            await expect(callCheck(checkedReport))
+              .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+              .withArgs(expected.actualCLBalanceDiff, expected.maxAllowedCLBalanceDiff);
+          } else {
+            await expect(callCheck(checkedReport))
+              .to.emit(checker, "NegativeCLRebaseAccepted")
+              .withArgs(0n, expected.postCLBalance, expected.actualCLBalanceDiff, expected.maxAllowedCLBalanceDiff);
+          }
+        });
       }
     });
   }

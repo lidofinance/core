@@ -33,6 +33,11 @@ export type NegativeRebaseFormulaCase = {
   };
 };
 
+export type NegativeRebaseFormulaFixtureSet = {
+  title: string;
+  cases: NegativeRebaseFormulaCase[];
+};
+
 export type StoredReportModel = {
   timestamp: bigint;
   postCLBalance: bigint;

@@ -77,6 +77,11 @@ export type ModuleBalanceCase = {
   };
 };
 
+export type ModuleBalanceFixtureSet = {
+  title: string;
+  cases: ModuleBalanceCase[];
+};
+
 export const moduleReport = ({
   timeElapsed = DAY,
   preCLValidatorsBalance,

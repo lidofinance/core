@@ -8,7 +8,7 @@ import {
   StakingRouter__MockForAccountingOracle,
 } from "typechain-types";
 
-import { moduleBalanceCases } from "./fixtures";
+import { moduleBalanceFixtureSets } from "./fixtures/index";
 import {
   calcModuleBalanceFormula,
   defaultOracleReportLimits,
@@ -105,44 +105,48 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
     }
   };
 
-  for (const testCase of moduleBalanceCases) {
-    it(testCase.title, async () => {
-      const { checker, stakingRouter } = await deployChecker(testCase);
-      await seedPreviousBalances(stakingRouter, testCase);
+  for (const fixtureSet of moduleBalanceFixtureSets) {
+    describe(fixtureSet.title, () => {
+      for (const testCase of fixtureSet.cases) {
+        it(testCase.title, async () => {
+          const { checker, stakingRouter } = await deployChecker(testCase);
+          await seedPreviousBalances(stakingRouter, testCase);
 
-      const limits = { ...defaultOracleReportLimits, ...testCase.limits };
-      const formula = calcModuleBalanceFormula(testCase.report, limits);
-      const call = checker.checkModuleAndCLBalancesChangeRates(
-        testCase.report.modules.map((module) => module.moduleId),
-        testCase.report.modules.map((module) => module.postValidatorsBalance),
-        getPreCLValidatorsBalance(testCase.report),
-        testCase.report.preCLPendingBalance,
-        getPostCLValidatorsBalance(testCase.report),
-        testCase.report.postCLPendingBalance,
-        testCase.report.deposits,
-        testCase.report.timeElapsed,
-      );
+          const limits = { ...defaultOracleReportLimits, ...testCase.limits };
+          const formula = calcModuleBalanceFormula(testCase.report, limits);
+          const call = checker.checkModuleAndCLBalancesChangeRates(
+            testCase.report.modules.map((module) => module.moduleId),
+            testCase.report.modules.map((module) => module.postValidatorsBalance),
+            getPreCLValidatorsBalance(testCase.report),
+            testCase.report.preCLPendingBalance,
+            getPostCLValidatorsBalance(testCase.report),
+            testCase.report.postCLPendingBalance,
+            testCase.report.deposits,
+            testCase.report.timeElapsed,
+          );
 
-      expectFormulaFields(testCase, formula);
+          expectFormulaFields(testCase, formula);
 
-      if (testCase.expected.outcome === "accepted") {
-        await expect(call).not.to.be.reverted;
-      } else if (testCase.expected.outcome === "IncorrectTotalPendingBalance") {
-        await expect(call)
-          .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
-          .withArgs(formula.pendingBalanceCap, testCase.report.postCLPendingBalance);
-      } else if (testCase.expected.outcome === "IncorrectTotalActivatedBalance") {
-        await expect(call)
-          .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
-          .withArgs(formula.appearedBalanceLimit, formula.activatedBalance);
-      } else if (testCase.expected.outcome === "IncorrectTotalCLBalanceIncrease") {
-        await expect(call)
-          .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
-          .withArgs(formula.validatorsGrowthLimit, formula.validatorsBalanceIncrease);
-      } else {
-        await expect(call)
-          .to.be.revertedWithCustomError(checker, "IncorrectTotalModuleValidatorsBalanceIncrease")
-          .withArgs(formula.moduleValidatorsGrowthLimit, formula.totalPositiveModuleDelta);
+          if (testCase.expected.outcome === "accepted") {
+            await expect(call).not.to.be.reverted;
+          } else if (testCase.expected.outcome === "IncorrectTotalPendingBalance") {
+            await expect(call)
+              .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
+              .withArgs(formula.pendingBalanceCap, testCase.report.postCLPendingBalance);
+          } else if (testCase.expected.outcome === "IncorrectTotalActivatedBalance") {
+            await expect(call)
+              .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
+              .withArgs(formula.appearedBalanceLimit, formula.activatedBalance);
+          } else if (testCase.expected.outcome === "IncorrectTotalCLBalanceIncrease") {
+            await expect(call)
+              .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
+              .withArgs(formula.validatorsGrowthLimit, formula.validatorsBalanceIncrease);
+          } else {
+            await expect(call)
+              .to.be.revertedWithCustomError(checker, "IncorrectTotalModuleValidatorsBalanceIncrease")
+              .withArgs(formula.moduleValidatorsGrowthLimit, formula.totalPositiveModuleDelta);
+          }
+        });
       }
     });
   }

@@ -7,7 +7,8 @@ Test the negative CL rebase formula with oracle report fixtures.
 ## Files
 
 - Library: `lib.ts`
-- Fixture data: `fixtures.ts`
+- Fixture sets: `fixtures/*.ts`
+- Fixture index: `fixtures/index.ts`
 - Test runner: `spec.test.ts`
 - Common rules: `../README.md`
 
@@ -110,7 +111,7 @@ So `actualCLBalanceDiff == maxAllowedCLBalanceDiff` is accepted.
 
 ## Adding A Case
 
-Add a new object to `negativeRebaseFormulaCases`:
+Add a new object to an existing fixture set:
 
 ```ts
 {
@@ -129,6 +130,9 @@ Add a new object to `negativeRebaseFormulaCases`:
 The last report is the checked report. Previous reports are setup snapshots.
 
 The runner calculates the window diff and compares it with optional fixture numbers before calling the contract.
+
+To add network-specific data, create a separate fixture file such as `fixtures/hoodi.ts` or `fixtures/mainnet.ts`, then
+export its fixture set from `fixtures/index.ts`.
 
 ## Run
 

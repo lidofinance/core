@@ -3,6 +3,8 @@
 This folder contains formula-level tests for sanity checks.
 
 A fixture defines report state, movements, limits, and the expected formula outcome.
+Each spec can have multiple fixture sets, for example common, Hoodi, or mainnet data. The spec runner imports
+`fixtures/index.ts` and runs every exported set.
 
 ## Two Layers
 
@@ -34,6 +36,7 @@ Other checks stay in the technical test files unless their formula becomes large
 
 - describe reports, balances, movements, and limits
 - keep fixtures as data, not helper code
+- keep fixture sets in separate files and export them from `fixtures/index.ts`
 - keep plumbing fields out of fixtures unless the formula itself depends on them
 - add explicit expected formula values for boundary and regression cases
 - add a fixture for each new formula scenario

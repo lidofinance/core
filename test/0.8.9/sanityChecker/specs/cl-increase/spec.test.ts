@@ -7,7 +7,7 @@ import {
   OracleReportSanityChecker,
 } from "typechain-types";
 
-import { clIncreaseCases } from "./fixtures";
+import { clIncreaseFixtureSets } from "./fixtures/index";
 import { calcClIncreaseFormula, ClIncreaseCase, defaultOracleReportLimits } from "./lib";
 
 describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
@@ -71,37 +71,41 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     }
   };
 
-  for (const testCase of clIncreaseCases) {
-    it(testCase.title, async () => {
-      const checker = await deployChecker(testCase);
-      const limits = { ...defaultOracleReportLimits, ...testCase.limits };
-      const formula = calcClIncreaseFormula(testCase.report, limits);
-      const call = checker.checkCLPendingBalanceIncrease(
-        testCase.report.timeElapsed,
-        testCase.report.preValidatorsBalance,
-        testCase.report.prePendingBalance,
-        testCase.report.postValidatorsBalance,
-        testCase.report.postPendingBalance,
-        testCase.report.clWithdrawals,
-        testCase.report.deposits,
-      );
+  for (const fixtureSet of clIncreaseFixtureSets) {
+    describe(fixtureSet.title, () => {
+      for (const testCase of fixtureSet.cases) {
+        it(testCase.title, async () => {
+          const checker = await deployChecker(testCase);
+          const limits = { ...defaultOracleReportLimits, ...testCase.limits };
+          const formula = calcClIncreaseFormula(testCase.report, limits);
+          const call = checker.checkCLPendingBalanceIncrease(
+            testCase.report.timeElapsed,
+            testCase.report.preValidatorsBalance,
+            testCase.report.prePendingBalance,
+            testCase.report.postValidatorsBalance,
+            testCase.report.postPendingBalance,
+            testCase.report.clWithdrawals,
+            testCase.report.deposits,
+          );
 
-      expectFormulaFields(testCase, formula);
+          expectFormulaFields(testCase, formula);
 
-      if (testCase.expected.outcome === "accepted") {
-        await expect(call).not.to.be.reverted;
-      } else if (testCase.expected.outcome === "IncorrectTotalPendingBalance") {
-        await expect(call)
-          .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
-          .withArgs(formula.pendingBalanceCap, testCase.report.postPendingBalance);
-      } else if (testCase.expected.outcome === "IncorrectTotalActivatedBalance") {
-        await expect(call)
-          .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
-          .withArgs(formula.appearedBalanceLimit, formula.activatedBalance);
-      } else {
-        await expect(call)
-          .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
-          .withArgs(formula.validatorsGrowthLimit, formula.validatorsBalanceIncrease);
+          if (testCase.expected.outcome === "accepted") {
+            await expect(call).not.to.be.reverted;
+          } else if (testCase.expected.outcome === "IncorrectTotalPendingBalance") {
+            await expect(call)
+              .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
+              .withArgs(formula.pendingBalanceCap, testCase.report.postPendingBalance);
+          } else if (testCase.expected.outcome === "IncorrectTotalActivatedBalance") {
+            await expect(call)
+              .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
+              .withArgs(formula.appearedBalanceLimit, formula.activatedBalance);
+          } else {
+            await expect(call)
+              .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
+              .withArgs(formula.validatorsGrowthLimit, formula.validatorsBalanceIncrease);
+          }
+        });
       }
     });
   }

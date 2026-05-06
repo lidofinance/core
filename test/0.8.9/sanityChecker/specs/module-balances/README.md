@@ -27,8 +27,12 @@ Modules without previous accounting do not contribute to `totalPositiveModuleDel
 ## Files
 
 - Library: `lib.ts`
-- Fixture data: `fixtures.ts`
+- Fixture sets: `fixtures/*.ts`
+- Fixture index: `fixtures/index.ts`
 - Test runner: `spec.test.ts`
+
+The runner imports `fixtures/index.ts` and runs every fixture set exported there. Add network-specific data as separate
+files, for example `fixtures/hoodi.ts` or `fixtures/mainnet.ts`.
 
 ## Run
 
