@@ -12,24 +12,15 @@ import {
 
 import { ether, impersonate } from "lib";
 
+import { negativeRebaseFormulaCases } from "./fixtures";
 import {
-  negativeRebaseWindowFormulaCases,
+  buildStoredReportsModel,
+  calcExpectedWindowDiff,
+  MAX_CL_BALANCE_DECREASE_BP,
   OracleReportFixture,
-} from "./oracleReportSanityChecker.negative-rebase-window-formula.fixtures";
+} from "./lib";
 
-const MAX_BASIS_POINTS = 10_000n;
-const MAX_CL_BALANCE_DECREASE_BP = 360n;
-const DAY = 24n * 60n * 60n;
-const CL_BALANCE_WINDOW = 36n * DAY;
-
-type StoredReportModel = {
-  timestamp: bigint;
-  postCLBalance: bigint;
-  deposits: bigint;
-  clWithdrawals: bigint;
-};
-
-describe("OracleReportSanityChecker.sol: negative rebase window formula", () => {
+describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
   let checker: OracleReportSanityChecker;
   let accounting: Accounting__MockForSanityChecker;
   let accountingOracle: AccountingOracle__MockForSanityChecker;
@@ -54,55 +45,6 @@ describe("OracleReportSanityChecker.sol: negative rebase window formula", () => 
     consolidationEthAmountPerDayLimit: 0n,
     exitedValidatorEthAmountLimit: 1n,
     externalPendingBalanceCapEth: 0n,
-  };
-
-  const maxDiffFor = (recreatedPostCLBalance: bigint) =>
-    (recreatedPostCLBalance * MAX_CL_BALANCE_DECREASE_BP) / MAX_BASIS_POINTS;
-
-  const buildStoredReportsModel = (reports: OracleReportFixture[]) => {
-    let timestamp = 0n;
-
-    return reports.map((report) => {
-      timestamp += report.timeElapsed;
-
-      return {
-        timestamp,
-        postCLBalance: report.cl.postValidatorsBalance + report.cl.postPendingBalance,
-        deposits: report.movements.deposits,
-        clWithdrawals: report.movements.clWithdrawals,
-      };
-    });
-  };
-
-  const calcExpectedWindowDiff = (storedReports: StoredReportModel[]) => {
-    const lastIndex = storedReports.length - 1;
-    const lastTimestamp = storedReports[lastIndex].timestamp;
-    const windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0n;
-
-    let baselineIndex = lastIndex;
-    while (baselineIndex > 0 && storedReports[baselineIndex - 1].timestamp >= windowStart) {
-      --baselineIndex;
-    }
-
-    const baselineCLBalance = storedReports[baselineIndex].postCLBalance;
-    const currentPostCLBalance = storedReports[lastIndex].postCLBalance;
-    let totalDeposits = 0n;
-    let totalCLWithdrawals = 0n;
-
-    for (let i = baselineIndex + 1; i <= lastIndex; ++i) {
-      totalDeposits += storedReports[i].deposits;
-      totalCLWithdrawals += storedReports[i].clWithdrawals;
-    }
-
-    const recreatedPostCLBalance = baselineCLBalance + totalDeposits - totalCLWithdrawals;
-    const actualCLBalanceDiff =
-      recreatedPostCLBalance > currentPostCLBalance ? recreatedPostCLBalance - currentPostCLBalance : 0n;
-
-    return {
-      postCLBalance: currentPostCLBalance,
-      actualCLBalanceDiff,
-      maxAllowedCLBalanceDiff: maxDiffFor(recreatedPostCLBalance),
-    };
   };
 
   beforeEach(async () => {
@@ -176,17 +118,26 @@ describe("OracleReportSanityChecker.sol: negative rebase window formula", () => 
       );
   };
 
-  for (const testCase of negativeRebaseWindowFormulaCases) {
+  for (const testCase of negativeRebaseFormulaCases) {
     it(testCase.title, async () => {
       const checkedReport = testCase.reports[testCase.reports.length - 1];
       const setupReports = testCase.reports.slice(0, -1);
       const expected = calcExpectedWindowDiff(buildStoredReportsModel(testCase.reports));
 
-      for (const report of setupReports) {
-        await expect(callCheck(report)).not.to.be.reverted;
+      if (testCase.expected.window !== undefined) {
+        expect(expected.actualCLBalanceDiff, `${testCase.title}: actualCLBalanceDiff`).to.equal(
+          testCase.expected.window.actualCLBalanceDiff,
+        );
+        expect(expected.maxAllowedCLBalanceDiff, `${testCase.title}: maxAllowedCLBalanceDiff`).to.equal(
+          testCase.expected.window.maxAllowedCLBalanceDiff,
+        );
       }
 
-      if (testCase.expectedOutcome === "revert") {
+      for (const report of setupReports) {
+        await expect(callCheck(report), `${testCase.title}: setup report '${report.label}'`).not.to.be.reverted;
+      }
+
+      if (testCase.expected.outcome === "revert") {
         await expect(callCheck(checkedReport))
           .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
           .withArgs(expected.actualCLBalanceDiff, expected.maxAllowedCLBalanceDiff);
