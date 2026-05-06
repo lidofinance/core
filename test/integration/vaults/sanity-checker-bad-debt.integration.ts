@@ -5,18 +5,22 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { advanceChainTime, ether, impersonate, LIMITER_PRECISION_BASE } from "lib";
+import { ether, impersonate, LIMITER_PRECISION_BASE, ONE_GWEI } from "lib";
 import {
+  getNextReportContext,
   getProtocolContext,
   ProtocolContext,
   queueBadDebtInternalization,
   removeStakingLimit,
   report,
+  reportWithEffectiveClDiff,
+  resetCLBalanceDecreaseWindow,
+  seedProtocolPendingBaseline,
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
-  waitNextAvailableReportTime,
 } from "lib/protocol";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 import { SHARE_RATE_PRECISION } from "test/suite/constants";
@@ -268,17 +272,17 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
   describe("CL balance decrease check with bad debt internalization", () => {
     it("Small CL balance decrease", async () => {
+      await resetCLBalanceDecreaseWindow(ctx, { waitNextReportTime: true });
+
       const stateBefore = await captureState();
 
       // Queue bad debt internalization
-      const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
-      await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
+      await setupVaultWithBadDebt(ctx, owner, nodeOperator);
 
       // Small negative CL diff (within allowed limits)
       const smallDecrease = ether("-1");
 
-      await report(ctx, {
-        clDiff: smallDecrease,
+      await reportWithEffectiveClDiff(ctx, smallDecrease, {
         excludeVaultsBalances: true,
         skipWithdrawals: true,
         // Burner state on the fork can hold pending cover/non-cover shares; burning them
@@ -297,29 +301,19 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Bad debt internalization does not affect calculation of dynamic slashing limit
       // so the report with max allowed CL decrease should still pass with bad debt internalization
 
-      const { oracleReportSanityChecker, lido, stakingRouter } = ctx.contracts;
+      const { oracleReportSanityChecker, lido } = ctx.contracts;
 
-      // Time travel to 54 days to invalidate all current penalties and get max slashing limits
-      const DAYS_54_IN_SECONDS = 54n * 24n * 60n * 60n;
-      await advanceChainTime(DAYS_54_IN_SECONDS);
+      // Submit a neutral report to establish the current CL balance baseline
       await report(ctx);
 
       // Get current protocol state to calculate dynamic slashing limit
-      const { beaconValidators } = await lido.getBeaconStat();
-      const moduleDigests = await stakingRouter.getAllStakingModuleDigests();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const limits = await oracleReportSanityChecker.getOracleReportLimits();
+      const maxAllowedNegativeRebase = (preCLBalance * limits.maxCLBalanceDecreaseBP) / 10_000n;
 
-      const exitedValidators = moduleDigests.reduce((total, { summary }) => total + summary.totalExitedValidators, 0n);
-      const activeValidators = beaconValidators - exitedValidators;
-
-      // maxAllowedCLRebaseNegativeSum = initialSlashingAmountPWei * 1e15 * validators + inactivityPenaltiesAmountPWei * 1e15 * validators
-      const ONE_PWEI = 10n ** 15n;
-      const maxAllowedNegativeRebase =
-        limits.initialSlashingAmountPWei * ONE_PWEI * activeValidators +
-        limits.inactivityPenaltiesAmountPWei * ONE_PWEI * activeValidators;
-
-      // CL decrease exactly at limit minus 1 wei should pass
-      const clSlashing = -(maxAllowedNegativeRebase - 1n);
+      // Oracle reports CL balances in gwei, so keep the reported decrease below the limit after gwei rounding.
+      const clSlashing = -(maxAllowedNegativeRebase - ONE_GWEI);
 
       const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
       await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
@@ -349,56 +343,52 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
   describe("Annual balance increase check with bad debt internalization", () => {
     it("CL balance increase over limit reverts, bad debt does not compensate", async () => {
-      // Bad debt internalization does not affect CL balance increase check
-      // so even with bad debt queued, the report exceeding limit should revert
+      // Bad debt internalization does not affect positive CL growth checks,
+      // so even with bad debt queued, a report exceeding the activated-pending
+      // plus validators-based safety cap should revert.
 
-      const { oracleReportSanityChecker, lido, accountingOracle, hashConsensus } = ctx.contracts;
+      const { oracleReportSanityChecker, lido } = ctx.contracts;
+
+      await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
       const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
       await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
-      await waitNextAvailableReportTime(ctx);
 
       // Get current protocol state
-      const { beaconBalance: preCLBalance } = await lido.getBeaconStat();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
       const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-      const { secondsPerSlot } = await hashConsensus.getChainConfig();
-      const { currentFrameRefSlot } = await accountingOracle.getProcessingState();
-      const lastRefSlot = await accountingOracle.getLastProcessingRefSlot();
-      const slotElapsed = currentFrameRefSlot - lastRefSlot;
-
-      expect(slotElapsed).to.be.gt(0n, "Some slots should have elapsed since last report");
-
-      // Calculate time elapsed for one frame
-      const timeElapsed = slotElapsed * secondsPerSlot;
-
-      // Calculate balance increase that exceeds the limit
-      // The check is: (365 days * 10000 * balanceIncrease / preCLBalance) / timeElapsed > limit
-      // Solving : balanceIncrease > ((limit + 1) * preCLBalance * timeElapsed - 1) / (365 days * 10000)
+      const { reportTimeElapsed } = await getNextReportContext(ctx);
       const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
       const MAX_BASIS_POINTS = 10000n;
       const maxBalanceIncrease =
-        ((annualBalanceIncreaseBPLimit + 1n) * preCLBalance * timeElapsed - 1n) / (SECONDS_PER_YEAR * MAX_BASIS_POINTS);
+        ((annualBalanceIncreaseBPLimit *
+          (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) *
+          reportTimeElapsed) /
+          (SECONDS_PER_YEAR * MAX_BASIS_POINTS) /
+          ONE_GWEI) *
+        ONE_GWEI;
 
       const stateBefore = await captureState();
       expect(stateBefore.badDebtToInternalize).to.equal(badDebtShares, "Bad debt should be queued");
 
-      // Report should revert - CL increase exceeds the limit
-      // Bad debt being queued does NOT compensate for the excess
+      // `report()` consumes the seeded pending baseline inside the same report, so the
+      // raw CL delta under test is the safety-cap component computed from the
+      // post-activation validators base.
+      // Bad debt still must not compensate an over-limit report.
+      expect(clPendingBalanceAtLastReport).to.be.gt(0n, "test precondition failed: pending baseline must be non-zero");
       await expect(
         report(ctx, {
-          clDiff: maxBalanceIncrease + 10n ** 9n, // + 1 gwei to exceed limit
+          clDiff: maxBalanceIncrease + ONE_GWEI,
           excludeVaultsBalances: true,
           skipWithdrawals: true,
-          waitNextReportTime: false,
         }),
-      ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease");
+      ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
 
-      // Now report exactly at the limit. Should pass despite bad debt internalization
+      // Report exactly at the limit should pass despite bad debt internalization
       await report(ctx, {
         clDiff: maxBalanceIncrease,
         excludeVaultsBalances: true,
         skipWithdrawals: true,
-        waitNextReportTime: false,
       });
 
       const stateAfter = await captureState();

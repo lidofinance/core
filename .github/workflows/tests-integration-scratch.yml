@@ -24,6 +24,10 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
+      # https://github.com/foundry-rs/foundry-toolchain
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Set env
         run: cp .env.example .env
 

@@ -41,21 +41,30 @@ interface ILido is IERC20, IVersioned {
         view
         returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance);
 
+    function getBalanceStats()
+        external
+        view
+        returns (
+            uint256 clValidatorsBalanceAtLastReport,
+            uint256 clPendingBalanceAtLastReport,
+            uint256 depositedSinceLastReport,
+            uint256 depositedForCurrentReport
+        );
+
     function processClStateUpdate(
         uint256 _reportTimestamp,
-        uint256 _preClValidators,
-        uint256 _reportClValidators,
-        uint256 _reportClBalance
+        uint256 _clValidatorsBalance,
+        uint256 _clPendingBalance
     ) external;
 
     function collectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _reportClBalance,
-        uint256 _adjustedPreCLBalance,
+        uint256 _principalCLBalance,
         uint256 _withdrawalsToWithdraw,
         uint256 _elRewardsToWithdraw,
         uint256 _lastWithdrawalRequestToFinalize,
-        uint256 _simulatedShareRate,
+        uint256 _withdrawalsShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     ) external;
 

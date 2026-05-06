@@ -72,6 +72,11 @@ const BurnerSchema = z.object({
   totalNonCoverSharesBurnt: BigIntStringSchema.optional(),
 });
 
+const WithdrawalVaultSchema = z.object({
+  withdrawalRequestContract: EthereumAddressSchema,
+  consolidationRequestContract: EthereumAddressSchema,
+});
+
 // Triggerable withdrawals gateway schema (used in scratch configs)
 const TriggerableWithdrawalsGatewaySchema = z.object({
   maxExitRequestsLimit: PositiveIntSchema,
@@ -79,18 +84,74 @@ const TriggerableWithdrawalsGatewaySchema = z.object({
   frameDurationInSec: PositiveIntSchema,
 });
 
+// Consolidation gateway schema
+const ConsolidationGatewaySchema = z.object({
+  maxConsolidationRequestsLimit: PositiveIntSchema,
+  consolidationsPerFrame: PositiveIntSchema,
+  frameDurationInSec: PositiveIntSchema,
+  gIFirstValidatorPrev: HexStringSchema,
+  gIFirstValidatorCurr: HexStringSchema,
+  pivotSlot: NonNegativeIntSchema,
+  pauser: EthereumAddressSchema.optional(),
+});
+
+const ConsolidationBusSchema = z.object({
+  initialBatchSize: PositiveIntSchema,
+  initialMaxGroupsInBatch: PositiveIntSchema,
+  initialExecutionDelay: NonNegativeIntSchema,
+});
+
+const ConsolidationMigratorSchema = z.object({
+  sourceModuleId: PositiveIntSchema,
+  targetModuleId: PositiveIntSchema,
+  committee: EthereumAddressSchema.optional(),
+});
+
+// Top-up gateway schema
+const TopUpGatewaySchema = z.object({
+  maxValidatorsPerTopUp: PositiveIntSchema,
+  minBlockDistance: PositiveIntSchema,
+  maxRootAge: PositiveIntSchema,
+  targetBalanceGwei: PositiveIntSchema,
+  minTopUpGwei: PositiveIntSchema,
+  gIFirstValidatorPrev: HexStringSchema,
+  gIFirstValidatorCurr: HexStringSchema,
+  pivotSlot: NonNegativeIntSchema,
+  depositor: EthereumAddressSchema.optional(),
+});
+
+const StakingRouterSchema = z.object({
+  maxEBType1: BigIntStringSchema,
+  maxEBType2: BigIntStringSchema,
+});
+
 // Easy track schema
 const EasyTrackSchema = z.object({
-  VaultsAdapter: EthereumAddressSchema,
+  trustedCaller: EthereumAddressSchema.optional(),
   newFactories: z.object({
-    AlterTiersInOperatorGrid: EthereumAddressSchema,
-    RegisterGroupsInOperatorGrid: EthereumAddressSchema,
-    RegisterTiersInOperatorGrid: EthereumAddressSchema,
-    SetJailStatusInOperatorGrid: EthereumAddressSchema,
-    SocializeBadDebtInVaultHub: EthereumAddressSchema,
-    ForceValidatorExitsInVaultHub: EthereumAddressSchema,
-    UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
-    UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
+    // v3
+    // AlterTiersInOperatorGrid: EthereumAddressSchema,
+    // RegisterGroupsInOperatorGrid: EthereumAddressSchema,
+    // RegisterTiersInOperatorGrid: EthereumAddressSchema,
+    // SetJailStatusInOperatorGrid: EthereumAddressSchema,
+    // SocializeBadDebtInVaultHub: EthereumAddressSchema,
+    // ForceValidatorExitsInVaultHub: EthereumAddressSchema,
+    // UpdateGroupsShareLimitInOperatorGrid: EthereumAddressSchema,
+    // UpdateVaultsFeesInOperatorGrid: EthereumAddressSchema,
+    // v4
+    UpdateStakingModuleShareLimits: EthereumAddressSchema,
+    AllowConsolidationPair: EthereumAddressSchema,
+    SetMerkleGateTreeForCSM: EthereumAddressSchema,
+    ReportWithdrawalsForSlashedValidatorsForCSM: EthereumAddressSchema,
+    SettleGeneralDelayedPenaltyForCSM: EthereumAddressSchema,
+    SetMerkleGateTreeForCM: EthereumAddressSchema,
+    ReportWithdrawalsForSlashedValidatorsForCM: EthereumAddressSchema,
+    SettleGeneralDelayedPenaltyForCM: EthereumAddressSchema,
+    CreateOrUpdateOperatorGroupForCM: EthereumAddressSchema,
+  }),
+  oldFactories: z.object({
+    CSMSettleElStealingPenalty: EthereumAddressSchema,
+    CSMSetVettedGateTree: EthereumAddressSchema,
   }),
 });
 
@@ -100,13 +161,13 @@ const OracleVersionsSchema = z.object({
 });
 
 // V3 vote script params
-const V3VoteScriptSchema = z.object({
-  expiryTimestamp: NonNegativeIntSchema,
-  initialMaxExternalRatioBP: BasisPointsSchema,
-  timeConstraintsContract: EthereumAddressSchema,
-  odcSlashingReserveWeRightShiftEpochs: NonNegativeIntSchema,
-  odcSlashingReserveWeLeftShiftEpochs: NonNegativeIntSchema,
-});
+// const V3VoteScriptSchema = z.object({
+//   expiryTimestamp: NonNegativeIntSchema,
+//   initialMaxExternalRatioBP: BasisPointsSchema,
+//   timeConstraintsContract: EthereumAddressSchema,
+//   odcSlashingReserveWeRightShiftEpochs: NonNegativeIntSchema,
+//   odcSlashingReserveWeLeftShiftEpochs: NonNegativeIntSchema,
+// });
 
 // Aragon app versions schema
 const AragonAppVersionsSchema = z.object({
@@ -114,34 +175,60 @@ const AragonAppVersionsSchema = z.object({
   sdvt_version: z.array(z.number()).length(3),
 });
 
-// Upgrade parameters schema
-export const UpgradeParametersSchema = z.object({
-  chainSpec: ChainSpecSchema.extend({
-    genesisTime: z.number().int(),
-    depositContract: EthereumAddressSchema,
-  }),
-  gateSealForVaults: z.object({
-    sealDuration: PositiveIntSchema,
-    sealingCommittee: EthereumAddressSchema,
-  }),
-  easyTrack: EasyTrackSchema,
-  vaultHub: VaultHubSchema,
-  lazyOracle: LazyOracleSchema,
-  predepositGuarantee: PredepositGuaranteeSchema.extend({
-    genesisForkVersion: HexStringSchema,
-  }),
-  operatorGrid: OperatorGridSchema,
-  burner: BurnerSchema,
-  oracleVersions: OracleVersionsSchema.optional(),
-  aragonAppVersions: AragonAppVersionsSchema.optional(),
-  v3VoteScript: V3VoteScriptSchema,
+const CSMUpgradeConfigSchema = z.object({
+  csmProxy: EthereumAddressSchema,
+  csmImpl: EthereumAddressSchema,
+  vettedGateProxy: EthereumAddressSchema,
+  identifiedDVTClusterGate: EthereumAddressSchema,
+  identifiedDVTClusterCurveSetup: EthereumAddressSchema,
+  identifiedDVTClusterBondCurveId: NonNegativeIntSchema,
+  parametersRegistryImpl: EthereumAddressSchema,
+  feeOracleImpl: EthereumAddressSchema,
+  feeOracleConsensusVersion: NonNegativeIntSchema,
+  vettedGateImpl: EthereumAddressSchema,
+  accountingImpl: EthereumAddressSchema,
+  feeDistributorImpl: EthereumAddressSchema,
+  exitPenaltiesImpl: EthereumAddressSchema,
+  strikesImpl: EthereumAddressSchema,
+  oldPermissionlessGate: EthereumAddressSchema,
+  oldVerifier: EthereumAddressSchema,
+  newVerifier: EthereumAddressSchema,
+  newPermissionlessGate: EthereumAddressSchema,
+  ejector: EthereumAddressSchema,
+  csmCommittee: EthereumAddressSchema,
 });
 
-// Gate seal schema (for scratch deployment)
-const GateSealSchema = z.object({
-  sealDuration: PositiveIntSchema,
-  expiryTimestamp: PositiveIntSchema,
-  sealingCommittee: z.array(EthereumAddressSchema),
+const CuratedModuleConfigSchema = z.object({
+  module: EthereumAddressSchema,
+  curatedGates: z.array(EthereumAddressSchema),
+  verifier: EthereumAddressSchema,
+  circuitBreakerPauser: EthereumAddressSchema,
+  moduleName: z.string().min(1),
+  stakeShareLimit: NonNegativeIntSchema,
+  priorityExitShareThreshold: NonNegativeIntSchema,
+  stakingModuleFee: NonNegativeIntSchema,
+  treasuryFee: NonNegativeIntSchema,
+  maxDepositsPerBlock: NonNegativeIntSchema,
+  minDepositBlockDistance: NonNegativeIntSchema,
+  feeOracleConsensusVersion: NonNegativeIntSchema,
+  hashConsensusInitialEpoch: NonNegativeIntSchema,
+});
+
+const UpgradeVoteScriptSchema = z.object({
+  expiryTimestamp: NonNegativeIntSchema,
+  timeConstraintsContract: EthereumAddressSchema,
+  enabledDaySpanStart: NonNegativeIntSchema,
+  enabledDaySpanEnd: NonNegativeIntSchema,
+});
+
+// CircuitBreaker schema (for scratch deployment)
+const CircuitBreakerSchema = z.object({
+  minPauseDuration: PositiveIntSchema,
+  maxPauseDuration: PositiveIntSchema,
+  minHeartbeatInterval: PositiveIntSchema,
+  maxHeartbeatInterval: PositiveIntSchema,
+  initialPauseDuration: PositiveIntSchema,
+  initialHeartbeatInterval: PositiveIntSchema,
 });
 
 // DAO schema
@@ -188,10 +275,11 @@ const OracleSchema = z.object({
 });
 
 const ValidatorsExitBusOracleSchema = OracleSchema.extend({
-  maxValidatorsPerRequest: PositiveIntSchema,
-  maxExitRequestsLimit: PositiveIntSchema,
-  exitsPerFrame: PositiveIntSchema,
+  maxValidatorsPerReport: PositiveIntSchema,
+  maxExitBalanceEth: PositiveIntSchema,
+  balancePerFrameEth: PositiveIntSchema,
   frameDurationInSec: PositiveIntSchema,
+  consensusVersion: PositiveIntSchema,
 });
 
 // Deposit security module schema
@@ -203,19 +291,22 @@ const DepositSecurityModuleSchema = z.object({
 
 // Oracle report sanity checker schema
 const OracleReportSanityCheckerSchema = z.object({
-  exitedValidatorsPerDayLimit: PositiveIntSchema,
-  appearedValidatorsPerDayLimit: PositiveIntSchema,
-  deprecatedOneOffCLBalanceDecreaseBPLimit: BasisPointsSchema,
+  exitedEthAmountPerDayLimit: PositiveIntSchema,
+  appearedEthAmountPerDayLimit: PositiveIntSchema,
   annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
-  maxValidatorExitRequestsPerReport: PositiveIntSchema,
+  maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
+  maxEffectiveBalanceWeightWCType01: PositiveIntSchema,
+  maxEffectiveBalanceWeightWCType02: PositiveIntSchema,
   maxItemsPerExtraDataTransaction: PositiveIntSchema,
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,
   maxPositiveTokenRebase: PositiveIntSchema,
-  initialSlashingAmountPWei: PositiveIntSchema,
-  inactivityPenaltiesAmountPWei: PositiveIntSchema,
+  maxCLBalanceDecreaseBP: BasisPointsSchema,
   clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
+  consolidationEthAmountPerDayLimit: NonNegativeIntSchema,
+  exitedValidatorEthAmountLimit: PositiveIntSchema,
+  externalPendingBalanceCapEth: NonNegativeIntSchema,
 });
 
 // Oracle daemon config schema
@@ -251,11 +342,16 @@ const LidoApmSchema = z.object({
   ensRegDurationSec: PositiveIntSchema,
 });
 
+const LidoSchema = z.object({
+  lidoDepositsReserveTarget: BigIntStringSchema,
+});
+
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
-  gateSeal: GateSealSchema,
+  circuitBreaker: CircuitBreakerSchema,
   lidoApm: LidoApmSchema,
+  lido: LidoSchema.optional(),
   dao: DaoSchema,
   vesting: VestingSchema,
   burner: BurnerSchema.extend({
@@ -278,8 +374,47 @@ export const ScratchParametersSchema = z.object({
   withdrawalQueueERC721: WithdrawalQueueERC721Schema,
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  consolidationGateway: ConsolidationGatewaySchema,
+  consolidationBus: ConsolidationBusSchema,
+  consolidationMigrator: ConsolidationMigratorSchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
+  topUpGateway: TopUpGatewaySchema,
+  stakingRouter: StakingRouterSchema,
+});
+
+// Upgrade parameters schema
+export const UpgradeParametersSchema = z.object({
+  lido: LidoSchema,
+  easyTrack: EasyTrackSchema,
+  depositSecurityModule: DepositSecurityModuleSchema,
+  oracleReportSanityChecker: OracleReportSanityCheckerSchema,
+  consolidationGateway: ConsolidationGatewaySchema,
+  consolidationBus: ConsolidationBusSchema,
+  consolidationMigrator: ConsolidationMigratorSchema,
+
+  topUpGateway: TopUpGatewaySchema,
+  stakingRouter: StakingRouterSchema,
+  withdrawalVault: WithdrawalVaultSchema,
+  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  accountingOracle: OracleSchema,
+  validatorsExitBusOracle: ValidatorsExitBusOracleSchema,
+
+  // csm
+  csmUpgrade: CSMUpgradeConfigSchema,
+  curatedModule: CuratedModuleConfigSchema,
+
+  upgradeVoteScript: UpgradeVoteScriptSchema,
+
+  // old and optional
+  vaultHub: VaultHubSchema.optional(),
+  chainSpec: ChainSpecSchema.extend({
+    genesisTime: z.number().int(),
+    depositContract: EthereumAddressSchema,
+  }).optional(),
+  burner: BurnerSchema.optional(),
+  oracleVersions: OracleVersionsSchema.optional(),
+  aragonAppVersions: AragonAppVersionsSchema.optional(),
 });
 
 // Inferred types from zod schemas

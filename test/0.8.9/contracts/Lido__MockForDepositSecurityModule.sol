@@ -18,12 +18,12 @@ contract Lido__MockForDepositSecurityModule {
     }
 
     function deposit(
-        uint256 maxDepositsCount,
+        uint256 maxDepositsAmount,
         uint256 stakingModuleId,
         bytes calldata depositCalldata
     ) external returns (uint256 keysCount) {
-        emit StakingModuleDeposited(maxDepositsCount, uint24(stakingModuleId), depositCalldata);
-        return maxDepositsCount;
+        emit StakingModuleDeposited(maxDepositsAmount, uint24(stakingModuleId), depositCalldata);
+        return maxDepositsAmount;
     }
 
     function canDeposit() external view returns (bool) {

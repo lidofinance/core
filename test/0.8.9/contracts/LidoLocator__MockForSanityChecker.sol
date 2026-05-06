@@ -23,6 +23,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address oracleDaemonConfig;
         address validatorExitDelayVerifier;
         address triggerableWithdrawalsGateway;
+        address consolidationGateway;
         address accounting;
         address predepositGuarantee;
         address wstETH;
@@ -30,6 +31,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address vaultFactory;
         address lazyOracle;
         address operatorGrid;
+        address topUpGateway;
     }
 
     address public immutable lido;
@@ -47,6 +49,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable oracleDaemonConfig;
     address public immutable validatorExitDelayVerifier;
     address public immutable triggerableWithdrawalsGateway;
+    address public immutable consolidationGateway;
     address public immutable accounting;
     address public immutable predepositGuarantee;
     address public immutable wstETH;
@@ -54,6 +57,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable vaultFactory;
     address public immutable lazyOracle;
     address public immutable operatorGrid;
+    address public immutable topUpGateway;
 
     constructor(ContractAddresses memory addresses) {
         lido = addresses.lido;
@@ -71,6 +75,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         oracleDaemonConfig = addresses.oracleDaemonConfig;
         validatorExitDelayVerifier = addresses.validatorExitDelayVerifier;
         triggerableWithdrawalsGateway = addresses.triggerableWithdrawalsGateway;
+        consolidationGateway = addresses.consolidationGateway;
         accounting = addresses.accounting;
         wstETH = addresses.wstETH;
         predepositGuarantee = addresses.predepositGuarantee;
@@ -78,6 +83,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         vaultFactory = addresses.vaultFactory;
         lazyOracle = addresses.lazyOracle;
         operatorGrid = addresses.operatorGrid;
+        topUpGateway = addresses.topUpGateway;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {

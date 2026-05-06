@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      NODE_OPTIONS: --max_old_space_size=7200
+      NODE_OPTIONS: --max_old_space_size=10240
       SKIP_GAS_REPORT: true
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
@@ -20,7 +20,9 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Run integration tests
-        run: yarn test:integration
+        run: yarn test:integration:upgrade
         env:
+          NETWORK: "hoodi"
           RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
+          FORKING_BLOCK_NUMBER: "2715255"
           NETWORK_STATE_FILE: deployed-hoodi.json

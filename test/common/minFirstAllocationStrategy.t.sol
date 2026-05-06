@@ -15,12 +15,18 @@ contract MinFirstAllocationStrategyInvariants is Test {
     uint256 private constant MAX_CAPACITY_VALUE = 8192;
     uint256 private constant MAX_ALLOCATION_SIZE = 1024;
 
-    MinFirstAllocationStrategyBase internal handler;
+    MinFirstAllocationStrategyAllocateHandler internal handler;
     MinFirstAllocationStrategy__Harness internal harness;
 
     function setUp() external {
         handler = new MinFirstAllocationStrategyAllocateHandler();
         harness = new MinFirstAllocationStrategy__Harness();
+
+        targetContract(address(handler));
+
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = MinFirstAllocationStrategyAllocateHandler.allocate.selector;
+        targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 
     function test_allocateToBestCandidate_ReturnsZeroWhenAllocationSizeIsZero() public view {

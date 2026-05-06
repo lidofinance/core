@@ -50,10 +50,12 @@ const getDefaultExtraData = (): ExtraDataType => ({
 const getDefaultReportFields = (override = {}) => ({
   consensusVersion: AO_CONSENSUS_VERSION,
   refSlot: 0,
-  numValidators: 10,
-  clBalanceGwei: 320n * ONE_GWEI,
+  clValidatorsBalanceGwei: 300n * ONE_GWEI,
+  clPendingBalanceGwei: 20n * ONE_GWEI,
   stakingModuleIdsWithNewlyExitedValidators: [1],
   numExitedValidatorsByStakingModule: [3],
+  stakingModuleIdsWithUpdatedBalance: [1],
+  validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
   withdrawalVaultBalance: ether("1"),
   elRewardsVaultBalance: ether("2"),
   sharesRequestedToBurn: ether("3"),
@@ -836,62 +838,65 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         });
       });
 
-      context("checks data type for UnsupportedExtraDataType reverts (only supported types are `1` and `2`)", () => {
-        // contextual helper to prepeare wrong typed data
-        const getExtraWithCustomType = (typeCustom: bigint) => {
-          const extraData = {
-            exitedKeys: [{ moduleId: 1, nodeOpIds: [1], keysCounts: [2] }],
+      context(
+        "checks data type for UnsupportedExtraDataType reverts (only supported type is `2` and `1` is deprecated)",
+        () => {
+          // contextual helper to prepeare wrong typed data
+          const getExtraWithCustomType = (typeCustom: bigint) => {
+            const extraData = {
+              exitedKeys: [{ moduleId: 1, nodeOpIds: [1], keysCounts: [2] }],
+            };
+            const item = extraData.exitedKeys[0];
+            const extraDataItems = [];
+            extraDataItems.push(encodeExtraDataItem(0, typeCustom, item.moduleId, item.nodeOpIds, item.keysCounts));
+            return {
+              extraData,
+              extraDataItems,
+              wrongTypedIndex: 0,
+              typeCustom,
+            };
           };
-          const item = extraData.exitedKeys[0];
-          const extraDataItems = [];
-          extraDataItems.push(encodeExtraDataItem(0, typeCustom, item.moduleId, item.nodeOpIds, item.keysCounts));
-          return {
-            extraData,
-            extraDataItems,
-            wrongTypedIndex: 0,
-            typeCustom,
-          };
-        };
 
-        it("if type `0` was passed", async () => {
-          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(0n);
-          await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
-          await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-          await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
-            .to.be.revertedWithCustomError(oracle, "UnsupportedExtraDataType")
-            .withArgs(wrongTypedIndex, typeCustom);
-        });
+          it("if type `0` was passed", async () => {
+            const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(0n);
+            await consensus.advanceTimeToNextFrameStart();
+            const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
+            await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+            await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
+              .to.be.revertedWithCustomError(oracle, "UnsupportedExtraDataType")
+              .withArgs(wrongTypedIndex, typeCustom);
+          });
 
-        it("if type `3` was passed", async () => {
-          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(3n);
-          await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
-          await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-          await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
-            .to.be.revertedWithCustomError(oracle, "UnsupportedExtraDataType")
-            .withArgs(wrongTypedIndex, typeCustom);
-        });
+          it("if type `4` was passed", async () => {
+            const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(4n);
+            await consensus.advanceTimeToNextFrameStart();
+            const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
+            await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+            await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
+              .to.be.revertedWithCustomError(oracle, "UnsupportedExtraDataType")
+              .withArgs(wrongTypedIndex, typeCustom);
+          });
 
-        it("if type `1` was passed", async () => {
-          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(1n);
-          await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
-          await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-          await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
-            .to.be.revertedWithCustomError(oracle, "DeprecatedExtraDataType")
-            .withArgs(wrongTypedIndex, typeCustom);
-        });
+          it("if type `1` was passed", async () => {
+            const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(1n);
+            await consensus.advanceTimeToNextFrameStart();
+            const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
+            await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+            await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
+              .to.be.revertedWithCustomError(oracle, "DeprecatedExtraDataType")
+              .withArgs(wrongTypedIndex, typeCustom);
+          });
 
-        it("succeeds if `2` was passed", async () => {
-          const { extraDataItems } = getExtraWithCustomType(2n);
-          await consensus.advanceTimeToNextFrameStart();
-          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
-          await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-          const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
-          await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
-        });
-      });
+          it("succeeds if `2` was passed", async () => {
+            const { extraDataItems } = getExtraWithCustomType(2n);
+            await consensus.advanceTimeToNextFrameStart();
+            const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
+            await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+            const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
+            await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
+          });
+        },
+      );
 
       context("should check node operators processing limits with OracleReportSanityChecker", () => {
         it("by reverting TooManyNodeOpsPerExtraDataItem if there was too much node operators", async () => {

@@ -3,17 +3,19 @@ import { ethers } from "hardhat";
 
 import { SecondOpinionOracle__Mock } from "typechain-types";
 
-import { ether, impersonate, log, ONE_GWEI } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { ether, log, ONE_GWEI } from "lib";
+import {
+  depositValidatorsWithoutReport,
+  getProtocolContext,
+  ProtocolContext,
+  report,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
 const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
-const CURATED_MODULE_ID = 1n;
 const INITIAL_REPORTED_BALANCE = ether("32") * 3n; // 32 ETH * 3 validators
-
-const ZERO_HASH = new Uint8Array(32).fill(0);
 
 // Diff amount is 10% of total supply
 function getDiffAmount(totalSupply: bigint): bigint {
@@ -34,7 +36,7 @@ describe("Integration: Second opinion", () => {
 
     snapshot = await Snapshot.take();
 
-    const { lido, depositSecurityModule, oracleReportSanityChecker } = ctx.contracts;
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
 
     const { chainId } = await ethers.provider.getNetwork();
     // Sepolia-specific initialization
@@ -51,8 +53,9 @@ describe("Integration: Second opinion", () => {
       await bepoliaToken.connect(bepiloaSigner).transfer(adapterAddr, BEPOLIA_TO_TRANSFER);
     }
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    // On Hoodi after SRv3 allocation, a raw router deposit into NOR can return `ZeroDeposits()`
+    // unless the test first prepares Lido buffered ETH and module deposit limits.
+    await depositValidatorsWithoutReport(ctx, 1n);
 
     secondOpinion = await ethers.deployContract("SecondOpinionOracle__Mock", []);
     const soAddress = await secondOpinion.getAddress();
@@ -62,19 +65,26 @@ describe("Integration: Second opinion", () => {
       .connect(agentSigner)
       .grantRole(await oracleReportSanityChecker.SECOND_OPINION_MANAGER_ROLE(), agentSigner.address);
 
-    let { beaconBalance } = await lido.getBeaconStat();
+    let balanceStats = await lido.getBalanceStats();
+    let clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     // Report initial balances if TVL is zero
-    if (beaconBalance === 0n) {
+    if (clBalance === 0n) {
       await report(ctx, {
         clDiff: INITIAL_REPORTED_BALANCE,
         clAppearedValidators: 3n,
         excludeVaultsBalances: true,
       });
-      beaconBalance = (await lido.getBeaconStat()).beaconBalance;
+      balanceStats = await lido.getBalanceStats();
+      clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     }
-    totalSupply = beaconBalance;
-
     await oracleReportSanityChecker.connect(agentSigner).setSecondOpinionOracleAndCLBalanceUpperMargin(soAddress, 74n);
+
+    // Normalize CL decrease window and consume pending deposits to make
+    // second-opinion checks deterministic across different scratch states.
+    await resetCLBalanceDecreaseWindow(ctx);
+
+    balanceStats = await lido.getBalanceStats();
+    totalSupply = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
   });
 
   beforeEach(bailOnFailure);

@@ -4,8 +4,14 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { ether, impersonate } from "lib";
+import {
+  getDepositedSinceLastReport,
+  getProtocolContext,
+  ProtocolContext,
+  reportWithEffectiveClDiff,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -55,65 +61,155 @@ describe("Integration: Negative rebase", () => {
     return exited;
   };
 
+  const ensureAtLeastOneStoredReport = async () => {
+    const reportDataCount = await ctx.contracts.oracleReportSanityChecker.getReportDataCount();
+    if (reportDataCount === 0n) {
+      await reportWithEffectiveClDiff(ctx, 0n, {
+        skipWithdrawals: true,
+        excludeVaultsBalances: true,
+      });
+    }
+  };
+
   it("Should store correctly exited validators count", async () => {
     const { locator, oracleReportSanityChecker } = ctx.contracts;
 
-    expect((await locator.oracleReportSanityChecker()) == oracleReportSanityChecker.address);
+    expect(await locator.oracleReportSanityChecker()).to.equal(oracleReportSanityChecker.address);
 
     const currentExited = await exitedValidatorsCount();
     const reportExitedValidators = currentExited.get(1n) ?? 0n;
+    await ensureAtLeastOneStoredReport();
+    const reportDataCountBefore = await oracleReportSanityChecker.getReportDataCount();
 
-    // On upgrade OracleReportSanityChecker is new and not provisioned thus has no reports
-    if ((await oracleReportSanityChecker.getReportDataCount()) === 0n) {
-      await report(ctx, {
-        clDiff: ether("0"),
-        skipWithdrawals: true,
-        clAppearedValidators: 0n,
-      });
-    }
-
-    await report(ctx, {
-      clDiff: ether("0"),
+    // On Hoodi after the SRv3 migration, Lido has pending deposits.
+    // `report(ctx, { clDiff: 0 })` means raw postCL - preCL = 0, which looks
+    // to the sanity checker like a CL decrease by the amount of those deposits.
+    // This report must be effective-neutral relative to principal CL balance.
+    await reportWithEffectiveClDiff(ctx, 0n, {
       skipWithdrawals: true,
       clAppearedValidators: 0n,
+      reportElVault: false,
       stakingModuleIdsWithNewlyExitedValidators: [1n],
       numExitedValidatorsByStakingModule: [reportExitedValidators + 2n],
     });
 
-    const count = await oracleReportSanityChecker.getReportDataCount();
-    expect(count).to.be.greaterThanOrEqual(2);
+    const reportDataCountAfter = await oracleReportSanityChecker.getReportDataCount();
+    expect(reportDataCountAfter).to.equal(reportDataCountBefore + 1n);
 
-    const lastReportData = await oracleReportSanityChecker.reportData(count - 1n);
-    const beforeLastReportData = await oracleReportSanityChecker.reportData(count - 2n);
+    const updatedExited = await exitedValidatorsCount();
+    const updatedExitedForModule = updatedExited.get(1n) ?? 0n;
+    const totalExitedBefore = Array.from(currentExited.values()).reduce((acc, val) => acc + val, 0n);
+    const totalExitedAfter = Array.from(updatedExited.values()).reduce((acc, val) => acc + val, 0n);
 
-    const lastExitedTotal = Array.from(currentExited.values()).reduce((acc, val) => acc + val, 0n);
-
-    expect(lastReportData.totalExitedValidators).to.be.equal(lastExitedTotal + 2n);
-    expect(beforeLastReportData.totalExitedValidators).to.be.equal(lastExitedTotal);
+    expect(updatedExitedForModule).to.be.equal(reportExitedValidators + 2n);
+    expect(totalExitedAfter).to.be.equal(totalExitedBefore + 2n);
   });
 
-  // 56 weeks of negative rebases is too much for the test and it breaks with the SocketError: other side closed
-  it.skip("Should store correctly many negative rebases", async () => {
+  it("Should store correctly many negative rebases", async () => {
     const { locator, oracleReportSanityChecker } = ctx.contracts;
 
-    expect((await locator.oracleReportSanityChecker()) == oracleReportSanityChecker.address);
+    expect(await locator.oracleReportSanityChecker()).to.equal(oracleReportSanityChecker.address);
 
-    const REPORTS_REPEATED = 56;
-    const SINGLE_REPORT_DECREASE = -1000000000n;
+    // After migration, the sanity checker stores the current withdrawal vault balance as baseline.
+    // The reset report must not report the withdrawal vault as 0, otherwise `_getCLWithdrawals`
+    // fails before the negative rebase check.
+    await resetCLBalanceDecreaseWindow(ctx, {
+      excludeVaultsBalances: false,
+      reportElVault: false,
+    });
+    await ensureAtLeastOneStoredReport();
+
+    const REPORTS_REPEATED = 10;
+    const CL_DIFF_PER_REPORT = -1000000000n; // effective -1 gwei per report relative to principal CL balance
+    let reportDataCount = await oracleReportSanityChecker.getReportDataCount();
+    expect(reportDataCount).to.be.gt(0n);
+    let previousCLBalance = (await oracleReportSanityChecker.reportData(reportDataCount - 1n)).clBalance;
+
     for (let i = 0; i < REPORTS_REPEATED; i++) {
-      await report(ctx, {
-        clDiff: SINGLE_REPORT_DECREASE * BigInt(i + 1),
+      const depositedSinceLastReport = await getDepositedSinceLastReport(ctx);
+
+      await reportWithEffectiveClDiff(ctx, CL_DIFF_PER_REPORT, {
         skipWithdrawals: true,
-        reportWithdrawalsVault: false,
         reportElVault: false,
       });
-    }
-    const count = await oracleReportSanityChecker.getReportDataCount();
-    expect(count).to.be.greaterThanOrEqual(REPORTS_REPEATED + 1);
 
-    for (let i = count - 1n, j = REPORTS_REPEATED - 1; i >= 0 && j >= 0; --i, --j) {
-      const reportData = await oracleReportSanityChecker.reportData(i);
-      expect(reportData.negativeCLRebaseWei).to.be.equal(-1n * SINGLE_REPORT_DECREASE * BigInt(j + 1));
+      reportDataCount += 1n;
+      const reportCountAfter = await oracleReportSanityChecker.getReportDataCount();
+      expect(reportCountAfter).to.equal(reportDataCount);
+
+      const lastReportData = await oracleReportSanityChecker.reportData(reportDataCount - 1n);
+      const expectedCurrentCLBalance = previousCLBalance + depositedSinceLastReport + CL_DIFF_PER_REPORT;
+
+      expect(lastReportData.clBalance).to.equal(expectedCurrentCLBalance);
+      expect(lastReportData.clBalance).to.be.lt(previousCLBalance + depositedSinceLastReport);
+      previousCLBalance = lastReportData.clBalance;
     }
+  });
+
+  // Tests the sliding window CL decrease check by calling checkAccountingOracleReport
+  // directly with zero deposits/withdrawals (so adjustedBase == raw baseline balance).
+  it("Should revert with IncorrectCLBalanceDecrease on gradual negative rebases", async () => {
+    const { oracleReportSanityChecker, accounting, withdrawalVault } = ctx.contracts;
+
+    const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
+    const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault);
+
+    const reportDataCount = await oracleReportSanityChecker.getReportDataCount();
+    let currentBalance =
+      reportDataCount === 0n
+        ? ether("1000000")
+        : (await oracleReportSanityChecker.reportData(reportDataCount - 1n)).clBalance;
+
+    // This direct call bypasses helper report(), so it must pass the reported withdrawal vault balance itself.
+    // On Hoodi after migration, the sanity checker baseline is non-zero; passing 0 here masks
+    // the intended IncorrectCLBalanceDecrease check with a withdrawal vault balance error.
+    const reportFromAccounting = (preBalance: bigint, postBalance: bigint) =>
+      oracleReportSanityChecker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(
+          24n * 60n * 60n,
+          preBalance,
+          0n,
+          postBalance,
+          0n,
+          withdrawalVaultBalance,
+          0n,
+          0n,
+          0n,
+          0n,
+        );
+
+    // REPORTS_WINDOW in contract is 36 (private constant, no getter).
+    // Fill window + 1 neutral data points to fully control the baseline.
+    const REPORTS_WINDOW = 36;
+    for (let i = 0; i < REPORTS_WINDOW + 1; ++i) {
+      await reportFromAccounting(currentBalance, currentBalance);
+    }
+
+    // Derive the number of 1% decreases that fit under the limit from the actual config.
+    const limits = await oracleReportSanityChecker.getOracleReportLimits();
+    const maxDecreaseBP = limits.maxCLBalanceDecreaseBP;
+    const DECREASE_PER_REPORT_BP = 100n; // 1%
+
+    let passingReports = 0;
+    let cumulativeBalanceBP = 10_000n;
+    while (true) {
+      const next = cumulativeBalanceBP - (cumulativeBalanceBP * DECREASE_PER_REPORT_BP) / 10_000n;
+      if (10_000n - next > maxDecreaseBP) break;
+      cumulativeBalanceBP = next;
+      passingReports++;
+    }
+
+    for (let i = 0; i < passingReports; ++i) {
+      const decreasedBalance = currentBalance - (currentBalance * DECREASE_PER_REPORT_BP) / 10_000n;
+      await reportFromAccounting(currentBalance, decreasedBalance);
+      currentBalance = decreasedBalance;
+    }
+
+    const nextDecreasedBalance = currentBalance - (currentBalance * DECREASE_PER_REPORT_BP) / 10_000n;
+    await expect(reportFromAccounting(currentBalance, nextDecreasedBalance)).to.be.revertedWithCustomError(
+      oracleReportSanityChecker,
+      "IncorrectCLBalanceDecrease",
+    );
   });
 });
