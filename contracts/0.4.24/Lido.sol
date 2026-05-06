@@ -159,7 +159,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb;
 
-    /// @dev Storage slot for deposits reserve.
+    /// @dev Storage slot for deposit reserve.
     /// Holds buffered ether that remains depositable even when withdrawals demand exists.
     /// Lifecycle:
     ///   1) can be decreased by `setDepositsReserveTarget()` when target is lowered;
