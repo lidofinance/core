@@ -35,6 +35,8 @@ Other checks stay in the technical test files unless their formula becomes large
 ## Fixture Rules
 
 - describe reports, balances, movements, and limits
+- put the full limits object on each fixture set exactly once
+- use case `limits` only for explicit overrides
 - keep fixtures as data, not helper code
 - keep fixture sets in separate files and export them from `fixtures/index.ts`
 - keep plumbing fields out of fixtures unless the formula itself depends on them

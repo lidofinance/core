@@ -13,51 +13,28 @@ import {
 import { ether, impersonate } from "lib";
 
 import { negativeRebaseFormulaFixtureSets } from "./fixtures/index";
-import {
-  buildStoredReportsModel,
-  calcExpectedWindowDiff,
-  MAX_CL_BALANCE_DECREASE_BP,
-  OracleReportFixture,
-} from "./lib";
+import { buildStoredReportsModel, calcExpectedWindowDiff, OracleReportFixture,OracleReportLimits } from "./lib";
 
 describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
-  let checker: OracleReportSanityChecker;
-  let accounting: Accounting__MockForSanityChecker;
-  let accountingOracle: AccountingOracle__MockForSanityChecker;
-  let deployer: HardhatEthersSigner;
-  let withdrawalVault: HardhatEthersSigner;
-  let accountingSigner: HardhatEthersSigner;
-
-  const defaultLimitsList = {
-    exitedEthAmountPerDayLimit: 50n,
-    appearedEthAmountPerDayLimit: 75n,
-    annualBalanceIncreaseBPLimit: 10_00n,
-    simulatedShareRateDeviationBPLimit: 2_00n,
-    maxBalanceExitRequestedPerReportInEth: 64_000n,
-    maxEffectiveBalanceWeightWCType01: 32n,
-    maxEffectiveBalanceWeightWCType02: 2_048n,
-    maxItemsPerExtraDataTransaction: 15n,
-    maxNodeOperatorsPerExtraDataItem: 16n,
-    requestTimestampMargin: 128n,
-    maxPositiveTokenRebase: 5_000_000n,
-    maxCLBalanceDecreaseBP: MAX_CL_BALANCE_DECREASE_BP,
-    clBalanceOraclesErrorUpperBPLimit: 50n,
-    consolidationEthAmountPerDayLimit: 0n,
-    exitedValidatorEthAmountLimit: 1n,
-    externalPendingBalanceCapEth: 0n,
-  };
-
-  beforeEach(async () => {
-    [deployer, withdrawalVault] = await ethers.getSigners();
+  const deployChecker = async (
+    limitsList: OracleReportLimits,
+  ): Promise<{
+    checker: OracleReportSanityChecker;
+    accountingSigner: HardhatEthersSigner;
+  }> => {
+    const [deployer, withdrawalVault] = await ethers.getSigners();
     await setBalance(withdrawalVault.address, ether("10000"));
 
     const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
-    accounting = await ethers.deployContract("Accounting__MockForSanityChecker", []);
-    accountingOracle = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
+    const accounting = (await ethers.deployContract(
+      "Accounting__MockForSanityChecker",
+      [],
+    )) as Accounting__MockForSanityChecker;
+    const accountingOracle = (await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
       deployer.address,
       12,
       1_606_824_023,
-    ]);
+    ])) as AccountingOracle__MockForSanityChecker;
     const stakingRouter = await ethers.deployContract("StakingRouter__MockForSanityChecker");
 
     const locator = await ethers.deployContract("LidoLocator__MockForSanityChecker", [
@@ -89,17 +66,24 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
       },
     ]);
 
-    checker = await ethers.deployContract("OracleReportSanityChecker", [
+    const checker = (await ethers.deployContract("OracleReportSanityChecker", [
       await locator.getAddress(),
       await accounting.getAddress(),
       deployer.address,
-      defaultLimitsList,
-    ]);
+      limitsList,
+    ])) as OracleReportSanityChecker;
 
-    accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
-  });
+    return {
+      checker,
+      accountingSigner: await impersonate(await accounting.getAddress(), ether("1")),
+    };
+  };
 
-  const callCheck = (report: OracleReportFixture) => {
+  const callCheck = (
+    checker: OracleReportSanityChecker,
+    accountingSigner: HardhatEthersSigner,
+    report: OracleReportFixture,
+  ) => {
     const { cl, movements, timeElapsed } = report;
 
     return checker
@@ -122,9 +106,11 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     describe(fixtureSet.title, () => {
       for (const testCase of fixtureSet.cases) {
         it(testCase.title, async () => {
+          const limits = { ...fixtureSet.limits, ...testCase.limits };
+          const { checker, accountingSigner } = await deployChecker(limits);
           const checkedReport = testCase.reports[testCase.reports.length - 1];
           const setupReports = testCase.reports.slice(0, -1);
-          const expected = calcExpectedWindowDiff(buildStoredReportsModel(testCase.reports));
+          const expected = calcExpectedWindowDiff(buildStoredReportsModel(testCase.reports), limits);
 
           if (testCase.expected.window !== undefined) {
             expect(expected.actualCLBalanceDiff, `${testCase.title}: actualCLBalanceDiff`).to.equal(
@@ -136,17 +122,22 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
           }
 
           for (const report of setupReports) {
-            await expect(callCheck(report), `${testCase.title}: setup report '${report.label}'`).not.to.be.reverted;
+            await expect(
+              callCheck(checker, accountingSigner, report),
+              `${testCase.title}: setup report '${report.label}'`,
+            ).not.to.be.reverted;
           }
 
           if (testCase.expected.outcome === "revert") {
-            await expect(callCheck(checkedReport))
+            await expect(callCheck(checker, accountingSigner, checkedReport))
               .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
               .withArgs(expected.actualCLBalanceDiff, expected.maxAllowedCLBalanceDiff);
-          } else {
-            await expect(callCheck(checkedReport))
+          } else if (testCase.expected.window !== undefined && testCase.expected.window.actualCLBalanceDiff > 0n) {
+            await expect(callCheck(checker, accountingSigner, checkedReport))
               .to.emit(checker, "NegativeCLRebaseAccepted")
               .withArgs(0n, expected.postCLBalance, expected.actualCLBalanceDiff, expected.maxAllowedCLBalanceDiff);
+          } else {
+            await expect(callCheck(checker, accountingSigner, checkedReport)).not.to.be.reverted;
           }
         });
       }

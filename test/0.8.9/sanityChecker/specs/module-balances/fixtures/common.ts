@@ -4,6 +4,24 @@ import { ModuleBalanceFixtureSet, moduleReport } from "../lib";
 
 export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
   title: "common",
+  limits: {
+    exitedEthAmountPerDayLimit: 100n,
+    appearedEthAmountPerDayLimit: 100n,
+    annualBalanceIncreaseBPLimit: 1_000n,
+    simulatedShareRateDeviationBPLimit: 250n,
+    maxBalanceExitRequestedPerReportInEth: 65_000n,
+    maxEffectiveBalanceWeightWCType01: 32n,
+    maxEffectiveBalanceWeightWCType02: 2_048n,
+    maxItemsPerExtraDataTransaction: 15n,
+    maxNodeOperatorsPerExtraDataItem: 16n,
+    requestTimestampMargin: 128n,
+    maxPositiveTokenRebase: 5_000_000n,
+    maxCLBalanceDecreaseBP: 360n,
+    clBalanceOraclesErrorUpperBPLimit: 50n,
+    consolidationEthAmountPerDayLimit: 10n,
+    exitedValidatorEthAmountLimit: 1n,
+    externalPendingBalanceCapEth: 0n,
+  },
   cases: [
     {
       title: "accepts a first report for a module without previous accounting",

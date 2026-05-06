@@ -9,31 +9,32 @@ const ONE_GWEI = 10n ** 9n;
 
 export const toGwei = (value: bigint) => value / ONE_GWEI;
 
-export type ModuleBalanceLimits = {
+export type OracleReportLimits = {
+  exitedEthAmountPerDayLimit: bigint;
   appearedEthAmountPerDayLimit: bigint;
   annualBalanceIncreaseBPLimit: bigint;
+  simulatedShareRateDeviationBPLimit: bigint;
+  maxBalanceExitRequestedPerReportInEth: bigint;
+  maxEffectiveBalanceWeightWCType01: bigint;
+  maxEffectiveBalanceWeightWCType02: bigint;
+  maxItemsPerExtraDataTransaction: bigint;
+  maxNodeOperatorsPerExtraDataItem: bigint;
+  requestTimestampMargin: bigint;
+  maxPositiveTokenRebase: bigint;
+  maxCLBalanceDecreaseBP: bigint;
+  clBalanceOraclesErrorUpperBPLimit: bigint;
   consolidationEthAmountPerDayLimit: bigint;
+  exitedValidatorEthAmountLimit: bigint;
   externalPendingBalanceCapEth: bigint;
 };
 
-export const defaultOracleReportLimits = {
-  exitedEthAmountPerDayLimit: 100n,
-  appearedEthAmountPerDayLimit: 100n,
-  annualBalanceIncreaseBPLimit: 1_000n,
-  simulatedShareRateDeviationBPLimit: 250n,
-  maxBalanceExitRequestedPerReportInEth: 65_000n,
-  maxEffectiveBalanceWeightWCType01: 32n,
-  maxEffectiveBalanceWeightWCType02: 2_048n,
-  maxItemsPerExtraDataTransaction: 15n,
-  maxNodeOperatorsPerExtraDataItem: 16n,
-  requestTimestampMargin: 128n,
-  maxPositiveTokenRebase: 5_000_000n,
-  maxCLBalanceDecreaseBP: 360n,
-  clBalanceOraclesErrorUpperBPLimit: 50n,
-  consolidationEthAmountPerDayLimit: 10n,
-  exitedValidatorEthAmountLimit: 1n,
-  externalPendingBalanceCapEth: 0n,
-};
+export type ModuleBalanceLimits = Pick<
+  OracleReportLimits,
+  | "appearedEthAmountPerDayLimit"
+  | "annualBalanceIncreaseBPLimit"
+  | "consolidationEthAmountPerDayLimit"
+  | "externalPendingBalanceCapEth"
+>;
 
 export type ModuleBalance = {
   moduleId: bigint;
@@ -64,7 +65,7 @@ export type ModuleBalanceFormula = {
 export type ModuleBalanceCase = {
   title: string;
   rationale: string;
-  limits?: Partial<ModuleBalanceLimits>;
+  limits?: Partial<OracleReportLimits>;
   report: ModuleBalanceReport;
   expected: {
     outcome:
@@ -79,6 +80,7 @@ export type ModuleBalanceCase = {
 
 export type ModuleBalanceFixtureSet = {
   title: string;
+  limits: OracleReportLimits;
   cases: ModuleBalanceCase[];
 };
 

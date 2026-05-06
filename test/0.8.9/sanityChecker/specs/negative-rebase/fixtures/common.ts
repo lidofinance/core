@@ -4,6 +4,24 @@ import { NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib";
 
 export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
   title: "common",
+  limits: {
+    exitedEthAmountPerDayLimit: 50n,
+    appearedEthAmountPerDayLimit: 75n,
+    annualBalanceIncreaseBPLimit: 10_00n,
+    simulatedShareRateDeviationBPLimit: 2_00n,
+    maxBalanceExitRequestedPerReportInEth: 64_000n,
+    maxEffectiveBalanceWeightWCType01: 32n,
+    maxEffectiveBalanceWeightWCType02: 2_048n,
+    maxItemsPerExtraDataTransaction: 15n,
+    maxNodeOperatorsPerExtraDataItem: 16n,
+    requestTimestampMargin: 128n,
+    maxPositiveTokenRebase: 5_000_000n,
+    maxCLBalanceDecreaseBP: 360n,
+    clBalanceOraclesErrorUpperBPLimit: 50n,
+    consolidationEthAmountPerDayLimit: 0n,
+    exitedValidatorEthAmountLimit: 1n,
+    externalPendingBalanceCapEth: 0n,
+  },
   cases: [
     {
       title: "reverts when deposits hide a negative rebase in raw CL balance snapshots",

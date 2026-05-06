@@ -8,10 +8,10 @@ import {
 } from "typechain-types";
 
 import { clIncreaseFixtureSets } from "./fixtures/index";
-import { calcClIncreaseFormula, ClIncreaseCase, defaultOracleReportLimits } from "./lib";
+import { calcClIncreaseFormula, ClIncreaseCase, OracleReportLimits } from "./lib";
 
 describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
-  const deployChecker = async (testCase: ClIncreaseCase): Promise<OracleReportSanityChecker> => {
+  const deployChecker = async (limitsList: OracleReportLimits): Promise<OracleReportSanityChecker> => {
     const [deployer] = await ethers.getSigners();
     const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
     const accounting = (await ethers.deployContract(
@@ -58,7 +58,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
       await locator.getAddress(),
       await accounting.getAddress(),
       deployer.address,
-      { ...defaultOracleReportLimits, ...testCase.limits },
+      limitsList,
     ]);
   };
 
@@ -75,8 +75,8 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     describe(fixtureSet.title, () => {
       for (const testCase of fixtureSet.cases) {
         it(testCase.title, async () => {
-          const checker = await deployChecker(testCase);
-          const limits = { ...defaultOracleReportLimits, ...testCase.limits };
+          const limits = { ...fixtureSet.limits, ...testCase.limits };
+          const checker = await deployChecker(limits);
           const formula = calcClIncreaseFormula(testCase.report, limits);
           const call = checker.checkCLPendingBalanceIncrease(
             testCase.report.timeElapsed,

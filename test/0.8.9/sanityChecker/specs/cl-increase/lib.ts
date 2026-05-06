@@ -5,30 +5,29 @@ export const HOUR = 3_600n;
 export const MAX_BASIS_POINTS = 10_000n;
 export const ANNUAL_BALANCE_INCREASE_DENOMINATOR = 365n * DAY * MAX_BASIS_POINTS;
 
-export type ClIncreaseLimits = {
+export type OracleReportLimits = {
+  exitedEthAmountPerDayLimit: bigint;
   appearedEthAmountPerDayLimit: bigint;
   annualBalanceIncreaseBPLimit: bigint;
+  simulatedShareRateDeviationBPLimit: bigint;
+  maxBalanceExitRequestedPerReportInEth: bigint;
+  maxEffectiveBalanceWeightWCType01: bigint;
+  maxEffectiveBalanceWeightWCType02: bigint;
+  maxItemsPerExtraDataTransaction: bigint;
+  maxNodeOperatorsPerExtraDataItem: bigint;
+  requestTimestampMargin: bigint;
+  maxPositiveTokenRebase: bigint;
+  maxCLBalanceDecreaseBP: bigint;
+  clBalanceOraclesErrorUpperBPLimit: bigint;
+  consolidationEthAmountPerDayLimit: bigint;
+  exitedValidatorEthAmountLimit: bigint;
   externalPendingBalanceCapEth: bigint;
 };
 
-export const defaultOracleReportLimits = {
-  exitedEthAmountPerDayLimit: 55n,
-  appearedEthAmountPerDayLimit: 100n,
-  annualBalanceIncreaseBPLimit: 1_000n,
-  simulatedShareRateDeviationBPLimit: 250n,
-  maxBalanceExitRequestedPerReportInEth: 65_000n,
-  maxEffectiveBalanceWeightWCType01: 32n,
-  maxEffectiveBalanceWeightWCType02: 2_048n,
-  maxItemsPerExtraDataTransaction: 15n,
-  maxNodeOperatorsPerExtraDataItem: 16n,
-  requestTimestampMargin: 128n,
-  maxPositiveTokenRebase: 5_000_000n,
-  maxCLBalanceDecreaseBP: 360n,
-  clBalanceOraclesErrorUpperBPLimit: 50n,
-  consolidationEthAmountPerDayLimit: 10n,
-  exitedValidatorEthAmountLimit: 1n,
-  externalPendingBalanceCapEth: 0n,
-};
+export type ClIncreaseLimits = Pick<
+  OracleReportLimits,
+  "appearedEthAmountPerDayLimit" | "annualBalanceIncreaseBPLimit" | "externalPendingBalanceCapEth"
+>;
 
 export type ClIncreaseReport = {
   timeElapsed: bigint;
@@ -51,7 +50,7 @@ export type ClIncreaseFormula = {
 export type ClIncreaseCase = {
   title: string;
   rationale: string;
-  limits?: Partial<ClIncreaseLimits>;
+  limits?: Partial<OracleReportLimits>;
   report: ClIncreaseReport;
   expected: {
     outcome:
@@ -65,6 +64,7 @@ export type ClIncreaseCase = {
 
 export type ClIncreaseFixtureSet = {
   title: string;
+  limits: OracleReportLimits;
   cases: ClIncreaseCase[];
 };
 

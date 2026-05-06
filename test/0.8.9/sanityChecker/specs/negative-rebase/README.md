@@ -46,6 +46,35 @@ The runner translates `movements.clWithdrawals` into the ABI inputs used by `che
 
 ## Case Shape
 
+Each fixture set has the full limits object exactly once:
+
+```ts
+{
+  title: "hoodi",
+  limits: {
+    exitedEthAmountPerDayLimit: 57_600n,
+    appearedEthAmountPerDayLimit: 57_600n,
+    annualBalanceIncreaseBPLimit: 1_000n,
+    simulatedShareRateDeviationBPLimit: 50n,
+    maxBalanceExitRequestedPerReportInEth: 19_200n,
+    maxEffectiveBalanceWeightWCType01: 32n,
+    maxEffectiveBalanceWeightWCType02: 2_048n,
+    maxItemsPerExtraDataTransaction: 8n,
+    maxNodeOperatorsPerExtraDataItem: 24n,
+    requestTimestampMargin: 128n,
+    maxPositiveTokenRebase: 750_000n,
+    maxCLBalanceDecreaseBP: 360n,
+    clBalanceOraclesErrorUpperBPLimit: 50n,
+    consolidationEthAmountPerDayLimit: 93_375n,
+    exitedValidatorEthAmountLimit: 32n,
+    externalPendingBalanceCapEth: 300n,
+  },
+  cases: [],
+}
+```
+
+Use case `limits` only when a scenario explicitly overrides the fixture set limits.
+
 Each case has:
 
 ```ts

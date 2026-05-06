@@ -23,9 +23,29 @@ export type ExpectedWindowDiff = {
   maxAllowedCLBalanceDiff: bigint;
 };
 
+export type OracleReportLimits = {
+  exitedEthAmountPerDayLimit: bigint;
+  appearedEthAmountPerDayLimit: bigint;
+  annualBalanceIncreaseBPLimit: bigint;
+  simulatedShareRateDeviationBPLimit: bigint;
+  maxBalanceExitRequestedPerReportInEth: bigint;
+  maxEffectiveBalanceWeightWCType01: bigint;
+  maxEffectiveBalanceWeightWCType02: bigint;
+  maxItemsPerExtraDataTransaction: bigint;
+  maxNodeOperatorsPerExtraDataItem: bigint;
+  requestTimestampMargin: bigint;
+  maxPositiveTokenRebase: bigint;
+  maxCLBalanceDecreaseBP: bigint;
+  clBalanceOraclesErrorUpperBPLimit: bigint;
+  consolidationEthAmountPerDayLimit: bigint;
+  exitedValidatorEthAmountLimit: bigint;
+  externalPendingBalanceCapEth: bigint;
+};
+
 export type NegativeRebaseFormulaCase = {
   title: string;
   rationale: string;
+  limits?: Partial<OracleReportLimits>;
   reports: OracleReportFixture[];
   expected: {
     outcome: "revert" | "accepted";
@@ -35,6 +55,7 @@ export type NegativeRebaseFormulaCase = {
 
 export type NegativeRebaseFormulaFixtureSet = {
   title: string;
+  limits: OracleReportLimits;
   cases: NegativeRebaseFormulaCase[];
 };
 
@@ -83,8 +104,8 @@ export const repeatReports = (
   makeReport: (index: number) => OracleReportFixture,
 ): OracleReportFixture[] => Array.from({ length: count }, (_, index) => makeReport(index));
 
-export const maxDiffFor = (recreatedPostCLBalance: bigint) =>
-  (recreatedPostCLBalance * MAX_CL_BALANCE_DECREASE_BP) / MAX_BASIS_POINTS;
+export const maxDiffFor = (recreatedPostCLBalance: bigint, limits: OracleReportLimits) =>
+  (recreatedPostCLBalance * limits.maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
 
 export const buildStoredReportsModel = (reports: OracleReportFixture[]) => {
   let timestamp = 0n;
@@ -101,7 +122,7 @@ export const buildStoredReportsModel = (reports: OracleReportFixture[]) => {
   });
 };
 
-export const calcExpectedWindowDiff = (storedReports: StoredReportModel[]) => {
+export const calcExpectedWindowDiff = (storedReports: StoredReportModel[], limits: OracleReportLimits) => {
   const lastIndex = storedReports.length - 1;
   const lastTimestamp = storedReports[lastIndex].timestamp;
   const windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0n;
@@ -128,6 +149,6 @@ export const calcExpectedWindowDiff = (storedReports: StoredReportModel[]) => {
   return {
     postCLBalance: currentPostCLBalance,
     actualCLBalanceDiff,
-    maxAllowedCLBalanceDiff: maxDiffFor(recreatedPostCLBalance),
+    maxAllowedCLBalanceDiff: maxDiffFor(recreatedPostCLBalance, limits),
   };
 };

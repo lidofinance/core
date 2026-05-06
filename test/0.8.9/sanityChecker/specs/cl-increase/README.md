@@ -37,6 +37,8 @@ CL withdrawals reduce the validator baseline before reported validator growth is
 The runner imports `fixtures/index.ts` and runs every fixture set exported there. Add network-specific data as separate
 files, for example `fixtures/hoodi.ts` or `fixtures/mainnet.ts`.
 
+Each fixture set defines the full `OracleReportSanityChecker` limits object once. Cases do not override limits.
+
 ## Run
 
 ```bash

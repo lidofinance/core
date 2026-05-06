@@ -11,16 +11,16 @@ import {
 import { moduleBalanceFixtureSets } from "./fixtures/index";
 import {
   calcModuleBalanceFormula,
-  defaultOracleReportLimits,
   getPostCLValidatorsBalance,
   getPreCLValidatorsBalance,
   ModuleBalanceCase,
+  OracleReportLimits,
   toGwei,
 } from "./lib";
 
 describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
   const deployChecker = async (
-    testCase: ModuleBalanceCase,
+    limitsList: OracleReportLimits,
   ): Promise<{
     checker: OracleReportSanityCheckerWrapper;
     stakingRouter: StakingRouter__MockForAccountingOracle;
@@ -73,7 +73,7 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
       await locator.getAddress(),
       await accounting.getAddress(),
       deployer.address,
-      { ...defaultOracleReportLimits, ...testCase.limits },
+      limitsList,
       true,
     ])) as OracleReportSanityCheckerWrapper;
 
@@ -109,10 +109,10 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
     describe(fixtureSet.title, () => {
       for (const testCase of fixtureSet.cases) {
         it(testCase.title, async () => {
-          const { checker, stakingRouter } = await deployChecker(testCase);
+          const limits = { ...fixtureSet.limits, ...testCase.limits };
+          const { checker, stakingRouter } = await deployChecker(limits);
           await seedPreviousBalances(stakingRouter, testCase);
 
-          const limits = { ...defaultOracleReportLimits, ...testCase.limits };
           const formula = calcModuleBalanceFormula(testCase.report, limits);
           const call = checker.checkModuleAndCLBalancesChangeRates(
             testCase.report.modules.map((module) => module.moduleId),
