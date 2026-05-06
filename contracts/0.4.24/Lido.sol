@@ -137,7 +137,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION =
         0x8d3ed945c7718edcdb639b1235f2bbe3fa81f4a6cec7a436d8ea13fbc502d957;
 
-    /// @dev CL validators balance and deposited balance since last report
+    /// @dev CL validators balance and CL pending deposit balance
     /// |----- 128 bit ------------|------ 128 bit -------|
     /// | CL validators balance    |  CL pending balance  |
     /// keccak256("lido.Lido.clValidatorsBalanceAndClPendingBalance");
