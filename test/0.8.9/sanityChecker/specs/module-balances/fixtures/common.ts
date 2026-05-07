@@ -1,6 +1,7 @@
 import { ether } from "lib";
 
-import { ModuleBalanceFixtureSet, moduleReport } from "../lib";
+import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib";
+import { migrate, ModuleBalanceFixtureSet, moduleReport } from "../lib";
 
 export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
   title: "common",
@@ -139,6 +140,12 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
       title: "reverts when module-positive deltas exceed activation plus consolidation corridor",
       rationale: "A matching decrease in another module keeps total CL flat, so only the module corridor can fail.",
       steps: [
+        migrate({
+          label: "module migration baseline",
+          clValidators: 114n,
+          transientDeposits: 0n,
+          withdrawalVaultBalance: 0n,
+        }),
         moduleReport({
           label: "first post-migration module report",
           postCLPendingBalance: 0n,
@@ -190,7 +197,7 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
       steps: [
         moduleReport({
           label: "activation above appeared limit",
-          preCLPendingBalance: ether("101"),
+          preCLPendingBalance: ether("100") + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n,
           postCLPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
@@ -206,7 +213,7 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
       expected: {
         outcome: "IncorrectTotalActivatedBalance",
         formula: {
-          activatedBalance: ether("101"),
+          activatedBalance: ether("100") + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n,
           appearedBalanceLimit: ether("100"),
         },
       },

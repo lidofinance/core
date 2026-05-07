@@ -21,6 +21,7 @@ import {
   calcModuleBalanceFormula,
   getPostCLValidatorsBalance,
   getPreCLValidatorsBalance,
+  ModuleAccountingState,
   ModuleBalanceCase,
   ModuleBalanceReport,
   ModuleBalanceStepFixture,
@@ -105,12 +106,21 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
   const seedPreviousBalances = async (
     stakingRouter: StakingRouter__MockForAccountingOracle,
     report: ModuleBalanceReport,
+    state: ScenarioState,
+    title: string,
   ) => {
-    const seededModules = report.modules.filter((module) => module.hasPreviousAccounting !== false);
-    if (seededModules.length === 0) return;
+    const moduleIds = report.modules.map((module) => module.moduleId);
+    const validatorBalancesGwei = report.modules.map((module) => {
+      const hasPreviousAccounting = getFixtureHasPreviousAccounting(module, title);
+      const validatorsBalance = hasPreviousAccounting ? module.previousValidatorsBalance : 0n;
 
-    const moduleIds = seededModules.map((module) => module.moduleId);
-    const validatorBalancesGwei = seededModules.map((module) => toGwei(module.previousValidatorsBalance));
+      state.moduleAccounting.set(module.moduleId, {
+        validatorsBalance: toGwei(validatorsBalance) * 10n ** 9n,
+        hasPreviousAccounting,
+      });
+
+      return toGwei(validatorsBalance);
+    });
 
     for (const moduleId of moduleIds) {
       await stakingRouter.mock__registerStakingModule(moduleId);
@@ -120,6 +130,45 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
 
   type ScenarioState = {
     lastVaultBalanceAfterTransfer: bigint;
+    postMigrationFirstReportDone: boolean;
+    moduleAccounting: Map<bigint, ModuleAccountingState>;
+  };
+
+  const getFixtureHasPreviousAccounting = (module: ModuleBalanceReport["modules"][number], title: string): boolean => {
+    if (module.hasPreviousAccounting === false) {
+      expect(module.previousValidatorsBalance, `${title}: module ${module.moduleId} previous balance`).to.equal(0n);
+      return false;
+    }
+
+    expect(module.previousValidatorsBalance, `${title}: module ${module.moduleId} previous balance`).not.to.equal(0n);
+    return true;
+  };
+
+  const expectReportMatchesModuleAccountingState = (
+    state: ScenarioState,
+    report: ModuleBalanceReport,
+    title: string,
+  ) => {
+    for (const module of report.modules) {
+      const previousAccounting = state.moduleAccounting.get(module.moduleId);
+      if (previousAccounting === undefined) {
+        expect(module.hasPreviousAccounting, `${title}: new module ${module.moduleId} previous accounting`).to.equal(
+          false,
+        );
+        expect(module.previousValidatorsBalance, `${title}: new module ${module.moduleId} previous balance`).to.equal(
+          0n,
+        );
+        continue;
+      }
+
+      const fixtureHasPreviousAccounting = module.hasPreviousAccounting !== false;
+      expect(fixtureHasPreviousAccounting, `${title}: module ${module.moduleId} previous accounting`).to.equal(
+        previousAccounting.hasPreviousAccounting,
+      );
+      expect(module.previousValidatorsBalance, `${title}: module ${module.moduleId} previous balance`).to.equal(
+        previousAccounting.validatorsBalance,
+      );
+    }
   };
 
   const runMigrationStep = async (
@@ -135,6 +184,7 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
 
     await expect(checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
     state.lastVaultBalanceAfterTransfer = step.withdrawalVaultBalance;
+    state.postMigrationFirstReportDone = false;
   };
 
   const callAccountingReport = (
@@ -176,17 +226,24 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
 
   const recordAcceptedModuleBalances = async (
     stakingRouter: StakingRouter__MockForAccountingOracle,
+    state: ScenarioState,
     report: ModuleBalanceReport,
   ) => {
     const moduleIds = report.modules.map((module) => module.moduleId);
+    const validatorBalancesGwei = report.modules.map((module) => toGwei(module.postValidatorsBalance));
 
     for (const moduleId of moduleIds) {
       await stakingRouter.mock__registerStakingModule(moduleId);
     }
-    await stakingRouter.reportValidatorBalancesByStakingModule(
-      moduleIds,
-      report.modules.map((module) => toGwei(module.postValidatorsBalance)),
-    );
+    await stakingRouter.reportValidatorBalancesByStakingModule(moduleIds, validatorBalancesGwei);
+
+    for (const [index, module] of report.modules.entries()) {
+      const validatorsBalance = validatorBalancesGwei[index] * 10n ** 9n;
+      state.moduleAccounting.set(module.moduleId, {
+        validatorsBalance,
+        hasPreviousAccounting: validatorsBalance !== 0n,
+      });
+    }
   };
 
   const runAcceptedReportStep = async (
@@ -198,6 +255,9 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
     report: ModuleBalanceReport,
     title: string,
   ) => {
+    if (state.postMigrationFirstReportDone) {
+      expectReportMatchesModuleAccountingState(state, report, title);
+    }
     await expect(callModuleReport(checker, report), `${title}: module report '${report.label}'`).not.to.be.reverted;
 
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
@@ -209,7 +269,8 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
 
     state.lastVaultBalanceAfterTransfer =
       withdrawalVaultBalance - (report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals);
-    await recordAcceptedModuleBalances(stakingRouter, report);
+    state.postMigrationFirstReportDone = true;
+    await recordAcceptedModuleBalances(stakingRouter, state, report);
   };
 
   const expectFormulaFields = (testCase: ModuleBalanceCase, formula: ReturnType<typeof calcModuleBalanceFormula>) => {
@@ -227,7 +288,7 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
         it(testCase.title, async () => {
           const limits = { ...fixtureSet.limits, ...testCase.limits };
           const reportSteps = testCase.steps.filter((step): step is ModuleBalanceReport => step.kind === "report");
-          const startsAfterFirstReport = reportSteps.length === 1;
+          const startsAfterFirstReport = !testCase.steps.some((step) => step.kind === "migration");
           const { checker, stakingRouter, accountingSigner, lido, withdrawalVaultAddress } = await deployChecker(
             limits,
             startsAfterFirstReport,
@@ -235,10 +296,14 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
           const checkedStep = testCase.steps[testCase.steps.length - 1];
           expect(checkedStep.kind, `${testCase.title}: checked step`).to.equal("report");
           const checkedReport = checkedStep as ModuleBalanceReport;
-          const state: ScenarioState = { lastVaultBalanceAfterTransfer: 0n };
+          const state: ScenarioState = {
+            lastVaultBalanceAfterTransfer: 0n,
+            postMigrationFirstReportDone: startsAfterFirstReport,
+            moduleAccounting: new Map(),
+          };
 
-          if (reportSteps.length > 0) {
-            await seedPreviousBalances(stakingRouter, reportSteps[0]);
+          if (state.postMigrationFirstReportDone && reportSteps.length > 0) {
+            await seedPreviousBalances(stakingRouter, reportSteps[0], state, testCase.title);
           }
 
           for (const step of testCase.steps.slice(0, -1)) {
@@ -257,7 +322,10 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
             }
           }
 
-          const formula = calcModuleBalanceFormula(checkedReport, limits);
+          if (state.postMigrationFirstReportDone) {
+            expectReportMatchesModuleAccountingState(state, checkedReport, testCase.title);
+          }
+          const formula = calcModuleBalanceFormula(checkedReport, limits, state.moduleAccounting);
           const call = () => callModuleReport(checker, checkedReport);
 
           expectFormulaFields(testCase, formula);

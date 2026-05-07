@@ -24,6 +24,7 @@ import { Snapshot } from "test/suite";
 const OVER_UINT16 = 1n << 16n;
 const OVER_UINT32 = 1n << 32n;
 const OVER_UINT64 = 1n << 64n;
+const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");
 
 describe("OracleReportSanityChecker.sol", () => {
   let checker: OracleReportSanityChecker;
@@ -964,36 +965,6 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(checker.checkExitBusOracleReport(limit - 1n)).not.to.be.reverted;
     });
 
-    it("checkExitedEthAmountPerDay uses timeElapsed (seconds)", async () => {
-      const limits = await checker.getOracleReportLimits();
-      const limitWithConsolidationInWei =
-        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
-      const oneDay = 24n * 60n * 60n;
-      const exitedValidatorEthAmountLimit = limits.exitedValidatorEthAmountLimit;
-      const exitedValidatorEthAmountLimitInWei = exitedValidatorEthAmountLimit * ether("1");
-
-      await expect(checker.checkExitedEthAmountPerDay(0n, oneDay)).not.to.be.reverted;
-
-      const exitedValidatorsCountForDailyExceededRevert =
-        limitWithConsolidationInWei / exitedValidatorEthAmountLimitInWei + 1n;
-      const exitedPerDayForDailyExceededRevert =
-        exitedValidatorsCountForDailyExceededRevert * exitedValidatorEthAmountLimitInWei;
-
-      await expect(checker.checkExitedEthAmountPerDay(exitedValidatorsCountForDailyExceededRevert, oneDay))
-        .to.be.revertedWithCustomError(checker, "ExitedEthAmountPerDayLimitExceeded")
-        .withArgs(limitWithConsolidationInWei, exitedPerDayForDailyExceededRevert);
-
-      const exitedPerDayForOneValidatorAndZeroTime = exitedValidatorEthAmountLimitInWei * 86_400n;
-      const exitedValidatorsCountForGuaranteedRevert =
-        limitWithConsolidationInWei / exitedPerDayForOneValidatorAndZeroTime + 1n;
-      const exitedPerDayForGuaranteedRevert =
-        exitedValidatorsCountForGuaranteedRevert * exitedPerDayForOneValidatorAndZeroTime;
-
-      await expect(checker.checkExitedEthAmountPerDay(exitedValidatorsCountForGuaranteedRevert, 0n))
-        .to.be.revertedWithCustomError(checker, "ExitedEthAmountPerDayLimitExceeded")
-        .withArgs(limitWithConsolidationInWei, exitedPerDayForGuaranteedRevert);
-    });
-
     it("checkAppearedEthAmountPerDay includes consolidation limit", async () => {
       const limits = await checker.getOracleReportLimits();
       const limitWithConsolidationInWei =
@@ -1014,6 +985,22 @@ describe("OracleReportSanityChecker.sol", () => {
         (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
 
       await expect(checker.checkAppearedEthAmountPerDay(limitWithConsolidationInWei)).not.to.be.reverted;
+    });
+
+    it("checkExitedEthAmountPerDay uses timeElapsed (seconds)", async () => {
+      const halfDay = 12n * 60n * 60n;
+      const limits = await checker.getOracleReportLimits();
+      const exitedEthAmountPerDayLimit = limits.exitedEthAmountPerDayLimit * ether("1");
+      const allowedExitedValidatorsCount = limits.exitedEthAmountPerDayLimit / 2n;
+      const exceededExitedValidatorsCount = allowedExitedValidatorsCount + 1n;
+      const exceededExitedEthAmountPerDay =
+        exceededExitedValidatorsCount * limits.exitedValidatorEthAmountLimit * ether("1") * 2n;
+
+      await expect(checker.checkExitedEthAmountPerDay(allowedExitedValidatorsCount, halfDay)).not.to.be.reverted;
+
+      await expect(checker.checkExitedEthAmountPerDay(exceededExitedValidatorsCount, halfDay))
+        .to.be.revertedWithCustomError(checker, "ExitedEthAmountPerDayLimitExceeded")
+        .withArgs(exitedEthAmountPerDayLimit, exceededExitedEthAmountPerDay);
     });
 
     it("checkNodeOperatorsPerExtraDataItemCount", async () => {
@@ -1058,12 +1045,12 @@ describe("OracleReportSanityChecker.sol", () => {
       const oneDay = 24n * 60n * 60n;
       const noDeposits = 0n;
       const unexpectedPendingWei = 1n;
-      const coldStartDepositsWei = ether("200");
       const largeColdStartDepositsWei = ether("1000000");
       const firstDayAppearedLimitWei = defaultLimits.appearedEthAmountPerDayLimit * ether("1");
+      const coldStartDepositsWei = firstDayAppearedLimitWei + MAX_VALIDATOR_EFFECTIVE_BALANCE + ether("10");
       const pendingAfterExactFirstDayActivationWei = coldStartDepositsWei - firstDayAppearedLimitWei;
-      const validatorsBeyondFirstDayLimitWei = firstDayAppearedLimitWei + 1n;
-      const pendingAfterExceededFirstDayActivationWei = pendingAfterExactFirstDayActivationWei - 1n;
+      const validatorsBeyondFirstDayLimitWei = firstDayAppearedLimitWei + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n;
+      const pendingAfterExceededFirstDayActivationWei = coldStartDepositsWei - validatorsBeyondFirstDayLimitWei;
 
       it("allows a zero-balance first report without deposits", async () => {
         await expect(checker.checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, 0n, 0n, noDeposits)).not.to.be.reverted;
@@ -1133,7 +1120,7 @@ describe("OracleReportSanityChecker.sol", () => {
           ),
         )
           .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
-          .withArgs(firstDayAppearedLimitWei, firstDayAppearedLimitWei + 1n);
+          .withArgs(firstDayAppearedLimitWei, validatorsBeyondFirstDayLimitWei);
       });
     });
 

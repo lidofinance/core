@@ -1,5 +1,6 @@
 import { ether } from "lib";
 
+import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib";
 import { ClIncreaseFixtureSet, report } from "../lib";
 
 export const commonClIncreaseFixtureSet: ClIncreaseFixtureSet = {
@@ -100,7 +101,7 @@ export const commonClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         report({
           label: "activation above appeared limit",
-          prePendingBalance: ether("101"),
+          prePendingBalance: ether("100") + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n,
           postValidatorsBalance: 0n,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -110,7 +111,7 @@ export const commonClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       expected: {
         outcome: "IncorrectTotalActivatedBalance",
         formula: {
-          activatedBalance: ether("101"),
+          activatedBalance: ether("100") + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n,
           appearedBalanceLimit: ether("100"),
         },
       },

@@ -1,5 +1,6 @@
 import { ether } from "lib";
 
+import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib";
 import { ClIncreaseFixtureSet, migrate, report } from "../lib";
 
 const mainnetCLValidators = 281_250n;
@@ -7,6 +8,8 @@ const mainnetCLValidatorsBalance = mainnetCLValidators * ether("32");
 const oneValidatorTransientDeposits = ether("32");
 const appearedLimitTransientDeposits = ether("57600");
 const aboveAppearedLimitTransientDeposits = ether("57632");
+const aboveActivationBoundaryTransientDeposits =
+  appearedLimitTransientDeposits + MAX_VALIDATOR_EFFECTIVE_BALANCE + oneValidatorTransientDeposits;
 const partiallyActivatedDeposits = ether("19200");
 const migrationVaultBalanceAboveDailyAprCap = ether("3000");
 
@@ -305,28 +308,29 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       },
     },
     {
-      title: "reverts above appeared-limit activation when migrated transient deposits exceed the limit",
-      rationale: "Activating one wei above 57,600 ETH fails before the APR cap matters.",
+      title: "reverts above appeared-limit activation boundary when migrated transient deposits exceed the limit",
+      rationale: "Activating one wei above 57,600 ETH plus one max validator fails before the APR cap matters.",
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with above-limit transient deposits",
           clValidators: mainnetCLValidators,
-          transientDeposits: aboveAppearedLimitTransientDeposits,
+          transientDeposits: aboveActivationBoundaryTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
-          label: "first report activates one wei above the appeared limit",
+          label: "first report activates one wei above the appeared limit plus boundary allowance",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          postValidatorsBalance: mainnetCLValidatorsBalance + appearedLimitTransientDeposits + 1n,
+          postValidatorsBalance:
+            mainnetCLValidatorsBalance + appearedLimitTransientDeposits + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n,
           postPendingBalance: oneValidatorTransientDeposits - 1n,
-          deposits: aboveAppearedLimitTransientDeposits,
+          deposits: aboveActivationBoundaryTransientDeposits,
           clWithdrawals: 0n,
         }),
       ],
       expected: {
         outcome: "IncorrectTotalActivatedBalance",
         formula: {
-          activatedBalance: appearedLimitTransientDeposits + 1n,
+          activatedBalance: appearedLimitTransientDeposits + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n,
           appearedBalanceLimit: appearedLimitTransientDeposits,
         },
       },

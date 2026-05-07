@@ -44,6 +44,11 @@ export type ModuleBalanceFormula = {
   moduleValidatorsGrowthLimit: bigint;
 };
 
+export type ModuleAccountingState = {
+  validatorsBalance: bigint;
+  hasPreviousAccounting: boolean;
+};
+
 export type ModuleBalanceCase = {
   title: string;
   rationale: string;
@@ -112,6 +117,7 @@ export const getPostCLValidatorsBalance = (report: ModuleBalanceReport) => repor
 export const calcModuleBalanceFormula = (
   report: ModuleBalanceReport,
   limits: ModuleBalanceLimits,
+  moduleAccounting = new Map<bigint, ModuleAccountingState>(),
 ): ModuleBalanceFormula => {
   const effectiveTimeElapsed = report.timeElapsed === 0n ? HOUR : report.timeElapsed;
   const preCLValidatorsBalance = getPreCLValidatorsBalance(report);
@@ -128,9 +134,14 @@ export const calcModuleBalanceFormula = (
   const validatorsBalanceIncrease =
     postCLValidatorsBalance > preCLValidatorsBalance ? postCLValidatorsBalance - preCLValidatorsBalance : 0n;
   const totalPositiveModuleDelta = report.modules.reduce((sum, module) => {
-    if (module.hasPreviousAccounting === false) return sum;
-    if (module.postValidatorsBalance <= module.previousValidatorsBalance) return sum;
-    return sum + module.postValidatorsBalance - module.previousValidatorsBalance;
+    const previousAccounting = moduleAccounting.get(module.moduleId) ?? {
+      validatorsBalance: module.previousValidatorsBalance,
+      hasPreviousAccounting: module.hasPreviousAccounting !== false,
+    };
+
+    if (!previousAccounting.hasPreviousAccounting) return sum;
+    if (module.postValidatorsBalance <= previousAccounting.validatorsBalance) return sum;
+    return sum + module.postValidatorsBalance - previousAccounting.validatorsBalance;
   }, 0n);
   const consolidationLimit = (ether(limits.consolidationEthAmountPerDayLimit.toString()) * effectiveTimeElapsed) / DAY;
 

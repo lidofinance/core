@@ -218,6 +218,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
     uint256 private constant ANNUAL_BALANCE_INCREASE_DENOMINATOR = 365 days * MAX_BASIS_POINTS;
+    /// @dev Max effective balance of a single validator, used as a boundary allowance for CL activation churn.
+    uint256 private constant MAX_VALIDATOR_EFFECTIVE_BALANCE = 2_048 ether;
     /// @dev Maximum withdrawals ether used for migration bootstrap, bounded by CL churn limit per report window
     uint256 private constant MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT = 57_600 ether;
     /// @dev Time window for the CL balance decrease check
@@ -954,7 +956,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether,
             result.effectiveTimeElapsed
         );
-        if (activatedBalance > appearedEthLimitPerPeriod) {
+        if (activatedBalance > appearedEthLimitPerPeriod + MAX_VALIDATOR_EFFECTIVE_BALANCE) {
             revert IncorrectTotalActivatedBalance(appearedEthLimitPerPeriod, activatedBalance);
         }
 

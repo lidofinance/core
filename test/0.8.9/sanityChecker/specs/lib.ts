@@ -18,6 +18,7 @@ import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/
 
 export const DAY = 86_400n;
 export const DEPOSIT_SIZE = ether("32");
+export const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");
 export const FINALIZE_UPGRADE_V4_MIGRATION_REF_SLOT = 1n;
 export const FIRST_POST_MIGRATION_REF_SLOT = FINALIZE_UPGRADE_V4_MIGRATION_REF_SLOT + 1n;
 
