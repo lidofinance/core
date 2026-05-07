@@ -4,8 +4,14 @@ import { migrate, MIGRATION_CL_WITHDRAWALS, NegativeRebaseFormulaFixtureSet, rep
 
 const hoodiCLValidators = 62_500n;
 const hoodiCLValidatorsBalance = hoodiCLValidators * ether("32");
-const hoodiFirstReportWindowLimit = ether("69926.4");
+const hoodiMigratedTransientDeposits = ether("57600");
+const hoodiUnadjustedFirstReportWindowLimit = ether("72000");
+const hoodiWindowOverstatementWithoutMigrationWithdrawal = ether("2073.6");
+const hoodiFirstReportWindowLimit =
+  hoodiUnadjustedFirstReportWindowLimit - hoodiWindowOverstatementWithoutMigrationWithdrawal;
 const hoodiCLDecreaseAtWindowLimit = MIGRATION_CL_WITHDRAWALS + hoodiFirstReportWindowLimit;
+const hoodiDecreaseMaskedByZeroVaultBaseline = hoodiCLDecreaseAtWindowLimit + 1n;
+const hoodiRawDecreaseWithTransientDeposits = hoodiMigratedTransientDeposits + hoodiUnadjustedFirstReportWindowLimit;
 
 export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
   title: "migration-hoodi",
@@ -30,7 +36,8 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
   cases: [
     {
       title: "accepts Hoodi first post-migration decrease at the adjusted window limit",
-      rationale: "The migration bootstrap withdrawal reduces the first report window limit to 69,926.4 ETH.",
+      rationale:
+        "Without the migration bootstrap withdrawal, the Hoodi window would be overstated by 2,073.6 ETH: 72,000 ETH instead of 69,926.4 ETH.",
       steps: [
         migrate({
           label: "Hoodi finalized v4 migration",
@@ -56,17 +63,18 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
     },
     {
       title: "reverts Hoodi first post-migration decrease one wei above the adjusted window limit",
-      rationale: "With the migrated withdrawal vault baseline seeded, vault ETH cannot mask the CL decrease.",
+      rationale:
+        "With the migrated vault baseline seeded, a 127,526.4 ETH + 1 wei raw CL drop is observed as a 69,926.4 ETH + 1 wei negative rebase.",
       steps: [
         migrate({
           label: "Hoodi finalized v4 migration",
           clValidators: hoodiCLValidators,
           transientDeposits: 0n,
-          withdrawalVaultBalance: hoodiCLDecreaseAtWindowLimit + 1n,
+          withdrawalVaultBalance: hoodiDecreaseMaskedByZeroVaultBaseline,
         }),
         report({
           label: "Hoodi first report above adjusted decrease limit",
-          postValidatorsBalance: hoodiCLValidatorsBalance - hoodiCLDecreaseAtWindowLimit - 1n,
+          postValidatorsBalance: hoodiCLValidatorsBalance - hoodiDecreaseMaskedByZeroVaultBaseline,
           postPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
@@ -82,7 +90,8 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
     },
     {
       title: "accepts Hoodi counterfactual decrease when vault balance is counted as fresh withdrawals",
-      rationale: "With a zero vault baseline, the same vault delta masks the CL decrease as withdrawals.",
+      rationale:
+        "With a zero vault baseline, 127,526.4 ETH + 1 wei is recorded as fresh CL withdrawals, understating the negative rebase to zero.",
       steps: [
         migrate({
           label: "Hoodi counterfactual zero vault baseline",
@@ -92,15 +101,42 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
         }),
         report({
           label: "Hoodi first report with vault delta masking decrease",
-          postValidatorsBalance: hoodiCLValidatorsBalance - hoodiCLDecreaseAtWindowLimit - 1n,
+          postValidatorsBalance: hoodiCLValidatorsBalance - hoodiDecreaseMaskedByZeroVaultBaseline,
           postPendingBalance: 0n,
           deposits: 0n,
-          clWithdrawals: hoodiCLDecreaseAtWindowLimit + 1n,
+          clWithdrawals: hoodiDecreaseMaskedByZeroVaultBaseline,
         }),
       ],
       expected: {
         outcome: "accepted",
-        lastReportCLWithdrawals: hoodiCLDecreaseAtWindowLimit + 1n,
+        lastReportCLWithdrawals: hoodiDecreaseMaskedByZeroVaultBaseline,
+      },
+    },
+    {
+      title: "does not overstate Hoodi negative rebase with migrated transient deposits",
+      rationale:
+        "Deposits in the migration snapshot overstate negative rebase: adding the 57,600 ETH transient backlog there would make this 72,000 ETH decrease look like 129,600 ETH. The backlog is safe only in the first report, where the same 57,600 ETH also appears as post-pending balance.",
+      steps: [
+        migrate({
+          label: "Hoodi finalized v4 migration with transient deposits",
+          clValidators: hoodiCLValidators,
+          transientDeposits: hoodiMigratedTransientDeposits,
+          withdrawalVaultBalance: 0n,
+        }),
+        report({
+          label: "Hoodi first report includes migrated transient deposits once",
+          postValidatorsBalance: hoodiCLValidatorsBalance - hoodiRawDecreaseWithTransientDeposits,
+          postPendingBalance: hoodiMigratedTransientDeposits,
+          deposits: hoodiMigratedTransientDeposits,
+          clWithdrawals: 0n,
+        }),
+      ],
+      expected: {
+        outcome: "accepted",
+        window: {
+          actualCLBalanceDiff: hoodiUnadjustedFirstReportWindowLimit,
+          maxAllowedCLBalanceDiff: hoodiUnadjustedFirstReportWindowLimit,
+        },
       },
     },
   ],

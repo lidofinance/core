@@ -4,8 +4,15 @@ import { migrate, MIGRATION_CL_WITHDRAWALS, NegativeRebaseFormulaFixtureSet, rep
 
 const mainnetCLValidators = 281_250n;
 const mainnetCLValidatorsBalance = mainnetCLValidators * ether("32");
-const mainnetFirstReportWindowLimit = ether("321926.4");
+const mainnetMigratedTransientDeposits = ether("57600");
+const mainnetUnadjustedFirstReportWindowLimit = ether("324000");
+const mainnetWindowOverstatementWithoutMigrationWithdrawal = ether("2073.6");
+const mainnetFirstReportWindowLimit =
+  mainnetUnadjustedFirstReportWindowLimit - mainnetWindowOverstatementWithoutMigrationWithdrawal;
 const mainnetCLDecreaseAtWindowLimit = MIGRATION_CL_WITHDRAWALS + mainnetFirstReportWindowLimit;
+const mainnetDecreaseMaskedByZeroVaultBaseline = mainnetCLDecreaseAtWindowLimit + 1n;
+const mainnetRawDecreaseWithTransientDeposits =
+  mainnetMigratedTransientDeposits + mainnetUnadjustedFirstReportWindowLimit;
 const firstReportWindowSpend = ether("100000");
 const firstReportCLDecrease = MIGRATION_CL_WITHDRAWALS + firstReportWindowSpend;
 const remainingWindowHeadroom = mainnetFirstReportWindowLimit - firstReportWindowSpend;
@@ -33,7 +40,8 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
   cases: [
     {
       title: "accepts Mainnet first post-migration decrease at the adjusted window limit",
-      rationale: "The migration bootstrap withdrawal reduces the first report window limit to 321,926.4 ETH.",
+      rationale:
+        "Without the migration bootstrap withdrawal, the Mainnet window would be overstated by 2,073.6 ETH: 324,000 ETH instead of 321,926.4 ETH.",
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration",
@@ -59,17 +67,18 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
     },
     {
       title: "reverts Mainnet first post-migration decrease one wei above the adjusted window limit",
-      rationale: "With the migrated withdrawal vault baseline seeded, vault ETH cannot mask the CL decrease.",
+      rationale:
+        "With the migrated vault baseline seeded, a 379,526.4 ETH + 1 wei raw CL drop is observed as a 321,926.4 ETH + 1 wei negative rebase.",
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration",
           clValidators: mainnetCLValidators,
           transientDeposits: 0n,
-          withdrawalVaultBalance: mainnetCLDecreaseAtWindowLimit + 1n,
+          withdrawalVaultBalance: mainnetDecreaseMaskedByZeroVaultBaseline,
         }),
         report({
           label: "Mainnet first report above adjusted decrease limit",
-          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetCLDecreaseAtWindowLimit - 1n,
+          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetDecreaseMaskedByZeroVaultBaseline,
           postPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
@@ -85,7 +94,8 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
     },
     {
       title: "accepts Mainnet counterfactual decrease when vault balance is counted as fresh withdrawals",
-      rationale: "With a zero vault baseline, the same vault delta masks the CL decrease as withdrawals.",
+      rationale:
+        "With a zero vault baseline, 379,526.4 ETH + 1 wei is recorded as fresh CL withdrawals, understating the negative rebase to zero.",
       steps: [
         migrate({
           label: "Mainnet counterfactual zero vault baseline",
@@ -95,15 +105,15 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "Mainnet first report with vault delta masking decrease",
-          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetCLDecreaseAtWindowLimit - 1n,
+          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetDecreaseMaskedByZeroVaultBaseline,
           postPendingBalance: 0n,
           deposits: 0n,
-          clWithdrawals: mainnetCLDecreaseAtWindowLimit + 1n,
+          clWithdrawals: mainnetDecreaseMaskedByZeroVaultBaseline,
         }),
       ],
       expected: {
         outcome: "accepted",
-        lastReportCLWithdrawals: mainnetCLDecreaseAtWindowLimit + 1n,
+        lastReportCLWithdrawals: mainnetDecreaseMaskedByZeroVaultBaseline,
       },
     },
     {
@@ -136,6 +146,33 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
       expected: {
         outcome: "accepted",
         lastReportCLWithdrawals: ether("1"),
+      },
+    },
+    {
+      title: "does not overstate Mainnet negative rebase with migrated transient deposits",
+      rationale:
+        "Deposits in the migration snapshot overstate negative rebase: adding the 57,600 ETH transient backlog there would make this 324,000 ETH decrease look like 381,600 ETH. The backlog is safe only in the first report, where the same 57,600 ETH also appears as post-pending balance.",
+      steps: [
+        migrate({
+          label: "Mainnet finalized v4 migration with transient deposits",
+          clValidators: mainnetCLValidators,
+          transientDeposits: mainnetMigratedTransientDeposits,
+          withdrawalVaultBalance: 0n,
+        }),
+        report({
+          label: "Mainnet first report includes migrated transient deposits once",
+          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetRawDecreaseWithTransientDeposits,
+          postPendingBalance: mainnetMigratedTransientDeposits,
+          deposits: mainnetMigratedTransientDeposits,
+          clWithdrawals: 0n,
+        }),
+      ],
+      expected: {
+        outcome: "accepted",
+        window: {
+          actualCLBalanceDiff: mainnetUnadjustedFirstReportWindowLimit,
+          maxAllowedCLBalanceDiff: mainnetUnadjustedFirstReportWindowLimit,
+        },
       },
     },
     {

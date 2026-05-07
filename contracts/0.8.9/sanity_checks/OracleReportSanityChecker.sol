@@ -547,12 +547,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _lastVaultBalanceAfterTransfer = LIDO_LOCATOR.withdrawalVault().balance;
 
         // The decrease formula uses baseline report B[X-k] and sums flows from reports [X-k+1..X].
-        // To include migration-time deposits/withdrawals without any special-case branch in formula code:
+        // To include migration-time withdrawals without any special-case branch in formula code:
         // 1) store pure baseline point with zero flows;
         // 2) store bootstrap flow chunk at the same CL balance right after baseline.
+        // Migration-time deposit backlog is intentionally not stored here: it belongs to the first
+        // post-migration oracle report frame, not to the migration bootstrap snapshot.
         uint256 migrationReportTimestamp = _lastReportTimestamp;
         _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
-        _addReportData(migrationReportTimestamp, migrationCLBalance, migrationDeposits, migrationCLWithdrawals);
+        // Flows stored on the baseline entry are intentionally skipped by _calcWindowDiff(),
+        // so migration-time withdrawals must live in the next snapshot to be visible in the first window.
+        _addReportData(migrationReportTimestamp, migrationCLBalance, 0, migrationCLWithdrawals);
 
         emit BaselineSnapshotMigrated(migrationCLBalance, migrationDeposits, migrationCLWithdrawals);
     }

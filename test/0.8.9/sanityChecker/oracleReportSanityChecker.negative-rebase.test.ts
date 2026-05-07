@@ -1178,7 +1178,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       const bootstrapFlowData = await checker.reportData(1);
       expect(bootstrapFlowData.timestamp).to.equal(0n);
       expect(bootstrapFlowData.clBalance).to.equal(expectedCLBalance);
-      expect(bootstrapFlowData.deposits).to.equal(deposits);
+      expect(bootstrapFlowData.deposits).to.equal(0);
       expect(bootstrapFlowData.clWithdrawals).to.equal(CHURN_LIMIT);
     });
 
@@ -1201,11 +1201,11 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await checker.migrateBaselineSnapshot();
 
       // reportData[0] = baseline point with zero flows
-      // reportData[1] = bootstrap flow chunk with migration deposits/withdrawals
+      // reportData[1] = bootstrap flow chunk with migration withdrawals
       const baseline = clActive + clPending;
       const postCL = ether("10200000");
       const actualDiff = baseline - postCL;
-      const adjusted = baseline + migrationDeposits - CHURN_LIMIT;
+      const adjusted = baseline - CHURN_LIMIT;
       const expectedMaxDiff = maxDiffFor(adjusted);
 
       // Pass the actual vault balance as WVB since migration initialized _lastVaultBalanceAfterTransfer

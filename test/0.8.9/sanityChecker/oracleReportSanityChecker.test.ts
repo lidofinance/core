@@ -1993,7 +1993,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       expect(bootstrapFlowReport.timestamp).to.equal(0n);
       expect(bootstrapFlowReport.clBalance).to.equal(ether("107"));
-      expect(bootstrapFlowReport.deposits).to.equal(ether("3"));
+      expect(bootstrapFlowReport.deposits).to.equal(0n);
       expect(bootstrapFlowReport.clWithdrawals).to.equal(MIGRATION_WITHDRAWALS);
     });
 
@@ -2014,7 +2014,7 @@ describe("OracleReportSanityChecker.sol", () => {
       const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
       const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
 
-      const recreatedPostCLBalance = migratedCLBalance + migrationDeposits - MIGRATION_WITHDRAWALS;
+      const recreatedPostCLBalance = migratedCLBalance - MIGRATION_WITHDRAWALS;
       const maxAllowedCLBalanceDecrease =
         (recreatedPostCLBalance * defaultLimits.maxCLBalanceDecreaseBP) / TOTAL_BASIS_POINTS;
       const actualCLBalanceDecrease = maxAllowedCLBalanceDecrease + 1n;
