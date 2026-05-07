@@ -67,16 +67,23 @@ export type FinalizeUpgradeV4MigrationStep = MigrationStep & {
   clValidators: bigint;
 };
 
+export type ReportCLState = {
+  preValidatorsBalance: bigint;
+  prePendingBalance: bigint;
+  postValidatorsBalance: bigint;
+  postPendingBalance: bigint;
+};
+
+export type ReportCLStateInput = Omit<ReportCLState, "preValidatorsBalance" | "prePendingBalance"> & {
+  preValidatorsBalance?: bigint;
+  prePendingBalance?: bigint;
+};
+
 export type ReportStep = {
   kind: "report";
   label: string;
   timeElapsed: bigint;
-  cl: {
-    preValidatorsBalance: bigint;
-    prePendingBalance: bigint;
-    postValidatorsBalance: bigint;
-    postPendingBalance: bigint;
-  };
+  cl: ReportCLState;
   movements: {
     deposits: bigint;
     clWithdrawals: bigint;
@@ -85,13 +92,18 @@ export type ReportStep = {
   modules?: ModuleBalanceStep[];
 };
 
+export type ReportStepInput = Omit<ReportStep, "cl"> & {
+  cl: ReportCLStateInput;
+};
+
 export type FormulaFixtureSet<TCase> = {
   title: string;
   limits: OracleReportLimits;
   cases: TCase[];
 };
 
-export type ScenarioStep = MigrationStep | ReportStep;
+export type ScenarioStep = MigrationStep | ReportStepInput;
+export type ResolvedScenarioStep = MigrationStep | ReportStep;
 
 export const migrate = ({
   label,
@@ -123,7 +135,51 @@ export const migrate = ({
   clValidators,
 });
 
-export const isReportStep = (step: ScenarioStep): step is ReportStep => step.kind === "report";
+export const isReportStep = (step: ScenarioStep): step is ReportStepInput => step.kind === "report";
+
+type PreviousCLState = {
+  validatorsBalance: bigint;
+  pendingBalance: bigint;
+};
+
+export const resolveReportStep = (step: ReportStepInput, previousCLState?: PreviousCLState): ReportStep => {
+  const preValidatorsBalance = step.cl.preValidatorsBalance ?? previousCLState?.validatorsBalance;
+  const prePendingBalance = step.cl.prePendingBalance ?? previousCLState?.pendingBalance;
+
+  if (preValidatorsBalance === undefined || prePendingBalance === undefined) {
+    throw new Error(`Report '${step.label}' is missing pre CL state and has no previous step to inherit from`);
+  }
+
+  return {
+    ...step,
+    cl: {
+      ...step.cl,
+      preValidatorsBalance,
+      prePendingBalance,
+    },
+  };
+};
+
+export const resolveScenarioSteps = (steps: ScenarioStep[]): ResolvedScenarioStep[] => {
+  let previousCLState: PreviousCLState | undefined;
+
+  return steps.map((step) => {
+    if (!isReportStep(step)) {
+      previousCLState = {
+        validatorsBalance: step.clValidatorsBalance,
+        pendingBalance: step.clPendingBalance,
+      };
+      return step;
+    }
+
+    const resolvedStep = resolveReportStep(step, previousCLState);
+    previousCLState = {
+      validatorsBalance: resolvedStep.cl.postValidatorsBalance,
+      pendingBalance: resolvedStep.cl.postPendingBalance,
+    };
+    return resolvedStep;
+  });
+};
 
 export type LidoBalanceStats = {
   clValidatorsBalanceAtLastReport: bigint;

@@ -39,8 +39,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "report with deposits and negative rebase",
-          preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9500"),
           postPendingBalance: ether("500"),
           deposits: ether("500"),
@@ -71,8 +69,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "report with deposits and tolerated negative rebase",
-          preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9630"),
           postPendingBalance: ether("500"),
           deposits: ether("500"),
@@ -102,8 +98,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "withdrawal report",
-          preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9500"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -111,8 +105,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "small negative rebase report",
-          preValidatorsBalance: ether("9500"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9499"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -144,8 +136,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         ),
         report({
           label: "negative rebase at the limit",
-          preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9640"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -177,8 +167,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         ),
         report({
           label: "negative rebase one wei above the limit",
-          preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9640") - 1n,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -209,8 +197,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "day 1 decrease",
-          preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9900"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -218,8 +204,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "day 2 decrease",
-          preValidatorsBalance: ether("9900"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9800"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -227,8 +211,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "day 3 decrease",
-          preValidatorsBalance: ether("9800"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9700"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -236,8 +218,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "day 4 decrease",
-          preValidatorsBalance: ether("9700"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9600"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -268,8 +248,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "first accepted decrease",
-          preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9640"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -278,8 +256,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         ...repeatReports(34, (index) =>
           report({
             label: `stable low-balance report ${index + 1}`,
-            preValidatorsBalance: ether("9640"),
-            prePendingBalance: 0n,
             postValidatorsBalance: ether("9640"),
             postPendingBalance: 0n,
             deposits: 0n,
@@ -288,8 +264,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         ),
         report({
           label: "decrease before old baseline eviction",
-          preValidatorsBalance: ether("9640"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("9630"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -319,8 +293,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         }),
         report({
           label: "new in-window baseline after accepted decrease",
-          preValidatorsBalance: ether("12500"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("12250"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -329,8 +301,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         ...repeatReports(35, (index) =>
           report({
             label: `stable low-balance report ${index + 1}`,
-            preValidatorsBalance: ether("12250"),
-            prePendingBalance: 0n,
             postValidatorsBalance: ether("12250"),
             postPendingBalance: 0n,
             deposits: 0n,
@@ -339,8 +309,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         ),
         report({
           label: "small decrease after old baseline eviction",
-          preValidatorsBalance: ether("12250"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("12240"),
           postPendingBalance: 0n,
           deposits: 0n,

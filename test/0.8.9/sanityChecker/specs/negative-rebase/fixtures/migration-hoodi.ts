@@ -44,8 +44,6 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
         }),
         report({
           label: "Hoodi first report at adjusted decrease limit",
-          preValidatorsBalance: hoodiCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: hoodiCLValidatorsBalance - hoodiCLDecreaseAtWindowLimit,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -76,8 +74,6 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
         }),
         report({
           label: "Hoodi first report above adjusted decrease limit",
-          preValidatorsBalance: hoodiCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: hoodiCLValidatorsBalance - hoodiCLDecreaseAtWindowLimit - 1n,
           postPendingBalance: 0n,
           deposits: 0n,

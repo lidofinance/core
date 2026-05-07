@@ -18,15 +18,17 @@ import {
   FinalizeUpgradeV4CheckerFixture,
   hasFinalizeUpgradeV4State,
   migrateFinalizeUpgradeV4State,
+  MigrationStep,
+  resolveScenarioSteps,
 } from "../lib";
 
 import { negativeRebaseFormulaFixtureSets } from "./fixtures/index";
 import {
   buildStoredReportsModel,
   calcExpectedWindowDiff,
-  NegativeRebaseStep,
-  OracleReportFixture,
   OracleReportLimits,
+  ResolvedNegativeRebaseStep,
+  ResolvedOracleReportFixture,
 } from "./lib";
 
 describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
@@ -117,11 +119,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     lastVaultBalanceAfterTransfer: bigint;
   };
 
-  const runMigrationStep = async (
-    fixture: CheckerFixture,
-    state: ScenarioState,
-    step: Exclude<NegativeRebaseStep, OracleReportFixture>,
-  ) => {
+  const runMigrationStep = async (fixture: CheckerFixture, state: ScenarioState, step: MigrationStep) => {
     if (fixture.kind === "finalizeUpgradeV4") {
       await migrateFinalizeUpgradeV4State(fixture, step);
     } else {
@@ -143,7 +141,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     checker: OracleReportSanityChecker,
     accountingSigner: HardhatEthersSigner,
     state: ScenarioState,
-    report: OracleReportFixture,
+    report: ResolvedOracleReportFixture,
   ) => {
     const { cl, movements, timeElapsed } = report;
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + movements.clWithdrawals;
@@ -170,7 +168,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     accountingSigner: HardhatEthersSigner,
     withdrawalVaultAddress: string,
     state: ScenarioState,
-    report: OracleReportFixture,
+    report: ResolvedOracleReportFixture,
     title: string,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
@@ -187,16 +185,17 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
       for (const testCase of fixtureSet.cases) {
         it(testCase.title, async () => {
           const limits = { ...fixtureSet.limits, ...testCase.limits };
-          const useFinalizeUpgradeV4 = testCase.steps.some(
+          const steps = resolveScenarioSteps(testCase.steps) as ResolvedNegativeRebaseStep[];
+          const useFinalizeUpgradeV4 = steps.some(
             (step) => step.kind === "migration" && hasFinalizeUpgradeV4State(step),
           );
           const fixture = await deployChecker(limits, useFinalizeUpgradeV4);
           const { checker, accountingSigner, withdrawalVaultAddress } = fixture;
-          const checkedStep = testCase.steps[testCase.steps.length - 1];
+          const checkedStep = steps[steps.length - 1];
           expect(checkedStep.kind, `${testCase.title}: checked step`).to.equal("report");
-          const checkedReport = checkedStep as OracleReportFixture;
-          const setupSteps = testCase.steps.slice(0, -1);
-          const expected = calcExpectedWindowDiff(buildStoredReportsModel(testCase.steps), limits);
+          const checkedReport = checkedStep as ResolvedOracleReportFixture;
+          const setupSteps = steps.slice(0, -1);
+          const expected = calcExpectedWindowDiff(buildStoredReportsModel(steps), limits);
           const state: ScenarioState = { lastVaultBalanceAfterTransfer: 0n };
 
           if (testCase.expected.window !== undefined) {

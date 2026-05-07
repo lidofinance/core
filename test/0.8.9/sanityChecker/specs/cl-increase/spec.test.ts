@@ -19,12 +19,14 @@ import {
   hasFinalizeUpgradeV4State,
   LidoBalanceStats,
   migrateFinalizeUpgradeV4State,
+  MigrationStep,
   moveToFirstPostMigrationReportFrame,
+  resolveScenarioSteps,
   setLastVaultBalanceAfterTransfer,
 } from "../lib";
 
 import { clIncreaseFixtureSets } from "./fixtures/index";
-import { calcClIncreaseFormula, ClIncreaseCase, ClIncreaseReport, ClIncreaseStep, OracleReportLimits } from "./lib";
+import { calcClIncreaseFormula, ClIncreaseCase, OracleReportLimits, ResolvedClIncreaseReport } from "./lib";
 
 describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   type MockCheckerFixture = {
@@ -111,11 +113,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     migrationSameFrameStats?: LidoBalanceStats;
   };
 
-  const runMigrationStep = async (
-    fixture: CheckerFixture,
-    state: ScenarioState,
-    step: Exclude<ClIncreaseStep, ClIncreaseReport>,
-  ) => {
+  const runMigrationStep = async (fixture: CheckerFixture, state: ScenarioState, step: MigrationStep) => {
     if (fixture.kind === "finalizeUpgradeV4") {
       state.migrationSameFrameStats = await migrateFinalizeUpgradeV4State(fixture, step);
     } else {
@@ -137,7 +135,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     checker: OracleReportSanityChecker,
     accountingSigner: HardhatEthersSigner,
     state: ScenarioState,
-    report: ClIncreaseReport,
+    report: ResolvedClIncreaseReport,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
     const withdrawalsVaultTransfer = report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals;
@@ -163,7 +161,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     accountingSigner: HardhatEthersSigner,
     withdrawalVaultAddress: string,
     state: ScenarioState,
-    report: ClIncreaseReport,
+    report: ResolvedClIncreaseReport,
     title: string,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
@@ -189,7 +187,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   const callPendingBalanceCheck = (
     checker: OracleReportSanityChecker,
     state: ScenarioState,
-    report: ClIncreaseReport,
+    report: ResolvedClIncreaseReport,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
 
@@ -204,7 +202,10 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     );
   };
 
-  const withPostValidatorsBalance = (report: ClIncreaseReport, postValidatorsBalance: bigint): ClIncreaseReport => ({
+  const withPostValidatorsBalance = (
+    report: ResolvedClIncreaseReport,
+    postValidatorsBalance: bigint,
+  ): ResolvedClIncreaseReport => ({
     ...report,
     cl: {
       ...report.cl,
@@ -212,7 +213,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     },
   });
 
-  const getPreValidatorsAfterWithdrawals = (report: ClIncreaseReport) =>
+  const getPreValidatorsAfterWithdrawals = (report: ResolvedClIncreaseReport) =>
     report.movements.clWithdrawals >= report.cl.preValidatorsBalance
       ? 0n
       : report.cl.preValidatorsBalance - report.movements.clWithdrawals;
@@ -222,17 +223,18 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
       for (const testCase of fixtureSet.cases) {
         it(testCase.title, async () => {
           const limits = { ...fixtureSet.limits, ...testCase.limits };
-          const useFinalizeUpgradeV4 = testCase.steps.some(
+          const steps = resolveScenarioSteps(testCase.steps);
+          const useFinalizeUpgradeV4 = steps.some(
             (step) => step.kind === "migration" && hasFinalizeUpgradeV4State(step),
           );
           const fixture = await deployChecker(limits, useFinalizeUpgradeV4);
           const { checker, accountingSigner, withdrawalVaultAddress } = fixture;
-          const checkedStep = testCase.steps[testCase.steps.length - 1];
+          const checkedStep = steps[steps.length - 1];
           expect(checkedStep.kind, `${testCase.title}: checked step`).to.equal("report");
-          const checkedReport = checkedStep as ClIncreaseReport;
+          const checkedReport = checkedStep as ResolvedClIncreaseReport;
           const state: ScenarioState = { lastVaultBalanceAfterTransfer: 0n };
 
-          for (const step of testCase.steps.slice(0, -1)) {
+          for (const step of steps.slice(0, -1)) {
             if (step.kind === "migration") {
               await runMigrationStep(fixture, state, step);
 

@@ -1,6 +1,14 @@
 import { ether } from "lib";
 
-import { DAY, FormulaFixtureSet, migrate, MigrationStep, OracleReportLimits, ReportStep } from "../lib";
+import {
+  DAY,
+  FormulaFixtureSet,
+  migrate,
+  MigrationStep,
+  OracleReportLimits,
+  ReportStep,
+  ReportStepInput,
+} from "../lib";
 
 export { migrate };
 export type { OracleReportLimits };
@@ -14,7 +22,8 @@ export type ClIncreaseLimits = Pick<
   "appearedEthAmountPerDayLimit" | "annualBalanceIncreaseBPLimit" | "externalPendingBalanceCapEth"
 >;
 
-export type ClIncreaseReport = ReportStep;
+export type ClIncreaseReport = ReportStepInput;
+export type ResolvedClIncreaseReport = ReportStep;
 export type ClIncreaseStep = MigrationStep | ClIncreaseReport;
 
 export type ClIncreaseFormula = {
@@ -65,8 +74,8 @@ export const report = ({
 }: {
   label: string;
   timeElapsed?: bigint;
-  preValidatorsBalance: bigint;
-  prePendingBalance: bigint;
+  preValidatorsBalance?: bigint;
+  prePendingBalance?: bigint;
   postValidatorsBalance: bigint;
   postPendingBalance: bigint;
   deposits: bigint;
@@ -77,8 +86,8 @@ export const report = ({
   label,
   timeElapsed,
   cl: {
-    preValidatorsBalance,
-    prePendingBalance,
+    ...(preValidatorsBalance === undefined ? {} : { preValidatorsBalance }),
+    ...(prePendingBalance === undefined ? {} : { prePendingBalance }),
     postValidatorsBalance,
     postPendingBalance,
   },
@@ -89,7 +98,10 @@ export const report = ({
   },
 });
 
-export const calcClIncreaseFormula = (fixture: ClIncreaseReport, limits: ClIncreaseLimits): ClIncreaseFormula => {
+export const calcClIncreaseFormula = (
+  fixture: ResolvedClIncreaseReport,
+  limits: ClIncreaseLimits,
+): ClIncreaseFormula => {
   const effectiveTimeElapsed = fixture.timeElapsed === 0n ? HOUR : fixture.timeElapsed;
   const fundedPendingBalance = fixture.cl.prePendingBalance + fixture.movements.deposits;
   const pendingBalanceCap = fundedPendingBalance + ether(limits.externalPendingBalanceCapEth.toString());

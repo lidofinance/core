@@ -47,8 +47,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "Mainnet first report at adjusted decrease limit",
-          preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance - mainnetCLDecreaseAtWindowLimit,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -79,8 +77,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "Mainnet first report above adjusted decrease limit",
-          preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance - mainnetCLDecreaseAtWindowLimit - 1n,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -111,8 +107,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "first report transfers most of the withdrawal vault balance",
-          preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance - ether("10"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -121,8 +115,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "second report counts only the new withdrawal vault delta",
-          preValidatorsBalance: mainnetCLValidatorsBalance - ether("10"),
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance - ether("11"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -151,8 +143,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "first report spends 100,000 ETH of adjusted window headroom",
-          preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -160,8 +150,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "second report spends the remaining adjusted window headroom",
-          preValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease - remainingWindowHeadroom,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -192,8 +180,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "first report spends 100,000 ETH of adjusted window headroom",
-          preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -201,8 +187,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         }),
         report({
           label: "second report exceeds the remaining adjusted window headroom",
-          preValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease - remainingWindowHeadroom - 1n,
           postPendingBalance: 0n,
           deposits: 0n,

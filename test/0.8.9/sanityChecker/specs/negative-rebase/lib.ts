@@ -1,4 +1,12 @@
-import { DAY, FormulaFixtureSet, isReportStep, migrate, MigrationStep, OracleReportLimits, ReportStep } from "../lib";
+import {
+  DAY,
+  FormulaFixtureSet,
+  migrate,
+  MigrationStep,
+  OracleReportLimits,
+  ReportStep,
+  ReportStepInput,
+} from "../lib";
 
 export const MAX_BASIS_POINTS = 10_000n;
 export const MAX_CL_BALANCE_DECREASE_BP = 360n;
@@ -8,8 +16,10 @@ export const MIGRATION_CL_WITHDRAWALS = 57_600n * 10n ** 18n;
 export { migrate };
 export type { OracleReportLimits };
 
-export type OracleReportFixture = ReportStep;
+export type OracleReportFixture = ReportStepInput;
+export type ResolvedOracleReportFixture = ReportStep;
 export type NegativeRebaseStep = MigrationStep | OracleReportFixture;
+export type ResolvedNegativeRebaseStep = MigrationStep | ResolvedOracleReportFixture;
 
 export type ExpectedWindowDiff = {
   actualCLBalanceDiff: bigint;
@@ -50,8 +60,8 @@ export const report = ({
 }: {
   label: string;
   timeElapsed?: bigint;
-  preValidatorsBalance: bigint;
-  prePendingBalance: bigint;
+  preValidatorsBalance?: bigint;
+  prePendingBalance?: bigint;
   postValidatorsBalance: bigint;
   postPendingBalance: bigint;
   deposits: bigint;
@@ -62,8 +72,8 @@ export const report = ({
   label,
   timeElapsed,
   cl: {
-    preValidatorsBalance,
-    prePendingBalance,
+    ...(preValidatorsBalance === undefined ? {} : { preValidatorsBalance }),
+    ...(prePendingBalance === undefined ? {} : { prePendingBalance }),
     postValidatorsBalance,
     postPendingBalance,
   },
@@ -82,12 +92,12 @@ export const repeatReports = (
 export const maxDiffFor = (recreatedPostCLBalance: bigint, limits: OracleReportLimits) =>
   (recreatedPostCLBalance * limits.maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
 
-export const buildStoredReportsModel = (steps: NegativeRebaseStep[]) => {
+export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => {
   let timestamp = 0n;
   const storedReports: StoredReportModel[] = [];
 
   for (const step of steps) {
-    if (!isReportStep(step)) {
+    if (step.kind === "migration") {
       const postCLBalance = step.clValidatorsBalance + step.clPendingBalance;
       storedReports.push({
         timestamp,
