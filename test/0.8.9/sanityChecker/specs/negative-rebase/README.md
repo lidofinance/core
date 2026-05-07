@@ -16,12 +16,13 @@ The lower-level Solidity plumbing tests stay in `../../oracleReportSanityChecker
 Those tests cover authorization, storage side effects, second opinion oracle behavior, migration, and custom errors
 that are not part of the formula.
 
-## Report Shape
+## Step Shape
 
-Each report describes one oracle report snapshot:
+Each case is a `steps` sequence. A report step describes one oracle report snapshot:
 
 ```ts
 {
+  kind: "report",
   label: "baseline report",
   timeElapsed: DAY,
   cl: {
@@ -43,6 +44,18 @@ Do not put derived constants or calculation helpers into fixtures.
 
 Do not put ABI plumbing fields like `withdrawalVaultBalance` or `withdrawalsVaultTransfer` into fixtures.
 The runner translates `movements.clWithdrawals` into the ABI inputs used by `checkAccountingOracleReport(...)`.
+
+Use a migration step when the scenario starts from `migrateBaselineSnapshot()`:
+
+```ts
+migrate({
+  label: "migration baseline",
+  clValidatorsBalance: ether("100000"),
+  clPendingBalance: ether("7000"),
+  deposits: ether("3"),
+  withdrawalVaultBalance: ether("10000"),
+});
+```
 
 ## Case Shape
 
@@ -81,7 +94,7 @@ Each case has:
 {
   title: "short behavior description",
   rationale: "why this scenario matters to the formula",
-  reports: [
+  steps: [
     // setup reports
     // final checked report goes last
   ],
@@ -146,7 +159,7 @@ Add a new object to an existing fixture set:
 {
   title: "short behavior description",
   rationale: "why this scenario matters",
-  reports: [
+  steps: [
     // setup reports
     // final checked report goes last
   ],
@@ -156,7 +169,7 @@ Add a new object to an existing fixture set:
 }
 ```
 
-The last report is the checked report. Previous reports are setup snapshots.
+The last report step is the checked report. Previous steps are setup state.
 
 The runner calculates the window diff and compares it with optional fixture numbers before calling the contract.
 

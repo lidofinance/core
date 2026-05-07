@@ -26,7 +26,7 @@ export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureS
     {
       title: "accepts a small Hoodi negative rebase inside the window limit",
       rationale: "A 1 ETH CL balance decrease is well inside the 36-day Hoodi negative rebase limit.",
-      reports: [
+      steps: [
         report({
           label: "Hoodi previous accepted report",
           preValidatorsBalance: ether("10000"),
@@ -57,7 +57,7 @@ export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureS
     {
       title: "accepts Hoodi activation at the deployed appeared ETH limit",
       rationale: "The deployed Hoodi appeared limit is 57,600 ETH per day.",
-      reports: [
+      steps: [
         report({
           label: "Hoodi baseline report",
           preValidatorsBalance: ether("10000"),

@@ -1,43 +1,21 @@
 import { ether } from "lib";
 
-export const DAY = 86_400n;
+import { DAY, FormulaFixtureSet, migrate, MigrationStep, OracleReportLimits, ReportStep } from "../lib";
+
+export { migrate };
+export type { OracleReportLimits };
+
 export const HOUR = 3_600n;
 export const MAX_BASIS_POINTS = 10_000n;
 export const ANNUAL_BALANCE_INCREASE_DENOMINATOR = 365n * DAY * MAX_BASIS_POINTS;
-
-export type OracleReportLimits = {
-  exitedEthAmountPerDayLimit: bigint;
-  appearedEthAmountPerDayLimit: bigint;
-  annualBalanceIncreaseBPLimit: bigint;
-  simulatedShareRateDeviationBPLimit: bigint;
-  maxBalanceExitRequestedPerReportInEth: bigint;
-  maxEffectiveBalanceWeightWCType01: bigint;
-  maxEffectiveBalanceWeightWCType02: bigint;
-  maxItemsPerExtraDataTransaction: bigint;
-  maxNodeOperatorsPerExtraDataItem: bigint;
-  requestTimestampMargin: bigint;
-  maxPositiveTokenRebase: bigint;
-  maxCLBalanceDecreaseBP: bigint;
-  clBalanceOraclesErrorUpperBPLimit: bigint;
-  consolidationEthAmountPerDayLimit: bigint;
-  exitedValidatorEthAmountLimit: bigint;
-  externalPendingBalanceCapEth: bigint;
-};
 
 export type ClIncreaseLimits = Pick<
   OracleReportLimits,
   "appearedEthAmountPerDayLimit" | "annualBalanceIncreaseBPLimit" | "externalPendingBalanceCapEth"
 >;
 
-export type ClIncreaseReport = {
-  timeElapsed: bigint;
-  preValidatorsBalance: bigint;
-  prePendingBalance: bigint;
-  postValidatorsBalance: bigint;
-  postPendingBalance: bigint;
-  deposits: bigint;
-  clWithdrawals: bigint;
-};
+export type ClIncreaseReport = ReportStep;
+export type ClIncreaseStep = MigrationStep | ClIncreaseReport;
 
 export type ClIncreaseFormula = {
   pendingBalanceCap: bigint;
@@ -51,7 +29,7 @@ export type ClIncreaseCase = {
   title: string;
   rationale: string;
   limits?: Partial<OracleReportLimits>;
-  report: ClIncreaseReport;
+  steps: ClIncreaseStep[];
   expected: {
     outcome:
       | "accepted"
@@ -62,13 +40,10 @@ export type ClIncreaseCase = {
   };
 };
 
-export type ClIncreaseFixtureSet = {
-  title: string;
-  limits: OracleReportLimits;
-  cases: ClIncreaseCase[];
-};
+export type ClIncreaseFixtureSet = FormulaFixtureSet<ClIncreaseCase>;
 
 export const report = ({
+  label,
   timeElapsed = DAY,
   preValidatorsBalance,
   prePendingBalance,
@@ -77,6 +52,7 @@ export const report = ({
   deposits,
   clWithdrawals,
 }: {
+  label: string;
   timeElapsed?: bigint;
   preValidatorsBalance: bigint;
   prePendingBalance: bigint;
@@ -85,31 +61,41 @@ export const report = ({
   deposits: bigint;
   clWithdrawals: bigint;
 }): ClIncreaseReport => ({
+  kind: "report",
+  label,
   timeElapsed,
-  preValidatorsBalance,
-  prePendingBalance,
-  postValidatorsBalance,
-  postPendingBalance,
-  deposits,
-  clWithdrawals,
+  cl: {
+    preValidatorsBalance,
+    prePendingBalance,
+    postValidatorsBalance,
+    postPendingBalance,
+  },
+  movements: {
+    deposits,
+    clWithdrawals,
+  },
 });
 
 export const calcClIncreaseFormula = (fixture: ClIncreaseReport, limits: ClIncreaseLimits): ClIncreaseFormula => {
   const effectiveTimeElapsed = fixture.timeElapsed === 0n ? HOUR : fixture.timeElapsed;
-  const fundedPendingBalance = fixture.prePendingBalance + fixture.deposits;
+  const fundedPendingBalance = fixture.cl.prePendingBalance + fixture.movements.deposits;
   const pendingBalanceCap = fundedPendingBalance + ether(limits.externalPendingBalanceCapEth.toString());
   const activatedBalance =
-    fundedPendingBalance > fixture.postPendingBalance ? fundedPendingBalance - fixture.postPendingBalance : 0n;
+    fundedPendingBalance > fixture.cl.postPendingBalance ? fundedPendingBalance - fixture.cl.postPendingBalance : 0n;
   const appearedBalanceLimit = (ether(limits.appearedEthAmountPerDayLimit.toString()) * effectiveTimeElapsed) / DAY;
   const validatorsGrowthLimit =
     activatedBalance +
-    ((fixture.preValidatorsBalance + activatedBalance) * limits.annualBalanceIncreaseBPLimit * effectiveTimeElapsed) /
+    ((fixture.cl.preValidatorsBalance + activatedBalance) *
+      limits.annualBalanceIncreaseBPLimit *
+      effectiveTimeElapsed) /
       ANNUAL_BALANCE_INCREASE_DENOMINATOR;
   const preValidatorsAfterWithdrawals =
-    fixture.clWithdrawals >= fixture.preValidatorsBalance ? 0n : fixture.preValidatorsBalance - fixture.clWithdrawals;
+    fixture.movements.clWithdrawals >= fixture.cl.preValidatorsBalance
+      ? 0n
+      : fixture.cl.preValidatorsBalance - fixture.movements.clWithdrawals;
   const validatorsBalanceIncrease =
-    fixture.postValidatorsBalance > preValidatorsAfterWithdrawals
-      ? fixture.postValidatorsBalance - preValidatorsAfterWithdrawals
+    fixture.cl.postValidatorsBalance > preValidatorsAfterWithdrawals
+      ? fixture.cl.postValidatorsBalance - preValidatorsAfterWithdrawals
       : 0n;
 
   return {

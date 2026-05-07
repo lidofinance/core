@@ -2,7 +2,7 @@
 
 This folder contains formula-level tests for sanity checks.
 
-A fixture defines report state, movements, limits, and the expected formula outcome.
+A fixture defines report sequence, movements, limits, and the expected formula outcome.
 Each spec can have multiple fixture sets, for example common, Hoodi, or mainnet data. The spec runner imports
 `fixtures/index.ts` and runs every exported set.
 
@@ -22,7 +22,7 @@ Formula specs live under this folder. They cover protocol math:
 - domain fixtures instead of raw ABI calls
 - expected formula values next to each scenario
 - scenario titles and rationale
-- boundary cases such as zero, exact limit, limit plus one, rounding, and window eviction
+- report sequences, migration steps, and boundary cases
 
 ## Scope
 
@@ -35,6 +35,8 @@ Other checks stay in the technical test files unless their formula becomes large
 ## Fixture Rules
 
 - describe reports, balances, movements, and limits
+- put oracle reports under `steps`
+- use `migration` as a separate step, not as a fake report
 - put the full limits object on each fixture set exactly once
 - use case `limits` only for explicit overrides
 - keep fixtures as data, not helper code

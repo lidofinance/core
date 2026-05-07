@@ -27,7 +27,7 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
       title: "reverts when deposits hide a negative rebase in raw CL balance snapshots",
       rationale:
         "Raw post-CL balance stays flat at 10,000 ETH, but a 500 ETH deposit means the recreated CL balance is 10,500 ETH.",
-      reports: [
+      steps: [
         report({
           label: "baseline report",
           preValidatorsBalance: ether("10000"),
@@ -59,7 +59,7 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
       title: "accepts a deposited period when the recreated balance decrease stays within the limit",
       rationale:
         "The report has a positive raw CL balance delta, but the formula still checks the recreated balance after deposits.",
-      reports: [
+      steps: [
         report({
           label: "baseline report",
           preValidatorsBalance: ether("10000"),
@@ -90,7 +90,7 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
     {
       title: "does not count window withdrawals as a negative rebase",
       rationale: "CL withdrawals are subtracted from the recreated balance before the negative rebase diff is checked.",
-      reports: [
+      steps: [
         report({
           label: "baseline report",
           preValidatorsBalance: ether("10000"),
@@ -130,7 +130,7 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
     {
       title: "accepts a negative rebase exactly equal to the 36-day window limit",
       rationale: "The formula is strict only above the limit; equality is accepted.",
-      reports: [
+      steps: [
         ...repeatReports(36, (index) =>
           report({
             label: `stable report ${index + 1}`,
@@ -163,7 +163,7 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
     {
       title: "reverts when the negative rebase is one wei above the 36-day window limit",
       rationale: "This pins the strict greater-than boundary and catches accidental >= changes.",
-      reports: [
+      steps: [
         ...repeatReports(36, (index) =>
           report({
             label: `stable report ${index + 1}`,
@@ -197,7 +197,7 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
       title: "reverts when small daily negative rebases accumulate above the window limit",
       rationale:
         "The check is window-based; repeated tolerated reports can still fail once their sum crosses the limit.",
-      reports: [
+      steps: [
         report({
           label: "baseline report",
           preValidatorsBalance: ether("10000"),
@@ -256,7 +256,7 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
       title: "reverts before the old baseline leaves the 36-day window",
       rationale:
         "At exactly 36 days from the old baseline timestamp, the baseline is still inside the inclusive window.",
-      reports: [
+      steps: [
         report({
           label: "old baseline report",
           preValidatorsBalance: ether("10000"),
@@ -307,7 +307,7 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
     {
       title: "accepts after the old baseline leaves the 36-day window",
       rationale: "Once the old baseline is evicted, the recreated balance starts from the newer in-window baseline.",
-      reports: [
+      steps: [
         report({
           label: "old baseline report",
           preValidatorsBalance: ether("12500"),

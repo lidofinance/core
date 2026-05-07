@@ -24,6 +24,9 @@ totalPositiveModuleDelta = sum(max(postModuleValidators - previousModuleValidato
 
 Modules without previous accounting do not contribute to `totalPositiveModuleDelta`.
 
+The runner executes report steps in order. Accepted setup reports update sanity-check state and module balances, so
+fixtures can cover first-report skip behavior and the next-report invariant.
+
 ## Files
 
 - Library: `lib.ts`
@@ -34,7 +37,8 @@ Modules without previous accounting do not contribute to `totalPositiveModuleDel
 The runner imports `fixtures/index.ts` and runs every fixture set exported there. Add network-specific data as separate
 files, for example `fixtures/hoodi.ts` or `fixtures/mainnet.ts`.
 
-Each fixture set defines the full `OracleReportSanityChecker` limits object once. Cases do not override limits.
+Each fixture set defines the full `OracleReportSanityChecker` limits object once. A case uses `steps`; the final report
+step is checked, and previous report steps are accepted setup state.
 
 ## Run
 

@@ -1,63 +1,33 @@
-export const DAY = 86_400n;
+import { DAY, FormulaFixtureSet, isReportStep, migrate, MigrationStep, OracleReportLimits, ReportStep } from "../lib";
+
 export const MAX_BASIS_POINTS = 10_000n;
 export const MAX_CL_BALANCE_DECREASE_BP = 360n;
 export const CL_BALANCE_WINDOW = 36n * DAY;
+export const MIGRATION_CL_WITHDRAWALS = 57_600n * 10n ** 18n;
 
-export type OracleReportFixture = {
-  label: string;
-  timeElapsed: bigint;
-  cl: {
-    preValidatorsBalance: bigint;
-    prePendingBalance: bigint;
-    postValidatorsBalance: bigint;
-    postPendingBalance: bigint;
-  };
-  movements: {
-    deposits: bigint;
-    clWithdrawals: bigint;
-  };
-};
+export { migrate };
+export type { OracleReportLimits };
+
+export type OracleReportFixture = ReportStep;
+export type NegativeRebaseStep = MigrationStep | OracleReportFixture;
 
 export type ExpectedWindowDiff = {
   actualCLBalanceDiff: bigint;
   maxAllowedCLBalanceDiff: bigint;
 };
 
-export type OracleReportLimits = {
-  exitedEthAmountPerDayLimit: bigint;
-  appearedEthAmountPerDayLimit: bigint;
-  annualBalanceIncreaseBPLimit: bigint;
-  simulatedShareRateDeviationBPLimit: bigint;
-  maxBalanceExitRequestedPerReportInEth: bigint;
-  maxEffectiveBalanceWeightWCType01: bigint;
-  maxEffectiveBalanceWeightWCType02: bigint;
-  maxItemsPerExtraDataTransaction: bigint;
-  maxNodeOperatorsPerExtraDataItem: bigint;
-  requestTimestampMargin: bigint;
-  maxPositiveTokenRebase: bigint;
-  maxCLBalanceDecreaseBP: bigint;
-  clBalanceOraclesErrorUpperBPLimit: bigint;
-  consolidationEthAmountPerDayLimit: bigint;
-  exitedValidatorEthAmountLimit: bigint;
-  externalPendingBalanceCapEth: bigint;
-};
-
 export type NegativeRebaseFormulaCase = {
   title: string;
   rationale: string;
   limits?: Partial<OracleReportLimits>;
-  reports: OracleReportFixture[];
+  steps: NegativeRebaseStep[];
   expected: {
     outcome: "revert" | "accepted";
     window?: ExpectedWindowDiff;
   };
 };
 
-export type NegativeRebaseFormulaFixtureSet = {
-  title: string;
-  limits: OracleReportLimits;
-  cases: NegativeRebaseFormulaCase[];
-};
+export type NegativeRebaseFormulaFixtureSet = FormulaFixtureSet<NegativeRebaseFormulaCase>;
 
 export type StoredReportModel = {
   timestamp: bigint;
@@ -85,6 +55,7 @@ export const report = ({
   deposits: bigint;
   clWithdrawals: bigint;
 }): OracleReportFixture => ({
+  kind: "report",
   label,
   timeElapsed,
   cl: {
@@ -107,19 +78,40 @@ export const repeatReports = (
 export const maxDiffFor = (recreatedPostCLBalance: bigint, limits: OracleReportLimits) =>
   (recreatedPostCLBalance * limits.maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
 
-export const buildStoredReportsModel = (reports: OracleReportFixture[]) => {
+export const buildStoredReportsModel = (steps: NegativeRebaseStep[]) => {
   let timestamp = 0n;
+  const storedReports: StoredReportModel[] = [];
 
-  return reports.map((oracleReport) => {
+  for (const step of steps) {
+    if (!isReportStep(step)) {
+      const postCLBalance = step.clValidatorsBalance + step.clPendingBalance;
+      storedReports.push({
+        timestamp,
+        postCLBalance,
+        deposits: 0n,
+        clWithdrawals: 0n,
+      });
+      storedReports.push({
+        timestamp,
+        postCLBalance,
+        deposits: step.deposits,
+        clWithdrawals: MIGRATION_CL_WITHDRAWALS,
+      });
+      continue;
+    }
+
+    const oracleReport = step;
     timestamp += oracleReport.timeElapsed;
 
-    return {
+    storedReports.push({
       timestamp,
       postCLBalance: oracleReport.cl.postValidatorsBalance + oracleReport.cl.postPendingBalance,
       deposits: oracleReport.movements.deposits,
       clWithdrawals: oracleReport.movements.clWithdrawals,
-    };
-  });
+    });
+  }
+
+  return storedReports;
 };
 
 export const calcExpectedWindowDiff = (storedReports: StoredReportModel[], limits: OracleReportLimits) => {
