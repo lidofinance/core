@@ -7,6 +7,8 @@ import {
   depositValidatorsWithoutReport,
   getNextReportContext,
   getProtocolContext,
+  norSdvtAddOperatorKeys,
+  norSdvtSetOperatorStakingLimit,
   ProtocolContext,
   report,
   submitReportDataWithConsensus,
@@ -199,6 +201,20 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
     // The checker allows one Electra max-effective validator above the prorated appeared limit.
     const validatorsToExceedActivationBoundary = 2_048n / ONE_VALIDATOR_BALANCE_ETH + 2n;
+    const [, , norDepositableValidators] = await ctx.contracts.nor.getStakingModuleSummary();
+    // Scratch fixture may not have enough NOR capacity to deposit validators past the checker boundary.
+    if (norDepositableValidators < validatorsToExceedActivationBoundary) {
+      const operatorId = 0n;
+      const keysToAdd = validatorsToExceedActivationBoundary - norDepositableValidators;
+      const operator = await ctx.contracts.nor.getNodeOperator(operatorId, false);
+
+      await norSdvtAddOperatorKeys(ctx, ctx.contracts.nor, { operatorId, keysToAdd });
+      await norSdvtSetOperatorStakingLimit(ctx, ctx.contracts.nor, {
+        operatorId,
+        limit: operator.totalVettedValidators + keysToAdd,
+      });
+    }
+
     const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, validatorsToExceedActivationBoundary);
     const balanceStatsBeforeReport = await ctx.contracts.lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
