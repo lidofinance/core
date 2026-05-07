@@ -3,7 +3,7 @@ import { ether } from "lib";
 import { migrate, MIGRATION_CL_WITHDRAWALS, NegativeRebaseFormulaFixtureSet, report } from "../lib";
 
 const hoodiCLValidators = 62_500n;
-const hoodiCLValidatorsBalance = ether("2000000");
+const hoodiCLValidatorsBalance = hoodiCLValidators * ether("32");
 const hoodiFirstReportWindowLimit = ether("69926.4");
 const hoodiCLDecreaseAtWindowLimit = MIGRATION_CL_WITHDRAWALS + hoodiFirstReportWindowLimit;
 
@@ -34,12 +34,8 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
       steps: [
         migrate({
           label: "Hoodi finalized v4 migration",
-          bufferedEther: 1n,
-          depositedValidators: hoodiCLValidators,
           clValidators: hoodiCLValidators,
-          clValidatorsBalance: hoodiCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: hoodiCLDecreaseAtWindowLimit,
         }),
         report({
@@ -64,12 +60,8 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
       steps: [
         migrate({
           label: "Hoodi finalized v4 migration",
-          bufferedEther: 1n,
-          depositedValidators: hoodiCLValidators,
           clValidators: hoodiCLValidators,
-          clValidatorsBalance: hoodiCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: hoodiCLDecreaseAtWindowLimit + 1n,
         }),
         report({

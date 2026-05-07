@@ -31,7 +31,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         report({
           label: "baseline report",
           preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("10000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -61,7 +60,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         report({
           label: "baseline report",
           preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("10000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -90,7 +88,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         report({
           label: "baseline report",
           preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("10000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -127,7 +124,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
           report({
             label: `stable report ${index + 1}`,
             preValidatorsBalance: ether("10000"),
-            prePendingBalance: 0n,
             postValidatorsBalance: ether("10000"),
             postPendingBalance: 0n,
             deposits: 0n,
@@ -158,7 +154,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
           report({
             label: `stable report ${index + 1}`,
             preValidatorsBalance: ether("10000"),
-            prePendingBalance: 0n,
             postValidatorsBalance: ether("10000"),
             postPendingBalance: 0n,
             deposits: 0n,
@@ -189,7 +184,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         report({
           label: "baseline report",
           preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("10000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -240,7 +234,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         report({
           label: "old baseline report",
           preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("10000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -285,7 +278,6 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         report({
           label: "old baseline report",
           preValidatorsBalance: ether("12500"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("12500"),
           postPendingBalance: 0n,
           deposits: 0n,

@@ -3,7 +3,7 @@ import { ether } from "lib";
 import { migrate, MIGRATION_CL_WITHDRAWALS, NegativeRebaseFormulaFixtureSet, report } from "../lib";
 
 const mainnetCLValidators = 281_250n;
-const mainnetCLValidatorsBalance = ether("9000000");
+const mainnetCLValidatorsBalance = mainnetCLValidators * ether("32");
 const mainnetFirstReportWindowLimit = ether("321926.4");
 const mainnetCLDecreaseAtWindowLimit = MIGRATION_CL_WITHDRAWALS + mainnetFirstReportWindowLimit;
 const firstReportWindowSpend = ether("100000");
@@ -37,12 +37,8 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: mainnetCLDecreaseAtWindowLimit,
         }),
         report({
@@ -67,12 +63,8 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: mainnetCLDecreaseAtWindowLimit + 1n,
         }),
         report({
@@ -97,12 +89,8 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with 100 ETH vault baseline",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: ether("100"),
         }),
         report({
@@ -133,12 +121,8 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with first-report window spend",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: firstReportCLDecrease,
         }),
         report({
@@ -170,12 +154,8 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with first-report window spend",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: firstReportCLDecrease,
         }),
         report({

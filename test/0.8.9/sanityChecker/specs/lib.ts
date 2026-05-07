@@ -53,19 +53,12 @@ export type ModuleBalanceStep = {
 export type MigrationStep = {
   kind: "migration";
   label: string;
-  clValidatorsBalance: bigint;
-  clPendingBalance: bigint;
-  deposits: bigint;
+  clValidators: bigint;
+  transientDeposits: bigint;
   withdrawalVaultBalance: bigint;
-  bufferedEther?: bigint;
-  depositedValidators?: bigint;
-  clValidators?: bigint;
 };
 
-export type FinalizeUpgradeV4MigrationStep = MigrationStep & {
-  depositedValidators: bigint;
-  clValidators: bigint;
-};
+export type FinalizeUpgradeV4MigrationStep = MigrationStep;
 
 export type ReportCLState = {
   preValidatorsBalance: bigint;
@@ -107,33 +100,23 @@ export type ResolvedScenarioStep = MigrationStep | ReportStep;
 
 export const migrate = ({
   label,
-  clValidatorsBalance,
-  clPendingBalance,
-  deposits,
-  withdrawalVaultBalance,
-  bufferedEther,
-  depositedValidators,
   clValidators,
+  transientDeposits,
+  withdrawalVaultBalance,
 }: {
   label: string;
-  clValidatorsBalance: bigint;
-  clPendingBalance: bigint;
-  deposits: bigint;
+  clValidators: bigint;
+  transientDeposits: bigint;
   withdrawalVaultBalance: bigint;
-  bufferedEther?: bigint;
-  depositedValidators?: bigint;
-  clValidators?: bigint;
 }): MigrationStep => ({
   kind: "migration",
   label,
-  clValidatorsBalance,
-  clPendingBalance,
-  deposits,
-  withdrawalVaultBalance,
-  bufferedEther,
-  depositedValidators,
   clValidators,
+  transientDeposits,
+  withdrawalVaultBalance,
 });
+
+export const getMigrationCLValidatorsBalance = (step: MigrationStep) => step.clValidators * DEPOSIT_SIZE;
 
 export const isReportStep = (step: ScenarioStep): step is ReportStepInput => step.kind === "report";
 
@@ -143,12 +126,8 @@ type PreviousCLState = {
 };
 
 export const resolveReportStep = (step: ReportStepInput, previousCLState?: PreviousCLState): ReportStep => {
-  const preValidatorsBalance = step.cl.preValidatorsBalance ?? previousCLState?.validatorsBalance;
-  const prePendingBalance = step.cl.prePendingBalance ?? previousCLState?.pendingBalance;
-
-  if (preValidatorsBalance === undefined || prePendingBalance === undefined) {
-    throw new Error(`Report '${step.label}' is missing pre CL state and has no previous step to inherit from`);
-  }
+  const preValidatorsBalance = step.cl.preValidatorsBalance ?? previousCLState?.validatorsBalance ?? 0n;
+  const prePendingBalance = step.cl.prePendingBalance ?? previousCLState?.pendingBalance ?? 0n;
 
   return {
     ...step,
@@ -166,8 +145,8 @@ export const resolveScenarioSteps = (steps: ScenarioStep[]): ResolvedScenarioSte
   return steps.map((step) => {
     if (!isReportStep(step)) {
       previousCLState = {
-        validatorsBalance: step.clValidatorsBalance,
-        pendingBalance: step.clPendingBalance,
+        validatorsBalance: getMigrationCLValidatorsBalance(step),
+        pendingBalance: 0n,
       };
       return step;
     }
@@ -197,7 +176,7 @@ export type FinalizeUpgradeV4CheckerFixture = {
 };
 
 export const hasFinalizeUpgradeV4State = (step: MigrationStep): step is FinalizeUpgradeV4MigrationStep =>
-  step.depositedValidators !== undefined && step.clValidators !== undefined;
+  step.clValidators !== undefined;
 
 export const deployFinalizeUpgradeV4Checker = async (
   limitsList: OracleReportLimits,
@@ -257,12 +236,13 @@ export const migrateFinalizeUpgradeV4State = async (
   fixture: FinalizeUpgradeV4CheckerFixture,
   step: MigrationStep,
 ): Promise<LidoBalanceStats> => {
-  if (!hasFinalizeUpgradeV4State(step)) {
-    throw new Error(`Migration step '${step.label}' is missing finalizeUpgrade_v4 validator state`);
+  if (step.transientDeposits % DEPOSIT_SIZE !== 0n) {
+    throw new Error(`Migration step '${step.label}' has transientDeposits that are not divisible by 32 ETH`);
   }
 
-  const depositedValidators = step.depositedValidators;
+  const depositedValidators = step.clValidators + step.transientDeposits / DEPOSIT_SIZE;
   const clValidators = step.clValidators;
+  const clValidatorsBalance = getMigrationCLValidatorsBalance(step);
   const depositedSinceLastReport = (depositedValidators - clValidators) * DEPOSIT_SIZE;
   const lidoV3Harness = await ethers.getContractAt(
     ["function harness_setV3BalanceState(uint256,uint256,uint256,uint256) external"],
@@ -271,9 +251,9 @@ export const migrateFinalizeUpgradeV4State = async (
 
   await fixture.accountingOracle.mock_setProcessingState(FINALIZE_UPGRADE_V4_MIGRATION_REF_SLOT, true, true);
   await lidoV3Harness.harness_setV3BalanceState(
-    step.bufferedEther ?? FINALIZE_UPGRADE_V4_INITIAL_BUFFERED_ETHER,
+    FINALIZE_UPGRADE_V4_INITIAL_BUFFERED_ETHER,
     depositedValidators,
-    step.clValidatorsBalance,
+    clValidatorsBalance,
     clValidators,
   );
 
@@ -281,17 +261,13 @@ export const migrateFinalizeUpgradeV4State = async (
 
   const balanceStats = await fixture.lido.getBalanceStats();
   expect(balanceStats.clValidatorsBalanceAtLastReport, `${step.label}: migrated validators balance`).to.equal(
-    step.clValidatorsBalance,
+    clValidatorsBalance,
   );
-  expect(balanceStats.clPendingBalanceAtLastReport, `${step.label}: migrated pending balance`).to.equal(
-    step.clPendingBalance,
-  );
+  expect(balanceStats.clPendingBalanceAtLastReport, `${step.label}: migrated pending balance`).to.equal(0n);
   expect(balanceStats.depositedSinceLastReport, `${step.label}: migrated deposits since last report`).to.equal(
     depositedSinceLastReport,
   );
-  expect(balanceStats.depositedForCurrentReport, `${step.label}: migrated deposits for current report`).to.equal(
-    step.deposits,
-  );
+  expect(balanceStats.depositedForCurrentReport, `${step.label}: migrated deposits for current report`).to.equal(0n);
 
   await setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
   await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;

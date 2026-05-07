@@ -66,7 +66,7 @@ export const moduleReport = ({
   label,
   timeElapsed = DAY,
   preCLValidatorsBalance,
-  preCLPendingBalance,
+  preCLPendingBalance = 0n,
   postCLPendingBalance,
   deposits,
   clWithdrawals,
@@ -76,7 +76,7 @@ export const moduleReport = ({
   label: string;
   timeElapsed?: bigint;
   preCLValidatorsBalance?: bigint;
-  preCLPendingBalance: bigint;
+  preCLPendingBalance?: bigint;
   postCLPendingBalance: bigint;
   deposits: bigint;
   clWithdrawals: bigint;

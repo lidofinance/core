@@ -16,6 +16,7 @@ import { ether, impersonate, randomAddress } from "lib";
 import {
   deployFinalizeUpgradeV4Checker,
   FinalizeUpgradeV4CheckerFixture,
+  getMigrationCLValidatorsBalance,
   hasFinalizeUpgradeV4State,
   migrateFinalizeUpgradeV4State,
   MigrationStep,
@@ -125,12 +126,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     } else {
       await setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
       await fixture.lido.mock__setContractVersion(4n);
-      await fixture.lido.mock__setBalanceStats(
-        step.clValidatorsBalance,
-        step.clPendingBalance,
-        step.deposits,
-        step.deposits,
-      );
+      await fixture.lido.mock__setBalanceStats(getMigrationCLValidatorsBalance(step), 0n, 0n, 0n);
 
       await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
     }

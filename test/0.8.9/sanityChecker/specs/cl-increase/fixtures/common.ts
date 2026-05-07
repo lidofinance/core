@@ -30,8 +30,6 @@ export const commonClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         report({
           label: "first report deposits",
-          preValidatorsBalance: 0n,
-          prePendingBalance: 0n,
           postValidatorsBalance: 0n,
           postPendingBalance: ether("500"),
           deposits: ether("500"),
@@ -102,7 +100,6 @@ export const commonClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         report({
           label: "activation above appeared limit",
-          preValidatorsBalance: 0n,
           prePendingBalance: ether("101"),
           postValidatorsBalance: 0n,
           postPendingBalance: 0n,

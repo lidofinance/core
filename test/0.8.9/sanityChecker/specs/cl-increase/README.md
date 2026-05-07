@@ -27,7 +27,19 @@ validatorsGrowthLimit = activatedBalance + annualSafetyCap(preValidatorsBalance 
 
 CL withdrawals reduce the validator baseline before reported validator growth is measured.
 The runner maps fixture `clWithdrawals` to the withdrawal vault balance used by the contract.
-Migration fixtures may also run the real `finalizeUpgrade_v4()` path before calling `migrateBaselineSnapshot()`.
+Migration fixtures run the real no-arg `finalizeUpgrade_v4()` path before calling `migrateBaselineSnapshot()`.
+The migration step describes the v3 state seeded by the test harness:
+
+```ts
+migrate({
+  label: "Mainnet finalized v4 migration",
+  clValidators: 281_250n,
+  transientDeposits: ether("57600"),
+  withdrawalVaultBalance: 0n,
+});
+```
+
+Migrated CL balance is derived as `clValidators * 32 ETH`.
 
 ## Files
 

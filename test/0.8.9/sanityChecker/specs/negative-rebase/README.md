@@ -27,7 +27,6 @@ Each case is a `steps` sequence. A report step describes one oracle report snaps
   timeElapsed: DAY,
   cl: {
     preValidatorsBalance: ether("10000"),
-    prePendingBalance: 0n,
     postValidatorsBalance: ether("10000"),
     postPendingBalance: 0n,
   },
@@ -52,24 +51,23 @@ Use a migration step when the scenario starts from `migrateBaselineSnapshot()`:
 ```ts
 migrate({
   label: "migration baseline",
-  clValidatorsBalance: ether("100000"),
-  clPendingBalance: ether("7000"),
-  deposits: ether("3"),
+  clValidators: 3_125n,
+  transientDeposits: 0n,
   withdrawalVaultBalance: ether("10000"),
 });
 ```
 
-Migration fixtures that exercise `finalizeUpgrade_v4()` also set the v3 validator counts on the migration step:
+The migration call itself has no arguments. The fixture step describes the v3 state seeded before
+`finalizeUpgrade_v4()` and the withdrawal vault balance observed by `migrateBaselineSnapshot()`.
+Migrated CL balance is derived as `clValidators * 32 ETH`.
+`transientDeposits` is the amount submitted to the deposit contract after the last report; the runner derives
+`depositedValidators` from it.
 
 ```ts
 migrate({
   label: "Mainnet finalized v4 migration",
-  bufferedEther: 1n,
-  depositedValidators: 281_250n,
   clValidators: 281_250n,
-  clValidatorsBalance: ether("9000000"),
-  clPendingBalance: 0n,
-  deposits: 0n,
+  transientDeposits: 0n,
   withdrawalVaultBalance: ether("100000"),
 });
 ```
@@ -136,7 +134,6 @@ To fill a 36-day window with identical reports:
   report({
     label: `stable report ${index + 1}`,
     preValidatorsBalance: ether("10000"),
-    prePendingBalance: 0n,
     postValidatorsBalance: ether("10000"),
     postPendingBalance: 0n,
     deposits: 0n,

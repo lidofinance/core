@@ -30,7 +30,6 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
         moduleReport({
           label: "first module report",
           preCLValidatorsBalance: ether("120"),
-          preCLPendingBalance: 0n,
           postCLPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
@@ -112,7 +111,6 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
       steps: [
         moduleReport({
           label: "redistribution inside corridor",
-          preCLPendingBalance: 0n,
           postCLPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
@@ -143,7 +141,6 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
       steps: [
         moduleReport({
           label: "first post-migration module report",
-          preCLPendingBalance: 0n,
           postCLPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
@@ -162,7 +159,6 @@ export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
         }),
         moduleReport({
           label: "module-positive delta above corridor",
-          preCLPendingBalance: 0n,
           postCLPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,

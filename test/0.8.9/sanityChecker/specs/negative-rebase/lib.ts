@@ -1,6 +1,7 @@
 import {
   DAY,
   FormulaFixtureSet,
+  getMigrationCLValidatorsBalance,
   migrate,
   MigrationStep,
   OracleReportLimits,
@@ -98,7 +99,7 @@ export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => 
 
   for (const step of steps) {
     if (step.kind === "migration") {
-      const postCLBalance = step.clValidatorsBalance + step.clPendingBalance;
+      const postCLBalance = getMigrationCLValidatorsBalance(step);
       storedReports.push({
         timestamp,
         postCLBalance,
@@ -108,7 +109,7 @@ export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => 
       storedReports.push({
         timestamp,
         postCLBalance,
-        deposits: step.deposits,
+        deposits: 0n,
         clWithdrawals: MIGRATION_CL_WITHDRAWALS,
       });
       continue;

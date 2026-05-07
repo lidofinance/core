@@ -3,8 +3,7 @@ import { ether } from "lib";
 import { ClIncreaseFixtureSet, migrate, report } from "../lib";
 
 const mainnetCLValidators = 281_250n;
-const mainnetCLValidatorsBalance = ether("9000000");
-const noTransientDepositsValidators = mainnetCLValidators;
+const mainnetCLValidatorsBalance = mainnetCLValidators * ether("32");
 const oneValidatorTransientDeposits = ether("32");
 const appearedLimitTransientDeposits = ether("57600");
 const aboveAppearedLimitTransientDeposits = ether("57632");
@@ -38,18 +37,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with withdrawal vault balance",
-          bufferedEther: 1n,
-          depositedValidators: noTransientDepositsValidators,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: migrationVaultBalanceAboveDailyAprCap,
         }),
         report({
           label: "neutral first report",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -67,18 +61,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration without transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: noTransientDepositsValidators,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report without transient deposits",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -101,18 +90,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with one transient validator",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators + 1n,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: oneValidatorTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report with one transient validator pending",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance,
           postPendingBalance: oneValidatorTransientDeposits,
           deposits: oneValidatorTransientDeposits,
@@ -135,18 +119,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with appeared-limit transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators + 1_800n,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: appearedLimitTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report with appeared-limit transient deposits pending",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance,
           postPendingBalance: appearedLimitTransientDeposits,
           deposits: appearedLimitTransientDeposits,
@@ -169,18 +148,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with above-limit transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators + 1_801n,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: aboveAppearedLimitTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report with above-limit transient deposits pending",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance,
           postPendingBalance: aboveAppearedLimitTransientDeposits,
           deposits: aboveAppearedLimitTransientDeposits,
@@ -203,18 +177,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration without transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: noTransientDepositsValidators,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: 0n,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report without activated deposits",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance,
           postPendingBalance: 0n,
           deposits: 0n,
@@ -234,18 +203,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with pending transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators + 1_800n,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: appearedLimitTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report keeps all transient deposits pending",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance,
           postPendingBalance: appearedLimitTransientDeposits,
           deposits: appearedLimitTransientDeposits,
@@ -265,18 +229,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with partially activated transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators + 1_800n,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: appearedLimitTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report activates part of transient deposits",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance + partiallyActivatedDeposits,
           postPendingBalance: appearedLimitTransientDeposits - partiallyActivatedDeposits,
           deposits: appearedLimitTransientDeposits,
@@ -297,18 +256,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with fully activated transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators + 1_800n,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: appearedLimitTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report activates all appeared-limit transient deposits",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance + appearedLimitTransientDeposits,
           postPendingBalance: 0n,
           deposits: appearedLimitTransientDeposits,
@@ -329,18 +283,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with above-limit transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators + 1_801n,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: aboveAppearedLimitTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report activates exactly the appeared limit",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance + appearedLimitTransientDeposits,
           postPendingBalance: oneValidatorTransientDeposits,
           deposits: aboveAppearedLimitTransientDeposits,
@@ -361,18 +310,13 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with above-limit transient deposits",
-          bufferedEther: 1n,
-          depositedValidators: mainnetCLValidators + 1_801n,
           clValidators: mainnetCLValidators,
-          clValidatorsBalance: mainnetCLValidatorsBalance,
-          clPendingBalance: 0n,
-          deposits: 0n,
+          transientDeposits: aboveAppearedLimitTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "first report activates one wei above the appeared limit",
           preValidatorsBalance: mainnetCLValidatorsBalance,
-          prePendingBalance: 0n,
           postValidatorsBalance: mainnetCLValidatorsBalance + appearedLimitTransientDeposits + 1n,
           postPendingBalance: oneValidatorTransientDeposits - 1n,
           deposits: aboveAppearedLimitTransientDeposits,

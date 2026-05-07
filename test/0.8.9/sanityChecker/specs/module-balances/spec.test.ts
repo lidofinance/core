@@ -14,6 +14,8 @@ import {
 
 import { ether, impersonate, randomAddress } from "lib";
 
+import { getMigrationCLValidatorsBalance } from "../lib";
+
 import { moduleBalanceFixtureSets } from "./fixtures/index";
 import {
   calcModuleBalanceFormula,
@@ -129,7 +131,7 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
   ) => {
     await setBalance(withdrawalVaultAddress, step.withdrawalVaultBalance);
     await lido.mock__setContractVersion(4n);
-    await lido.mock__setBalanceStats(step.clValidatorsBalance, step.clPendingBalance, step.deposits, step.deposits);
+    await lido.mock__setBalanceStats(getMigrationCLValidatorsBalance(step), 0n, 0n, 0n);
 
     await expect(checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
     state.lastVaultBalanceAfterTransfer = step.withdrawalVaultBalance;

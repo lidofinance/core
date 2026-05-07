@@ -30,7 +30,6 @@ export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureS
         report({
           label: "Hoodi previous accepted report",
           preValidatorsBalance: ether("2000000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("2000000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -59,7 +58,6 @@ export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureS
         report({
           label: "Hoodi baseline report",
           preValidatorsBalance: ether("10000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("10000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -84,7 +82,6 @@ export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureS
         report({
           label: "Hoodi previous accepted report",
           preValidatorsBalance: ether("2000000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("2000000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -113,7 +110,6 @@ export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureS
         report({
           label: `Report before slashing`,
           preValidatorsBalance: ether("2000000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("2000000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -167,7 +163,6 @@ export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureS
         report({
           label: `Report before slashing`,
           preValidatorsBalance: ether("2000000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("2000000"),
           postPendingBalance: 0n,
           deposits: 0n,
@@ -221,7 +216,6 @@ export const hoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureS
         report({
           label: `Report before slashing`,
           preValidatorsBalance: ether("2000000"),
-          prePendingBalance: 0n,
           postValidatorsBalance: ether("2000000"),
           postPendingBalance: 0n,
           deposits: 0n,
