@@ -68,13 +68,11 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
     });
 
     it("Reverts upgrade if occurred before report", async () => {
-      // simulate no report
       await accountingOracle.mock_setProcessingState(1, false, false);
       await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("NO_REPORT");
     });
 
     it("Migrates storage successfully after report and before next frame", async () => {
-      // simulate report
       await accountingOracle.mock_setProcessingState(1, true, true);
       const { low: bufferedEther, high: depositedValidators } = await getStorageAtPositionAsUint128Pair(
         lido,
@@ -97,6 +95,19 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       expect((await lido.getBalanceStats()).clPendingBalanceAtLastReport).to.equal(0);
       expect((await lido.getBalanceStats()).depositedSinceLastReport).to.equal(depositedBalance);
       expect((await lido.getBalanceStats()).depositedForCurrentReport).to.equal(0);
+
+      const { low: wipedBufferedEther, high: wipedDepositedValidators } = await getStorageAtPositionAsUint128Pair(
+        lido,
+        "lido.Lido.bufferedEtherAndDepositedValidators",
+      );
+      const { low: wipedClBalance, high: wipedClValidators } = await getStorageAtPositionAsUint128Pair(
+        lido,
+        "lido.Lido.clBalanceAndClValidators",
+      );
+      expect(wipedBufferedEther).to.equal(0);
+      expect(wipedDepositedValidators).to.equal(0);
+      expect(wipedClBalance).to.equal(0);
+      expect(wipedClValidators).to.equal(0);
     });
   });
 });
