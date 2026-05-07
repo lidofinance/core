@@ -56,7 +56,7 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
     },
     {
       title: "reverts Hoodi first post-migration decrease one wei above the adjusted window limit",
-      rationale: "The first post-migration report uses the same strict greater-than boundary as steady state.",
+      rationale: "With the migrated withdrawal vault baseline seeded, vault ETH cannot mask the CL decrease.",
       steps: [
         migrate({
           label: "Hoodi finalized v4 migration",
@@ -78,6 +78,29 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
           actualCLBalanceDiff: hoodiFirstReportWindowLimit + 1n,
           maxAllowedCLBalanceDiff: hoodiFirstReportWindowLimit,
         },
+      },
+    },
+    {
+      title: "accepts Hoodi counterfactual decrease when vault balance is counted as fresh withdrawals",
+      rationale: "With a zero vault baseline, the same vault delta masks the CL decrease as withdrawals.",
+      steps: [
+        migrate({
+          label: "Hoodi counterfactual zero vault baseline",
+          clValidators: hoodiCLValidators,
+          transientDeposits: 0n,
+          withdrawalVaultBalance: 0n,
+        }),
+        report({
+          label: "Hoodi first report with vault delta masking decrease",
+          postValidatorsBalance: hoodiCLValidatorsBalance - hoodiCLDecreaseAtWindowLimit - 1n,
+          postPendingBalance: 0n,
+          deposits: 0n,
+          clWithdrawals: hoodiCLDecreaseAtWindowLimit + 1n,
+        }),
+      ],
+      expected: {
+        outcome: "accepted",
+        lastReportCLWithdrawals: hoodiCLDecreaseAtWindowLimit + 1n,
       },
     },
   ],

@@ -59,7 +59,7 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
     },
     {
       title: "reverts Mainnet first post-migration decrease one wei above the adjusted window limit",
-      rationale: "The first post-migration report pins the strict upper boundary for a 9M ETH migration.",
+      rationale: "With the migrated withdrawal vault baseline seeded, vault ETH cannot mask the CL decrease.",
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration",
@@ -81,6 +81,29 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
           actualCLBalanceDiff: mainnetFirstReportWindowLimit + 1n,
           maxAllowedCLBalanceDiff: mainnetFirstReportWindowLimit,
         },
+      },
+    },
+    {
+      title: "accepts Mainnet counterfactual decrease when vault balance is counted as fresh withdrawals",
+      rationale: "With a zero vault baseline, the same vault delta masks the CL decrease as withdrawals.",
+      steps: [
+        migrate({
+          label: "Mainnet counterfactual zero vault baseline",
+          clValidators: mainnetCLValidators,
+          transientDeposits: 0n,
+          withdrawalVaultBalance: 0n,
+        }),
+        report({
+          label: "Mainnet first report with vault delta masking decrease",
+          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetCLDecreaseAtWindowLimit - 1n,
+          postPendingBalance: 0n,
+          deposits: 0n,
+          clWithdrawals: mainnetCLDecreaseAtWindowLimit + 1n,
+        }),
+      ],
+      expected: {
+        outcome: "accepted",
+        lastReportCLWithdrawals: mainnetCLDecreaseAtWindowLimit + 1n,
       },
     },
     {
