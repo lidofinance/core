@@ -11,7 +11,7 @@ import {
   OracleReportSanityChecker,
 } from "typechain-types";
 
-import { ether, impersonate } from "lib";
+import { ether, impersonate, randomAddress } from "lib";
 
 import {
   deployFinalizeUpgradeV4Checker,
@@ -39,7 +39,8 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     | (FinalizeUpgradeV4CheckerFixture & { kind: "finalizeUpgradeV4" });
 
   const deployMockChecker = async (limitsList: OracleReportLimits): Promise<MockCheckerFixture> => {
-    const [deployer, withdrawalVault] = await ethers.getSigners();
+    const [deployer] = await ethers.getSigners();
+    const withdrawalVaultAddress = randomAddress();
     const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
     const accounting = (await ethers.deployContract(
       "Accounting__MockForSanityChecker",
@@ -65,7 +66,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
         stakingRouter: await stakingRouter.getAddress(),
         treasury: deployer.address,
         withdrawalQueue: deployer.address,
-        withdrawalVault: withdrawalVault.address,
+        withdrawalVault: withdrawalVaultAddress,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
         validatorExitDelayVerifier: deployer.address,
@@ -93,7 +94,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
       checker,
       accountingSigner: await impersonate(await accounting.getAddress(), ether("1")),
       lido,
-      withdrawalVaultAddress: withdrawalVault.address,
+      withdrawalVaultAddress,
     };
   };
 

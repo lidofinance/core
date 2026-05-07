@@ -11,7 +11,7 @@ import {
   OracleReportSanityChecker,
 } from "typechain-types";
 
-import { ether, impersonate } from "lib";
+import { ether, impersonate, randomAddress } from "lib";
 
 import {
   deployFinalizeUpgradeV4Checker,
@@ -43,8 +43,9 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     | (FinalizeUpgradeV4CheckerFixture & { kind: "finalizeUpgradeV4" });
 
   const deployMockChecker = async (limitsList: OracleReportLimits): Promise<MockCheckerFixture> => {
-    const [deployer, withdrawalVault] = await ethers.getSigners();
-    await setBalance(withdrawalVault.address, ether("10000"));
+    const [deployer] = await ethers.getSigners();
+    const withdrawalVaultAddress = randomAddress();
+    await setBalance(withdrawalVaultAddress, ether("10000"));
 
     const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
     const accounting = (await ethers.deployContract(
@@ -71,7 +72,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
         stakingRouter: await stakingRouter.getAddress(),
         treasury: deployer.address,
         withdrawalQueue: deployer.address,
-        withdrawalVault: withdrawalVault.address,
+        withdrawalVault: withdrawalVaultAddress,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
         validatorExitDelayVerifier: deployer.address,
@@ -100,7 +101,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
       accountingSigner: await impersonate(await accounting.getAddress(), ether("1")),
       accountingOracle,
       lido,
-      withdrawalVaultAddress: withdrawalVault.address,
+      withdrawalVaultAddress,
     };
   };
 

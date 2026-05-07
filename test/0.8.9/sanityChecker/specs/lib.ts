@@ -12,7 +12,7 @@ import {
   OracleReportSanityChecker,
 } from "typechain-types";
 
-import { ether, impersonate, proxify } from "lib";
+import { ether, impersonate, proxify, randomAddress } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/locator";
 
@@ -146,7 +146,9 @@ export const hasFinalizeUpgradeV4State = (step: MigrationStep): step is Finalize
 export const deployFinalizeUpgradeV4Checker = async (
   limitsList: OracleReportLimits,
 ): Promise<FinalizeUpgradeV4CheckerFixture> => {
-  const [deployer, withdrawalVault, elRewardsVault] = await ethers.getSigners();
+  const [deployer] = await ethers.getSigners();
+  const withdrawalVaultAddress = randomAddress();
+  const elRewardsVaultAddress = randomAddress();
   const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
   const accounting = (await ethers.deployContract(
     "Accounting__MockForSanityChecker",
@@ -178,8 +180,8 @@ export const deployFinalizeUpgradeV4Checker = async (
     {
       accounting: await accounting.getAddress(),
       oracleReportSanityChecker: await checker.getAddress(),
-      withdrawalVault: withdrawalVault.address,
-      elRewardsVault: elRewardsVault.address,
+      withdrawalVault: withdrawalVaultAddress,
+      elRewardsVault: elRewardsVaultAddress,
       burner: await burner.getAddress(),
     },
     undefined,
@@ -191,7 +193,7 @@ export const deployFinalizeUpgradeV4Checker = async (
     accountingSigner: await impersonate(await accounting.getAddress(), ether("1")),
     accountingOracle,
     lido,
-    withdrawalVaultAddress: withdrawalVault.address,
+    withdrawalVaultAddress,
   };
 };
 
