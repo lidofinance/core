@@ -994,28 +994,6 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(limitWithConsolidationInWei, exitedPerDayForGuaranteedRevert);
     });
 
-    it("checkAppearedEthAmountPerDay includes consolidation limit", async () => {
-      const limits = await checker.getOracleReportLimits();
-      const limitWithConsolidationInWei =
-        (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
-
-      await expect(checker.checkAppearedEthAmountPerDay(0n)).not.to.be.reverted;
-
-      const guaranteedExceededAppearedPerDayValue = limitWithConsolidationInWei + 1n;
-
-      await expect(checker.checkAppearedEthAmountPerDay(guaranteedExceededAppearedPerDayValue))
-        .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
-        .withArgs(limitWithConsolidationInWei, guaranteedExceededAppearedPerDayValue);
-    });
-
-    it("checkAppearedEthAmountPerDay allows exact configured limit", async () => {
-      const limits = await checker.getOracleReportLimits();
-      const limitWithConsolidationInWei =
-        (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
-
-      await expect(checker.checkAppearedEthAmountPerDay(limitWithConsolidationInWei)).not.to.be.reverted;
-    });
-
     it("checkNodeOperatorsPerExtraDataItemCount", async () => {
       const limit = (await checker.getOracleReportLimits()).maxNodeOperatorsPerExtraDataItem;
       await expect(checker.checkNodeOperatorsPerExtraDataItemCount(12n, limit)).not.to.be.reverted;

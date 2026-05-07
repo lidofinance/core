@@ -218,7 +218,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
     uint256 private constant ANNUAL_BALANCE_INCREASE_DENOMINATOR = 365 days * MAX_BASIS_POINTS;
-    /// @dev Max effective balance of a single validator, used as a boundary allowance for CL activation churn.
+    /// @dev Electra max effective balance of a single validator. The appeared ETH limit is prorated by elapsed time,
+    ///      while CL activations are discrete, so one max validator is allowed as a report-window boundary allowance.
     uint256 private constant MAX_VALIDATOR_EFFECTIVE_BALANCE = 2_048 ether;
     /// @dev Maximum withdrawals ether used for migration bootstrap, bounded by CL churn limit per report window
     uint256 private constant MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT = 57_600 ether;
@@ -799,12 +800,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkExitedEthAmountPerDay(limitsList, exitedEthAmountPerDay);
     }
 
-    /// @notice Check appeared ETH amount rate per day.
-    /// @param _appearedEthAmountPerDay Appeared ETH amount per day in Wei.
-    function checkAppearedEthAmountPerDay(uint256 _appearedEthAmountPerDay) external view {
-        _checkAppearedEthAmountPerDay(_accountingCoreLimits, _appearedEthAmountPerDay);
-    }
-
     /// @notice check the number of node operators reported per extra data item in the accounting oracle report.
     /// @param _itemIndex Index of item in extra data
     /// @param _nodeOperatorsCount Number of validator exit requests supplied per oracle report
@@ -895,18 +890,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             1 ether;
         if (_exitedEthAmountPerDay > exitedEthLimitWithConsolidation) {
             revert ExitedEthAmountPerDayLimitExceeded(exitedEthLimitWithConsolidation, _exitedEthAmountPerDay);
-        }
-    }
-
-    function _checkAppearedEthAmountPerDay(
-        AccountingCoreLimitsPacked memory _limitsList,
-        uint256 _appearedEthAmountPerDay
-    ) internal pure {
-        uint256 appearedEthLimitWithConsolidation =
-            (uint256(_limitsList.appearedEthAmountPerDayLimit) + uint256(_limitsList.consolidationEthAmountPerDayLimit)) *
-            1 ether;
-        if (_appearedEthAmountPerDay > appearedEthLimitWithConsolidation) {
-            revert AppearedEthAmountPerDayLimitExceeded(appearedEthLimitWithConsolidation, _appearedEthAmountPerDay);
         }
     }
 
@@ -1507,7 +1490,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectTotalActivatedBalance(uint256 maxAllowed, uint256 actual);
     error IncorrectTotalCLBalanceIncrease(uint256 maxAllowed, uint256 actual);
     error IncorrectTotalModuleValidatorsBalanceIncrease(uint256 maxAllowed, uint256 actual);
-    error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
