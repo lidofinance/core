@@ -137,7 +137,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION =
         0x8d3ed945c7718edcdb639b1235f2bbe3fa81f4a6cec7a436d8ea13fbc502d957;
 
-    /// @dev CL validators balance and deposited balance since last report
+    /// @dev CL validators balance and CL pending deposit balance
     /// |----- 128 bit ------------|------ 128 bit -------|
     /// | CL validators balance    |  CL pending balance  |
     /// keccak256("lido.Lido.clValidatorsBalanceAndClPendingBalance");
@@ -159,7 +159,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb;
 
-    /// @dev Storage slot for deposits reserve.
+    /// @dev Storage slot for deposit reserve.
     /// Holds buffered ether that remains depositable even when withdrawals demand exists.
     /// Lifecycle:
     ///   1) can be decreased by `setDepositsReserveTarget()` when target is lowered;

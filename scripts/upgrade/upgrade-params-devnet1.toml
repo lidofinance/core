@@ -153,7 +153,7 @@ curatedGates = [
 # TODO: replace with deployed curated verifier before execution
 verifier = "0x0000000000000000000000000000000000000000"
 circuitBreakerPauser = "0x8943545177806ED17B9F23F0a21ee5948eCaa776"
-moduleName = "curated-onchain-v1"
+moduleName = "curated-onchain-v2"
 stakeShareLimit = 2000
 priorityExitShareThreshold = 2500
 stakingModuleFee = 800
