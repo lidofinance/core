@@ -538,8 +538,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 lidoVersion = IVersioned(lidoAddr).getContractVersion();
         if (lidoVersion != 4) revert UnexpectedLidoVersion(lidoVersion, 4);
 
-        (uint256 migrationCLValidatorsBalance, uint256 migrationCLPendingBalance,, uint256 migrationDeposits) = ILido(lidoAddr)
-            .getBalanceStats();
+        (uint256 migrationCLValidatorsBalance, uint256 migrationCLPendingBalance,,) = ILido(lidoAddr).getBalanceStats();
         uint256 migrationCLBalance = migrationCLValidatorsBalance + migrationCLPendingBalance;
         uint256 migrationCLWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
         // Initialize vault state: vault is not drained during migration,
@@ -558,7 +557,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // so migration-time withdrawals must live in the next snapshot to be visible in the first window.
         _addReportData(migrationReportTimestamp, migrationCLBalance, 0, migrationCLWithdrawals);
 
-        emit BaselineSnapshotMigrated(migrationCLBalance, migrationDeposits, migrationCLWithdrawals);
+        emit BaselineSnapshotMigrated(migrationCLBalance, migrationCLWithdrawals);
     }
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
@@ -1520,7 +1519,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error MigrationAlreadyDone();
     error UnexpectedLidoVersion(uint256 actual, uint256 expected);
 
-    event BaselineSnapshotMigrated(uint256 clBalance, uint256 deposits, uint256 clWithdrawals);
+    event BaselineSnapshotMigrated(uint256 clBalance, uint256 clWithdrawals);
 }
 
 library LimitsListPacker {

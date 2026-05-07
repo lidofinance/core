@@ -1165,7 +1165,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       await expect(checker.migrateBaselineSnapshot())
         .to.emit(checker, "BaselineSnapshotMigrated")
-        .withArgs(expectedCLBalance, deposits, CHURN_LIMIT);
+        .withArgs(expectedCLBalance, CHURN_LIMIT);
 
       expect(await checker.getReportDataCount()).to.equal(2);
 

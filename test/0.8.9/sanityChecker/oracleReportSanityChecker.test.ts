@@ -1979,7 +1979,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot())
         .to.emit(migrationChecker, "BaselineSnapshotMigrated")
-        .withArgs(ether("107"), ether("3"), MIGRATION_WITHDRAWALS);
+        .withArgs(ether("107"), MIGRATION_WITHDRAWALS);
 
       expect(await migrationChecker.getReportDataCount()).to.equal(2n);
 
