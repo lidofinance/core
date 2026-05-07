@@ -141,6 +141,7 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
     report: ModuleBalanceReport,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
+    const withdrawalsVaultTransfer = report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals;
 
     return checker
       .connect(accountingSigner)
@@ -154,7 +155,7 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
         0n,
         0n,
         report.movements.deposits,
-        report.movements.clWithdrawals,
+        withdrawalsVaultTransfer,
       );
   };
 
@@ -203,7 +204,8 @@ describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
       `${title}: accounting report '${report.label}'`,
     ).not.to.be.reverted;
 
-    state.lastVaultBalanceAfterTransfer = withdrawalVaultBalance - report.movements.clWithdrawals;
+    state.lastVaultBalanceAfterTransfer =
+      withdrawalVaultBalance - (report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals);
     await recordAcceptedModuleBalances(stakingRouter, report);
   };
 

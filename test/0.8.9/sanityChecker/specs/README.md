@@ -41,6 +41,6 @@ Other checks stay in the technical test files unless their formula becomes large
 - use case `limits` only for explicit overrides
 - keep fixtures as data, not helper code
 - keep fixture sets in separate files and export them from `fixtures/index.ts`
-- keep plumbing fields out of fixtures unless the formula itself depends on them
+- keep plumbing fields out of fixtures unless the scenario is explicitly about that state transition
 - add explicit expected formula values for boundary and regression cases
 - add a fixture for each new formula scenario

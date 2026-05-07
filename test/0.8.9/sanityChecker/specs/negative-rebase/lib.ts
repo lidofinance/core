@@ -24,6 +24,7 @@ export type NegativeRebaseFormulaCase = {
   expected: {
     outcome: "revert" | "accepted";
     window?: ExpectedWindowDiff;
+    lastReportCLWithdrawals?: bigint;
   };
 };
 
@@ -45,6 +46,7 @@ export const report = ({
   postPendingBalance,
   deposits,
   clWithdrawals,
+  withdrawalsVaultTransfer,
 }: {
   label: string;
   timeElapsed?: bigint;
@@ -54,6 +56,7 @@ export const report = ({
   postPendingBalance: bigint;
   deposits: bigint;
   clWithdrawals: bigint;
+  withdrawalsVaultTransfer?: bigint;
 }): OracleReportFixture => ({
   kind: "report",
   label,
@@ -67,6 +70,7 @@ export const report = ({
   movements: {
     deposits,
     clWithdrawals,
+    withdrawalsVaultTransfer,
   },
 });
 

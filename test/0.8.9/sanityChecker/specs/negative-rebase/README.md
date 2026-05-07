@@ -42,8 +42,10 @@ Use `ether("10000")` for ETH-denominated values in wei.
 
 Do not put derived constants or calculation helpers into fixtures.
 
-Do not put ABI plumbing fields like `withdrawalVaultBalance` or `withdrawalsVaultTransfer` into fixtures.
-The runner translates `movements.clWithdrawals` into the ABI inputs used by `checkAccountingOracleReport(...)`.
+The runner translates `movements.clWithdrawals` into the withdrawal vault balance used by
+`checkAccountingOracleReport(...)`.
+Use `movements.withdrawalsVaultTransfer` only when the report explicitly transfers a different amount from the
+withdrawal vault than the fresh `clWithdrawals` delta.
 
 Use a migration step when the scenario starts from `migrateBaselineSnapshot()`:
 
@@ -54,6 +56,21 @@ migrate({
   clPendingBalance: ether("7000"),
   deposits: ether("3"),
   withdrawalVaultBalance: ether("10000"),
+});
+```
+
+Migration fixtures that exercise `finalizeUpgrade_v4()` also set the v3 validator counts on the migration step:
+
+```ts
+migrate({
+  label: "Mainnet finalized v4 migration",
+  bufferedEther: 1n,
+  depositedValidators: 281_250n,
+  clValidators: 281_250n,
+  clValidatorsBalance: ether("9000000"),
+  clPendingBalance: 0n,
+  deposits: 0n,
+  withdrawalVaultBalance: ether("100000"),
 });
 ```
 

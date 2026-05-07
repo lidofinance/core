@@ -25,6 +25,13 @@ export type ClIncreaseFormula = {
   validatorsGrowthLimit: bigint;
 };
 
+export type MigrationFrameExpectation = {
+  sameFrameDepositsForReport: bigint;
+  sameFrameFundedPendingBalance: bigint;
+  firstPostMigrationFrameDepositsForReport: bigint;
+  firstPostMigrationFrameFundedPendingBalance: bigint;
+};
+
 export type ClIncreaseCase = {
   title: string;
   rationale: string;
@@ -35,8 +42,11 @@ export type ClIncreaseCase = {
       | "accepted"
       | "IncorrectTotalPendingBalance"
       | "IncorrectTotalActivatedBalance"
-      | "IncorrectTotalCLBalanceIncrease";
+      | "IncorrectTotalCLBalanceIncrease"
+      | "validatorsGrowthBoundary";
     formula?: Partial<ClIncreaseFormula>;
+    migrationFrame?: MigrationFrameExpectation;
+    counterfactualZeroVaultBaseline?: boolean;
   };
 };
 
@@ -51,6 +61,7 @@ export const report = ({
   postPendingBalance,
   deposits,
   clWithdrawals,
+  withdrawalsVaultTransfer,
 }: {
   label: string;
   timeElapsed?: bigint;
@@ -60,6 +71,7 @@ export const report = ({
   postPendingBalance: bigint;
   deposits: bigint;
   clWithdrawals: bigint;
+  withdrawalsVaultTransfer?: bigint;
 }): ClIncreaseReport => ({
   kind: "report",
   label,
@@ -73,6 +85,7 @@ export const report = ({
   movements: {
     deposits,
     clWithdrawals,
+    withdrawalsVaultTransfer,
   },
 });
 

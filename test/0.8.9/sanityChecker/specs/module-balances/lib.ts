@@ -70,6 +70,7 @@ export const moduleReport = ({
   postCLPendingBalance,
   deposits,
   clWithdrawals,
+  withdrawalsVaultTransfer,
   modules,
 }: {
   label: string;
@@ -79,6 +80,7 @@ export const moduleReport = ({
   postCLPendingBalance: bigint;
   deposits: bigint;
   clWithdrawals: bigint;
+  withdrawalsVaultTransfer?: bigint;
   modules: ModuleBalance[];
 }): ModuleBalanceReport => {
   const postValidatorsBalance = modules.reduce((sum, module) => sum + module.postValidatorsBalance, 0n);
@@ -97,6 +99,7 @@ export const moduleReport = ({
     movements: {
       deposits,
       clWithdrawals,
+      withdrawalsVaultTransfer,
     },
     modules,
   };

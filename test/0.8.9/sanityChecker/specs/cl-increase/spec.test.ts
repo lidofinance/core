@@ -13,18 +13,32 @@ import {
 
 import { ether, impersonate } from "lib";
 
+import {
+  deployFinalizeUpgradeV4Checker,
+  FinalizeUpgradeV4CheckerFixture,
+  hasFinalizeUpgradeV4State,
+  LidoBalanceStats,
+  migrateFinalizeUpgradeV4State,
+  moveToFirstPostMigrationReportFrame,
+  setLastVaultBalanceAfterTransfer,
+} from "../lib";
+
 import { clIncreaseFixtureSets } from "./fixtures/index";
 import { calcClIncreaseFormula, ClIncreaseCase, ClIncreaseReport, ClIncreaseStep, OracleReportLimits } from "./lib";
 
 describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
-  const deployChecker = async (
-    limitsList: OracleReportLimits,
-  ): Promise<{
+  type MockCheckerFixture = {
     checker: OracleReportSanityChecker;
     accountingSigner: HardhatEthersSigner;
     lido: Lido__MockForSanityChecker;
     withdrawalVaultAddress: string;
-  }> => {
+  };
+
+  type CheckerFixture =
+    | (MockCheckerFixture & { kind: "mock" })
+    | (FinalizeUpgradeV4CheckerFixture & { kind: "finalizeUpgradeV4" });
+
+  const deployMockChecker = async (limitsList: OracleReportLimits): Promise<MockCheckerFixture> => {
     const [deployer, withdrawalVault] = await ethers.getSigners();
     const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
     const accounting = (await ethers.deployContract(
@@ -83,22 +97,38 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     };
   };
 
+  const deployChecker = async (limitsList: OracleReportLimits, useFinalizeUpgradeV4: boolean) => {
+    if (useFinalizeUpgradeV4) {
+      return { ...(await deployFinalizeUpgradeV4Checker(limitsList)), kind: "finalizeUpgradeV4" } as CheckerFixture;
+    }
+
+    return { ...(await deployMockChecker(limitsList)), kind: "mock" } as CheckerFixture;
+  };
+
   type ScenarioState = {
     lastVaultBalanceAfterTransfer: bigint;
+    migrationSameFrameStats?: LidoBalanceStats;
   };
 
   const runMigrationStep = async (
-    checker: OracleReportSanityChecker,
-    lido: Lido__MockForSanityChecker,
-    withdrawalVaultAddress: string,
+    fixture: CheckerFixture,
     state: ScenarioState,
     step: Exclude<ClIncreaseStep, ClIncreaseReport>,
   ) => {
-    await setBalance(withdrawalVaultAddress, step.withdrawalVaultBalance);
-    await lido.mock__setContractVersion(4n);
-    await lido.mock__setBalanceStats(step.clValidatorsBalance, step.clPendingBalance, step.deposits, step.deposits);
+    if (fixture.kind === "finalizeUpgradeV4") {
+      state.migrationSameFrameStats = await migrateFinalizeUpgradeV4State(fixture, step);
+    } else {
+      await setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
+      await fixture.lido.mock__setContractVersion(4n);
+      await fixture.lido.mock__setBalanceStats(
+        step.clValidatorsBalance,
+        step.clPendingBalance,
+        step.deposits,
+        step.deposits,
+      );
 
-    await expect(checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
+      await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
+    }
     state.lastVaultBalanceAfterTransfer = step.withdrawalVaultBalance;
   };
 
@@ -109,6 +139,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     report: ClIncreaseReport,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
+    const withdrawalsVaultTransfer = report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals;
 
     return checker
       .connect(accountingSigner)
@@ -122,7 +153,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
         0n,
         0n,
         report.movements.deposits,
-        report.movements.clWithdrawals,
+        withdrawalsVaultTransfer,
       );
   };
 
@@ -141,7 +172,8 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
       callAccountingReport(checker, accountingSigner, state, report),
       `${title}: setup report '${report.label}'`,
     ).not.to.be.reverted;
-    state.lastVaultBalanceAfterTransfer = withdrawalVaultBalance - report.movements.clWithdrawals;
+    state.lastVaultBalanceAfterTransfer =
+      withdrawalVaultBalance - (report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals);
   };
 
   const expectFormulaFields = (testCase: ClIncreaseCase, formula: ReturnType<typeof calcClIncreaseFormula>) => {
@@ -153,12 +185,47 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
     }
   };
 
+  const callPendingBalanceCheck = (
+    checker: OracleReportSanityChecker,
+    state: ScenarioState,
+    report: ClIncreaseReport,
+  ) => {
+    const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
+
+    return checker.checkCLPendingBalanceIncrease(
+      report.timeElapsed,
+      report.cl.preValidatorsBalance,
+      report.cl.prePendingBalance,
+      report.cl.postValidatorsBalance,
+      report.cl.postPendingBalance,
+      withdrawalVaultBalance,
+      report.movements.deposits,
+    );
+  };
+
+  const withPostValidatorsBalance = (report: ClIncreaseReport, postValidatorsBalance: bigint): ClIncreaseReport => ({
+    ...report,
+    cl: {
+      ...report.cl,
+      postValidatorsBalance,
+    },
+  });
+
+  const getPreValidatorsAfterWithdrawals = (report: ClIncreaseReport) =>
+    report.movements.clWithdrawals >= report.cl.preValidatorsBalance
+      ? 0n
+      : report.cl.preValidatorsBalance - report.movements.clWithdrawals;
+
   for (const fixtureSet of clIncreaseFixtureSets) {
     describe(fixtureSet.title, () => {
       for (const testCase of fixtureSet.cases) {
         it(testCase.title, async () => {
           const limits = { ...fixtureSet.limits, ...testCase.limits };
-          const { checker, accountingSigner, lido, withdrawalVaultAddress } = await deployChecker(limits);
+          const useFinalizeUpgradeV4 = testCase.steps.some(
+            (step) => step.kind === "migration" && hasFinalizeUpgradeV4State(step),
+          );
+          const fixture = await deployChecker(limits, useFinalizeUpgradeV4);
+          const { checker, accountingSigner, withdrawalVaultAddress } = fixture;
           const checkedStep = testCase.steps[testCase.steps.length - 1];
           expect(checkedStep.kind, `${testCase.title}: checked step`).to.equal("report");
           const checkedReport = checkedStep as ClIncreaseReport;
@@ -166,7 +233,34 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
 
           for (const step of testCase.steps.slice(0, -1)) {
             if (step.kind === "migration") {
-              await runMigrationStep(checker, lido, withdrawalVaultAddress, state, step);
+              await runMigrationStep(fixture, state, step);
+
+              const expectedFrame = testCase.expected.migrationFrame;
+              if (expectedFrame !== undefined) {
+                expect(
+                  state.migrationSameFrameStats?.depositedForCurrentReport,
+                  `${testCase.title}: same-frame deposits`,
+                ).to.equal(expectedFrame.sameFrameDepositsForReport);
+                expect(
+                  (state.migrationSameFrameStats?.clPendingBalanceAtLastReport ?? 0n) +
+                    (state.migrationSameFrameStats?.depositedForCurrentReport ?? 0n),
+                  `${testCase.title}: same-frame funded pending`,
+                ).to.equal(expectedFrame.sameFrameFundedPendingBalance);
+
+                expect(fixture.kind, `${testCase.title}: first post-migration frame`).to.equal("finalizeUpgradeV4");
+                const firstPostMigrationFrameStats = await moveToFirstPostMigrationReportFrame(
+                  fixture as FinalizeUpgradeV4CheckerFixture,
+                );
+                expect(
+                  firstPostMigrationFrameStats.depositedForCurrentReport,
+                  `${testCase.title}: first-frame deposits`,
+                ).to.equal(expectedFrame.firstPostMigrationFrameDepositsForReport);
+                expect(
+                  firstPostMigrationFrameStats.clPendingBalanceAtLastReport +
+                    firstPostMigrationFrameStats.depositedForCurrentReport,
+                  `${testCase.title}: first-frame funded pending`,
+                ).to.equal(expectedFrame.firstPostMigrationFrameFundedPendingBalance);
+              }
             } else {
               await runAcceptedReportStep(
                 checker,
@@ -180,21 +274,40 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
           }
 
           const formula = calcClIncreaseFormula(checkedReport, limits);
-          const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + checkedReport.movements.clWithdrawals;
-          const call = checker.checkCLPendingBalanceIncrease(
-            checkedReport.timeElapsed,
-            checkedReport.cl.preValidatorsBalance,
-            checkedReport.cl.prePendingBalance,
-            checkedReport.cl.postValidatorsBalance,
-            checkedReport.cl.postPendingBalance,
-            withdrawalVaultBalance,
-            checkedReport.movements.deposits,
-          );
+          const call = callPendingBalanceCheck(checker, state, checkedReport);
 
           expectFormulaFields(testCase, formula);
 
           if (testCase.expected.outcome === "accepted") {
             await expect(call).not.to.be.reverted;
+
+            if (testCase.expected.counterfactualZeroVaultBaseline) {
+              const withdrawalVaultBalance =
+                state.lastVaultBalanceAfterTransfer + checkedReport.movements.clWithdrawals;
+              const counterfactualFormula = calcClIncreaseFormula(
+                {
+                  ...checkedReport,
+                  movements: {
+                    ...checkedReport.movements,
+                    clWithdrawals: withdrawalVaultBalance,
+                  },
+                },
+                limits,
+              );
+
+              await setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
+              await setLastVaultBalanceAfterTransfer(checker, 0n);
+              await expect(
+                callAccountingReport(
+                  checker,
+                  accountingSigner,
+                  { lastVaultBalanceAfterTransfer: withdrawalVaultBalance },
+                  checkedReport,
+                ),
+              )
+                .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
+                .withArgs(counterfactualFormula.validatorsGrowthLimit, counterfactualFormula.validatorsBalanceIncrease);
+            }
           } else if (testCase.expected.outcome === "IncorrectTotalPendingBalance") {
             await expect(call)
               .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
@@ -203,6 +316,20 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
             await expect(call)
               .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
               .withArgs(formula.appearedBalanceLimit, formula.activatedBalance);
+          } else if (testCase.expected.outcome === "validatorsGrowthBoundary") {
+            const atLimitReport = withPostValidatorsBalance(
+              checkedReport,
+              getPreValidatorsAfterWithdrawals(checkedReport) + formula.validatorsGrowthLimit,
+            );
+            const excessiveReport = withPostValidatorsBalance(
+              checkedReport,
+              getPreValidatorsAfterWithdrawals(checkedReport) + formula.validatorsGrowthLimit + 1n,
+            );
+
+            await expect(callPendingBalanceCheck(checker, state, atLimitReport)).not.to.be.reverted;
+            await expect(callPendingBalanceCheck(checker, state, excessiveReport))
+              .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
+              .withArgs(formula.validatorsGrowthLimit, formula.validatorsGrowthLimit + 1n);
           } else {
             await expect(call)
               .to.be.revertedWithCustomError(checker, "IncorrectTotalCLBalanceIncrease")
