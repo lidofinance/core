@@ -197,7 +197,9 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       consolidationEthAmountPerDayLimit: 0n,
     });
 
-    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, 2n);
+    // The checker allows one Electra max-effective validator above the prorated appeared limit.
+    const validatorsToExceedActivationBoundary = 2_048n / ONE_VALIDATOR_BALANCE_ETH + 2n;
+    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, validatorsToExceedActivationBoundary);
     const balanceStatsBeforeReport = await ctx.contracts.lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
 
