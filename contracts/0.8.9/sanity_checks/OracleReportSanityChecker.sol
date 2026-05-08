@@ -540,22 +540,23 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         (uint256 migrationCLValidatorsBalance, uint256 migrationCLPendingBalance,,) = ILido(lidoAddr).getBalanceStats();
         uint256 migrationCLBalance = migrationCLValidatorsBalance + migrationCLPendingBalance;
-        uint256 migrationCLWithdrawals = MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT;
+        uint256 migrationCLWithdrawals = LIDO_LOCATOR.withdrawalVault().balance;
+        uint256 postWithdrawalsMigrationCLBalance = migrationCLBalance - migrationCLWithdrawals;
         // Initialize vault state: vault is not drained during migration,
         // so after-transfer balance equals current vault balance
-        _lastVaultBalanceAfterTransfer = LIDO_LOCATOR.withdrawalVault().balance;
+        _lastVaultBalanceAfterTransfer = migrationCLWithdrawals;
 
         // The decrease formula uses baseline report B[X-k] and sums flows from reports [X-k+1..X].
         // To include migration-time withdrawals without any special-case branch in formula code:
-        // 1) store pure baseline point with zero flows;
-        // 2) store bootstrap flow chunk at the same CL balance right after baseline.
+        // 1) store a virtual pre-withdrawals baseline point with zero flows;
+        // 2) store a virtual post-withdrawals point at the same logical timestamp with the same withdrawals flow.
         // Migration-time deposit backlog is intentionally not stored here: it belongs to the first
         // post-migration oracle report frame, not to the migration bootstrap snapshot.
         uint256 migrationReportTimestamp = _lastReportTimestamp;
         _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
         // Flows stored on the baseline entry are intentionally skipped by _calcWindowDiff(),
         // so migration-time withdrawals must live in the next snapshot to be visible in the first window.
-        _addReportData(migrationReportTimestamp, migrationCLBalance, 0, migrationCLWithdrawals);
+        _addReportData(migrationReportTimestamp, postWithdrawalsMigrationCLBalance, 0, migrationCLWithdrawals);
 
         emit BaselineSnapshotMigrated(migrationCLBalance, migrationCLWithdrawals);
     }

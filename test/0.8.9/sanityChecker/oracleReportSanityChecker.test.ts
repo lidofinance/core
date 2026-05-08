@@ -1958,10 +1958,11 @@ describe("OracleReportSanityChecker.sol", () => {
   });
 
   context("migrateBaselineSnapshot", () => {
-    const MIGRATION_WITHDRAWALS = ether("57600");
+    const MIGRATION_WITHDRAWALS = ether("5");
 
     it("is permissionless before migration completes", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
+      await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
 
       await expect(migrationChecker.connect(stranger).migrateBaselineSnapshot()).not.to.be.reverted;
     });
@@ -1976,6 +1977,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
     it("seeds baseline and bootstrap report snapshots", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
+      await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
 
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot())
         .to.emit(migrationChecker, "BaselineSnapshotMigrated")
@@ -1992,7 +1994,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(baselineReport.clWithdrawals).to.equal(0n);
 
       expect(bootstrapFlowReport.timestamp).to.equal(0n);
-      expect(bootstrapFlowReport.clBalance).to.equal(ether("107"));
+      expect(bootstrapFlowReport.clBalance).to.equal(ether("107") - MIGRATION_WITHDRAWALS);
       expect(bootstrapFlowReport.deposits).to.equal(0n);
       expect(bootstrapFlowReport.clWithdrawals).to.equal(MIGRATION_WITHDRAWALS);
     });
@@ -2008,6 +2010,7 @@ describe("OracleReportSanityChecker.sol", () => {
         deposits: migrationDeposits,
         depositsCurrent: migrationDepositsCur,
       });
+      await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
 
       await migrationChecker.connect(manager).migrateBaselineSnapshot();
 
@@ -2042,6 +2045,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
     it("reverts when migration is called more than once", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
+      await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
 
       await migrationChecker.connect(manager).migrateBaselineSnapshot();
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot()).to.be.revertedWithCustomError(

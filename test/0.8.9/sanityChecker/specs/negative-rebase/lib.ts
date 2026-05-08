@@ -12,7 +12,6 @@ import {
 export const MAX_BASIS_POINTS = 10_000n;
 export const MAX_CL_BALANCE_DECREASE_BP = 360n;
 export const CL_BALANCE_WINDOW = 36n * DAY;
-export const MIGRATION_CL_WITHDRAWALS = 57_600n * 10n ** 18n;
 
 export { migrate };
 export type { OracleReportLimits };
@@ -99,18 +98,19 @@ export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => 
 
   for (const step of steps) {
     if (step.kind === "migration") {
-      const postCLBalance = getMigrationCLValidatorsBalance(step);
+      const migrationCLBalance = getMigrationCLValidatorsBalance(step);
+      const migrationCLWithdrawals = step.withdrawalVaultBalance;
       storedReports.push({
         timestamp,
-        postCLBalance,
+        postCLBalance: migrationCLBalance,
         deposits: 0n,
         clWithdrawals: 0n,
       });
       storedReports.push({
         timestamp,
-        postCLBalance,
+        postCLBalance: migrationCLBalance - migrationCLWithdrawals,
         deposits: 0n,
-        clWithdrawals: MIGRATION_CL_WITHDRAWALS,
+        clWithdrawals: migrationCLWithdrawals,
       });
       continue;
     }

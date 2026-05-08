@@ -1128,8 +1128,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   });
 
   context("OracleReportSanityChecker migrateBaselineSnapshot", () => {
-    const CHURN_LIMIT = ether("57600");
-
     let genesisTime: bigint;
     let baseRefSlot: bigint;
 
@@ -1143,6 +1141,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
     it("is permissionless before migration completes", async () => {
       await lido.mock__setContractVersion(4);
+      await setBalance(withdrawalVault.address, 0n);
       await expect(checker.migrateBaselineSnapshot()).not.to.be.reverted;
     });
 
@@ -1162,10 +1161,11 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await lido.mock__setBalanceStats(clActive, clPending, deposits, depositsCur);
 
       const expectedCLBalance = clActive + clPending;
+      const migrationWithdrawals = await ethers.provider.getBalance(withdrawalVault.address);
 
       await expect(checker.migrateBaselineSnapshot())
         .to.emit(checker, "BaselineSnapshotMigrated")
-        .withArgs(expectedCLBalance, CHURN_LIMIT);
+        .withArgs(expectedCLBalance, migrationWithdrawals);
 
       expect(await checker.getReportDataCount()).to.equal(2);
 
@@ -1177,9 +1177,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       const bootstrapFlowData = await checker.reportData(1);
       expect(bootstrapFlowData.timestamp).to.equal(0n);
-      expect(bootstrapFlowData.clBalance).to.equal(expectedCLBalance);
+      expect(bootstrapFlowData.clBalance).to.equal(expectedCLBalance - migrationWithdrawals);
       expect(bootstrapFlowData.deposits).to.equal(0);
-      expect(bootstrapFlowData.clWithdrawals).to.equal(CHURN_LIMIT);
+      expect(bootstrapFlowData.clWithdrawals).to.equal(migrationWithdrawals);
     });
 
     it("reverts with MigrationAlreadyDone on second call", async () => {
@@ -1205,11 +1205,11 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       const baseline = clActive + clPending;
       const postCL = ether("10200000");
       const actualDiff = baseline - postCL;
-      const adjusted = baseline - CHURN_LIMIT;
+      const vaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
+      const adjusted = baseline - vaultBalance;
       const expectedMaxDiff = maxDiffFor(adjusted);
 
       // Pass the actual vault balance as WVB since migration initialized _lastVaultBalanceAfterTransfer
-      const vaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
       await setRefSlot(baseRefSlot);
       await expect(callCheck(baseline, postCL, vaultBalance))
         .to.emit(checker, "NegativeCLRebaseAccepted")

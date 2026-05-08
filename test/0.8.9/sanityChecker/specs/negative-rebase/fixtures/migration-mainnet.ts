@@ -1,21 +1,15 @@
 import { ether } from "lib";
 
-import { migrate, MIGRATION_CL_WITHDRAWALS, NegativeRebaseFormulaFixtureSet, report } from "../lib";
+import { migrate, NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib";
 
 const mainnetCLValidators = 281_250n;
-const mainnetCLValidatorsBalance = mainnetCLValidators * ether("32");
-const mainnetMigratedTransientDeposits = ether("57600");
-const mainnetUnadjustedFirstReportWindowLimit = ether("324000");
-const mainnetWindowOverstatementWithoutMigrationWithdrawal = ether("2073.6");
-const mainnetFirstReportWindowLimit =
-  mainnetUnadjustedFirstReportWindowLimit - mainnetWindowOverstatementWithoutMigrationWithdrawal;
-const mainnetCLDecreaseAtWindowLimit = MIGRATION_CL_WITHDRAWALS + mainnetFirstReportWindowLimit;
-const mainnetDecreaseMaskedByZeroVaultBaseline = mainnetCLDecreaseAtWindowLimit + 1n;
-const mainnetRawDecreaseWithTransientDeposits =
-  mainnetMigratedTransientDeposits + mainnetUnadjustedFirstReportWindowLimit;
-const firstReportWindowSpend = ether("100000");
-const firstReportCLDecrease = MIGRATION_CL_WITHDRAWALS + firstReportWindowSpend;
-const remainingWindowHeadroom = mainnetFirstReportWindowLimit - firstReportWindowSpend;
+const mainnetCLBalance = ether("9000000");
+const mainnetMigrationWithdrawals = ether("400000");
+const mainnetCLBalanceAfterMigrationWithdrawals = ether("8600000");
+const mainnetNegativeRebaseLimit = ether("309600");
+const mainnetFirstReportDecrease = ether("100000");
+const mainnetShiftedWindowDecrease = ether("209600") + 1n;
+const mainnetShiftedWindowLimit = ether("306000");
 
 export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
   title: "migration-mainnet",
@@ -39,19 +33,19 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
   },
   cases: [
     {
-      title: "accepts Mainnet first post-migration decrease at the adjusted window limit",
+      title: "accepts Mainnet first report when the unexplained decrease is exactly 3.6%",
       rationale:
-        "Without the migration bootstrap withdrawal, the Mainnet window would be overstated by 2,073.6 ETH: 324,000 ETH instead of 321,926.4 ETH.",
+        "The 400,000 ETH already in the withdrawal vault is accounted as withdrawals, not as negative rebase. After that, the remaining unexplained decrease is exactly 309,600 ETH, which is 3.6% of 8,600,000 ETH.",
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration",
           clValidators: mainnetCLValidators,
           transientDeposits: 0n,
-          withdrawalVaultBalance: mainnetCLDecreaseAtWindowLimit,
+          withdrawalVaultBalance: mainnetMigrationWithdrawals,
         }),
         report({
-          label: "Mainnet first report at adjusted decrease limit",
-          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetCLDecreaseAtWindowLimit,
+          label: "Mainnet first report at 3.6% unexplained decrease",
+          postValidatorsBalance: mainnetCLBalanceAfterMigrationWithdrawals - mainnetNegativeRebaseLimit,
           postPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
@@ -60,25 +54,25 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
       expected: {
         outcome: "accepted",
         window: {
-          actualCLBalanceDiff: mainnetFirstReportWindowLimit,
-          maxAllowedCLBalanceDiff: mainnetFirstReportWindowLimit,
+          actualCLBalanceDiff: mainnetNegativeRebaseLimit,
+          maxAllowedCLBalanceDiff: mainnetNegativeRebaseLimit,
         },
       },
     },
     {
-      title: "reverts Mainnet first post-migration decrease one wei above the adjusted window limit",
+      title: "reverts Mainnet first report when the unexplained decrease is 3.6% plus 1 wei",
       rationale:
-        "With the migrated vault baseline seeded, a 379,526.4 ETH + 1 wei raw CL drop is observed as a 321,926.4 ETH + 1 wei negative rebase.",
+        "The migration withdrawal amount is still fully explained. The revert is only because the remaining unexplained decrease is 1 wei above the 309,600 ETH Mainnet limit.",
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration",
           clValidators: mainnetCLValidators,
           transientDeposits: 0n,
-          withdrawalVaultBalance: mainnetDecreaseMaskedByZeroVaultBaseline,
+          withdrawalVaultBalance: mainnetMigrationWithdrawals,
         }),
         report({
-          label: "Mainnet first report above adjusted decrease limit",
-          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetDecreaseMaskedByZeroVaultBaseline,
+          label: "Mainnet first report above 3.6% unexplained decrease",
+          postValidatorsBalance: mainnetCLBalanceAfterMigrationWithdrawals - mainnetNegativeRebaseLimit - 1n,
           postPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
@@ -87,157 +81,121 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
       expected: {
         outcome: "revert",
         window: {
-          actualCLBalanceDiff: mainnetFirstReportWindowLimit + 1n,
-          maxAllowedCLBalanceDiff: mainnetFirstReportWindowLimit,
+          actualCLBalanceDiff: mainnetNegativeRebaseLimit + 1n,
+          maxAllowedCLBalanceDiff: mainnetNegativeRebaseLimit,
         },
       },
     },
     {
-      title: "accepts Mainnet counterfactual decrease when vault balance is counted as fresh withdrawals",
+      title: "reverts Mainnet at the 36-day boundary when the migration-anchored window is over 3.6%",
       rationale:
-        "With a zero vault baseline, 379,526.4 ETH + 1 wei is recorded as fresh CL withdrawals, understating the negative rebase to zero.",
+        "At exactly 36 days, migration snapshots are still inside the window. The first report spends 100,000 ETH, and the final report goes 1 wei above the full 309,600 ETH migration-anchored limit.",
       steps: [
         migrate({
-          label: "Mainnet counterfactual zero vault baseline",
+          label: "Mainnet finalized v4 migration",
           clValidators: mainnetCLValidators,
           transientDeposits: 0n,
-          withdrawalVaultBalance: 0n,
+          withdrawalVaultBalance: mainnetMigrationWithdrawals,
         }),
         report({
-          label: "Mainnet first report with vault delta masking decrease",
-          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetDecreaseMaskedByZeroVaultBaseline,
+          label: "Mainnet first report inside the 36-day window",
+          postValidatorsBalance: mainnetCLBalanceAfterMigrationWithdrawals - mainnetFirstReportDecrease,
           postPendingBalance: 0n,
           deposits: 0n,
-          clWithdrawals: mainnetDecreaseMaskedByZeroVaultBaseline,
+          clWithdrawals: 0n,
+        }),
+        ...repeatReports(34, (index) =>
+          report({
+            label: `Mainnet neutral report before day 36 ${index + 2}`,
+            postValidatorsBalance: mainnetCLBalanceAfterMigrationWithdrawals - mainnetFirstReportDecrease,
+            postPendingBalance: 0n,
+            deposits: 0n,
+            clWithdrawals: 0n,
+          }),
+        ),
+        report({
+          label: "Mainnet day 36 report above the migration-anchored limit",
+          postValidatorsBalance: mainnetCLBalanceAfterMigrationWithdrawals - mainnetNegativeRebaseLimit - 1n,
+          postPendingBalance: 0n,
+          deposits: 0n,
+          clWithdrawals: 0n,
+        }),
+      ],
+      expected: {
+        outcome: "revert",
+        window: {
+          actualCLBalanceDiff: mainnetNegativeRebaseLimit + 1n,
+          maxAllowedCLBalanceDiff: mainnetNegativeRebaseLimit,
+        },
+      },
+    },
+    {
+      title: "accepts Mainnet at day 37 after the migration snapshots leave the window",
+      rationale:
+        "This uses the same final CL state as the day-36 revert. At day 37, the window starts from the first real report, so only 209,600 ETH plus 1 wei remains in the checked window, under the shifted 306,000 ETH limit.",
+      steps: [
+        migrate({
+          label: "Mainnet finalized v4 migration",
+          clValidators: mainnetCLValidators,
+          transientDeposits: 0n,
+          withdrawalVaultBalance: mainnetMigrationWithdrawals,
+        }),
+        report({
+          label: "Mainnet first report that becomes the shifted window baseline",
+          postValidatorsBalance: mainnetCLBalanceAfterMigrationWithdrawals - mainnetFirstReportDecrease,
+          postPendingBalance: 0n,
+          deposits: 0n,
+          clWithdrawals: 0n,
+        }),
+        ...repeatReports(35, (index) =>
+          report({
+            label: `Mainnet neutral report before day 37 ${index + 2}`,
+            postValidatorsBalance: mainnetCLBalanceAfterMigrationWithdrawals - mainnetFirstReportDecrease,
+            postPendingBalance: 0n,
+            deposits: 0n,
+            clWithdrawals: 0n,
+          }),
+        ),
+        report({
+          label: "Mainnet day 37 report with migration snapshots outside the window",
+          postValidatorsBalance: mainnetCLBalanceAfterMigrationWithdrawals - mainnetNegativeRebaseLimit - 1n,
+          postPendingBalance: 0n,
+          deposits: 0n,
+          clWithdrawals: 0n,
         }),
       ],
       expected: {
         outcome: "accepted",
-        lastReportCLWithdrawals: mainnetDecreaseMaskedByZeroVaultBaseline,
+        window: {
+          actualCLBalanceDiff: mainnetShiftedWindowDecrease,
+          maxAllowedCLBalanceDiff: mainnetShiftedWindowLimit,
+        },
       },
     },
     {
-      title: "uses first-report after-transfer withdrawal vault balance as the next baseline",
-      rationale: "A second report with 21 ETH in the vault can only pass if the first report stored 20 ETH baseline.",
-      steps: [
-        migrate({
-          label: "Mainnet finalized v4 migration with 100 ETH vault baseline",
-          clValidators: mainnetCLValidators,
-          transientDeposits: 0n,
-          withdrawalVaultBalance: ether("100"),
-        }),
-        report({
-          label: "first report transfers most of the withdrawal vault balance",
-          postValidatorsBalance: mainnetCLValidatorsBalance - ether("10"),
-          postPendingBalance: 0n,
-          deposits: 0n,
-          clWithdrawals: ether("10"),
-          withdrawalsVaultTransfer: ether("90"),
-        }),
-        report({
-          label: "second report counts only the new withdrawal vault delta",
-          postValidatorsBalance: mainnetCLValidatorsBalance - ether("11"),
-          postPendingBalance: 0n,
-          deposits: 0n,
-          clWithdrawals: ether("1"),
-          withdrawalsVaultTransfer: 0n,
-        }),
-      ],
-      expected: {
-        outcome: "accepted",
-        lastReportCLWithdrawals: ether("1"),
-      },
-    },
-    {
-      title: "does not overstate Mainnet negative rebase with migrated transient deposits",
+      title: "keeps Mainnet migrated transient deposits in the first report, not in migration",
       rationale:
-        "Deposits in the migration snapshot overstate negative rebase: adding the 57,600 ETH transient backlog there would make this 324,000 ETH decrease look like 381,600 ETH. The backlog is safe only in the first report, where the same 57,600 ETH also appears as post-pending balance.",
+        "The 57,600 ETH migrated transient deposits are first-report deposits. They are not written into the migration bootstrap data, so the migration snapshot itself does not inflate the negative rebase window.",
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with transient deposits",
           clValidators: mainnetCLValidators,
-          transientDeposits: mainnetMigratedTransientDeposits,
+          transientDeposits: ether("57600"),
           withdrawalVaultBalance: 0n,
         }),
         report({
           label: "Mainnet first report includes migrated transient deposits once",
-          postValidatorsBalance: mainnetCLValidatorsBalance - mainnetRawDecreaseWithTransientDeposits,
-          postPendingBalance: mainnetMigratedTransientDeposits,
-          deposits: mainnetMigratedTransientDeposits,
+          postValidatorsBalance: mainnetCLBalance - ether("326000"),
+          postPendingBalance: ether("57600"),
+          deposits: ether("57600"),
           clWithdrawals: 0n,
         }),
       ],
       expected: {
         outcome: "accepted",
         window: {
-          actualCLBalanceDiff: mainnetUnadjustedFirstReportWindowLimit,
-          maxAllowedCLBalanceDiff: mainnetUnadjustedFirstReportWindowLimit,
-        },
-      },
-    },
-    {
-      title: "accepts the remaining Mainnet 36-day headroom after migration-time decrease",
-      rationale: "After the first report spends 100,000 ETH of window headroom, 221,926.4 ETH remains.",
-      steps: [
-        migrate({
-          label: "Mainnet finalized v4 migration with first-report window spend",
-          clValidators: mainnetCLValidators,
-          transientDeposits: 0n,
-          withdrawalVaultBalance: firstReportCLDecrease,
-        }),
-        report({
-          label: "first report spends 100,000 ETH of adjusted window headroom",
-          postValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease,
-          postPendingBalance: 0n,
-          deposits: 0n,
-          clWithdrawals: 0n,
-        }),
-        report({
-          label: "second report spends the remaining adjusted window headroom",
-          postValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease - remainingWindowHeadroom,
-          postPendingBalance: 0n,
-          deposits: 0n,
-          clWithdrawals: 0n,
-        }),
-      ],
-      expected: {
-        outcome: "accepted",
-        window: {
-          actualCLBalanceDiff: mainnetFirstReportWindowLimit,
-          maxAllowedCLBalanceDiff: mainnetFirstReportWindowLimit,
-        },
-      },
-    },
-    {
-      title: "reverts above the remaining Mainnet 36-day headroom after migration-time decrease",
-      rationale: "The second report cannot exceed the same 321,926.4 ETH adjusted window limit.",
-      steps: [
-        migrate({
-          label: "Mainnet finalized v4 migration with first-report window spend",
-          clValidators: mainnetCLValidators,
-          transientDeposits: 0n,
-          withdrawalVaultBalance: firstReportCLDecrease,
-        }),
-        report({
-          label: "first report spends 100,000 ETH of adjusted window headroom",
-          postValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease,
-          postPendingBalance: 0n,
-          deposits: 0n,
-          clWithdrawals: 0n,
-        }),
-        report({
-          label: "second report exceeds the remaining adjusted window headroom",
-          postValidatorsBalance: mainnetCLValidatorsBalance - firstReportCLDecrease - remainingWindowHeadroom - 1n,
-          postPendingBalance: 0n,
-          deposits: 0n,
-          clWithdrawals: 0n,
-        }),
-      ],
-      expected: {
-        outcome: "revert",
-        window: {
-          actualCLBalanceDiff: mainnetFirstReportWindowLimit + 1n,
-          maxAllowedCLBalanceDiff: mainnetFirstReportWindowLimit,
+          actualCLBalanceDiff: ether("326000"),
+          maxAllowedCLBalanceDiff: ether("326073.6"),
         },
       },
     },
