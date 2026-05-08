@@ -450,7 +450,7 @@ describe("AccountingOracle.sol:submitReport", () => {
         const exitedEthAmountPerDay =
           timeElapsed === 0n ? exitedEthAmount * 86_400n : (exitedEthAmount * 86_400n) / timeElapsed;
         const exitedEthAmountPerDayLimitWithConsolidation =
-          (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 10n ** 18n;
+          (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 2n * 10n ** 18n;
 
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
           .to.be.revertedWithCustomError(sanityChecker, "ExitedEthAmountPerDayLimitExceeded")

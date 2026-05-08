@@ -967,7 +967,7 @@ describe("OracleReportSanityChecker.sol", () => {
     it("checkExitedEthAmountPerDay uses timeElapsed (seconds)", async () => {
       const limits = await checker.getOracleReportLimits();
       const limitWithConsolidationInWei =
-        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
+        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 2n * ether("1");
       const oneDay = 24n * 60n * 60n;
       const exitedValidatorEthAmountLimit = limits.exitedValidatorEthAmountLimit;
       const exitedValidatorEthAmountLimitInWei = exitedValidatorEthAmountLimit * ether("1");

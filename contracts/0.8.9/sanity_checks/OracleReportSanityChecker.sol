@@ -889,8 +889,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         AccountingCoreLimitsPacked memory _limitsList,
         uint256 _exitedEthAmountPerDay
     ) internal pure {
+        /// @dev The limit is set for the number of exits assuming 16 ETH per validator, so double
+        ///      the summed ETH limit here.
         uint256 exitedEthLimitWithConsolidation =
             (uint256(_limitsList.exitedEthAmountPerDayLimit) + uint256(_limitsList.consolidationEthAmountPerDayLimit)) *
+            2 *
             1 ether;
         if (_exitedEthAmountPerDay > exitedEthLimitWithConsolidation) {
             revert ExitedEthAmountPerDayLimitExceeded(exitedEthLimitWithConsolidation, _exitedEthAmountPerDay);
