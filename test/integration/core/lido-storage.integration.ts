@@ -45,3 +45,37 @@ describe("Integration: Lido storage slots after V3", () => {
     }
   });
 });
+
+describe("Integration: Lido storage slots after V4 (SRv3)", () => {
+  let ctx: ProtocolContext;
+  let snapshot: string;
+
+  let stEthHolder: HardhatEthersSigner;
+  let stranger: HardhatEthersSigner;
+
+  before(async () => {
+    ctx = await getProtocolContext();
+
+    [stEthHolder, stranger] = await ethers.getSigners();
+    await updateBalance(stranger.address, ether("100000000"));
+    await updateBalance(stEthHolder.address, ether("100000000"));
+
+    snapshot = await Snapshot.take();
+  });
+
+  after(async () => await Snapshot.restore(snapshot));
+
+  it("Should have old storage slots zeroed in V4", async () => {
+    const lido = ctx.contracts.lido;
+
+    const oldStorageSlots = {
+      CL_BALANCE_AND_CL_VALIDATORS_POSITION: streccak("lido.Lido.clBalanceAndClValidators"),
+      BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION: streccak("lido.Lido.bufferedEtherAndDepositedValidators"),
+    };
+
+    for (const [key, value] of Object.entries(oldStorageSlots)) {
+      const storageValue = await ethers.provider.getStorage(lido, value);
+      expect(storageValue).to.equal(0n, `${key} storage slot at ${value} is not empty`);
+    }
+  });
+});

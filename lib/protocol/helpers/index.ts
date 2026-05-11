@@ -1,25 +1,43 @@
-export { depositAndReportValidators, ensureStakeLimit, unpauseStaking } from "./staking";
+export {
+  depositAndReportValidators,
+  depositValidatorsWithoutReport,
+  ensureStakeLimit,
+  seedProtocolPendingBaseline,
+  getStakingModuleBalances,
+  unpauseStaking,
+} from "./staking";
 
 export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal";
 
-export { setMaxPositiveTokenRebase } from "./sanity-checker";
+export { setMaxPositiveTokenRebase, updateOracleReportLimits } from "./sanity-checker";
 
 export {
   calcReportDataHash,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
   getReportDataItems,
+  getNextReportContext,
   getReportTimeElapsed,
   waitNextAvailableReportTime,
   handleOracleReport,
   OracleReportParams,
   OracleReportSubmitParams,
   report,
+  reportWithEffectiveClDiff,
+  resetCLBalanceDecreaseWindow,
+  submitReportDataWithConsensus,
+  submitReportDataWithConsensusAndEmptyExtraData,
+  getDepositedSinceLastReport,
 } from "./accounting";
 
 export { ensureDsmGuardians } from "./dsm";
+export {
+  norSdvtEnsureOperators,
+  norSdvtAddNodeOperator,
+  norSdvtAddOperatorKeys,
+  norSdvtSetOperatorStakingLimit,
+} from "./nor-sdvt";
 export { ensurePredepositGuaranteeUnpaused } from "./pdg";
-export { norSdvtEnsureOperators } from "./nor-sdvt";
 export { calcNodeOperatorRewards } from "./staking-module";
 
 export * from "./vaults";

@@ -120,11 +120,12 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
   withStateFile = true,
+  signerOrOptions?: Signer | FactoryOptions,
   fields: Record<string, unknown> = {},
 ): Promise<DeployedContract> {
   logWithConstructorArgs(`Deploying: ${yl(artifactName)} (without proxy)`, constructorArgs);
 
-  const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile);
+  const contract = await deployContract(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
 
   if (withStateFile) {
     const contractPath = await getContractPath(artifactName);
@@ -257,14 +258,15 @@ async function getLocatorConfig(locatorAddress: string) {
     "oracleDaemonConfig",
     "validatorExitDelayVerifier",
     "triggerableWithdrawalsGateway",
+    "consolidationGateway",
     "accounting",
-    "wstETH",
     "predepositGuarantee",
+    "wstETH",
     "vaultHub",
     "vaultFactory",
     "lazyOracle",
     "operatorGrid",
-    "vaultFactory",
+    "topUpGateway",
   ]) as (keyof LidoLocator.ConfigStruct)[];
 
   const config = await Promise.all(locatorKeys.map((name) => locator[name]()));

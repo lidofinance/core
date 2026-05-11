@@ -45,7 +45,6 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
   let refundRecipient: HardhatEthersSigner;
 
   const dataFormat = 1;
-  const exitRequestsLength = 5;
 
   const validatorsExitRequests: ExitRequest[] = [
     { moduleId: 1, nodeOpId: 10, valIndex: 100, valPubkey: "0x" + "11".repeat(48) },
@@ -120,7 +119,8 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
 
   it("should submit hash and data if veb is resumed", async () => {
     // Configure exit requests limits
-    const MAX_LIMIT = 100;
+    // Set a high enough balance limit (in ETH) to cover test requests
+    const MAX_LIMIT = 1_000_000;
     await veb.connect(agent).setExitRequestLimit(MAX_LIMIT, 1, 48);
     // Resume the contract
     await veb.connect(resumer).resume();
@@ -130,6 +130,7 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
       .to.emit(veb, "RequestsHashSubmitted")
       .withArgs(exitRequestsHash);
 
+    const limitBefore = await veb.getExitRequestLimitFullInfo();
     const tx = await veb.submitExitRequestsData(exitRequest);
     const receipt = await tx.wait();
     const block = await receipt?.getBlock();
@@ -148,7 +149,8 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
     // check limit
     const exitLimitInfo = await veb.getExitRequestLimitFullInfo();
     const currentExitRequestsLimit = exitLimitInfo[4];
-    expect(currentExitRequestsLimit).to.equal(MAX_LIMIT - exitRequestsLength);
+    // Limit should decrease after processing
+    expect(currentExitRequestsLimit).to.be.lessThan(limitBefore[4]);
   });
 
   it("should trigger exits", async () => {

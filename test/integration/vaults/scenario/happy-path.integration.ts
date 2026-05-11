@@ -28,6 +28,7 @@ import {
   ProtocolContext,
   report,
   reportVaultDataWithProof,
+  reportWithEffectiveClDiff,
   setupLidoForVaults,
 } from "lib/protocol";
 
@@ -89,13 +90,15 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   beforeEach(bailOnFailure);
 
   async function calculateReportParams() {
-    const { beaconBalance } = await ctx.contracts.lido.getBeaconStat();
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } =
+      await ctx.contracts.lido.getBalanceStats();
+    const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
     log.debug("Report time elapsed", { timeElapsed });
 
     const gross = (TARGET_APR * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - PROTOCOL_FEE); // take into account 10% Lido fee
-    const elapsedProtocolReward = (beaconBalance * gross * timeElapsed) / TOTAL_BASIS_POINTS / ONE_YEAR;
+    const elapsedProtocolReward = (clBalance * gross * timeElapsed) / TOTAL_BASIS_POINTS / ONE_YEAR;
     const elapsedVaultReward = (VAULT_DEPOSIT * gross * timeElapsed) / TOTAL_BASIS_POINTS / ONE_YEAR;
 
     log.debug("Report values", {
@@ -320,12 +323,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward);
 
-    const params = {
-      clDiff: elapsedProtocolReward,
+    await reportWithEffectiveClDiff(ctx, elapsedProtocolReward, {
       excludeVaultsBalances: true,
-    } as OracleReportParams;
-
-    await report(ctx, params);
+    });
 
     expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.be.equal(stakingVaultMaxMintingShares);
 
@@ -376,14 +376,16 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await lido.connect(owner).approve(dashboard, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
     await dashboard.connect(owner).burnShares(stakingVaultMaxMintingShares);
 
-    const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
+    const { elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value after validator exit
 
     const params = {
-      clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
     } as OracleReportParams;
 
+    // This test is about burn -> zero liability shares on the next vault report, not
+    // about a protocol CL reward. Keep the follow-up report neutral so we don't add
+    // an unrelated pending-backed APR setup to a burn-flow assertion.
     await report(ctx, params);
 
     await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });

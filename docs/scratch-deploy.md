@@ -132,8 +132,6 @@ To do a testnet deployment, the following parameters must be set up via env vari
   `0x10000910` for Hoodi. Used to properly calculate the deposit domain for the network.
 - `GAS_PRIORITY_FEE`. Gas priority fee. By default set to `2`
 - `GAS_MAX_FEE`. Gas max fee. By default set to `100`
-- `GATE_SEAL_FACTORY`. Address of the [GateSeal Factory](https://github.com/lidofinance/gate-seals) contract. Must be
-  deployed in advance. Can be set to any `0x0000000000000000000000000000000000000000` to debug deployment
 - `WITHDRAWAL_QUEUE_BASE_URI`. BaseURI for WithdrawalQueueERC721. By default not set (left an empty string)
 - `DSM_PREDEFINED_ADDRESS`. Address to use instead of deploying `DepositSecurityModule` or `null` otherwise. If used,
   the deposits can be made by calling `Lido.deposit` from the address.

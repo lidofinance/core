@@ -23,6 +23,7 @@ import {
   ProtocolContracts,
   ProtocolSigners,
   StakingModuleContracts,
+  StakingModules,
   VaultsContracts,
   WstETHContracts,
 } from "./types";
@@ -123,6 +124,12 @@ const getCoreContracts = async (
             "TriggerableWithdrawalsGateway",
             config.get("triggerableWithdrawalsGateway") || (await locator.triggerableWithdrawalsGateway()),
           ),
+          consolidationGateway: loadContract(
+            "ConsolidationGateway",
+            config.get("consolidationGateway") || (await locator.consolidationGateway()),
+          ),
+          consolidationBus: loadContract("ConsolidationBus", config.get("consolidationBus")),
+          consolidationMigrator: loadContract("ConsolidationMigrator", config.get("consolidationMigrator")),
           accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
         }),
   })) as CoreContracts;
@@ -158,7 +165,15 @@ const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, c
     promises.csm = loadContract("IStakingModule", config.get("csm") || csm.stakingModuleAddress);
   }
 
-  return (await batch(promises)) as StakingModuleContracts;
+  const cmv2 = modules.find((m) => m.name === "curated-onchain-v2");
+  if (cmv2) {
+    promises.cmv2 = loadContract("IStakingModule", config.get("cmv2") || cmv2.stakingModuleAddress);
+  }
+
+  return {
+    contracts: (await batch(promises)) as StakingModuleContracts,
+    modules: { nor, sdvt, csm, cmv2 } as StakingModules,
+  };
 };
 
 /**
@@ -214,11 +229,15 @@ export async function discover(skipV3Contracts: boolean) {
   const locator = await loadContract("LidoLocator", networkConfig.get("locator"));
   const foundationContracts = await getCoreContracts(locator, networkConfig, skipV3Contracts);
 
+  const { contracts: modulesContracts, modules } = await getStakingModules(
+    foundationContracts.stakingRouter,
+    networkConfig,
+  );
   const contracts = {
     locator,
     ...foundationContracts,
     ...(await getAragonContracts(foundationContracts.lido, networkConfig)),
-    ...(await getStakingModules(foundationContracts.stakingRouter, networkConfig)),
+    ...modulesContracts,
     ...(await getHashConsensusContract(foundationContracts.accountingOracle, networkConfig)),
     ...(await getWstEthContract(foundationContracts.withdrawalQueue, networkConfig)),
     ...(skipV3Contracts ? {} : await getVaultsContracts(networkConfig, locator)),
@@ -246,6 +265,9 @@ export async function discover(skipV3Contracts: boolean) {
     "Burner": foundationContracts.burner.address,
     "wstETH": contracts.wstETH.address,
     "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway?.address,
+    "Consolidation Gateway": contracts.consolidationGateway?.address,
+    "Consolidation Bus": contracts.consolidationBus?.address,
+    "Consolidation Migrator": contracts.consolidationMigrator?.address,
     // Vaults
     "Staking Vault Factory": contracts.stakingVaultFactory?.address,
     "Staking Vault Beacon": contracts.stakingVaultBeacon?.address,
@@ -264,5 +286,5 @@ export async function discover(skipV3Contracts: boolean) {
 
   log.debug("Signers discovered", signers);
 
-  return { contracts, signers };
+  return { contracts, signers, modules };
 }

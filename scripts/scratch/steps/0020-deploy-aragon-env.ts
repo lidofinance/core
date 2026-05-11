@@ -147,7 +147,7 @@ export async function main() {
   if (state[Sk.miniMeTokenFactory].address) {
     log(`Using pre-deployed MiniMeTokenFactory: ${cy(state[Sk.miniMeTokenFactory].address)}`);
   } else {
-    await deployWithoutProxy(Sk.miniMeTokenFactory, "MiniMeTokenFactory", deployer, [], "address", true, {
+    await deployWithoutProxy(Sk.miniMeTokenFactory, "MiniMeTokenFactory", deployer, [], "address", true, undefined, {
       contractName: "MiniMeTokenFactory",
     });
   }

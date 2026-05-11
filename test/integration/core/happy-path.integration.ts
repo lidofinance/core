@@ -4,8 +4,9 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, batch, ether, impersonate, log, updateBalance } from "lib";
+import { advanceChainTime, batch, ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
 import {
+  buildModuleAccountingReportParams,
   finalizeWQViaElVault,
   getProtocolContext,
   norSdvtEnsureOperators,
@@ -14,9 +15,10 @@ import {
   removeStakingLimit,
   report,
   setStakingLimit,
+  submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
 
-import { bailOnFailure, MAX_DEPOSIT, Snapshot, ZERO_HASH } from "test/suite";
+import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
 
 import { LogDescriptionExtended } from "../../../lib/protocol/types";
 
@@ -32,6 +34,8 @@ describe("Scenario: Protocol Happy Path", () => {
   let uncountedStETHShares: bigint;
   let amountWithRewards: bigint;
   let depositCount: bigint;
+  let finalizedWithdrawalAmount: bigint;
+  let norPendingDepositsGwei: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -201,30 +205,41 @@ describe("Scenario: Protocol Happy Path", () => {
 
   it("Should deposit to staking modules", async () => {
     const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
+    const agent = await ctx.getSigner("agent");
 
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
+    await lido.connect(agent).setDepositsReserveTarget(ether("128"));
+    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false, skipWithdrawals: true });
 
     const withdrawalsUnfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
+    const depositsReserveTarget = await lido.getDepositsReserveTarget();
+    const depositsReserve = await lido.getDepositsReserve();
+    const withdrawalsReserve = await lido.getWithdrawalsReserve();
     const depositableEther = await lido.getDepositableEther();
 
     const bufferedEtherBeforeDeposit = await lido.getBufferedEther();
 
-    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUnfinalizedStETH;
+    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsReserve;
 
+    expect(depositsReserveTarget).to.equal(ether("128"), "Deposits reserve target");
+    expect(depositsReserve).to.equal(ether("128"), "Deposits reserve");
     expect(depositableEther).to.equal(expectedDepositableEther, "Depositable ether");
+    expect(withdrawalsReserve).to.be.lte(withdrawalsUnfinalizedStETH, "Withdrawals reserve should not exceed demand");
 
     log.debug("Depositable ether", {
       "Buffered ether": ethers.formatEther(bufferedEtherBeforeDeposit),
       "Withdrawals unfinalized stETH": ethers.formatEther(withdrawalsUnfinalizedStETH),
+      "Withdrawals reserve": ethers.formatEther(withdrawalsReserve),
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     const stakingModules = (await stakingRouter.getStakingModules()).filter((m) => m.id === 1n);
     depositCount = 0n;
+    norPendingDepositsGwei = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
-      const depositTx = await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, module.id, ZERO_HASH);
+      const depositTx = await stakingRouter.connect(dsmSigner).deposit(module.id, ZERO_HASH);
       const depositReceipt = (await depositTx.wait()) as ContractTransactionReceipt;
       const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];
       const unbufferedAmount = unbufferedEvent?.args[0] || 0n;
@@ -237,6 +252,7 @@ describe("Scenario: Protocol Happy Path", () => {
       });
 
       depositCount += deposits;
+      norPendingDepositsGwei += unbufferedAmount / ONE_GWEI;
       expectedBufferedEtherAfterDeposit -= unbufferedAmount;
     }
 
@@ -252,7 +268,7 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should rebase correctly", async () => {
-    const { lido, withdrawalQueue, locator, burner, nor, sdvt, stakingRouter, csm, accounting } = ctx.contracts;
+    const { lido, withdrawalQueue, locator, burner, nor, sdvt, stakingRouter, csm, cmv2, accounting } = ctx.contracts;
 
     const treasuryAddress = await locator.treasury();
     const strangerBalancesBeforeRebase = await getBalances(stranger);
@@ -295,9 +311,27 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
 
-    // 0.001 – to simulate rewards
+    const { depositedSinceLastReport } = await lido.getBalanceStats();
+
+    // Deposit() moved ETH into protocol pending, but the new sanity path takes its
+    // baseline from the previous Lido report snapshot rather than router-only state.
+    // Submit a neutral report first so the next reward-bearing report stays on the
+    // original "deposits activated + tiny positive CL reward" happy path.
+    const { data: pendingBaselineData } = await report(ctx, {
+      clDiff: depositedSinceLastReport,
+      dryRun: true,
+      excludeVaultsBalances: true,
+      skipWithdrawals: true,
+      ...(await buildModuleAccountingReportParams(ctx)),
+    });
+    await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
+      ...pendingBaselineData,
+      clValidatorsBalanceGwei: BigInt(pendingBaselineData.clValidatorsBalanceGwei) - norPendingDepositsGwei,
+      clPendingBalanceGwei: norPendingDepositsGwei,
+    });
+
     const reportData: Partial<OracleReportParams> = {
-      clDiff: ether("32") * depositCount + ether("0.001"),
+      clDiff: ether("0.001"),
       clAppearedValidators: depositCount,
     };
 
@@ -323,20 +357,38 @@ describe("Scenario: Protocol Happy Path", () => {
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
 
     let toBurnerTransfer, toNorTransfer, toSdvtTransfer: LogDescriptionExtended | undefined;
-    let numExpectedTransferEvents = Number(await stakingRouter.getStakingModulesCount()) + 2; // +1 for the treasury
+    let numExpectedTransferEvents = Number(await stakingRouter.getStakingModulesCount()) + 2; // +1 initial mint, +1 for the treasury
     if (wereWithdrawalsFinalized) {
       numExpectedTransferEvents += 1; // +1 for the burner transfer
       [toBurnerTransfer, , toNorTransfer, toSdvtTransfer] = transferEvents;
     } else {
       [, toNorTransfer, toSdvtTransfer] = transferEvents;
     }
-    const toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
-    const toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents - 1];
+
+    let toTreasuryTransferIdx = numExpectedTransferEvents - 1;
 
     if (csm !== undefined) {
-      // +1 for the CSM internal transfer
-      numExpectedTransferEvents += 1;
+      if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
+        // +1 for the CSM internal transfer
+        numExpectedTransferEvents += 1;
+        toTreasuryTransferIdx -= 1;
+      } else {
+        // no reward transfer to modules with 0 validators balance
+        numExpectedTransferEvents -= 1;
+      }
     }
+    if (cmv2 !== undefined) {
+      if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
+        // +1 for the CSM internal transfer
+        numExpectedTransferEvents += 1;
+        toTreasuryTransferIdx -= 1;
+      } else {
+        // no reward transfer to modules with 0 validators balance
+        numExpectedTransferEvents -= 1;
+      }
+    }
+    const toTreasuryTransfer = transferEvents[toTreasuryTransferIdx];
+    const toTreasuryTransferShares = transferSharesEvents[toTreasuryTransferIdx];
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
 
@@ -549,7 +601,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const lockedEtherAmountBeforeFinalization = await withdrawalQueue.getLockedEtherAmount();
 
-    const reportParams = { clDiff: ether("0.0005") }; // simulate some rewards
+    const reportParams = { clDiff: 0n };
     const { reportTx } = (await report(ctx, reportParams)) as { reportTx: TransactionResponse };
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
@@ -557,24 +609,27 @@ describe("Scenario: Protocol Happy Path", () => {
     const requestId = await withdrawalQueue.getLastRequestId();
 
     const lockedEtherAmountAfterFinalization = await withdrawalQueue.getLockedEtherAmount();
-    const expectedLockedEtherAmountAfterFinalization = lockedEtherAmountAfterFinalization - amountWithRewards;
+    const withdrawalFinalizedEvent = ctx.getEvents(reportTxReceipt, "WithdrawalsFinalized")[0];
+    finalizedWithdrawalAmount = withdrawalFinalizedEvent.args.amountOfETHLocked;
 
     log.debug("Locked ether amount", {
       "Before finalization": ethers.formatEther(lockedEtherAmountBeforeFinalization),
       "After finalization": ethers.formatEther(lockedEtherAmountAfterFinalization),
-      "Amount with rewards": ethers.formatEther(amountWithRewards),
+      "Finalized amount": ethers.formatEther(finalizedWithdrawalAmount),
     });
 
     expect(lockedEtherAmountBeforeFinalization).to.equal(
-      expectedLockedEtherAmountAfterFinalization,
+      lockedEtherAmountAfterFinalization - finalizedWithdrawalAmount,
       "Locked ether amount after finalization",
     );
-
-    const withdrawalFinalizedEvent = ctx.getEvents(reportTxReceipt, "WithdrawalsFinalized")[0];
+    expect(amountWithRewards - finalizedWithdrawalAmount).to.be.lte(
+      2n,
+      "Finalized amount should differ from requested amount by at most the documented dust",
+    );
 
     expect(withdrawalFinalizedEvent?.args.toObject()).to.deep.include(
       {
-        amountOfETHLocked: amountWithRewards,
+        amountOfETHLocked: finalizedWithdrawalAmount,
         from: requestId,
         to: requestId,
       },
@@ -608,7 +663,7 @@ describe("Scenario: Protocol Happy Path", () => {
     const balanceBeforeClaim = await getBalances(stranger);
 
     expect(status.isFinalized).to.be.true;
-    expect(claimableEtherBeforeClaim).to.equal(amountWithRewards, "Claimable ether before claim");
+    expect(claimableEtherBeforeClaim).to.equal(finalizedWithdrawalAmount, "Claimable ether before claim");
 
     const claimTx = await withdrawalQueue.connect(stranger).claimWithdrawals([requestId], hints);
     const claimTxReceipt = (await claimTx.wait()) as ContractTransactionReceipt;
@@ -621,7 +676,7 @@ describe("Scenario: Protocol Happy Path", () => {
         requestId,
         owner: stranger.address,
         receiver: stranger.address,
-        amountOfETH: amountWithRewards,
+        amountOfETH: finalizedWithdrawalAmount,
       },
       "WithdrawalClaimed event",
     );
@@ -640,7 +695,7 @@ describe("Scenario: Protocol Happy Path", () => {
     const balanceAfterClaim = await getBalances(stranger);
 
     expect(balanceAfterClaim.ETH).to.equal(
-      balanceBeforeClaim.ETH + amountWithRewards - spentGas,
+      balanceBeforeClaim.ETH + finalizedWithdrawalAmount - spentGas,
       "ETH balance after claim",
     );
 
@@ -649,11 +704,11 @@ describe("Scenario: Protocol Happy Path", () => {
     log.debug("Locked ether amount", {
       "Before withdrawal": ethers.formatEther(lockedEtherAmountBeforeWithdrawal),
       "After claim": ethers.formatEther(lockedEtherAmountAfterClaim),
-      "Amount with rewards": ethers.formatEther(amountWithRewards),
+      "Finalized amount": ethers.formatEther(finalizedWithdrawalAmount),
     });
 
     expect(lockedEtherAmountAfterClaim).to.equal(
-      lockedEtherAmountBeforeWithdrawal - amountWithRewards,
+      lockedEtherAmountBeforeWithdrawal - finalizedWithdrawalAmount,
       "Locked ether amount after claim",
     );
 

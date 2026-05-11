@@ -3,6 +3,35 @@ import { artifacts, ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+import { NonPayableOverrides } from "typechain-types/common";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type MethodArgs<C, M extends keyof C> = C[M] extends (...args: any[]) => any ? Parameters<C[M]> : never;
+
+// constructor args
+// example:  const constructorArgs:  ConstructorArgs<UpgradeTemporaryAdmin__factory>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ContractWithConstructor = { deploy: (...args: any[]) => any };
+type DeployArgs<C extends ContractWithConstructor> = MethodArgs<C, "deploy">;
+type RequiredDeployArgs<C extends ContractWithConstructor> = Required<DeployArgs<C>>;
+export type ConstructorArgs<C extends ContractWithConstructor> =
+  RequiredDeployArgs<C> extends [...infer Args, infer Last]
+    ? Last extends NonPayableOverrides & { from?: string } // check if `overrides?` are the last argument
+      ? Args
+      : DeployArgs<C>
+    : DeployArgs<C>;
+
+// initialize method args
+// example: const initArgs: InitializeArgs<TopUpGateway> = [param1, param2];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ContractWithInitialize = { initialize: (...args: any[]) => any };
+export type InitializeArgs<C extends ContractWithInitialize> = MethodArgs<C, "initialize">;
+
+// finalizeUpgrade_xxx method args
+// example: for finalizeUpgrade_v5() -  const finArgs: FinalizeUpgradeArgs<StakingRouter, "v5">;
+type ContractWithFinalizeUpgrade<C, Suffix extends string> = Extract<keyof C, `finalizeUpgrade_${Suffix}`>;
+export type FinalizeUpgradeArgs<C, Suffix extends string> = MethodArgs<C, ContractWithFinalizeUpgrade<C, Suffix>>;
+
 interface LoadedContractHelper {
   name: string;
   contractPath: string;
@@ -48,4 +77,19 @@ export async function loadContract<ContractType extends BaseContract>(
 export async function getContractPath(contractName: string) {
   const artifact = await artifacts.readArtifact(contractName);
   return artifact.sourceName;
+}
+
+export async function encodeFunctionCall<T extends readonly unknown[] = readonly unknown[]>(
+  contractName: string,
+  method: string,
+  args: T,
+) {
+  const artifact = await artifacts.readArtifact(contractName);
+  const contractInterface = new ethers.Interface(artifact.abi);
+  return contractInterface.encodeFunctionData(method, args);
+}
+
+export async function isContractDeployed(address: string): Promise<boolean> {
+  const code = await ethers.provider.getCode(address);
+  return code !== "0x";
 }

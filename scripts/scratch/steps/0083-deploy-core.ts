@@ -1,8 +1,15 @@
 import { ethers } from "hardhat";
 
-import { StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
+import {
+  ConsolidationBus,
+  ConsolidationGateway,
+  ConsolidationMigrator,
+  StakingRouter,
+  TopUpGateway,
+  TriggerableWithdrawalsGateway,
+} from "typechain-types";
 
-import { getContractPath, loadContract } from "lib/contract";
+import { encodeFunctionCall, getContractPath, InitializeArgs, loadContract } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
   deployContract,
@@ -10,6 +17,8 @@ import {
   deployWithoutProxy,
   makeTx,
 } from "lib/deploy";
+import { EIP7002_ADDRESS } from "lib/eips/eip7002";
+import { EIP7251_ADDRESS } from "lib/eips/eip7251";
 import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 import { en0x } from "lib/string";
@@ -37,7 +46,6 @@ export async function main() {
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
-  const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
   const validatorExitDelayVerifierParams = state[Sk.validatorExitDelayVerifier].deployParameters;
 
   const proxyContractsOwner = deployer;
@@ -108,8 +116,7 @@ export async function main() {
     [wstETH.address, withdrawalQueueERC721Params.name, withdrawalQueueERC721Params.symbol],
   );
   const withdrawalQueue = await loadContract("WithdrawalQueueERC721", withdrawalQueue_.address);
-  const withdrawalQueueAdmin = deployer;
-  await makeTx(withdrawalQueue, "initialize", [withdrawalQueueAdmin], { from: deployer });
+  await makeTx(withdrawalQueue, "initialize", [admin], { from: deployer });
 
   const withdrawalQueueBaseUri = state["withdrawalQueueERC721"].deployParameters.baseUri;
   if (withdrawalQueueBaseUri !== null && withdrawalQueueBaseUri !== "") {
@@ -149,24 +156,45 @@ export async function main() {
   // Deploy StakingRouter
   //
 
+  // deploy beacon chain depositor
+  const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
+
+  // deploy SRLib
+  const minFirstAllocationStrategy = await deployWithoutProxy(
+    Sk.minFirstAllocationStrategy,
+    "MinFirstAllocationStrategy",
+    deployer,
+  );
+
+  const srLib = await deployWithoutProxy(Sk.srLib, "SRLib", deployer, [], "address", true, {
+    libraries: {
+      MinFirstAllocationStrategy: minFirstAllocationStrategy.address,
+    },
+  });
+
+  const stakingRouterParams = state[Sk.stakingRouter].deployParameters;
+  const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
+
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
     "StakingRouter",
     proxyContractsOwner,
     deployer,
-    [depositContract],
+    [depositContract, lidoAddress, locator.address, stakingRouterParams.maxEBType1, stakingRouterParams.maxEBType2],
     null,
     true,
     {
-      libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategyAddress },
+      libraries: {
+        BeaconChainDepositor: beaconChainDepositor.address,
+        SRLib: srLib.address,
+      },
     },
+    await encodeFunctionCall<InitializeArgs<StakingRouter>>("StakingRouter", "initialize", [
+      admin,
+      withdrawalCredentials,
+    ]),
   );
-  const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
-  const stakingRouterAdmin = deployer;
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
-  await makeTx(stakingRouter, "initialize", [stakingRouterAdmin, lidoAddress, withdrawalCredentials], {
-    from: deployer,
-  });
 
   //
   // Deploy or use predefined DepositSecurityModule
@@ -178,7 +206,7 @@ export async function main() {
       await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
         lidoAddress,
         depositContract,
-        stakingRouter.address,
+        stakingRouter_.address,
         depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,
         depositSecurityModuleParams.maxOperatorsPerUnvetting,
       ])
@@ -190,13 +218,50 @@ export async function main() {
   }
 
   //
+  // Deploy TopUpGateway behind OssifiableProxy (before StakingRouter initialization)
+  //
+
+  const topUpGatewayParams = state[Sk.topUpGateway].deployParameters;
+
+  const topUpGateway_ = await deployBehindOssifiableProxy(
+    Sk.topUpGateway,
+    "TopUpGateway",
+    proxyContractsOwner,
+    deployer,
+    [
+      locator.address,
+      topUpGatewayParams.gIFirstValidatorPrev,
+      topUpGatewayParams.gIFirstValidatorCurr,
+      topUpGatewayParams.pivotSlot,
+      chainSpec.slotsPerEpoch,
+    ],
+    null, // implementation
+    true, // withStateFile
+    undefined, // factoryOptions
+    await encodeFunctionCall<InitializeArgs<TopUpGateway>>("TopUpGateway", "initialize", [
+      admin,
+      topUpGatewayParams.maxValidatorsPerTopUp,
+      topUpGatewayParams.minBlockDistance,
+      topUpGatewayParams.maxRootAge,
+      topUpGatewayParams.targetBalanceGwei,
+      topUpGatewayParams.minTopUpGwei,
+    ]),
+  );
+  await loadContract<TopUpGateway>("TopUpGateway", topUpGateway_.address);
+
+  //
   // Deploy Accounting
   //
 
-  const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
-    locator.address,
-    lidoAddress,
-  ]);
+  const accounting = await deployBehindOssifiableProxy(
+    Sk.accounting,
+    "Accounting",
+    proxyContractsOwner,
+    deployer,
+    [locator.address, lidoAddress],
+    null,
+    true,
+  );
 
   //
   // Deploy AccountingOracle and its HashConsensus
@@ -265,9 +330,9 @@ export async function main() {
       hashConsensusForVebo.address,
       validatorsExitBusOracleParams.consensusVersion,
       ZERO_LAST_PROCESSING_REF_SLOT,
-      validatorsExitBusOracleParams.maxValidatorsPerRequest,
-      validatorsExitBusOracleParams.maxExitRequestsLimit,
-      validatorsExitBusOracleParams.exitsPerFrame,
+      validatorsExitBusOracleParams.maxValidatorsPerReport,
+      validatorsExitBusOracleParams.maxExitBalanceEth,
+      validatorsExitBusOracleParams.balancePerFrameEth,
       validatorsExitBusOracleParams.frameDurationInSec,
     ],
     { from: deployer },
@@ -277,6 +342,7 @@ export async function main() {
   // Deploy Triggerable Withdrawals Gateway
   //
 
+  const triggerableWithdrawalsGatewayParams = state[Sk.triggerableWithdrawalsGateway].deployParameters;
   const triggerableWithdrawalsGateway_ = await deployWithoutProxy(
     Sk.triggerableWithdrawalsGateway,
     "TriggerableWithdrawalsGateway",
@@ -284,9 +350,9 @@ export async function main() {
     [
       admin,
       locator.address,
-      validatorsExitBusOracleParams.maxExitRequestsLimit,
-      validatorsExitBusOracleParams.exitsPerFrame,
-      validatorsExitBusOracleParams.frameDurationInSec,
+      triggerableWithdrawalsGatewayParams.maxExitRequestsLimit,
+      triggerableWithdrawalsGatewayParams.exitsPerFrame,
+      triggerableWithdrawalsGatewayParams.frameDurationInSec,
     ],
   );
   await makeTx(
@@ -305,6 +371,109 @@ export async function main() {
     [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracle.address],
     { from: deployer },
   );
+
+  //
+  // Deploy Consolidation Gateway
+  //
+
+  const consolidationGatewayParams = state[Sk.consolidationGateway].deployParameters;
+  const consolidationGateway_ = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
+    admin,
+    locator.address,
+    consolidationGatewayParams.maxConsolidationRequestsLimit,
+    consolidationGatewayParams.consolidationsPerFrame,
+    consolidationGatewayParams.frameDurationInSec,
+    consolidationGatewayParams.gIFirstValidatorPrev,
+    consolidationGatewayParams.gIFirstValidatorCurr,
+    consolidationGatewayParams.pivotSlot,
+  ]);
+
+  const consolidationGateway = await loadContract<ConsolidationGateway>(
+    "ConsolidationGateway",
+    consolidationGateway_.address,
+  );
+
+  //
+  // Deploy Consolidation Bus
+  //
+
+  const consolidationBusParams = state[Sk.consolidationBus].deployParameters;
+  const consolidationBus_ = await deployBehindOssifiableProxy(
+    Sk.consolidationBus,
+    "ConsolidationBus",
+    proxyContractsOwner,
+    deployer,
+    [consolidationGateway_.address],
+  );
+
+  const consolidationBus = await loadContract<ConsolidationBus>("ConsolidationBus", consolidationBus_.address);
+
+  await makeTx(
+    consolidationBus,
+    "initialize",
+    [
+      admin,
+      consolidationBusParams.initialBatchSize,
+      consolidationBusParams.initialMaxGroupsInBatch,
+      consolidationBusParams.initialExecutionDelay,
+    ],
+    { from: deployer },
+  );
+
+  // Grant MANAGE_ROLE to deployer for testing
+  await makeTx(consolidationBus, "grantRole", [await consolidationBus.MANAGE_ROLE(), deployer], { from: deployer });
+
+  // Grant ADD_CONSOLIDATION_REQUEST_ROLE on Gateway to Bus
+  await makeTx(
+    consolidationGateway,
+    "grantRole",
+    [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), consolidationBus_.address],
+    { from: deployer },
+  );
+
+  // Also grant ADD_CONSOLIDATION_REQUEST_ROLE to deployer for direct testing
+  await makeTx(
+    consolidationGateway,
+    "grantRole",
+    [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), deployer],
+    { from: deployer },
+  );
+
+  //
+  // Deploy Consolidation Migrator
+  //
+  const consolidationMigratorParams = state[Sk.consolidationMigrator].deployParameters;
+
+  const consolidationMigrator_ = await deployBehindOssifiableProxy(
+    Sk.consolidationMigrator,
+    "ConsolidationMigrator",
+    proxyContractsOwner,
+    deployer,
+    [
+      stakingRouter_.address,
+      consolidationBus_.address,
+      consolidationMigratorParams.sourceModuleId,
+      consolidationMigratorParams.targetModuleId,
+    ],
+  );
+
+  const consolidationMigrator = await loadContract<ConsolidationMigrator>(
+    "ConsolidationMigrator",
+    consolidationMigrator_.address,
+  );
+
+  await makeTx(consolidationMigrator, "initialize", [admin], { from: deployer });
+
+  // Grant ALLOW_PAIR_ROLE to deployer for testing
+  await makeTx(consolidationMigrator, "grantRole", [await consolidationMigrator.ALLOW_PAIR_ROLE(), deployer], {
+    from: deployer,
+  });
+
+  // Register ConsolidationMigrator as publisher on ConsolidationBus
+
+  await makeTx(consolidationBus, "grantRole", [await consolidationBus.PUBLISH_ROLE(), consolidationMigrator_.address], {
+    from: deployer,
+  });
 
   //
   // Deploy ValidatorExitDelayVerifier
@@ -344,6 +513,9 @@ export async function main() {
     lidoAddress,
     treasuryAddress,
     triggerableWithdrawalsGateway.address,
+    consolidationGateway.address,
+    EIP7002_ADDRESS,
+    EIP7251_ADDRESS,
   ]);
 
   await makeTx(withdrawalsManagerProxy, "proxy_upgradeTo", [withdrawalVaultImpl.address, "0x"], { from: deployer });
@@ -365,26 +537,31 @@ export async function main() {
   //
 
   const sanityCheckerParams = state["oracleReportSanityChecker"].deployParameters;
-  const oracleReportSanityCheckerArgs = [
-    locator.address,
-    accountingOracle.address,
-    accounting.address,
-    admin,
-    [
-      sanityCheckerParams.exitedValidatorsPerDayLimit,
-      sanityCheckerParams.appearedValidatorsPerDayLimit,
-      sanityCheckerParams.annualBalanceIncreaseBPLimit,
-      sanityCheckerParams.simulatedShareRateDeviationBPLimit,
-      sanityCheckerParams.maxValidatorExitRequestsPerReport,
-      sanityCheckerParams.maxItemsPerExtraDataTransaction,
-      sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
-      sanityCheckerParams.requestTimestampMargin,
-      sanityCheckerParams.maxPositiveTokenRebase,
-      sanityCheckerParams.initialSlashingAmountPWei,
-      sanityCheckerParams.inactivityPenaltiesAmountPWei,
-      sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
-    ],
-  ];
+  // TODO: set final NEW sanity limits in deploy params before release deployment:
+  // - exitedEthAmountPerDayLimit
+  // - appearedEthAmountPerDayLimit
+  // - consolidationEthAmountPerDayLimit
+  // - exitedValidatorEthAmountLimit
+  const sanityLimits = {
+    exitedEthAmountPerDayLimit: sanityCheckerParams.exitedEthAmountPerDayLimit,
+    appearedEthAmountPerDayLimit: sanityCheckerParams.appearedEthAmountPerDayLimit,
+    annualBalanceIncreaseBPLimit: sanityCheckerParams.annualBalanceIncreaseBPLimit,
+    simulatedShareRateDeviationBPLimit: sanityCheckerParams.simulatedShareRateDeviationBPLimit,
+    maxBalanceExitRequestedPerReportInEth: sanityCheckerParams.maxBalanceExitRequestedPerReportInEth,
+    maxEffectiveBalanceWeightWCType01: sanityCheckerParams.maxEffectiveBalanceWeightWCType01,
+    maxEffectiveBalanceWeightWCType02: sanityCheckerParams.maxEffectiveBalanceWeightWCType02,
+    maxItemsPerExtraDataTransaction: sanityCheckerParams.maxItemsPerExtraDataTransaction,
+    maxNodeOperatorsPerExtraDataItem: sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
+    requestTimestampMargin: sanityCheckerParams.requestTimestampMargin,
+    maxPositiveTokenRebase: sanityCheckerParams.maxPositiveTokenRebase,
+    maxCLBalanceDecreaseBP: sanityCheckerParams.maxCLBalanceDecreaseBP,
+    clBalanceOraclesErrorUpperBPLimit: sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
+    consolidationEthAmountPerDayLimit: sanityCheckerParams.consolidationEthAmountPerDayLimit,
+    exitedValidatorEthAmountLimit: sanityCheckerParams.exitedValidatorEthAmountLimit,
+    externalPendingBalanceCapEth: sanityCheckerParams.externalPendingBalanceCapEth,
+  };
+
+  const oracleReportSanityCheckerArgs = [locator.address, accounting.address, admin, sanityLimits];
 
   await deployWithoutProxy(
     Sk.oracleReportSanityChecker,

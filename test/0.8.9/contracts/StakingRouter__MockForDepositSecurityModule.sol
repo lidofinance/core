@@ -1,10 +1,25 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
-import {IStakingRouter} from "contracts/0.8.9/DepositSecurityModule.sol";
-import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
+import {StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
+
+interface IStakingRouter {
+    function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
+    function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256);
+    function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
+    function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
+    function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
+    function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
+    function decreaseStakingModuleVettedKeysCountByNodeOperator(
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _vettedSigningKeysCounts
+    ) external;
+    function deposit(uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
+    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
+}
 
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     error StakingModuleUnregistered();
@@ -14,17 +29,14 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         bytes nodeOperatorIds,
         bytes vettedSigningKeysCounts
     );
-    event StakingModuleDeposited(uint256 maxDepositsCount, uint24 stakingModuleId, bytes depositCalldata);
-    event StakingModuleStatusSet(
-        uint24 indexed stakingModuleId,
-        StakingRouter.StakingModuleStatus status,
-        address setBy
-    );
+    event StakingModuleDeposited(uint24 stakingModuleId, bytes depositCalldata);
+    event StakingModuleStatusSet(uint24 indexed stakingModuleId, StakingModuleStatus status, address setBy);
 
-    StakingRouter.StakingModuleStatus private status;
+    StakingModuleStatus private status;
     uint256 private stakingModuleNonce;
     uint256 private stakingModuleLastDepositBlock;
     uint256 private stakingModuleMaxDepositsPerBlock;
+    uint256 private stakingModuleMaxDepositsAmountPerBlock;
     uint256 private stakingModuleMinDepositBlockDistance;
     uint256 private registeredStakingModuleId;
 
@@ -32,13 +44,15 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         registeredStakingModuleId = stakingModuleId;
     }
 
+    function receiveDepositableEther() external payable {
+        // Mock function to receive ETH from Lido.withdrawDepositableEther
+    }
+
     function deposit(
-        uint256 maxDepositsCount,
         uint256 stakingModuleId,
         bytes calldata depositCalldata
-    ) external payable whenModuleIsRegistered(stakingModuleId) returns (uint256 keysCount) {
-        emit StakingModuleDeposited(maxDepositsCount, uint24(stakingModuleId), depositCalldata);
-        return maxDepositsCount;
+    ) external whenModuleIsRegistered(stakingModuleId) {
+        emit StakingModuleDeposited(uint24(stakingModuleId), depositCalldata);
     }
 
     function decreaseStakingModuleVettedKeysCountByNodeOperator(
@@ -55,13 +69,13 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
 
     function getStakingModuleStatus(
         uint256 stakingModuleId
-    ) external view whenModuleIsRegistered(stakingModuleId) returns (StakingRouter.StakingModuleStatus) {
+    ) external view whenModuleIsRegistered(stakingModuleId) returns (StakingModuleStatus) {
         return status;
     }
 
     function setStakingModuleStatus(
         uint256 _stakingModuleId,
-        StakingRouter.StakingModuleStatus _status
+        StakingModuleStatus _status
     ) external whenModuleIsRegistered(_stakingModuleId) {
         emit StakingModuleStatusSet(uint24(_stakingModuleId), _status, msg.sender);
         status = _status;
@@ -70,19 +84,23 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     function getStakingModuleIsStopped(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.Stopped;
+        return status == StakingModuleStatus.Stopped;
     }
 
     function getStakingModuleIsDepositsPaused(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.DepositsPaused;
+        return status == StakingModuleStatus.DepositsPaused;
+    }
+
+    function canDeposit(uint256 _stakingModuleId) external view returns (bool) {
+        return hasStakingModule(_stakingModuleId) && status == StakingModuleStatus.Active;
     }
 
     function getStakingModuleIsActive(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.Active;
+        return status == StakingModuleStatus.Active;
     }
 
     function getStakingModuleNonce(
@@ -109,6 +127,12 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (uint256) {
         return stakingModuleMaxDepositsPerBlock;
+    }
+
+    function getStakingModuleMaxDepositsAmountPerBlock(
+        uint256 stakingModuleId
+    ) external view whenModuleIsRegistered(stakingModuleId) returns (uint256) {
+        return stakingModuleMaxDepositsAmountPerBlock;
     }
 
     function setStakingModuleMaxDepositsPerBlock(uint256 value) external {

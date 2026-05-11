@@ -1,8 +1,5 @@
 {
   "foundry/lib/forge-std": {
-    "tag": {
-      "name": "v1.13.0",
-      "rev": "c29afdd40a82db50a3d3709d324416be50050e5e"
-    }
+    "rev": "662ae0d6936654c5d1fb79fc15f521de28edb60e"
   }
 }

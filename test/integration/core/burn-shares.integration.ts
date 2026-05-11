@@ -66,11 +66,11 @@ describe("Scenario: Burn Shares", () => {
     const accountingSigner = await impersonate(accounting.address, ether("1"));
     await burner.connect(accountingSigner).requestBurnSharesForCover(stranger, sharesToBurn);
 
-    const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
     await handleOracleReport(ctx, {
-      beaconValidators,
-      clBalance: beaconBalance,
+      clBalance,
       sharesRequestedToBurn: sharesToBurn,
       withdrawalVaultBalance: 0n,
       elRewardsVaultBalance: 0n,

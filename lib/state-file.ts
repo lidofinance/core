@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { network as hardhatNetwork } from "hardhat";
+import { ethers, network as hardhatNetwork } from "hardhat";
 import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch";
 
 const NETWORK_STATE_FILE_PREFIX = "deployed-";
@@ -66,11 +66,11 @@ export enum Sk {
   callsScript = "callsScript",
   vestingParams = "vestingParams",
   withdrawalVault = "withdrawalVault",
+  circuitBreaker = "circuitBreaker",
   gateSeal = "gateSeal",
   gateSealV3 = "gateSealV3",
   gateSealFactory = "gateSealFactory",
   gateSealTW = "gateSealTW",
-  circuitBreaker = "circuitBreaker",
   resealManager = "resealManager",
   stakingRouter = "stakingRouter",
   burner = "burner",
@@ -99,6 +99,9 @@ export enum Sk {
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  consolidationGateway = "consolidationGateway",
+  consolidationBus = "consolidationBus",
+  consolidationMigrator = "consolidationMigrator",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
@@ -108,19 +111,32 @@ export enum Sk {
   v3Template = "v3Template",
   v3Addresses = "v3Addresses",
   v3VoteScript = "v3VoteScript",
+  stakingRouterV3VoteScript = "stakingRouterV3VoteScript",
   operatorGrid = "operatorGrid",
   validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
+  topUpGateway = "topUpGateway",
   v3TemporaryAdmin = "v3TemporaryAdmin",
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
+  depositsTempStorage = "depositsTempStorage",
+  beaconChainDepositor = "beaconChainDepositor",
+  srLib = "srLib",
   // Easy Track
   easyTrack = "easyTrack",
   easyTrackEVMScriptExecutor = "easyTrackEVMScriptExecutor",
   vaultsAdapter = "vaultsAdapter",
   // Harnesses
   alertingHarness = "alertingHarness",
+  // protocol upgrade
+  upgradeConfig = "upgradeConfig",
+  upgradeTemplate = "upgradeTemplate",
+  upgradeVoteScript = "upgradeVoteScript",
+  upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
+  // csm & cm
+  csm_CSM = "csm:CSM",
+  csm_CM = "csm:CM",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -153,6 +169,9 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.vaultHub:
     case Sk.dgDualGovernance:
     case Sk.dgEmergencyProtectedTimelock:
+    case Sk.consolidationBus:
+    case Sk.consolidationMigrator:
+    case Sk.topUpGateway:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
@@ -164,9 +183,10 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.ensFactory:
     case Sk.evmScriptRegistryFactory:
     case Sk.executionLayerRewardsVault:
+    case Sk.circuitBreaker:
     case Sk.gateSeal:
     case Sk.gateSealV3:
-    case Sk.circuitBreaker:
+    case Sk.gateSealTW:
     case Sk.resealManager:
     case Sk.hashConsensusForAccountingOracle:
     case Sk.hashConsensusForValidatorsExitBusOracle:
@@ -182,15 +202,34 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.tokenRebaseNotifierV3:
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
+    case Sk.consolidationGateway:
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
     case Sk.v3VoteScript:
+    case Sk.stakingRouterV3VoteScript:
+    case Sk.depositsTempStorage:
+    case Sk.beaconChainDepositor:
+    case Sk.vaultsAdapter:
     case Sk.easyTrack:
+    case Sk.upgradeTemporaryAdmin:
+    case Sk.upgradeTemplate:
+    case Sk.upgradeVoteScript:
     case Sk.gateSealFactory:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
+  }
+}
+export function getAddressValidated(contractKey: Sk, state: DeploymentState): string | null {
+  if (!state[contractKey]) return null;
+  // allow error throw on missed items
+  let address = getAddress(contractKey, state);
+  try {
+    address = ethers.getAddress(address);
+    return address !== "0x0000000000000000000000000000000000000000" ? address : null;
+  } catch {
+    return null;
   }
 }
 
@@ -238,13 +277,13 @@ export function setValueInState(key: Sk, value: unknown): DeploymentState {
   return state;
 }
 
-export function incrementGasUsed(increment: bigint | number, useStateFile = true) {
+export function incrementGasUsed(increment: bigint | number, useStateFile = true, key: Sk = Sk.scratchDeployGasUsed) {
   if (!useStateFile) {
     return;
   }
 
   const state = readNetworkState();
-  state[Sk.scratchDeployGasUsed] = (BigInt(state[Sk.scratchDeployGasUsed] || 0) + BigInt(increment)).toString();
+  state[key] = (BigInt(state[key] || 0) + BigInt(increment)).toString();
   persistNetworkState(state);
 }
 

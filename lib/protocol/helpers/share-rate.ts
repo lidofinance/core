@@ -28,16 +28,14 @@ async function changeInternalEther(ctx: ProtocolContext, internalEtherDelta: big
 
   const accountingSigner = await impersonate(accounting, ether("1"));
 
-  const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
+  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+  const beaconBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
-  await lido
-    .connect(accountingSigner)
-    .processClStateUpdate(
-      await getCurrentBlockTimestamp(),
-      beaconValidators,
-      beaconValidators,
-      beaconBalance + internalEtherDelta,
-    );
+  await lido.connect(accountingSigner).processClStateUpdate(
+    await getCurrentBlockTimestamp(),
+    beaconBalance + internalEtherDelta, // new clValidatorsBalance
+    0n, // new clPendingBalance
+  );
 }
 
 export const ensureExactShareRate = async (ctx: ProtocolContext, targetShareRate: bigint) => {

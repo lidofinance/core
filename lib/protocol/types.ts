@@ -7,9 +7,11 @@ import {
   AccountingOracle,
   ACL,
   Burner,
+  ConsolidationBus,
+  ConsolidationGateway,
+  ConsolidationMigrator,
   DepositSecurityModule,
   HashConsensus,
-  ICSModule,
   IStakingModule,
   Kernel,
   LazyOracle,
@@ -33,6 +35,7 @@ import {
   WithdrawalVault,
   WstETH,
 } from "typechain-types";
+import { StakingModuleStructOutput } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
 
 export type LogDescriptionExtended = LogDescription & {
   address?: string;
@@ -56,6 +59,9 @@ export type ProtocolNetworkItems = {
   validatorExitDelayVerifier: string;
   validatorsExitBusOracle: string;
   triggerableWithdrawalsGateway: string;
+  consolidationGateway: string;
+  consolidationBus: string;
+  consolidationMigrator: string;
   withdrawalQueue: string;
   withdrawalVault: string;
   oracleDaemonConfig: string;
@@ -67,6 +73,7 @@ export type ProtocolNetworkItems = {
   nor: string;
   sdvt: string;
   csm: string;
+  cmv2: string;
   // hash consensus
   hashConsensus: string;
   // vaults
@@ -99,9 +106,11 @@ export interface ContractTypes {
   HashConsensus: HashConsensus;
   PredepositGuarantee: PredepositGuarantee;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
-  ICSModule: ICSModule;
   WstETH: WstETH;
   TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
+  ConsolidationGateway: ConsolidationGateway;
+  ConsolidationBus: ConsolidationBus;
+  ConsolidationMigrator: ConsolidationMigrator;
   VaultFactory: VaultFactory;
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
@@ -136,6 +145,9 @@ export type CoreContracts = {
   oracleDaemonConfig: LoadedContract<OracleDaemonConfig>;
   wstETH: LoadedContract<WstETH>;
   triggerableWithdrawalsGateway: LoadedContract<TriggerableWithdrawalsGateway>;
+  consolidationGateway: LoadedContract<ConsolidationGateway>;
+  consolidationBus: LoadedContract<ConsolidationBus>;
+  consolidationMigrator: LoadedContract<ConsolidationMigrator>;
 };
 
 export type AragonContracts = {
@@ -147,6 +159,14 @@ export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
   csm?: LoadedContract<IStakingModule>;
+  cmv2?: LoadedContract<IStakingModule>;
+};
+
+export type StakingModules = {
+  nor: StakingModuleStructOutput;
+  sdvt: StakingModuleStructOutput;
+  csm?: StakingModuleStructOutput;
+  cmv2?: StakingModuleStructOutput;
 };
 
 export type StakingModuleName = "nor" | "sdvt" | "csm";
@@ -186,10 +206,12 @@ export type Signer = keyof ProtocolSigners;
 
 export type ProtocolContextFlags = {
   withCSM: boolean;
+  withCMv2: boolean;
 };
 
 export type ProtocolContext = {
   contracts: ProtocolContracts;
+  modules: StakingModules;
   signers: ProtocolSigners;
   interfaces: Array<BaseContract["interface"]>;
   flags: ProtocolContextFlags;
