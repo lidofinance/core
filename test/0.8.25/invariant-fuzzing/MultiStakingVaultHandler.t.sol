@@ -63,6 +63,7 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         address _rootAccount,
         address[] memory _userAccount
     ) {
+        require(_stakingVaults.length == _userAccount.length, "array length mismatch");
         lidoLocator = LidoLocatorMock(_lidoLocator);
         accountingOracle = lidoLocator.accountingOracle();
         lidoContract = ILido(lidoLocator.lido());
@@ -126,7 +127,7 @@ contract MultiStakingVaultHandler is CommonBase, StdCheats, StdUtils, StdAsserti
         // Padding slots are already bytes32(0)
 
         // Build tree bottom-up
-        for (uint256 i = p - 1; i >= 1; i--) {
+        for (uint256 i = p - 1; i > 0; i--) {
             tree[i] = _hashPair(tree[2 * i], tree[2 * i + 1]);
         }
         root = tree[1];
