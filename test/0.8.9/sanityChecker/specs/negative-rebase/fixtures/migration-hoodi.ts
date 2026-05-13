@@ -10,6 +10,11 @@ const hoodiNegativeRebaseLimit = ether("68400");
 const hoodiFirstReportDecrease = ether("10000");
 const hoodiShiftedWindowDecrease = ether("58400") + 1n;
 const hoodiShiftedWindowLimit = ether("68040");
+const migratedTransientDeposits = ether("32");
+const hoodiDepositSensitiveValidatorsDecrease = ether("72000");
+const hoodiDepositPassedActualDecrease = ether("72032");
+const hoodiDepositZeroWindowLimit = ether("72000");
+const hoodiDepositPassedWindowLimit = ether("72001.152");
 
 export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
   title: "migration-hoodi",
@@ -173,29 +178,56 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
       },
     },
     {
-      title: "keeps Hoodi migrated transient deposits in the first report, not in migration",
+      title: "accepts Hoodi migrated transient state when report deposits are zero",
       rationale:
-        "The 57,600 ETH migrated transient deposits are first-report deposits. They are not written into the migration bootstrap data, so the migration snapshot itself does not inflate the negative rebase window.",
+        "The migration bootstrap stores zero deposits. With zero report deposits, the checked decrease is exactly the 72,000 ETH Hoodi limit.",
       steps: [
         migrate({
           label: "Hoodi finalized v4 migration with transient deposits",
           clValidators: hoodiCLValidators,
-          transientDeposits: ether("57600"),
+          transientDeposits: migratedTransientDeposits,
           withdrawalVaultBalance: 0n,
         }),
         report({
-          label: "Hoodi first report includes migrated transient deposits once",
-          postValidatorsBalance: hoodiCLBalance - ether("74000"),
-          postPendingBalance: ether("57600"),
-          deposits: ether("57600"),
+          label: "Hoodi first report keeps migrated deposits out of report deposits",
+          postValidatorsBalance: hoodiCLBalance - hoodiDepositSensitiveValidatorsDecrease,
+          postPendingBalance: 0n,
+          deposits: 0n,
           clWithdrawals: 0n,
         }),
       ],
       expected: {
         outcome: "accepted",
         window: {
-          actualCLBalanceDiff: ether("74000"),
-          maxAllowedCLBalanceDiff: ether("74073.6"),
+          actualCLBalanceDiff: hoodiDepositZeroWindowLimit,
+          maxAllowedCLBalanceDiff: hoodiDepositZeroWindowLimit,
+        },
+      },
+    },
+    {
+      title: "reverts Hoodi migrated transient state when report deposits are passed",
+      rationale:
+        "This is the same post-state as the previous case. Passing the 32 ETH migrated transient deposits as report deposits makes the checked decrease stricter: it becomes 72,032 ETH against a 72,001.152 ETH limit.",
+      steps: [
+        migrate({
+          label: "Hoodi finalized v4 migration with transient deposits",
+          clValidators: hoodiCLValidators,
+          transientDeposits: migratedTransientDeposits,
+          withdrawalVaultBalance: 0n,
+        }),
+        report({
+          label: "Hoodi first report passes migrated transient deposits",
+          postValidatorsBalance: hoodiCLBalance - hoodiDepositSensitiveValidatorsDecrease,
+          postPendingBalance: 0n,
+          deposits: migratedTransientDeposits,
+          clWithdrawals: 0n,
+        }),
+      ],
+      expected: {
+        outcome: "revert",
+        window: {
+          actualCLBalanceDiff: hoodiDepositPassedActualDecrease,
+          maxAllowedCLBalanceDiff: hoodiDepositPassedWindowLimit,
         },
       },
     },

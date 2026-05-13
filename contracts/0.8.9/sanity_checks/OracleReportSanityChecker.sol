@@ -542,20 +542,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 migrationCLBalance = migrationCLValidatorsBalance + migrationCLPendingBalance;
         uint256 migrationCLWithdrawals = LIDO_LOCATOR.withdrawalVault().balance;
         uint256 postWithdrawalsMigrationCLBalance = migrationCLBalance - migrationCLWithdrawals;
-        // Initialize vault state: vault is not drained during migration,
-        // so after-transfer balance equals current vault balance
+        // Use the current vault balance as the last post-transfer balance.
+        // Migration has no more precise post-report baseline; the seeded snapshots below compensate it.
         _lastVaultBalanceAfterTransfer = migrationCLWithdrawals;
 
-        // The decrease formula uses baseline report B[X-k] and sums flows from reports [X-k+1..X].
-        // To include migration-time withdrawals without any special-case branch in formula code:
-        // 1) store a virtual pre-withdrawals baseline point with zero flows;
-        // 2) store a virtual post-withdrawals point at the same logical timestamp with the same withdrawals flow.
-        // Migration-time deposit backlog is intentionally not stored here: it belongs to the first
-        // post-migration oracle report frame, not to the migration bootstrap snapshot.
+        // Seed the decrease-check window with two migration snapshots:
+        // 1) pre-withdrawals CL balance with zero flows;
+        // 2) post-withdrawals CL balance with migration-time vault balance recorded as CL withdrawals.
+        // Migrated transient deposits are not stored here; they belong to the first post-migration report.
         uint256 migrationReportTimestamp = _lastReportTimestamp;
         _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
-        // Flows stored on the baseline entry are intentionally skipped by _calcWindowDiff(),
-        // so migration-time withdrawals must live in the next snapshot to be visible in the first window.
         _addReportData(migrationReportTimestamp, postWithdrawalsMigrationCLBalance, 0, migrationCLWithdrawals);
 
         emit BaselineSnapshotMigrated(migrationCLBalance, migrationCLWithdrawals);
@@ -889,8 +885,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         AccountingCoreLimitsPacked memory _limitsList,
         uint256 _exitedEthAmountPerDay
     ) internal pure {
-        /// @dev The limit is set for the number of exits assuming 16 ETH per validator, so double
-        ///      the summed ETH limit here.
+        /// @dev The limit is set for the number of exits assuming 16 ETH per validator
         uint256 exitedEthLimitWithConsolidation =
             (uint256(_limitsList.exitedEthAmountPerDayLimit) + uint256(_limitsList.consolidationEthAmountPerDayLimit)) *
             2 *
