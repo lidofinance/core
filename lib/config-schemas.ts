@@ -251,6 +251,61 @@ const LidoApmSchema = z.object({
   ensRegDurationSec: PositiveIntSchema,
 });
 
+// Dual Governance schemas
+const DualGovernanceTiebreakerCommitteeSchema = z.object({
+  quorum: PositiveIntSchema,
+  members: z.array(EthereumAddressSchema).min(1),
+});
+
+const DualGovernanceConfigSchema = z.object({
+  tiebreakerActivationTimeout: PositiveIntSchema,
+  resealCommittee: EthereumAddressSchema,
+  sanityCheckParams: z.object({
+    maxMinAssetsLockDuration: PositiveIntSchema,
+    maxSealableWithdrawalBlockersCount: PositiveIntSchema,
+    maxTiebreakerActivationTimeout: PositiveIntSchema,
+    minTiebreakerActivationTimeout: PositiveIntSchema,
+    minWithdrawalsBatchSize: PositiveIntSchema,
+  }),
+  configProvider: z.object({
+    firstSealRageQuitSupport: BigIntStringSchema,
+    secondSealRageQuitSupport: BigIntStringSchema,
+    minAssetsLockDuration: PositiveIntSchema,
+    vetoSignallingMinDuration: PositiveIntSchema,
+    vetoSignallingMinActiveDuration: PositiveIntSchema,
+    vetoSignallingMaxDuration: PositiveIntSchema,
+    vetoSignallingDeactivationMaxDuration: PositiveIntSchema,
+    vetoCooldownDuration: PositiveIntSchema,
+    rageQuitExtensionPeriodDuration: PositiveIntSchema,
+    rageQuitEthWithdrawalsMinDelay: PositiveIntSchema,
+    rageQuitEthWithdrawalsMaxDelay: PositiveIntSchema,
+    rageQuitEthWithdrawalsDelayGrowth: PositiveIntSchema,
+  }),
+  timelock: z.object({
+    afterSubmitDelay: PositiveIntSchema,
+    afterScheduleDelay: PositiveIntSchema,
+    sanityCheckParams: z.object({
+      minExecutionDelay: PositiveIntSchema,
+      maxAfterSubmitDelay: PositiveIntSchema,
+      maxAfterScheduleDelay: PositiveIntSchema,
+      maxEmergencyModeDuration: PositiveIntSchema,
+      maxEmergencyProtectionDuration: PositiveIntSchema,
+    }),
+    emergencyProtection: z.object({
+      emergencyModeDuration: PositiveIntSchema,
+      emergencyProtectionEndOffset: PositiveIntSchema,
+      emergencyGovernanceProposer: EthereumAddressSchema,
+      emergencyActivationCommittee: EthereumAddressSchema,
+      emergencyExecutionCommittee: EthereumAddressSchema,
+    }),
+  }),
+  tiebreaker: z.object({
+    quorum: PositiveIntSchema,
+    executionDelay: PositiveIntSchema,
+    committees: z.array(DualGovernanceTiebreakerCommitteeSchema).min(1),
+  }),
+});
+
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
@@ -280,6 +335,7 @@ export const ScratchParametersSchema = z.object({
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
+  dualGovernance: DualGovernanceConfigSchema.optional(),
 });
 
 // Inferred types from zod schemas

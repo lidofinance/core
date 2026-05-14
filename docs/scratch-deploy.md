@@ -10,6 +10,18 @@ anvil -p 8555 --base-fee 0 --gas-price 0
 bash scripts/dao-local-deploy.sh
 ```
 
+### Sepolia fork
+
+Same flow, but anvil forks Sepolia (preserving chainId 11155111, which triggers `0010-deploy-deposit-contract` to deploy `SepoliaDepositAdapter` wrapping Sepolia's real beacon deposit contract):
+
+```shell
+# Terminal 1 — fork Sepolia
+anvil --fork-url "$SEPOLIA_RPC_URL" -p 8555 --base-fee 0 --gas-price 0
+
+# Terminal 2 — deploy
+bash scripts/dao-sepolia-fork-deploy.sh
+```
+
 ### Agent / CI mode (quiet logs)
 
 The scripts above print full deploy + test output to the terminal — gas reports, per-tx traces, and ~700 mocha test ticks. That is fine for a human watching interactively but wasteful for automation / LLM agents.
@@ -19,6 +31,7 @@ Agent-friendly variants tee the full output to a file and forward only milestone
 ```shell
 # Full deploy + tests, log at logs/scratch-deploy.log (override via LOG_FILE env):
 bash scripts/dao-local-deploy-agent.sh
+bash scripts/dao-sepolia-fork-deploy-agent.sh   # logs/scratch-deploy-sepolia-fork.log
 
 # Just the test suites, with their own log files:
 yarn test:integration:fork:local:agent   # logs/integration-fork-local.log
@@ -26,11 +39,19 @@ yarn test:integration:scratch:agent      # logs/integration-scratch.log
 yarn test:integration:agent              # logs/integration-tests.log (forking mode)
 ```
 
-All three yarn variants and the deploy wrapper route through `scripts/run-logged.sh <logfile> <command...>`, which you can use to wrap any long-running command the same way.
+All three yarn variants and the deploy wrappers route through `scripts/run-logged.sh <logfile> <command...>`, which you can use to wrap any long-running command the same way.
 
 ## Requirements
 
 Same as for the rest of the repo, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+In addition, scratch deploy installs Dual Governance from the bundled
+`foundry/lib/dual-governance` submodule via `forge script`, so the deploy host
+needs:
+
+- `forge` on `PATH` (Foundry; same toolchain used elsewhere in the repo)
+- The submodule initialised: `git submodule update --init --recursive` after
+  cloning. CI workflows must use `actions/checkout@v4` with `submodules: recursive`.
 
 ## General Information
 
@@ -103,6 +124,48 @@ A detailed overview of the deployment script's process:
   - OssifiableProxy admin roles: `LidoLocator`, `StakingRouter`, `AccountingOracle`, `ValidatorsExitBusOracle`,
     `WithdrawalQueueERC721`
   - `DepositSecurityModule` owner
+- Unpause sealable withdrawal blockers — `WithdrawalQueueERC721` and
+  `ValidatorsExitBusOracle` ship paused on a fresh deploy; DG's
+  `addSealableWithdrawalBlocker` rejects paused contracts, so this prerequisite
+  step (`0155-unpause-sealables`) resumes them via the Agent.
+- Deploy Dual Governance — `0160-deploy-dual-governance` generates a per-deploy
+  TOML config (signalling tokens, sealables, admin proposer, etc.) from the
+  scratch state plus the `[dualGovernance]` knobs in
+  `scripts/scratch/deploy-params-testnet.toml`, then shells out to
+  `forge script DeployConfigurable.s.sol` against the local node and writes the
+  resulting addresses (timelock, AdminExecutor, ResealManager, escrow master copy,
+  config provider, tiebreaker core + sub-committees, emergency governance) into
+  the network state file.
+- Launch Dual Governance — `0170-launch-dual-governance`:
+  - Grants `RUN_SCRIPT_ROLE`/`EXECUTE_ROLE` on `Agent` to DG's `AdminExecutor`
+  - Sets `Agent` as the permission manager for those roles (revokes Voting's
+    direct ability to revoke them later)
+  - Migrates ACL `CREATE_PERMISSIONS_ROLE` from Voting to Agent (the only
+    Voting-managed protocol permission scratch's `LidoTemplate` doesn't already
+    place at Agent — items 1–27 of the mainnet omnibus are no-ops here)
+  - Grants `ResealManager` `PAUSE_ROLE`/`RESUME_ROLE` on the sealables
+  - Submits, schedules and executes a launch DG proposal that revokes Voting's
+    `RUN_SCRIPT_ROLE`/`EXECUTE_ROLE` on Agent — completing the migration and
+    asserting the whole DG → AdminExecutor → Agent → protocol path works
+  - Verifies end state: `timelock.getGovernance() == DG`, no emergency mode,
+    Voting bridge cut
+
+To opt out of DG, remove `0155-unpause-sealables`, `0160-deploy-dual-governance`
+and `0170-launch-dual-governance` from `scripts/scratch/steps.json`.
+
+### Dual Governance configuration
+
+The `[dualGovernance]` section of the deploy-params toml mirrors the structure
+of `dual-governance/deploy-config/deploy-config-mainnet.toml`. Timings are short
+(15 min `after_submit_delay`, 5 min veto signalling, etc.) so integration tests
+don't have to advance time across multi-day mainnet windows. Committee
+addresses default to anvil dev accounts — replace them per network when running
+against real testnets:
+
+- `dualGovernance.resealCommittee` — Gnosis Multisig on mainnet
+- `dualGovernance.timelock.emergencyProtection.{emergencyGovernanceProposer,
+emergencyActivationCommittee, emergencyExecutionCommittee}`
+- `dualGovernance.tiebreaker.committees[N].members`
 
 ## Deployment Environments
 

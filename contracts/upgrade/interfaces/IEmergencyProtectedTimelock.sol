@@ -13,4 +13,10 @@ interface IEmergencyProtectedTimelock {
     function getAfterScheduleDelay() external view returns (Duration);
 
     function execute(uint256 proposalId) external;
+
+    function getProposalsCount() external view returns (uint256);
+
+    function getGovernance() external view returns (address);
+
+    function isEmergencyModeActive() external view returns (bool);
 }

@@ -116,6 +116,12 @@ export enum Sk {
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
+  dgAdminExecutor = "dg:adminExecutor",
+  dgConfigProvider = "dg:configProvider",
+  dgEmergencyGovernance = "dg:emergencyGovernance",
+  dgTiebreakerCoreCommittee = "dg:tiebreakerCoreCommittee",
+  dgTiebreakerSubCommittees = "dg:tiebreakerSubCommittees",
+  dgEscrowMasterCopy = "dg:escrowMasterCopy",
   // Easy Track
   easyTrack = "easyTrack",
   easyTrackEVMScriptExecutor = "easyTrackEVMScriptExecutor",
@@ -152,8 +158,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.appSimpleDvt:
     case Sk.predepositGuarantee:
     case Sk.vaultHub:
-    case Sk.dgDualGovernance:
-    case Sk.dgEmergencyProtectedTimelock:
     case Sk.sepoliaDepositAdapter:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
@@ -190,9 +194,31 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.v3VoteScript:
     case Sk.easyTrack:
     case Sk.gateSealFactory:
+    // DG contracts (none are proxies upstream — stored as { address }):
+    case Sk.dgDualGovernance: // eslint-disable-line no-fallthrough
+    case Sk.dgEmergencyProtectedTimelock:
+    case Sk.dgAdminExecutor:
+    case Sk.dgConfigProvider:
+    case Sk.dgEmergencyGovernance:
+    case Sk.dgTiebreakerCoreCommittee:
+    case Sk.dgEscrowMasterCopy:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
+  }
+}
+
+/**
+ * Like {@link getAddress} but returns `undefined` if the entry is missing.
+ * Useful when a step needs to detect whether a prior step has populated the
+ * state (e.g. idempotency guards) without throwing.
+ */
+export function tryGetAddress(contractKey: Sk, state: DeploymentState): string | undefined {
+  if (state[contractKey] === undefined) return undefined;
+  try {
+    return getAddress(contractKey, state);
+  } catch {
+    return undefined;
   }
 }
 

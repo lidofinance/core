@@ -1,7 +1,8 @@
-import { TransactionReceipt, TransactionResponse } from "ethers";
+import { TransactionReceipt } from "ethers";
 import fs from "fs";
 
 import * as toml from "@iarna/toml";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { IDualGovernance, IEmergencyProtectedTimelock } from "typechain-types";
 
@@ -42,6 +43,51 @@ export function readUpgradeParameters(skipValidation: boolean = false): UpgradeP
   }
 }
 
+const DG_TIME_CONSTRAINT_RETRY_STEP = ONE_HOUR;
+const DG_TIME_CONSTRAINT_RETRY_MAX_ATTEMPTS = 24;
+
+export interface ExecuteDGProposalOpts {
+  dualGovernance: IDualGovernance;
+  timelock: IEmergencyProtectedTimelock;
+  signer: HardhatEthersSigner;
+  proposalId: bigint;
+  retryOnTimeConstraint?: boolean;
+}
+
+/**
+ * Schedule + execute an already-submitted DG proposal. Advances chain time across
+ * the after-submit and after-schedule delays. With `retryOnTimeConstraint`, the
+ * execute call is retried when it reverts due to a TimeConstraints window —
+ * mainnet's launch omnibus uses these (executable only between 06:00 and 18:00
+ * UTC). Scratch has no time constraints, so callers there leave it off.
+ */
+export async function executeDGProposal(
+  opts: ExecuteDGProposalOpts,
+): Promise<{ scheduleReceipt: TransactionReceipt; executeReceipt: TransactionReceipt }> {
+  const { dualGovernance, timelock, signer, proposalId } = opts;
+  const retry = opts.retryOnTimeConstraint ?? false;
+
+  await advanceChainTime(await timelock.getAfterSubmitDelay());
+  const scheduleReceipt = (await (await dualGovernance.connect(signer).scheduleProposal(proposalId)).wait())!;
+  log.success("Proposal scheduled: gas used", scheduleReceipt.gasUsed);
+
+  await advanceChainTime(await timelock.getAfterScheduleDelay());
+
+  let executeReceipt: TransactionReceipt | undefined;
+  let attempts = 0;
+  while (!executeReceipt) {
+    try {
+      executeReceipt = (await (await timelock.connect(signer).execute(proposalId)).wait())!;
+    } catch (e) {
+      if (!retry || attempts >= DG_TIME_CONSTRAINT_RETRY_MAX_ATTEMPTS) throw e;
+      await advanceChainTime(DG_TIME_CONSTRAINT_RETRY_STEP);
+      attempts++;
+    }
+  }
+  log.success("Proposal executed: gas used", executeReceipt.gasUsed);
+  return { scheduleReceipt, executeReceipt };
+}
+
 export async function mockDGAragonVoting(state: DeploymentState): Promise<{
   proposalId: bigint;
   scheduleReceipt: TransactionReceipt;
@@ -49,50 +95,30 @@ export async function mockDGAragonVoting(state: DeploymentState): Promise<{
 }> {
   log("Starting mock Aragon voting...");
   const agentAddress = getAddress(Sk.appAgent, state);
-
-  const deployer = await impersonate(agentAddress, ether("100"));
+  const signer = await impersonate(agentAddress, ether("100"));
   const timelock = await loadContract<IEmergencyProtectedTimelock>(
     "IEmergencyProtectedTimelock",
-    state[Sk.dgEmergencyProtectedTimelock].proxy.address,
+    getAddress(Sk.dgEmergencyProtectedTimelock, state),
   );
-  const afterSubmitDelay = await timelock.getAfterSubmitDelay();
-  const afterScheduleDelay = await timelock.getAfterScheduleDelay();
+  const dualGovernance = await loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state));
 
-  const dualGovernance = await loadContract<IDualGovernance>(
-    "IDualGovernance",
-    state[Sk.dgDualGovernance].proxy.address,
-  );
+  // https://dg.lido.fi/proposals/6 — already submitted on mainnet; this helper
+  // only schedules + executes it during the upgrade-on-fork dry-run.
+  const proposalId = 6n;
+  log(`Targeting mainnet DG proposalId=${proposalId}`);
 
-  const proposalId = 6n; // https://dg.lido.fi/proposals/6
-  log.success("Proposal submitted: proposalId", proposalId);
+  const { scheduleReceipt, executeReceipt } = await executeDGProposal({
+    dualGovernance,
+    timelock,
+    signer,
+    proposalId,
+    retryOnTimeConstraint: true,
+  });
 
-  await advanceChainTime(afterSubmitDelay);
-  const scheduleTx = await dualGovernance.connect(deployer).scheduleProposal(proposalId);
-  const scheduleReceipt = (await scheduleTx.wait())!;
-  log.success("Proposal scheduled: gas used", scheduleReceipt.gasUsed);
-
-  await advanceChainTime(afterScheduleDelay);
-  let proposalExecutedTx: TransactionResponse;
-  let revertedDueToTimeConstraints: boolean = true;
-  let attempts: number = 0;
-
-  while (revertedDueToTimeConstraints && attempts < 24) {
-    try {
-      proposalExecutedTx = await timelock.connect(deployer).execute(proposalId);
-      revertedDueToTimeConstraints = false;
-    } catch {
-      await advanceChainTime(ONE_HOUR);
-      attempts++;
-    }
-  }
-
-  const proposalExecutedReceipt = (await proposalExecutedTx!.wait())!;
-  log.success("Proposal executed: gas used", proposalExecutedReceipt.gasUsed);
-
-  if (proposalExecutedReceipt.gasUsed > FUSAKA_TX_LIMIT) {
+  if (executeReceipt.gasUsed > FUSAKA_TX_LIMIT) {
     log.error("Proposal executed: gas used exceeds FUSAKA_TX_LIMIT");
     process.exit(1);
   }
 
-  return { proposalId, scheduleReceipt, proposalExecutedReceipt };
+  return { proposalId, scheduleReceipt, proposalExecutedReceipt: executeReceipt };
 }

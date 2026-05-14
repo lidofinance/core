@@ -35,7 +35,8 @@ export const ensureDsmGuardians = async (ctx: ProtocolContext, minGuardiansCount
     count++;
   }
 
-  await dsm.connect(ownerSigner).addGuardians(newGuardians, quorum);
+  const addGuardiansTx = await dsm.connect(ownerSigner).addGuardians(newGuardians, quorum);
+  await addGuardiansTx.wait();
 
   log.debug("Checked DSM guardians count", {
     "Min guardians count": minGuardiansCount,

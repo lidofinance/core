@@ -35,3 +35,7 @@ deployed-mainnet-upgrade.json
 # MacOS
 .DS_Store
 /logs
+
+# Editor swap files
+*.swp
+*.swo
