@@ -45,7 +45,12 @@ describe("Integration: Dual Governance scratch launch state", () => {
     ctx = await getProtocolContext();
     if (!ctx.isScratch) {
       // Post-launch topology asserted here is the end state of scratch step
-      // 0170. On non-scratch contexts DG state may not match.
+      // 0160 (forge deploy + LidoTemplate.finalizePermissionsAfterDGDeployment).
+      // On non-scratch contexts DG state may not match.
+      this.skip();
+    }
+    if (process.env.DG_DEPLOYMENT_ENABLED === "false") {
+      // Scratch deploy explicitly skipped DG via the opt-out toggle.
       this.skip();
     }
 
@@ -100,8 +105,8 @@ describe("Integration: Dual Governance scratch launch state", () => {
     expect(await timelock.isEmergencyModeActive()).to.equal(false);
   });
 
-  it("recorded the launch proposal", async () => {
-    expect(await timelock.getProposalsCount()).to.equal(1n);
+  it("records no launch proposal (LidoTemplate finalize handles revocation directly)", async () => {
+    expect(await timelock.getProposalsCount()).to.equal(0n);
   });
 
   it("grants AdminExecutor full Agent control and revokes it from Voting", async () => {

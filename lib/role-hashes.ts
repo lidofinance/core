@@ -1,4 +1,4 @@
-import type { AddressLike, BytesLike, ContractTransactionResponse } from "ethers";
+import type { AddressLike, BytesLike } from "ethers";
 
 import type { ACL } from "typechain-types";
 
@@ -20,29 +20,4 @@ export const RESUME_ROLE = streccak("RESUME_ROLE");
 // helper picks the simple `(address, address, bytes32)` overload.
 export function aclHasPermission(acl: ACL, who: AddressLike, where: AddressLike, role: BytesLike): Promise<boolean> {
   return acl["hasPermission(address,address,bytes32)"](who, where, role);
-}
-
-// Minimal subset of OZ AccessControl needed by `withTemporaryRole`.
-interface AccessControllable {
-  grantRole(role: BytesLike, account: AddressLike): Promise<ContractTransactionResponse>;
-  revokeRole(role: BytesLike, account: AddressLike): Promise<ContractTransactionResponse>;
-}
-
-/**
- * Grant `role` to `account` on `contract`, run `action`, then revoke the role.
- * Useful when an admin (e.g. Agent) needs to perform a one-shot operation that
- * requires a role it doesn't permanently hold.
- */
-export async function withTemporaryRole(
-  contract: AccessControllable,
-  role: BytesLike,
-  account: AddressLike,
-  action: () => Promise<unknown>,
-): Promise<void> {
-  await (await contract.grantRole(role, account)).wait();
-  try {
-    await action();
-  } finally {
-    await (await contract.revokeRole(role, account)).wait();
-  }
 }

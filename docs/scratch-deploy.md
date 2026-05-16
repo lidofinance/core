@@ -124,10 +124,11 @@ A detailed overview of the deployment script's process:
   - OssifiableProxy admin roles: `LidoLocator`, `StakingRouter`, `AccountingOracle`, `ValidatorsExitBusOracle`,
     `WithdrawalQueueERC721`
   - `DepositSecurityModule` owner
-- Unpause sealable withdrawal blockers — `WithdrawalQueueERC721` and
-  `ValidatorsExitBusOracle` ship paused on a fresh deploy; DG's
-  `addSealableWithdrawalBlocker` rejects paused contracts, so this prerequisite
-  step (`0155-unpause-sealables`) resumes them via the Agent.
+- Unpause sealable withdrawal blockers — `0145-unpause-sealables` runs before
+  `0150-transfer-roles` so the deployer (which still holds `DEFAULT_ADMIN_ROLE`
+  on `WithdrawalQueueERC721` and `ValidatorsExitBusOracle` at this point)
+  temporarily grants itself `RESUME_ROLE`, resumes both contracts, and renounces
+  the role. No impersonation — works on a live network.
 - Deploy Dual Governance — `0160-deploy-dual-governance` generates a per-deploy
   TOML config (signalling tokens, sealables, admin proposer, etc.) from the
   scratch state plus the `[dualGovernance]` knobs in
@@ -135,23 +136,21 @@ A detailed overview of the deployment script's process:
   `forge script DeployConfigurable.s.sol` against the local node and writes the
   resulting addresses (timelock, AdminExecutor, ResealManager, escrow master copy,
   config provider, tiebreaker core + sub-committees, emergency governance) into
-  the network state file.
-- Launch Dual Governance — `0170-launch-dual-governance`:
-  - Grants `RUN_SCRIPT_ROLE`/`EXECUTE_ROLE` on `Agent` to DG's `AdminExecutor`
-  - Sets `Agent` as the permission manager for those roles (revokes Voting's
-    direct ability to revoke them later)
-  - Migrates ACL `CREATE_PERMISSIONS_ROLE` from Voting to Agent (the only
-    Voting-managed protocol permission scratch's `LidoTemplate` doesn't already
-    place at Agent — items 1–27 of the mainnet omnibus are no-ops here)
-  - Grants `ResealManager` `PAUSE_ROLE`/`RESUME_ROLE` on the sealables
-  - Submits, schedules and executes a launch DG proposal that revokes Voting's
-    `RUN_SCRIPT_ROLE`/`EXECUTE_ROLE` on Agent — completing the migration and
-    asserting the whole DG → AdminExecutor → Agent → protocol path works
-  - Verifies end state: `timelock.getGovernance() == DG`, no emergency mode,
-    Voting bridge cut
+  the network state file. After the forge deploy, the step:
+  - Grants `ResealManager` `PAUSE_ROLE`/`RESUME_ROLE` on each sealable and
+    renounces the deployer's `DEFAULT_ADMIN_ROLE` on WQ + VEBO (deferred from
+    step `0150` when DG is enabled).
+  - Calls `LidoTemplate.finalizePermissionsAfterDGDeployment(adminExecutor)`
+    — this is the on-chain hand-off: the template grants AdminExecutor
+    `RUN_SCRIPT_ROLE`/`EXECUTE_ROLE` on `Agent`, revokes them from Voting, sets
+    `Agent` as permission manager for those roles, and migrates ACL
+    `CREATE_PERMISSIONS_ROLE` (Voting → Agent). No impersonation required.
+  - Calls `LidoTemplate.setOwner(agent)` to hand template ownership over.
 
-To opt out of DG, remove `0155-unpause-sealables`, `0160-deploy-dual-governance`
-and `0170-launch-dual-governance` from `scripts/scratch/steps.json`.
+To opt out of DG, set `DG_DEPLOYMENT_ENABLED=false` in the environment. With the
+toggle off, step `0145` is a no-op, step `0150` renounces WQ/VEBO admin
+normally, and step `0160` calls `LidoTemplate.finalizePermissionsWithoutDGDeployment()`
+(keeps Voting as permission manager) before setting the template owner to Agent.
 
 ### Dual Governance configuration
 

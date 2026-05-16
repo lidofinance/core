@@ -1,10 +1,9 @@
 import { ethers } from "hardhat";
 
+import { DEFAULT_ADMIN_ROLE } from "lib/constants";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
-
-const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -12,16 +11,23 @@ export async function main() {
 
   const agent = state[Sk.appAgent].proxy.address;
   const voting = state[Sk.appVoting].proxy.address;
+  const dgEnabled = process.env.DG_DEPLOYMENT_ENABLED !== "false";
 
-  // Transfer OZ admin roles for various contracts
+  // `deferDgRenounce: true` keeps the deployer's DEFAULT_ADMIN_ROLE on the
+  // contract until step 0160, which needs it to wire ResealManager
+  // PAUSE/RESUME on each sealable before handing admin to Agent.
   const ozAdminTransfers = [
     { name: "Burner", address: state[Sk.burner].proxy.address },
     { name: "HashConsensus", address: state[Sk.hashConsensusForAccountingOracle].address },
     { name: "HashConsensus", address: state[Sk.hashConsensusForValidatorsExitBusOracle].address },
     { name: "StakingRouter", address: state[Sk.stakingRouter].proxy.address },
     { name: "AccountingOracle", address: state[Sk.accountingOracle].proxy.address },
-    { name: "ValidatorsExitBusOracle", address: state[Sk.validatorsExitBusOracle].proxy.address },
-    { name: "WithdrawalQueueERC721", address: state[Sk.withdrawalQueueERC721].proxy.address },
+    {
+      name: "ValidatorsExitBusOracle",
+      address: state[Sk.validatorsExitBusOracle].proxy.address,
+      deferDgRenounce: true,
+    },
+    { name: "WithdrawalQueueERC721", address: state[Sk.withdrawalQueueERC721].proxy.address, deferDgRenounce: true },
     { name: "OracleDaemonConfig", address: state[Sk.oracleDaemonConfig].address },
     { name: "OracleReportSanityChecker", address: state[Sk.oracleReportSanityChecker].address },
     { name: "TriggerableWithdrawalsGateway", address: state[Sk.triggerableWithdrawalsGateway].address },
@@ -34,7 +40,9 @@ export async function main() {
   for (const contract of ozAdminTransfers) {
     const contractInstance = await loadContract(contract.name, contract.address);
     await makeTx(contractInstance, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
-    await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+    if (!dgEnabled || !contract.deferDgRenounce) {
+      await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+    }
   }
 
   // Change admin for OssifiableProxy contracts
@@ -73,9 +81,8 @@ export async function main() {
     await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });
   }
 
-  // Transfer ownership of LidoTemplate to agent
-  const lidoTemplate = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
-  await makeTx(lidoTemplate, "setOwner", [agent], { from: deployer });
+  // LidoTemplate ownership moves to Agent in step 0160 — its finalize
+  // functions require the deployer to still be the template owner.
 
   // Transfer admin for WithdrawalsManagerProxy from deployer to voting
   const withdrawalsManagerProxy = await loadContract("WithdrawalsManagerProxy", state.withdrawalVault.proxy.address);

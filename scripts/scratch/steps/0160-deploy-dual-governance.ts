@@ -2,12 +2,18 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { readScratchParameters, ScratchParameters } from "scripts/utils/scratch";
 
 import * as toml from "@iarna/toml";
 
+import { ACL, LidoTemplate, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+
+import { DEFAULT_ADMIN_ROLE } from "lib/constants";
+import { loadContract, LoadedContract } from "lib/contract";
+import { makeTx } from "lib/deploy";
 import { cy, log } from "lib/log";
+import { aclHasPermission, PAUSE_ROLE, RESUME_ROLE, RUN_SCRIPT_ROLE } from "lib/role-hashes";
 import { getAddress, persistNetworkState, readNetworkState, Sk, tryGetAddress } from "lib/state-file";
 import { getCurrentBlockTimestamp } from "lib/time";
 
@@ -30,31 +36,122 @@ const DG_CONTRACT_FIELDS: Record<string, Sk> = {
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
-  const params = readScratchParameters();
 
-  // Idempotency: scratch deploy is replayed by integration tests (MODE=scratch
-  // with --network local) against the same hardhat-node, so this step must
-  // tolerate re-execution. If DG is already deployed, skip.
-  const existing = tryGetAddress(Sk.dgDualGovernance, state);
-  if (existing) {
-    log(`Dual Governance already deployed at ${cy(existing)}, skipping`);
+  const agentAddress = getAddress(Sk.appAgent, state);
+  const lidoTemplate = await loadContract<LidoTemplate>("LidoTemplate", getAddress(Sk.lidoTemplate, state));
+
+  if (process.env.DG_DEPLOYMENT_ENABLED === "false") {
+    await finalizeWithoutDG(deployer, agentAddress, lidoTemplate);
     return;
   }
 
+  const params = readScratchParameters();
+  if (!params.dualGovernance) {
+    throw new Error(
+      "Scratch deploy params have no [dualGovernance] section. Add one (see deploy-params-testnet.toml) " +
+        "or set DG_DEPLOYMENT_ENABLED=false to skip DG.",
+    );
+  }
+
+  // Forge deploy is the one expensive, non-idempotent operation. If we already
+  // have its output in state (from a previous run that died before finalize),
+  // reuse it.
+  let adminExecutorAddress = tryGetAddress(Sk.dgAdminExecutor, state);
+  let resealManagerAddress = tryGetAddress(Sk.resealManager, state);
+  if (!adminExecutorAddress || !resealManagerAddress) {
+    ({ adminExecutorAddress, resealManagerAddress } = await runForgeAndPersist(deployer, state, params.dualGovernance));
+  } else {
+    log(`DG already deployed (admin executor ${cy(adminExecutorAddress)}); skipping forge deploy`);
+  }
+
+  // Each post-forge tx has its own guard so a partial failure (e.g. setOwner
+  // reverted after finalize succeeded) doesn't leave the retry running into
+  // permanently-broken state (renounceRole on a role the deployer no longer
+  // holds, finalize on already-wiped deployState).
+  await transferSealableRolesForDG(deployer, state, resealManagerAddress);
+
+  const acl = await loadContract<ACL>("ACL", getAddress(Sk.aragonAcl, state));
+  if (!(await aclHasPermission(acl, adminExecutorAddress, agentAddress, RUN_SCRIPT_ROLE))) {
+    await makeTx(lidoTemplate, "finalizePermissionsAfterDGDeployment", [adminExecutorAddress], { from: deployer });
+  } else {
+    log("AdminExecutor already has RUN_SCRIPT_ROLE on Agent — finalize already applied, skipping");
+  }
+
+  await setTemplateOwnerIfNeeded(deployer, agentAddress, lidoTemplate);
+
+  log.success("Dual Governance deployed and launched via LidoTemplate");
+}
+
+async function finalizeWithoutDG(
+  deployer: string,
+  agentAddress: string,
+  lidoTemplate: LoadedContract<LidoTemplate>,
+): Promise<void> {
+  log("DG_DEPLOYMENT_ENABLED=false — finalizing without Dual Governance");
+  const [currentOwner] = await lidoTemplate.getConfig();
+  if (currentOwner.toLowerCase() === agentAddress.toLowerCase()) {
+    log(`LidoTemplate owner is already Agent (${cy(agentAddress)}), skipping`);
+    return;
+  }
+  await makeTx(lidoTemplate, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
+  await makeTx(lidoTemplate, "setOwner", [agentAddress], { from: deployer });
+}
+
+async function setTemplateOwnerIfNeeded(
+  deployer: string,
+  agentAddress: string,
+  lidoTemplate: LoadedContract<LidoTemplate>,
+): Promise<void> {
+  const [currentOwner] = await lidoTemplate.getConfig();
+  if (currentOwner.toLowerCase() === agentAddress.toLowerCase()) {
+    log(`LidoTemplate owner is already Agent (${cy(agentAddress)}), skipping setOwner`);
+    return;
+  }
+  await makeTx(lidoTemplate, "setOwner", [agentAddress], { from: deployer });
+}
+
+async function transferSealableRolesForDG(
+  deployer: string,
+  state: ReturnType<typeof readNetworkState>,
+  resealManagerAddress: string,
+): Promise<void> {
+  const wq = await loadContract<WithdrawalQueueERC721>(
+    "WithdrawalQueueERC721",
+    getAddress(Sk.withdrawalQueueERC721, state),
+  );
+  const vebo = await loadContract<ValidatorsExitBusOracle>(
+    "ValidatorsExitBusOracle",
+    getAddress(Sk.validatorsExitBusOracle, state),
+  );
+
+  for (const [label, c] of [
+    ["WithdrawalQueueERC721", wq],
+    ["ValidatorsExitBusOracle", vebo],
+  ] as const) {
+    if (!(await c.hasRole(DEFAULT_ADMIN_ROLE, deployer))) {
+      log(`${cy(label)}: deployer no longer holds DEFAULT_ADMIN_ROLE, sealable roles already wired, skipping`);
+      continue;
+    }
+    log(`Wiring DG permissions on ${cy(label)} (${cy(await c.getAddress())})`);
+    await makeTx(c, "grantRole", [PAUSE_ROLE, resealManagerAddress], { from: deployer });
+    await makeTx(c, "grantRole", [RESUME_ROLE, resealManagerAddress], { from: deployer });
+    await makeTx(c, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+  }
+}
+
+async function runForgeAndPersist(
+  deployer: string,
+  state: ReturnType<typeof readNetworkState>,
+  dgParams: NonNullable<ScratchParameters["dualGovernance"]>,
+): Promise<{ adminExecutorAddress: string; resealManagerAddress: string }> {
   const rpcUrl = process.env.RPC_URL;
   if (!rpcUrl) {
     throw new Error("RPC_URL must be set so the DG forge script can broadcast against the same node as scratch deploy");
   }
-  if (!params.dualGovernance) {
-    throw new Error(
-      "Scratch deploy params have no [dualGovernance] section. Add one (see deploy-params-testnet.toml) " +
-        "or remove this step from steps.json if DG is not desired for this deployment.",
-    );
-  }
 
   const chainId = Number(state.chainId);
-  warnIfDevCommitteesOnPublicChain(params.dualGovernance, chainId);
-  const tomlContent = await renderDGConfigToml(params.dualGovernance, state, chainId);
+  warnIfDevCommitteesOnPublicChain(dgParams, chainId);
+  const tomlContent = await renderDGConfigToml(dgParams, state, chainId);
 
   fs.mkdirSync(DG_DEPLOY_CONFIG_DIR, { recursive: true });
   fs.mkdirSync(DG_DEPLOY_ARTIFACTS_DIR, { recursive: true });
@@ -96,13 +193,13 @@ export async function main() {
 
   // The DG submodule's .gitignore covers deploy-config/* but not deploy-artifacts/.
   // Without cleanup, every local scratch deploy leaves untracked .toml files
-  // that pollute `git status` of the parent repo (shown as "modified:
-  // foundry/lib/dual-governance (untracked content)"). Remove every artifact
-  // for this chainId except the one we just consumed, so the dirty marker
-  // reflects only the freshest run.
+  // that pollute `git status` of the parent repo.
   pruneArtifactsExcept(artifact, chainId);
 
-  log.success("Dual Governance deployed");
+  return {
+    adminExecutorAddress: getAddress(Sk.dgAdminExecutor, state),
+    resealManagerAddress: getAddress(Sk.resealManager, state),
+  };
 }
 
 async function renderDGConfigToml(
@@ -236,15 +333,20 @@ function warnIfDevCommitteesOnPublicChain(dg: NonNullable<ScratchParameters["dua
 }
 
 function runForgeDeploy(deployer: string, rpcUrl: string) {
+  // forge needs its own --private-key on a live RPC (no unlocked accounts).
+  // Reuse whatever hardhat loaded for this network so the JS- and forge-side
+  // signers stay in sync; fall through to --unlocked otherwise.
+  const accounts = network.config.accounts;
+  const privateKey = Array.isArray(accounts) && typeof accounts[0] === "string" ? accounts[0] : undefined;
+  const signingArgs = privateKey ? ["--private-key", privateKey] : ["--unlocked", "--sender", deployer];
+
   const args = [
     "script",
     "scripts/deploy/DeployConfigurable.s.sol:DeployConfigurable",
     "--rpc-url",
     rpcUrl,
     "--broadcast",
-    "--unlocked",
-    "--sender",
-    deployer,
+    ...signingArgs,
     "--silent",
     "--skip",
     "test",
@@ -253,7 +355,11 @@ function runForgeDeploy(deployer: string, rpcUrl: string) {
     "--slow",
   ];
 
-  log(`Running: ${cy(`forge ${args.join(" ")}`)} (cwd: ${cy(DG_SUBMODULE)})`);
+  const argsForLog = privateKey ? args.map((a) => (a === privateKey ? "<redacted>" : a)) : args;
+  log(
+    `Running: ${cy(`forge ${argsForLog.join(" ")}`)} (cwd: ${cy(DG_SUBMODULE)}, ` +
+      `signing: ${privateKey ? "--private-key from accounts.json" : "--unlocked"})`,
+  );
   const result = spawnSync("forge", args, {
     cwd: DG_SUBMODULE,
     stdio: "inherit",

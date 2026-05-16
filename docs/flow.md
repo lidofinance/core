@@ -5,6 +5,15 @@ Governance (DG) is wired in. Companion to [scratch-deploy.md](./scratch-deploy.m
 which is the user-facing handbook; this doc is the architect's view — what
 moves between the pieces and why.
 
+> **Stale section warning:** the DG-launch portions below describe the
+> impersonation-based `0170-launch-dual-governance` step, which has been
+> removed. DG launch now happens on-chain via
+> `LidoTemplate.finalizePermissionsAfterDGDeployment(adminExecutor)` called
+> from `0160-deploy-dual-governance`, so the deploy works on live networks
+> without impersonation. `0155-unpause-sealables` was also moved to
+> `0145-unpause-sealables` (runs before `0150-transfer-roles`).
+> See [scratch-deploy.md](./scratch-deploy.md) for the current sequence.
+
 ## Vocabulary
 
 - **Scratch deploy** — runs every step in `scripts/scratch/steps.json` against a

@@ -3,8 +3,8 @@ name: Integration Tests Scratch
 on: [push]
 
 jobs:
-  test_hardhat_integration_scratch:
-    name: Hardhat / Scratch
+  test_hardhat_integration_scratch_with_dg:
+    name: Hardhat / Scratch with DG
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -48,3 +48,51 @@ jobs:
         run: yarn test:integration:fork:local
         env:
           INTEGRATION_WITH_CSM: "off"
+
+  test_hardhat_integration_scratch_no_dg:
+    name: Hardhat / Scratch without DG
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SKIP_GAS_REPORT: true
+      SKIP_CONTRACT_SIZE: true
+      SKIP_INTERFACES_CHECK: true
+
+    services:
+      hardhat-node:
+        image: ghcr.io/lidofinance/hardhat-node:2.26.0-scratch
+        ports:
+          - 8555:8545
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Set env
+        run: cp .env.example .env && echo "DG_DEPLOYMENT_ENABLED=false" >> .env
+
+      - name: Run scratch deployment
+        run: ./scripts/dao-deploy.sh
+        env:
+          NETWORK: "local"
+          RPC_URL: "http://localhost:8555"
+          GENESIS_TIME: 1639659600
+          DEPLOYER: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+          GAS_PRIORITY_FEE: 1
+          GAS_MAX_FEE: 100
+          NETWORK_STATE_FILE: "deployed-local.json"
+          NETWORK_STATE_DEFAULTS_FILE: "scripts/defaults/testnet-defaults.json"
+          DG_DEPLOYMENT_ENABLED: "false"
+
+      - name: Finalize scratch deployment
+        run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
+
+      - name: Run integration tests
+        run: yarn test:integration:fork:local
+        env:
+          INTEGRATION_WITH_CSM: "off"
+          DG_DEPLOYMENT_ENABLED: "false"
