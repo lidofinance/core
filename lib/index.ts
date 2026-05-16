@@ -19,7 +19,6 @@ export * from "./oracle";
 export * from "./pdg";
 export * from "./promise";
 export * from "./proxy";
-export * from "./role-hashes";
 export * from "./scratch";
 export * from "./signing-keys";
 export * from "./state-file";

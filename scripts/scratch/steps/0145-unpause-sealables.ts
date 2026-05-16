@@ -5,6 +5,7 @@ import { ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types"
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { cy, log } from "lib/log";
+import { isDGDeploymentEnabled } from "lib/scratch";
 import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 // DG's `addSealableWithdrawalBlocker` rejects paused sealables, so WQ + VEBO
@@ -13,8 +14,8 @@ import { getAddress, readNetworkState, Sk } from "lib/state-file";
 // on a live network. No-op when DG is disabled (matches historical pre-DG
 // scratch state where WQ stays paused).
 export async function main() {
-  if (process.env.DG_DEPLOYMENT_ENABLED === "false") {
-    log("DG_DEPLOYMENT_ENABLED=false — leaving sealables paused");
+  if (!isDGDeploymentEnabled()) {
+    log("DG deployment disabled — leaving sealables paused");
     return;
   }
 

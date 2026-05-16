@@ -14,9 +14,11 @@ import { DeploymentState, getAddress, Sk } from "lib/state-file";
 
 import { ONE_HOUR } from "test/suite";
 
-const FUSAKA_TX_LIMIT = 2n ** 24n; // 16M =  16_777_216
-
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
+
+// Fusaka activates a per-tx 16M gas cap (EIP-7825). DG proposals that
+// exceed it execute fine on a pre-Fusaka fork but would revert at mainnet.
+const FUSAKA_TX_LIMIT = 2n ** 24n; // 16_777_216
 
 export { UpgradeParameters };
 
@@ -88,24 +90,44 @@ export async function executeDGProposal(
   return { scheduleReceipt, executeReceipt };
 }
 
-export async function mockDGAragonVoting(state: DeploymentState): Promise<{
+export interface ExecuteExistingDGProposalOnForkOpts {
+  state: DeploymentState;
+  proposalId: bigint;
+  // Account that calls `scheduleProposal` and `execute`. Both are
+  // permission-less after their respective delays, so any funded EOA
+  // works; defaults to Agent for parity with the historical helper.
+  callerAddress?: string;
+  // Abort with exit(1) when the executed tx exceeds Fusaka's per-tx gas
+  // cap — catches an over-fat omnibus in dry-run instead of at mainnet.
+  // Defaults to true.
+  enforceFusakaTxLimit?: boolean;
+}
+
+/**
+ * Schedule + execute an already-submitted DG proposal on a local fork:
+ * load DG/timelock from the network state, impersonate a caller, advance
+ * across the submit/schedule delays via `executeDGProposal`, and (by
+ * default) abort if the execute tx breaches Fusaka's 16M gas cap.
+ *
+ * Historically called `mockDGAragonVoting` — the post-DG analog of the
+ * pre-DG "mock Aragon voting" fast-forward step.
+ */
+export async function executeExistingDGProposalOnFork(opts: ExecuteExistingDGProposalOnForkOpts): Promise<{
   proposalId: bigint;
   scheduleReceipt: TransactionReceipt;
   proposalExecutedReceipt: TransactionReceipt;
 }> {
-  log("Starting mock Aragon voting...");
-  const agentAddress = getAddress(Sk.appAgent, state);
-  const signer = await impersonate(agentAddress, ether("100"));
+  const { state, proposalId } = opts;
+  const callerAddress = opts.callerAddress ?? getAddress(Sk.appAgent, state);
+  const enforceFusakaTxLimit = opts.enforceFusakaTxLimit ?? true;
+
+  log(`Executing existing DG proposal #${proposalId} as ${callerAddress}`);
+  const signer = await impersonate(callerAddress, ether("100"));
   const timelock = await loadContract<IEmergencyProtectedTimelock>(
     "IEmergencyProtectedTimelock",
     getAddress(Sk.dgEmergencyProtectedTimelock, state),
   );
   const dualGovernance = await loadContract<IDualGovernance>("IDualGovernance", getAddress(Sk.dgDualGovernance, state));
-
-  // https://dg.lido.fi/proposals/6 — already submitted on mainnet; this helper
-  // only schedules + executes it during the upgrade-on-fork dry-run.
-  const proposalId = 6n;
-  log(`Targeting mainnet DG proposalId=${proposalId}`);
 
   const { scheduleReceipt, executeReceipt } = await executeDGProposal({
     dualGovernance,
@@ -115,8 +137,8 @@ export async function mockDGAragonVoting(state: DeploymentState): Promise<{
     retryOnTimeConstraint: true,
   });
 
-  if (executeReceipt.gasUsed > FUSAKA_TX_LIMIT) {
-    log.error("Proposal executed: gas used exceeds FUSAKA_TX_LIMIT");
+  if (enforceFusakaTxLimit && executeReceipt.gasUsed > FUSAKA_TX_LIMIT) {
+    log.error(`Proposal #${proposalId} execute gas (${executeReceipt.gasUsed}) exceeds FUSAKA_TX_LIMIT`);
     process.exit(1);
   }
 

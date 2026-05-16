@@ -218,18 +218,90 @@ To do a testnet deployment, the following parameters must be set up via env vari
 - `DSM_PREDEFINED_ADDRESS`. Address to use instead of deploying `DepositSecurityModule` or `null` otherwise. If used,
   the deposits can be made by calling `Lido.deposit` from the address.
 
-Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/<network>` like `"<network>": ["<key>"]`. See
-`accounts.sample.json` for an example.
+Also you need to specify the `DEPLOYER` private key in `accounts.json` under `/eth/<network>` like `"<network>": ["<key>"]`.
+See [`accounts.sample.json`](../accounts.sample.json) for the schema. Both `accounts.json` and `.env` are gitignored,
+so secrets stay local.
 
-To start the deployment, run (the env variables must already be defined) from the root repo directory, e.g.:
+To start the deployment, run `scripts/dao-deploy.sh` with `NETWORK` set to a network configured in
+`hardhat.config.ts` (e.g. `sepolia`, `hoodi`, `mainnet`). All env variables listed above must be in scope —
+typically loaded from `.env`:
 
 ```shell
-bash scripts/scratch/dao-<network>-deploy.sh
+NETWORK=hoodi \
+NETWORK_STATE_FILE=deployed-hoodi.json \
+NETWORK_STATE_DEFAULTS_FILE=scripts/defaults/testnet-defaults.json \
+bash scripts/dao-deploy.sh
 ```
 
-Deployment artifacts information will be stored in `deployed-<network>.json`.
+`NETWORK_STATE_FILE` defaults to `deployed-<network>.json` if unset; override it (e.g.
+`deployed-hoodi-scratch-test.json`) to keep multiple parallel deploys side by side.
+
+Deployment artifacts will be stored in the file pointed at by `NETWORK_STATE_FILE`.
 
 ## Post-Deployment Tasks
+
+### Verifying a Live-Testnet Scratch Deployment
+
+The integration suite (`test/integration/**/*.ts` — the ~40 core tests plus
+the DG-specific `test/integration/dual-governance/dg-scratch.integration.ts`)
+uses anvil/hardhat-only RPC methods (`evm_snapshot`/`evm_revert`,
+`hardhat_setCode`, `*_impersonateAccount`, chain-time manipulation), so it
+**cannot run directly against a live testnet RPC**. To verify a fresh
+Sepolia/Hoodi scratch deploy, fork the live testnet locally and point the
+suite at the fork plus the deployment artifact:
+
+```shell
+# Terminal 1 — fork the live testnet at HEAD (chainId inherited from RPC)
+anvil --fork-url "$HOODI_RPC_URL" -p 8555 --base-fee 0 --gas-price 0
+
+# Terminal 2 — run the full suite against the fork + the deployment artifact
+NETWORK_STATE_FILE=deployed-hoodi.json \
+LOCAL_RPC_URL=http://localhost:8555 \
+yarn test:integration:fork:local
+```
+
+For Sepolia, substitute `SEPOLIA_RPC_URL` and `deployed-sepolia.json` (or
+whichever filename you passed to the deploy step). Under the hood the
+script runs `MODE=scratch hardhat test test/integration/**/*.ts --network local`,
+which:
+
+- Loads the state file from the live deploy, so the suite resolves real
+  on-chain addresses (DG contracts, oracles, Lido, etc.).
+- Re-invokes every scratch step entrypoint against the fork. Each step is
+  idempotent (`tryGetAddress`, `isPaused`, role-check guards throughout)
+  and short-circuits on the existing state — no contracts are re-deployed.
+- Runs the DG suite (`dg-scratch.integration.ts`) — gated on a fresh
+  post-scratch DG state (`dgAdminExecutor` present, not mainnet,
+  `DG_DEPLOYMENT_ENABLED` not opted out). It asserts the post-launch
+  topology (`timelock.governance == dualGovernance`, zero launch
+  proposals), role transfer (AdminExecutor has Agent's
+  `RUN_SCRIPT`/`EXECUTE`, Voting doesn't; Agent owns
+  `CREATE_PERMISSIONS_ROLE`), ResealManager wiring on every sealable, and
+  an end-to-end no-op proposal routed
+  Voting → DG → AdminExecutor → Agent.
+- Runs the standard core tests (accounting, oracle, withdrawals, staking
+  modules, vaults, etc.) against the same context.
+
+Pass `DG_DEPLOYMENT_ENABLED=false` alongside if the deploy under test was
+done with DG opt-out — the DG suite self-skips and the rest continues.
+
+To run only the DG-specific suite (~20 s, useful for fast feedback on the
+DG handoff alone):
+
+```shell
+NETWORK_STATE_FILE=deployed-hoodi.json \
+LOCAL_RPC_URL=http://localhost:8555 \
+MODE=scratch \
+yarn hardhat test test/integration/dual-governance/dg-scratch.integration.ts --network local
+```
+
+Caveats:
+
+- Fork the testnet promptly after deploy. The DG test asserts
+  `timelock.getProposalsCount() == 0`; if anyone submits a proposal to the
+  testnet's DG between deploy and verification, that assertion fails.
+- The fork-side test signers (Voting, Agent, deployer) are impersonated
+  via anvil. Don't expect the same calls to succeed against the live RPC.
 
 ### Publishing Sources to Etherscan
 

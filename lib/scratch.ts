@@ -68,6 +68,17 @@ export async function deployScratchProtocol(): Promise<void> {
   await applySteps(steps);
 }
 
+// `DG_DEPLOYMENT_ENABLED` is opt-out: default ON, disabled via any of the
+// common falsy strings ("false", "0", "off", "no" — case-insensitive). The
+// strict `=== "false"` check used previously rejected the rest, which
+// surprised users typing `DG_DEPLOYMENT_ENABLED=0`.
+const DG_DISABLE_VALUES = new Set(["false", "0", "off", "no"]);
+
+export function isDGDeploymentEnabled(): boolean {
+  const v = process.env.DG_DEPLOYMENT_ENABLED?.trim().toLowerCase();
+  return !v || !DG_DISABLE_VALUES.has(v);
+}
+
 type StepsFile = {
   steps: string[];
 };

@@ -3,6 +3,7 @@ import { ethers } from "hardhat";
 import { DEFAULT_ADMIN_ROLE } from "lib/constants";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
+import { isDGDeploymentEnabled } from "lib/scratch";
 import { readNetworkState, Sk } from "lib/state-file";
 
 export async function main() {
@@ -11,7 +12,7 @@ export async function main() {
 
   const agent = state[Sk.appAgent].proxy.address;
   const voting = state[Sk.appVoting].proxy.address;
-  const dgEnabled = process.env.DG_DEPLOYMENT_ENABLED !== "false";
+  const dgEnabled = isDGDeploymentEnabled();
 
   // `deferDgRenounce: true` keeps the deployer's DEFAULT_ADMIN_ROLE on the
   // contract until step 0160, which needs it to wire ResealManager

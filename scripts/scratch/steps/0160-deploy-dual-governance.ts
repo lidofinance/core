@@ -12,10 +12,15 @@ import { ACL, LidoTemplate, ValidatorsExitBusOracle, WithdrawalQueueERC721 } fro
 import { DEFAULT_ADMIN_ROLE } from "lib/constants";
 import { loadContract, LoadedContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
+import { streccak } from "lib/keccak";
 import { cy, log } from "lib/log";
-import { aclHasPermission, PAUSE_ROLE, RESUME_ROLE, RUN_SCRIPT_ROLE } from "lib/role-hashes";
+import { isDGDeploymentEnabled } from "lib/scratch";
 import { getAddress, persistNetworkState, readNetworkState, Sk, tryGetAddress } from "lib/state-file";
 import { getCurrentBlockTimestamp } from "lib/time";
+
+const RUN_SCRIPT_ROLE = streccak("RUN_SCRIPT_ROLE");
+const PAUSE_ROLE = streccak("PAUSE_ROLE");
+const RESUME_ROLE = streccak("RESUME_ROLE");
 
 const DG_SUBMODULE = path.resolve(__dirname, "../../../foundry/lib/dual-governance");
 const DG_DEPLOY_CONFIG_DIR = path.join(DG_SUBMODULE, "deploy-config");
@@ -40,7 +45,7 @@ export async function main() {
   const agentAddress = getAddress(Sk.appAgent, state);
   const lidoTemplate = await loadContract<LidoTemplate>("LidoTemplate", getAddress(Sk.lidoTemplate, state));
 
-  if (process.env.DG_DEPLOYMENT_ENABLED === "false") {
+  if (!isDGDeploymentEnabled()) {
     await finalizeWithoutDG(deployer, agentAddress, lidoTemplate);
     return;
   }
@@ -71,7 +76,7 @@ export async function main() {
   await transferSealableRolesForDG(deployer, state, resealManagerAddress);
 
   const acl = await loadContract<ACL>("ACL", getAddress(Sk.aragonAcl, state));
-  if (!(await aclHasPermission(acl, adminExecutorAddress, agentAddress, RUN_SCRIPT_ROLE))) {
+  if (!(await acl["hasPermission(address,address,bytes32)"](adminExecutorAddress, agentAddress, RUN_SCRIPT_ROLE))) {
     await makeTx(lidoTemplate, "finalizePermissionsAfterDGDeployment", [adminExecutorAddress], { from: deployer });
   } else {
     log("AdminExecutor already has RUN_SCRIPT_ROLE on Agent — finalize already applied, skipping");
@@ -87,7 +92,7 @@ async function finalizeWithoutDG(
   agentAddress: string,
   lidoTemplate: LoadedContract<LidoTemplate>,
 ): Promise<void> {
-  log("DG_DEPLOYMENT_ENABLED=false — finalizing without Dual Governance");
+  log("DG deployment disabled — finalizing without Dual Governance");
   const [currentOwner] = await lidoTemplate.getConfig();
   if (currentOwner.toLowerCase() === agentAddress.toLowerCase()) {
     log(`LidoTemplate owner is already Agent (${cy(agentAddress)}), skipping`);

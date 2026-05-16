@@ -187,14 +187,22 @@ liquidityFeeBP = 650                  # Liquidity provision fee in basis points 
 reservationFeeBP = 0                # Reservation fee in basis points (1%)
 
 # Dual Governance configuration for the scratch deploy.
-# Mirrors the structure of dual-governance/deploy-config/deploy-config-mainnet.toml,
-# but with short timings suitable for local-fork integration tests. Override per
-# network when running against Sepolia/Hoodi/etc.
 #
-# The signalling tokens (stETH/wstETH/withdrawalQueue), the sealable withdrawal
-# blockers, the admin proposer, and the proposals canceller are filled in by the
-# config generator from the scratch deployment state — they are not known until
-# the protocol is deployed. All other knobs come from this section.
+# Source of the numeric values and dev addresses below:
+#   foundry/lib/dual-governance/deploy-config/deploy-config-scratch.toml
+# (the DG submodule's own scratch config — short timings + anvil dev keys,
+# suitable for local-fork integration tests). Keys here are camelCase to match
+# the rest of this file; the DG submodule's file uses snake_case.
+#
+# The inline `# (mainnet: …)` annotations cross-reference the production
+# values in the sibling file:
+#   foundry/lib/dual-governance/deploy-config/deploy-config-mainnet.toml
+#
+# Override per network when running against Sepolia/Hoodi/etc. The signalling
+# tokens (stETH/wstETH/withdrawalQueue), the sealable withdrawal blockers, the
+# admin proposer, and the proposals canceller are filled in by the config
+# generator from the scratch deployment state — they are not known until the
+# protocol is deployed. All other knobs come from this section.
 [dualGovernance]
 # Tiebreaker activation timeout: time DG must spend in a "locked" state before
 # the tiebreaker committee can schedule proposals.

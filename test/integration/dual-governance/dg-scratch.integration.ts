@@ -5,22 +5,25 @@ import { executeDGProposal } from "scripts/utils/upgrade";
 import { ACL, IDualGovernance, IEmergencyProtectedTimelock } from "typechain-types";
 
 import {
-  aclHasPermission,
-  CREATE_PERMISSIONS_ROLE,
   ether,
-  EXECUTE_ROLE,
   getAddress,
   impersonate,
+  isDGDeploymentEnabled,
   loadContract,
-  PAUSE_ROLE,
   readNetworkState,
-  RESUME_ROLE,
-  RUN_SCRIPT_ROLE,
   Sk,
+  streccak,
+  tryGetAddress,
 } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
+
+const RUN_SCRIPT_ROLE = streccak("RUN_SCRIPT_ROLE");
+const EXECUTE_ROLE = streccak("EXECUTE_ROLE");
+const CREATE_PERMISSIONS_ROLE = streccak("CREATE_PERMISSIONS_ROLE");
+const PAUSE_ROLE = streccak("PAUSE_ROLE");
+const RESUME_ROLE = streccak("RESUME_ROLE");
 
 describe("Integration: Dual Governance scratch launch state", () => {
   let ctx: ProtocolContext;
@@ -43,20 +46,20 @@ describe("Integration: Dual Governance scratch launch state", () => {
 
   before(async function () {
     ctx = await getProtocolContext();
-    if (!ctx.isScratch) {
-      // Post-launch topology asserted here is the end state of scratch step
-      // 0160 (forge deploy + LidoTemplate.finalizePermissionsAfterDGDeployment).
-      // On non-scratch contexts DG state may not match.
-      this.skip();
-    }
-    if (process.env.DG_DEPLOYMENT_ENABLED === "false") {
-      // Scratch deploy explicitly skipped DG via the opt-out toggle.
+    const state = readNetworkState();
+
+    // Gate on what the test actually asserts — a fresh post-scratch DG
+    // topology — rather than on `MODE=scratch`. That lets the same suite
+    // verify a freshly-deployed testnet through a local anvil fork
+    // (MODE=forking, --network local, deployed-<network>.json) without
+    // re-running scratch steps. Mainnet is excluded because its DG has
+    // already executed proposals, so e.g. `getProposalsCount() == 0` would
+    // legitimately fail there.
+    if (ctx.isMainnet || !isDGDeploymentEnabled() || !tryGetAddress(Sk.dgAdminExecutor, state)) {
       this.skip();
     }
 
     suiteSnapshot = await Snapshot.take();
-
-    const state = readNetworkState();
     aclAddress = getAddress(Sk.aragonAcl, state);
     agentAddress = ctx.signers.agent;
     votingAddress = ctx.signers.voting;
@@ -110,10 +113,18 @@ describe("Integration: Dual Governance scratch launch state", () => {
   });
 
   it("grants AdminExecutor full Agent control and revokes it from Voting", async () => {
-    expect(await aclHasPermission(acl, adminExecutor, agentAddress, RUN_SCRIPT_ROLE)).to.equal(true);
-    expect(await aclHasPermission(acl, adminExecutor, agentAddress, EXECUTE_ROLE)).to.equal(true);
-    expect(await aclHasPermission(acl, votingAddress, agentAddress, RUN_SCRIPT_ROLE)).to.equal(false);
-    expect(await aclHasPermission(acl, votingAddress, agentAddress, EXECUTE_ROLE)).to.equal(false);
+    expect(await acl["hasPermission(address,address,bytes32)"](adminExecutor, agentAddress, RUN_SCRIPT_ROLE)).to.equal(
+      true,
+    );
+    expect(await acl["hasPermission(address,address,bytes32)"](adminExecutor, agentAddress, EXECUTE_ROLE)).to.equal(
+      true,
+    );
+    expect(await acl["hasPermission(address,address,bytes32)"](votingAddress, agentAddress, RUN_SCRIPT_ROLE)).to.equal(
+      false,
+    );
+    expect(await acl["hasPermission(address,address,bytes32)"](votingAddress, agentAddress, EXECUTE_ROLE)).to.equal(
+      false,
+    );
   });
 
   it("makes Agent the permission manager for its own RUN_SCRIPT_ROLE/EXECUTE_ROLE", async () => {
@@ -122,8 +133,12 @@ describe("Integration: Dual Governance scratch launch state", () => {
   });
 
   it("routes ACL CREATE_PERMISSIONS_ROLE through Agent (Voting can no longer create permissions)", async () => {
-    expect(await aclHasPermission(acl, agentAddress, aclAddress, CREATE_PERMISSIONS_ROLE)).to.equal(true);
-    expect(await aclHasPermission(acl, votingAddress, aclAddress, CREATE_PERMISSIONS_ROLE)).to.equal(false);
+    expect(
+      await acl["hasPermission(address,address,bytes32)"](agentAddress, aclAddress, CREATE_PERMISSIONS_ROLE),
+    ).to.equal(true);
+    expect(
+      await acl["hasPermission(address,address,bytes32)"](votingAddress, aclAddress, CREATE_PERMISSIONS_ROLE),
+    ).to.equal(false);
     expect(await acl.getPermissionManager(aclAddress, CREATE_PERMISSIONS_ROLE)).to.equal(agentAddress);
   });
 
