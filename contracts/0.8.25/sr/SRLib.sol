@@ -190,7 +190,8 @@ library SRLib {
         if (bytes(_moduleName).length == 0 || bytes(_moduleName).length > SRUtils.MAX_STAKING_MODULE_NAME_LENGTH) {
             revert ISRBase.StakingModuleWrongName();
         }
-        if (SRStorage.getModulesCount() >= SRUtils.MAX_STAKING_MODULES_COUNT) {
+        uint256 modulesCount = SRStorage.getModulesCount();
+        if (modulesCount >= SRUtils.MAX_STAKING_MODULES_COUNT) {
             revert ISRBase.StakingModulesLimitExceeded();
         }
 
@@ -198,7 +199,6 @@ library SRLib {
 
         // Check for duplicate module address
         /// @dev due to small number of modules, we can afford to do this check on add
-        uint256 modulesCount = SRStorage.getModulesCount();
         for (uint256 i; i < modulesCount; ++i) {
             uint256 moduleId = SRStorage.getModuleIdAt(i);
             if (_moduleAddress == moduleId.getModuleState().config.moduleAddress) {
