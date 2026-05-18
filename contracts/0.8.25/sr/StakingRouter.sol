@@ -495,6 +495,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
     function getAllNodeOperatorDigests(uint256 _stakingModuleId) external view returns (NodeOperatorDigest[] memory) {
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         return getNodeOperatorDigests(
             _stakingModuleId, 0, _getStakingModuleNodeOperatorsCount(_stakingModuleId.getIStakingModule())
         );
@@ -512,6 +513,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         view
         returns (NodeOperatorDigest[] memory)
     {
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         return getNodeOperatorDigests(
             _stakingModuleId, _getStakingModuleNodeOperatorIds(_stakingModuleId.getIStakingModule(), _offset, _limit)
         );
