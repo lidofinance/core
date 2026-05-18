@@ -894,6 +894,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 moduleId := shr(moduleShift, dataWithoutPubkey) // Extract top 24 bits
             }
 
+            if (moduleId == 0) {
+                revert InvalidModuleId();
+            }
+
             if (moduleId != cachedModuleId) {
                 cachedModuleId = moduleId;
                 cachedModuleMaxEBWeightEth = _getModuleMaxEBWeight(moduleId, maxEBWeightType1, maxEBWeightType2);
