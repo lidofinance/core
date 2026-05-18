@@ -52,9 +52,8 @@ library SRLib {
     /// @dev Storage slot positions are computed inline for migration-only use.
     ///      After migration, this function can be removed.
     function _migrateStorage(uint256 maxEBType1) public {
-        // skip migration if data already exists
         if (SRStorage.getModulesCount() > 0) {
-            return;
+            revert ISRBase.AlreadyMigrated();
         }
 
         // Old storage slot positions (computed inline for migration-only use)

@@ -173,6 +173,12 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.testing_getOldModulesCountPosition()).to.equal(0);
     });
 
+    it("reverts if new module storage is already populated", async () => {
+      await stakingRouter.testing_addModuleId(1);
+
+      await expect(stakingRouter.finalizeUpgrade_v4()).to.be.revertedWithCustomError(stakingRouter, "AlreadyMigrated");
+    });
+
     it("migrate all defined AccessControl role and skip undefined", async () => {
       const someAccount = randomAddress();
       const someNewRole = randomBytes32();

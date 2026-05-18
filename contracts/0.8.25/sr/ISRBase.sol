@@ -80,6 +80,7 @@ interface ISRBase {
 
     // Staking module
     error StakingModuleAddressExists();
+    error AlreadyMigrated();
     error StakingModulesLimitExceeded();
     error StakingModuleWrongName();
     error StakingModuleUnregistered();
