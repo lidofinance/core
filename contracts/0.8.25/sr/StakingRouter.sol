@@ -533,9 +533,9 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     {
         SRUtils._requireModuleIdExists(_stakingModuleId);
         digests = new NodeOperatorDigest[](_nodeOperatorIds.length);
+        IStakingModule stakingModule = _stakingModuleId.getIStakingModule();
         for (uint256 i = 0; i < _nodeOperatorIds.length; ++i) {
             uint256 nodeOperatorId = _nodeOperatorIds[i];
-            IStakingModule stakingModule = _stakingModuleId.getIStakingModule();
 
             digests[i].id = nodeOperatorId;
             digests[i].isActive = _getStakingModuleNodeOperatorIsActive(stakingModule, nodeOperatorId);
