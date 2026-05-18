@@ -139,7 +139,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @dev CL validators balance and CL pending deposit balance
     /// |----- 128 bit ------------|------ 128 bit -------|
-    /// | CL validators balance    |  CL pending balance  |
+    /// | CL pending balance       | CL validators balance|
     /// keccak256("lido.Lido.clValidatorsBalanceAndClPendingBalance");
     bytes32 internal constant CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
         0x096e465397f38e659238ccd5d5a2c434ced54a63fd8d694045bfb058ab9d8112;
