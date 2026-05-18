@@ -144,10 +144,6 @@ library SRLib {
             delete oldStakingModuleIndices[_moduleId];
         }
 
-        // cleanup old mapping storage slots
-        delete STAKING_MODULES_MAPPING_POS.getBytes32Slot().value;
-        delete STAKING_MODULE_INDICES_POS.getBytes32Slot().value;
-
         /// @dev use the same value for both CL balance and active balance at migration moment,
         /// next Oracle report will update the both values
         SRStorage.getRouterState().accounting =
