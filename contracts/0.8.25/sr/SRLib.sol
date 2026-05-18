@@ -261,7 +261,9 @@ library SRLib {
         if (_minDepositBlockDistance == 0 || _minDepositBlockDistance > type(uint64).max) {
             revert ISRBase.InvalidMinDepositBlockDistance();
         }
-        if (_maxDepositsPerBlock > type(uint64).max) revert ISRBase.InvalidMaxDepositPerBlockValue();
+        if (_maxDepositsPerBlock == 0 || _maxDepositsPerBlock > type(uint64).max) {
+            revert ISRBase.InvalidMaxDepositPerBlockValue();
+        }
 
         // 1 SLOAD
         ModuleStateConfig memory stateConfig = _moduleId.getModuleState().config;
