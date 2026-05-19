@@ -225,6 +225,8 @@ describe("StakingRouter.sol:topUp", () => {
       const keyIndices = [0n, 1n, 2n];
       const operatorIds = [0n, 0n, 0n];
 
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(1600n * 10n ** 9n);
+
       const tx = await stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei);
 
       const receipt = await tx.wait();
@@ -292,6 +294,8 @@ describe("StakingRouter.sol:topUp", () => {
       const operatorIds = [0n];
 
       const beaconChainDepositor = await ethers.getContractFactory("BeaconChainDepositor");
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(1600n * 10n ** 9n);
+
       await expect(
         stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
       ).to.be.revertedWithCustomError(beaconChainDepositor, "DepositAmountTooLow");

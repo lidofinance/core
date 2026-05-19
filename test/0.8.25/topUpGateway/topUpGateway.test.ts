@@ -575,6 +575,224 @@ describe("TopUpGateway.sol", () => {
     });
   });
 
+  describe("pausable", () => {
+    let pauseRole: string;
+    let resumeRole: string;
+
+    beforeEach(async () => {
+      pauseRole = await topUpGateway.PAUSE_ROLE();
+      resumeRole = await topUpGateway.RESUME_ROLE();
+      await topUpGateway.connect(admin).grantRole(pauseRole, admin.address);
+      await topUpGateway.connect(admin).grantRole(resumeRole, admin.address);
+    });
+
+    describe("resume", () => {
+      it("should revert if the sender does not have the RESUME_ROLE", async () => {
+        await topUpGateway.connect(admin).pauseFor(1000n);
+
+        await expect(topUpGateway.connect(stranger).resume())
+          .to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger.address, resumeRole);
+      });
+
+      it("should revert if the contract is not paused", async () => {
+        await expect(topUpGateway.connect(admin).resume()).to.be.revertedWithCustomError(
+          topUpGateway,
+          "PausedExpected",
+        );
+      });
+
+      it("should resume the contract when paused and emit Resumed event", async () => {
+        await topUpGateway.connect(admin).pauseFor(1000n);
+        expect(await topUpGateway.isPaused()).to.equal(true);
+
+        await expect(topUpGateway.connect(admin).resume()).to.emit(topUpGateway, "Resumed");
+
+        expect(await topUpGateway.isPaused()).to.equal(false);
+      });
+    });
+
+    describe("pauseFor", () => {
+      it("should revert if the sender does not have the PAUSE_ROLE", async () => {
+        await expect(topUpGateway.connect(stranger).pauseFor(1000n))
+          .to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger.address, pauseRole);
+      });
+
+      it("should revert if the contract is already paused", async () => {
+        await topUpGateway.connect(admin).pauseFor(1000n);
+
+        await expect(topUpGateway.connect(admin).pauseFor(500n)).to.be.revertedWithCustomError(
+          topUpGateway,
+          "ResumedExpected",
+        );
+      });
+
+      it("should revert if pause duration is zero", async () => {
+        await expect(topUpGateway.connect(admin).pauseFor(0n)).to.be.revertedWithCustomError(
+          topUpGateway,
+          "ZeroPauseDuration",
+        );
+      });
+
+      it("should pause the contract for the specified duration and emit Paused event", async () => {
+        await expect(topUpGateway.connect(admin).pauseFor(1000n)).to.emit(topUpGateway, "Paused").withArgs(1000n);
+
+        expect(await topUpGateway.isPaused()).to.equal(true);
+      });
+
+      it("should pause the contract indefinitely with PAUSE_INFINITELY", async () => {
+        const pauseInfinitely = await topUpGateway.PAUSE_INFINITELY();
+
+        await expect(topUpGateway.connect(admin).pauseFor(pauseInfinitely))
+          .to.emit(topUpGateway, "Paused")
+          .withArgs(pauseInfinitely);
+
+        expect(await topUpGateway.isPaused()).to.equal(true);
+
+        await time.increase(1_000_000_000);
+
+        expect(await topUpGateway.isPaused()).to.equal(true);
+      });
+
+      it("should automatically resume after the pause duration passes", async () => {
+        await topUpGateway.connect(admin).pauseFor(100n);
+        expect(await topUpGateway.isPaused()).to.equal(true);
+
+        await time.increase(101);
+
+        expect(await topUpGateway.isPaused()).to.equal(false);
+      });
+    });
+
+    describe("pauseUntil", () => {
+      it("should revert if the sender does not have the PAUSE_ROLE", async () => {
+        const timestamp = BigInt(await time.latest());
+        await expect(topUpGateway.connect(stranger).pauseUntil(timestamp + 1000n))
+          .to.be.revertedWithCustomError(topUpGateway, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger.address, pauseRole);
+      });
+
+      it("should revert if the contract is already paused", async () => {
+        const timestamp = BigInt(await time.latest());
+        await topUpGateway.connect(admin).pauseFor(1000n);
+
+        await expect(topUpGateway.connect(admin).pauseUntil(timestamp + 1000n)).to.be.revertedWithCustomError(
+          topUpGateway,
+          "ResumedExpected",
+        );
+      });
+
+      it("should revert if timestamp is in the past", async () => {
+        const timestamp = BigInt(await time.latest());
+
+        await expect(topUpGateway.connect(admin).pauseUntil(timestamp - 1000n)).to.be.revertedWithCustomError(
+          topUpGateway,
+          "PauseUntilMustBeInFuture",
+        );
+      });
+
+      it("should pause the contract until the specified timestamp and emit Paused event", async () => {
+        const timestamp = BigInt(await time.latest());
+        const pauseUntil = timestamp + 1000n;
+
+        await expect(topUpGateway.connect(admin).pauseUntil(pauseUntil))
+          .to.emit(topUpGateway, "Paused")
+          .withArgs(pauseUntil - timestamp);
+
+        expect(await topUpGateway.isPaused()).to.equal(true);
+      });
+
+      it("should pause the contract indefinitely with PAUSE_INFINITELY", async () => {
+        const pauseInfinitely = await topUpGateway.PAUSE_INFINITELY();
+
+        await expect(topUpGateway.connect(admin).pauseUntil(pauseInfinitely))
+          .to.emit(topUpGateway, "Paused")
+          .withArgs(pauseInfinitely);
+
+        expect(await topUpGateway.isPaused()).to.equal(true);
+
+        await time.increase(1_000_000_000);
+
+        expect(await topUpGateway.isPaused()).to.equal(true);
+      });
+
+      it("should automatically resume after the pause timestamp passes", async () => {
+        const timestamp = BigInt(await time.latest());
+        const pauseUntil = timestamp + 100n;
+
+        await topUpGateway.connect(admin).pauseUntil(pauseUntil);
+        expect(await topUpGateway.isPaused()).to.equal(true);
+
+        await time.increase(101);
+
+        expect(await topUpGateway.isPaused()).to.equal(false);
+      });
+    });
+
+    describe("Interaction with topUp", () => {
+      it("pauseFor: should prevent topUp immediately after pausing", async () => {
+        const data = await buildTopUpData();
+        await topUpGateway.connect(admin).pauseFor(1000n);
+
+        await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
+          topUpGateway,
+          "ResumedExpected",
+        );
+      });
+
+      it("pauseUntil: should prevent topUp immediately after pausing", async () => {
+        const timestamp = BigInt(await time.latest());
+        const data = await buildTopUpData();
+
+        await topUpGateway.connect(admin).pauseUntil(timestamp + 1000n);
+
+        await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
+          topUpGateway,
+          "ResumedExpected",
+        );
+      });
+
+      it("pauseFor: should allow topUp immediately after resuming", async () => {
+        await topUpGateway.connect(admin).pauseFor(1000n);
+        await topUpGateway.connect(admin).resume();
+
+        const data = await buildTopUpData();
+        await topUpGateway.connect(topUpOperator).topUp(data);
+      });
+
+      it("pauseUntil: should allow topUp immediately after resuming", async () => {
+        const timestamp = BigInt(await time.latest());
+
+        await topUpGateway.connect(admin).pauseUntil(timestamp + 1000n);
+        await topUpGateway.connect(admin).resume();
+
+        const data = await buildTopUpData();
+        await topUpGateway.connect(topUpOperator).topUp(data);
+      });
+
+      it("pauseFor: should allow topUp after pause duration automatically expires", async () => {
+        await topUpGateway.connect(admin).pauseFor(100n);
+
+        await time.increase(101);
+
+        const data = await buildTopUpData();
+        await topUpGateway.connect(topUpOperator).topUp(data);
+      });
+
+      it("pauseUntil: should allow topUp after pause duration automatically expires", async () => {
+        const timestamp = BigInt(await time.latest());
+
+        await topUpGateway.connect(admin).pauseUntil(timestamp + 100n);
+
+        await time.increase(101);
+
+        const data = await buildTopUpData();
+        await topUpGateway.connect(topUpOperator).topUp(data);
+      });
+    });
+  });
+
   describe("canTopUp", () => {
     it("returns false when module is not registered", async () => {
       expect(await topUpGateway.canTopUp(999n)).to.equal(false);

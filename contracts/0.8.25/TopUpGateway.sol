@@ -11,6 +11,7 @@ import {
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
+import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 
 interface ILidoLocator {
     function stakingRouter() external view returns (address);
@@ -38,7 +39,7 @@ interface ILido {
  * @author Lido
  * @notice TopUpGateway is a contract that serves as the entry point for validator top-ups
  */
-contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable {
+contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable, PausableUntil {
     using WithdrawalCredentials for bytes32;
 
     ILidoLocator internal immutable LOCATOR;
@@ -63,6 +64,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
 
     bytes32 public constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
     bytes32 public constant MANAGE_LIMITS_ROLE = keccak256("MANAGE_LIMITS_ROLE");
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
 
     constructor(
         address _lidoLocator,
@@ -86,10 +89,6 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     ///        Top-up amount = targetBalance - currentTotal.
     /// @param _minTopUpGwei Minimum top-up that can be performed (in Gwei). If calculated top-up < minTopUp, returns 0.
     ///        Must be <= _targetBalanceGwei.
-    ///
-    /// @dev Ethereum reference values (0x02 validators, MAX_EFFECTIVE_BALANCE = 2048 ETH):
-    ///        _targetBalanceGwei = 2046.75 ETH (2048e9 - 1.25e9 Gwei) — leaves 1.25 ETH safety margin
-    ///        _minTopUpGwei      = 1 ETH (1e9 Gwei) — skip top-ups below 1 ETH
     function initialize(
         address _admin,
         uint256 _maxValidatorsPerTopUp,
@@ -105,6 +104,37 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         _setMinBlockDistance(_minBlockDistance);
         _setMaxRootAge(_maxRootAgeSec);
         _setTopUpBalanceLimits(_targetBalanceGwei, _minTopUpGwei);
+    }
+
+    /**
+     * @notice Resume the contract
+     * @dev Reverts if contracts is not paused
+     * @dev Reverts if sender has no `RESUME_ROLE`
+     */
+    function resume() external onlyRole(RESUME_ROLE) {
+        _resume();
+    }
+
+    /**
+     * @notice Pause the contract for a specified period
+     * @param _duration pause duration in seconds (use `PAUSE_INFINITELY` for unlimited)
+     * @dev Reverts if contract is already paused
+     * @dev Reverts if sender has no `PAUSE_ROLE`
+     * @dev Reverts if zero duration is passed
+     */
+    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
+        _pauseFor(_duration);
+    }
+
+    /**
+     * @notice Pause the contract until a specified timestamp
+     * @param _pauseUntilInclusive the last second to pause until inclusive
+     * @dev Reverts if the timestamp is in the past
+     * @dev Reverts if sender has no `PAUSE_ROLE`
+     * @dev Reverts if contract is already paused
+     */
+    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
+        _pauseUntil(_pauseUntilInclusive);
     }
 
     /**
@@ -134,7 +164,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
      *  - any validator has activationEpoch >= current epoch (derived from beacon root slot) (`ValidatorIsNotActivated`);
      *  - any validator Merkle proof fails verification in CLValidatorVerifier.
      */
-    function topUp(TopUpData calldata _topUps) external onlyRole(TOP_UP_ROLE) {
+    function topUp(TopUpData calldata _topUps) external onlyRole(TOP_UP_ROLE) whenResumed {
         Storage storage $ = _gatewayStorage();
 
         uint256 validatorsCount = _topUps.validatorIndices.length;
@@ -213,6 +243,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
      * @dev Checks: module exists, module is active, block distance passed, Lido can deposit, and withdrawal credentials are 0x02
      */
     function canTopUp(uint256 _stakingModuleId) external view returns (bool) {
+        if (isPaused()) return false;
+
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         if (!stakingRouter.canDeposit(_stakingModuleId)) return false;

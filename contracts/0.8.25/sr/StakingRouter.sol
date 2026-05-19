@@ -686,8 +686,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
 
+        // Cap depositable ether by the global per-block top-up limit (mirrors maxDepositsPerBlock in deposit()).
+        // Zero limit -> depositableEther = 0 -> no actual top-up (CSM cursor still advances).
+        uint256 maxTopUpPerBlockWei = uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei;
+        uint256 depositableEther = Math.min(LIDO.getDepositableEther(), maxTopUpPerBlockWei);
+
         // Get allocation based on target share
-        uint256 depositableEther = LIDO.getDepositableEther();
         uint256 smDepositableEthAmount = _getModuleDepositAllocation(_stakingModuleId, depositableEther, true);
 
         // Call allocateDeposits on the staking module to determine for what amount deposit each key
@@ -994,6 +998,20 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @return Withdrawal credentials.
     function getWithdrawalCredentials() public view returns (bytes32) {
         return SRStorage.getRouterState().withdrawalCredentials;
+    }
+
+    /// @notice Set per-block top up limit for top-ups (in Gwei).
+    /// @param _newValue top-up limit value in Gwei (must be > 0).
+    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
+    function setMaxTopUpPerBlockGwei(uint64 _newValue) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
+        SRUtils._requireNotZero(_newValue);
+        SRStorage.getRouterState().maxTopUpPerBlockGwei = _newValue;
+        emit MaxTopUpPerBlockGweiSet(_newValue, _msgSender());
+    }
+
+    /// @notice Returns the top up limit for top-ups (in Gwei).
+    function getMaxTopUpPerBlockGwei() external view returns (uint64) {
+        return SRStorage.getRouterState().maxTopUpPerBlockGwei;
     }
 
     function _setWithdrawalCredentials(bytes32 wc) internal {
