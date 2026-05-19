@@ -53,7 +53,6 @@ contract Accounting {
         uint256 depositedBalance;
         uint256 totalPooledEther;
         uint256 totalShares;
-        uint256 depositedValidators;
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
