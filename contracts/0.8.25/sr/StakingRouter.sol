@@ -552,7 +552,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         onlyRole(STAKING_MODULE_MANAGE_ROLE)
     {
         SRUtils._requireModuleIdExists(_stakingModuleId);
-        if (!SRLib._setModuleStatus(_stakingModuleId, _status)) revert StakingModuleStatusTheSame();
+        SRLib._setModuleStatus(_stakingModuleId, _status);
     }
 
     /// @notice Returns whether the staking module is stopped.

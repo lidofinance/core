@@ -363,13 +363,13 @@ library SRLib {
 
     /// @dev module state helpers
 
-    function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public returns (bool isChanged) {
+    function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public {
         ModuleStateConfig storage stateConfig = _moduleId.getModuleState().config;
-        isChanged = stateConfig.status != _status;
-        if (isChanged) {
-            stateConfig.status = _status;
-            emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
+        if (stateConfig.status == _status) {
+            revert ISRBase.StakingModuleStatusTheSame();
         }
+        stateConfig.status = _status;
+        emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
     }
 
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.
