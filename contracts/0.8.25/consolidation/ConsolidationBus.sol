@@ -98,9 +98,10 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
     /**
      * @notice Thrown when source and target pubkeys are the same
-     * @param index Index of the invalid pair in the batch
+     * @param groupIndex Index of the invalid group in the batch
+     * @param sourceIndex Index of the invalid source key in the batch
      */
-    error SourceEqualsTarget(uint256 index);
+    error SourceEqualsTarget(uint256 groupIndex, uint256 sourceIndex);
 
     /**
      * @notice Thrown when target pubkey length is invalid
@@ -360,7 +361,7 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
                 }
 
                 if (keccak256(sourcePubkey) == targetHash) {
-                    revert SourceEqualsTarget(i);
+                    revert SourceEqualsTarget(i, j);
                 }
             }
         }
