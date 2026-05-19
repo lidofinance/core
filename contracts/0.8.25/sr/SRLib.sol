@@ -51,7 +51,7 @@ library SRLib {
     /// @notice One-time migration from old storage layout to new RouterState struct.
     /// @dev Storage slot positions are computed inline for migration-only use.
     ///      After migration, this function can be removed.
-    function _migrateStorage(uint256 maxEBType1) public {
+    function _migrateStorage(uint256 maxEBType1, uint256 expectedVersion) public {
         if (SRStorage.getModulesCount() > 0) {
             revert ISRBase.AlreadyMigrated();
         }
@@ -64,6 +64,13 @@ library SRLib {
         bytes32 CONTRACT_VERSION_POS = keccak256("lido.Versioned.contractVersion");
         bytes32 STAKING_MODULES_MAPPING_POS = keccak256("lido.StakingRouter.stakingModules");
         bytes32 STAKING_MODULE_INDICES_POS = keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
+        bytes32 LEGACY_CONTRACT_VERSION_POSITION = keccak256("lido.Versioned.contractVersion");
+
+        uint256 actualVersion = LEGACY_CONTRACT_VERSION_POSITION.getUint256Slot().value;
+        if (actualVersion != expectedVersion) {
+            revert ISRBase.UnexpectedContractVersion(expectedVersion, actualVersion);
+        }
+        delete LEGACY_CONTRACT_VERSION_POSITION.getBytes32Slot().value;
 
         // cleanup old storage slots
         delete LIDO_POS.getBytes32Slot().value;

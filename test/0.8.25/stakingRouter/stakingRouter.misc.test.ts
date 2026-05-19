@@ -76,6 +76,12 @@ describe("StakingRouter.sol:misc", () => {
       // fails with InvalidInitialization error when called after initialize
       await expect(stakingRouter.finalizeUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
     });
+
+    it("Reverts if finalizeUpgrade_v4 is called on a fresh proxy", async () => {
+      await expect(stakingRouter.finalizeUpgrade_v4())
+        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedContractVersion")
+        .withArgs(3, 0);
+    });
   });
 
   context("finalizeUpgrade_v4()", () => {

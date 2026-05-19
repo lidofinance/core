@@ -122,7 +122,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
     function finalizeUpgrade_v4() external reinitializer(4) {
         // migrate current modules to new storage
-        SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
+        SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01, 3);
 
         /// @dev migrate OZ roles
         ///      Due to OZ 5.2 AccessControl uses ERC-7201 namespaced storage at different slots we should
