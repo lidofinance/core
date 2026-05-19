@@ -1256,6 +1256,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         uint256 newRedeemsReserve = Math256.min(allocation.redeemsReserve.add(growth), target);
 
+        address buffer = _getRedeemsBuffer();
+        if (buffer != address(0)) {
+            (uint256 carriedEther, ) = IRedeemsBuffer(buffer).getRedeemed();
+            newRedeemsReserve = Math256.max(newRedeemsReserve, carriedEther);
+        }
+
         if (newRedeemsReserve != allocation.redeemsReserve) {
             _setRedeemsReserve(newRedeemsReserve);
         }
