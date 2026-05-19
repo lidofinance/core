@@ -1131,10 +1131,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         ) = _stakingModule.getNodeOperatorSummary(_nodeOperatorId);
     }
 
-    function _getAccountingOracle() internal view returns (address) {
-        return LIDO_LOCATOR.accountingOracle();
-    }
-
     function _getTopUpGateway() internal view returns (address) {
         return LIDO_LOCATOR.topUpGateway();
     }
