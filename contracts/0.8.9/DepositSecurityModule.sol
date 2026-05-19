@@ -466,7 +466,6 @@ contract DepositSecurityModule {
      * @param depositRoot The deposit root hash.
      * @param stakingModuleId The ID of the staking module.
      * @param nonce The nonce of the staking module.
-     * @param depositCalldata The calldata for the deposit.
      * @param sortedGuardianSignatures The list of guardian signatures ascendingly sorted by address.
      * @dev Reverts if any of the following is true:
      *   - onchain deposit root is different from the provided one;
@@ -490,7 +489,6 @@ contract DepositSecurityModule {
         bytes32 depositRoot,
         uint256 stakingModuleId,
         uint256 nonce,
-        bytes calldata depositCalldata,
         Signature[] calldata sortedGuardianSignatures
     ) external {
         /// @dev The first most likely reason for the signature to go stale
@@ -510,7 +508,7 @@ contract DepositSecurityModule {
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
         // Call StakingRouter instead of Lido - SR will pull ETH from Lido
-        STAKING_ROUTER.deposit(stakingModuleId, depositCalldata);
+        STAKING_ROUTER.deposit(stakingModuleId, "");
 
         _setLastDepositBlock(block.number);
     }

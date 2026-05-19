@@ -18,7 +18,7 @@ import {
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
 
-import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
 import { LogDescriptionExtended } from "../../../lib/protocol/types";
 
@@ -239,7 +239,7 @@ describe("Scenario: Protocol Happy Path", () => {
     norPendingDepositsGwei = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
-      const depositTx = await stakingRouter.connect(dsmSigner).deposit(module.id, ZERO_HASH);
+      const depositTx = await stakingRouter.connect(dsmSigner).deposit(module.id, "0x");
       const depositReceipt = (await depositTx.wait()) as ContractTransactionReceipt;
       const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];
       const unbufferedAmount = unbufferedEvent?.args[0] || 0n;

@@ -12,8 +12,6 @@ import {
   TOTAL_BASIS_POINTS,
 } from "lib";
 
-import { ZERO_HASH } from "test/suite";
-
 import { ProtocolContext } from "../types";
 
 import { adjustReportModuleBalances, report, submitReportDataWithConsensusAndEmptyExtraData } from "./accounting";
@@ -194,7 +192,7 @@ const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint
 
   try {
     const dsmSigner = await impersonate(await depositSecurityModule.getAddress(), ether("1"));
-    await stakingRouter.connect(dsmSigner).deposit(moduleId, ZERO_HASH);
+    await stakingRouter.connect(dsmSigner).deposit(moduleId, "0x");
   } finally {
     if (shouldRestoreMaxDepositsPerBlock) {
       await stakingRouter
