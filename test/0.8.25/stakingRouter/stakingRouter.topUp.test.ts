@@ -253,8 +253,11 @@ describe("StakingRouter.sol:topUp", () => {
       const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
       expect(depositEvents.length).to.equal(topUpWei.length);
 
+      // Cap is applied to the allocator OUTPUT (StakingRouter.sol:696-700):
+      // raw module allocation = 201_600 ETH; min(201_600, 500) = 500 ETH passes through
+      // to allocateDeposits unchanged (already aligned to 1 gwei).
       const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
-      expect(topUpEvents[0].args._amount).to.equal(480n * 10n ** 18n); // 500  / 32 ~ 15. 15*32 = 480
+      expect(topUpEvents[0].args._amount).to.equal(500n * 10n ** 18n);
     });
 
     it("if sum of top up is 0 execute allocateDeposits but no top up happen", async () => {

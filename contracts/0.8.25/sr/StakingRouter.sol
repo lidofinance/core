@@ -694,10 +694,10 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
 
         uint256 maxTopUpPerBlockWei = uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei;
-        uint256 depositableEther = Math.min(LIDO.getDepositableEther(), maxTopUpPerBlockWei);
+        uint256 depositableEther = LIDO.getDepositableEther();
 
         // Get allocation based on target share
-        uint256 smDepositableEthAmount = _getModuleDepositAllocation(_stakingModuleId, depositableEther, true);
+        uint256 smDepositableEthAmount = Math.min(_getModuleDepositAllocation(_stakingModuleId, depositableEther, true), maxTopUpPerBlockWei);
 
         // Call allocateDeposits on the staking module to determine for what amount deposit each key
         // The module verifies keys belong to it and reverts if invalid.
