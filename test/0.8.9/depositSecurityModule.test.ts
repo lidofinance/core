@@ -1091,17 +1091,6 @@ describe("DepositSecurityModule.sol", () => {
         await expect(deposit([guardian1])).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
       });
 
-      it("Reverts if module is inactive", async () => {
-        await stakingRouter.setStakingModuleStatus(STAKING_MODULE_ID, Status.DepositsPaused);
-
-        await dsm.addGuardian(guardian1, 1);
-        expect(await dsm.getGuardians()).to.deep.equal([guardian1.address]);
-        expect(await dsm.getGuardians()).to.have.length(1);
-        expect(await dsm.getGuardianQuorum()).to.equal(1);
-
-        await expect(deposit([guardian1])).to.be.revertedWithCustomError(dsm, "DepositInactiveModule");
-      });
-
       it("Reverts if `block.hash` and `block.number` from different blocks", async () => {
         const previousBlockNumber = await time.latestBlock();
         await mineUpTo((await time.latestBlock()) + 1);
@@ -1464,9 +1453,3 @@ describe("DepositSecurityModule.sol", () => {
     });
   });
 });
-
-enum Status {
-  Active,
-  DepositsPaused,
-  Stopped,
-}

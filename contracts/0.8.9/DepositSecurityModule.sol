@@ -57,7 +57,6 @@ contract DepositSecurityModule {
     error SignaturesNotSorted();
     error DepositNoQuorum();
     error DepositRootChanged();
-    error DepositInactiveModule();
     error DepositTooFrequent();
     error DepositUnexpectedBlockHash();
     error DepositsArePaused();
@@ -502,7 +501,6 @@ contract DepositSecurityModule {
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
         if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
-        if (!STAKING_ROUTER.canDeposit(stakingModuleId)) revert DepositInactiveModule();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();
