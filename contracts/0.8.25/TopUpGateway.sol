@@ -277,6 +277,14 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     }
 
     /**
+     * @notice Returns true if enough blocks have passed since the last top-up
+     *         (or no top-up has happened yet).
+     */
+    function isBlockDistancePassed() external view returns (bool) {
+        return _isBlockDistancePassed();
+    }
+
+    /**
      * @notice Returns the maximum age (seconds) of beacon root relative to block.timestamp
      */
     function getMaxRootAge() external view returns (uint256) {

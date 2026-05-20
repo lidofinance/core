@@ -109,6 +109,9 @@ export async function main() {
       consolidationGatewayPauser: parameters.consolidationGateway.pauser!,
 
       lidoDepositsReserveTarget: parameters.lido.lidoDepositsReserveTarget,
+
+      // StakingRouter
+      maxTopUpPerBlockGwei: parameters.stakingRouter.maxTopUpPerBlockGwei,
     },
     csmUpgrade: parameters.csmUpgrade,
     curatedModule: parameters.curatedModule,

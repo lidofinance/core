@@ -120,7 +120,14 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     }
 
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
-    function finalizeUpgrade_v4() external reinitializer(4) {
+    /// @param _maxTopUpPerBlockGwei Initial value for the global per-block top-up cap (in Gwei).
+    function finalizeUpgrade_v4(uint256 _maxTopUpPerBlockGwei) external reinitializer(4) {
+        if (_maxTopUpPerBlockGwei == 0 || _maxTopUpPerBlockGwei > type(uint64).max) {
+            revert InvalidMaxTopUpPerBlockGwei();
+        }
+        SRStorage.getRouterState().maxTopUpPerBlockGwei = uint64(_maxTopUpPerBlockGwei);
+        emit MaxTopUpPerBlockGweiSet(uint64(_maxTopUpPerBlockGwei), _msgSender());
+
         // migrate current modules to new storage
         SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
 

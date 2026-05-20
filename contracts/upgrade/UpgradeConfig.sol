@@ -109,6 +109,7 @@ contract UpgradeConfig is IUpgradeConfig {
     uint256 internal immutable VEBO_BALANCE_PER_FRAME_ETH;
     uint256 internal immutable VEBO_FRAME_DURATION_IN_SEC;
     uint256 internal immutable VEBO_CONSENSUS_VERSION;
+    uint256 internal immutable MAX_TOP_UP_PER_BLOCK_GWEI;
 
     // -------- EasyTrack addresses --------
     //
@@ -249,6 +250,7 @@ contract UpgradeConfig is IUpgradeConfig {
         VEBO_BALANCE_PER_FRAME_ETH = coreUpgradeParams.veboBalancePerFrameEth;
         VEBO_FRAME_DURATION_IN_SEC = coreUpgradeParams.veboFrameDurationInSec;
         VEBO_CONSENSUS_VERSION = coreUpgradeParams.veboConsensusVersion;
+        MAX_TOP_UP_PER_BLOCK_GWEI = coreUpgradeParams.maxTopUpPerBlockGwei;
 
         // EasyTrack new factories
         EasyTrackNewFactories memory newFactories = params.newFactories;
@@ -442,7 +444,8 @@ contract UpgradeConfig is IUpgradeConfig {
             veboMaxExitBalanceEth: VEBO_MAX_EXIT_BALANCE_ETH,
             veboBalancePerFrameEth: VEBO_BALANCE_PER_FRAME_ETH,
             veboFrameDurationInSec: VEBO_FRAME_DURATION_IN_SEC,
-            veboConsensusVersion: VEBO_CONSENSUS_VERSION
+            veboConsensusVersion: VEBO_CONSENSUS_VERSION,
+            maxTopUpPerBlockGwei: MAX_TOP_UP_PER_BLOCK_GWEI
         });
     }
 

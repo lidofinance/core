@@ -295,7 +295,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Upgrade StakingRouter implementation",
                 to: stakingRouter,
                 impl: c.newStakingRouterImpl,
-                data: abi.encodeCall(IStakingRouterUpgrade.finalizeUpgrade_v4, ())
+                data: abi.encodeCall(IStakingRouterUpgrade.finalizeUpgrade_v4, (c.maxTopUpPerBlockGwei))
             });
 
             /// @notice updating AccountingOracle implementation and call finalizeUpgrade_v5

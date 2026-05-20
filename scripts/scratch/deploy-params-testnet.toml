@@ -213,7 +213,7 @@ reservationFeeBP = 0                # Reservation fee in basis points (1%)
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
 maxValidatorsPerTopUp = 100           # Maximum validators per top-up call
-minBlockDistance = 1                  # Minimum block distance between top-ups
+minBlockDistance = 75                 # Minimum block distance between top-ups
 maxRootAge = 300                      # Maximum allowed age of beacon root relative to current block timestamp
 targetBalanceGwei = 2046750000000
 minTopUpGwei = 1000000000
@@ -226,4 +226,4 @@ pivotSlot = 0                         # Pivot slot for fork-aware gIndex selecti
 [stakingRouter]
 maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
 maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2
-maxTopUpPerBlockGwei = 1600000000000  # 1600 ETH (LIP-35): global per-block top-up cap
+maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-up cap

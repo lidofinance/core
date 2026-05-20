@@ -89,6 +89,7 @@ interface ISRBase {
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
+    error InvalidMaxTopUpPerBlockGwei();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
     error InconsistentFeeSum();

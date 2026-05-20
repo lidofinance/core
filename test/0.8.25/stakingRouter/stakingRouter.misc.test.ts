@@ -28,6 +28,7 @@ describe("StakingRouter.sol:misc", () => {
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
   const accounting = certainAddress("test:staking-router:accounting");
   const withdrawalCredentials = randomWCType1();
+  const MAX_TOP_UP_PER_BLOCK_GWEI = 3200n * 10n ** 9n; // 3200 ETH in gwei
 
   before(async () => {
     [deployer, admin, stakingRouterAdmin, user] = await ethers.getSigners();
@@ -74,7 +75,10 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
 
       // fails with InvalidInitialization error when called after initialize
-      await expect(stakingRouter.finalizeUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
+      await expect(stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI)).to.be.revertedWithCustomError(
+        impl,
+        "InvalidInitialization",
+      );
     });
   });
 
@@ -135,7 +139,10 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("fails with InvalidInitialization error when called on implementation", async () => {
-      await expect(impl.finalizeUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
+      await expect(impl.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI)).to.be.revertedWithCustomError(
+        impl,
+        "InvalidInitialization",
+      );
     });
 
     it("sets correct contract version, withdrawal credentials and admin role", async () => {
@@ -144,7 +151,7 @@ describe("StakingRouter.sol:misc", () => {
       // but old Versioned slot has v3
       expect(await stakingRouter.testing_getOldContractVersion()).to.equal(3);
 
-      await expect(stakingRouter.finalizeUpgrade_v4())
+      await expect(stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI))
         .to.emit(stakingRouter, "Initialized")
         .withArgs(4)
         .and.to.emit(stakingRouter, "RoleGranted")
@@ -160,10 +167,13 @@ describe("StakingRouter.sol:misc", () => {
       // admin role granted
       expect(await stakingRouter.hasRole(await stakingRouter.DEFAULT_ADMIN_ROLE(), stakingRouterAdmin.address)).to.be
         .true;
+
+      // maxTopUpPerBlockGwei set
+      expect(await stakingRouter.getMaxTopUpPerBlockGwei()).to.equal(MAX_TOP_UP_PER_BLOCK_GWEI);
     });
 
     it("cleans up old storage slots after migration", async () => {
-      await stakingRouter.finalizeUpgrade_v4();
+      await stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI);
 
       // all old unstructured storage slots should be zeroed
       expect(await stakingRouter.testing_getOldLidoPosition()).to.equal(ZeroAddress);
@@ -197,7 +207,7 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.hasRole(someNewRole, someAccount)).to.be.false;
 
       // migration writes DEFAULT_ADMIN_ROLE to the NEW slot, but does NOT touch old slots
-      await stakingRouter.finalizeUpgrade_v4();
+      await stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI);
 
       // after migration:  all roles should be reassigned
       expect(await stakingRouter.hasRole(DEFAULT_ADMIN_ROLE, stakingRouterAdmin.address)).to.be.true;
@@ -215,8 +225,25 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("cannot be called twice", async () => {
-      await stakingRouter.finalizeUpgrade_v4();
-      await expect(stakingRouter.finalizeUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
+      await stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI);
+      await expect(stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI)).to.be.revertedWithCustomError(
+        impl,
+        "InvalidInitialization",
+      );
+    });
+
+    it("reverts when maxTopUpPerBlockGwei is zero", async () => {
+      await expect(stakingRouter.finalizeUpgrade_v4(0n)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "InvalidMaxTopUpPerBlockGwei",
+      );
+    });
+
+    it("reverts when maxTopUpPerBlockGwei exceeds uint64", async () => {
+      await expect(stakingRouter.finalizeUpgrade_v4(2n ** 64n)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "InvalidMaxTopUpPerBlockGwei",
+      );
     });
   });
 
