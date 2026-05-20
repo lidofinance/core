@@ -703,9 +703,18 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         // The module verifies keys belong to it and reverts if invalid.
         // Even if smDepositableEthAmount is 0, we still call the module
         // to allow CSM queue cursor advancement.
-        uint256[] memory allocations;
         uint256 smDepositableEthAmountRounded = smDepositableEthAmount - (smDepositableEthAmount % 1 gwei);
-        allocations = IStakingModuleV2(stateConfig.moduleAddress)
+
+        // When the smDepositableEthAmountRounded is zero we still call the module to allow module queue cursor advancement
+        // (e.g. CSM queue), but ONLY if Lido itself is in a deposit-enabled
+        // state. If Lido is paused, withdrawDepositableEther on the `amount > 0` path
+        // would revert with `CAN_NOT_DEPOSIT`; on the zero smDepositableEthAmountRounded path that check is
+        // bypassed, so we must guard the stateful module call explicitly here.
+        if (smDepositableEthAmountRounded == 0 && !LIDO.canDeposit()) {
+            revert LidoDepositsPaused();
+        }
+
+        uint256[] memory allocations = IStakingModuleV2(stateConfig.moduleAddress)
             .allocateDeposits(smDepositableEthAmountRounded, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
 
         // Calculate total amount from allocations returned by module (in wei)

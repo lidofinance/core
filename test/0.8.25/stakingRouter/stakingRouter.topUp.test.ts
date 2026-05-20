@@ -299,6 +299,29 @@ describe("StakingRouter.sol:topUp", () => {
       await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, 0n);
     });
 
+    it("reverts with LidoDepositsPaused when budget is 0 and Lido cannot deposit", async () => {
+      const [, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 100n,
+        totalModuleStake: 100n * 2048n * 10n ** 18n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      // smDepositableEthAmountRounded ends up at 0:
+      await lidoMock.setDepositableEther(0n);
+      // and Lido is paused
+      await lidoMock.setCanDeposit(false);
+
+      const pubkeys = [randomString(48)];
+      const keyIndices = [0n];
+      const operatorIds = [0n];
+      const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI];
+
+      await expect(
+        stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+      ).to.be.revertedWithCustomError(stakingRouter, "LidoDepositsPaused");
+    });
+
     // tests group below - topUp execution depends on module result
     describe("processing staking module allocateDeposits method  result ", async () => {
       it("Reverts when allocation exceeds module's target", async () => {
