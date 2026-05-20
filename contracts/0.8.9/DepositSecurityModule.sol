@@ -401,9 +401,10 @@ contract DepositSecurityModule {
     }
 
     /**
-     * @notice Returns whether LIDO.deposit() can be called, given that the caller
+     * @notice Returns whether STAKING_ROUTER.deposit() can be called, given that the caller
      * will provide guardian attestations of non-stale deposit root and nonce,
-     * and the number of such attestations will be enough to reach the quorum.
+     * and the number of such attestations will be enough to reach the quorum,
+     * and the deposit count for the module is greater than 0
      *
      * @param stakingModuleId The ID of the staking module.
      * @return canDeposit Whether a deposit can be made.
