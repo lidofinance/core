@@ -207,11 +207,6 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
 
         uint256[] memory topUpLimits = new uint256[](validatorsCount);
 
-        // Sum of per-validator top-up limits. If zero, the caller submitted a guaranteed
-        // no-op (all validators are already at target, exiting/slashed, or below minTopUp).
-        // We still call StakingRouter.topUp (it may advance module-side cursors), but we
-        // skip _setLastTopUpData() so the global rate-limit window and witness freshness
-        // threshold are not consumed by an intent-less call.
         uint256 totalLimits;
 
         // 1. Evaluate top-up limit based on current balance, pending deposits, and configured limits
@@ -419,8 +414,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata _w) internal view {
         // header slot epoch
         uint64 epoch = uint64(_slot / SLOTS_PER_EPOCH);
-        // Validator should be activated earlier than current epoch
-        if (_w.activationEpoch >= epoch) revert ValidatorIsNotActivated();
+        if (_w.activationEpoch > epoch) revert ValidatorIsNotActivated();
     }
 
     function _evaluateTopUpLimit(ValidatorWitness calldata _validator, uint256 _pendingBalanceGwei)

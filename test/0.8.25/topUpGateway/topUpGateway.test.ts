@@ -573,13 +573,23 @@ describe("TopUpGateway.sol", () => {
     it("revert if validator is not active", async () => {
       const data = await buildTopUpData();
       const epoch = data.beaconRootData.slot / SLOTS_PER_EPOCH;
-      // Validator should be activated earlier than current epoch
+      // Validator activates strictly after the proven epoch -> still pending.
       data.validatorWitness[0].activationEpoch = epoch + 1n;
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
         topUpGateway,
         "ValidatorIsNotActivated",
       );
+    });
+
+    it("accepts a validator activated exactly at the proven epoch", async () => {
+      // Per CL spec, a validator is active when activation_epoch <= e < exit_epoch,
+      // so activation_epoch == epoch is already active and must be eligible for top-up.
+      const data = await buildTopUpData();
+      const epoch = data.beaconRootData.slot / SLOTS_PER_EPOCH;
+      data.validatorWitness[0].activationEpoch = epoch;
+
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.emit(stakingRouter, "TopUpCalled");
     });
   });
 

@@ -693,8 +693,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
 
-        // Cap depositable ether by the global per-block top-up limit (mirrors maxDepositsPerBlock in deposit()).
-        // Zero limit -> depositableEther = 0 -> no actual top-up (CSM cursor still advances).
         uint256 maxTopUpPerBlockWei = uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei;
         uint256 depositableEther = Math.min(LIDO.getDepositableEther(), maxTopUpPerBlockWei);
 
