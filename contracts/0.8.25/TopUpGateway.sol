@@ -83,7 +83,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     /// @notice Initializes the TopUpGateway proxy with admin, rate limits, and top-up balance parameters.
     /// @param _admin Address to receive DEFAULT_ADMIN_ROLE
     /// @param _maxValidatorsPerTopUp Maximum number of validators per single topUp call
-    /// @param _minBlockDistance Minimum blocks between topUp calls
+    /// @param _minTopUpBlockDistance Minimum blocks between topUp calls
     /// @param _maxRootAgeSec Maximum age (seconds) of beacon root relative to block.timestamp
     /// @param _targetBalanceGwei Target validator balance ceiling after top-up (in Gwei).
     ///        Top-up amount = targetBalance - currentTotal.
@@ -92,7 +92,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     function initialize(
         address _admin,
         uint256 _maxValidatorsPerTopUp,
-        uint256 _minBlockDistance,
+        uint256 _minTopUpBlockDistance,
         uint256 _maxRootAgeSec,
         uint256 _targetBalanceGwei,
         uint256 _minTopUpGwei
@@ -101,7 +101,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setMaxValidatorsPerTopUp(_maxValidatorsPerTopUp);
-        _setMinBlockDistance(_minBlockDistance);
+        _setMinBlockDistance(_minTopUpBlockDistance);
         _setMaxRootAge(_maxRootAgeSec);
         _setTopUpBalanceLimits(_targetBalanceGwei, _minTopUpGwei);
     }
