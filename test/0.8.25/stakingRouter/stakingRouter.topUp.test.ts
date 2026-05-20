@@ -209,6 +209,10 @@ describe("StakingRouter.sol:topUp", () => {
       // 100 * 32 - stake before topUp transaction
       const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
       expect(topUpEvents[0].args._amount).to.equal(2016n * 100n * 10n ** 18n);
+
+      // StakingRouter emits StakingRouterETHTopUp with the sum of module-returned allocations
+      // (i.e. what is actually pulled from Lido and deposited), not the budget passed to allocateDeposits.
+      await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, totalTopUpWei);
     });
 
     it("top up value limit by maxTopUpPerBlockGwei", async () => {
@@ -286,6 +290,10 @@ describe("StakingRouter.sol:topUp", () => {
       const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
       expect(topUpEvents.length).to.equal(1);
       expect(topUpEvents[0].args._amount).to.equal(0n);
+
+      // StakingRouterETHTopUp is emitted unconditionally for off-chain observability,
+      // mirroring StakingRouterETHDeposited behavior in deposit().
+      await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, 0n);
     });
 
     // tests group below - topUp execution depends on module result

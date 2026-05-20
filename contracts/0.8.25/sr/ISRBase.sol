@@ -31,6 +31,7 @@ interface ISRBase {
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
 
     event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
+    event StakingRouterETHTopUp(uint256 indexed stakingModuleId, uint256 amount);
     event DepositableEthReceived(uint256 amount);
 
     event ExitedAndStuckValidatorsCountsUpdateFailed(uint256 indexed stakingModuleId, bytes lowLevelRevertData);

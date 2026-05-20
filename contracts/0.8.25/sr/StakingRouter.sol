@@ -747,6 +747,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             /// @dev All pulled ETH must be deposited
             assert(etherBalanceBeforeDeposits == etherBalanceAfterDeposits);
         }
+
+        emit StakingRouterETHTopUp(_stakingModuleId, amount);
     }
 
     function _validateTopUpInputs(
