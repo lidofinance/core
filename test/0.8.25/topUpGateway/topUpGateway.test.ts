@@ -532,6 +532,35 @@ describe("TopUpGateway.sol", () => {
         .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
     });
 
+    it("does not advance the rate-limit window when all topUpLimits are zero", async () => {
+      // Make _evaluateTopUpLimit return 0 for the only validator (already at target).
+      const data = await buildTopUpData();
+      data.validatorWitness[0].effectiveBalance = DEFAULT_TARGET_BALANCE_GWEI;
+      data.pendingBalanceGwei = [0n];
+
+      // sanity: no prior top-up
+      expect(await topUpGateway.getLastTopUpTimestamp()).to.equal(0n);
+
+      // StakingRouter.topUp is still called (so module-side cursors can advance),
+      // but LastTopUpChanged must NOT be emitted and the stored timestamp stays at 0.
+      await expect(topUpGateway.connect(topUpOperator).topUp(data))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n])
+        .and.not.to.emit(topUpGateway, "LastTopUpChanged");
+
+      expect(await topUpGateway.getLastTopUpTimestamp()).to.equal(0n);
+      expect(await topUpGateway.isBlockDistancePassed()).to.equal(true);
+
+      // A subsequent valid top-up in the same block is NOT throttled, because
+      // the previous no-op did not consume the rate-limit window.
+      const data2 = await buildTopUpData();
+      // ensure the witness is fresh w.r.t. lastTopUpTimestamp (still 0)
+      data2.beaconRootData.childBlockTimestamp = BigInt(await time.latest()) + 1n;
+      await expect(topUpGateway.connect(topUpOperator).topUp(data2))
+        .to.emit(stakingRouter, "TopUpCalled")
+        .and.to.emit(topUpGateway, "LastTopUpChanged");
+    });
+
     it("returns zero when validator has withdrawableEpoch set", async () => {
       const data = await buildTopUpData();
       data.validatorWitness[0].withdrawableEpoch = 2000n; // not FAR_FUTURE_EPOCH

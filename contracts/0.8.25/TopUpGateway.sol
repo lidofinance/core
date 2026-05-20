@@ -207,6 +207,13 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
 
         uint256[] memory topUpLimits = new uint256[](validatorsCount);
 
+        // Sum of per-validator top-up limits. If zero, the caller submitted a guaranteed
+        // no-op (all validators are already at target, exiting/slashed, or below minTopUp).
+        // We still call StakingRouter.topUp (it may advance module-side cursors), but we
+        // skip _setLastTopUpData() so the global rate-limit window and witness freshness
+        // threshold are not consumed by an intent-less call.
+        uint256 totalLimits;
+
         // 1. Evaluate top-up limit based on current balance, pending deposits, and configured limits
         // 2. Verify proof data through CLValidatorProofVerifier
         unchecked {
@@ -226,6 +233,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
 
                 // calculate top up limit accounting for current balance and pending deposits
                 topUpLimits[i] = _evaluateTopUpLimit(vw, _topUps.pendingBalanceGwei[i]) * 1 gwei;
+                totalLimits += topUpLimits[i];
             }
         }
 
@@ -233,7 +241,9 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         IStakingRouter(stakingRouter)
             .topUp(_topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits);
 
-        _setLastTopUpData();
+        if (totalLimits > 0) {
+            _setLastTopUpData();
+        }
     }
 
     /**
