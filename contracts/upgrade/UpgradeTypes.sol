@@ -91,6 +91,11 @@ interface IConsolidationMigrator {
     function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external;
     function sourceModuleId() external view returns (uint256);
     function targetModuleId() external view returns (uint256);
+    function CONSOLIDATION_BUS() external view returns (address);
+}
+
+interface IConsolidationBus {
+    function CONSOLIDATION_GATEWAY() external view returns (address);
 }
 
 interface IMerkleGate {
@@ -125,6 +130,8 @@ interface IValidatorsExitBusOracleUpgrade is IBaseOracle {
 
 interface IWithdrawalVaultUpgrade {
     function finalizeUpgrade_v3() external;
+    function TRIGGERABLE_WITHDRAWALS_GATEWAY() external view returns (address);
+    function CONSOLIDATION_GATEWAY() external view returns (address);
 }
 
 interface IWithdrawalsManagerProxy {
