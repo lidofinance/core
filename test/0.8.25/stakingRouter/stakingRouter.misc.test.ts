@@ -82,7 +82,7 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("Reverts if finalizeUpgrade_v4 is called on a fresh proxy", async () => {
-      await expect(stakingRouter.finalizeUpgrade_v4())
+      await expect(stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI))
         .to.be.revertedWithCustomError(stakingRouter, "UnexpectedContractVersion")
         .withArgs(3, 0);
     });
@@ -192,7 +192,10 @@ describe("StakingRouter.sol:misc", () => {
     it("reverts if new module storage is already populated", async () => {
       await stakingRouter.testing_addModuleId(1);
 
-      await expect(stakingRouter.finalizeUpgrade_v4()).to.be.revertedWithCustomError(stakingRouter, "AlreadyMigrated");
+      await expect(stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "AlreadyMigrated",
+      );
     });
 
     it("migrate all defined AccessControl role and skip undefined", async () => {
