@@ -216,45 +216,40 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
 
     // --- Top-up mock data ---
 
-    bytes[] private topUpPubkeys__mocked;
-    uint256[] private topUpAmounts__mocked;
-    bool private useCustomTopUpData__mocked;
-    bool private shouldRevert__mocked;
+    uint256[] private allocations__mocked;
 
-    function mock__setShouldRevert(bool shouldRevert) external {
-        shouldRevert__mocked = shouldRevert;
+    event TopUpData(
+        uint256 _amount,
+        bytes[] _pubkeys,
+        uint256[] _keyIndices,
+        uint256[] _operatorIds,
+        uint256[] _topUpLimits
+    );
+
+    /**
+     *
+     * @param amounts top up values for validators
+     */
+    function mock__allocateDeposits(uint256[] calldata amounts) external {
+        allocations__mocked = amounts;
     }
 
-    function mock__setTopUpDepositData(uint256[] calldata amounts) external {
-        delete topUpAmounts__mocked;
-
-        for (uint256 i = 0; i < amounts.length; ++i) {
-            topUpAmounts__mocked.push(amounts[i]);
-        }
-
-        useCustomTopUpData__mocked = true;
-    }
-
-    function mock__clearTopUpDepositData() external {
-        delete topUpAmounts__mocked;
-        useCustomTopUpData__mocked = false;
-    }
-
-    // *** TOP-UP (used by topUp()) ***
+    /**
+     * @dev mock method that used for SR.topUp method
+     * returns how much to topUp to each key
+     * By default mock returns the same data it gets
+     *
+     */
     function allocateDeposits(
-        uint256,
-        bytes[] calldata,
-        uint256[] calldata,
-        uint256[] calldata,
+        uint256 _amount,
+        bytes[] calldata _pubkeys,
+        uint256[] calldata _keyIndices,
+        uint256[] calldata _operatorIds,
         uint256[] calldata _topUpLimits
     ) external returns (uint256[] memory topUpAmounts) {
-        require(!shouldRevert__mocked, "Mock: revert requested");
+        emit TopUpData(_amount, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
 
-        if (useCustomTopUpData__mocked) {
-            return topUpAmounts__mocked;
-        }
-
-        return _topUpLimits;
+        return allocations__mocked;
     }
 
     event Mock__onExitedAndStuckValidatorsCountsUpdated();

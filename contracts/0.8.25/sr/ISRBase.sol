@@ -25,11 +25,13 @@ interface ISRBase {
     event StakingModuleMinDepositBlockDistanceSet(
         uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
     );
+    event MaxTopUpPerBlockGweiSet(uint256 maxTopUpPerBlockGwei, address setBy);
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
 
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
 
     event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
+    event StakingRouterETHTopUp(uint256 indexed stakingModuleId, uint256 amount);
     event DepositableEthReceived(uint256 amount);
 
     event ExitedAndStuckValidatorsCountsUpdateFailed(uint256 indexed stakingModuleId, bytes lowLevelRevertData);
@@ -89,6 +91,8 @@ interface ISRBase {
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
+    error InvalidMaxTopUpPerBlockGwei();
+    error LidoDepositsPaused();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
     error InconsistentFeeSum();

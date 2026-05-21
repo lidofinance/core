@@ -120,7 +120,10 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     }
 
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
-    function finalizeUpgrade_v4() external reinitializer(4) {
+    /// @param _maxTopUpPerBlockGwei Initial value for the global per-block top-up cap (in Gwei).
+    function finalizeUpgrade_v4(uint256 _maxTopUpPerBlockGwei) external reinitializer(4) {
+        _setMaxTopUpPerBlockGwei(_maxTopUpPerBlockGwei);
+
         // migrate current modules to new storage
         SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01, 3);
 
@@ -688,17 +691,28 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         /// @dev This method is only supported for new modules (0x02 withdrawal credentials)
         SRUtils._requireWCType2(stateConfig.withdrawalCredentialsType);
 
-        // Get allocation based on target share
+        uint256 maxTopUpPerBlockWei = uint256(SRStorage.getRouterState().maxTopUpPerBlockGwei) * 1 gwei;
         uint256 depositableEther = LIDO.getDepositableEther();
-        uint256 smDepositableEthAmount = _getModuleDepositAllocation(_stakingModuleId, depositableEther, true);
+
+        // Get allocation based on target share
+        uint256 smDepositableEthAmount = Math.min(_getModuleDepositAllocation(_stakingModuleId, depositableEther, true), maxTopUpPerBlockWei);
 
         // Call allocateDeposits on the staking module to determine for what amount deposit each key
         // The module verifies keys belong to it and reverts if invalid.
         // Even if smDepositableEthAmount is 0, we still call the module
         // to allow CSM queue cursor advancement.
-        uint256[] memory allocations;
         uint256 smDepositableEthAmountRounded = smDepositableEthAmount - (smDepositableEthAmount % 1 gwei);
-        allocations = IStakingModuleV2(stateConfig.moduleAddress)
+
+        // When the smDepositableEthAmountRounded is zero we still call the module to allow module queue cursor advancement
+        // (e.g. CSM queue), but ONLY if Lido itself is in a deposit-enabled
+        // state. If Lido is paused, withdrawDepositableEther on the `amount > 0` path
+        // would revert with `CAN_NOT_DEPOSIT`; on the zero smDepositableEthAmountRounded path that check is
+        // bypassed, so we must guard the stateful module call explicitly here.
+        if (smDepositableEthAmountRounded == 0 && !LIDO.canDeposit()) {
+            revert LidoDepositsPaused();
+        }
+
+        uint256[] memory allocations = IStakingModuleV2(stateConfig.moduleAddress)
             .allocateDeposits(smDepositableEthAmountRounded, _pubkeys, _keyIndices, _operatorIds, _topUpLimits);
 
         // Calculate total amount from allocations returned by module (in wei)
@@ -738,6 +752,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             /// @dev All pulled ETH must be deposited
             assert(etherBalanceBeforeDeposits == etherBalanceAfterDeposits);
         }
+
+        emit StakingRouterETHTopUp(_stakingModuleId, amount);
     }
 
     function _validateTopUpInputs(
@@ -996,6 +1012,26 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @return Withdrawal credentials.
     function getWithdrawalCredentials() public view returns (bytes32) {
         return SRStorage.getRouterState().withdrawalCredentials;
+    }
+
+    /// @notice Set per-block top up limit for top-ups (in Gwei).
+    /// @param _newValue top-up limit value in Gwei (must be > 0 and fit into uint64).
+    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
+    function setMaxTopUpPerBlockGwei(uint256 _newValue) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
+        _setMaxTopUpPerBlockGwei(_newValue);
+    }
+
+    function _setMaxTopUpPerBlockGwei(uint256 _newValue) internal {
+        if (_newValue == 0 || _newValue > type(uint64).max) {
+            revert InvalidMaxTopUpPerBlockGwei();
+        }
+        SRStorage.getRouterState().maxTopUpPerBlockGwei = uint64(_newValue);
+        emit MaxTopUpPerBlockGweiSet(_newValue, _msgSender());
+    }
+
+    /// @notice Returns the top up limit for top-ups (in Gwei).
+    function getMaxTopUpPerBlockGwei() external view returns (uint64) {
+        return SRStorage.getRouterState().maxTopUpPerBlockGwei;
     }
 
     function _setWithdrawalCredentials(bytes32 wc) internal {

@@ -57,7 +57,6 @@ contract DepositSecurityModule {
     error SignaturesNotSorted();
     error DepositNoQuorum();
     error DepositRootChanged();
-    error DepositInactiveModule();
     error DepositTooFrequent();
     error DepositUnexpectedBlockHash();
     error DepositsArePaused();
@@ -402,9 +401,10 @@ contract DepositSecurityModule {
     }
 
     /**
-     * @notice Returns whether LIDO.deposit() can be called, given that the caller
+     * @notice Returns whether STAKING_ROUTER.deposit() can be called, given that the caller
      * will provide guardian attestations of non-stale deposit root and nonce,
-     * and the number of such attestations will be enough to reach the quorum.
+     * and the number of such attestations will be enough to reach the quorum,
+     * and the deposit count for the module is greater than 0
      *
      * @param stakingModuleId The ID of the staking module.
      * @return canDeposit Whether a deposit can be made.
@@ -500,7 +500,6 @@ contract DepositSecurityModule {
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
         if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
-        if (!STAKING_ROUTER.canDeposit(stakingModuleId)) revert DepositInactiveModule();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();

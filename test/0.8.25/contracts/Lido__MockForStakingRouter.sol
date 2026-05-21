@@ -10,6 +10,7 @@ interface IStakingRouter {
 contract Lido__MockForStakingRouter {
     uint256 internal depositableEther__mocked;
     address public stakingRouter;
+    bool internal canDeposit__mocked = true;
 
     event WithdrawDepositableEtherCalled(uint256 amount, uint256 depositsCount);
 
@@ -27,6 +28,14 @@ contract Lido__MockForStakingRouter {
 
     function getDepositableEther() external view returns (uint256) {
         return depositableEther__mocked;
+    }
+
+    function setCanDeposit(bool _canDeposit) external {
+        canDeposit__mocked = _canDeposit;
+    }
+
+    function canDeposit() external view returns (bool) {
+        return canDeposit__mocked;
     }
 
     function withdrawDepositableEther(uint256 _amount, uint256 _depositsCount) external {

@@ -56,7 +56,7 @@ interface IStakingRouterUpgrade is IAccessControlEnumerable {
     // existing roles
 
     function getWithdrawalCredentials() external view returns (bytes32);
-    function finalizeUpgrade_v4() external;
+    function finalizeUpgrade_v4(uint256 _maxTopUpPerBlockGwei) external;
     function updateModuleShares(uint256 _stakingModuleId, uint16 _stakeShareLimit, uint16 _priorityExitShareThreshold)
         external;
 
@@ -324,6 +324,9 @@ struct CoreUpgradeParams {
     uint256 veboBalancePerFrameEth;
     uint256 veboFrameDurationInSec;
     uint256 veboConsensusVersion;
+
+    // staking router
+    uint256 maxTopUpPerBlockGwei;
 }
 
 struct CSMUpgradeParams {
@@ -435,6 +438,9 @@ struct CoreUpgradeConfig {
     uint256 veboBalancePerFrameEth;
     uint256 veboFrameDurationInSec;
     uint256 veboConsensusVersion;
+
+    // staking router
+    uint256 maxTopUpPerBlockGwei;
 }
 
 struct CSMUpgradeConfig {

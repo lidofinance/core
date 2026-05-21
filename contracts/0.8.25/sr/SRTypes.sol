@@ -9,6 +9,7 @@ import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/Enumerab
  */
 
 interface ILido {
+    function canDeposit() external view returns (bool);
     function getDepositableEther() external view returns (uint256);
     function withdrawDepositableEther(uint256 _amount, uint256 _seedDepositsCount) external;
 }
@@ -187,7 +188,8 @@ struct RouterState {
     EnumerableSet.UintSet moduleIds; // slot 1
     RouterStateAccounting accounting; // slot 2
     bytes32 withdrawalCredentials; // slot 3
-    uint24 lastModuleId;
+    uint24 lastModuleId; // slot 4
+    uint64 maxTopUpPerBlockGwei; // slot 4
 }
 
 /// @notice A summary of the staking module's validators.
