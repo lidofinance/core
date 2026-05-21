@@ -774,7 +774,7 @@ describe("Lido.sol:misc", () => {
       const amountToWithdraw = depositableEther;
       await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(amountToWithdraw, 1n))
         .to.emit(lido, "DepositedPostReportUpdated")
-        .withArgs(amountToWithdraw)
+        .withArgs(beforeDeposit.balanceStats.depositedSinceLastReport + amountToWithdraw)
         .and.to.emit(lido, "Unbuffered")
         .withArgs(amountToWithdraw)
         .and.to.emit(lido, "DepositedValidatorsChanged")
