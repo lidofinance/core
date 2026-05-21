@@ -1512,7 +1512,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectTotalModuleValidatorsBalanceIncrease(uint256 maxAllowed, uint256 actual);
     error AppearedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 appearedPerDay);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
-    error IncorrectRequestFinalization(uint256 requestCreationBlock);
+    error IncorrectRequestFinalization(uint256 requestCreationTimestamp);
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
     error TooManyItemsPerExtraDataTransaction(uint256 maxItemsCount, uint256 receivedItemsCount);
     error ExitedEthAmountPerDayLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
