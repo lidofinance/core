@@ -220,6 +220,11 @@ contract Accounting {
             postInternalSharesBeforeFees +
             update.sharesToMintAsFees +
             _pre.badDebtToInternalize;
+
+        // Oracle should consider this limitation:
+        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
+        if (update.postInternalShares == 0) revert InternalSharesCantBeZero();
+
         uint256 postExternalShares = _pre.externalShares - _pre.badDebtToInternalize; // can't underflow by design
 
         update.postTotalShares = update.postInternalShares + postExternalShares;
@@ -418,9 +423,6 @@ contract Accounting {
         if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
         // Validator count validation removed for MaxEB support - now using balance-based accounting
 
-        // Oracle should consider this limitation:
-        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
-        if (_update.postInternalShares == 0) revert InternalSharesCantBeZero();
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
