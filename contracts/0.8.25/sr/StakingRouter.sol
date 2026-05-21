@@ -122,11 +122,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
     /// @param _maxTopUpPerBlockGwei Initial value for the global per-block top-up cap (in Gwei).
     function finalizeUpgrade_v4(uint256 _maxTopUpPerBlockGwei) external reinitializer(4) {
-        if (_maxTopUpPerBlockGwei == 0 || _maxTopUpPerBlockGwei > type(uint64).max) {
-            revert InvalidMaxTopUpPerBlockGwei();
-        }
-        SRStorage.getRouterState().maxTopUpPerBlockGwei = uint64(_maxTopUpPerBlockGwei);
-        emit MaxTopUpPerBlockGweiSet(uint64(_maxTopUpPerBlockGwei), _msgSender());
+        _setMaxTopUpPerBlockGwei(_maxTopUpPerBlockGwei);
 
         // migrate current modules to new storage
         SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
@@ -1017,11 +1013,17 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     }
 
     /// @notice Set per-block top up limit for top-ups (in Gwei).
-    /// @param _newValue top-up limit value in Gwei (must be > 0).
+    /// @param _newValue top-up limit value in Gwei (must be > 0 and fit into uint64).
     /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
-    function setMaxTopUpPerBlockGwei(uint64 _newValue) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
-        SRUtils._requireNotZero(_newValue);
-        SRStorage.getRouterState().maxTopUpPerBlockGwei = _newValue;
+    function setMaxTopUpPerBlockGwei(uint256 _newValue) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
+        _setMaxTopUpPerBlockGwei(_newValue);
+    }
+
+    function _setMaxTopUpPerBlockGwei(uint256 _newValue) internal {
+        if (_newValue == 0 || _newValue > type(uint64).max) {
+            revert InvalidMaxTopUpPerBlockGwei();
+        }
+        SRStorage.getRouterState().maxTopUpPerBlockGwei = uint64(_newValue);
         emit MaxTopUpPerBlockGweiSet(_newValue, _msgSender());
     }
 

@@ -25,7 +25,7 @@ interface ISRBase {
     event StakingModuleMinDepositBlockDistanceSet(
         uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
     );
-    event MaxTopUpPerBlockGweiSet(uint64 maxTopUpPerBlockGwei, address setBy);
+    event MaxTopUpPerBlockGweiSet(uint256 maxTopUpPerBlockGwei, address setBy);
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
 
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);

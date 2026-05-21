@@ -451,4 +451,46 @@ describe("StakingRouter.sol:topUp", () => {
       });
     });
   });
+
+  context("setMaxTopUpPerBlockGwei", () => {
+    it("updates storage and emits event", async () => {
+      const newValue = 1000n * ONE_GWEI; // 1000 ETH in gwei
+
+      await expect(stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(newValue))
+        .to.emit(stakingRouter, "MaxTopUpPerBlockGweiSet")
+        .withArgs(newValue, admin.address);
+
+      expect(await stakingRouter.getMaxTopUpPerBlockGwei()).to.equal(newValue);
+    });
+
+    it("accepts the uint64 max value and stores it unchanged", async () => {
+      const maxUint64 = 2n ** 64n - 1n;
+
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(maxUint64);
+
+      // storage is uint64 — full uint64 value must survive the downcast
+      expect(await stakingRouter.getMaxTopUpPerBlockGwei()).to.equal(maxUint64);
+    });
+
+    it("reverts when value is zero", async () => {
+      await expect(stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(0n)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "InvalidMaxTopUpPerBlockGwei",
+      );
+    });
+
+    it("reverts when value exceeds uint64", async () => {
+      await expect(stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(2n ** 64n)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "InvalidMaxTopUpPerBlockGwei",
+      );
+    });
+
+    it("reverts when caller lacks STAKING_MODULE_MANAGE_ROLE", async () => {
+      const role = await stakingRouter.STAKING_MODULE_MANAGE_ROLE();
+      await expect(stakingRouter.connect(stranger).setMaxTopUpPerBlockGwei(1n))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger.address, role);
+    });
+  });
 });
