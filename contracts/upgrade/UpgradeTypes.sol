@@ -312,7 +312,6 @@ struct CoreUpgradeParams {
     address topUpGateway;
 
     // params
-    uint256 lidoDepositsReserveTarget;
     address curatedModuleCommittee;
     address topUpGatewayDepositor;
     address consolidationGatewayPauser;
@@ -427,7 +426,6 @@ struct CoreUpgradeConfig {
     address consolidationMigrator;
     address topUpGateway;
 
-    uint256 lidoDepositsReserveTarget;
     address curatedModuleCommittee;
     address topUpGatewayDepositor;
     address consolidationGatewayPauser;
