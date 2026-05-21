@@ -1114,7 +1114,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 depositsReserveTarget = getDepositsReserveTarget();
         uint256 depositsReserve = DEPOSITS_RESERVE_POSITION.getStorageUint256();
 
-        if (depositsReserve != depositsReserveTarget) {
+        if (depositsReserve < depositsReserveTarget) {
             _setDepositsReserve(depositsReserveTarget);
         }
     }
