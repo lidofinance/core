@@ -53,7 +53,6 @@ contract Accounting {
         uint256 depositedBalance;
         uint256 totalPooledEther;
         uint256 totalShares;
-        uint256 depositedValidators;
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
@@ -451,7 +450,7 @@ contract Accounting {
         }
     }
 
-    /// @dev mints protocol fees to the treasury and node operators and calls back to stakingRouter
+    /// @dev transfers pre-minted fee shares to the treasury and node operator recipients
     function _distributeFee(FeeDistribution memory _feeDistribution) internal {
         address[] memory recipients = _feeDistribution.moduleFeeRecipients;
         uint256[] memory sharesToMint = _feeDistribution.moduleSharesToMint;

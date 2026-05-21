@@ -80,6 +80,12 @@ describe("StakingRouter.sol:misc", () => {
         "InvalidInitialization",
       );
     });
+
+    it("Reverts if finalizeUpgrade_v4 is called on a fresh proxy", async () => {
+      await expect(stakingRouter.finalizeUpgrade_v4())
+        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedContractVersion")
+        .withArgs(3, 0);
+    });
   });
 
   context("finalizeUpgrade_v4()", () => {
@@ -181,6 +187,12 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.testing_getOldContractVersion()).to.equal(0);
       expect(await stakingRouter.testing_getOldLastModuleIdPosition()).to.equal(0);
       expect(await stakingRouter.testing_getOldModulesCountPosition()).to.equal(0);
+    });
+
+    it("reverts if new module storage is already populated", async () => {
+      await stakingRouter.testing_addModuleId(1);
+
+      await expect(stakingRouter.finalizeUpgrade_v4()).to.be.revertedWithCustomError(stakingRouter, "AlreadyMigrated");
     });
 
     it("migrate all defined AccessControl role and skip undefined", async () => {

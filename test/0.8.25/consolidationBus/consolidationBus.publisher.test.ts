@@ -202,7 +202,7 @@ describe("ConsolidationBus.sol: publisher", () => {
 
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
-        .withArgs(0);
+        .withArgs(0, 0);
     });
 
     it("should revert if source equals target pubkey at any index", async () => {
@@ -214,7 +214,7 @@ describe("ConsolidationBus.sol: publisher", () => {
 
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
-        .withArgs(1);
+        .withArgs(1, 0);
     });
 
     it("should revert if any source in a multi-source group equals the target", async () => {
@@ -225,7 +225,7 @@ describe("ConsolidationBus.sol: publisher", () => {
 
       await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups))
         .to.be.revertedWithCustomError(consolidationBus, "SourceEqualsTarget")
-        .withArgs(0);
+        .withArgs(0, 1);
     });
 
     it("should allow re-adding batch after removal", async () => {

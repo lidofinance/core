@@ -125,7 +125,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         _setMaxTopUpPerBlockGwei(_maxTopUpPerBlockGwei);
 
         // migrate current modules to new storage
-        SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
+        SRLib._migrateStorage(MAX_EFFECTIVE_BALANCE_WC_TYPE_01, 3);
 
         /// @dev migrate OZ roles
         ///      Due to OZ 5.2 AccessControl uses ERC-7201 namespaced storage at different slots we should
@@ -498,6 +498,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
     function getAllNodeOperatorDigests(uint256 _stakingModuleId) external view returns (NodeOperatorDigest[] memory) {
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         return getNodeOperatorDigests(
             _stakingModuleId, 0, _getStakingModuleNodeOperatorsCount(_stakingModuleId.getIStakingModule())
         );
@@ -515,6 +516,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         view
         returns (NodeOperatorDigest[] memory)
     {
+        SRUtils._requireModuleIdExists(_stakingModuleId);
         return getNodeOperatorDigests(
             _stakingModuleId, _getStakingModuleNodeOperatorIds(_stakingModuleId.getIStakingModule(), _offset, _limit)
         );
@@ -534,9 +536,9 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     {
         SRUtils._requireModuleIdExists(_stakingModuleId);
         digests = new NodeOperatorDigest[](_nodeOperatorIds.length);
+        IStakingModule stakingModule = _stakingModuleId.getIStakingModule();
         for (uint256 i = 0; i < _nodeOperatorIds.length; ++i) {
             uint256 nodeOperatorId = _nodeOperatorIds[i];
-            IStakingModule stakingModule = _stakingModuleId.getIStakingModule();
 
             digests[i].id = nodeOperatorId;
             digests[i].isActive = _getStakingModuleNodeOperatorIsActive(stakingModule, nodeOperatorId);
@@ -553,7 +555,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         onlyRole(STAKING_MODULE_MANAGE_ROLE)
     {
         SRUtils._requireModuleIdExists(_stakingModuleId);
-        if (!SRLib._setModuleStatus(_stakingModuleId, _status)) revert StakingModuleStatusTheSame();
+        SRLib._setModuleStatus(_stakingModuleId, _status);
     }
 
     /// @notice Returns whether the staking module is stopped.
@@ -1163,10 +1165,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             summary.totalDepositedValidators,
             summary.depositableValidatorsCount
         ) = _stakingModule.getNodeOperatorSummary(_nodeOperatorId);
-    }
-
-    function _getAccountingOracle() internal view returns (address) {
-        return LIDO_LOCATOR.accountingOracle();
     }
 
     function _getTopUpGateway() internal view returns (address) {

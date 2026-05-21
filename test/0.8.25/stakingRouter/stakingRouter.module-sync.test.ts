@@ -287,6 +287,13 @@ describe("StakingRouter.sol:module-sync", () => {
           [0n, true, nodeOperatorSummary],
         ]);
       });
+
+      it("Reverts when staking module does not exist", async () => {
+        await expect(stakingRouter.getAllNodeOperatorDigests(moduleId + 1n)).to.be.revertedWithCustomError(
+          stakingRouter,
+          "StakingModuleUnregistered",
+        );
+      });
     });
 
     context("getNodeOperatorDigests (by offset)", () => {
@@ -294,6 +301,12 @@ describe("StakingRouter.sol:module-sync", () => {
         expect(await stakingRouter["getNodeOperatorDigests(uint256,uint256,uint256)"](moduleId, 0n, 1n)).to.deep.equal([
           [0n, true, nodeOperatorSummary],
         ]);
+      });
+
+      it("Reverts when staking module does not exist", async () => {
+        await expect(
+          stakingRouter["getNodeOperatorDigests(uint256,uint256,uint256)"](moduleId + 1n, 0n, 1n),
+        ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleUnregistered");
       });
     });
 

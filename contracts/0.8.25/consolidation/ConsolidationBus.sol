@@ -98,9 +98,10 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
 
     /**
      * @notice Thrown when source and target pubkeys are the same
-     * @param index Index of the invalid pair in the batch
+     * @param groupIndex Index of the invalid group in the batch
+     * @param sourceIndex Index of the invalid source key in the batch
      */
-    error SourceEqualsTarget(uint256 index);
+    error SourceEqualsTarget(uint256 groupIndex, uint256 sourceIndex);
 
     /**
      * @notice Thrown when target pubkey length is invalid
@@ -340,6 +341,11 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
         uint256 limit = _batchSize;
         if (totalCount > limit) revert BatchTooLarge(totalCount, limit);
 
+        bytes memory encodedBatch = abi.encode(groups);
+        bytes32 batchHash = keccak256(encodedBatch);
+
+        if (_pendingBatches[batchHash].publisher != address(0)) revert BatchAlreadyPending(batchHash);
+
         for (uint256 i = 0; i < groupsCount; ++i) {
             bytes calldata targetPubkey = groups[i].targetPubkey;
             if (targetPubkey.length != PUBKEY_LENGTH) {
@@ -355,16 +361,10 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
                 }
 
                 if (keccak256(sourcePubkey) == targetHash) {
-                    revert SourceEqualsTarget(i);
+                    revert SourceEqualsTarget(i, j);
                 }
             }
         }
-
-        bytes memory encodedBatch = abi.encode(groups);
-
-        bytes32 batchHash = keccak256(encodedBatch);
-
-        if (_pendingBatches[batchHash].publisher != address(0)) revert BatchAlreadyPending(batchHash);
 
         _pendingBatches[batchHash] = BatchInfo(msg.sender, uint64(block.timestamp));
 

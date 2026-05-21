@@ -51,10 +51,9 @@ library SRLib {
     /// @notice One-time migration from old storage layout to new RouterState struct.
     /// @dev Storage slot positions are computed inline for migration-only use.
     ///      After migration, this function can be removed.
-    function _migrateStorage(uint256 maxEBType1) public {
-        // skip migration if data already exists
+    function _migrateStorage(uint256 maxEBType1, uint256 expectedVersion) public {
         if (SRStorage.getModulesCount() > 0) {
-            return;
+            revert ISRBase.AlreadyMigrated();
         }
 
         // Old storage slot positions (computed inline for migration-only use)
@@ -65,6 +64,13 @@ library SRLib {
         bytes32 CONTRACT_VERSION_POS = keccak256("lido.Versioned.contractVersion");
         bytes32 STAKING_MODULES_MAPPING_POS = keccak256("lido.StakingRouter.stakingModules");
         bytes32 STAKING_MODULE_INDICES_POS = keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
+        bytes32 LEGACY_CONTRACT_VERSION_POSITION = keccak256("lido.Versioned.contractVersion");
+
+        uint256 actualVersion = LEGACY_CONTRACT_VERSION_POSITION.getUint256Slot().value;
+        if (actualVersion != expectedVersion) {
+            revert ISRBase.UnexpectedContractVersion(expectedVersion, actualVersion);
+        }
+        delete LEGACY_CONTRACT_VERSION_POSITION.getBytes32Slot().value;
 
         // cleanup old storage slots
         delete LIDO_POS.getBytes32Slot().value;
@@ -144,10 +150,6 @@ library SRLib {
             delete oldStakingModuleIndices[_moduleId];
         }
 
-        // cleanup old mapping storage slots
-        delete STAKING_MODULES_MAPPING_POS.getBytes32Slot().value;
-        delete STAKING_MODULE_INDICES_POS.getBytes32Slot().value;
-
         /// @dev use the same value for both CL balance and active balance at migration moment,
         /// next Oracle report will update the both values
         SRStorage.getRouterState().accounting =
@@ -190,7 +192,8 @@ library SRLib {
         if (bytes(_moduleName).length == 0 || bytes(_moduleName).length > SRUtils.MAX_STAKING_MODULE_NAME_LENGTH) {
             revert ISRBase.StakingModuleWrongName();
         }
-        if (SRStorage.getModulesCount() >= SRUtils.MAX_STAKING_MODULES_COUNT) {
+        uint256 modulesCount = SRStorage.getModulesCount();
+        if (modulesCount >= SRUtils.MAX_STAKING_MODULES_COUNT) {
             revert ISRBase.StakingModulesLimitExceeded();
         }
 
@@ -198,7 +201,6 @@ library SRLib {
 
         // Check for duplicate module address
         /// @dev due to small number of modules, we can afford to do this check on add
-        uint256 modulesCount = SRStorage.getModulesCount();
         for (uint256 i; i < modulesCount; ++i) {
             uint256 moduleId = SRStorage.getModuleIdAt(i);
             if (_moduleAddress == moduleId.getModuleState().config.moduleAddress) {
@@ -261,7 +263,9 @@ library SRLib {
         if (_minDepositBlockDistance == 0 || _minDepositBlockDistance > type(uint64).max) {
             revert ISRBase.InvalidMinDepositBlockDistance();
         }
-        if (_maxDepositsPerBlock > type(uint64).max) revert ISRBase.InvalidMaxDepositPerBlockValue();
+        if (_maxDepositsPerBlock == 0 || _maxDepositsPerBlock > type(uint64).max) {
+            revert ISRBase.InvalidMaxDepositPerBlockValue();
+        }
 
         // 1 SLOAD
         ModuleStateConfig memory stateConfig = _moduleId.getModuleState().config;
@@ -359,13 +363,13 @@ library SRLib {
 
     /// @dev module state helpers
 
-    function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public returns (bool isChanged) {
+    function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public {
         ModuleStateConfig storage stateConfig = _moduleId.getModuleState().config;
-        isChanged = stateConfig.status != _status;
-        if (isChanged) {
-            stateConfig.status = _status;
-            emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
+        if (stateConfig.status == _status) {
+            revert ISRBase.StakingModuleStatusTheSame();
         }
+        stateConfig.status = _status;
+        emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
     }
 
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.

@@ -74,7 +74,6 @@ contract AccountingOracle is BaseOracle {
     error AdminCannotBeZero();
     error SenderNotAllowed();
     error InvalidExitedValidatorsData();
-    error InvalidClBalancesData();
     error UnsupportedExtraDataFormat(uint256 format);
     error UnsupportedExtraDataType(uint256 itemIndex, uint256 dataType);
     error DeprecatedExtraDataType(uint256 itemIndex, uint256 dataType);

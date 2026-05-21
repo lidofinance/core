@@ -142,6 +142,15 @@ describe("StakingRouter.sol:module-management", () => {
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
     });
 
+    it("Reverts if the max deposits per block is zero", async () => {
+      await expect(
+        stakingRouter.addStakingModule(NAME, ADDRESS, {
+          ...stakingModuleConfig,
+          maxDepositsPerBlock: 0n,
+        }),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMaxDepositPerBlockValue");
+    });
+
     it("Reverts if the max number of staking modules is reached", async () => {
       const MAX_STAKING_MODULES_COUNT = await stakingRouter.MAX_STAKING_MODULES_COUNT();
 
@@ -337,6 +346,20 @@ describe("StakingRouter.sol:module-management", () => {
           0n,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidMinDepositBlockDistance");
+    });
+
+    it("Reverts if the new max deposits per block is zero", async () => {
+      await expect(
+        stakingRouter.updateStakingModule(
+          ID,
+          NEW_STAKE_SHARE_LIMIT,
+          NEW_PRIORITY_EXIT_SHARE_THRESHOLD,
+          NEW_MODULE_FEE,
+          NEW_TREASURY_FEE,
+          0n,
+          NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+        ),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMaxDepositPerBlockValue");
     });
 
     it("Reverts if the new deposit block distance is great then uint64 max", async () => {

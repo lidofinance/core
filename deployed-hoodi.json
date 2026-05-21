@@ -1156,12 +1156,12 @@
   "withdrawalVault": {
     "implementation": {
       "contract": "contracts/0.8.9/WithdrawalVault.sol",
-      "address": "0xB97e67CC20bd2970E30341c0ECc7497d8A5b7342",
+      "address": "0x6724DaD16f7b05157dF72783F99cA6B813742330",
       "constructorArgs": [
         "0x3508A952176b3c15387C97BE809eaffB1982176a",
         "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
         "0x6679090D92b08a2a686eF8614feECD8cDFE209db",
-        "0xce93710b849e0dC202AaC513837e05bEA9D7DdFD",
+        "0xC9991Bb865d025364BCbBd99f36e85889Fb68e69",
         "0x00000961Ef480Eb55e80D19ad83579A64c007002",
         "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
       ]
