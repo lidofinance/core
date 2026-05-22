@@ -242,25 +242,6 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     }
 
     /**
-     * @notice Checks if top-up is possible for a given staking module
-     * @param _stakingModuleId Id of the staking module
-     * @return True if top-up is possible, false otherwise
-     * @dev Checks: module exists, module is active, block distance passed, Lido can deposit, and withdrawal credentials are 0x02
-     */
-    function canTopUp(uint256 _stakingModuleId) external view returns (bool) {
-        if (isPaused()) return false;
-
-        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
-
-        if (!stakingRouter.canDeposit(_stakingModuleId)) return false;
-        if (!ILido(LOCATOR.lido()).canDeposit()) return false;
-        if (!_isBlockDistancePassed()) return false;
-
-        bytes32 wc = stakingRouter.getStakingModuleWithdrawalCredentials(_stakingModuleId);
-        return wc.isType2();
-    }
-
-    /**
      * @notice Returns the timestamp when last top up happened
      */
     function getLastTopUpTimestamp() external view returns (uint256) {
