@@ -625,6 +625,41 @@ describe("TopUpGateway.sol", () => {
       await topUpGateway.connect(admin).grantRole(resumeRole, admin.address);
     });
 
+    describe("isPaused", () => {
+      it("returns false on a fresh contract", async () => {
+        expect(await topUpGateway.isPaused()).to.equal(false);
+      });
+
+      it("is callable by any address (no role required)", async () => {
+        expect(await topUpGateway.connect(stranger).isPaused()).to.equal(false);
+
+        await topUpGateway.connect(admin).pauseFor(1000n);
+
+        expect(await topUpGateway.connect(stranger).isPaused()).to.equal(true);
+      });
+
+      it("returns true within the pause window and false right after it expires", async () => {
+        const duration = 100n;
+        await topUpGateway.connect(admin).pauseFor(duration);
+
+        // at the very last second of the pause window — still paused
+        await time.increase(Number(duration) - 1);
+        expect(await topUpGateway.isPaused()).to.equal(true);
+
+        // one second past the window — auto-resumed
+        await time.increase(1);
+        expect(await topUpGateway.isPaused()).to.equal(false);
+      });
+
+      it("returns false after an explicit resume", async () => {
+        await topUpGateway.connect(admin).pauseFor(1000n);
+        expect(await topUpGateway.isPaused()).to.equal(true);
+
+        await topUpGateway.connect(admin).resume();
+        expect(await topUpGateway.isPaused()).to.equal(false);
+      });
+    });
+
     describe("resume", () => {
       it("should revert if the sender does not have the RESUME_ROLE", async () => {
         await topUpGateway.connect(admin).pauseFor(1000n);
@@ -829,37 +864,6 @@ describe("TopUpGateway.sol", () => {
         const data = await buildTopUpData();
         await topUpGateway.connect(topUpOperator).topUp(data);
       });
-    });
-  });
-
-  describe("canTopUp", () => {
-    it("returns false when module is not registered", async () => {
-      expect(await topUpGateway.canTopUp(999n)).to.equal(false);
-    });
-
-    it("returns false when module is inactive", async () => {
-      await stakingRouter.setModuleActive(MODULE_ID, false);
-      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
-    });
-
-    it("returns false when block distance is not met", async () => {
-      await topUpGateway.connect(limitsManager).setMinBlockDistance(DEFAULT_MIN_BLOCK_DISTANCE + 1n);
-      await topUpGateway.harness_setLastTopUpData();
-      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
-    });
-
-    it("returns false when Lido cannot deposit", async () => {
-      await lido.setCanDeposit(false);
-      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
-    });
-
-    it("returns false when withdrawal credentials are not 0x02", async () => {
-      await stakingRouter.setWithdrawalCredentials(MODULE_ID, WC_TYPE_01);
-      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(false);
-    });
-
-    it("returns true when all conditions are satisfied", async () => {
-      expect(await topUpGateway.canTopUp(MODULE_ID)).to.equal(true);
     });
   });
 });

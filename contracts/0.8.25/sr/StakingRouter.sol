@@ -946,15 +946,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         bytes32 withdrawalCredentials = _getWithdrawalCredentialsWithType(stateConfig.withdrawalCredentialsType);
         address stakingModuleAddress = stateConfig.moduleAddress;
 
-        // Get depositable ether from Lido (similar to topUp)
         uint256 depositableEther = LIDO.getDepositableEther();
         uint256 stakingModuleDepositableEthAmount =
             _getModuleDepositAllocation(_stakingModuleId, depositableEther, false);
-        // Calculate max deposits count (capped by max and module capacity)
-        (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
         uint256 maxDepositsCount = Math.min(
-            Math.min(state.deposits.maxDepositsPerBlock, depositableValidatorsCount),
-            stakingModuleDepositableEthAmount / MAX_EFFECTIVE_BALANCE_WC_TYPE_01 // max possible initial deposits count
+            state.deposits.maxDepositsPerBlock,
+            stakingModuleDepositableEthAmount / MAX_EFFECTIVE_BALANCE_WC_TYPE_01
         );
 
         if (maxDepositsCount == 0) revert ZeroDeposits();
