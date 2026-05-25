@@ -568,14 +568,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      *        beyond the deposits reserve
      * @param depositsReserve Buffer portion available for CL deposits, protected from withdrawals demand.
      *        Resets on each oracle report, decreases via `withdrawDepositableEther()`
-     * @param withdrawalsReserve Buffer portion allocated to unfinalized withdrawals. Not depositable to CL.
+     * @param withdrawalReserve Buffer portion allocated to unfinalized withdrawals. Not depositable to CL.
      *        Zero when all withdrawal requests are finalized
      */
     struct BufferedEtherAllocation {
         uint256 total;
         uint256 unreserved;
         uint256 depositsReserve;
-        uint256 withdrawalsReserve;
+        uint256 withdrawalReserve;
     }
 
     /**
@@ -583,22 +583,22 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev Buffer is split by priority:
      *
      *      1. depositsReserve    - per-frame CL deposit allowance, filled first
-     *      2. withdrawalsReserve - covers unfinalized withdrawal requests
+     *      2. withdrawalReserve  - covers unfinalized withdrawal requests
      *      3. unreserved         - excess, available for additional CL deposits
      *
      *      ┌─────────── Total Buffered Ether ───────────┐
      *      ├────────────────────┬───────────────────────┼─────┬──────────────┐
      *      │●●●●●●●●●●●●●●●●●●●●│●●●●●●●●●●●●●●●●●●●●●●●●○○○○○│○○○○○○○○○○○○○○│
      *      ├────────────────────┼───────────────────────┼─────┼──────────────┤
-     *      └─ Deposits Reserve ─┼─ Withdrawals Reserve ─┘     ├─ Unreserved ─┘
+     *      └─ Deposits Reserve ─┼─ Withdrawal Reserve ─┘      ├─ Unreserved ─┘
      *                           └───── Unfinalized stETH ─────┘
      *
      *      ● - covered by Buffered Ether
      *      ○ - not covered by Buffered Ether
      *
      *      depositsReserve    = min(total, stored deposits reserve)
-     *      withdrawalsReserve = min(total - depositsReserve, unfinalizedStETH)
-     *      unreserved         = total - depositsReserve - withdrawalsReserve
+     *      withdrawalReserve  = min(total - depositsReserve, unfinalizedStETH)
+     *      unreserved         = total - depositsReserve - withdrawalReserve
      */
     function _getBufferedEtherAllocation() internal view returns (BufferedEtherAllocation allocation) {
         uint256 remaining = _getBufferedEther();
@@ -607,8 +607,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         allocation.depositsReserve = Math256.min(remaining, DEPOSITS_RESERVE_POSITION.getStorageUint256());
         remaining -= allocation.depositsReserve;
 
-        allocation.withdrawalsReserve = Math256.min(remaining, _withdrawalQueue().unfinalizedStETH());
-        remaining -= allocation.withdrawalsReserve;
+        allocation.withdrawalReserve = Math256.min(remaining, _withdrawalQueue().unfinalizedStETH());
+        remaining -= allocation.withdrawalReserve;
 
         allocation.unreserved = remaining;
     }
@@ -636,7 +636,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @return Amount reserved to satisfy unfinalized withdrawals
      */
     function getWithdrawalsReserve() external view returns (uint256) {
-        return _getBufferedEtherAllocation().withdrawalsReserve;
+        return _getBufferedEtherAllocation().withdrawalReserve;
     }
 
     /**
