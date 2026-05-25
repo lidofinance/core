@@ -52,7 +52,6 @@ contract AccountingOracle is BaseOracle {
     error LidoLocatorCannotBeZero();
     error AdminCannotBeZero();
     error LidoCannotBeZero();
-    error IncorrectOracleMigration(uint256 code);
     error SenderNotAllowed();
     error InvalidExitedValidatorsData();
     error UnsupportedExtraDataFormat(uint256 format);
