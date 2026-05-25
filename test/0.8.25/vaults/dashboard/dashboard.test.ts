@@ -1148,6 +1148,13 @@ describe("Dashboard.sol", () => {
         .withArgs(stranger, await dashboard.NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE());
     });
 
+    it("reverts when witnesses are empty", async () => {
+      await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG([])).to.be.revertedWithCustomError(
+        dashboard,
+        "ZeroArgument",
+      );
+    });
+
     it("proves unknown validators to PDG when policy is set to ALLOW_DEPOSIT_AND_PROVE", async () => {
       expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
 

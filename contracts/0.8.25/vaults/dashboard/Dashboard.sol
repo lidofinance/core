@@ -745,6 +745,8 @@ contract Dashboard is NodeOperatorFee {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRoleMemberOrAdmin(NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE) {
+        _requireNotZero(_witnesses.length);
+
         for (uint256 i = 0; i < _witnesses.length; i++) {
             VAULT_HUB.proveUnknownValidatorToPDG(address(_stakingVault()), _witnesses[i]);
         }
