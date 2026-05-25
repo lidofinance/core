@@ -146,18 +146,33 @@ contract Accounting {
 
     /// @dev reads the current state of the protocol to the memory
     function _snapshotPreReportState(Contracts memory _contracts, bool isSimulation) internal view returns (PreReportState memory pre) {
-        (pre.clValidatorsBalance, pre.clPendingBalance,, pre.depositedBalance) = LIDO.getBalanceStats();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
 
+        uint256 depositedSinceLastReport;
+        uint256 depositedForCurrentReport;
+        (pre.clValidatorsBalance, pre.clPendingBalance, depositedSinceLastReport, depositedForCurrentReport) = LIDO.getBalanceStats();
+
         if (isSimulation) {
             // for simulation we specifically fetch the current value, because during the refSlot `LastRefSlot` method
             // will return the previous refSlot value, but Oracle use simulation to gather the current refSlot info
             pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalize();
+
+            /// @dev Since the oracle report simulation is called directly on the refSlot itself, Lido's internal logic
+            ///      will not account for the refSlot switch — therefore, to get the correct deposits sum, we simply
+            ///      take the current value of all deposits without any adjustment.
+            /// @notice Note that calling simulateOracleReport on any slot other than the refSlot may produce incorrect
+            ///      values if deposits were made between the refSlot and the moment simulateOracleReport is called.
+            pre.depositedBalance = depositedSinceLastReport;
         } else {
             pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
+
+            /// @dev At the moment `handleOracleReport` is called, the refSlot switch has already occurred — therefore
+            ///      we use the adjusted deposits sum as of the reporting refSlot (i.e. excluding deposits made
+            ///      after the refSlot).
+            pre.depositedBalance = depositedForCurrentReport;
         }
     }
 
