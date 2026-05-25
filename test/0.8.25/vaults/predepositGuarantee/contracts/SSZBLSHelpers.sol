@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat, fls} from "contracts/common/lib/GIndex.sol";
+import {GIndex, pack, fls} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 

@@ -3,8 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat} from "contracts/common/lib/GIndex.sol";
-import {SSZ} from "contracts/common/lib/SSZ.sol";
+import {GIndex, pack} from "contracts/common/lib/GIndex.sol";
 
 import {SSZBLSHelpers} from "./SSZBLSHelpers.sol";
 
