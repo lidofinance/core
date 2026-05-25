@@ -421,6 +421,19 @@ describe("Lido.sol:externalShares", () => {
       expect(await lido.getCurrentStakeLimit()).to.equal(limit + amountToBurn);
     });
 
+    it("Caps static staking limit when burning external shares", async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 1n);
+
+      const maxStakeLimit = 10n;
+      await lido.setStakingLimit(maxStakeLimit, 0n);
+      expect(await lido.getCurrentStakeLimit()).to.equal(maxStakeLimit);
+
+      await lido.connect(vaultHubSigner).burnExternalShares(1n);
+
+      expect(await lido.getCurrentStakeLimit()).to.equal(maxStakeLimit);
+    });
+
     it("Burns shares correctly when staking is paused", async () => {
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
       await lido.setStakingLimit(ether("1500000"), ether("1000000"));

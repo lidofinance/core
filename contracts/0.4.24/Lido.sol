@@ -1365,6 +1365,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         /// NB: burning external shares must be allowed even when staking is paused to allow external ether withdrawals
         if (stakeLimitData.isStakingLimitSet() && !stakeLimitData.isStakingPaused()) {
             uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + _amount;
+            if (stakeLimitData.maxStakeLimitGrowthBlocks == 0 && newStakeLimit > stakeLimitData.maxStakeLimit) {
+                newStakeLimit = stakeLimitData.maxStakeLimit;
+            }
 
             STAKING_STATE_POSITION.setStorageStakeLimitStruct(stakeLimitData.updatePrevStakeLimit(newStakeLimit));
         }
