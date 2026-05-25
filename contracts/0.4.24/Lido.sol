@@ -144,9 +144,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
         0x096e465397f38e659238ccd5d5a2c434ced54a63fd8d694045bfb058ab9d8112;
 
-    /// @dev number of initial seed deposits (incrementing counter), ex. deposited validators
+    /// @dev number of validators deposited from the Lido contract side
+    ///      Slot key is kept unchanged to preserve the v4 storage layout.
     /// keccak256("lido.Lido.seedDepositsCount");
-    bytes32 internal constant SEED_DEPOSITS_COUNT_POSITION =
+    bytes32 internal constant DEPOSITED_VALIDATORS_COUNT_POSITION =
         0x3f0eaa2c0f16ff9775c078f3df30470d8c042317b24ad1defa240b1c3e10b238;
 
     /// @dev storage slot position of the staking rate limit structure
@@ -331,7 +332,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         /// @dev no pending balance at the moment of upgrade
         _setClValidatorsBalanceAndClPendingBalance(clValidatorsBalance, 0);
-        _setSeedDepositsCount(depositedValidators);
+        _setDepositedValidators(depositedValidators);
 
         // wipe out the slots
         CL_BALANCE_AND_CL_VALIDATORS_POSITION.setStorageUint256(0);
@@ -718,7 +719,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         view
         returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance)
     {
-        depositedValidators = _getSeedDepositsCount();
+        depositedValidators = _getDepositedValidators();
         (uint256 clValidatorsBalance, uint256 clPendingBalance) = _getClValidatorsBalanceAndClPendingBalance();
         /// @dev Since there is now no gap between the deposit on EL and its observation on the CL layer,
         ///      for compatibility, beaconValidators = depositedValidators.
@@ -848,12 +849,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @notice Withdraw `_amount` of buffer to Staking Router
      * @dev Can be called only by the Staking Router contract
-     * @notice _seedDepositsCount - DEPRECATED, it is used only for backward compatibility
+     * @notice The _depositedValidators argument is DEPRECATED, it is used only for backward compatibility
      *
      * @param _amount amount of ETH to withdraw
-     * @param _seedDepositsCount amount of seed deposits. In case of top up this value will be equal to 0
+     * @param _depositedValidators number of deposited validators. In case of top up this value will be equal to 0
      */
-    function withdrawDepositableEther(uint256 _amount, uint256 _seedDepositsCount) external {
+    function withdrawDepositableEther(uint256 _amount, uint256 _depositedValidators) external {
         require(canDeposit(), "CAN_NOT_DEPOSIT");
         IStakingRouter stakingRouter = _stakingRouter();
         _auth(address(stakingRouter));
@@ -861,11 +862,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         _spendDepositableEther(_amount);
 
-        if (_seedDepositsCount > 0) {
-            uint256 newSeedDepositsCount = _getSeedDepositsCount().add(_seedDepositsCount);
-            _setSeedDepositsCount(newSeedDepositsCount);
+        if (_depositedValidators > 0) {
+            uint256 newDepositedValidators = _getDepositedValidators().add(_depositedValidators);
+            _setDepositedValidators(newDepositedValidators);
             /// @dev event name is kept for backward compatibility
-            emit DepositedValidatorsChanged(newSeedDepositsCount);
+            emit DepositedValidatorsChanged(newDepositedValidators);
         }
 
         /// @dev forward the requested amount of ether to the StakingRouter
@@ -1512,12 +1513,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // helpers: [DEPRECATED] deposited validators count
 
-    function _getSeedDepositsCount() internal view returns (uint256) {
-        return SEED_DEPOSITS_COUNT_POSITION.getLowUint128();
+    function _getDepositedValidators() internal view returns (uint256) {
+        return DEPOSITED_VALIDATORS_COUNT_POSITION.getLowUint128();
     }
 
-    function _setSeedDepositsCount(uint256 _newSeedDepositsCount) internal {
-        SEED_DEPOSITS_COUNT_POSITION.setLowUint128(_newSeedDepositsCount);
+    function _setDepositedValidators(uint256 _newDepositedValidators) internal {
+        DEPOSITED_VALIDATORS_COUNT_POSITION.setLowUint128(_newDepositedValidators);
     }
 
     // helpers: CL validators and pending balances
