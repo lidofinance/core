@@ -1002,9 +1002,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _whenNotStopped();
         _auth(_accounting());
 
-        (uint256 depositedNextReport, uint256 curNonce) = _getDepositedNextReportAdjusted();
-        /// @dev just save adjusted depositedNextReport
-        _setDepositedNextReportAndLastDepositNonce(depositedNextReport, curNonce);
+        (uint256 depositedNextReport,) = _getDepositedNextReportAdjusted();
         /// @dev Since `depositedPostReport` accumulates all deposits, including those that occurred
         ///      after `refSlot` but before the report, we must retain only the amount not
         ///      reflected in the report
