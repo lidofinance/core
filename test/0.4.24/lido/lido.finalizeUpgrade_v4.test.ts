@@ -96,7 +96,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       expect((await lido.getBalanceStats()).clValidatorsBalanceAtLastReport).to.equal(clBalance);
       expect((await lido.getBalanceStats()).clPendingBalanceAtLastReport).to.equal(0);
       expect((await lido.getBalanceStats()).depositedSinceLastReport).to.equal(depositedBalance);
-      expect((await lido.getBalanceStats()).depositedForCurrentReport).to.equal(0);
+      expect((await lido.getBalanceStats()).depositedBeforeCurrentReportRefSlot).to.equal(0);
     });
   });
 });

@@ -730,7 +730,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @notice Returns current balance statistics
     /// @return clValidatorsBalanceAtLastReport Sum of validator's active balances in wei
     /// @return clPendingBalanceAtLastReport Sum of validator's pending deposits in wei
-    /// @return depositedSinceLastReport Deposits made since last oracle report
+    /// @return depositedSinceLastReport Total deposits made since the last oracle report, including deposits after the
+    ///         current frame refSlot that will be handled by the next report
+    /// @return depositedBeforeCurrentReportRefSlot Deposits made since the last oracle report and before the current
+    ///         frame refSlot, to be accounted in the current report
     function getBalanceStats()
         external
         view
@@ -738,15 +741,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport,
-            uint256 depositedForCurrentReport
+            uint256 depositedBeforeCurrentReportRefSlot
         )
     {
         (clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport) = _getClValidatorsBalanceAndClPendingBalance();
 
         depositedSinceLastReport = _getDepositedPostReport();
-        (depositedForCurrentReport,) = _getDepositedNextReportAdjusted();
+        uint256 depositedAfterCurrentReportRefSlot;
+        (depositedAfterCurrentReportRefSlot,) = _getDepositedNextReportAdjusted();
         /// @dev depositedNextReport is always less than depositedPostReport, so we can safely subtract
-        depositedForCurrentReport = depositedSinceLastReport - depositedForCurrentReport;
+        depositedBeforeCurrentReportRefSlot = depositedSinceLastReport - depositedAfterCurrentReportRefSlot;
     }
 
     /**

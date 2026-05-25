@@ -570,7 +570,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport,
-            uint256 depositedForCurrentReport
+            uint256 depositedBeforeCurrentReportRefSlot
         ) = ILidoUpgrade(g.lido).getBalanceStats();
 
         if (clValidatorsBalanceAtLastReport != initialBeaconBalance || clPendingBalanceAtLastReport != 0) {
@@ -579,7 +579,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         if (
             depositedSinceLastReport != (initialDepositedValidators - initialBeaconValidators) * 32 ether
-                || depositedForCurrentReport != 0
+                || depositedBeforeCurrentReportRefSlot != 0
         ) {
             revert LidoMigrationIncorrectDepositedSinceLastReport();
         }

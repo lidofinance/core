@@ -33,13 +33,13 @@ contract Lido__MockForSanityChecker {
             uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport,
-            uint256 depositedForCurrentReport
+            uint256 depositedBeforeCurrentReportRefSlot
         )
     {
         clValidatorsBalanceAtLastReport = clValidatorsBalance;
         clPendingBalanceAtLastReport = clPendingBalance;
         depositedSinceLastReport = depositedLastReport;
-        depositedForCurrentReport = depositedCurrentReport;
+        depositedBeforeCurrentReportRefSlot = depositedCurrentReport;
     }
 
     function getContractVersion() external view returns (uint256) {

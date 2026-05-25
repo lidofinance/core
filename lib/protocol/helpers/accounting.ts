@@ -149,10 +149,10 @@ export const report = async (
   const {
     clValidatorsBalanceAtLastReport,
     clPendingBalanceAtLastReport,
-    depositedForCurrentReport,
+    depositedBeforeCurrentReportRefSlot,
     depositedSinceLastReport,
   } = await lido.getBalanceStats();
-  const deposited = waitNextReportTime ? depositedForCurrentReport : depositedSinceLastReport;
+  const deposited = waitNextReportTime ? depositedBeforeCurrentReportRefSlot : depositedSinceLastReport;
   clDiff = clDiff ?? deposited;
   const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 

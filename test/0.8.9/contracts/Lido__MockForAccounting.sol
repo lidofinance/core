@@ -68,13 +68,13 @@ contract Lido__MockForAccounting {
             uint256 clValidatorsBalanceAtLastReport,
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport,
-            uint256 depositedForCurrentReport
+            uint256 depositedBeforeCurrentReportRefSlot
         )
     {
         clValidatorsBalanceAtLastReport = reportClValidatorsBalance;
         clPendingBalanceAtLastReport = reportClPendingBalance;
         depositedSinceLastReport = depositedLastReport;
-        depositedForCurrentReport = depositedCurrentReport;
+        depositedBeforeCurrentReportRefSlot = depositedCurrentReport;
     }
 
     function getTotalPooledEther() external pure returns (uint256) {
