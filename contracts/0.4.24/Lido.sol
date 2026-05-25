@@ -710,7 +710,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev DEPRECATED: Use getBalanceStats() for new integrations
      * @notice Get the key values related to the Consensus Layer side of the contract.
      * @return depositedValidators - number of deposited validators from Lido contract side
-     * @return beaconValidators - number of Lido validators visible on Consensus Layer, reported by oracle
+     * @return beaconValidators - deprecated compatibility alias for depositedValidators, not a separate
+     *      Consensus Layer validator count reported by oracle
      * @return beaconBalance - total amount of ether on the Consensus Layer side (sum of all the balances of Lido validators)
      */
     function getBeaconStat()
