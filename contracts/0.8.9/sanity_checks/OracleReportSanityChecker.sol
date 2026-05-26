@@ -541,7 +541,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // Lido's deposit tracker will expose them as deposits in the first post-migration
         // report, and the negative rebase window adds report deposits to the previous CL
         // balance. Including them here would count the same deposits twice.
-        (uint256 migrationCLBalance) = ILido(lidoAddr).getBalanceStats();
+        (uint256 migrationCLBalance,,,) = ILido(lidoAddr).getBalanceStats();
         uint256 migrationCLWithdrawals = LIDO_LOCATOR.withdrawalVault().balance;
         uint256 postWithdrawalsMigrationCLBalance = migrationCLBalance - migrationCLWithdrawals;
         // Use the current vault balance as the last post-transfer balance.
