@@ -13,6 +13,8 @@ import { setSingleGuardian } from "lib/protocol/helpers/dsm";
 
 import { Snapshot } from "test/suite";
 
+const DSM_VERSION = 4;
+
 describe("Integration: DSM pause deposits", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
@@ -79,7 +81,12 @@ describe("Integration: DSM pause deposits", () => {
     const guardianSigner = await impersonate(guardian, ether("1"));
 
     const blockNumber = await time.latestBlock();
-    await pauseDeposits(guardianSigner, BigInt(blockNumber), { r: ZeroHash, vs: ZeroHash }, guardian);
+    await pauseDeposits(
+      guardianSigner,
+      BigInt(blockNumber),
+      { r: ZeroHash, vs: ZeroHash, contractVersion: DSM_VERSION },
+      guardian,
+    );
     await ownerUnpauseDeposits();
   });
 
@@ -93,7 +100,7 @@ describe("Integration: DSM pause deposits", () => {
 
     // Generate signature
     const blockNumber = await time.latestBlock();
-    const pauseMessage = new DSMPauseMessage(blockNumber);
+    const pauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
     const sig = await pauseMessage.sign(guardianPrivateKey);
 
     // Pause and unpause
@@ -119,6 +126,7 @@ describe("Integration: DSM pause deposits", () => {
       dsm.connect(guardianSigner).pauseDeposits(expiredBlockNumber, {
         r: ZeroHash,
         vs: ZeroHash,
+        contractVersion: DSM_VERSION,
       }),
     ).to.be.revertedWithCustomError(dsm, "PauseIntentExpired");
   });
@@ -131,13 +139,14 @@ describe("Integration: DSM pause deposits", () => {
       dsm.connect(stranger).pauseDeposits(await time.latestBlock(), {
         r: ZeroHash,
         vs: ZeroHash,
+        contractVersion: DSM_VERSION,
       }),
     ).to.be.revertedWith("ECDSA: invalid signature");
 
     // Try with non-guardian signature
     const blockNumber = await time.latestBlock();
     const nonGuardianPrivateKey = "0x" + "1".repeat(64);
-    const pauseMessage = new DSMPauseMessage(blockNumber);
+    const pauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
     const sig = pauseMessage.sign(nonGuardianPrivateKey);
 
     await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(

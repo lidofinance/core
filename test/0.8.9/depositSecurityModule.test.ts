@@ -36,6 +36,7 @@ const PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS = 10;
 const MAX_OPERATORS_PER_UNVETTING = 20;
 const MODULE_NONCE = 12;
 const DEPOSIT_ROOT = "0xd151867719c94ad8458feaf491809f9bc8096c702a72747403ecaac30c179137";
+const DSM_VERSION = 4;
 
 // status enum
 const StakingModuleStatus = {
@@ -128,7 +129,7 @@ describe("DepositSecurityModule.sol", () => {
     const [depositCalldata, ...signingArgs] = await getDepositArgs(overridingArgs);
 
     const sortedGuardianSignatures = sortedGuardianWallets.map((guardian) => {
-      const validAttestMessage = new DSMAttestMessage(...signingArgs);
+      const validAttestMessage = new DSMAttestMessage(DSM_VERSION, ...signingArgs);
       return validAttestMessage.sign(guardian.privateKey);
     });
 
@@ -227,7 +228,7 @@ describe("DepositSecurityModule.sol", () => {
 
   context("Constants", () => {
     it("Returns the VERSION variable", async () => {
-      expect(await dsm.VERSION()).to.equal(3);
+      expect(await dsm.VERSION()).to.equal(DSM_VERSION);
     });
 
     it("Returns the ATTEST_MESSAGE_PREFIX variable", async () => {
@@ -666,14 +667,29 @@ describe("DepositSecurityModule.sol", () => {
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
+        contractVersion: DSM_VERSION,
       };
 
       await expect(dsm.pauseDeposits(blockNumber, sig)).to.be.revertedWith("ECDSA: invalid signature");
     });
 
+    it("Reverts if signature contract version is unexpected", async () => {
+      const blockNumber = await time.latestBlock();
+
+      const sig: DepositSecurityModule.SignatureStruct = {
+        r: encodeBytes32String(""),
+        vs: encodeBytes32String(""),
+        contractVersion: DSM_VERSION - 1,
+      };
+
+      await expect(dsm.connect(guardian1).pauseDeposits(blockNumber, sig))
+        .to.be.revertedWithCustomError(dsm, "UnexpectedContractVersion")
+        .withArgs(DSM_VERSION, DSM_VERSION - 1);
+    });
+
     it("Reverts if signature is not guardian", async () => {
       const blockNumber = await time.latestBlock();
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
 
       const sig = validPauseMessage.sign(guardian3.privateKey);
 
@@ -682,7 +698,7 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Reverts if called by an anon submitting an unrelated sig", async () => {
       const blockNumber = await time.latestBlock();
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
 
       const sig = validPauseMessage.sign(guardian3.privateKey);
 
@@ -695,7 +711,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Reverts if called with an expired `blockNumber` by a guardian", async () => {
       const blockNumber = await time.latestBlock();
       const staleBlockNumber = blockNumber - PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
 
       const sig = validPauseMessage.sign(guardian1.privateKey);
 
@@ -709,7 +725,7 @@ describe("DepositSecurityModule.sol", () => {
       const blockNumber = await time.latestBlock();
       const staleBlockNumber = blockNumber - PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
 
-      const stalePauseMessage = new DSMPauseMessage(staleBlockNumber);
+      const stalePauseMessage = new DSMPauseMessage(DSM_VERSION, staleBlockNumber);
       const sig = stalePauseMessage.sign(guardian1.privateKey);
 
       await expect(dsm.connect(stranger).pauseDeposits(staleBlockNumber, sig)).to.be.revertedWithCustomError(
@@ -724,6 +740,7 @@ describe("DepositSecurityModule.sol", () => {
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
+        contractVersion: DSM_VERSION,
       };
 
       await expect(dsm.connect(guardian1).pauseDeposits(futureBlockNumber, sig)).to.be.revertedWithPanic(
@@ -734,7 +751,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Reverts if called with a future `blockNumber` by an anon submitting a guardian's sig", async () => {
       const futureBlockNumber = (await time.latestBlock()) + 100;
 
-      const futurePauseMessage = new DSMPauseMessage(futureBlockNumber);
+      const futurePauseMessage = new DSMPauseMessage(DSM_VERSION, futureBlockNumber);
       const sig = futurePauseMessage.sign(guardian1.privateKey);
 
       await expect(dsm.connect(stranger).pauseDeposits(futureBlockNumber, sig)).to.be.revertedWithPanic(
@@ -747,6 +764,7 @@ describe("DepositSecurityModule.sol", () => {
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
+        contractVersion: DSM_VERSION,
       };
 
       const tx = await dsm.connect(guardian1).pauseDeposits(blockNumber, sig);
@@ -757,7 +775,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Pause if called by anon submitting sig of guardian", async () => {
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -768,7 +786,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Do not pause and emits events if was paused before", async () => {
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx1 = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -789,7 +807,7 @@ describe("DepositSecurityModule.sol", () => {
 
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(blockNumber);
+      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -857,6 +875,7 @@ describe("DepositSecurityModule.sol", () => {
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
+        contractVersion: DSM_VERSION,
       };
 
       await dsm.connect(guardian1).pauseDeposits(blockNumber, sig);
@@ -1036,6 +1055,21 @@ describe("DepositSecurityModule.sol", () => {
         await expect(deposit([guardian2])).to.be.revertedWithCustomError(dsm, "InvalidSignature");
       });
 
+      it("Reverts if signature contract version is unexpected", async () => {
+        await dsm.addGuardian(guardian1, 1);
+        expect(await dsm.getGuardians()).to.deep.equal([guardian1.address]);
+        expect(await dsm.getGuardians()).to.have.length(1);
+        expect(await dsm.getGuardianQuorum()).to.equal(1);
+
+        const [depositCalldata, ...signingArgs] = await getDepositArgs();
+        const attestMessage = new DSMAttestMessage(DSM_VERSION - 1, ...signingArgs);
+        const sig = attestMessage.sign(guardian1.privateKey);
+
+        await expect(dsm.depositBufferedEther(...signingArgs, depositCalldata, [sig]))
+          .to.be.revertedWithCustomError(dsm, "UnexpectedContractVersion")
+          .withArgs(DSM_VERSION, DSM_VERSION - 1);
+      });
+
       it("Reverts if deposit contract root changed", async () => {
         const depositRootBefore = await depositContract.get_deposit_root();
         const newDepositRoot = "0x9daddc4daa5915981fd9f1bcc367a2be1389b017d5c24a58d44249a5dbb60289";
@@ -1162,6 +1196,7 @@ describe("DepositSecurityModule.sol", () => {
         await dsm.connect(guardian1).pauseDeposits(blockNumber, {
           r: encodeBytes32String(""),
           vs: encodeBytes32String(""),
+          contractVersion: DSM_VERSION,
         });
         expect(await dsm.isDepositsPaused()).to.equal(true);
 
@@ -1294,6 +1329,7 @@ describe("DepositSecurityModule.sol", () => {
     const invalidSig: DepositSecurityModule.SignatureStruct = {
       r: encodeBytes32String(""),
       vs: encodeBytes32String(""),
+      contractVersion: DSM_VERSION,
     };
 
     type UnvetArgs = {
@@ -1323,7 +1359,7 @@ describe("DepositSecurityModule.sol", () => {
 
     async function getUnvetSignature(from: Wallet, overridingArgs?: UnvetArgs) {
       const args = await getUnvetArgs(overridingArgs);
-      const validUnvetMessage = new DSMUnvetMessage(...args);
+      const validUnvetMessage = new DSMUnvetMessage(DSM_VERSION, ...args);
       return validUnvetMessage.sign(from.privateKey);
     }
 
@@ -1352,6 +1388,20 @@ describe("DepositSecurityModule.sol", () => {
         dsm,
         "ModuleNonceChanged",
       );
+    });
+
+    it("Reverts if signature contract version is unexpected", async () => {
+      const args = await getUnvetArgs();
+
+      await expect(
+        dsm.connect(guardian1).unvetSigningKeys(...args, {
+          r: encodeBytes32String(""),
+          vs: encodeBytes32String(""),
+          contractVersion: DSM_VERSION - 1,
+        }),
+      )
+        .to.be.revertedWithCustomError(dsm, "UnexpectedContractVersion")
+        .withArgs(DSM_VERSION, DSM_VERSION - 1);
     });
 
     it("Reverts if `nodeOperatorIds` is not a multiple of 8 bytes", async () => {
