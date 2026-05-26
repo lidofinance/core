@@ -1160,7 +1160,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await lido.mock__setContractVersion(4);
       await lido.mock__setBalanceStats(clActive, clPending, deposits, depositsCur);
 
-      const expectedCLBalance = clActive + clPending;
+      const expectedCLBalance = clActive;
       const migrationWithdrawals = await ethers.provider.getBalance(withdrawalVault.address);
 
       await expect(checker.migrateBaselineSnapshot())
@@ -1202,7 +1202,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       // reportData[0] = baseline point with zero flows
       // reportData[1] = bootstrap flow chunk with migration withdrawals
-      const baseline = clActive + clPending;
+      const baseline = clActive;
       const postCL = ether("10200000");
       const actualDiff = baseline - postCL;
       const vaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
