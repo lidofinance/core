@@ -35,6 +35,7 @@ export {
   norSdvtEnsureOperators,
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
+  norSdvtAddSigningKey,
   norSdvtSetOperatorStakingLimit,
 } from "./nor-sdvt";
 export { ensurePredepositGuaranteeUnpaused } from "./pdg";

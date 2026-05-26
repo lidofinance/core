@@ -16,6 +16,7 @@ export interface ExitRequest {
   nodeOpId: number;
   moduleId: number;
   valIndex: number;
+  keyIndex?: number;
 }
 
 export const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, pubkey }: ExitRequest) => {
@@ -30,6 +31,37 @@ export const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
 
 export const encodeExitRequestsDataListWithFormat = (requests: ExitRequest[]) => {
   const encodedExitRequests = { data: encodeExitRequestsDataList(requests), dataFormat: 1n };
+
+  const encodedExitRequestsHash = keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      ["bytes", "uint256"],
+      [encodedExitRequests.data, encodedExitRequests.dataFormat],
+    ),
+  );
+
+  return { encodedExitRequests, encodedExitRequestsHash };
+};
+
+// DATA_FORMAT_LIST_WITH_KEY_INDEX (=2): each request additionally carries an 8-byte keyIndex
+// between valIndex and the pubkey. This is the only format accepted by submitExitRequestsData.
+export const encodeExitRequestHexV2 = ({ moduleId, nodeOpId, valIndex, keyIndex, pubkey }: ExitRequest) => {
+  const pubkeyHex = de0x(pubkey);
+  expect(pubkeyHex.length).to.equal(48 * 2);
+  return (
+    numberToHex(moduleId, 3) +
+    numberToHex(nodeOpId, 5) +
+    numberToHex(valIndex, 8) +
+    numberToHex(keyIndex ?? 0, 8) +
+    pubkeyHex
+  );
+};
+
+export const encodeExitRequestsDataListV2 = (requests: ExitRequest[]) => {
+  return "0x" + requests.map(encodeExitRequestHexV2).join("");
+};
+
+export const encodeExitRequestsDataListWithFormatV2 = (requests: ExitRequest[]) => {
+  const encodedExitRequests = { data: encodeExitRequestsDataListV2(requests), dataFormat: 2n };
 
   const encodedExitRequestsHash = keccak256(
     ethers.AbiCoder.defaultAbiCoder().encode(

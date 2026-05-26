@@ -60,8 +60,8 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     }
 
     // Expose internal function for unit testing
-    function calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat) external view returns (uint256) {
-        return _calculateTotalExitBalanceEth(data, dataFormat);
+    function calculateTotalExitBalanceEth(bytes calldata data) external view returns (uint256) {
+        return _calculateTotalExitBalanceEth(data);
     }
 
     /// @notice Expose base timestamp calculation (without consensus override) for coverage
@@ -78,8 +78,8 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         return _getValidatorData(data, dataFormat, index);
     }
 
-    /// @notice Expose internal dispatcher for direct branch coverage
-    function callProcessExitRequestsList(bytes calldata data, uint256 dataFormat) external {
-        _processExitRequestsList(data, dataFormat);
+    /// @notice Expose internal exit requests processor for direct branch coverage
+    function callProcessExitRequestsList(bytes calldata data) external {
+        _processExitRequestsList(data);
     }
 }

@@ -11,7 +11,7 @@ import {
 
 import { de0x, numberToHex } from "lib";
 
-import { DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO } from "test/deploy";
+import { deployVEBO } from "test/deploy";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -42,16 +42,10 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
     nodeOpId: number;
     valIndex: number;
     valPubkey: string;
-    keyIndex?: number; // Optional for format 2
+    keyIndex?: number;
   }
 
-  const encodeExitRequestHexV1 = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    expect(pubkeyHex.length).to.equal(48 * 2);
-    return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
-  };
-
-  const encodeExitRequestHexV2 = ({ moduleId, nodeOpId, valIndex, keyIndex, valPubkey }: ExitRequest) => {
+  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, keyIndex, valPubkey }: ExitRequest) => {
     const pubkeyHex = de0x(valPubkey);
     expect(pubkeyHex.length).to.equal(48 * 2);
     return (
@@ -63,9 +57,8 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
     );
   };
 
-  const encodeExitRequestsDataList = (requests: ExitRequest[], dataFormat: number) => {
-    const encoder = dataFormat === DATA_FORMAT_LIST ? encodeExitRequestHexV1 : encodeExitRequestHexV2;
-    return "0x" + requests.map(encoder).join("");
+  const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
+    return "0x" + requests.map(encodeExitRequestHex).join("");
   };
 
   before(async () => {
@@ -79,175 +72,98 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
   });
 
   describe("_calculateTotalExitBalanceEth", () => {
-    describe("Format 1 (DATA_FORMAT_LIST)", () => {
-      it("should calculate balance for single legacy validator (32 ETH)", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
+    it("should calculate balance for single legacy validator (32 ETH)", async () => {
+      const requests: ExitRequest[] = [
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 5, valPubkey: PUBKEYS[0] },
+      ];
+      const data = encodeExitRequestsDataList(requests);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
+      const totalBalance = await oracle.calculateTotalExitBalanceEth(data);
 
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
-      });
-
-      it("should calculate balance for single MaxEB validator (2048 ETH)", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
-
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
-
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
-      });
-
-      it("should calculate balance for multiple legacy validators", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, valPubkey: PUBKEYS[1] },
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, valPubkey: PUBKEYS[2] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
-
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
-
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 3n);
-      });
-
-      it("should calculate balance for multiple MaxEB validators", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-          { moduleId: MAXEB_MODULE_ID_2, nodeOpId: 2, valIndex: 20, valPubkey: PUBKEYS[1] },
-          { moduleId: MAXEB_MODULE_ID_3, nodeOpId: 3, valIndex: 30, valPubkey: PUBKEYS[2] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
-
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
-
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH * 3n);
-      });
-
-      it("should calculate balance for mixed module types", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 2, valIndex: 20, valPubkey: PUBKEYS[1] },
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, valPubkey: PUBKEYS[2] },
-          { moduleId: MAXEB_MODULE_ID_2, nodeOpId: 3, valIndex: 30, valPubkey: PUBKEYS[3] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
-
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
-
-        const expected =
-          LEGACY_MODULE_MAX_BALANCE_ETH * 2n + // 2 legacy validators
-          MAXEB_MODULE_MAX_BALANCE_ETH * 2n; // 2 MaxEB validators
-        expect(totalBalance).to.equal(expected);
-      });
-
-      it("should return zero for empty data", async () => {
-        const data = "0x";
-
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
-
-        expect(totalBalance).to.equal(0n);
-      });
+      expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
     });
 
-    describe("Format 2 (DATA_FORMAT_LIST_WITH_KEY_INDEX)", () => {
-      it("should calculate balance for single legacy validator (32 ETH)", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 5, valPubkey: PUBKEYS[0] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+    it("should calculate balance for single MaxEB validator (2048 ETH)", async () => {
+      const requests: ExitRequest[] = [
+        { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 1, valIndex: 10, keyIndex: 7, valPubkey: PUBKEYS[0] },
+      ];
+      const data = encodeExitRequestsDataList(requests);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      const totalBalance = await oracle.calculateTotalExitBalanceEth(data);
 
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
-      });
+      expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
+    });
 
-      it("should calculate balance for single MaxEB validator (2048 ETH)", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 1, valIndex: 10, keyIndex: 7, valPubkey: PUBKEYS[0] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+    it("should calculate balance for multiple legacy validators", async () => {
+      const requests: ExitRequest[] = [
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, keyIndex: 3, valPubkey: PUBKEYS[2] },
+      ];
+      const data = encodeExitRequestsDataList(requests);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      const totalBalance = await oracle.calculateTotalExitBalanceEth(data);
 
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
-      });
+      expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 3n);
+    });
 
-      it("should calculate balance for multiple legacy validators", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 12, keyIndex: 3, valPubkey: PUBKEYS[2] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+    it("should calculate balance for multiple MaxEB validators", async () => {
+      const requests: ExitRequest[] = [
+        { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 1, valIndex: 10, keyIndex: 10, valPubkey: PUBKEYS[0] },
+        { moduleId: MAXEB_MODULE_ID_2, nodeOpId: 2, valIndex: 20, keyIndex: 20, valPubkey: PUBKEYS[1] },
+        { moduleId: MAXEB_MODULE_ID_3, nodeOpId: 3, valIndex: 30, keyIndex: 30, valPubkey: PUBKEYS[2] },
+      ];
+      const data = encodeExitRequestsDataList(requests);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      const totalBalance = await oracle.calculateTotalExitBalanceEth(data);
 
-        expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 3n);
-      });
+      expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH * 3n);
+    });
 
-      it("should calculate balance for multiple MaxEB validators", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 1, valIndex: 10, keyIndex: 10, valPubkey: PUBKEYS[0] },
-          { moduleId: MAXEB_MODULE_ID_2, nodeOpId: 2, valIndex: 20, keyIndex: 20, valPubkey: PUBKEYS[1] },
-          { moduleId: MAXEB_MODULE_ID_3, nodeOpId: 3, valIndex: 30, keyIndex: 30, valPubkey: PUBKEYS[2] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+    it("should calculate balance for mixed module types", async () => {
+      const requests: ExitRequest[] = [
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
+        { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 2, valIndex: 20, keyIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 3, valPubkey: PUBKEYS[2] },
+        { moduleId: MAXEB_MODULE_ID_2, nodeOpId: 3, valIndex: 30, keyIndex: 4, valPubkey: PUBKEYS[3] },
+      ];
+      const data = encodeExitRequestsDataList(requests);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      const totalBalance = await oracle.calculateTotalExitBalanceEth(data);
 
-        expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH * 3n);
-      });
+      const expected =
+        LEGACY_MODULE_MAX_BALANCE_ETH * 2n + // 2 legacy validators
+        MAXEB_MODULE_MAX_BALANCE_ETH * 2n; // 2 MaxEB validators
+      expect(totalBalance).to.equal(expected);
+    });
 
-      it("should calculate balance for mixed module types", async () => {
-        const requests: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
-          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 2, valIndex: 20, keyIndex: 2, valPubkey: PUBKEYS[1] },
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 3, valPubkey: PUBKEYS[2] },
-          { moduleId: MAXEB_MODULE_ID_2, nodeOpId: 3, valIndex: 30, keyIndex: 4, valPubkey: PUBKEYS[3] },
-        ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+    it("should return zero for empty data", async () => {
+      const data = "0x";
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      const totalBalance = await oracle.calculateTotalExitBalanceEth(data);
 
-        const expected =
-          LEGACY_MODULE_MAX_BALANCE_ETH * 2n + // 2 legacy validators
-          MAXEB_MODULE_MAX_BALANCE_ETH * 2n; // 2 MaxEB validators
-        expect(totalBalance).to.equal(expected);
-      });
+      expect(totalBalance).to.equal(0n);
+    });
 
-      it("should return zero for empty data", async () => {
-        const data = "0x";
+    it("should ignore keyIndex when calculating balance", async () => {
+      // Same module, different keyIndexes should result in same total balance
+      const requests1: ExitRequest[] = [
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
+      ];
+      const requests2: ExitRequest[] = [
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 100, valPubkey: PUBKEYS[0] },
+        { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 200, valPubkey: PUBKEYS[1] },
+      ];
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+      const data1 = encodeExitRequestsDataList(requests1);
+      const data2 = encodeExitRequestsDataList(requests2);
 
-        expect(totalBalance).to.equal(0n);
-      });
+      const totalBalance1 = await oracle.calculateTotalExitBalanceEth(data1);
+      const totalBalance2 = await oracle.calculateTotalExitBalanceEth(data2);
 
-      it("should ignore keyIndex when calculating balance", async () => {
-        // Same module, different keyIndexes should result in same total balance
-        const requests1: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 2, valPubkey: PUBKEYS[1] },
-        ];
-        const requests2: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 100, valPubkey: PUBKEYS[0] },
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 11, keyIndex: 200, valPubkey: PUBKEYS[1] },
-        ];
-
-        const data1 = encodeExitRequestsDataList(requests1, DATA_FORMAT_LIST_WITH_KEY_INDEX);
-        const data2 = encodeExitRequestsDataList(requests2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
-
-        const totalBalance1 = await oracle.calculateTotalExitBalanceEth(data1, DATA_FORMAT_LIST_WITH_KEY_INDEX);
-        const totalBalance2 = await oracle.calculateTotalExitBalanceEth(data2, DATA_FORMAT_LIST_WITH_KEY_INDEX);
-
-        expect(totalBalance1).to.equal(totalBalance2);
-        expect(totalBalance1).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 2n);
-      });
+      expect(totalBalance1).to.equal(totalBalance2);
+      expect(totalBalance1).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 2n);
     });
 
     describe("Edge cases", () => {
@@ -258,12 +174,13 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
             moduleId: LEGACY_MODULE_ID,
             nodeOpId: 1,
             valIndex: i,
+            keyIndex: i,
             valPubkey: PUBKEYS[i % PUBKEYS.length],
           });
         }
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
+        const data = encodeExitRequestsDataList(requests);
 
-        const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
+        const totalBalance = await oracle.calculateTotalExitBalanceEth(data);
 
         expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH * 100n);
       });
@@ -274,10 +191,12 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         // Configure module 999 as MaxEB (0x02)
         await localRouter.setStakingModuleWithdrawalCredentialsType(999, 0x02);
 
-        const requests: ExitRequest[] = [{ moduleId: 999, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
+        const requests: ExitRequest[] = [
+          { moduleId: 999, nodeOpId: 1, valIndex: 10, keyIndex: 0, valPubkey: PUBKEYS[0] },
+        ];
+        const data = encodeExitRequestsDataList(requests);
 
-        const totalBalance = await newOracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
+        const totalBalance = await newOracle.calculateTotalExitBalanceEth(data);
         expect(totalBalance).to.equal(MAXEB_MODULE_MAX_BALANCE_ETH);
       });
 
@@ -287,10 +206,12 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         // Configure module 888 as Legacy (0x01)
         await localRouter.setStakingModuleWithdrawalCredentialsType(888, 0x01);
 
-        const requests: ExitRequest[] = [{ moduleId: 888, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
+        const requests: ExitRequest[] = [
+          { moduleId: 888, nodeOpId: 1, valIndex: 10, keyIndex: 0, valPubkey: PUBKEYS[0] },
+        ];
+        const data = encodeExitRequestsDataList(requests);
 
-        const totalBalance = await newOracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST);
+        const totalBalance = await newOracle.calculateTotalExitBalanceEth(data);
         expect(totalBalance).to.equal(LEGACY_MODULE_MAX_BALANCE_ETH);
       });
 
@@ -300,22 +221,24 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         await sanityChecker.setMaxEffectiveBalanceWeightWCType02(4_096n);
 
         const requests: ExitRequest[] = [
-          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
-          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 2, valIndex: 20, valPubkey: PUBKEYS[1] },
+          { moduleId: LEGACY_MODULE_ID, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
+          { moduleId: MAXEB_MODULE_ID_1, nodeOpId: 2, valIndex: 20, keyIndex: 2, valPubkey: PUBKEYS[1] },
         ];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
+        const data = encodeExitRequestsDataList(requests);
 
         expect(await oracle.MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01()).to.equal(40n);
         expect(await oracle.MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02()).to.equal(4_096n);
-        expect(await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST)).to.equal(4_136n);
+        expect(await oracle.calculateTotalExitBalanceEth(data)).to.equal(4_136n);
       });
 
       it("reverts for unconfigured modules", async () => {
         // Module 777 is not configured in the router
-        const requests: ExitRequest[] = [{ moduleId: 777, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
-        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
+        const requests: ExitRequest[] = [
+          { moduleId: 777, nodeOpId: 1, valIndex: 10, keyIndex: 0, valPubkey: PUBKEYS[0] },
+        ];
+        const data = encodeExitRequestsDataList(requests);
 
-        await expect(oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST)).to.be.revertedWithCustomError(
+        await expect(oracle.calculateTotalExitBalanceEth(data)).to.be.revertedWithCustomError(
           stakingRouter,
           "StakingModuleUnregistered",
         );

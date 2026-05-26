@@ -8,7 +8,7 @@ import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-ty
 
 import { de0x, numberToHex } from "lib";
 
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
+import { DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO, makeMockPubkey } from "test/deploy";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers
@@ -21,7 +21,8 @@ const EXIT = [
     moduleId: 1,
     nodeOpId: 0,
     valIndex: 0,
-    valPubkey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    keyIndex: 0,
+    valPubkey: makeMockPubkey(0, 0),
   },
 ];
 
@@ -32,13 +33,20 @@ interface ExitRequest {
   moduleId: number;
   nodeOpId: number;
   valIndex: number;
+  keyIndex: number;
   valPubkey: string;
 }
 
-const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
+const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, keyIndex, valPubkey }: ExitRequest) => {
   const pubkeyHex = de0x(valPubkey);
   expect(pubkeyHex.length).to.equal(48 * 2);
-  return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
+  return (
+    numberToHex(moduleId, 3) +
+    numberToHex(nodeOpId, 5) +
+    numberToHex(valIndex, 8) +
+    numberToHex(keyIndex, 8) +
+    pubkeyHex
+  );
 };
 
 const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
@@ -51,7 +59,7 @@ const hashExitRequest = (request: { dataFormat: number; data: string }) => {
   );
 };
 
-const EXIT_DATA = { dataFormat: DATA_FORMAT_LIST, data: encodeExitRequestsDataList(EXIT) };
+const EXIT_DATA = { dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX, data: encodeExitRequestsDataList(EXIT) };
 const EXIT_DATA_HASH = hashExitRequest(EXIT_DATA);
 
 describe("ValidatorsExitBus: pause checks", () => {

@@ -7,19 +7,7 @@ import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-ty
 
 import { de0x, numberToHex } from "lib";
 
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
-
-// -----------------------------------------------------------------------------
-// Constants & helpers
-// -----------------------------------------------------------------------------
-
-const PUBKEYS = [
-  "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-  "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-  "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-];
+import { DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO, makeMockPubkey } from "test/deploy";
 
 // -----------------------------------------------------------------------------
 // Encoding
@@ -28,6 +16,7 @@ interface ExitRequest {
   moduleId: number;
   nodeOpId: number;
   valIndex: number;
+  keyIndex: number;
   valPubkey: string;
 }
 
@@ -36,10 +25,26 @@ interface ExitRequestData {
   data: string;
 }
 
-const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
+// Build a request whose pubkey matches the permissive mock module's derived key
+// for (nodeOpId, keyIndex), so key verification passes without explicit seeding.
+const makeRequest = (moduleId: number, nodeOpId: number, valIndex: number, keyIndex: number): ExitRequest => ({
+  moduleId,
+  nodeOpId,
+  valIndex,
+  keyIndex,
+  valPubkey: makeMockPubkey(nodeOpId, keyIndex),
+});
+
+const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, keyIndex, valPubkey }: ExitRequest) => {
   const pubkeyHex = de0x(valPubkey);
   expect(pubkeyHex.length).to.equal(48 * 2);
-  return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
+  return (
+    numberToHex(moduleId, 3) +
+    numberToHex(nodeOpId, 5) +
+    numberToHex(valIndex, 8) +
+    numberToHex(keyIndex, 8) +
+    pubkeyHex
+  );
 };
 
 const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
@@ -82,13 +87,16 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
   let admin: HardhatEthersSigner;
 
   let exitRequests = [
-    { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-    { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-    { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
-    { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
+    makeRequest(1, 0, 0, 1),
+    makeRequest(1, 0, 2, 2),
+    makeRequest(2, 0, 1, 3),
+    makeRequest(2, 0, 3, 4),
   ];
 
-  let exitRequest: ExitRequestData = { dataFormat: DATA_FORMAT_LIST, data: encodeExitRequestsDataList(exitRequests) };
+  let exitRequest: ExitRequestData = {
+    dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
+    data: encodeExitRequestsDataList(exitRequests),
+  };
 
   let exitRequestHash: string = hashExitRequest(exitRequest);
 
@@ -153,45 +161,11 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const emitTx = await oracle.submitExitRequestsData(exitRequest);
       const timestamp = await oracle.getTime();
 
-      await expect(emitTx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          exitRequests[0].moduleId,
-          exitRequests[0].nodeOpId,
-          exitRequests[0].valIndex,
-          exitRequests[0].valPubkey,
-          timestamp,
-        );
-
-      await expect(emitTx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          exitRequests[1].moduleId,
-          exitRequests[1].nodeOpId,
-          exitRequests[1].valIndex,
-          exitRequests[1].valPubkey,
-          timestamp,
-        );
-
-      await expect(emitTx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          exitRequests[2].moduleId,
-          exitRequests[2].nodeOpId,
-          exitRequests[2].valIndex,
-          exitRequests[2].valPubkey,
-          timestamp,
-        );
-
-      await expect(emitTx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(
-          exitRequests[3].moduleId,
-          exitRequests[3].nodeOpId,
-          exitRequests[3].valIndex,
-          exitRequests[3].valPubkey,
-          timestamp,
-        );
+      for (const request of exitRequests) {
+        await expect(emitTx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+      }
     });
 
     it("Should revert if wrong DATA_FORMAT", async () => {
@@ -210,13 +184,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should revert if contains duplicates", async () => {
-      const requests = [
-        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
-      ];
+      const requests = [makeRequest(1, 0, 0, 1), makeRequest(1, 0, 0, 2)];
 
       const exitRequestData: ExitRequestData = {
-        dataFormat: 1,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: encodeExitRequestsDataList(requests),
       };
       const hash = hashExitRequest(exitRequestData);
@@ -230,13 +201,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should revert if data is not sorted in ascending order", async () => {
-      const requests = [
-        { moduleId: 2, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
-      ];
+      const requests = [makeRequest(2, 0, 0, 1), makeRequest(1, 0, 0, 2)];
 
       const exitRequestData: ExitRequestData = {
-        dataFormat: 1,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: encodeExitRequestsDataList(requests),
       };
       const hash = hashExitRequest(exitRequestData);
@@ -251,7 +219,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Should revert with InvalidRequestsDataLength if length of requests is equal to 0", async () => {
       const exitRequestData: ExitRequestData = {
-        dataFormat: 1,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: "0x",
       };
       const hash = hashExitRequest(exitRequestData);
@@ -266,15 +234,12 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should revert with InvalidRequestsDataLength if length of requests is not divided by request length without remainder", async () => {
-      // 64 - length of request in bytes
-      const request =
-        "0x00000100000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".slice(
-          0,
-          2 + 64 * 2 - 4,
-        );
+      // A single 72-byte request with the last 2 bytes chopped off
+      const validRequest = encodeExitRequestsDataList([makeRequest(1, 0, 0, 0)]);
+      const request = validRequest.slice(0, validRequest.length - 4);
 
       const exitRequestData: ExitRequestData = {
-        dataFormat: 1,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: request,
       };
       const hash = hashExitRequest(exitRequestData);
@@ -289,13 +254,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should revert if module id is equal to 0", async () => {
-      const requests = [
-        { moduleId: 0, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
-      ];
+      const requests = [makeRequest(0, 0, 0, 1), makeRequest(1, 0, 0, 2)];
 
       const exitRequestData: ExitRequestData = {
-        dataFormat: 1,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: encodeExitRequestsDataList(requests),
       };
       const hash = hashExitRequest(exitRequestData);
@@ -332,15 +294,15 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     // Data for case when limit is not enough to process entire request
     // Total: 2×32 ETH (module 1) + 2×2048 ETH (module 2) + 1×2048 ETH (module 3) = 6208 ETH
     const VALIDATORS: ExitRequest[] = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }, // 32 ETH
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] }, // 32 ETH
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] }, // 2048 ETH
-      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] }, // 2048 ETH
-      { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] }, // 2048 ETH
+      makeRequest(1, 0, 0, 1), // 32 ETH
+      makeRequest(1, 0, 2, 2), // 32 ETH
+      makeRequest(2, 0, 1, 3), // 2048 ETH
+      makeRequest(2, 0, 3, 4), // 2048 ETH
+      makeRequest(3, 0, 3, 5), // 2048 ETH
     ];
 
     const REQUEST = {
-      dataFormat: DATA_FORMAT_LIST,
+      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
       data: encodeExitRequestsDataList(VALIDATORS),
     };
 
@@ -369,13 +331,13 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
         .withArgs(MAX_EXIT_BALANCE_ETH, BALANCE_PER_FRAME_ETH, FRAME_DURATION);
 
       exitRequests = [
-        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }, // 32 ETH
-        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] }, // 32 ETH
+        makeRequest(1, 0, 0, 1), // 32 ETH
+        makeRequest(1, 0, 2, 2), // 32 ETH
       ];
-      // Total: 64 ETH = 64,000,000,000 Gwei (well below limit)
+      // Total: 64 ETH (well below limit)
 
       exitRequest = {
-        dataFormat: DATA_FORMAT_LIST,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: encodeExitRequestsDataList(exitRequests),
       };
 
@@ -490,17 +452,18 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await expect(tx).to.emit(oracle, "SetMaxValidatorsPerReport").withArgs(maxRequestsPerReport);
       expect(await oracle.connect(authorizedEntity).getMaxValidatorsPerReport()).to.equal(maxRequestsPerReport);
 
-      // Create a request with 5 validators (exceeds maxRequestsPerReport of 4)
+      // Create a request with 5 validators (exceeds maxRequestsPerReport of 4).
+      // Reverts on the count check before any per-request processing.
       const exitRequestsRandom = [
-        { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 101, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-        { moduleId: 102, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 103, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-        { moduleId: 104, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        makeRequest(100, 0, 0, 1),
+        makeRequest(101, 0, 2, 2),
+        makeRequest(102, 0, 0, 3),
+        makeRequest(103, 0, 2, 4),
+        makeRequest(104, 0, 2, 5),
       ];
 
       const exitRequestRandom = {
-        dataFormat: DATA_FORMAT_LIST,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: encodeExitRequestsDataList(exitRequestsRandom),
       };
 
@@ -529,13 +492,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not check limit, if maxExitBalanceEth equal to 0 (means limit was not set)", async () => {
-      const exitRequestsRandom = [
-        { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 101, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-      ];
+      const exitRequestsRandom = [makeRequest(1, 0, 0, 1), makeRequest(2, 0, 2, 2)];
 
       const exitRequestRandom = {
-        dataFormat: DATA_FORMAT_LIST,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: encodeExitRequestsDataList(exitRequestsRandom),
       };
 
@@ -547,9 +507,11 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const timestamp = await getTimestampFromTx(emitTx, oracle.interface);
 
       // Check each event individually
-      await expect(emitTx).to.emit(oracle, "ValidatorExitRequest").withArgs(100, 0, 0, PUBKEYS[0], timestamp);
-
-      await expect(emitTx).to.emit(oracle, "ValidatorExitRequest").withArgs(101, 0, 2, PUBKEYS[1], timestamp);
+      for (const request of exitRequestsRandom) {
+        await expect(emitTx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+      }
 
       await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestRandomHash);
 
@@ -568,10 +530,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     // version can be changed during deploy
     // but we will change it via accessing storage
 
-    const VALIDATORS: ExitRequest[] = [{ moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }];
+    const VALIDATORS: ExitRequest[] = [makeRequest(1, 0, 0, 1)];
 
     const REQUEST = {
-      dataFormat: DATA_FORMAT_LIST,
+      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
       data: encodeExitRequestsDataList(VALIDATORS),
     };
 

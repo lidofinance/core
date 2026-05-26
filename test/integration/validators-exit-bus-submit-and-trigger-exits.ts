@@ -8,6 +8,9 @@ import { NodeOperatorsRegistry, ValidatorsExitBusOracle, WithdrawalVault } from 
 
 import { de0x, ether, numberToHex } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { norSdvtEnsureOperators } from "lib/protocol/helpers";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
+import { LoadedContract } from "lib/protocol/types";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -15,13 +18,21 @@ interface ExitRequest {
   moduleId: number;
   nodeOpId: number;
   valIndex: number;
+  keyIndex: number;
   valPubkey: string;
 }
 
-const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
+// DATA_FORMAT_LIST_WITH_KEY_INDEX (=2): the only format accepted by submitExitRequestsData.
+const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, keyIndex, valPubkey }: ExitRequest) => {
   const pubkeyHex = de0x(valPubkey);
   expect(pubkeyHex.length).to.equal(48 * 2);
-  return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
+  return (
+    numberToHex(moduleId, 3) +
+    numberToHex(nodeOpId, 5) +
+    numberToHex(valIndex, 8) +
+    numberToHex(keyIndex, 8) +
+    pubkeyHex
+  );
 };
 
 const hashExitRequest = (request: { dataFormat: number; data: string }) => {
@@ -36,7 +47,7 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
 
   let veb: ValidatorsExitBusOracle;
   let wv: WithdrawalVault;
-  let nor: NodeOperatorsRegistry;
+  let nor: LoadedContract<NodeOperatorsRegistry>;
 
   let hashReporter: HardhatEthersSigner;
   let resumer: HardhatEthersSigner;
@@ -44,20 +55,12 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
   let stranger: HardhatEthersSigner;
   let refundRecipient: HardhatEthersSigner;
 
-  const dataFormat = 1;
+  const dataFormat = 2;
 
-  const validatorsExitRequests: ExitRequest[] = [
-    { moduleId: 1, nodeOpId: 10, valIndex: 100, valPubkey: "0x" + "11".repeat(48) },
-    { moduleId: 1, nodeOpId: 11, valIndex: 101, valPubkey: "0x" + "22".repeat(48) },
-    { moduleId: 1, nodeOpId: 12, valIndex: 102, valPubkey: "0x" + "33".repeat(48) },
-    { moduleId: 2, nodeOpId: 20, valIndex: 200, valPubkey: "0x" + "44".repeat(48) },
-    { moduleId: 2, nodeOpId: 21, valIndex: 201, valPubkey: "0x" + "55".repeat(48) },
-  ];
-
-  const multipleExitRequests = validatorsExitRequests.map((req) => "0x" + encodeExitRequestHex(req));
-  const data = multipleExitRequests.reduce((acc, curr) => acc + curr.slice(2), "0x");
-  const exitRequest = { dataFormat, data };
-  const exitRequestsHash: string = hashExitRequest(exitRequest);
+  // Built in `before` from real on-chain NOR signing keys, so format-2 key verification passes.
+  let validatorsExitRequests: ExitRequest[];
+  let exitRequest: { dataFormat: number; data: string };
+  let exitRequestsHash: string;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -68,6 +71,29 @@ describe("Scenario: ValidatorsExitBus Submit and Trigger Exits", () => {
     [hashReporter, stranger, resumer, refundRecipient] = await ethers.getSigners();
 
     agent = await ctx.getSigner("agent", ether("1"));
+
+    // Ensure NOR has node operators with signing keys, then build exit requests
+    // referencing real registered keys (moduleId 1 = NOR).
+    await norSdvtEnsureOperators(ctx, nor);
+
+    const moduleId = Number(NOR_MODULE_ID);
+    const requestDefs = [
+      { nodeOpId: 0, keyIndex: 0, valIndex: 100 },
+      { nodeOpId: 0, keyIndex: 1, valIndex: 101 },
+      { nodeOpId: 1, keyIndex: 0, valIndex: 102 },
+      { nodeOpId: 1, keyIndex: 1, valIndex: 200 },
+      { nodeOpId: 2, keyIndex: 0, valIndex: 201 },
+    ];
+
+    validatorsExitRequests = [];
+    for (const def of requestDefs) {
+      const { key } = await nor.getSigningKey(def.nodeOpId, def.keyIndex);
+      validatorsExitRequests.push({ moduleId, ...def, valPubkey: key });
+    }
+
+    const data = "0x" + validatorsExitRequests.map(encodeExitRequestHex).join("");
+    exitRequest = { dataFormat, data };
+    exitRequestsHash = hashExitRequest(exitRequest);
 
     // Grant role to submit exit hash
     const submitReportHashRole = await veb.SUBMIT_REPORT_HASH_ROLE();

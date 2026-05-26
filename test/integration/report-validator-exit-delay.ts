@@ -5,9 +5,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { norSdvtAddSigningKey, norSdvtEnsureOperators } from "lib/protocol/helpers";
 
 import {
-  encodeExitRequestsDataListWithFormat,
+  encodeExitRequestsDataListWithFormatV2,
   toHistoricalHeaderWitness,
   toProvableBeaconBlockHeader,
   toValidatorWitness,
@@ -24,6 +25,10 @@ describe("Integration: Report Validator Exit Delay", () => {
 
   const moduleId = 1; // NOR module ID
 
+  // keyIndex at which the proof's validator pubkey is registered for each node operator,
+  // required for the format-2 (DATA_FORMAT_LIST_WITH_KEY_INDEX) VEB key verification.
+  let keyIndexByNodeOp: Record<number, number>;
+
   before(async () => {
     ctx = await getProtocolContext();
     rootSnapshot = await Snapshot.take();
@@ -31,6 +36,15 @@ describe("Integration: Report Validator Exit Delay", () => {
     [vebReportSubmitter] = await ethers.getSigners();
 
     const { nor, stakingRouter, validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
+
+    // Ensure node operators exist and register the proof's validator pubkey as an on-chain signing
+    // key for the operators used in the tests, so submitExitRequestsData key verification passes.
+    await norSdvtEnsureOperators(ctx, nor);
+    const proofPubkey = ACTIVE_VALIDATOR_PROOF.validator.pubkey;
+    keyIndexByNodeOp = {
+      1: Number(await norSdvtAddSigningKey(ctx, nor, { operatorId: 1n, pubkey: proofPubkey })),
+      2: Number(await norSdvtAddSigningKey(ctx, nor, { operatorId: 2n, pubkey: proofPubkey })),
+    };
 
     const agentSigner = await ctx.getSigner("agent", ether("1"));
     await validatorsExitBusOracle
@@ -73,11 +87,12 @@ describe("Integration: Report Validator Exit Delay", () => {
         moduleId,
         nodeOpId,
         valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        keyIndex: keyIndexByNodeOp[nodeOpId],
         pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
       },
     ];
 
-    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormatV2(exitRequests);
 
     const currentBlockTimestamp = await getCurrentBlockTimestamp();
     const proofSlotTimestamp =
@@ -143,11 +158,12 @@ describe("Integration: Report Validator Exit Delay", () => {
         moduleId,
         nodeOpId,
         valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        keyIndex: keyIndexByNodeOp[nodeOpId],
         pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
       },
     ];
 
-    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormatV2(exitRequests);
 
     const currentBlockTimestamp = await getCurrentBlockTimestamp();
     const proofSlotTimestamp =
@@ -215,10 +231,11 @@ describe("Integration: Report Validator Exit Delay", () => {
       moduleId,
       nodeOpId,
       valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+      keyIndex: keyIndexByNodeOp[nodeOpId],
       pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
     }));
 
-    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormatV2(exitRequests);
 
     const currentBlockTimestamp = await getCurrentBlockTimestamp();
     const proofSlotTimestamp =
@@ -266,11 +283,12 @@ describe("Integration: Report Validator Exit Delay", () => {
         moduleId,
         nodeOpId: 2,
         valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        keyIndex: keyIndexByNodeOp[2],
         pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
       },
     ];
 
-    const { encodedExitRequests } = encodeExitRequestsDataListWithFormat(exitRequests);
+    const { encodedExitRequests } = encodeExitRequestsDataListWithFormatV2(exitRequests);
 
     // Note that we don't submit the hash to ValidatorsExitBusOracle
 
@@ -307,11 +325,12 @@ describe("Integration: Report Validator Exit Delay", () => {
         moduleId,
         nodeOpId: 2,
         valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        keyIndex: keyIndexByNodeOp[2],
         pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
       },
     ];
 
-    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormatV2(exitRequests);
 
     // Note that we don't submit actual report, only hash
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
@@ -347,11 +366,12 @@ describe("Integration: Report Validator Exit Delay", () => {
         moduleId,
         nodeOpId,
         valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        keyIndex: keyIndexByNodeOp[nodeOpId],
         pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
       },
     ];
 
-    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormatV2(exitRequests);
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
@@ -377,11 +397,12 @@ describe("Integration: Report Validator Exit Delay", () => {
         moduleId,
         nodeOpId,
         valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        keyIndex: keyIndexByNodeOp[nodeOpId],
         pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
       },
     ];
 
-    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormatV2(exitRequests);
 
     const currentBlockTimestamp = await getCurrentBlockTimestamp();
     const proofSlotTimestamp =

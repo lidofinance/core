@@ -13,14 +13,7 @@ import {
 
 import { numberToHex } from "lib";
 
-import {
-  DATA_FORMAT_LIST,
-  DATA_FORMAT_LIST_WITH_KEY_INDEX,
-  deployVEBO,
-  initVEBO,
-  makeMockPubkey,
-  updateLidoLocatorImplementation,
-} from "test/deploy";
+import { DATA_FORMAT_LIST, deployVEBO, initVEBO, makeMockPubkey, updateLidoLocatorImplementation } from "test/deploy";
 
 const PUBKEY_AA = "0x" + "aa".repeat(48);
 const PUBKEY_BB = "0x" + "bb".repeat(48);
@@ -84,41 +77,31 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
     expect(ts).to.be.greaterThan(0);
   });
 
-  it("unsupported formats revert in decoder, dispatcher, and balance calc", async () => {
+  it("unsupported format reverts in decoder", async () => {
     const request = encodeV1(1, 1, 1, PUBKEY_AA);
 
     await expect(oracle.callGetValidatorData(request, 3, 0)).to.be.revertedWithCustomError(
       oracle,
       "UnsupportedRequestsDataFormat",
     );
-    await expect(oracle.callProcessExitRequestsList(request, 3)).to.be.revertedWithCustomError(
-      oracle,
-      "UnsupportedRequestsDataFormat",
-    );
-    await expect(oracle.calculateTotalExitBalanceEth(request, 3)).to.be.revertedWithCustomError(
-      oracle,
-      "UnsupportedRequestsDataFormat",
-    );
   });
 
-  it("processExitRequestsList supports format 2 and reverts on unsorted data", async () => {
+  it("processExitRequestsList reverts on unsorted data", async () => {
     const req1 = encodeV2(1, 1, 2, 0, makeMockPubkey(1, 0)); // valIndex 2
     const req2 = encodeV2(1, 1, 1, 1, makeMockPubkey(1, 1)); // valIndex 1 (unordered)
     const data = (req1 + req2.slice(2)) as `0x${string}`;
 
-    await expect(
-      oracle.callProcessExitRequestsList(data, DATA_FORMAT_LIST_WITH_KEY_INDEX),
-    ).to.be.revertedWithCustomError(oracle, "InvalidRequestsDataSortOrder");
+    await expect(oracle.callProcessExitRequestsList(data)).to.be.revertedWithCustomError(
+      oracle,
+      "InvalidRequestsDataSortOrder",
+    );
   });
 
   it("calculateTotalExitBalanceEth reverts on unexpected WC type", async () => {
     await stakingRouter.setStakingModuleWithdrawalCredentialsType(30, 0x03); // unsupported
-    const req = encodeV1(30, 1, 1, PUBKEY_AA);
+    const req = encodeV2(30, 1, 1, 0, PUBKEY_AA);
 
-    await expect(oracle.calculateTotalExitBalanceEth(req, DATA_FORMAT_LIST)).to.be.revertedWithCustomError(
-      oracle,
-      "UnexpectedWCType",
-    );
+    await expect(oracle.calculateTotalExitBalanceEth(req)).to.be.revertedWithCustomError(oracle, "UnexpectedWCType");
   });
 
   it("InvalidMaxEBWeight when sanity checker returns zero", async () => {
@@ -131,11 +114,8 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
       oracleReportSanityChecker: await mockSanity.getAddress(),
     });
 
-    const req = encodeV1(1, 1, 1, PUBKEY_AA);
-    await expect(oracle.calculateTotalExitBalanceEth(req, DATA_FORMAT_LIST)).to.be.revertedWithCustomError(
-      oracle,
-      "InvalidMaxEBWeight",
-    );
+    const req = encodeV2(1, 1, 1, 0, PUBKEY_AA);
+    await expect(oracle.calculateTotalExitBalanceEth(req)).to.be.revertedWithCustomError(oracle, "InvalidMaxEBWeight");
   });
 
   it("verifyKey detects invalid lengths and mismatched pubkeys", async () => {
@@ -146,14 +126,13 @@ describe("ValidatorsExitBusOracle.sol:edge coverage", () => {
     // invalid length (empty)
     await badModule.setReturned("0x");
     const req = encodeV2(40, 1, 1, 0, PUBKEY_AA);
-    await expect(
-      oracle.callProcessExitRequestsList(req, DATA_FORMAT_LIST_WITH_KEY_INDEX),
-    ).to.be.revertedWithCustomError(oracle, "InvalidRetrievedKeyLength");
+    await expect(oracle.callProcessExitRequestsList(req)).to.be.revertedWithCustomError(
+      oracle,
+      "InvalidRetrievedKeyLength",
+    );
 
     // mismatched pubkey (returns PUBKEY_BB but request has PUBKEY_AA)
     await badModule.setReturned(PUBKEY_BB);
-    await expect(
-      oracle.callProcessExitRequestsList(req, DATA_FORMAT_LIST_WITH_KEY_INDEX),
-    ).to.be.revertedWithCustomError(oracle, "InvalidPublicKey");
+    await expect(oracle.callProcessExitRequestsList(req)).to.be.revertedWithCustomError(oracle, "InvalidPublicKey");
   });
 });

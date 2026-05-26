@@ -85,7 +85,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Thrown when exit request passed to method contain wrong DATA_FORMAT
-     * @param format code of format, currently only DATA_FORMAT=1 is supported in the contract
+     * @param format code of the unsupported format.
      */
     error UnsupportedRequestsDataFormat(uint256 format);
 
@@ -341,6 +341,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @param request - The exit requests structure.
      */
     function submitExitRequestsData(ExitRequestsData calldata request) external whenResumed {
+        if (request.dataFormat != DATA_FORMAT_LIST_WITH_KEY_INDEX) {
+            revert UnsupportedRequestsDataFormat(request.dataFormat);
+        }
+
         bytes32 exitRequestsHash = keccak256(abi.encode(request.data, request.dataFormat));
         RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestsHash];
 
@@ -349,17 +353,17 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _checkExitRequestData(request.data, request.dataFormat);
         _checkContractVersion(requestStatus.contractVersion);
 
-        uint256 requestsCount = request.data.length / _getPackedRequestLength(request.dataFormat);
+        uint256 requestsCount = request.data.length / PACKED_REQUEST_LENGTH_V2;
         uint256 maxRequestsPerReport = _getMaxValidatorsPerReport();
 
         if (requestsCount > maxRequestsPerReport) {
             revert TooManyExitRequestsInReport(requestsCount, maxRequestsPerReport);
         }
 
-        uint256 totalBalanceEth = _calculateTotalExitBalanceEth(request.data, request.dataFormat);
+        uint256 totalBalanceEth = _calculateTotalExitBalanceEth(request.data);
         _consumeLimit(totalBalanceEth);
 
-        _processExitRequestsList(request.data, request.dataFormat);
+        _processExitRequestsList(request.data);
 
         TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
             TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + requestsCount
@@ -521,7 +525,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /**
      * @notice Returns validator exit request data by index.
      * @param exitRequests Encoded list of validator exit requests.
-     * @param dataFormat Format of the encoded exit request data. Currently, only DATA_FORMAT_LIST = 1 is supported.
+     * @param dataFormat Format of the encoded exit request data. Supports both DATA_FORMAT_LIST = 1 and DATA_FORMAT_LIST_WITH_KEY_INDEX = 2.
      * @param index Index of the exit request within the `exitRequests` list.
      * @return pubkey Public key of the validator.
      * @return nodeOpId ID of the node operator.
@@ -842,38 +846,22 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     *      For gas efficiency, module types are cached during iteration to avoid repeated external calls
     *      for the same module.
     *
-    * @param data Packed exit requests data
-    * @param dataFormat Format of the data (1 or 2)
+    * @param data Packed exit requests data (DATA_FORMAT_LIST_WITH_KEY_INDEX)
     * @return totalBalanceEth Total balance of all validators being exited in ETH
     */
-    function _calculateTotalExitBalanceEth(bytes calldata data, uint256 dataFormat)
+    function _calculateTotalExitBalanceEth(bytes calldata data)
         internal
         view
         returns (uint256 totalBalanceEth)
     {
         (uint16 maxEBWeightType1, uint16 maxEBWeightType2) = _getMaxEffectiveBalanceWeights();
-        uint256 packedLength;
-        uint256 dataShift;
-        uint256 moduleShift;
-
-        if (dataFormat == DATA_FORMAT_LIST) {
-            packedLength = PACKED_REQUEST_LENGTH;
-            dataShift = 128;
-            moduleShift = 104;
-        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
-            packedLength = PACKED_REQUEST_LENGTH_V2;
-            dataShift = 64;
-            moduleShift = 168;
-        } else {
-            revert UnsupportedRequestsDataFormat(dataFormat);
-        }
 
         uint256 baseOffset;
         assembly {
             baseOffset := data.offset
         }
 
-        uint256 requestsCount = data.length / packedLength;
+        uint256 requestsCount = data.length / PACKED_REQUEST_LENGTH_V2;
         uint256 cachedModuleId = 0;
         uint256 cachedModuleMaxEBWeightEth = 0;
 
@@ -882,9 +870,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             uint256 itemOffset;
 
             assembly {
-                itemOffset := add(baseOffset, mul(packedLength, i))
-                let dataWithoutPubkey := shr(dataShift, calldataload(itemOffset))
-                moduleId := shr(moduleShift, dataWithoutPubkey) // Extract top 24 bits
+                itemOffset := add(baseOffset, mul(PACKED_REQUEST_LENGTH_V2, i))
+                let dataWithoutPubkey := shr(64, calldataload(itemOffset))
+                moduleId := shr(168, dataWithoutPubkey) // Extract top 24 bits
             }
 
             if (moduleId != cachedModuleId) {
@@ -970,84 +958,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-    * @notice Dispatcher that processes exit requests based on data format
-    * @param data Packed exit requests data
-    * @param dataFormat Format of the data (1 or 2)
-    */
-    function _processExitRequestsList(bytes calldata data, uint256 dataFormat) internal {
-        if (dataFormat == DATA_FORMAT_LIST) {
-            _processExitRequestsListV1(data);
-        } else if (dataFormat == DATA_FORMAT_LIST_WITH_KEY_INDEX) {
-            _processExitRequestsListV2(data);
-        } else {
-            revert UnsupportedRequestsDataFormat(dataFormat);
-        }
-    }
-
-    /**
-    * @notice Process exit requests for format 1 (64 bytes per request, no keyIndex)
-    * @dev Check dataWithoutPubkey <= lastDataWithoutPubkey prevents duplicates and ensures sorting
-    * @param data Packed exit requests data (DATA_FORMAT=1)
-    */
-    function _processExitRequestsListV1(bytes calldata data) internal {
-        uint256 offset;
-        uint256 offsetPastEnd;
-        uint256 lastDataWithoutPubkey = 0;
-        uint256 timestamp = _getTimestamp();
-
-        assembly {
-            offset := data.offset
-            offsetPastEnd := add(offset, data.length)
-        }
-
-        bytes calldata pubkey;
-        uint256 dataWithoutPubkey;
-        uint256 moduleId;
-        uint256 nodeOpId;
-        uint64 valIndex;
-
-        assembly {
-            pubkey.length := 48
-        }
-
-        while (offset < offsetPastEnd) {
-            assembly {
-                // 16 most significant bytes are taken by module id, node op id, and val index
-                dataWithoutPubkey := shr(128, calldataload(offset))
-                // the next 48 bytes are taken by the pubkey
-                pubkey.offset := add(offset, 16)
-                // totalling to 64 bytes
-                offset := add(offset, 64)
-            }
-
-            moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-            if (moduleId == 0) {
-                revert InvalidModuleId();
-            }
-
-            //                              dataWithoutPubkey
-            // MSB <---------------------------------------------------------------------- LSB
-            // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-            if (dataWithoutPubkey <= lastDataWithoutPubkey) {
-                revert InvalidRequestsDataSortOrder();
-            }
-
-            valIndex = uint64(dataWithoutPubkey);
-            nodeOpId = uint40(dataWithoutPubkey >> 64);
-
-            lastDataWithoutPubkey = dataWithoutPubkey;
-            emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
-        }
-    }
-
-    /**
     * @notice Process exit requests for format 2 (72 bytes per request, includes keyIndex)
     * @dev Uniqueness and sort check uses (moduleId, nodeOpId, valIndex) only — keyIndex is excluded
     *      so that the same validator cannot appear twice with different keyIndex (double-counted).
     * @param data Packed exit requests data (DATA_FORMAT=2)
     */
-    function _processExitRequestsListV2(bytes calldata data) internal {
+    function _processExitRequestsList(bytes calldata data) internal {
         uint256 offset;
         uint256 offsetPastEnd;
         uint256 lastValidatorData = 0; // (moduleId, nodeOpId, valIndex) — 128 bits, no keyIndex

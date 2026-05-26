@@ -220,6 +220,39 @@ export const norSdvtAddOperatorKeys = async (
 };
 
 /**
+ * Adds a single signing key with an explicit pubkey to the operator and returns its key index.
+ * Useful when the on-chain registered key must match a specific pubkey.
+ */
+export const norSdvtAddSigningKey = async (
+  ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
+  params: {
+    operatorId: bigint;
+    pubkey: string;
+  },
+): Promise<bigint> => {
+  const { acl } = ctx.contracts;
+  const { operatorId, pubkey } = params;
+
+  const role = await module.MANAGE_SIGNING_KEYS();
+  const managerSigner = await impersonate(await acl.getPermissionManager(module.address, role), ether("100"));
+
+  const hasPermission = await acl["hasPermission(address,address,bytes32)"](managerSigner, module.address, role);
+  if (!hasPermission) {
+    await acl.connect(managerSigner).grantPermission(managerSigner, module.address, role);
+  }
+
+  const keyIndex = await module.getTotalSigningKeyCount(operatorId);
+  await module.connect(managerSigner).addSigningKeys(operatorId, 1, pubkey, randomSignatures(1));
+
+  if (!hasPermission) {
+    await acl.connect(managerSigner).revokePermission(managerSigner, module.address, role);
+  }
+
+  return keyIndex;
+};
+
+/**
  * Sets the staking limit for the operator.
  */
 export const norSdvtSetOperatorStakingLimit = async (
