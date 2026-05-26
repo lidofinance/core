@@ -1981,7 +1981,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot())
         .to.emit(migrationChecker, "BaselineSnapshotMigrated")
-        .withArgs(ether("107"), MIGRATION_WITHDRAWALS);
+        .withArgs(ether("100"), MIGRATION_WITHDRAWALS);
 
       expect(await migrationChecker.getReportDataCount()).to.equal(2n);
 
@@ -1989,18 +1989,18 @@ describe("OracleReportSanityChecker.sol", () => {
       const bootstrapFlowReport = await migrationChecker.reportData(1n);
 
       expect(baselineReport.timestamp).to.equal(0n);
-      expect(baselineReport.clBalance).to.equal(ether("107"));
+      expect(baselineReport.clBalance).to.equal(ether("100"));
       expect(baselineReport.deposits).to.equal(0n);
       expect(baselineReport.clWithdrawals).to.equal(0n);
 
       expect(bootstrapFlowReport.timestamp).to.equal(0n);
-      expect(bootstrapFlowReport.clBalance).to.equal(ether("107") - MIGRATION_WITHDRAWALS);
+      expect(bootstrapFlowReport.clBalance).to.equal(ether("100") - MIGRATION_WITHDRAWALS);
       expect(bootstrapFlowReport.deposits).to.equal(0n);
       expect(bootstrapFlowReport.clWithdrawals).to.equal(MIGRATION_WITHDRAWALS);
     });
 
     it("uses migrated bootstrap flows in first CL decrease window check", async () => {
-      const migratedCLBalance = ether("107000");
+      const migratedCLBalance = ether("100000");
       const migrationDeposits = ether("3");
       const migrationDepositsCur = ether("3");
 

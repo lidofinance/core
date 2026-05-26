@@ -16,8 +16,6 @@ import { ether, impersonate, randomAddress } from "lib";
 import { DAY } from "./specs/lib";
 import { migrationHoodiNegativeRebaseFormulaFixtureSet } from "./specs/negative-rebase/fixtures/migration-hoodi";
 
-const MAX_BASIS_POINTS = 10_000n;
-
 type CheckerFixture = {
   checker: OracleReportSanityChecker;
   accountingSigner: HardhatEthersSigner;
@@ -96,12 +94,11 @@ const report = (
     .checkAccountingOracleReport(DAY, preValidatorsBalance, 0n, postValidatorsBalance, 0n, 0n, 0n, 0n, deposits, 0n);
 
 describe("OracleReportSanityChecker.sol:migration deposit accounting", () => {
-  it("reverts when migration reportData includes deposits that the first report also passes", async () => {
+  it("keeps migration deposits out of reportData baseline so the first report counts them once", async () => {
     const validatorsBalance = ether("3200");
     const migratedDeposits = ether("320");
     const realLoss = ether("100");
     const postReportCLBalance = validatorsBalance + migratedDeposits - realLoss;
-    const limits = migrationHoodiNegativeRebaseFormulaFixtureSet.limits;
     const fixture = await deployChecker();
 
     await fixture.lido.mock__setContractVersion(4n);
@@ -110,17 +107,9 @@ describe("OracleReportSanityChecker.sol:migration deposit accounting", () => {
     await expect(fixture.checker.migrateBaselineSnapshot()).not.to.be.reverted;
 
     const migrationBaseline = await fixture.checker.reportData(0n);
-    expect(migrationBaseline.clBalance, "migration baseline already includes migrated deposits").to.equal(
-      validatorsBalance + migratedDeposits,
-    );
+    expect(migrationBaseline.clBalance, "migration baseline ignores migrated deposits").to.equal(validatorsBalance);
     expect(migrationBaseline.deposits, "migration baseline stores zero report deposits").to.equal(0n);
 
-    const doubleCountedWindowBase = migrationBaseline.clBalance + migratedDeposits;
-    const doubleCountedLoss = realLoss + migratedDeposits;
-    const doubleCountedWindowLimit = (doubleCountedWindowBase * limits.maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
-
-    await expect(report(fixture, validatorsBalance, postReportCLBalance, migratedDeposits))
-      .to.be.revertedWithCustomError(fixture.checker, "IncorrectCLBalanceDecrease")
-      .withArgs(doubleCountedLoss, doubleCountedWindowLimit);
+    await expect(report(fixture, validatorsBalance, postReportCLBalance, migratedDeposits)).not.to.be.reverted;
   });
 });
