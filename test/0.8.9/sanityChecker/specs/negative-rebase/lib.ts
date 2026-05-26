@@ -34,6 +34,8 @@ export type NegativeRebaseFormulaCase = {
   expected: {
     outcome: "revert" | "accepted";
     window?: ExpectedWindowDiff;
+    lastReportCLBalance?: bigint;
+    lastReportDeposits?: bigint;
     lastReportCLWithdrawals?: bigint;
   };
 };

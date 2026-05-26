@@ -10,11 +10,9 @@ const hoodiNegativeRebaseLimit = ether("68400");
 const hoodiFirstReportDecrease = ether("10000");
 const hoodiShiftedWindowDecrease = ether("58400") + 1n;
 const hoodiShiftedWindowLimit = ether("68040");
-const migratedTransientDeposits = ether("32");
-const hoodiDepositSensitiveValidatorsDecrease = ether("72000");
-const hoodiDepositPassedActualDecrease = ether("72032");
-const hoodiDepositZeroWindowLimit = ether("72000");
-const hoodiDepositPassedWindowLimit = ether("72001.152");
+const windowStretchingMigratedDeposits = ether("100000");
+const hoodiZeroDepositWindowLimit = ether("72000");
+const hoodiStretchedWindowLimit = ether("75600");
 
 export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
   title: "migration-hoodi",
@@ -178,57 +176,59 @@ export const migrationHoodiNegativeRebaseFormulaFixtureSet: NegativeRebaseFormul
       },
     },
     {
-      title: "accepts Hoodi migrated transient state when report deposits are zero",
+      title: "reverts Hoodi when migrated deposits are missing and the window stays 72,000 ETH",
       rationale:
-        "The migration bootstrap stores zero deposits. With zero report deposits, the checked decrease is exactly the 72,000 ETH Hoodi limit.",
+        "Migration stores zero deposits. The first report also has zero deposits, so the limit stays 72,000 ETH and a 75,600 ETH decrease is rejected.",
       steps: [
         migrate({
-          label: "Hoodi finalized v4 migration with transient deposits",
+          label: "Hoodi finalized v4 migration after upper migration zeroed CL pending",
           clValidators: hoodiCLValidators,
-          transientDeposits: migratedTransientDeposits,
+          transientDeposits: 0n,
           withdrawalVaultBalance: 0n,
         }),
         report({
-          label: "Hoodi first report keeps migrated deposits out of report deposits",
-          postValidatorsBalance: hoodiCLBalance - hoodiDepositSensitiveValidatorsDecrease,
+          label: "Hoodi first report without migrated deposits",
+          postValidatorsBalance: hoodiCLBalance - hoodiStretchedWindowLimit,
           postPendingBalance: 0n,
           deposits: 0n,
           clWithdrawals: 0n,
         }),
       ],
       expected: {
-        outcome: "accepted",
+        outcome: "revert",
         window: {
-          actualCLBalanceDiff: hoodiDepositZeroWindowLimit,
-          maxAllowedCLBalanceDiff: hoodiDepositZeroWindowLimit,
+          actualCLBalanceDiff: hoodiStretchedWindowLimit,
+          maxAllowedCLBalanceDiff: hoodiZeroDepositWindowLimit,
         },
       },
     },
     {
-      title: "reverts Hoodi migrated transient state when report deposits are passed",
+      title: "accepts Hoodi when 100,000 ETH migrated deposits stretch the window to 75,600 ETH",
       rationale:
-        "This is the same post-state as the previous case. Passing the 32 ETH migrated transient deposits as report deposits makes the checked decrease stricter: it becomes 72,032 ETH against a 72,001.152 ETH limit.",
+        "The first report adds 100,000 ETH deposits and keeps them pending. The checked decrease is still 75,600 ETH, but the limit grows by 3,600 ETH: from 72,000 ETH to 75,600 ETH.",
       steps: [
         migrate({
-          label: "Hoodi finalized v4 migration with transient deposits",
+          label: "Hoodi finalized v4 migration after upper migration zeroed CL pending",
           clValidators: hoodiCLValidators,
-          transientDeposits: migratedTransientDeposits,
+          transientDeposits: 0n,
           withdrawalVaultBalance: 0n,
         }),
         report({
-          label: "Hoodi first report passes migrated transient deposits",
-          postValidatorsBalance: hoodiCLBalance - hoodiDepositSensitiveValidatorsDecrease,
-          postPendingBalance: 0n,
-          deposits: migratedTransientDeposits,
+          label: "Hoodi first report carries migrated deposits",
+          postValidatorsBalance: hoodiCLBalance - hoodiStretchedWindowLimit,
+          postPendingBalance: windowStretchingMigratedDeposits,
+          deposits: windowStretchingMigratedDeposits,
           clWithdrawals: 0n,
         }),
       ],
       expected: {
-        outcome: "revert",
+        outcome: "accepted",
         window: {
-          actualCLBalanceDiff: hoodiDepositPassedActualDecrease,
-          maxAllowedCLBalanceDiff: hoodiDepositPassedWindowLimit,
+          actualCLBalanceDiff: hoodiStretchedWindowLimit,
+          maxAllowedCLBalanceDiff: hoodiStretchedWindowLimit,
         },
+        lastReportCLBalance: hoodiCLBalance - hoodiStretchedWindowLimit + windowStretchingMigratedDeposits,
+        lastReportDeposits: windowStretchingMigratedDeposits,
       },
     },
   ],

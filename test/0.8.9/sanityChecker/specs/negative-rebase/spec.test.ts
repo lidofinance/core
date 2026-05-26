@@ -130,6 +130,26 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
 
       await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
     }
+
+    const migrationCLBalance = getMigrationCLValidatorsBalance(step);
+    expect(await fixture.checker.getReportDataCount(), `${step.label}: migration report data count`).to.equal(2n);
+
+    const baselineData = await fixture.checker.reportData(0n);
+    expect(baselineData.clBalance, `${step.label}: migration baseline ignores transient deposits`).to.equal(
+      migrationCLBalance,
+    );
+    expect(baselineData.deposits, `${step.label}: migration baseline stores zero deposits`).to.equal(0n);
+    expect(baselineData.clWithdrawals, `${step.label}: migration baseline stores zero withdrawals`).to.equal(0n);
+
+    const bootstrapFlowData = await fixture.checker.reportData(1n);
+    expect(bootstrapFlowData.clBalance, `${step.label}: bootstrap snapshot ignores transient deposits`).to.equal(
+      migrationCLBalance - step.withdrawalVaultBalance,
+    );
+    expect(bootstrapFlowData.deposits, `${step.label}: bootstrap snapshot stores zero deposits`).to.equal(0n);
+    expect(bootstrapFlowData.clWithdrawals, `${step.label}: bootstrap snapshot stores migration withdrawals`).to.equal(
+      step.withdrawalVaultBalance,
+    );
+
     state.lastVaultBalanceAfterTransfer = step.withdrawalVaultBalance;
   };
 
@@ -245,6 +265,26 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
             expect(lastReportData.clWithdrawals, `${testCase.title}: stored clWithdrawals`).to.equal(
               testCase.expected.lastReportCLWithdrawals,
             );
+          }
+
+          if (
+            testCase.expected.lastReportCLBalance !== undefined ||
+            testCase.expected.lastReportDeposits !== undefined
+          ) {
+            const reportDataCount = await checker.getReportDataCount();
+            const lastReportData = await checker.reportData(reportDataCount - 1n);
+
+            if (testCase.expected.lastReportCLBalance !== undefined) {
+              expect(lastReportData.clBalance, `${testCase.title}: stored first-report CL balance`).to.equal(
+                testCase.expected.lastReportCLBalance,
+              );
+            }
+
+            if (testCase.expected.lastReportDeposits !== undefined) {
+              expect(lastReportData.deposits, `${testCase.title}: stored first-report deposits`).to.equal(
+                testCase.expected.lastReportDeposits,
+              );
+            }
           }
         });
       }

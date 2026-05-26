@@ -3,18 +3,13 @@ import { ether } from "lib";
 import { migrate, NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib";
 
 const mainnetCLValidators = 281_250n;
-const mainnetCLBalance = ether("9000000");
+// const mainnetCLBalance = ether("9000000");
 const mainnetMigrationWithdrawals = ether("400000");
 const mainnetCLBalanceAfterMigrationWithdrawals = ether("8600000");
 const mainnetNegativeRebaseLimit = ether("309600");
 const mainnetFirstReportDecrease = ether("100000");
 const mainnetShiftedWindowDecrease = ether("209600") + 1n;
 const mainnetShiftedWindowLimit = ether("306000");
-const migratedTransientDeposits = ether("32");
-const mainnetDepositSensitiveValidatorsDecrease = ether("324000");
-const mainnetDepositPassedActualDecrease = ether("324032");
-const mainnetDepositZeroWindowLimit = ether("324000");
-const mainnetDepositPassedWindowLimit = ether("324001.152");
 
 export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
   title: "migration-mainnet",
@@ -174,60 +169,6 @@ export const migrationMainnetNegativeRebaseFormulaFixtureSet: NegativeRebaseForm
         window: {
           actualCLBalanceDiff: mainnetShiftedWindowDecrease,
           maxAllowedCLBalanceDiff: mainnetShiftedWindowLimit,
-        },
-      },
-    },
-    {
-      title: "accepts Mainnet migrated transient state when report deposits are zero",
-      rationale:
-        "The migration bootstrap stores zero deposits. With zero report deposits, the checked decrease is exactly the 324,000 ETH Mainnet limit.",
-      steps: [
-        migrate({
-          label: "Mainnet finalized v4 migration with transient deposits",
-          clValidators: mainnetCLValidators,
-          transientDeposits: migratedTransientDeposits,
-          withdrawalVaultBalance: 0n,
-        }),
-        report({
-          label: "Mainnet first report keeps migrated deposits out of report deposits",
-          postValidatorsBalance: mainnetCLBalance - mainnetDepositSensitiveValidatorsDecrease,
-          postPendingBalance: 0n,
-          deposits: 0n,
-          clWithdrawals: 0n,
-        }),
-      ],
-      expected: {
-        outcome: "accepted",
-        window: {
-          actualCLBalanceDiff: mainnetDepositZeroWindowLimit,
-          maxAllowedCLBalanceDiff: mainnetDepositZeroWindowLimit,
-        },
-      },
-    },
-    {
-      title: "reverts Mainnet migrated transient state when report deposits are passed",
-      rationale:
-        "This is the same post-state as the previous case. Passing the 32 ETH migrated transient deposits as report deposits makes the checked decrease stricter: it becomes 324,032 ETH against a 324,001.152 ETH limit.",
-      steps: [
-        migrate({
-          label: "Mainnet finalized v4 migration with transient deposits",
-          clValidators: mainnetCLValidators,
-          transientDeposits: migratedTransientDeposits,
-          withdrawalVaultBalance: 0n,
-        }),
-        report({
-          label: "Mainnet first report passes migrated transient deposits",
-          postValidatorsBalance: mainnetCLBalance - mainnetDepositSensitiveValidatorsDecrease,
-          postPendingBalance: 0n,
-          deposits: migratedTransientDeposits,
-          clWithdrawals: 0n,
-        }),
-      ],
-      expected: {
-        outcome: "revert",
-        window: {
-          actualCLBalanceDiff: mainnetDepositPassedActualDecrease,
-          maxAllowedCLBalanceDiff: mainnetDepositPassedWindowLimit,
         },
       },
     },
