@@ -214,7 +214,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 nodeOpId;
         uint256 moduleId;
         uint256 valIndex;
-        uint256 keyIndex;  // - will be max uint256 for format 1, actual value for format 2
+        uint256 keyIndex;  // max uint256 for DATA_FORMAT_LIST (1); actual key index for DATA_FORMAT_LIST_WITH_KEY_INDEX (2)
         bytes pubkey;
     }
 
@@ -724,9 +724,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     function _updateRequestStatus(RequestStatus storage requestStatus) internal {
         requestStatus.deliveredExitDataTimestamp = _getTimestamp();
     }
-
-    /// Methods for reading data from tightly packed validator exit requests
-    /// Format DATA_FORMAT_LIST = 1;
 
    /**
     * @notice Method for reading node operator id, module id, validator index, and optionally key index
