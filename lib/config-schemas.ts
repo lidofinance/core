@@ -342,16 +342,11 @@ const LidoApmSchema = z.object({
   ensRegDurationSec: PositiveIntSchema,
 });
 
-const LidoSchema = z.object({
-  lidoDepositsReserveTarget: BigIntStringSchema,
-});
-
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
   circuitBreaker: CircuitBreakerSchema,
   lidoApm: LidoApmSchema,
-  lido: LidoSchema.optional(),
   dao: DaoSchema,
   vesting: VestingSchema,
   burner: BurnerSchema.extend({
@@ -385,7 +380,6 @@ export const ScratchParametersSchema = z.object({
 
 // Upgrade parameters schema
 export const UpgradeParametersSchema = z.object({
-  lido: LidoSchema,
   easyTrack: EasyTrackSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
   oracleReportSanityChecker: OracleReportSanityCheckerSchema,

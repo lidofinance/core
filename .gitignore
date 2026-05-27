@@ -3,6 +3,7 @@
 .vscode/
 .cursor/
 .claude/
+.codex/
 
 node_modules/
 coverage/
