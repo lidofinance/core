@@ -308,8 +308,9 @@ export const migrationMainnetClIncreaseFixtureSet: ClIncreaseFixtureSet = {
       },
     },
     {
-      title: "reverts above appeared-limit activation boundary when migrated transient deposits exceed the limit",
-      rationale: "Activating one wei above 57,600 ETH plus one max validator fails before the APR cap matters.",
+      title: "reverts when reported pending consumption exceeds the prorated appeared limit plus one max validator",
+      rationale:
+        "This guards an oracle-inconsistent first report: on mainnet CL churn should prevent more activations than the report-window limit, and delayed reports get a larger timeElapsed allowance.",
       steps: [
         migrate({
           label: "Mainnet finalized v4 migration with above-limit transient deposits",
