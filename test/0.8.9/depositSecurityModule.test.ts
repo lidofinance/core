@@ -667,7 +667,6 @@ describe("DepositSecurityModule.sol", () => {
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
-        contractVersion: DSM_VERSION,
       };
 
       await expect(dsm.pauseDeposits(blockNumber, sig)).to.be.revertedWith("ECDSA: invalid signature");
@@ -676,15 +675,13 @@ describe("DepositSecurityModule.sol", () => {
     it("Reverts if signature contract version is unexpected", async () => {
       const blockNumber = await time.latestBlock();
 
-      const sig: DepositSecurityModule.SignatureStruct = {
-        r: encodeBytes32String(""),
-        vs: encodeBytes32String(""),
-        contractVersion: DSM_VERSION - 1,
-      };
+      const pauseMessage = new DSMPauseMessage(DSM_VERSION - 1, blockNumber);
+      const sig = pauseMessage.sign(guardian1.privateKey);
 
-      await expect(dsm.connect(guardian1).pauseDeposits(blockNumber, sig))
-        .to.be.revertedWithCustomError(dsm, "UnexpectedContractVersion")
-        .withArgs(DSM_VERSION, DSM_VERSION - 1);
+      await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
+        dsm,
+        "InvalidSignature",
+      );
     });
 
     it("Reverts if signature is not guardian", async () => {
@@ -740,7 +737,6 @@ describe("DepositSecurityModule.sol", () => {
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
-        contractVersion: DSM_VERSION,
       };
 
       await expect(dsm.connect(guardian1).pauseDeposits(futureBlockNumber, sig)).to.be.revertedWithPanic(
@@ -764,7 +760,6 @@ describe("DepositSecurityModule.sol", () => {
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
-        contractVersion: DSM_VERSION,
       };
 
       const tx = await dsm.connect(guardian1).pauseDeposits(blockNumber, sig);
@@ -875,7 +870,6 @@ describe("DepositSecurityModule.sol", () => {
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
-        contractVersion: DSM_VERSION,
       };
 
       await dsm.connect(guardian1).pauseDeposits(blockNumber, sig);
@@ -1065,9 +1059,10 @@ describe("DepositSecurityModule.sol", () => {
         const attestMessage = new DSMAttestMessage(DSM_VERSION - 1, ...signingArgs);
         const sig = attestMessage.sign(guardian1.privateKey);
 
-        await expect(dsm.depositBufferedEther(...signingArgs, depositCalldata, [sig]))
-          .to.be.revertedWithCustomError(dsm, "UnexpectedContractVersion")
-          .withArgs(DSM_VERSION, DSM_VERSION - 1);
+        await expect(dsm.depositBufferedEther(...signingArgs, depositCalldata, [sig])).to.be.revertedWithCustomError(
+          dsm,
+          "InvalidSignature",
+        );
       });
 
       it("Reverts if deposit contract root changed", async () => {
@@ -1196,7 +1191,6 @@ describe("DepositSecurityModule.sol", () => {
         await dsm.connect(guardian1).pauseDeposits(blockNumber, {
           r: encodeBytes32String(""),
           vs: encodeBytes32String(""),
-          contractVersion: DSM_VERSION,
         });
         expect(await dsm.isDepositsPaused()).to.equal(true);
 
@@ -1329,7 +1323,6 @@ describe("DepositSecurityModule.sol", () => {
     const invalidSig: DepositSecurityModule.SignatureStruct = {
       r: encodeBytes32String(""),
       vs: encodeBytes32String(""),
-      contractVersion: DSM_VERSION,
     };
 
     type UnvetArgs = {
@@ -1392,16 +1385,12 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Reverts if signature contract version is unexpected", async () => {
       const args = await getUnvetArgs();
+      const sig = new DSMUnvetMessage(DSM_VERSION - 1, ...args).sign(guardian1.privateKey);
 
-      await expect(
-        dsm.connect(guardian1).unvetSigningKeys(...args, {
-          r: encodeBytes32String(""),
-          vs: encodeBytes32String(""),
-          contractVersion: DSM_VERSION - 1,
-        }),
-      )
-        .to.be.revertedWithCustomError(dsm, "UnexpectedContractVersion")
-        .withArgs(DSM_VERSION, DSM_VERSION - 1);
+      await expect(dsm.connect(unrelatedGuardian1).unvetSigningKeys(...args, sig)).to.be.revertedWithCustomError(
+        dsm,
+        "InvalidSignature",
+      );
     });
 
     it("Reverts if `nodeOperatorIds` is not a multiple of 8 bytes", async () => {

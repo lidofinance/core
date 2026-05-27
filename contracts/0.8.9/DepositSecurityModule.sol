@@ -38,7 +38,6 @@ contract DepositSecurityModule {
     struct Signature {
         bytes32 r;
         bytes32 vs;
-        uint256 contractVersion;
     }
 
     event OwnerChanged(address newValue);
@@ -69,7 +68,6 @@ contract DepositSecurityModule {
     error UnvetUnexpectedBlockHash();
     error NotAGuardian(address addr);
     error ZeroParameter(string parameter);
-    error UnexpectedContractVersion(uint256 expected, uint256 received);
 
     /// @notice Represents the code version to help distinguish contract interfaces.
     uint256 public constant VERSION = 4;
@@ -370,8 +368,6 @@ contract DepositSecurityModule {
      * | PAUSE_MESSAGE_PREFIX | contractVersion | blockNumber |
      */
     function pauseDeposits(uint256 blockNumber, Signature memory sig) external {
-        if (sig.contractVersion != VERSION) revert UnexpectedContractVersion(VERSION, sig.contractVersion);
-
         /// @dev In case of an emergency function `pauseDeposits` is supposed to be called
         /// by all guardians. Thus only the first call will do the actual change. But
         /// the other calls would be OK operations from the point of view of protocol’s logic.
@@ -382,7 +378,7 @@ contract DepositSecurityModule {
         int256 guardianIndex = _getGuardianIndex(msg.sender);
 
         if (guardianIndex == -1) {
-            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, sig.contractVersion, blockNumber));
+            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, VERSION, blockNumber));
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
             if (guardianIndex == -1) revert InvalidSignature();
@@ -499,15 +495,6 @@ contract DepositSecurityModule {
     ) external {
         if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
 
-        for (uint256 i = 0; i < sortedGuardianSignatures.length;) {
-            uint256 receivedVersion = sortedGuardianSignatures[i].contractVersion;
-            if (receivedVersion != VERSION) revert UnexpectedContractVersion(VERSION, receivedVersion);
-
-            unchecked {
-                ++i;
-            }
-        }
-
         /// @dev The first most likely reason for the signature to go stale
         bytes32 onchainDepositRoot = IDepositContract(DEPOSIT_CONTRACT).get_deposit_root();
         if (depositRoot != onchainDepositRoot) revert DepositRootChanged();
@@ -540,7 +527,7 @@ contract DepositSecurityModule {
         bytes32 msgHash = keccak256(
             abi.encodePacked(
                 ATTEST_MESSAGE_PREFIX,
-                sigs[0].contractVersion,
+                VERSION,
                 blockNumber,
                 blockHash,
                 depositRoot,
@@ -594,8 +581,6 @@ contract DepositSecurityModule {
         bytes calldata vettedSigningKeysCounts,
         Signature calldata sig
     ) external {
-        if (sig.contractVersion != VERSION) revert UnexpectedContractVersion(VERSION, sig.contractVersion);
-
         /// @dev The most likely reason for the signature to go stale
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
         if (nonce != onchainNonce) revert ModuleNonceChanged();
@@ -617,19 +602,19 @@ contract DepositSecurityModule {
         if (guardianIndex == -1) {
             bytes32 msgHash = keccak256(
                 // slither-disable-start encode-packed-collision
-                // values with a dynamic type checked earlier
-                abi.encodePacked(
-                    UNVET_MESSAGE_PREFIX,
-                    sig.contractVersion,
-                    blockNumber,
-                    blockHash,
-                    stakingModuleId,
-                    nonce,
-                    nodeOperatorIds,
-                    vettedSigningKeysCounts
-                )
-                // slither-disable-end encode-packed-collision
-            );
+                    // values with a dynamic type checked earlier
+                    abi.encodePacked(
+                        UNVET_MESSAGE_PREFIX,
+                        VERSION,
+                        blockNumber,
+                        blockHash,
+                        stakingModuleId,
+                        nonce,
+                        nodeOperatorIds,
+                        vettedSigningKeysCounts
+                    )
+                    // slither-disable-end encode-packed-collision
+                );
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
             if (guardianIndex == -1) revert InvalidSignature();

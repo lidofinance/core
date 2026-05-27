@@ -81,12 +81,7 @@ describe("Integration: DSM pause deposits", () => {
     const guardianSigner = await impersonate(guardian, ether("1"));
 
     const blockNumber = await time.latestBlock();
-    await pauseDeposits(
-      guardianSigner,
-      BigInt(blockNumber),
-      { r: ZeroHash, vs: ZeroHash, contractVersion: DSM_VERSION },
-      guardian,
-    );
+    await pauseDeposits(guardianSigner, BigInt(blockNumber), { r: ZeroHash, vs: ZeroHash }, guardian);
     await ownerUnpauseDeposits();
   });
 
@@ -126,7 +121,6 @@ describe("Integration: DSM pause deposits", () => {
       dsm.connect(guardianSigner).pauseDeposits(expiredBlockNumber, {
         r: ZeroHash,
         vs: ZeroHash,
-        contractVersion: DSM_VERSION,
       }),
     ).to.be.revertedWithCustomError(dsm, "PauseIntentExpired");
   });
@@ -139,7 +133,6 @@ describe("Integration: DSM pause deposits", () => {
       dsm.connect(stranger).pauseDeposits(await time.latestBlock(), {
         r: ZeroHash,
         vs: ZeroHash,
-        contractVersion: DSM_VERSION,
       }),
     ).to.be.revertedWith("ECDSA: invalid signature");
 

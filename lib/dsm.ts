@@ -30,7 +30,7 @@ class DSMMessage {
   }
 
   sign(signerPrivateKey: string): DepositSecurityModule.SignatureStruct {
-    return { ...toEip2098(sign(this.hash, signerPrivateKey)), contractVersion: this.contractVersion };
+    return toEip2098(sign(this.hash, signerPrivateKey));
   }
 }
 

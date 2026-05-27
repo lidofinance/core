@@ -235,7 +235,6 @@ describe("Integration: DSM keys unvetting", () => {
         .unvetSigningKeys(blockNumber, blockHash, stakingModuleId, nonce, nodeOperatorIds, vettedSigningKeysCounts, {
           r: ZeroHash,
           vs: ZeroHash,
-          contractVersion: DSM_VERSION,
         }),
     )
       .to.emit(nor, "VettedSigningKeysCountChanged")
@@ -290,7 +289,6 @@ describe("Integration: DSM keys unvetting", () => {
       .unvetSigningKeys(blockNumber, blockHash, stakingModuleId, nonce, nodeOperatorIds, vettedSigningKeysCounts, {
         r: ZeroHash,
         vs: ZeroHash,
-        contractVersion: DSM_VERSION,
       });
 
     // Check events
