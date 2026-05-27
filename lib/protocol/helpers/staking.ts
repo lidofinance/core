@@ -237,7 +237,7 @@ export const depositValidatorsWithoutReport = async (
     throw new Error(`Not enough depositable ether`);
   }
 
-  const depositedBefore = (await lido.getBalanceStats()).depositedSinceLastReport;
+  const depositedBefore = (await lido.getBalanceStats()).depositedAmount;
 
   const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(ethToDeposit, false);
 
@@ -261,10 +261,10 @@ export const depositValidatorsWithoutReport = async (
     validatorsDeltaGweiByModule.set(moduleIds[i], allocated[i] / ONE_GWEI);
   }
 
-  const { depositedSinceLastReport } = await lido.getBalanceStats();
+  const { depositedAmount } = await lido.getBalanceStats();
 
-  if (depositedSinceLastReport - depositedBefore !== ethToDeposit) {
-    throw new Error(`Deposited ${depositedSinceLastReport - depositedBefore} wei, expected ${ethToDeposit}`);
+  if (depositedAmount - depositedBefore !== ethToDeposit) {
+    throw new Error(`Deposited ${depositedAmount - depositedBefore} wei, expected ${ethToDeposit}`);
   }
 
   return validatorsDeltaGweiByModule;
@@ -276,11 +276,10 @@ export const seedProtocolPendingBaseline = async (
   depositsCount: bigint = 1n,
 ) => {
   await depositValidatorsWithoutReport(ctx, depositsCount);
-  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
-    await ctx.contracts.lido.getBalanceStats();
+  const { clValidatorsBalance, clPendingBalance, depositedAmount } = await ctx.contracts.lido.getBalanceStats();
 
   const { data } = await report(ctx, {
-    clDiff: depositedSinceLastReport,
+    clDiff: depositedAmount,
     dryRun: true,
     excludeVaultsBalances: true,
     skipWithdrawals: true,
@@ -288,11 +287,11 @@ export const seedProtocolPendingBaseline = async (
     // adjust modules balances in case of unaccounted cl balance in tests
     ...adjustReportModuleBalances(
       await buildModuleAccountingReportParams(ctx),
-      toGwei(clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport),
+      toGwei(clValidatorsBalance + clPendingBalance),
     ),
   });
 
-  const pendingBaselineGwei = toGwei(depositedSinceLastReport);
+  const pendingBaselineGwei = toGwei(depositedAmount);
   return submitReportDataWithConsensusAndEmptyExtraData(ctx, {
     ...data,
     clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei,
@@ -365,14 +364,14 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
 
   log.debug("Validators on beacon chain before provisioning", {
     "Module ID to deposit": moduleId,
-    "Deposited": before.depositedSinceLastReport,
-    "Active": before.clValidatorsBalanceAtLastReport,
-    "Pending": before.clPendingBalanceAtLastReport,
+    "Deposited": before.depositedAmount,
+    "Active": before.clValidatorsBalance,
+    "Pending": before.clPendingBalance,
   });
 
   // Add new validators to beacon chain
   const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[moduleId, toGwei(ethToDeposit)]]);
-  const postCLBalanceWei = before.clValidatorsBalanceAtLastReport + before.clPendingBalanceAtLastReport + ethToDeposit;
+  const postCLBalanceWei = before.clValidatorsBalance + before.clPendingBalance + ethToDeposit;
 
   await report(ctx, {
     clDiff: ethToDeposit,
@@ -388,8 +387,8 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
 
   log.debug("Validators on beacon chain after depositing", {
     "Module ID deposited": moduleId,
-    "Deposited": after.depositedSinceLastReport,
-    "Active": after.clValidatorsBalanceAtLastReport,
-    "Pending": after.clPendingBalanceAtLastReport,
+    "Deposited": after.depositedAmount,
+    "Active": after.clValidatorsBalance,
+    "Pending": after.clPendingBalance,
   });
 };

@@ -587,21 +587,21 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
 
         (
-            uint256 clValidatorsBalanceAtLastReport,
-            uint256 clPendingBalanceAtLastReport,
-            uint256 depositedSinceLastReport,
-            uint256 depositedForCurrentReport
+            uint256 clValidatorsBalance,
+            uint256 clPendingBalance,
+            uint256 depositedAmount,
+            uint256 depositedAmountForLastRefSlot
         ) = ILidoUpgrade(g.lido).getBalanceStats();
 
-        if (clValidatorsBalanceAtLastReport != initialBeaconBalance || clPendingBalanceAtLastReport != 0) {
+        if (clValidatorsBalance != initialBeaconBalance || clPendingBalance != 0) {
             revert LidoMigrationIncorrectBeaconBalance();
         }
 
         if (
-            depositedSinceLastReport != (initialDepositedValidators - initialBeaconValidators) * 32 ether
-                || depositedForCurrentReport != 0
+            depositedAmount != (initialDepositedValidators - initialBeaconValidators) * 32 ether
+                || depositedAmountForLastRefSlot != 0
         ) {
-            revert LidoMigrationIncorrectDepositedSinceLastReport();
+            revert LidoMigrationIncorrectDepositedAmount();
         }
     }
 
@@ -845,7 +845,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error LidoMigrationIncorrectBufferedEther();
     error LidoMigrationIncorrectDepositedValidators();
     error LidoMigrationIncorrectBeaconBalance();
-    error LidoMigrationIncorrectDepositedSinceLastReport();
+    error LidoMigrationIncorrectDepositedAmount();
 
     error SRMigrationIncorrectAddStakingModule();
     error SRMigrationIncorrectModulesCount();

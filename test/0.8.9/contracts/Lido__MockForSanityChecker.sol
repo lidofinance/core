@@ -4,22 +4,22 @@
 pragma solidity 0.8.9;
 
 contract Lido__MockForSanityChecker {
-    uint256 public clValidatorsBalance;
-    uint256 public clPendingBalance;
-    uint256 public depositedLastReport;
-    uint256 public depositedCurrentReport;
+    uint256 public reportClValidatorsBalance;
+    uint256 public reportClPendingBalance;
+    uint256 public depositedEther;
+    uint256 public depositedEtherForLastRefSlot;
     uint256 public contractVersion;
 
     function mock__setBalanceStats(
-        uint256 _clValidatorsBalance,
-        uint256 _clPendingBalance,
-        uint256 _depositedLastReport,
-        uint256 _depositedCurrentReport
+        uint256 clValidatorsBalance,
+        uint256 clPendingBalance,
+        uint256 depositedLastReport,
+        uint256 depositedCurrentReport
     ) external {
-        clValidatorsBalance = _clValidatorsBalance;
-        clPendingBalance = _clPendingBalance;
-        depositedLastReport = _depositedLastReport;
-        depositedCurrentReport = _depositedCurrentReport;
+        reportClValidatorsBalance = clValidatorsBalance;
+        reportClPendingBalance = clPendingBalance;
+        depositedEther = depositedLastReport;
+        depositedEtherForLastRefSlot = depositedCurrentReport;
     }
 
     function mock__setContractVersion(uint256 _version) external {
@@ -30,16 +30,16 @@ contract Lido__MockForSanityChecker {
         external
         view
         returns (
-            uint256 clValidatorsBalanceAtLastReport,
-            uint256 clPendingBalanceAtLastReport,
-            uint256 depositedSinceLastReport,
-            uint256 depositedForCurrentReport
+            uint256 clValidatorsBalance,
+            uint256 clPendingBalance,
+            uint256 depositedAmount,
+            uint256 depositedAmountForLastRefSlot
         )
     {
-        clValidatorsBalanceAtLastReport = clValidatorsBalance;
-        clPendingBalanceAtLastReport = clPendingBalance;
-        depositedSinceLastReport = depositedLastReport;
-        depositedForCurrentReport = depositedCurrentReport;
+        clValidatorsBalance = reportClValidatorsBalance;
+        clPendingBalance = reportClPendingBalance;
+        depositedAmount = depositedEther;
+        depositedAmountForLastRefSlot = depositedEtherForLastRefSlot;
     }
 
     function getContractVersion() external view returns (uint256) {

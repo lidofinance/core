@@ -151,9 +151,9 @@ contract Accounting {
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
 
-        uint256 depositedSinceLastReport;
-        uint256 depositedForCurrentReport;
-        (pre.clValidatorsBalance, pre.clPendingBalance, depositedSinceLastReport, depositedForCurrentReport) = LIDO.getBalanceStats();
+        uint256 depositedAmount;
+        uint256 depositedAmountForLastRefSlot;
+        (pre.clValidatorsBalance, pre.clPendingBalance, depositedAmount, depositedAmountForLastRefSlot) = LIDO.getBalanceStats();
 
         if (isSimulation) {
             // for simulation we specifically fetch the current value, because during the refSlot `LastRefSlot` method
@@ -165,14 +165,14 @@ contract Accounting {
             ///      take the current value of all deposits without any adjustment.
             /// @notice Note that calling simulateOracleReport on any slot other than the refSlot may produce incorrect
             ///      values if deposits were made between the refSlot and the moment simulateOracleReport is called.
-            pre.depositedBalance = depositedSinceLastReport;
+            pre.depositedBalance = depositedAmount;
         } else {
             pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
 
             /// @dev At the moment `handleOracleReport` is called, the refSlot switch has already occurred — therefore
             ///      we use the adjusted deposits sum as of the reporting refSlot (i.e. excluding deposits made
             ///      after the refSlot).
-            pre.depositedBalance = depositedForCurrentReport;
+            pre.depositedBalance = depositedAmountForLastRefSlot;
         }
     }
 
