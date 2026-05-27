@@ -13,12 +13,11 @@ import { setSingleGuardian } from "lib/protocol/helpers/dsm";
 
 import { Snapshot } from "test/suite";
 
-const DSM_VERSION = 4;
-
 describe("Integration: DSM pause deposits", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
   let dsm: DepositSecurityModule;
+  let dsmVersion: bigint;
 
   let snapshot: string;
   let originalState: string;
@@ -31,6 +30,7 @@ describe("Integration: DSM pause deposits", () => {
 
     [stranger] = await ethers.getSigners();
 
+    dsmVersion = await dsm.VERSION();
     DSMPauseMessage.setMessagePrefix(await dsm.PAUSE_MESSAGE_PREFIX());
   });
 
@@ -95,7 +95,7 @@ describe("Integration: DSM pause deposits", () => {
 
     // Generate signature
     const blockNumber = await time.latestBlock();
-    const pauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
+    const pauseMessage = new DSMPauseMessage(dsmVersion, blockNumber);
     const sig = await pauseMessage.sign(guardianPrivateKey);
 
     // Pause and unpause
@@ -139,7 +139,7 @@ describe("Integration: DSM pause deposits", () => {
     // Try with non-guardian signature
     const blockNumber = await time.latestBlock();
     const nonGuardianPrivateKey = "0x" + "1".repeat(64);
-    const pauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
+    const pauseMessage = new DSMPauseMessage(dsmVersion, blockNumber);
     const sig = pauseMessage.sign(nonGuardianPrivateKey);
 
     await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(

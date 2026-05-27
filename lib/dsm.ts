@@ -29,6 +29,10 @@ class DSMMessage {
     throw new Error("Unimplemented");
   }
 
+  get isVersionedHash(): boolean {
+    return BigInt(this.contractVersion.toString()) >= 4n;
+  }
+
   sign(signerPrivateKey: string): DepositSecurityModule.SignatureStruct {
     return toEip2098(sign(this.hash, signerPrivateKey));
   }
@@ -58,6 +62,13 @@ export class DSMAttestMessage extends DSMMessage {
   }
 
   get hash() {
+    if (!this.isVersionedHash) {
+      return solidityPackedKeccak256(
+        ["bytes32", "uint256", "bytes32", "bytes32", "uint256", "uint256"],
+        [this.messagePrefix, this.blockNumber, this.blockHash, this.depositRoot, this.stakingModule, this.nonce],
+      );
+    }
+
     return solidityPackedKeccak256(
       ["bytes32", "uint256", "uint256", "bytes32", "bytes32", "uint256", "uint256"],
       [
@@ -82,6 +93,10 @@ export class DSMPauseMessage extends DSMMessage {
   }
 
   get hash() {
+    if (!this.isVersionedHash) {
+      return solidityPackedKeccak256(["bytes32", "uint256"], [this.messagePrefix, this.blockNumber]);
+    }
+
     return solidityPackedKeccak256(
       ["bytes32", "uint256", "uint256"],
       [this.messagePrefix, this.contractVersion, this.blockNumber],
@@ -116,6 +131,21 @@ export class DSMUnvetMessage extends DSMMessage {
   }
 
   get hash() {
+    if (!this.isVersionedHash) {
+      return solidityPackedKeccak256(
+        ["bytes32", "uint256", "bytes32", "uint256", "uint256", "bytes", "bytes"],
+        [
+          this.messagePrefix,
+          this.blockNumber,
+          this.blockHash,
+          this.stakingModule,
+          this.nonce,
+          this.nodeOperatorIds,
+          this.vettedSigningKeysCounts,
+        ],
+      );
+    }
+
     return solidityPackedKeccak256(
       ["bytes32", "uint256", "uint256", "bytes32", "uint256", "uint256", "bytes", "bytes"],
       [

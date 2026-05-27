@@ -20,12 +20,12 @@ import { Snapshot } from "test/suite";
 
 // Just an arbitrary account for using in tests
 const GUARDIAN_PRIVATE_KEY = "0x516b8a7d9290502f5661da81f0cf43893e3d19cb9aea3c426cfb36e8186e9c09";
-const DSM_VERSION = 4;
 
 describe("Integration: DSM keys unvetting", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
   let dsm: DepositSecurityModule;
+  let dsmVersion: bigint;
 
   let snapshot: string;
   let originalState: string;
@@ -38,6 +38,7 @@ describe("Integration: DSM keys unvetting", () => {
 
     [stranger] = await ethers.getSigners();
 
+    dsmVersion = await dsm.VERSION();
     DSMUnvetMessage.setMessagePrefix(await dsm.UNVET_MESSAGE_PREFIX());
   });
 
@@ -81,7 +82,7 @@ describe("Integration: DSM keys unvetting", () => {
     // Create signature with non-guardian private key
     const nonGuardianPrivateKey = "0x" + "1".repeat(64);
     const unvetMessage = new DSMUnvetMessage(
-      DSM_VERSION,
+      dsmVersion,
       blockNumber,
       blockHash,
       stakingModuleId,
@@ -150,7 +151,7 @@ describe("Integration: DSM keys unvetting", () => {
     const nonce = await stakingRouter.getStakingModuleNonce(stakingModuleId);
     // Generate valid guardian signature
     const unvetMessage = new DSMUnvetMessage(
-      DSM_VERSION,
+      dsmVersion,
       blockNumber,
       blockHash,
       stakingModuleId,
