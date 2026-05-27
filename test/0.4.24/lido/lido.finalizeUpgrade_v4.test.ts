@@ -51,6 +51,8 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       const latestBlock = BigInt(await time.latestBlock());
 
       await lido.connect(deployer).harness_initialize_v3(locator, { value: initialValue });
+      // simulate report
+      await accountingOracle.mock_setProcessingState(1, true, true);
 
       expect(await impl.getInitializationBlock()).to.equal(MaxUint256);
       expect(await lido.getInitializationBlock()).to.equal(latestBlock + 1n);
