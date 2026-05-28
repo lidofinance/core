@@ -233,8 +233,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         }
 
         // Proceed to StakingRouter
-        IStakingRouter(stakingRouter)
-            .topUp(_topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits);
+        stakingRouter.topUp(_topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits);
 
         if (totalLimits > 0) {
             _setLastTopUpData();
