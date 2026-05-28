@@ -239,16 +239,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ISecondOpinionOracle public secondOpinionOracle;
 
     /// @dev Withdrawal vault balance after the last report's transfer was applied.
-    ///      Used to compute actual CL withdrawals: clWithdrawals = WVB_current - _lastVaultBalanceAfterTransfer
-    uint256 private _lastVaultBalanceAfterTransfer;
+    ///      Used to compute actual CL withdrawals: clWithdrawals = WVB_current - lastVaultBalanceAfterTransfer
+    uint256 public lastVaultBalanceAfterTransfer;
 
     /// @dev Logical timestamp of the latest stored report snapshot.
     ///      It is advanced by `_timeElapsed` on each accounting report.
-    uint256 private _lastReportTimestamp;
+    uint256 public lastReportTimestamp;
 
     /// @dev Migration flag: false until the first successful accounting report after migration.
     ///      The per-module validators balance increase check is skipped while the flag is false.
-    bool private _isPostMigrationFirstReportDone;
+    bool public isPostMigrationFirstReportDone;
 
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _accounting address of the Accounting instance
@@ -546,13 +546,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 postWithdrawalsMigrationCLBalance = migrationCLBalance - migrationCLWithdrawals;
         // Use the current vault balance as the last post-transfer balance.
         // Migration has no more precise post-report baseline; the seeded snapshots below compensate it.
-        _lastVaultBalanceAfterTransfer = migrationCLWithdrawals;
+        lastVaultBalanceAfterTransfer = migrationCLWithdrawals;
 
         // Seed the decrease-check window with two migration snapshots:
         // 1) pre-withdrawals CL balance with zero flows;
         // 2) post-withdrawals CL balance with migration-time vault balance recorded as CL withdrawals.
         // Migrated transient deposits are not stored here; they belong to the first post-migration report.
-        uint256 migrationReportTimestamp = _lastReportTimestamp;
+        uint256 migrationReportTimestamp = lastReportTimestamp;
         _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
         _addReportData(migrationReportTimestamp, postWithdrawalsMigrationCLBalance, 0, migrationCLWithdrawals);
 
@@ -763,7 +763,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // using the max effective balance, so those migration values may be higher than the first
         // oracle-reported balances. Skip the module validators balance increase check until the
         // first report overwrites the migrated accounting state with the actual per-module values.
-        if (!_isPostMigrationFirstReportDone) {
+        if (!isPostMigrationFirstReportDone) {
             return;
         }
 
@@ -1120,9 +1120,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) internal {
         // Compute actual CL withdrawals for this period:
         // clWithdrawals = current vault balance - vault balance after last report's transfer
-        uint256 reportTimestamp = _lastReportTimestamp + _checkParams.timeElapsed;
+        uint256 reportTimestamp = lastReportTimestamp + _checkParams.timeElapsed;
         _addReportData(reportTimestamp, _checkParams.postCLBalance, _checkParams.deposits, _clWithdrawals);
-        _lastReportTimestamp = reportTimestamp;
+        lastReportTimestamp = reportTimestamp;
 
         // If the CL balance didn't decrease accounting for withdrawals, skip the window check
         if (_checkParams.preCLBalance <= _checkParams.postCLBalance) return;
@@ -1166,10 +1166,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     function _getCLWithdrawals(uint256 _withdrawalVaultBalance) internal view returns (uint256) {
-        if (_withdrawalVaultBalance < _lastVaultBalanceAfterTransfer) {
-            revert IncorrectCLWithdrawalsVaultBalance(_withdrawalVaultBalance, _lastVaultBalanceAfterTransfer);
+        if (_withdrawalVaultBalance < lastVaultBalanceAfterTransfer) {
+            revert IncorrectCLWithdrawalsVaultBalance(_withdrawalVaultBalance, lastVaultBalanceAfterTransfer);
         }
-        return _withdrawalVaultBalance - _lastVaultBalanceAfterTransfer;
+        return _withdrawalVaultBalance - lastVaultBalanceAfterTransfer;
     }
 
     function _checkWithdrawalsVaultTransfer(
@@ -1196,8 +1196,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _withdrawalVaultBalance,
         uint256 _withdrawalsVaultTransfer
     ) internal {
-        _lastVaultBalanceAfterTransfer = _withdrawalVaultBalance - _withdrawalsVaultTransfer;
-        _isPostMigrationFirstReportDone = true;
+        lastVaultBalanceAfterTransfer = _withdrawalVaultBalance - _withdrawalsVaultTransfer;
+        isPostMigrationFirstReportDone = true;
     }
 
     function _calcWindowDiff(
