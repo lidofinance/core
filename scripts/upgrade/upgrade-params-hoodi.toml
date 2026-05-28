@@ -36,9 +36,6 @@ consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amoun
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
-[lido]
-lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
-
 [withdrawalVault]
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification
 withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
@@ -168,6 +165,3 @@ expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
 timeConstraintsContract = "0xB26Fd3b50280AbC55c572EE73071778A51088408"
 enabledDaySpanStart = 0 # 00:00:000 UTC
 enabledDaySpanEnd = 86399 # 23:59:59 UTC
-# Vault hub configuration
-[vaultHub]
-maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)

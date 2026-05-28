@@ -298,8 +298,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         ///      made after refSlot and before migration (i.e. report's tx) will be lost
         IAccountingOracle oracle = _accountingOracle();
         (,,, bool mainDataSubmitted,,,,,) = oracle.getProcessingState();
-        /// @dev pass in case of initial deploy
-        require(mainDataSubmitted || oracle.getLastProcessingRefSlot() == 0, "NO_REPORT");
+        require(mainDataSubmitted, "NO_REPORT");
 
         _checkContractVersion(3);
         _setContractVersion(4);

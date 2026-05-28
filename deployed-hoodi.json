@@ -945,8 +945,7 @@
           "consolidationBus": "0xe09fBcE63826468867eE66Eda491E444829E022A",
           "consolidationMigrator": "0x747d357F5b6410B80Eb63406FaC5E2A91131B4f8",
           "curatedModuleCommittee": "0x84DffcfB232594975C608DE92544Ff239a24c9E9",
-          "consolidationGatewayPauser": "0x83BCE68B4e8b7071b2a664a26e6D3Bc17eEe3102",
-          "lidoDepositsReserveTarget": "1000000000000000000000"
+          "consolidationGatewayPauser": "0x83BCE68B4e8b7071b2a664a26e6D3Bc17eEe3102"
         },
         "csmUpgrade": {
           "csmProxy": "0x79CEf36D84743222f37765204Bec41E92a93E59d",

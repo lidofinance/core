@@ -33,7 +33,10 @@ import {
     IConsolidationMigrator,
     IInitializedVersionView,
     IMerkleGate,
-    IOneShotCurveSetup
+    IOneShotCurveSetup,
+    IWithdrawalVaultUpgrade,
+    IConsolidationBus,
+    IConsolidationMigrator
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
@@ -307,9 +310,19 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
 
         // WithdrawalVault
-        _assertWithdrawalsManagerProxyImplementation(c.withdrawalVault, c.newWithdrawalVaultImpl);
-        _assertWithdrawalsManagerProxyAdmin(c.withdrawalVault, agent);
-        _assertContractVersion(c.withdrawalVault, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
+        {
+            address wv = c.withdrawalVault;
+            _assertWithdrawalsManagerProxyImplementation(wv, c.newWithdrawalVaultImpl);
+            _assertWithdrawalsManagerProxyAdmin(wv, agent);
+            _assertContractVersion(wv, EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION);
+
+            if (IWithdrawalVaultUpgrade(wv).CONSOLIDATION_GATEWAY() != c.consolidationGateway) {
+                revert InvalidConsolidationGatewayAddressInWithdrawalVault();
+            }
+            if (IWithdrawalVaultUpgrade(wv).TRIGGERABLE_WITHDRAWALS_GATEWAY() != g.triggerableWithdrawalsGateway) {
+                revert InvalidTriggerableWithdrawalsGatewayInWithdrawalVault();
+            }
+        }
 
         // SR
         {
@@ -340,11 +353,18 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertZeroOZRoleHolders(consBus, MANAGE_ROLE);
             _assertZeroOZRoleHolders(consBus, REMOVE_ROLE);
 
+            if (IConsolidationBus(consBus).CONSOLIDATION_GATEWAY() != consGw) {
+                revert InvalidConsolidationGatewayAddressInConsolidationBus();
+            }
+
             _assertProxyImplementation(consMigrator, c.consolidationMigratorImpl);
             _assertProxyAdmin(consMigrator, agent);
             _assertSingleOZRoleHolder(consMigrator, DEFAULT_ADMIN_ROLE, agent);
             _assertSingleOZRoleHolder(consMigrator, ALLOW_PAIR_ROLE, g.easyTrackEVMScriptExecutor);
             _assertSingleOZRoleHolder(consMigrator, DISALLOW_PAIR_ROLE, c.curatedModuleCommittee);
+            if (IConsolidationMigrator(consMigrator).CONSOLIDATION_BUS() != consBus) {
+                revert InvalidConsolidationBusAddressInConsolidationMigrator();
+            }
             /// @note correctness of TARGET_MODULE_ID is checked inside the SR migration checks
 
             _assertLocatorAddress(locator.consolidationGateway(), consGw);
@@ -816,6 +836,11 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error InvalidCircuitBreakerPauser(address pausable, address actualPauser, address expectedPauser);
     error IdentifiedDVTClusterCurveSetupNotExecuted(address curveSetup);
     error InvalidIdentifiedDVTClusterCurveId(address contractAddress, uint256 actualCurveId, uint256 expectedCurveId);
+
+    error InvalidConsolidationBusAddressInConsolidationMigrator();
+    error InvalidConsolidationGatewayAddressInConsolidationBus();
+    error InvalidConsolidationGatewayAddressInWithdrawalVault();
+    error InvalidTriggerableWithdrawalsGatewayInWithdrawalVault();
 
     error LidoMigrationIncorrectBufferedEther();
     error LidoMigrationIncorrectDepositedValidators();

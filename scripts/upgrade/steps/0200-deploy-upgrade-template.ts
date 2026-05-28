@@ -107,11 +107,6 @@ export async function main() {
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
       curatedModuleCommittee: parameters.consolidationMigrator.committee!,
       consolidationGatewayPauser: parameters.consolidationGateway.pauser!,
-
-      lidoDepositsReserveTarget: parameters.lido.lidoDepositsReserveTarget,
-
-      // StakingRouter
-      maxTopUpPerBlockGwei: parameters.stakingRouter.maxTopUpPerBlockGwei,
     },
     csmUpgrade: parameters.csmUpgrade,
     curatedModule: parameters.curatedModule,

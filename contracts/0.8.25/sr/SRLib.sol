@@ -505,7 +505,8 @@ library SRLib {
         ModuleState storage moduleState;
         ModuleStateConfig memory stateConfig;
 
-        uint256 totalValidators;
+        // new total validators count after allocation
+        uint256 totalValidators = depositsToAllocate;
         uint256 maxEBType1 = _cfg.maxEBType1;
         for (uint256 i = 0; i < modulesCount; ++i) {
             uint256 moduleId = SRStorage.getModuleIdAt(i);
@@ -533,8 +534,6 @@ library SRLib {
             _allocations[i] = validatorsCount;
             totalValidators += validatorsCount;
         }
-        // new total validators count after allocation
-        totalValidators += depositsToAllocate;
         _capacities = new uint256[](modulesCount);
 
         // put calldata msxEBType2 to stack
