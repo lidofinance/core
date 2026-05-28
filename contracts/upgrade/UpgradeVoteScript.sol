@@ -57,7 +57,7 @@ contract UpgradeVoteScript is OmnibusBase {
     // Constants
     //
     // TODO set upon finish with items
-    uint256 public constant DG_ITEMS_COUNT = 65;
+    uint256 public constant DG_ITEMS_COUNT = 66;
     uint256 public constant VOTING_ITEMS_COUNT = 11;
 
     // Aragon Kernel APP_BASES_NAMESPACE
@@ -94,6 +94,8 @@ contract UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant SET_TREE_ROLE = keccak256("SET_TREE_ROLE");
     bytes32 internal constant MANAGE_OPERATOR_GROUPS_ROLE = keccak256("MANAGE_OPERATOR_GROUPS_ROLE");
     bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
+
+    string internal constant IDENTIFIED_COMMUNITY_STAKERS_GATE_NAME = "Identified Community Stakers Gate";
     //
     // Immutables
     //
@@ -556,6 +558,12 @@ contract UpgradeVoteScript is OmnibusBase {
                 to: vettedGate,
                 role: END_REFERRAL_SEASON_ROLE,
                 account: c.csmCommittee
+            });
+
+            items[i++] = _item({
+                description: "Set name for Identified Community Stakers gate",
+                to: vettedGate,
+                data: abi.encodeCall(IMerkleGate.setName, (IDENTIFIED_COMMUNITY_STAKERS_GATE_NAME))
             });
 
             items[i++] =

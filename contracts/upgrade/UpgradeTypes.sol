@@ -103,7 +103,9 @@ interface IConsolidationBus {
 }
 
 interface IMerkleGate {
+    function name() external view returns (string memory);
     function curveId() external view returns (uint256);
+    function setName(string calldata name) external;
     function setTreeParams(bytes32 treeRoot, string calldata treeCid) external;
 }
 
@@ -233,6 +235,7 @@ interface IMetaRegistry {
     }
 
     struct OperatorGroup {
+        string name;
         SubNodeOperator[] subNodeOperators;
         ExternalOperator[] externalOperators;
     }
