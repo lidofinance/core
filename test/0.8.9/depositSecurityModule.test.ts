@@ -1053,11 +1053,11 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(1);
         expect(await dsm.getGuardianQuorum()).to.equal(1);
 
-        const [depositCalldata, ...signingArgs] = await getDepositArgs();
+        const signingArgs = await getDepositArgs();
         const attestMessage = new DSMAttestMessage(DSM_VERSION - 1, ...signingArgs);
         const sig = attestMessage.sign(guardian1.privateKey);
 
-        await expect(dsm.depositBufferedEther(...signingArgs, depositCalldata, [sig])).to.be.revertedWithCustomError(
+        await expect(dsm.depositBufferedEther(...signingArgs, [sig])).to.be.revertedWithCustomError(
           dsm,
           "InvalidSignature",
         );
