@@ -726,10 +726,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return (depositedValidators, depositedValidators, clValidatorsBalance.add(clPendingBalance));
     }
 
-    /// @notice Returns current balance statistics
+    /// @notice Returns current (i.e. from last report) CL balances and deposit sums since the last report
     /// @return clValidatorsBalanceAtLastReport Sum of validator's active balances in wei
     /// @return clPendingBalanceAtLastReport Sum of validator's pending deposits in wei
-    /// @return depositedSinceLastReport Deposits made since last oracle report
+    /// @return depositedSinceLastReport Deposits made since last oracle report in wei
+    /// @return depositedForCurrentReport Deposits made since last oracle report and up to
+    ///         the most recent refSlot in wei
     function getBalanceStats()
         external
         view
