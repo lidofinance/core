@@ -122,11 +122,11 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
-    const norPendingBalanceBeforeGwei = balanceStatsBeforeReport.depositedAmount / ONE_GWEI;
+    const norPendingBalanceBeforeGwei = balanceStatsBeforeReport.depositedSinceLastReport / ONE_GWEI;
     const totalPendingBalanceBeforeGwei = norPendingBalanceBeforeGwei;
     const totalValidatorsBalanceBeforeGwei = sumBigints(moduleReportState.validatorBalancesGweiByStakingModule);
 
-    expect(balanceStatsBeforeReport.depositedAmount).to.equal(ONE_VALIDATOR_BALANCE);
+    expect(balanceStatsBeforeReport.depositedSinceLastReport).to.equal(ONE_VALIDATOR_BALANCE);
 
     const pendingConsumedGwei = norPendingBalanceBeforeGwei;
     expect(pendingConsumedGwei).to.be.gt(0n);
@@ -149,7 +149,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     expect(pendingBalanceAfterGwei).to.equal(totalPendingBalanceBeforeGwei - pendingConsumedGwei);
 
     const data = await buildReportData({
-      clDiff: balanceStatsBeforeReport.depositedAmount,
+      clDiff: balanceStatsBeforeReport.depositedSinceLastReport,
       stakingModuleIdsWithUpdatedBalance: moduleReportState.stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule: reportedValidatorsBalancesGwei,
       clPendingBalanceGwei: 0n,
@@ -165,12 +165,12 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
-    const norPendingBalanceBeforeGwei = balanceStatsBeforeReport.depositedAmount / ONE_GWEI;
+    const norPendingBalanceBeforeGwei = balanceStatsBeforeReport.depositedSinceLastReport / ONE_GWEI;
 
-    expect(balanceStatsBeforeReport.depositedAmount).to.equal(ONE_VALIDATOR_BALANCE);
+    expect(balanceStatsBeforeReport.depositedSinceLastReport).to.equal(ONE_VALIDATOR_BALANCE);
 
     const data = await buildReportData({
-      clDiff: balanceStatsBeforeReport.depositedAmount,
+      clDiff: balanceStatsBeforeReport.depositedSinceLastReport,
       stakingModuleIdsWithUpdatedBalance: moduleReportState.stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule: moduleReportState.validatorBalancesGweiByStakingModule,
       clPendingBalanceGwei: norPendingBalanceBeforeGwei,
@@ -202,7 +202,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     const moduleReportState = await getCurrentModuleReportState();
 
     const data = await buildReportData({
-      clDiff: balanceStatsBeforeReport.depositedAmount,
+      clDiff: balanceStatsBeforeReport.depositedSinceLastReport,
       stakingModuleIdsWithUpdatedBalance: moduleReportState.stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule: withUpdatedModuleBalances(
         moduleReportState.validatorBalancesGweiByStakingModule,
@@ -231,7 +231,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const { reportTimeElapsed } = await getNextReportContext(ctx);
-    const totalPendingBalanceBeforeWei = balanceStatsBeforeReport.depositedAmount;
+    const totalPendingBalanceBeforeWei = balanceStatsBeforeReport.depositedSinceLastReport;
     const totalPendingBalanceBeforeGwei = totalPendingBalanceBeforeWei / ONE_GWEI;
     const appearedLimitEthPerDay =
       ((totalPendingBalanceBeforeWei / ONE_ETH) * ONE_DAY + reportTimeElapsed - 1n) / reportTimeElapsed;
@@ -304,12 +304,14 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
     const balanceStatsBeforeReport = await lido.getBalanceStats();
     const moduleReportState = await getCurrentModuleReportState();
-    const totalPendingBalanceBeforeGwei = balanceStatsBeforeReport.depositedAmount / ONE_GWEI;
+    const totalPendingBalanceBeforeGwei = balanceStatsBeforeReport.depositedSinceLastReport / ONE_GWEI;
     const totalValidatorsBalanceBeforeGwei = sumBigints(moduleReportState.validatorBalancesGweiByStakingModule);
 
-    expect(balanceStatsBeforeReport.clValidatorsBalance / ONE_GWEI).to.equal(totalValidatorsBalanceBeforeGwei);
-    expect(balanceStatsBeforeReport.clValidatorsBalance).to.be.gt(0n);
-    expect(balanceStatsBeforeReport.depositedAmount).to.equal(ONE_VALIDATOR_BALANCE);
+    expect(balanceStatsBeforeReport.clValidatorsBalanceAtLastReport / ONE_GWEI).to.equal(
+      totalValidatorsBalanceBeforeGwei,
+    );
+    expect(balanceStatsBeforeReport.clValidatorsBalanceAtLastReport).to.be.gt(0n);
+    expect(balanceStatsBeforeReport.depositedSinceLastReport).to.equal(ONE_VALIDATOR_BALANCE);
     expect(totalPendingBalanceBeforeGwei).to.be.gt(0n);
 
     const { reportTimeElapsed } = await getNextReportContext(ctx);
@@ -342,9 +344,9 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     });
 
     const totalCLBalanceBeforeWei =
-      balanceStatsBeforeReport.clValidatorsBalance +
-      balanceStatsBeforeReport.clPendingBalance +
-      balanceStatsBeforeReport.depositedAmount;
+      balanceStatsBeforeReport.clValidatorsBalanceAtLastReport +
+      balanceStatsBeforeReport.clPendingBalanceAtLastReport +
+      balanceStatsBeforeReport.depositedSinceLastReport;
     const totalCLGrowthCapWei =
       (totalCLBalanceBeforeWei * annualBalanceIncreaseBPLimit * reportTimeElapsed) /
       (SECONDS_PER_YEAR * MAX_BASIS_POINTS);

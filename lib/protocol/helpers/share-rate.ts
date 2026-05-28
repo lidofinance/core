@@ -28,8 +28,8 @@ async function changeInternalEther(ctx: ProtocolContext, internalEtherDelta: big
 
   const accountingSigner = await impersonate(accounting, ether("1"));
 
-  const { clValidatorsBalance, clPendingBalance } = await lido.getBalanceStats();
-  const beaconBalance = clValidatorsBalance + clPendingBalance;
+  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+  const beaconBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
   await lido.connect(accountingSigner).processClStateUpdate(
     await getCurrentBlockTimestamp(),

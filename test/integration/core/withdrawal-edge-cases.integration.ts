@@ -53,8 +53,10 @@ describe("Integration: Withdrawal edge cases", () => {
     effectiveClDiff: bigint,
     skipWithdrawals = false,
   ) => {
-    const { clValidatorsBalance, clPendingBalance, depositedAmount } = await ctx.contracts.lido.getBalanceStats();
-    const postCLBalanceWei = clValidatorsBalance + clPendingBalance + depositedAmount + effectiveClDiff;
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
+      await ctx.contracts.lido.getBalanceStats();
+    const postCLBalanceWei =
+      clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport + effectiveClDiff;
 
     await reportWithEffectiveClDiff(ctx, effectiveClDiff, {
       excludeVaultsBalances: true,
@@ -67,13 +69,14 @@ describe("Integration: Withdrawal edge cases", () => {
     await depositValidatorsWithoutReport(ctx, depositsCount);
 
     const { lido: lidoContract } = ctx.contracts;
-    const { clValidatorsBalance, clPendingBalance, depositedAmount } = await lidoContract.getBalanceStats();
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
+      await lidoContract.getBalanceStats();
 
-    const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[NOR_MODULE_ID, toGwei(depositedAmount)]]);
-    const postCLBalanceWei = clValidatorsBalance + clPendingBalance + depositedAmount;
+    const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[NOR_MODULE_ID, toGwei(depositedSinceLastReport)]]);
+    const postCLBalanceWei = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport;
 
     await report(ctx, {
-      clDiff: depositedAmount,
+      clDiff: depositedSinceLastReport,
       excludeVaultsBalances: true,
       skipWithdrawals: true,
       ...adjustReportModuleBalances(

@@ -146,11 +146,15 @@ export const report = async (
 
   refSlot = refSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
-  const { clValidatorsBalance, clPendingBalance, depositedAmount, depositedAmountForLastRefSlot } =
-    await lido.getBalanceStats();
-  const deposited = waitNextReportTime ? depositedAmount : depositedAmountForLastRefSlot;
+  const {
+    clValidatorsBalanceAtLastReport,
+    clPendingBalanceAtLastReport,
+    depositedForCurrentReport,
+    depositedSinceLastReport,
+  } = await lido.getBalanceStats();
+  const deposited = waitNextReportTime ? depositedForCurrentReport : depositedSinceLastReport;
   clDiff = clDiff ?? deposited;
-  const preCLBalance = clValidatorsBalance + clPendingBalance;
+  const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
   elRewardsVaultBalance = elRewardsVaultBalance ?? (await ethers.provider.getBalance(elRewardsVault.address));
   withdrawalVaultBalance = withdrawalVaultBalance ?? (await ethers.provider.getBalance(withdrawalVault.address));
@@ -287,8 +291,8 @@ export const report = async (
 };
 
 export const getDepositedSinceLastReport = async (ctx: ProtocolContext): Promise<bigint> => {
-  const { depositedAmount } = await ctx.contracts.lido.getBalanceStats();
-  return depositedAmount;
+  const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
+  return depositedSinceLastReport;
 };
 
 /**

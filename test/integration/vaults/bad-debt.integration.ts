@@ -707,8 +707,8 @@ describe("Integration: Vault with bad debt", () => {
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares, "Bad debt to internalize is the same");
 
       // simulate the report at the refSlot (like the Oracle would do)
-      const { clValidatorsBalance, clPendingBalance } = await lido.getBalanceStats();
-      const clBalance = clValidatorsBalance + clPendingBalance;
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const simulationAtRefSlot = await simulateReport(ctx, {
         refSlot: nextRefSlot,
         clValidatorsBalance: clBalance,

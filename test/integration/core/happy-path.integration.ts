@@ -311,14 +311,14 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
 
-    const { depositedAmount } = await lido.getBalanceStats();
+    const { depositedSinceLastReport } = await lido.getBalanceStats();
 
     // Deposit() moved ETH into protocol pending, but the new sanity path takes its
     // baseline from the previous Lido report snapshot rather than router-only state.
     // Submit a neutral report first so the next reward-bearing report stays on the
     // original "deposits activated + tiny positive CL reward" happy path.
     const { data: pendingBaselineData } = await report(ctx, {
-      clDiff: depositedAmount,
+      clDiff: depositedSinceLastReport,
       dryRun: true,
       excludeVaultsBalances: true,
       skipWithdrawals: true,

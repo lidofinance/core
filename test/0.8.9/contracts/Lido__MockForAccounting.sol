@@ -9,8 +9,8 @@ contract Lido__MockForAccounting {
     uint256 public reportClBalance;
     uint256 public reportClValidatorsBalance;
     uint256 public reportClPendingBalance;
-    uint256 public depositedEther;
-    uint256 public depositedEtherForLastRefSlot;
+    uint256 public depositedLastReport;
+    uint256 public depositedCurrentReport;
 
     // Emitted when CL balances are updated by the oracle
     event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
@@ -44,11 +44,11 @@ contract Lido__MockForAccounting {
     }
 
     function mock__setDepositedLastReportBalance(uint256 _amount) external {
-        depositedEther = _amount;
+        depositedLastReport = _amount;
     }
 
     function mock__setDepositedCurrentReportBalance(uint256 _amount) external {
-        depositedEtherForLastRefSlot = _amount;
+        depositedCurrentReport = _amount;
     }
 
     function getBeaconStat()
@@ -65,16 +65,16 @@ contract Lido__MockForAccounting {
         external
         view
         returns (
-            uint256 clValidatorsBalance,
-            uint256 clPendingBalance,
-            uint256 depositedAmount,
-            uint256 depositedAmountForLastRefSlot
+            uint256 clValidatorsBalanceAtLastReport,
+            uint256 clPendingBalanceAtLastReport,
+            uint256 depositedSinceLastReport,
+            uint256 depositedForCurrentReport
         )
     {
-        clValidatorsBalance = reportClValidatorsBalance;
-        clPendingBalance = reportClPendingBalance;
-        depositedAmount = depositedEther;
-        depositedAmountForLastRefSlot = depositedEtherForLastRefSlot;
+        clValidatorsBalanceAtLastReport = reportClValidatorsBalance;
+        clPendingBalanceAtLastReport = reportClPendingBalance;
+        depositedSinceLastReport = depositedLastReport;
+        depositedForCurrentReport = depositedCurrentReport;
     }
 
     function getTotalPooledEther() external pure returns (uint256) {

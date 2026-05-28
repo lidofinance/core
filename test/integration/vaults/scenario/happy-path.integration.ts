@@ -90,8 +90,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   beforeEach(bailOnFailure);
 
   async function calculateReportParams() {
-    const { clValidatorsBalance, clPendingBalance } = await ctx.contracts.lido.getBalanceStats();
-    const clBalance = clValidatorsBalance + clPendingBalance;
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } =
+      await ctx.contracts.lido.getBalanceStats();
+    const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
     log.debug("Report time elapsed", { timeElapsed });

@@ -307,8 +307,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await report(ctx);
 
       // Get current protocol state to calculate dynamic slashing limit
-      const { clValidatorsBalance, clPendingBalance } = await lido.getBalanceStats();
-      const preCLBalance = clValidatorsBalance + clPendingBalance;
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const preCLBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const limits = await oracleReportSanityChecker.getOracleReportLimits();
       const maxAllowedNegativeRebase = (preCLBalance * limits.maxCLBalanceDecreaseBP) / 10_000n;
 
@@ -355,13 +355,15 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
 
       // Get current protocol state
-      const { clValidatorsBalance, clPendingBalance } = await lido.getBalanceStats();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
       const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
       const { reportTimeElapsed } = await getNextReportContext(ctx);
       const SECONDS_PER_YEAR = 365n * 24n * 60n * 60n;
       const MAX_BASIS_POINTS = 10000n;
       const maxBalanceIncrease =
-        ((annualBalanceIncreaseBPLimit * (clValidatorsBalance + clPendingBalance) * reportTimeElapsed) /
+        ((annualBalanceIncreaseBPLimit *
+          (clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) *
+          reportTimeElapsed) /
           (SECONDS_PER_YEAR * MAX_BASIS_POINTS) /
           ONE_GWEI) *
         ONE_GWEI;
@@ -373,7 +375,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // raw CL delta under test is the safety-cap component computed from the
       // post-activation validators base.
       // Bad debt still must not compensate an over-limit report.
-      expect(clPendingBalance).to.be.gt(0n, "test precondition failed: pending baseline must be non-zero");
+      expect(clPendingBalanceAtLastReport).to.be.gt(0n, "test precondition failed: pending baseline must be non-zero");
       await expect(
         report(ctx, {
           clDiff: maxBalanceIncrease + ONE_GWEI,

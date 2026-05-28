@@ -66,7 +66,7 @@ describe("Integration: Second opinion", () => {
       .grantRole(await oracleReportSanityChecker.SECOND_OPINION_MANAGER_ROLE(), agentSigner.address);
 
     let balanceStats = await lido.getBalanceStats();
-    let clBalance = balanceStats.clValidatorsBalance + balanceStats.clPendingBalance;
+    let clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     // Report initial balances if TVL is zero
     if (clBalance === 0n) {
       await report(ctx, {
@@ -75,7 +75,7 @@ describe("Integration: Second opinion", () => {
         excludeVaultsBalances: true,
       });
       balanceStats = await lido.getBalanceStats();
-      clBalance = balanceStats.clValidatorsBalance + balanceStats.clPendingBalance;
+      clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     }
     await oracleReportSanityChecker.connect(agentSigner).setSecondOpinionOracleAndCLBalanceUpperMargin(soAddress, 74n);
 
@@ -84,7 +84,7 @@ describe("Integration: Second opinion", () => {
     await resetCLBalanceDecreaseWindow(ctx);
 
     balanceStats = await lido.getBalanceStats();
-    totalSupply = balanceStats.clValidatorsBalance + balanceStats.clPendingBalance;
+    totalSupply = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
   });
 
   beforeEach(bailOnFailure);

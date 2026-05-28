@@ -121,25 +121,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         0xd92bc31601d11a10411d08f59b7146d8a5915af253cde25f8e66b67beb4be223;
 
     /// @dev amount of ether (on the current Ethereum side) buffered on this smart contract balance
-    ///      and amount of ether depositedAmount since last report
-    /// depositedEther lifecycle:
+    ///      and amount of ether deposited since last report
+    /// depositedPostReport lifecycle:
     ///   1) increased by `withdrawDepositableEther()` as CL deposits are performed;
     ///   2) resets on report processing via `processClStateUpdate()`
-    /// |------ 128 bit -----|----- 128 bit ------|
-    /// | depositedAmount ether    |   buffered ether   |
-    /// keccak256("lido.Lido.bufferedEtherAndDepositedEther");
-    // bytes32 internal constant BUFFERED_ETHER_AND_DEPOSITED_ETHER_POSITION =
-    //     0x81a11fa1111afa59b50051f60ccf604a39d96acb484dc467ad8eadb4a63f0a5f;
-    bytes32 internal constant BUFFERED_ETHER_AND_DEPOSITED_ETHER_POSITION =
-        0xdb205d018b057469604c4e2a900fd6c14d63aa16e6ac9bc50e84780001cb2f90;
+    /// |------ 128 bit --------|----- 128 bit ------|
+    /// | deposited post report |   buffered ether   |
+    /// keccak256("lido.Lido.bufferedEtherAndDepositedPostReport");
+    bytes32 internal constant BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION =
+        0x81a11fa1111afa59b50051f60ccf604a39d96acb484dc467ad8eadb4a63f0a5f;
 
-    /// @dev an internal counter accumulates the ETH depositedAmount after the reporting period/frame changes
+    /// @dev an internal counter accumulates the ETH deposited after the reporting period/frame changes
     ///      and unique identifier for the last deposit's frame (in this case, it's current refSlot)
-    /// keccak256("lido.Lido.depositedEtherFromLastRefSlotAndLastRefSlot")
-    // bytes32 internal constant DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION =
-    //     0x8d3ed945c7718edcdb639b1235f2bbe3fa81f4a6cec7a436d8ea13fbc502d957;
-    bytes32 internal constant DEPOSITED_ETHER_FROM_LAST_REFSLOT_AND_LAST_REFSLOT_POSITION =
-        0x69c63ed80d1cd64fe4c57f231f0d9aa53a746bd67c8ab7a454a854b132b025ff;
+    /// keccak256("lido.Lido.depositedNextReportAndLastDepositNonce")
+    bytes32 internal constant DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION =
+        0x8d3ed945c7718edcdb639b1235f2bbe3fa81f4a6cec7a436d8ea13fbc502d957;
 
     /// @dev CL validators balance and CL pending deposit balance
     /// |----- 128 bit ------------|------ 128 bit -------|
@@ -148,7 +144,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
         0x096e465397f38e659238ccd5d5a2c434ced54a63fd8d694045bfb058ab9d8112;
 
-    /// @dev number of initial seed deposits (incrementing counter), ex. depositedAmount validators
+    /// @dev number of initial seed deposits (incrementing counter), ex. deposited validators
     /// keccak256("lido.Lido.seedDepositsCount");
     bytes32 internal constant SEED_DEPOSITS_COUNT_POSITION =
         0x3f0eaa2c0f16ff9775c078f3df30470d8c042317b24ad1defa240b1c3e10b238;
@@ -192,14 +188,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Emitted when CL balances are updated by the oracle
     event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
     // Emitted when CL pending balance is updated during deposits to CL
-    event DepositedEtherUpdated(uint256 depositedEther);
+    event DepositedPostReportUpdated(uint256 depositedPostReport);
 
     // Emitted when depositedValidators value is changed
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
     // Emitted when oracle accounting report processed
     // @dev `preCLBalance` is actually the principal CL balance: the sum of the previous report's
-    //      CL validators balance, CL pending balance, and depositedAmount balance since the last report.
+    //      CL validators balance, CL pending balance, and deposited balance since the last report.
     //      The parameter name is kept for ABI backward compatibility.
     event ETHDistributed(
         uint256 indexed reportTimestamp,
@@ -325,12 +321,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         /// @dev convert ex-transientBalance to amount submitted to the Deposit contract
         ///      after the last accounting oracle report
-        uint256 depositedEther = (depositedValidators - clValidators) * DEPOSIT_SIZE;
-        _setBufferedEtherAndDepositedEther(bufferedEther, depositedEther);
+        uint256 depositedPostReport = (depositedValidators - clValidators) * DEPOSIT_SIZE;
+        _setBufferedEtherAndDepositedPostReport(bufferedEther, depositedPostReport);
         /// @dev Since migration is only possible after a report and before the next frame begins,
         ///      the transient balance will apply to the current frame
-        (uint256 refSlot,) = _getCurrentFrame(); // get current refslot
-        _setDepositedEtherFromLastRefSlotAndLastRefSlot(depositedEther, refSlot);
+        (uint256 curNonce,) = _getCurrentFrame(); // get current refslot
+        _setDepositedNextReportAndLastDepositNonce(depositedPostReport, curNonce);
 
         /// @dev no pending balance at the moment of upgrade
         _setClValidatorsBalanceAndClPendingBalance(clValidatorsBalance, 0);
@@ -696,7 +692,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @return the total amount of Execution Layer rewards collected to the Lido contract
      * @dev ether received through LidoExecutionLayerRewardsVault is kept on this contract's balance the same way
-     * as other buffered ether is kept (until it gets depositedAmount or withdrawn)
+     * as other buffered ether is kept (until it gets deposited or withdrawn)
      */
     function getTotalELRewardsCollected() public view returns (uint256) {
         return TOTAL_EL_REWARDS_COLLECTED_POSITION.getStorageUint256();
@@ -712,7 +708,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @dev DEPRECATED: Use getBalanceStats() for new integrations
      * @notice Get the key values related to the Consensus Layer side of the contract.
-     * @return depositedValidators - number of depositedAmount validators from Lido contract side
+     * @return depositedValidators - number of deposited validators from Lido contract side
      * @return beaconValidators - number of Lido validators visible on Consensus Layer, reported by oracle
      * @return beaconBalance - total amount of ether on the Consensus Layer side (sum of all the balances of Lido validators)
      */
@@ -730,45 +726,43 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return (depositedValidators, depositedValidators, clValidatorsBalance.add(clPendingBalance));
     }
 
-    /// @notice Returns the balances and deposits state as of the time of the last report
-    /// @return clValidatorsBalance Sum of validator's active balances in wei at last report
-    /// @return clPendingBalance Sum of validator's pending deposits in wei at last report
-    /// @return depositedAmount Deposits made since last oracle report
-    /// @return depositedAmountForLastRefSlot Deposits made since last oracle report and up to the last refSlot
+    /// @notice Returns current balance statistics
+    /// @return clValidatorsBalanceAtLastReport Sum of validator's active balances in wei
+    /// @return clPendingBalanceAtLastReport Sum of validator's pending deposits in wei
+    /// @return depositedSinceLastReport Deposits made since last oracle report
     function getBalanceStats()
         external
         view
         returns (
-            uint256 clValidatorsBalance,
-            uint256 clPendingBalance,
-            uint256 depositedAmount,
-            uint256 depositedAmountForLastRefSlot
+            uint256 clValidatorsBalanceAtLastReport,
+            uint256 clPendingBalanceAtLastReport,
+            uint256 depositedSinceLastReport,
+            uint256 depositedForCurrentReport
         )
     {
-        (clValidatorsBalance, clPendingBalance) = _getClValidatorsBalanceAndClPendingBalance();
+        (clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport) = _getClValidatorsBalanceAndClPendingBalance();
 
-        depositedAmount = _getDepositedEther();
-        (uint256 depositedEtherFromLastRefSlot,) = _getDepositedEtherFromLastRefSlot();
-        /// @dev depositedEtherFromLastRefSlot is always less than depositedEther, so we can safely subtract
-        depositedAmountForLastRefSlot = depositedAmount - depositedEtherFromLastRefSlot;
+        depositedSinceLastReport = _getDepositedPostReport();
+        (depositedForCurrentReport,) = _getDepositedNextReportAdjusted();
+        /// @dev depositedNextReport is always less than depositedPostReport, so we can safely subtract
+        depositedForCurrentReport = depositedSinceLastReport - depositedForCurrentReport;
     }
 
     /**
-     * To accurately track the ETH that was depositedAmount between the refSlot and the report transaction, we use the following
+     * To accurately track the ETH that was deposited between the refSlot and the report transaction, we use the following
      * approach:
      *
      * Data structure can be represented as:
-     *   - lastRefSlot - last deposit refSlot
-     *   - depositedEther - total sum of all deposits across all periods since the last successful report
-     *   - depositedEtherFromLastRefSlot - sum of deposits within the current reporting period (i.e. made since lastRefSlot),
-     *   - to be included in the next report
+     *   - lastNonce - last deposit refSlot
+     *   - depositedPostReport - total sum of all deposits across all periods since the last successful report
+     *   - depositedNextReport - sum of deposits within the current reporting period, to be included in the next report
      *
      * Flow diagram:
      *                                                              NOW
-     *                     ┌── depositedEther ─-----───────────────┐ ↓
+     *                     ┌── depositedPostReport ────────────────┐ ↓
      *      │○○○○○○○○○○○○○○│○●●○○R○○○●○○●○│○○●●●○○●○●○○○○│○○●●○○●○○●○○○○│
      *      ┆         lastReport-↑       currentRefSlot-↑└────⁠┬────┘
-     *      ┆              ┆ currentReportFrame-↓        ┆    └depositedEtherFromLastRefSlot
+     *      ┆              ┆ currentReportFrame-↓        ┆    └depositedNextReport
      *      ⁠║   frame X    ⁠║   frame X+1  ⁠║   frame X+2  ⁠║   frame X+3  ⁠║
      *
      *       R - report transaction slot
@@ -777,26 +771,22 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      *       ⁠║ - frame refSlot
      *
      * Logic:
-     *   - On any read/write operation, we first retrieve currentRefSlot
-     *   - Whenever the refSlot changes (i.e. the reporting period changes), we reset depositedEtherFromLastRefSlot to zero
-     *   - To obtain the exact deposit amount for the reporting periods, we compute:  depositedEther - depositedEtherFromLastRefSlot
-     *   - On each deposit, both counters are incremented:  depositedEther += amount and depositedEtherFromLastRefSlot += amount
-     *   - At reporting time, deposits already accounted for in the report are excluded from depositedEther, leaving
-     *     only the current period: depositedEther = depositedEtherFromLastRefSlot
+     *   - On any read/write operation, we first retrieve currentNonce (currentRefSlot)
+     *   - Whenever the nonce changes (i.e. the reporting period changes), we reset depositedNextReport to zero
+     *   - To obtain the exact deposit amount for the reporting periods, we compute:  depositedPostReport - depositedNextReport
+     *   - On each deposit, both counters are incremented:  depositedPostReport += amount and depositedNextReport += amount
+     *   - At reporting time, deposits already accounted for in the report are excluded from depositedPostReport, leaving
+     *     only the current period: depositedPostReport = depositedNextReport
      */
-    /// @dev read and adjust the `depositedEtherFromLastRefSlot` value according to the current frame
-    function _getDepositedEtherFromLastRefSlot()
-        internal
-        view
-        returns (uint256 depositedEtherFromLastRefSlot, uint256 refSlot)
-    {
-        uint256 lastRefSlot;
-        (depositedEtherFromLastRefSlot, lastRefSlot) = _getDepositedEtherFromLastRefSlotAndLastRefSlot();
-        (refSlot,) = _getCurrentFrame(); // get current refSlot
-        if (refSlot != lastRefSlot) {
-            // treating all unsettled amounts as belonging to previous periods,
+    /// @dev read and adjust the `depositedNextReport` value according to the current frame
+    function _getDepositedNextReportAdjusted() internal view returns (uint256 depositedNextReport, uint256 curNonce) {
+        uint256 lastNonce;
+        (depositedNextReport, lastNonce) = _getDepositedNextReportAndLastDepositNonce();
+        (curNonce,) = _getCurrentFrame(); // get current refSlot
+        if (curNonce != lastNonce) {
+            // treating all unsettled amounts as belonging to previous periods (aka nonces),
             // i.e., as already settled (accounted in upcoming report)
-            depositedEtherFromLastRefSlot = 0;
+            depositedNextReport = 0;
         }
     }
 
@@ -839,14 +829,14 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         require(_depositAmount <= depositableEther, "NOT_ENOUGH_ETHER");
 
         /// @dev the requested amount will be sent to DepositContract, so we increment
-        ///      depositedEther counter to keep _getInternalEther value correct
-        uint256 depositedEther = _getDepositedEther().add(_depositAmount);
-        _setBufferedEtherAndDepositedEther(allocation.total.sub(_depositAmount), depositedEther);
+        ///      depositedPostReport counter to keep _getInternalEther value correct
+        uint256 depositedPostReport = _getDepositedPostReport().add(_depositAmount);
+        _setBufferedEtherAndDepositedPostReport(allocation.total.sub(_depositAmount), depositedPostReport);
         emit Unbuffered(_depositAmount);
 
-        (uint256 depositedEtherFromLastRefSlot, uint256 refSlot) = _getDepositedEtherFromLastRefSlot();
-        depositedEtherFromLastRefSlot = depositedEtherFromLastRefSlot.add(_depositAmount);
-        _setDepositedEtherFromLastRefSlotAndLastRefSlot(depositedEtherFromLastRefSlot, refSlot);
+        (uint256 depositedNextReport, uint256 curNonce) = _getDepositedNextReportAdjusted();
+        depositedNextReport = depositedNextReport.add(_depositAmount);
+        _setDepositedNextReportAndLastDepositNonce(depositedNextReport, curNonce);
 
         uint256 storedDepositsReserve = DEPOSITS_RESERVE_POSITION.getStorageUint256();
         if (storedDepositsReserve > 0) {
@@ -1011,13 +1001,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _whenNotStopped();
         _auth(_accounting());
 
-        (uint256 depositedEtherFromLastRefSlot, uint256 refSlot) = _getDepositedEtherFromLastRefSlot();
-        /// @dev just save adjusted depositedEtherFromLastRefSlot
-        _setDepositedEtherFromLastRefSlotAndLastRefSlot(depositedEtherFromLastRefSlot, refSlot);
-        /// @dev Since `depositedEther` accumulates all deposits, including those that occurred
+        (uint256 depositedNextReport, uint256 curNonce) = _getDepositedNextReportAdjusted();
+        /// @dev just save adjusted depositedNextReport
+        _setDepositedNextReportAndLastDepositNonce(depositedNextReport, curNonce);
+        /// @dev Since `depositedPostReport` accumulates all deposits, including those that occurred
         ///      after `refSlot` but before the report, we must retain only the amount not
         ///      reflected in the report
-        _setDepositedEther(depositedEtherFromLastRefSlot);
+        _setDepositedPostReport(depositedNextReport);
 
         /// @dev new values of clValidatorsBalance and clPendingBalance should reflect all
         ///      deposits during the report frame
@@ -1264,12 +1254,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Get the total amount of ether controlled by the protocol internally
     /// (buffered ether + CL validators balance + CL pending balance + deposited since last report)
     function _getInternalEther() internal view returns (uint256) {
-        (uint256 bufferedEther, uint256 depositedEther) = _getBufferedEtherAndDepositedEther();
+        (uint256 bufferedEther, uint256 depositedPostReport) = _getBufferedEtherAndDepositedPostReport();
         (uint256 clValidatorsBalance, uint256 clPendingBalance) = _getClValidatorsBalanceAndClPendingBalance();
 
         // With balance-based accounting, we don't need to calculate transientEther
         // as pending deposits are already included in clPendingBalance
-        return bufferedEther.add(clValidatorsBalance).add(clPendingBalance).add(depositedEther);
+        return bufferedEther.add(clValidatorsBalance).add(clPendingBalance).add(depositedPostReport);
     }
 
     /// @dev Calculate the amount of ether controlled by external entities
@@ -1480,40 +1470,43 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // helpers: buffered ether and deposited ether since last report
 
     function _getBufferedEther() internal view returns (uint256) {
-        return BUFFERED_ETHER_AND_DEPOSITED_ETHER_POSITION.getLowUint128();
+        return BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.getLowUint128();
     }
 
-    function _getDepositedEther() internal view returns (uint256) {
-        return BUFFERED_ETHER_AND_DEPOSITED_ETHER_POSITION.getHighUint128();
+    function _getDepositedPostReport() internal view returns (uint256) {
+        return BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.getHighUint128();
     }
 
-    function _getBufferedEtherAndDepositedEther() internal view returns (uint256, uint256) {
-        return BUFFERED_ETHER_AND_DEPOSITED_ETHER_POSITION.getLowAndHighUint128();
+    function _getBufferedEtherAndDepositedPostReport() internal view returns (uint256, uint256) {
+        return BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.getLowAndHighUint128();
     }
 
     function _setBufferedEther(uint256 _newBufferedEther) internal {
-        BUFFERED_ETHER_AND_DEPOSITED_ETHER_POSITION.setLowUint128(_newBufferedEther);
+        BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.setLowUint128(_newBufferedEther);
     }
 
-    function _setDepositedEther(uint256 _newDepositedEther) internal {
-        BUFFERED_ETHER_AND_DEPOSITED_ETHER_POSITION.setHighUint128(_newDepositedEther);
+    function _setDepositedPostReport(uint256 _newDepositedPostReport) internal {
+        BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.setHighUint128(_newDepositedPostReport);
     }
 
-    function _setBufferedEtherAndDepositedEther(uint256 _newBufferedEther, uint256 _newDepositedEther) internal {
-        BUFFERED_ETHER_AND_DEPOSITED_ETHER_POSITION.setLowAndHighUint128(_newBufferedEther, _newDepositedEther);
+    function _setBufferedEtherAndDepositedPostReport(uint256 _newBufferedEther, uint256 _newDepositedPostReport)
+        internal
+    {
+        BUFFERED_ETHER_AND_DEPOSITED_POST_REPORT_POSITION.setLowAndHighUint128(
+            _newBufferedEther, _newDepositedPostReport
+        );
     }
 
-    function _getDepositedEtherFromLastRefSlotAndLastRefSlot() internal view returns (uint256, uint256) {
-        return DEPOSITED_ETHER_FROM_LAST_REFSLOT_AND_LAST_REFSLOT_POSITION.getLowAndHighUint128();
+    function _getDepositedNextReportAndLastDepositNonce() internal view returns (uint256, uint256) {
+        return DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION.getLowAndHighUint128();
     }
 
-    function _setDepositedEtherFromLastRefSlotAndLastRefSlot(
-        uint256 _newDepositedEtherFromLastRefSlot,
-        uint256 _lastRefSlot
-    ) internal {
-        DEPOSITED_ETHER_FROM_LAST_REFSLOT_AND_LAST_REFSLOT_POSITION.setLowAndHighUint128(
-                _newDepositedEtherFromLastRefSlot, _lastRefSlot
-            );
+    function _setDepositedNextReportAndLastDepositNonce(uint256 _depositedNextReport, uint256 _lastDepositNonce)
+        internal
+    {
+        DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION.setLowAndHighUint128(
+            _depositedNextReport, _lastDepositNonce
+        );
     }
 
     // helpers: [DEPRECATED] deposited validators count
