@@ -69,7 +69,7 @@ contract DepositSecurityModule {
     error ZeroParameter(string parameter);
 
     /// @notice Represents the code version to help distinguish contract interfaces.
-    uint256 public constant VERSION = 3;
+    uint256 public constant VERSION = 4;
 
     /// @notice Prefix for the message signed by guardians to attest a deposit.
     bytes32 public immutable ATTEST_MESSAGE_PREFIX;
@@ -364,7 +364,7 @@ contract DepositSecurityModule {
      * The signature, if present, must be produced for the keccak256 hash of the following
      * message (each component taking 32 bytes):
      *
-     * | PAUSE_MESSAGE_PREFIX | blockNumber |
+     * | PAUSE_MESSAGE_PREFIX | contractVersion | blockNumber |
      */
     function pauseDeposits(uint256 blockNumber, Signature memory sig) external {
         /// @dev In case of an emergency function `pauseDeposits` is supposed to be called
@@ -377,7 +377,7 @@ contract DepositSecurityModule {
         int256 guardianIndex = _getGuardianIndex(msg.sender);
 
         if (guardianIndex == -1) {
-            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, blockNumber));
+            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, VERSION, blockNumber));
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
             if (guardianIndex == -1) revert InvalidSignature();
@@ -485,7 +485,7 @@ contract DepositSecurityModule {
      * Signatures must be sorted in ascending order by address of the guardian. Each signature must
      * be produced for the keccak256 hash of the following message (each component taking 32 bytes):
      *
-     * | ATTEST_MESSAGE_PREFIX | blockNumber | blockHash | depositRoot | stakingModuleId | nonce |
+     * | ATTEST_MESSAGE_PREFIX | contractVersion | blockNumber | blockHash | depositRoot | stakingModuleId | nonce |
      */
     function depositBufferedEther(
         uint256 blockNumber,
@@ -525,7 +525,15 @@ contract DepositSecurityModule {
         Signature[] memory sigs
     ) internal view {
         bytes32 msgHash = keccak256(
-            abi.encodePacked(ATTEST_MESSAGE_PREFIX, blockNumber, blockHash, depositRoot, stakingModuleId, nonce)
+            abi.encodePacked(
+                ATTEST_MESSAGE_PREFIX,
+                VERSION,
+                blockNumber,
+                blockHash,
+                depositRoot,
+                stakingModuleId,
+                nonce
+            )
         );
 
         address prevSignerAddr;
@@ -562,7 +570,7 @@ contract DepositSecurityModule {
      *
      * The signature, if present, must be produced for the keccak256 hash of the following message:
      *
-     * | UNVET_MESSAGE_PREFIX | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
+     * | UNVET_MESSAGE_PREFIX | contractVersion | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
      */
     function unvetSigningKeys(
         uint256 blockNumber,
@@ -597,6 +605,7 @@ contract DepositSecurityModule {
                 // values with a dynamic type checked earlier
                 abi.encodePacked(
                     UNVET_MESSAGE_PREFIX,
+                    VERSION,
                     blockNumber,
                     blockHash,
                     stakingModuleId,
