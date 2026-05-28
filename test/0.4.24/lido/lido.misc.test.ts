@@ -804,12 +804,12 @@ describe("Lido.sol:misc", () => {
       const amountToWithdraw = depositableEther;
       await lido.connect(stakingRouterSigner).withdrawDepositableEther(amountToWithdraw, 1n);
       const balanceStatsAfterDeposit = await lido.getBalanceStats();
-      expect(balanceStatsAfterDeposit.depositedAmount).to.be.equal(
-        balanceStatsBeforeDeposit.depositedAmount + amountToWithdraw,
+      expect(balanceStatsAfterDeposit.depositedSinceLastReport).to.be.equal(
+        balanceStatsBeforeDeposit.depositedSinceLastReport + amountToWithdraw,
       );
       // Immediately check depositedAmountForLastRefSlot - should be less then deposited (or even 0) because increase applies to next refSlot
-      expect(balanceStatsAfterDeposit.depositedAmountForLastRefSlot).to.be.lessThan(
-        balanceStatsAfterDeposit.depositedAmount,
+      expect(balanceStatsAfterDeposit.depositedForCurrentReport).to.be.lessThan(
+        balanceStatsAfterDeposit.depositedSinceLastReport,
       );
 
       // Wait for next refSlot
@@ -819,11 +819,11 @@ describe("Lido.sol:misc", () => {
 
       // Now depositedAmountForLastRefSlot should show the correct amount
       const balanceStatsAfterRefSlot = await lido.getBalanceStats();
-      expect(balanceStatsAfterRefSlot.depositedAmount).to.be.equal(
-        balanceStatsBeforeDeposit.depositedAmount + amountToWithdraw,
+      expect(balanceStatsAfterRefSlot.depositedSinceLastReport).to.be.equal(
+        balanceStatsBeforeDeposit.depositedSinceLastReport + amountToWithdraw,
       );
-      expect(balanceStatsAfterRefSlot.depositedAmountForLastRefSlot).to.be.equal(
-        balanceStatsAfterDeposit.depositedAmount,
+      expect(balanceStatsAfterRefSlot.depositedForCurrentReport).to.be.equal(
+        balanceStatsAfterDeposit.depositedSinceLastReport,
       );
     });
 
