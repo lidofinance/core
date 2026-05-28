@@ -34,6 +34,7 @@ import {
     IInitializedVersionView,
     IMerkleGate,
     IOneShotCurveSetup,
+    IOracleReportSanityCheckerUpgrade,
     IWithdrawalVaultUpgrade,
     IConsolidationBus,
     IConsolidationMigrator
@@ -153,6 +154,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint64 public constant EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION = 3;
     uint64 public constant EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION = 1;
 
+    uint256 public constant ORACLE_REPORT_SANITY_CHECKER_WITHDRAWAL_VAULT_BALANCE_LIMIT = 20_000 ether;
+
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
 
     // Initial value of upgradeBlockNumber storage variable
@@ -188,7 +191,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     // Slot for the upgrade started flag
     // / keccak256("UpgradeTemplate.upgradeStartedFlag");
-    bytes32 public constant UPGRADE_STARTED_SLOT = 0x35b46117eef044799338cc40f60a0c4c38c26772e3f81f535801c8d814ecc33d;
+    bytes32 internal constant UPGRADE_STARTED_SLOT = 0x35b46117eef044799338cc40f60a0c4c38c26772e3f81f535801c8d814ecc33d;
 
     /// @param _params Params required to initialize the addresses contract
     /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
@@ -203,15 +206,28 @@ contract UpgradeTemplate is IUpgradeTemplate {
     function startUpgrade() external {
         UpgradeConfig config = UpgradeConfig(CONFIG);
         GlobalConfig memory g = config.getGlobalConfig();
+        {
+            if (msg.sender != g.agent) revert OnlyAgentCanUpgrade();
+            if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
+            if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+            if (_isStartCalledInThisTx()) revert StartAlreadyCalledInThisTx();
+            if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
 
-        if (msg.sender != g.agent) revert OnlyAgentCanUpgrade();
-        if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
-        if (isUpgradeFinished) revert UpgradeAlreadyFinished();
-        if (_isStartCalledInThisTx()) revert StartAlreadyCalledInThisTx();
-        if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
+            assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
+            upgradeBlockNumber = block.number;
+        }
 
-        assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
-        upgradeBlockNumber = block.number;
+        //
+        // PreUpgrade steps
+        //
+        CoreUpgradeConfig memory c = UpgradeConfig(CONFIG).getCoreUpgradeConfig();
+
+        // TODO: revise for mainnet
+        // OracleReportSanityChecker upgrade condition: WithdrawalVault balance
+        uint256 wvBalance = c.withdrawalVault.balance;
+        if (wvBalance >= ORACLE_REPORT_SANITY_CHECKER_WITHDRAWAL_VAULT_BALANCE_LIMIT) {
+            revert OracleReportSanityCheckerWithdrawalVaultBalanceExceed(wvBalance);
+        }
 
         initialBufferedEther = ILidoUpgrade(g.lido).getBufferedEther();
         (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) =
@@ -221,32 +237,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
 
-        _assertPreUpgradeState(g);
-
-        emit UpgradeStarted();
-    }
-
-    function finishUpgrade() external {
-        UpgradeConfig config = UpgradeConfig(CONFIG);
-        GlobalConfig memory g = config.getGlobalConfig();
-
-        if (msg.sender != g.agent) revert OnlyAgentCanUpgrade();
-        if (isUpgradeFinished) revert UpgradeAlreadyFinished();
-        if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
-
-        isUpgradeFinished = true;
-
-        _assertPostUpgradeState(g);
-
-        emit UpgradeFinished();
-    }
-
-    //
-    // Assertions
-    //
-
-    function _assertPreUpgradeState(GlobalConfig memory g) internal view {
-        CoreUpgradeConfig memory c = UpgradeConfig(CONFIG).getCoreUpgradeConfig();
         // Check initial implementations of the proxies to be upgraded
         _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.oldLidoImpl);
 
@@ -257,10 +247,27 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertProxyImplementation(c.validatorsExitBusOracle, c.oldValidatorsExitBusOracleImpl);
 
         _assertWithdrawalsManagerProxyImplementation(c.withdrawalVault, c.oldWithdrawalVaultImpl);
+
+        emit UpgradeStarted();
     }
 
-    function _assertPostUpgradeState(GlobalConfig memory g) internal view {
+    function finishUpgrade() external {
+        UpgradeConfig config = UpgradeConfig(CONFIG);
+        GlobalConfig memory g = config.getGlobalConfig();
+        {
+            if (msg.sender != g.agent) revert OnlyAgentCanUpgrade();
+            if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+            if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
+
+            isUpgradeFinished = true;
+        }
+        //
+        // PostUpgrade steps
+        //
         CoreUpgradeConfig memory c = UpgradeConfig(CONFIG).getCoreUpgradeConfig();
+
+        // OracleReportSanityChecker final migration
+        IOracleReportSanityCheckerUpgrade(c.newOracleReportSanityChecker).migrateBaselineSnapshot();
 
         _assertCoreFinalState(g, c);
         _assertCSMFinalState(g);
@@ -269,7 +276,13 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _checkSRMigration(g, c);
         _checkLidoMigration(g, c);
         _checkDSMMigration(g, c);
+
+        emit UpgradeFinished();
     }
+
+    //
+    // Assertions
+    //
 
     function _assertCoreFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
         address agent = g.agent;
@@ -837,6 +850,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error IdentifiedDVTClusterCurveSetupNotExecuted(address curveSetup);
     error InvalidIdentifiedDVTClusterCurveId(address contractAddress, uint256 actualCurveId, uint256 expectedCurveId);
 
+    error OracleReportSanityCheckerWithdrawalVaultBalanceExceed(uint256 actualBalance);
     error InvalidConsolidationBusAddressInConsolidationMigrator();
     error InvalidConsolidationGatewayAddressInConsolidationBus();
     error InvalidConsolidationGatewayAddressInWithdrawalVault();

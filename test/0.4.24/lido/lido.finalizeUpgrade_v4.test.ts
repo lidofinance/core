@@ -11,7 +11,7 @@ import {
   LidoLocator,
 } from "typechain-types";
 
-import { ether, getStorageAtPositionAsUint128Pair, proxify } from "lib";
+import { ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib";
 
 import { deployLidoLocator } from "test/deploy/locator";
 import { Snapshot } from "test/suite";
@@ -70,12 +70,12 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
     });
 
     it("Reverts upgrade if occurred before report", async () => {
-      // simulate no report
       await accountingOracle.mock_setProcessingState(1, false, false);
       await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("NO_REPORT");
     });
 
     it("Migrates storage successfully after report and before next frame", async () => {
+      await accountingOracle.mock_setProcessingState(1, true, true);
       const { low: bufferedEther, high: depositedValidators } = await getStorageAtPositionAsUint128Pair(
         lido,
         "lido.Lido.bufferedEtherAndDepositedValidators",
@@ -97,6 +97,49 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       expect((await lido.getBalanceStats()).clPendingBalanceAtLastReport).to.equal(0);
       expect((await lido.getBalanceStats()).depositedSinceLastReport).to.equal(depositedBalance);
       expect((await lido.getBalanceStats()).depositedForCurrentReport).to.equal(0);
+
+      const { low: wipedBufferedEther, high: wipedDepositedValidators } = await getStorageAtPositionAsUint128Pair(
+        lido,
+        "lido.Lido.bufferedEtherAndDepositedValidators",
+      );
+      const { low: wipedClBalance, high: wipedClValidators } = await getStorageAtPositionAsUint128Pair(
+        lido,
+        "lido.Lido.clBalanceAndClValidators",
+      );
+      expect(wipedBufferedEther).to.equal(0);
+      expect(wipedDepositedValidators).to.equal(0);
+      expect(wipedClBalance).to.equal(0);
+      expect(wipedClValidators).to.equal(0);
+    });
+
+    it("Moves migrated deposits from the deposit tracker to CL pending on the first post-migration report", async () => {
+      await accountingOracle.mock_setProcessingState(1, true, true);
+      const { low: clBalance, high: clValidators } = await getStorageAtPositionAsUint128Pair(
+        lido,
+        "lido.Lido.clBalanceAndClValidators",
+      );
+      const { high: depositedValidators } = await getStorageAtPositionAsUint128Pair(
+        lido,
+        "lido.Lido.bufferedEtherAndDepositedValidators",
+      );
+      const migratedDeposits = (depositedValidators - clValidators) * ether("32");
+
+      await lido.finalizeUpgrade_v4();
+      const totalPooledEtherAfterMigration = await lido.getTotalPooledEther();
+
+      await accountingOracle.mock_setProcessingState(2, false, false);
+      const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
+
+      await expect(lido.connect(accountingSigner).processClStateUpdate(0n, clBalance, migratedDeposits))
+        .to.emit(lido, "CLBalancesUpdated")
+        .withArgs(0n, clBalance, migratedDeposits);
+
+      const stats = await lido.getBalanceStats();
+      expect(stats.clValidatorsBalanceAtLastReport).to.equal(clBalance);
+      expect(stats.clPendingBalanceAtLastReport).to.equal(migratedDeposits);
+      expect(stats.depositedSinceLastReport).to.equal(0n);
+      expect(stats.depositedForCurrentReport).to.equal(0n);
+      expect(await lido.getTotalPooledEther()).to.equal(totalPooledEtherAfterMigration);
     });
   });
 });
