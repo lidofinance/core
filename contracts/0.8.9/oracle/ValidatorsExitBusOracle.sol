@@ -93,6 +93,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
         _setMaxValidatorsPerReport(maxValidatorsPerReport);
         _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
+        _clearDeprecatedExitRequestLimit();
     }
 
     ///

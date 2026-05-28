@@ -87,8 +87,8 @@ committee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" #m-sig
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
-maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process _minBlockDistance 1 Minimum block distance between topUp calls
-minBlockDistance = 1
+maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process
+minBlockDistance = 75 # Minimum block distance between topUp calls
 maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove validator state
 targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
 minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
@@ -103,6 +103,7 @@ depositor = "0x9b186cE78Ddd6fF098b4a533Dd17a139e1FFeD76" # depositor bot
 [stakingRouter]
 maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
 maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2
+maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-up cap
 
 [csmUpgrade]
 csmProxy = "0x79CEf36D84743222f37765204Bec41E92a93E59d"

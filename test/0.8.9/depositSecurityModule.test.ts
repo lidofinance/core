@@ -100,7 +100,6 @@ describe("DepositSecurityModule.sol", () => {
     depositRoot?: string;
     stakingModuleId?: number;
     nonce?: number;
-    depositCalldata?: string;
   };
 
   async function getDepositArgs(overridingArgs?: DepositArgs) {
@@ -116,23 +115,22 @@ describe("DepositSecurityModule.sol", () => {
     const blockHash = overridingArgs?.blockHash ?? latestBlock.hash;
     const depositRoot = overridingArgs?.depositRoot ?? defaultDepositRoot;
     const nonce = overridingArgs?.nonce ?? Number(defaultModuleNonce);
-    const depositCalldata = overridingArgs?.depositCalldata ?? encodeBytes32String("");
 
-    return [depositCalldata, blockNumber, blockHash, depositRoot, stakingModuleId, nonce] as const;
+    return [blockNumber, blockHash, depositRoot, stakingModuleId, nonce] as const;
   }
 
   async function deposit(
     sortedGuardianWallets: Wallet[],
     overridingArgs?: DepositArgs,
   ): Promise<ContractTransactionResponse> {
-    const [depositCalldata, ...signingArgs] = await getDepositArgs(overridingArgs);
+    const signingArgs = await getDepositArgs(overridingArgs);
 
     const sortedGuardianSignatures = sortedGuardianWallets.map((guardian) => {
       const validAttestMessage = new DSMAttestMessage(...signingArgs);
       return validAttestMessage.sign(guardian.privateKey);
     });
 
-    return await dsm.depositBufferedEther(...signingArgs, depositCalldata, sortedGuardianSignatures);
+    return await dsm.depositBufferedEther(...signingArgs, sortedGuardianSignatures);
   }
 
   before(async () => {
@@ -1091,17 +1089,6 @@ describe("DepositSecurityModule.sol", () => {
         await expect(deposit([guardian1])).to.be.revertedWithCustomError(dsm, "DepositTooFrequent");
       });
 
-      it("Reverts if module is inactive", async () => {
-        await stakingRouter.setStakingModuleStatus(STAKING_MODULE_ID, Status.DepositsPaused);
-
-        await dsm.addGuardian(guardian1, 1);
-        expect(await dsm.getGuardians()).to.deep.equal([guardian1.address]);
-        expect(await dsm.getGuardians()).to.have.length(1);
-        expect(await dsm.getGuardianQuorum()).to.equal(1);
-
-        await expect(deposit([guardian1])).to.be.revertedWithCustomError(dsm, "DepositInactiveModule");
-      });
-
       it("Reverts if `block.hash` and `block.number` from different blocks", async () => {
         const previousBlockNumber = await time.latestBlock();
         await mineUpTo((await time.latestBlock()) + 1);
@@ -1174,10 +1161,9 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(1);
         expect(await dsm.getGuardianQuorum()).to.equal(1);
 
-        const depositCalldata = encodeBytes32String("");
-        const tx = await deposit([guardian1], { depositCalldata });
+        const tx = await deposit([guardian1]);
 
-        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, "0x");
       });
     });
 
@@ -1239,10 +1225,9 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(3);
         expect(await dsm.getGuardianQuorum()).to.equal(2);
 
-        const depositCalldata = encodeBytes32String("");
-        const tx = await deposit([guardian1, guardian2, guardian3], { depositCalldata });
+        const tx = await deposit([guardian1, guardian2, guardian3]);
 
-        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, "0x");
       });
 
       it("Allow deposit if deposit with guardian's sigs (0,1)", async () => {
@@ -1251,10 +1236,9 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(3);
         expect(await dsm.getGuardianQuorum()).to.equal(2);
 
-        const depositCalldata = encodeBytes32String("");
-        const tx = await deposit([guardian1, guardian2], { depositCalldata });
+        const tx = await deposit([guardian1, guardian2]);
 
-        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, "0x");
       });
 
       it("Allow deposit if deposit with guardian's sigs (0,2)", async () => {
@@ -1263,10 +1247,9 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(3);
         expect(await dsm.getGuardianQuorum()).to.equal(2);
 
-        const depositCalldata = encodeBytes32String("");
-        const tx = await deposit([guardian1, guardian3], { depositCalldata });
+        const tx = await deposit([guardian1, guardian3]);
 
-        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, "0x");
       });
 
       it("Allow deposit if deposit with guardian's sigs (1,2)", async () => {
@@ -1275,10 +1258,9 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardians()).to.have.length(3);
         expect(await dsm.getGuardianQuorum()).to.equal(2);
 
-        const depositCalldata = encodeBytes32String("");
-        const tx = await deposit([guardian2, guardian3], { depositCalldata });
+        const tx = await deposit([guardian2, guardian3]);
 
-        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, depositCalldata);
+        await expect(tx).to.emit(stakingRouter, "StakingModuleDeposited").withArgs(STAKING_MODULE_ID, "0x");
       });
     });
   });
@@ -1464,9 +1446,3 @@ describe("DepositSecurityModule.sol", () => {
     });
   });
 });
-
-enum Status {
-  Active,
-  DepositsPaused,
-  Stopped,
-}

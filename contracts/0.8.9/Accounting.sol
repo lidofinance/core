@@ -53,7 +53,6 @@ contract Accounting {
         uint256 depositedBalance;
         uint256 totalPooledEther;
         uint256 totalShares;
-        uint256 depositedValidators;
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
@@ -221,6 +220,11 @@ contract Accounting {
             postInternalSharesBeforeFees +
             update.sharesToMintAsFees +
             _pre.badDebtToInternalize;
+
+        // Oracle should consider this limitation:
+        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
+        if (update.postInternalShares == 0) revert InternalSharesCantBeZero();
+
         uint256 postExternalShares = _pre.externalShares - _pre.badDebtToInternalize; // can't underflow by design
 
         update.postTotalShares = update.postInternalShares + postExternalShares;
@@ -419,9 +423,6 @@ contract Accounting {
         if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
         // Validator count validation removed for MaxEB support - now using balance-based accounting
 
-        // Oracle should consider this limitation:
-        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
-        if (_update.postInternalShares == 0) revert InternalSharesCantBeZero();
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
@@ -451,7 +452,7 @@ contract Accounting {
         }
     }
 
-    /// @dev mints protocol fees to the treasury and node operators and calls back to stakingRouter
+    /// @dev transfers pre-minted fee shares to the treasury and node operator recipients
     function _distributeFee(FeeDistribution memory _feeDistribution) internal {
         address[] memory recipients = _feeDistribution.moduleFeeRecipients;
         uint256[] memory sharesToMint = _feeDistribution.moduleSharesToMint;

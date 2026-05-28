@@ -14,7 +14,7 @@ import {
   setStakingLimit,
 } from "lib/protocol";
 
-import { Snapshot, ZERO_HASH } from "test/suite";
+import { Snapshot } from "test/suite";
 
 describe("Integration: Deposits reserve", () => {
   let ctx: ProtocolContext;
@@ -328,7 +328,7 @@ describe("Integration: Deposits reserve", () => {
 
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     // Spend depositable ether through CL deposit path.
-    const depositTx = await stakingRouter.connect(dsmSigner).deposit(1n, ZERO_HASH);
+    const depositTx = await stakingRouter.connect(dsmSigner).deposit(1n, "0x");
     await depositTx.wait();
 
     const bufferedAfter = await lido.getBufferedEther();

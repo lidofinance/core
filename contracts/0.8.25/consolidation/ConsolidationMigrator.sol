@@ -8,28 +8,12 @@ import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/Enumerab
 import {
     AccessControlEnumerableUpgradeable
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {StakingModule} from "contracts/0.8.25/sr/SRTypes.sol";
 
 /**
  * @dev Minimal interface for StakingRouter to get module addresses
  */
 interface IStakingRouter {
-    struct StakingModule {
-        uint24 id;
-        address stakingModuleAddress;
-        uint16 stakingModuleFee;
-        uint16 treasuryFee;
-        uint16 stakeShareLimit;
-        uint8 status;
-        string name;
-        uint64 lastDepositAt;
-        uint256 lastDepositBlock;
-        uint256 exitedValidatorsCount;
-        uint16 priorityExitShareThreshold;
-        uint64 maxDepositsPerBlock;
-        uint64 minDepositBlockDistance;
-        uint8 withdrawalCredentialsType;
-    }
-
     function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
 }
 
@@ -406,7 +390,7 @@ contract ConsolidationMigrator is AccessControlEnumerableUpgradeable {
     }
 
     function _getModule(uint256 moduleId) internal view returns (IUnifiedStakingModule) {
-        IStakingRouter.StakingModule memory sm = STAKING_ROUTER.getStakingModule(moduleId);
+        StakingModule memory sm = STAKING_ROUTER.getStakingModule(moduleId);
         return IUnifiedStakingModule(sm.stakingModuleAddress);
     }
 

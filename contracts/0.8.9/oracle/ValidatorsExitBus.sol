@@ -274,6 +274,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
+    // Deprecated v2 storage slot for exit-request limit tracked by validator count.
+    bytes32 internal constant DEPRECATED_EXIT_REQUEST_LIMIT_POSITION =
+        keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
     // Storage slot for exit balance limit configuration and current quota tracking (in ETH, not Gwei)
     bytes32 internal constant EXIT_BALANCE_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.exitBalanceLimitEth");
     // Storage slot for the maximum number of validator exit requests allowed per processing report
@@ -641,6 +644,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         return MAX_VALIDATORS_PER_REPORT_POSITION.getStorageUint256();
     }
 
+    function _clearDeprecatedExitRequestLimit() internal {
+        DEPRECATED_EXIT_REQUEST_LIMIT_POSITION.setStorageUint256(0);
+    }
+
     function _setExitRequestLimit(
         uint256 maxExitBalanceEth,
         uint256 balancePerFrameEth,
@@ -885,6 +892,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
                 itemOffset := add(baseOffset, mul(packedLength, i))
                 let dataWithoutPubkey := shr(dataShift, calldataload(itemOffset))
                 moduleId := shr(moduleShift, dataWithoutPubkey) // Extract top 24 bits
+            }
+
+            if (moduleId == 0) {
+                revert InvalidModuleId();
             }
 
             if (moduleId != cachedModuleId) {

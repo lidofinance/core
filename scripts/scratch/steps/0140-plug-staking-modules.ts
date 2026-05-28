@@ -76,6 +76,14 @@ export async function main() {
     { from: deployer },
   );
 
+  // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.
+  await makeTx(
+    stakingRouter,
+    "setMaxTopUpPerBlockGwei",
+    [state[Sk.stakingRouter].deployParameters.maxTopUpPerBlockGwei],
+    { from: deployer },
+  );
+
   // Renounce STAKING_MODULE_MANAGE_ROLE from deployer
   await makeTx(stakingRouter, "renounceRole", [STAKING_MODULE_MANAGE_ROLE, deployer], { from: deployer });
 

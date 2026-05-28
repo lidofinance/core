@@ -57,7 +57,6 @@ contract DepositSecurityModule {
     error SignaturesNotSorted();
     error DepositNoQuorum();
     error DepositRootChanged();
-    error DepositInactiveModule();
     error DepositTooFrequent();
     error DepositUnexpectedBlockHash();
     error DepositsArePaused();
@@ -402,9 +401,10 @@ contract DepositSecurityModule {
     }
 
     /**
-     * @notice Returns whether LIDO.deposit() can be called, given that the caller
-     * will provide guardian attestations of non-stale deposit root and nonce,
-     * and the number of such attestations will be enough to reach the quorum.
+     * @notice Returns whether STAKING_ROUTER.deposit() can be called, given that the caller
+     * will provide guardian attestations of a non-stale deposit root and nonce,
+     * the number of such attestations is enough to reach the quorum,
+     * and the deposit count for the module is greater than zero.
      *
      * @param stakingModuleId The ID of the staking module.
      * @return canDeposit Whether a deposit can be made.
@@ -414,7 +414,11 @@ contract DepositSecurityModule {
      *   - the guardian quorum is not set to zero;
      *   - the deposit distance is greater than the minimum required;
      *   - LIDO.canDeposit() returns true;
-     *   - STAKING_ROUTER.canDeposit returns true.
+     *   - STAKING_ROUTER.canDeposit() returns true.
+     * @dev This method is intended for off-chain tooling to check security conditions
+     * such as protocol pauses. However, to confirm that a deposit can actually be
+     * performed for the module, off-chain services should additionally verify that
+     * LIDO.getDepositableEther() and the module's allocation are both non-zero.
      */
     function canDeposit(uint256 stakingModuleId) external view returns (bool) {
         if (!STAKING_ROUTER.canDeposit(stakingModuleId)) return false;
@@ -466,7 +470,6 @@ contract DepositSecurityModule {
      * @param depositRoot The deposit root hash.
      * @param stakingModuleId The ID of the staking module.
      * @param nonce The nonce of the staking module.
-     * @param depositCalldata The calldata for the deposit.
      * @param sortedGuardianSignatures The list of guardian signatures ascendingly sorted by address.
      * @dev Reverts if any of the following is true:
      *   - onchain deposit root is different from the provided one;
@@ -490,7 +493,6 @@ contract DepositSecurityModule {
         bytes32 depositRoot,
         uint256 stakingModuleId,
         uint256 nonce,
-        bytes calldata depositCalldata,
         Signature[] calldata sortedGuardianSignatures
     ) external {
         /// @dev The first most likely reason for the signature to go stale
@@ -502,7 +504,6 @@ contract DepositSecurityModule {
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
         if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
-        if (!STAKING_ROUTER.canDeposit(stakingModuleId)) revert DepositInactiveModule();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();
@@ -510,7 +511,7 @@ contract DepositSecurityModule {
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
         // Call StakingRouter instead of Lido - SR will pull ETH from Lido
-        STAKING_ROUTER.deposit(stakingModuleId, depositCalldata);
+        STAKING_ROUTER.deposit(stakingModuleId, "");
 
         _setLastDepositBlock(block.number);
     }
