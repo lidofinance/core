@@ -391,23 +391,23 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         }
     }
 
-    function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata vw) internal view {
+    function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata _vw) internal view {
         // header slot epoch
         uint64 epoch = uint64(_slot / SLOTS_PER_EPOCH);
-        if (vw.activationEpoch > epoch) revert ValidatorIsNotActivated();
+        if (_vw.activationEpoch > epoch) revert ValidatorIsNotActivated();
     }
 
-    function _evaluateTopUpLimit(ValidatorWitness calldata vw, uint256 _pendingBalanceGwei)
+    function _evaluateTopUpLimit(ValidatorWitness calldata _vw, uint256 _pendingBalanceGwei)
         internal
         view
         returns (uint256)
     {
-        if (vw.exitEpoch != FAR_FUTURE_EPOCH || vw.slashed || vw.withdrawableEpoch != FAR_FUTURE_EPOCH) {
+        if (_vw.exitEpoch != FAR_FUTURE_EPOCH || _vw.slashed || _vw.withdrawableEpoch != FAR_FUTURE_EPOCH) {
             return 0;
         }
 
         Storage storage $ = _gatewayStorage();
-        uint256 currentTotal = vw.effectiveBalance + _pendingBalanceGwei;
+        uint256 currentTotal = _vw.effectiveBalance + _pendingBalanceGwei;
         if (currentTotal >= $.targetBalanceGwei) return 0;
 
         uint256 topUpLimit = $.targetBalanceGwei - currentTotal;
