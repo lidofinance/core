@@ -236,6 +236,7 @@ contract UpgradeConfig is IUpgradeConfig {
         CONSOLIDATION_BUS = coreUpgradeParams.consolidationBus;
         CONSOLIDATION_MIGRATOR = coreUpgradeParams.consolidationMigrator;
 
+        LIDO_DEPOSITS_RESERVE_TARGET = coreUpgradeParams.lidoDepositsReserveTarget;
         CURATED_MODULE_COMMITTEE = coreUpgradeParams.curatedModuleCommittee;
         TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
         CONSOLIDATION_GATEWAY_PAUSER = coreUpgradeParams.consolidationGatewayPauser;
@@ -429,6 +430,7 @@ contract UpgradeConfig is IUpgradeConfig {
             consolidationMigrator: CONSOLIDATION_MIGRATOR,
             topUpGateway: TOP_UP_GATEWAY,
             // params
+            lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
             curatedModuleCommittee: CURATED_MODULE_COMMITTEE,
             topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
             consolidationGatewayPauser: CONSOLIDATION_GATEWAY_PAUSER,
