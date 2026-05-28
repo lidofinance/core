@@ -83,8 +83,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     /// @notice Initializes the TopUpGateway proxy with admin, rate limits, and top-up balance parameters.
     /// @param _admin Address to receive DEFAULT_ADMIN_ROLE
     /// @param _maxValidatorsPerTopUp Maximum number of validators per single topUp call
-    /// @param _minTopUpBlockDistance Minimum blocks between topUp calls
-    /// @param _maxRootAgeSec Maximum age (seconds) of beacon root relative to block.timestamp
+    /// @param _minBlockDistance Minimum blocks between topUp calls
+    /// @param _maxRootAge Maximum age (seconds) of beacon root relative to block.timestamp
     /// @param _targetBalanceGwei Target validator balance ceiling after top-up (in Gwei).
     ///        Top-up amount = targetBalance - currentTotal.
     /// @param _minTopUpGwei Minimum top-up that can be performed (in Gwei). If calculated top-up < minTopUp, returns 0.
@@ -92,8 +92,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     function initialize(
         address _admin,
         uint256 _maxValidatorsPerTopUp,
-        uint256 _minTopUpBlockDistance,
-        uint256 _maxRootAgeSec,
+        uint256 _minBlockDistance,
+        uint256 _maxRootAge,
         uint256 _targetBalanceGwei,
         uint256 _minTopUpGwei
     ) external initializer {
@@ -101,8 +101,8 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setMaxValidatorsPerTopUp(_maxValidatorsPerTopUp);
-        _setMinBlockDistance(_minTopUpBlockDistance);
-        _setMaxRootAge(_maxRootAgeSec);
+        _setMinBlockDistance(_minBlockDistance);
+        _setMaxRootAge(_maxRootAge);
         _setTopUpBalanceLimits(_targetBalanceGwei, _minTopUpGwei);
     }
 
@@ -140,7 +140,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
     /**
      * @notice Method verifying Merkle proofs on validators and proceeding to top up validators
      * via StakingRouter.topUp(stakingModuleId, keyIndices, operatorIds, pubkeys, topUpLimits)
-     * @param _topUps TopUpData structure, containing validators' container fields, pending deposits
+     * @param _data TopUpData structure, containing validators' container fields, pending deposits
      *  and Merkle proofs on inclusion of each container in Beacon State tree
      * @dev Only callable by accounts with TOP_UP_ROLE.
      *
@@ -164,16 +164,16 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
      *  - any validator has activationEpoch >= current epoch (derived from beacon root slot) (`ValidatorIsNotActivated`);
      *  - any validator Merkle proof fails verification in CLValidatorVerifier.
      */
-    function topUp(TopUpData calldata _topUps) external onlyRole(TOP_UP_ROLE) whenResumed {
+    function topUp(TopUpData calldata _data) external onlyRole(TOP_UP_ROLE) whenResumed {
         Storage storage $ = _gatewayStorage();
 
-        uint256 validatorsCount = _topUps.validatorIndices.length;
+        uint256 validatorsCount = _data.validatorIndices.length;
         if (validatorsCount == 0) revert WrongArrayLength();
 
         if (
-            _topUps.keyIndices.length != validatorsCount || _topUps.operatorIds.length != validatorsCount
-                || _topUps.validatorWitness.length != validatorsCount
-                || _topUps.pendingBalanceGwei.length != validatorsCount
+            _data.keyIndices.length != validatorsCount || _data.operatorIds.length != validatorsCount
+                || _data.validatorWitness.length != validatorsCount
+                || _data.pendingBalanceGwei.length != validatorsCount
         ) {
             revert WrongArrayLength();
         }
@@ -184,7 +184,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
 
         // Require validatorIndices to be strictly increasing.
         for (uint256 i = 1; i < validatorsCount; ++i) {
-            if (_topUps.validatorIndices[i] <= _topUps.validatorIndices[i - 1]) {
+            if (_data.validatorIndices[i] <= _data.validatorIndices[i - 1]) {
                 revert InvalidValidatorIndicesSortOrder();
             }
         }
@@ -193,14 +193,14 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         _requireBlockDistancePassed();
 
         // Check proof age
-        // 0. _topUps.beaconRootData.childBlockTimestamp is newer than timestamp of last top up
-        // 1. _topUps.beaconRootData.childBlockTimestamp is not older than maxRootAge
-        _verifyRootAge(_topUps.beaconRootData);
+        // 0. _data.beaconRootData.childBlockTimestamp is newer than timestamp of last top up
+        // 1. _data.beaconRootData.childBlockTimestamp is not older than maxRootAge
+        _verifyRootAge(_data.beaconRootData);
 
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         // Find and validate withdrawalCredentials 0x02
-        bytes32 withdrawalCredentials = stakingRouter.getStakingModuleWithdrawalCredentials(_topUps.moduleId);
+        bytes32 withdrawalCredentials = stakingRouter.getStakingModuleWithdrawalCredentials(_data.moduleId);
         _requireWithdrawalCredentials02(withdrawalCredentials);
 
         bytes[] memory pubkeys = new bytes[](validatorsCount);
@@ -214,27 +214,26 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         unchecked {
             for (uint256 i; i < validatorsCount; ++i) {
                 // For each validator
-                ValidatorWitness calldata vw = _topUps.validatorWitness[i];
+                ValidatorWitness calldata vw = _data.validatorWitness[i];
 
                 if (vw.pubkey.length != PUBKEY_LENGTH) {
                     revert WrongPubkeyLength();
                 }
 
-                _verifyValidatorWasActivated(_topUps.beaconRootData.slot, vw);
+                _verifyValidatorWasActivated(_data.beaconRootData.slot, vw);
 
-                _verifyValidator(_topUps.beaconRootData, vw, _topUps.validatorIndices[i], withdrawalCredentials);
+                _verifyValidator(_data.beaconRootData, vw, _data.validatorIndices[i], withdrawalCredentials);
 
                 pubkeys[i] = vw.pubkey;
 
                 // calculate top up limit accounting for current balance and pending deposits
-                topUpLimits[i] = _evaluateTopUpLimit(vw, _topUps.pendingBalanceGwei[i]) * 1 gwei;
+                topUpLimits[i] = _evaluateTopUpLimit(vw, _data.pendingBalanceGwei[i]) * 1 gwei;
                 totalLimits += topUpLimits[i];
             }
         }
 
         // Proceed to StakingRouter
-        IStakingRouter(stakingRouter)
-            .topUp(_topUps.moduleId, _topUps.keyIndices, _topUps.operatorIds, pubkeys, topUpLimits);
+        stakingRouter.topUp(_data.moduleId, _data.keyIndices, _data.operatorIds, pubkeys, topUpLimits);
 
         if (totalLimits > 0) {
             _setLastTopUpData();
@@ -392,26 +391,23 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         }
     }
 
-    function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata _w) internal view {
+    function _verifyValidatorWasActivated(uint64 _slot, ValidatorWitness calldata vw) internal view {
         // header slot epoch
         uint64 epoch = uint64(_slot / SLOTS_PER_EPOCH);
-        if (_w.activationEpoch > epoch) revert ValidatorIsNotActivated();
+        if (vw.activationEpoch > epoch) revert ValidatorIsNotActivated();
     }
 
-    function _evaluateTopUpLimit(ValidatorWitness calldata _validator, uint256 _pendingBalanceGwei)
+    function _evaluateTopUpLimit(ValidatorWitness calldata vw, uint256 _pendingBalanceGwei)
         internal
         view
         returns (uint256)
     {
-        if (
-            _validator.exitEpoch != FAR_FUTURE_EPOCH || _validator.slashed
-                || _validator.withdrawableEpoch != FAR_FUTURE_EPOCH
-        ) {
+        if (vw.exitEpoch != FAR_FUTURE_EPOCH || vw.slashed || vw.withdrawableEpoch != FAR_FUTURE_EPOCH) {
             return 0;
         }
 
         Storage storage $ = _gatewayStorage();
-        uint256 currentTotal = _validator.effectiveBalance + _pendingBalanceGwei;
+        uint256 currentTotal = vw.effectiveBalance + _pendingBalanceGwei;
         if (currentTotal >= $.targetBalanceGwei) return 0;
 
         uint256 topUpLimit = $.targetBalanceGwei - currentTotal;
