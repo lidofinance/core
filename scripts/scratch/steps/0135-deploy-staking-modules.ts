@@ -5,7 +5,7 @@ import { ethers, network as hardhatNetwork } from "hardhat";
 import os from "os";
 import path from "path";
 
-import { certainAddress, cy, log } from "lib";
+import { cy, log } from "lib";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
@@ -158,9 +158,6 @@ export async function main() {
       CSM_FIRST_ADMIN_ADDRESS: state[Sk.appAgent].proxy.address,
       CSM_RESEAL_MANAGER_ADDRESS: state[Sk.resealManager]?.address || state[Sk.appAgent].proxy.address,
       EVM_SCRIPT_EXECUTOR_ADDRESS: state[Sk.appVoting].proxy.address,
-      CSM_ORACLE_1_ADDRESS: certainAddress("csm:oracle:1"),
-      CSM_ORACLE_2_ADDRESS: certainAddress("csm:oracle:2"),
-      CSM_ORACLE_3_ADDRESS: certainAddress("csm:oracle:3"),
     } as unknown as NodeJS.ProcessEnv;
 
     if (!csmAddress) {
