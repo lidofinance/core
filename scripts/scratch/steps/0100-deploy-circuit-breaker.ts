@@ -5,7 +5,7 @@ import { ethers, network as hardhatNetwork } from "hardhat";
 import os from "os";
 import path from "path";
 
-import { cy, deployWithoutProxy, log } from "lib";
+import { cy, deployWithoutProxy, log, warmUpJsonRpcProvider } from "lib";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 const CIRCUIT_BREAKER_REPO = "https://github.com/lidofinance/circuit-breaker.git";
@@ -91,6 +91,8 @@ export async function main() {
 
     log("Running CircuitBreaker deploy script...");
     execSync(forgeArgs.join(" "), { cwd: tmpDir, stdio: "inherit" });
+
+    await warmUpJsonRpcProvider();
 
     // Read the deployment artifact
     const network = await ethers.provider.getNetwork();

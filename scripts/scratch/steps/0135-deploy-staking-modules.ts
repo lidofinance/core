@@ -5,7 +5,7 @@ import { ethers, network as hardhatNetwork } from "hardhat";
 import os from "os";
 import path from "path";
 
-import { cy, log } from "lib";
+import { cy, log, warmUpJsonRpcProvider } from "lib";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
@@ -186,6 +186,8 @@ export async function main() {
       log(`Curated Module v2 deployed at: ${cy(artifact.CuratedModule!)}`);
       log.emptyLine();
     }
+
+    await warmUpJsonRpcProvider();
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
