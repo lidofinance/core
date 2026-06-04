@@ -413,6 +413,16 @@ contract LidoTemplate is IsContract {
         emit TmplDaoFinalized();
     }
 
+    /**
+     * @dev Hand root authority to Dual Governance and clear the template's deploy state.
+     *
+     *      After `finalizeDAO()` the template intentionally retains CREATE_PERMISSIONS_ROLE and the
+     *      Agent permission-manager rights (the root permission transfer was moved out of finalizeDAO
+     *      and into `_finalizePermissions`). Until one of the `finalizePermissions*` functions runs,
+     *      the template is therefore a single point of full control over the DAO. This MUST be called
+     *      in the same deployment session as `finalizeDAO()`, before relinquishing the template owner
+     *      key, to keep that trusted window as short as possible.
+     */
     function finalizePermissionsAfterDGDeployment(address dgAdminExecutor) external onlyOwner {
         require(dgAdminExecutor != address(0), ERROR_INVALID_DG_ADMIN_EXECUTOR);
 
@@ -425,6 +435,8 @@ contract LidoTemplate is IsContract {
         _finalizePermissions(address(deployState.agent));
     }
 
+    /// @dev Non-DG counterpart of `finalizePermissionsAfterDGDeployment`; same trusted-window
+    ///      contract applies — call in the same deployment session as `finalizeDAO()`.
     function finalizePermissionsWithoutDGDeployment() external onlyOwner {
         _finalizePermissions(address(deployState.voting));
     }

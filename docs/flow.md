@@ -414,7 +414,7 @@ across both delays. Its users:
 ## CI flow
 
 `.github/workflows/tests-integration-scratch.yml` runs two jobs against a
-`hardhat-node:2.26.0-scratch` service container — **Scratch with DG** and
+`hardhat-node:2.28.0-scratch` service container — **Scratch with DG** and
 **Scratch without DG** (`DG_DEPLOYMENT_ENABLED=false`):
 
 ```mermaid
@@ -426,7 +426,7 @@ sequenceDiagram
     participant Tests as test:integration:fork:local
 
     CI->>CI: checkout (submodules: recursive)<br/>setup-node + foundry-toolchain
-    CI->>Node: start hardhat-node:2.26.0-scratch
+    CI->>Node: start hardhat-node:2.28.0-scratch
     CI->>Deploy: NETWORK=local, RPC_URL=http://localhost:8555
     Deploy->>Node: steps 0000-0160
     Note over Deploy,Node: forge invoked from 0160<br/>broadcasts against same RPC

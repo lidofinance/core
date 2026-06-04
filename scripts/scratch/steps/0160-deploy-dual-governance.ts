@@ -166,7 +166,7 @@ async function runForgeAndPersist(
   }
 
   const chainId = Number(state.chainId);
-  warnIfDevCommitteesOnPublicChain(dgParams, chainId);
+  assertNoDevCommitteesOnPublicChain(dgParams, chainId);
   const tomlContent = await renderDGConfigToml(dgParams, state, chainId);
 
   fs.mkdirSync(DG_DEPLOY_CONFIG_DIR, { recursive: true });
@@ -327,7 +327,15 @@ const ANVIL_DEV_ADDRESSES = new Set(
   ].map((a) => a.toLowerCase()),
 );
 
-function warnIfDevCommitteesOnPublicChain(dg: NonNullable<ScratchParameters["dualGovernance"]>, chainId: number): void {
+// Fail-closed: a non-fork public chain whose DG committees are anvil dev keys is
+// a hijack waiting to happen (the deployer holds the keys and can replay txs to
+// seize control). Refuse the deploy unless explicitly overridden — escape hatch
+// mirrors DG_DEPLOYMENT_ENABLED, for the case of a public-chain *fork* whose
+// chainId isn't 31337/1337 (e.g. a forked mainnet under a custom chainId).
+function assertNoDevCommitteesOnPublicChain(
+  dg: NonNullable<ScratchParameters["dualGovernance"]>,
+  chainId: number,
+): void {
   // Local hardhat / anvil chain ids — dev addresses are expected.
   if (chainId === 31337 || chainId === 1337) return;
 
@@ -341,12 +349,19 @@ function warnIfDevCommitteesOnPublicChain(dg: NonNullable<ScratchParameters["dua
   const hits = allCommitteeAddresses.filter((a) => ANVIL_DEV_ADDRESSES.has(a.toLowerCase()));
   if (hits.length === 0) return;
 
-  log.warning(
-    `[dualGovernance] config references ${hits.length} anvil dev address(es) on chainId=${chainId}. ` +
-      `If this is a real testnet/mainnet deploy (not a local fork), replace them with real multisigs ` +
-      `before continuing. Offending addresses: ${hits.join(", ")}`,
-  );
+  const message =
+    `[dualGovernance] config references ${hits.length} anvil dev address(es) on chainId=${chainId}: ` +
+    `${hits.join(", ")}. These are publicly-known private keys — using them for DG committees on a ` +
+    `non-local chain hands control to anyone. Replace them with real multisigs.`;
+
+  if (DEV_COMMITTEE_OVERRIDE_VALUES.has(process.env.DG_ALLOW_DEV_COMMITTEES?.trim().toLowerCase() ?? "")) {
+    log.warning(`${message} Continuing anyway because DG_ALLOW_DEV_COMMITTEES is set (forks only).`);
+    return;
+  }
+  throw new Error(`${message} Set DG_ALLOW_DEV_COMMITTEES=1 to override (intended for public-chain forks only).`);
 }
+
+const DEV_COMMITTEE_OVERRIDE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 function runForgeDeploy(deployer: string, rpcUrl: string) {
   // forge needs its own --private-key on a live RPC (no unlocked accounts).

@@ -1,4 +1,4 @@
-import { TransactionReceipt } from "ethers";
+import { id, TransactionReceipt } from "ethers";
 import fs from "fs";
 
 import * as toml from "@iarna/toml";
@@ -48,6 +48,34 @@ export function readUpgradeParameters(skipValidation: boolean = false): UpgradeP
 const DG_TIME_CONSTRAINT_RETRY_STEP = ONE_HOUR;
 const DG_TIME_CONSTRAINT_RETRY_MAX_ATTEMPTS = 24;
 
+// Only these TimeConstraints reverts are cleared by advancing the chain clock:
+// `DayTimeOutOfRange` (outside the daily execution window) and `TimestampNotPassed`
+// (a not-before timestamp still in the future). `DayTimeOverflow` and
+// `TimestampPassed` are permanent — retrying them just burns 24 simulated hours
+// before failing, so we let any non-retryable revert propagate immediately.
+// Underlying ABI types: Duration is uint32, Timestamp is uint40 (DG submodule).
+const DG_RETRYABLE_TIME_CONSTRAINT_NAMES = ["DayTimeOutOfRange", "TimestampNotPassed"] as const;
+const DG_RETRYABLE_TIME_CONSTRAINT_SELECTORS = new Set([
+  id("DayTimeOutOfRange(uint32,uint32,uint32)").slice(0, 10),
+  id("TimestampNotPassed(uint40)").slice(0, 10),
+]);
+
+// The TimeConstraints check lives inside the proposal's external call, not in the
+// timelock ABI, so ethers usually can't decode it — we match the raw 4-byte
+// selector on any revert-data field, and fall back to the decoded error name
+// when ethers (or a wrapped provider) did surface it as text.
+function isRetryableTimeConstraint(e: unknown): boolean {
+  const err = e as { data?: unknown; info?: { error?: { data?: unknown } }; error?: { data?: unknown } };
+  const dataFields = [err?.data, err?.info?.error?.data, err?.error?.data];
+  for (const d of dataFields) {
+    if (typeof d === "string" && DG_RETRYABLE_TIME_CONSTRAINT_SELECTORS.has(d.slice(0, 10))) {
+      return true;
+    }
+  }
+  const text = `${(e as { message?: string })?.message ?? ""} ${String(e)}`;
+  return DG_RETRYABLE_TIME_CONSTRAINT_NAMES.some((name) => text.includes(name));
+}
+
 export interface ExecuteDGProposalOpts {
   dualGovernance: IDualGovernance;
   timelock: IEmergencyProtectedTimelock;
@@ -81,7 +109,9 @@ export async function executeDGProposal(
     try {
       executeReceipt = (await (await timelock.connect(signer).execute(proposalId)).wait())!;
     } catch (e) {
-      if (!retry || attempts >= DG_TIME_CONSTRAINT_RETRY_MAX_ATTEMPTS) throw e;
+      // Fail fast on anything that isn't a transient time-window revert: an
+      // unrelated failure should surface now, not after 24 retry hours.
+      if (!retry || attempts >= DG_TIME_CONSTRAINT_RETRY_MAX_ATTEMPTS || !isRetryableTimeConstraint(e)) throw e;
       await advanceChainTime(DG_TIME_CONSTRAINT_RETRY_STEP);
       attempts++;
     }

@@ -221,9 +221,11 @@ const config: HardhatUserConfig = {
           evmVersion: "cancun",
         },
       },
-      // NB: viaIR + low runs to keep LidoTemplate under the 24KB EIP-170 limit
+      // NB: low optimizer `runs` keeps LidoTemplate under the 24KB EIP-170 limit
       // after the DG-finalization additions (finalizePermissionsAfterDGDeployment,
-      // finalizePermissionsWithoutDGDeployment, _finalizePermissions).
+      // finalizePermissionsWithoutDGDeployment, _finalizePermissions). solc 0.4.24
+      // predates the IR pipeline, so `viaIR` is a no-op here — the size win is
+      // entirely from `runs`; the rest of the config matches the base 0.4.24 block.
       "contracts/0.4.24/template/LidoTemplate.sol": {
         version: "0.4.24",
         settings: {
@@ -231,7 +233,6 @@ const config: HardhatUserConfig = {
             enabled: true,
             runs: 50,
           },
-          viaIR: true,
           evmVersion: "constantinople",
         },
       },

@@ -257,54 +257,118 @@ const DualGovernanceTiebreakerCommitteeSchema = z.object({
   members: z.array(EthereumAddressSchema).min(1),
 });
 
-const DualGovernanceConfigSchema = z.object({
-  tiebreakerActivationTimeout: PositiveIntSchema,
-  resealCommittee: EthereumAddressSchema,
-  sanityCheckParams: z.object({
-    maxMinAssetsLockDuration: PositiveIntSchema,
-    maxSealableWithdrawalBlockersCount: PositiveIntSchema,
-    maxTiebreakerActivationTimeout: PositiveIntSchema,
-    minTiebreakerActivationTimeout: PositiveIntSchema,
-    minWithdrawalsBatchSize: PositiveIntSchema,
-  }),
-  configProvider: z.object({
-    firstSealRageQuitSupport: BigIntStringSchema,
-    secondSealRageQuitSupport: BigIntStringSchema,
-    minAssetsLockDuration: PositiveIntSchema,
-    vetoSignallingMinDuration: PositiveIntSchema,
-    vetoSignallingMinActiveDuration: PositiveIntSchema,
-    vetoSignallingMaxDuration: PositiveIntSchema,
-    vetoSignallingDeactivationMaxDuration: PositiveIntSchema,
-    vetoCooldownDuration: PositiveIntSchema,
-    rageQuitExtensionPeriodDuration: PositiveIntSchema,
-    rageQuitEthWithdrawalsMinDelay: PositiveIntSchema,
-    rageQuitEthWithdrawalsMaxDelay: PositiveIntSchema,
-    rageQuitEthWithdrawalsDelayGrowth: PositiveIntSchema,
-  }),
-  timelock: z.object({
-    afterSubmitDelay: PositiveIntSchema,
-    afterScheduleDelay: PositiveIntSchema,
+const DualGovernanceConfigSchema = z
+  .object({
+    tiebreakerActivationTimeout: PositiveIntSchema,
+    resealCommittee: EthereumAddressSchema,
     sanityCheckParams: z.object({
-      minExecutionDelay: PositiveIntSchema,
-      maxAfterSubmitDelay: PositiveIntSchema,
-      maxAfterScheduleDelay: PositiveIntSchema,
-      maxEmergencyModeDuration: PositiveIntSchema,
-      maxEmergencyProtectionDuration: PositiveIntSchema,
+      maxMinAssetsLockDuration: PositiveIntSchema,
+      maxSealableWithdrawalBlockersCount: PositiveIntSchema,
+      maxTiebreakerActivationTimeout: PositiveIntSchema,
+      minTiebreakerActivationTimeout: PositiveIntSchema,
+      minWithdrawalsBatchSize: PositiveIntSchema,
     }),
-    emergencyProtection: z.object({
-      emergencyModeDuration: PositiveIntSchema,
-      emergencyProtectionEndOffset: PositiveIntSchema,
-      emergencyGovernanceProposer: EthereumAddressSchema,
-      emergencyActivationCommittee: EthereumAddressSchema,
-      emergencyExecutionCommittee: EthereumAddressSchema,
+    configProvider: z.object({
+      firstSealRageQuitSupport: BigIntStringSchema,
+      secondSealRageQuitSupport: BigIntStringSchema,
+      minAssetsLockDuration: PositiveIntSchema,
+      vetoSignallingMinDuration: PositiveIntSchema,
+      vetoSignallingMinActiveDuration: PositiveIntSchema,
+      vetoSignallingMaxDuration: PositiveIntSchema,
+      vetoSignallingDeactivationMaxDuration: PositiveIntSchema,
+      vetoCooldownDuration: PositiveIntSchema,
+      rageQuitExtensionPeriodDuration: PositiveIntSchema,
+      rageQuitEthWithdrawalsMinDelay: PositiveIntSchema,
+      rageQuitEthWithdrawalsMaxDelay: PositiveIntSchema,
+      rageQuitEthWithdrawalsDelayGrowth: PositiveIntSchema,
     }),
-  }),
-  tiebreaker: z.object({
-    quorum: PositiveIntSchema,
-    executionDelay: PositiveIntSchema,
-    committees: z.array(DualGovernanceTiebreakerCommitteeSchema).min(1),
-  }),
-});
+    timelock: z.object({
+      afterSubmitDelay: PositiveIntSchema,
+      afterScheduleDelay: PositiveIntSchema,
+      sanityCheckParams: z.object({
+        minExecutionDelay: PositiveIntSchema,
+        maxAfterSubmitDelay: PositiveIntSchema,
+        maxAfterScheduleDelay: PositiveIntSchema,
+        maxEmergencyModeDuration: PositiveIntSchema,
+        maxEmergencyProtectionDuration: PositiveIntSchema,
+      }),
+      emergencyProtection: z.object({
+        emergencyModeDuration: PositiveIntSchema,
+        emergencyProtectionEndOffset: PositiveIntSchema,
+        emergencyGovernanceProposer: EthereumAddressSchema,
+        emergencyActivationCommittee: EthereumAddressSchema,
+        emergencyExecutionCommittee: EthereumAddressSchema,
+      }),
+    }),
+    tiebreaker: z.object({
+      quorum: PositiveIntSchema,
+      executionDelay: PositiveIntSchema,
+      committees: z.array(DualGovernanceTiebreakerCommitteeSchema).min(1),
+    }),
+  })
+  // Cross-field admissibility. The DG forge deploy re-checks all of these via its
+  // on-chain `sanity_check_params` (the authoritative gate), but that only fails
+  // after rendering TOML, spawning forge, and broadcasting on a live RPC. These
+  // refinements turn the common config typo (an inverted bound, a quorum larger
+  // than its committee) into a cheap local error before any of that. Bounds use
+  // `<=`/`>=` to avoid false-rejecting an edge config the chain would accept;
+  // strict-inequality enforcement stays with the on-chain check.
+  .superRefine((cfg, ctx) => {
+    const fail = (message: string, path: (string | number)[]) =>
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path });
+
+    if (BigInt(cfg.configProvider.firstSealRageQuitSupport) > BigInt(cfg.configProvider.secondSealRageQuitSupport)) {
+      fail("firstSealRageQuitSupport must be <= secondSealRageQuitSupport", [
+        "configProvider",
+        "firstSealRageQuitSupport",
+      ]);
+    }
+    if (cfg.configProvider.vetoSignallingMinDuration > cfg.configProvider.vetoSignallingMaxDuration) {
+      fail("vetoSignallingMinDuration must be <= vetoSignallingMaxDuration", [
+        "configProvider",
+        "vetoSignallingMinDuration",
+      ]);
+    }
+
+    const { minTiebreakerActivationTimeout: minT, maxTiebreakerActivationTimeout: maxT } = cfg.sanityCheckParams;
+    if (minT > maxT) {
+      fail("minTiebreakerActivationTimeout must be <= maxTiebreakerActivationTimeout", [
+        "sanityCheckParams",
+        "minTiebreakerActivationTimeout",
+      ]);
+    }
+    if (cfg.tiebreakerActivationTimeout < minT || cfg.tiebreakerActivationTimeout > maxT) {
+      fail(
+        "tiebreakerActivationTimeout must be within [minTiebreakerActivationTimeout, maxTiebreakerActivationTimeout]",
+        ["tiebreakerActivationTimeout"],
+      );
+    }
+
+    if (cfg.timelock.afterSubmitDelay > cfg.timelock.sanityCheckParams.maxAfterSubmitDelay) {
+      fail("afterSubmitDelay must be <= sanityCheckParams.maxAfterSubmitDelay", ["timelock", "afterSubmitDelay"]);
+    }
+    if (cfg.timelock.afterScheduleDelay > cfg.timelock.sanityCheckParams.maxAfterScheduleDelay) {
+      fail("afterScheduleDelay must be <= sanityCheckParams.maxAfterScheduleDelay", ["timelock", "afterScheduleDelay"]);
+    }
+    if (
+      cfg.timelock.emergencyProtection.emergencyModeDuration > cfg.timelock.sanityCheckParams.maxEmergencyModeDuration
+    ) {
+      fail("emergencyModeDuration must be <= sanityCheckParams.maxEmergencyModeDuration", [
+        "timelock",
+        "emergencyProtection",
+        "emergencyModeDuration",
+      ]);
+    }
+
+    if (cfg.tiebreaker.quorum > cfg.tiebreaker.committees.length) {
+      fail("tiebreaker.quorum must be <= number of committees", ["tiebreaker", "quorum"]);
+    }
+    cfg.tiebreaker.committees.forEach((c, i) => {
+      if (c.quorum > c.members.length) {
+        fail(`committee ${i}: quorum must be <= number of members`, ["tiebreaker", "committees", i, "quorum"]);
+      }
+    });
+  });
 
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
