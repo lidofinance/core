@@ -411,7 +411,7 @@ contract DepositSecurityModule {
      * @dev Returns true if all of the following conditions are met:
      *   - deposits are not paused;
      *   - the staking module is active;
-     *   - the guardian quorum is not set to zero;
+     *   - the guardian quorum is set and reachable;
      *   - the deposit distance is greater than the minimum required;
      *   - LIDO.canDeposit() returns true;
      *   - STAKING_ROUTER.canDeposit() returns true.
@@ -425,8 +425,9 @@ contract DepositSecurityModule {
 
         bool isDepositDistancePassed = _isMinDepositDistancePassed(stakingModuleId);
         bool isLidoCanDeposit = LIDO.canDeposit();
+        bool isQuorumReachable = quorum > 0 && quorum <= guardians.length;
 
-        return (!isDepositsPaused && quorum > 0 && isDepositDistancePassed && isLidoCanDeposit);
+        return (!isDepositsPaused && isQuorumReachable && isDepositDistancePassed && isLidoCanDeposit);
     }
 
     /**
