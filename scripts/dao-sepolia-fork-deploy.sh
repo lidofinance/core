@@ -32,5 +32,8 @@ bash scripts/dao-deploy.sh
 yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 
 # Run acceptance tests
+# dao-deploy.sh exports SKIP_GAS_REPORT only inside its own (child) shell, so
+# set it here too — otherwise the test phase prints the full gas table.
+export SKIP_GAS_REPORT=${SKIP_GAS_REPORT-true}  # re-enable with SKIP_GAS_REPORT=""
 export INTEGRATION_WITH_CSM="off"
 yarn test:integration:fork:local

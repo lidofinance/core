@@ -2,7 +2,10 @@
 
 Operator handbook: how to run, configure, and verify a scratch deploy. For how
 the pipeline works internally (step mechanics, Dual Governance wiring, state
-file semantics, CI architecture), see [flow.md](./flow.md).
+file semantics, CI architecture), see [flow.md](./flow.md). For why integration
+tests behave differently on external nodes (anvil) than on the in-process
+hardhat node — and how to write tests that pass on both — see
+[external-node-test-compat.md](./external-node-test-compat.md).
 
 ## TL;DR
 
@@ -285,6 +288,13 @@ Caveats:
   testnet's DG between deploy and verification, that assertion fails.
 - Voting, Agent, and the deployer are impersonated on the fork. Don't expect
   the same calls to succeed against the live RPC.
+- On Sepolia (forks included), tests that make variable-amount beacon
+  deposits — PDG predeposits/activations/top-ups, stVault unguaranteed and
+  side deposits — self-skip and show up as pending. Sepolia's deposit
+  contract reconstructs every `deposit_data_root` with a hardcoded 32 ETH
+  and refunds `msg.value`, so such deposits can never succeed there: not in
+  tests, and not in a real deployment either. See
+  `supportsVariableDepositAmounts` in `lib/protocol/types.ts`.
 
 **Re-deploy and test from scratch (scratch mode)** — `yarn
 test:integration:fork:local` (`MODE=scratch`, network `local`) does **not**
