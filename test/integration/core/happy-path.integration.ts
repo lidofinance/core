@@ -365,13 +365,10 @@ describe("Scenario: Protocol Happy Path", () => {
       [, toNorTransfer, toSdvtTransfer] = transferEvents;
     }
 
-    let toTreasuryTransferIdx = numExpectedTransferEvents - 1;
-
     if (csm !== undefined) {
       if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
         // +1 for the CSM internal transfer
         numExpectedTransferEvents += 1;
-        toTreasuryTransferIdx -= 1;
       } else {
         // no reward transfer to modules with 0 validators balance
         numExpectedTransferEvents -= 1;
@@ -381,14 +378,18 @@ describe("Scenario: Protocol Happy Path", () => {
       if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
         // +1 for the CSM internal transfer
         numExpectedTransferEvents += 1;
-        toTreasuryTransferIdx -= 1;
       } else {
         // no reward transfer to modules with 0 validators balance
         numExpectedTransferEvents -= 1;
       }
     }
-    const toTreasuryTransfer = transferEvents[toTreasuryTransferIdx];
-    const toTreasuryTransferShares = transferSharesEvents[toTreasuryTransferIdx];
+    const findTransfer = (events: LogDescriptionExtended[], from: string, to: string) =>
+      events.find((event) => {
+        const args = event.args.toObject();
+        return args.from.toLowerCase() === from.toLowerCase() && args.to.toLowerCase() === to.toLowerCase();
+      });
+    const toTreasuryTransfer = findTransfer(transferEvents, accounting.address, treasuryAddress);
+    const toTreasuryTransferShares = findTransfer(transferSharesEvents, accounting.address, treasuryAddress);
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
 
