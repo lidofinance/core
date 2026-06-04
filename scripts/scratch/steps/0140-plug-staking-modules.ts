@@ -50,9 +50,6 @@ const CSM_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 30;
 const CSM_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
 const CSM_WITHDRAWAL_TYPE = WithdrawalCredentialsType.WC0x01;
 
-const CSM_0X02_STAKING_MODULE_NAME = "Community Staking 0x02";
-const CSM_0X02_WITHDRAWAL_TYPE = WithdrawalCredentialsType.WC0x02;
-
 const CMV2_STAKING_MODULE_NAME = "curated-onchain-v2";
 const CMV2_STAKING_MODULE_TARGET_SHARE_BP = 10000; // 100%
 const CMV2_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
@@ -302,29 +299,6 @@ export async function main() {
           maxDepositsPerBlock: CMV2_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
           minDepositBlockDistance: CMV2_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
           withdrawalCredentialsType: CMV2_WITHDRAWAL_TYPE,
-        },
-      ],
-      { from: deployer },
-    );
-    await enableExternalModule(setup, state, deployer);
-  }
-
-  if (state[Sk.sm_CSM0x02]?.proxy?.address) {
-    const setup = getExternalModuleSetup(state, Sk.sm_CSM0x02, CSM_0X02_STAKING_MODULE_NAME, "CSModule");
-    await makeTx(
-      stakingRouter,
-      "addStakingModule",
-      [
-        CSM_0X02_STAKING_MODULE_NAME,
-        state[Sk.sm_CSM0x02].proxy.address,
-        {
-          stakeShareLimit: CSM_STAKING_MODULE_TARGET_SHARE_BP,
-          priorityExitShareThreshold: CSM_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
-          stakingModuleFee: CSM_STAKING_MODULE_MODULE_FEE_BP,
-          treasuryFee: CSM_STAKING_MODULE_TREASURY_FEE_BP,
-          maxDepositsPerBlock: CSM_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
-          minDepositBlockDistance: CSM_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
-          withdrawalCredentialsType: CSM_0X02_WITHDRAWAL_TYPE,
         },
       ],
       { from: deployer },
