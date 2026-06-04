@@ -77,19 +77,6 @@ function saveCSMArtifact(artifact: ExternalDeployArtifact) {
   });
 }
 
-function saveCSM0x02Artifact(artifact: ExternalDeployArtifact) {
-  if (!artifact.CSModule) throw new Error("CSM 0x02 deploy artifact does not contain CSModule address");
-
-  updateObjectInState(Sk.sm_CSM0x02, {
-    proxy: {
-      address: artifact.CSModule,
-      contract: "external:staking-modules/src/CSModule.sol:CSModule",
-      constructorArgs: [],
-    },
-    deployArtifact: artifact,
-  });
-}
-
 function saveCuratedArtifact(artifact: ExternalDeployArtifact) {
   const moduleAddress = artifact.CuratedModule;
   if (!moduleAddress) throw new Error("Curated deploy artifact does not contain CuratedModule address");
@@ -109,11 +96,9 @@ export async function main() {
   const state = readNetworkState({ deployer });
 
   const csmAddress = state[Sk.sm_CSM]?.proxy?.address;
-  const csm0x02Address = state[Sk.sm_CSM0x02]?.proxy?.address;
   const curatedAddress = state[Sk.sm_CM]?.proxy?.address;
-  if (csmAddress && csm0x02Address && curatedAddress) {
+  if (csmAddress && curatedAddress) {
     log(`Using the specified CSM address: ${cy(csmAddress)}`);
-    log(`Using the specified CSM 0x02 address: ${cy(csm0x02Address)}`);
     log(`Using the specified CMv2 address: ${cy(curatedAddress)}`);
     log.emptyLine();
     return;
@@ -166,15 +151,6 @@ export async function main() {
       const artifact = readArtifact(path.join(tmpDir, "artifacts", "local", "deploy-local-devnet.json"));
       saveCSMArtifact(artifact);
       log(`Community Staking Module deployed at: ${cy(artifact.CSModule!)}`);
-      log.emptyLine();
-    }
-
-    if (!csm0x02Address) {
-      log("Deploying Community Staking Module 0x02 from external repo...");
-      run("just", ["deploy-csm0x02", `--private-key=${privateKey}`], tmpDir, externalEnv);
-      const artifact = readArtifact(path.join(tmpDir, "artifacts", "local", "csm0x02", "deploy-local-devnet.json"));
-      saveCSM0x02Artifact(artifact);
-      log(`Community Staking Module 0x02 deployed at: ${cy(artifact.CSModule!)}`);
       log.emptyLine();
     }
 

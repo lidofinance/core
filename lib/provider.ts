@@ -2,10 +2,10 @@ import { ethers } from "hardhat";
 
 import { log } from "./log";
 
-const CONNECTION_RESET_RETRY_ATTEMPTS = 3;
-const CONNECTION_RESET_RETRY_DELAY_MS = 250;
+const CONNECTION_CLOSED_RETRY_ATTEMPTS = 3;
+const CONNECTION_CLOSED_RETRY_DELAY_MS = 250;
 
-function isConnectionReset(error: unknown): boolean {
+function isConnectionClosed(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
 
   const {
@@ -22,9 +22,10 @@ function isConnectionReset(error: unknown): boolean {
 
   return (
     code === "ECONNRESET" ||
-    isConnectionReset(cause) ||
-    isConnectionReset(nestedError) ||
-    (typeof message === "string" && message.includes("ECONNRESET"))
+    code === "UND_ERR_SOCKET" ||
+    isConnectionClosed(cause) ||
+    isConnectionClosed(nestedError) ||
+    (typeof message === "string" && (message.includes("ECONNRESET") || message.includes("other side closed")))
   );
 }
 
@@ -33,17 +34,17 @@ async function sleep(ms: number) {
 }
 
 export async function warmUpJsonRpcProvider() {
-  for (let attempt = 1; attempt <= CONNECTION_RESET_RETRY_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= CONNECTION_CLOSED_RETRY_ATTEMPTS; attempt++) {
     try {
       await ethers.provider.getBlockNumber();
       return;
     } catch (error) {
-      if (!isConnectionReset(error) || attempt === CONNECTION_RESET_RETRY_ATTEMPTS) {
+      if (!isConnectionClosed(error) || attempt === CONNECTION_CLOSED_RETRY_ATTEMPTS) {
         throw error;
       }
 
-      log.warning(`JSON-RPC connection reset after external broadcast, retrying (${attempt + 1})...`);
-      await sleep(CONNECTION_RESET_RETRY_DELAY_MS * attempt);
+      log.warning(`JSON-RPC connection closed after external broadcast, retrying (${attempt + 1})...`);
+      await sleep(CONNECTION_CLOSED_RETRY_DELAY_MS * attempt);
     }
   }
 }

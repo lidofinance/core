@@ -136,7 +136,6 @@ export enum Sk {
   upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
   // Staking modules
   sm_CSM = "sm:CSM",
-  sm_CSM0x02 = "sm:CSM0x02",
   sm_CM = "sm:CM",
 }
 
@@ -174,7 +173,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
     case Sk.sm_CSM:
-    case Sk.sm_CSM0x02:
     case Sk.sm_CM:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
