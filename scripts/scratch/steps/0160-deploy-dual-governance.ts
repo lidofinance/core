@@ -65,6 +65,13 @@ export async function main() {
   let resealManagerAddress = tryGetAddress(Sk.resealManager, state);
   if (!adminExecutorAddress || !resealManagerAddress) {
     ({ adminExecutorAddress, resealManagerAddress } = await runForgeAndPersist(deployer, state, params.dualGovernance));
+    // forge runs as a blocking child process, so the JS-side keep-alive RPC
+    // socket sits idle for the whole DG deploy (30-60s). Some nodes (notably
+    // `hardhat node`) close idle keep-alive connections in that window, and the
+    // first reused request then throws ECONNRESET. Drop the stale socket with a
+    // retried probe before the post-forge txs run. (anvil keeps the socket, so
+    // this is a no-op there.)
+    await reEstablishRpcAfterForge();
   } else {
     log(`DG already deployed (admin executor ${cy(adminExecutorAddress)}); skipping forge deploy`);
   }
@@ -362,6 +369,29 @@ function assertNoDevCommitteesOnPublicChain(
 }
 
 const DEV_COMMITTEE_OVERRIDE_VALUES = new Set(["1", "true", "yes", "on"]);
+
+// Transient socket errors raised when a previously-pooled keep-alive connection
+// was closed by the node while forge held the event loop.
+const TRANSIENT_RPC_ERRORS = ["ECONNRESET", "ECONNREFUSED", "EPIPE", "socket hang up", "network socket disconnected"];
+
+// Issue a trivial RPC call, retrying on transient socket errors, so the dead
+// keep-alive connection is discarded and a fresh one is opened before the real
+// post-forge transactions run. See the call site for why forge causes this.
+async function reEstablishRpcAfterForge(): Promise<void> {
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await ethers.provider.getBlockNumber();
+      return;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      const isTransient = TRANSIENT_RPC_ERRORS.some((needle) => message.includes(needle));
+      if (attempt === maxAttempts || !isTransient) throw e;
+      log.warning(`Post-forge RPC connection stale (${message}); reconnecting, attempt ${attempt}/${maxAttempts}`);
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+}
 
 function runForgeDeploy(deployer: string, rpcUrl: string) {
   // forge needs its own --private-key on a live RPC (no unlocked accounts).

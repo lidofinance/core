@@ -1,11 +1,11 @@
 # Deploy Lido protocol middleware from scratch
 
-Operator handbook: how to run, configure, and verify a scratch deploy. For how
-the pipeline works internally (step mechanics, Dual Governance wiring, state
-file semantics, CI architecture), see [flow.md](./flow.md). For why integration
-tests behave differently on external nodes (anvil) than on the in-process
-hardhat node — and how to write tests that pass on both — see
-[external-node-test-compat.md](./external-node-test-compat.md).
+How to run, configure, and verify a scratch deploy. The
+[Architecture & internals](#architecture--internals) section at the end covers
+how the pipeline works (step mechanics, Dual Governance wiring, state-file
+semantics, CI). For why integration tests behave differently on external nodes
+(anvil) than on the in-process hardhat node — and how to write tests that pass
+on both — see [external-node-test-compat.md](./external-node-test-compat.md).
 
 ## TL;DR
 
@@ -29,24 +29,32 @@ anvil --fork-url "$SEPOLIA_RPC_URL" -p 8555 --base-fee 0 --gas-price 0
 bash scripts/dao-sepolia-fork-deploy.sh
 ```
 
-### Agent / CI mode (quiet logs)
+### Output modes (quiet by default, or full)
 
-The scripts above print full deploy + test output to the terminal — gas reports, per-tx traces, and ~700 mocha test ticks. That is fine for a human watching interactively but wasteful for automation / LLM agents.
-
-Agent-friendly variants tee the full output to a file and forward only milestones, mocha counts (`N passing / N pending / N failing`), failure bullets, assertion/provider errors, and the tail of the log to the terminal:
+By default the deploy scripts **self-log**: the full deploy + test output (gas reports, per-tx traces, ~700 mocha test ticks) is teed to a log file, and only milestones, mocha counts (`N passing / N pending / N failing`), failure bullets, assertion/provider errors, and the tail of the log reach the terminal. A periodic heartbeat reports elapsed time and log growth, so a long quiet phase (e.g. a slow integration test — mocha lets each run up to 20 min before timing out) isn't mistaken for a freeze. This is friendly for both automation / LLM agents and humans who want signal over noise.
 
 ```shell
-# Full deploy + tests, log at logs/scratch-deploy.log (override via LOG_FILE env):
-bash scripts/dao-local-deploy-agent.sh
-bash scripts/dao-sepolia-fork-deploy-agent.sh   # logs/scratch-deploy-sepolia-fork.log
+# Quiet (default), log at logs/scratch-deploy.log (override via LOG_FILE env):
+bash scripts/dao-local-deploy.sh
+bash scripts/dao-sepolia-fork-deploy.sh          # logs/scratch-deploy-sepolia-fork.log
+```
 
-# Just the test suites, with their own log files:
+To get the raw, unfiltered firehose straight to the terminal instead, pass `--full` (or set `FULL_OUTPUT=1`):
+
+```shell
+bash scripts/dao-local-deploy.sh --full
+FULL_OUTPUT=1 bash scripts/dao-sepolia-fork-deploy.sh
+```
+
+The test suites have their own quiet variants with dedicated log files:
+
+```shell
 yarn test:integration:fork:local:agent   # logs/integration-fork-local.log
 yarn test:integration:scratch:agent      # logs/integration-scratch.log
 yarn test:integration:agent              # logs/integration-tests.log (forking mode)
 ```
 
-All three yarn variants and the deploy wrappers route through `scripts/run-logged.sh <logfile> <command...>`, which you can use to wrap any long-running command the same way.
+The deploy scripts and the `yarn …:agent` variants all route through `scripts/run-logged.sh <logfile> <command...>`, which you can use to wrap any long-running command the same way (heartbeat included; disable it with `HEARTBEAT_SECONDS=0`).
 
 ## Requirements
 
@@ -67,24 +75,25 @@ The repository contains bash scripts for deploying the DAO across various enviro
 - Local Node Deployment - `scripts/dao-local-deploy.sh` (Supports Ganache, Anvil, Hardhat Network, and other local
   Ethereum nodes)
 
-The protocol requires configuration of numerous parameters for a scratch deployment. The default configurations are
-stored in JSON files named `deployed-<deploy env>-defaults.json`, where `<deploy env>` represents the target
-environment. Currently, a single default configuration file exists: `testnet-defaults.json`, which is tailored
-for testnet deployments. This configuration differs from the mainnet setup, featuring shorter vote durations and more
-frequent oracle report cycles, among other adjustments.
+The protocol requires configuration of numerous parameters for a scratch deployment. These live in a TOML
+deploy-params file — by default `scripts/scratch/deploy-params-testnet.toml` (override with the
+`SCRATCH_DEPLOY_CONFIG` env var). It is tailored for testnet deployments — shorter vote durations, more frequent
+oracle report cycles, and the `[dualGovernance]` block — and differs from a mainnet setup. The Zod schema that
+validates it is `lib/config-schemas.ts`; the loader is `scripts/utils/scratch.ts`.
 
 > [!NOTE]
-> Some parameters in the default configuration file are intentionally set to `null`, indicating that they require
-> further specification during the deployment process.
+> Network-specific values (deployer, genesis time, deposit contract, …) are intentionally left `null` in the
+> rendered state file and filled in from environment variables during step `0000`.
 
-The deployment script performs the following steps regarding configuration:
+The first deployment step (`0000-populate-deploy-artifact-from-env.ts`) seeds the network state file from this config:
 
-1. Copies the appropriate default configuration file (e.g., `testnet-defaults.json`) to a new file named
-   `deployed-<network name>.json`, where `<network name>` corresponds to a network configuration defined in
-   `hardhat.config.js`.
+1. `resetStateFileFromDeployParams()` reads the TOML, converts it to deployment-state shape
+   (`scratchParametersToDeploymentState`), and writes it to `deployed-<network name>.json` — the file pointed at by
+   `NETWORK_STATE_FILE`, where `<network name>` is a network configured in `hardhat.config.ts`.
 
-2. Populates the `deployed-<network name>.json` file with specific contract addresses and transaction hashes as the
-   deployment progresses.
+2. Step `0000` then layers in the env-var values (`DEPLOYER`, `GENESIS_TIME`, `GENESIS_FORK_VERSION`,
+   `DEPOSIT_CONTRACT`, …). Every later step appends its deployed contract addresses and transaction hashes to the
+   same file.
 
 Detailed information for each setup is provided in the sections below.
 
@@ -97,7 +106,7 @@ Detailed information for each setup is provided in the sections below.
 A detailed overview of the deployment script's process:
 
 - Prepare `deployed-<network name>.json` file
-  - Copied from `testnet-defaults.json`
+  - Rendered from `scripts/scratch/deploy-params-testnet.toml` by step `0000`
   - Enhanced with environment variable values, e.g., `DEPLOYER`
   - Progressively updated with deployed contract information
 - (optional) Deploy DepositContract
@@ -141,8 +150,8 @@ A detailed overview of the deployment script's process:
   on the sealables, and performs the governance hand-off on-chain via
   `LidoTemplate.finalizePermissionsAfterDGDeployment(adminExecutor)` (Voting
   loses direct Agent control; DG's AdminExecutor gains it). No impersonation —
-  works on a live network. Mechanics, diagrams, and rationale:
-  [flow.md](./flow.md#phase-4-in-detail).
+  works on a live network. Mechanics and rationale:
+  [Architecture & internals](#architecture--internals).
 
 To opt out of DG, set `DG_DEPLOYMENT_ENABLED=false` (any of `false`/`0`/`off`/`no`,
 case-insensitive; default is enabled). With the toggle off, step `0145` is a
@@ -228,12 +237,12 @@ typically loaded from `.env`:
 ```shell
 NETWORK=hoodi \
 NETWORK_STATE_FILE=deployed-hoodi.json \
-NETWORK_STATE_DEFAULTS_FILE=scripts/defaults/testnet-defaults.json \
 bash scripts/dao-deploy.sh
 ```
 
 `NETWORK_STATE_FILE` defaults to `deployed-<network>.json` if unset; override it (e.g.
-`deployed-hoodi-scratch-test.json`) to keep multiple parallel deploys side by side.
+`deployed-hoodi-scratch-test.json`) to keep multiple parallel deploys side by side. The deploy params come from
+`scripts/scratch/deploy-params-testnet.toml` unless `SCRATCH_DEPLOY_CONFIG` overrides it.
 
 Deployment artifacts will be stored in the file pointed at by `NETWORK_STATE_FILE`.
 
@@ -310,6 +319,34 @@ blank node. Two warnings:
 - The chain accumulates a full extra protocol instance per run; only use
   disposable forks/nodes.
 
+**How `dao-local-deploy.sh` runs the suite — deploy on anvil, test on a
+fork of it.** The deploy script does _not_ drive the external anvil with the
+test suite (the old `test:integration:fork:local`, `MODE=scratch --network
+local` path). It deploys once to anvil (DG step `0160` needs a real RPC for
+`forge --broadcast`), then runs `yarn test:integration` (`MODE=forking`) so the
+suite runs on an **in-process hardhat node that forks that anvil**, with
+`PROVISION_ON_FORK=1`. Two reasons:
+
+- **Isolation.** The suite isolates tests with `evm_snapshot`/`evm_revert`
+  plus month-scale `evm_setNextBlockTimestamp` jumps. That isolation is only
+  reliable on the in-process node; driving the external anvil over a full
+  ~800-test run lets snapshot state degrade (cf. the ~6k-block caveat in
+  `test/integration/core/dsm-pause-deposits.integration.ts`), which cascades
+  into spurious failures and an eventual mid-suite deadlock (a submitted tx
+  that never mines, blocking until mocha's 20-min timeout). On the fork the
+  same suite is green and finishes in ~1 minute; anvil is never mutated by the
+  tests.
+- **Provisioning + `isScratch`.** A scratch deploy is deployed-but-not-
+  operational, so the fork self-provisions (oracle committee, hash-consensus
+  initial epoch, unpause, seed TVL) via `provision()` — the same setup a
+  `MODE=scratch` run does, here run on the fork instead of on anvil. Because the
+  protocol under test is still a scratch deployment (agent holds the powers,
+  no EasyTrack), `getProtocolContext` reports `ctx.isScratch = true` even though
+  it didn't redeploy, so tests that branch on `ctx.isScratch` (e.g.
+  `staking-module`, `circuit-breaker-pause`) take the scratch path. `MODE` and
+  `PROVISION_ON_FORK` are wired in `lib/protocol/context.ts`; the forking-mode
+  state-file reader is `getForkingNetworkConfig` in `lib/protocol/networks.ts`.
+
 ### Publishing Sources to Etherscan
 
 ```shell
@@ -372,10 +409,182 @@ await stakingRouter.addStakingModule(
 await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { from: agent.address });
 ```
 
+## Architecture & internals
+
+How the pipeline is wired and why. For step bodies, see `scripts/scratch/steps/`.
+
+### Vocabulary
+
+- **Step** — a `.ts` file under `scripts/scratch/steps/` exporting `async main()`,
+  run in numeric-prefix order per `steps.json`.
+- **Network state file** — `deployed-<network>.json`, the bus between steps: each
+  reads from and appends to it. There is no in-memory hand-off — each step runs
+  in isolation via `scripts/utils/migrate.ts` (or `lib/scratch.ts:applySteps` in
+  tests).
+- **Voting / Agent** — Aragon DAO components. Voting is the proposer-of-record;
+  Agent holds protocol admin (OZ `DEFAULT_ADMIN_ROLE`, ACL grants).
+- **Dual Governance (DG)** — Lido's two-tier governance (veto-signalling escrow +
+  emergency-protected timelock), vendored at `foundry/lib/dual-governance`
+  (submodule, pinned `v1.0.2`). **AdminExecutor** is the contract DG drives Agent
+  through; **ResealManager** can pause/resume the sealables.
+- **LidoTemplate** — the Aragon DAO factory; owns the permission bootstrap. The DG
+  launch is one of its finalize paths.
+
+### State file access
+
+- `getAddress(Sk.x, state)` — throws if missing (entry must exist).
+- `tryGetAddress(Sk.x, state)` — returns `undefined`; used by 0160's resume guard
+  to detect "forge already ran".
+
+DG single-address entries use `{ address: "0x…" }` (no upstream DG contract is a
+proxy); `dg:tiebreakerSubCommittees` holds `{ addresses: [...] }`.
+
+### Always a single clean pass
+
+There is no incremental/resume mode: `dao-deploy.sh` does `rm -f` on the state
+file, and step `0000` unconditionally rewrites it from the deploy params, so
+nothing from a prior run survives. Two consequences:
+
+- **`MODE=scratch` integration runs re-deploy everything** — they call
+  `deployScratchProtocol()`, which runs every step from `0000` and tests that
+  fresh instance (a second forge DG deploy included). They validate "scratch
+  deploy works on this chain", not a prior artifact. Never point
+  `NETWORK_STATE_FILE` at a file you want to keep.
+- **The 0145/0150/0160 idempotency guards are not a resume mode.** They exist for
+  one dangerous partial failure: 0160 persists the forge output mid-step (before
+  the permission hand-off). If it dies after that, re-running _just 0160_ resumes
+  cleanly — `tryGetAddress(dg:adminExecutor)` skips the forge redeploy, per-sealable
+  `hasRole` checks skip already-done wiring, and the `hasPermission` / `owner ==
+Agent` checks skip an already-applied finalize.
+
+### Phase 4: hand-off + Dual Governance
+
+The DG-aware tail is `0145` → `0150` → `0160`. There is no separate "launch DG"
+step — `0160` deploys the DG contracts _and_ performs the governance hand-off
+through a regular owner call on `LidoTemplate`, which is why the same pipeline
+works on live networks, not just forks with impersonation.
+
+- **0145 — unpause sealables.** DG's `addSealableWithdrawalBlocker` rejects paused
+  contracts, but WQ + VEBO ship paused. 0145 runs _before_ 0150 (while the
+  deployer still holds `DEFAULT_ADMIN_ROLE`): grant self `RESUME_ROLE`, resume,
+  renounce. No-op when DG is disabled.
+- **0150 — transfer roles, defer two renounces.** Hands protocol admin to Agent.
+  When DG is on, the deployer _keeps_ `DEFAULT_ADMIN_ROLE` on WQ + VEBO
+  (`deferDgRenounce`) so 0160 can wire ResealManager; Agent already has its grant,
+  so the end state is identical. Template ownership also stays with the deployer
+  (0160's finalize is `onlyOwner`).
+- **0160 — deploy DG via forge, launch via LidoTemplate.** Lido core is hardhat,
+  DG is foundry. 0160 renders `deploy-config-scratch.toml` from state + the
+  `[dualGovernance]` params, runs DG's `DeployConfigurable.s.sol` via
+  `forge --broadcast --slow`, records `dg:*` + `resealManager` to state, wires
+  ResealManager `PAUSE`/`RESUME` on each sealable (ending the deferred renounce),
+  then calls the template. `finalizePermissionsAfterDGDeployment(adminExecutor)`
+  grants AdminExecutor `RUN_SCRIPT_ROLE` + `EXECUTE_ROLE` on Agent, revokes both
+  from Voting, makes Agent its own permission manager for them, and migrates ACL
+  `CREATE_PERMISSIONS_ROLE` to Agent. Finally `setTemplateOwnerToAgent`. With DG
+  disabled, `finalizePermissionsWithoutDGDeployment()` does the same finalization
+  but keeps Voting as manager.
+
+  Non-obvious mechanics:
+
+  - **Forge targets the hardhat network's URL** (`network.config.url`, falling
+    back to `RPC_URL`) so DG lands on the same chain even when a dotenv `RPC_URL`
+    points elsewhere (the CI layout). `--slow` serializes broadcasts against a
+    fork-backed anvil. Signing reuses hardhat's account (`--private-key`) or falls
+    back to `--unlocked`.
+  - **DG needs an external node — it cannot deploy against the in-process hardhat
+    node.** `forge` is a separate process that reaches the chain over HTTP RPC, but
+    the built-in `hardhat` network (used by `MODE=scratch` in-process) has no `url`
+    and exposes no socket. With no `url` and no `RPC_URL`, 0160 fails fast (_"the
+    selected hardhat network has no `url` … Run scratch deploy against an external
+    node"_); with `RPC_URL` set it would broadcast DG to a _different_ chain than
+    the in-process one, so it can't work coherently either. For this reason the
+    in-process scratch commands (`yarn test:integration:scratch` and its
+    `:trace`/`:fulltrace` variants) force `DG_DEPLOYMENT_ENABLED=false`;
+    scratch-**with**-DG is exercised against an external node via
+    `yarn test:integration:fork:local` (scenario C in [testing.md](./testing.md))
+    or the `dao-*-deploy.sh` helpers — which is also why scratch CI uses
+    `test:integration:fork:local`, not `test:integration:scratch`.
+  - **Artifact pick** snapshots the artifact dir before forge and takes the new
+    file after — no mtime/wall-clock reliance (fork block timestamps diverge).
+    Older artifacts are pruned (the submodule doesn't gitignore them).
+  - **Dev-address tripwire** fails the deploy on any non-local chain whose
+    committee/proposer params still hold anvil's well-known dev accounts (public
+    keys); override with `DG_ALLOW_DEV_COMMITTEES=1` for public-chain forks.
+  - Rage-quit support values are emitted as native `bigint`; ethers patches
+    `BigInt.prototype.toJSON`, which breaks `@iarna/toml`, so the step removes the
+    patch during `stringify`.
+
+### Governance topology after 0160
+
+```mermaid
+flowchart LR
+    V[Voting] -- submitProposal only --> DG[DualGovernance]
+    DG -- schedule --> TL[Timelock]
+    TL -- execute --> AE[AdminExecutor]
+    AE -- RUN_SCRIPT_ROLE / EXECUTE_ROLE --> A[Agent]
+    A -- DEFAULT_ADMIN_ROLE --> P[Protocol contracts]
+    A -- CREATE_PERMISSIONS_ROLE (manager: Agent) --> ACL[ACL]
+```
+
+Voting still exists and remains DG's admin proposer/canceller, but can no longer
+call Agent directly: every protocol-modifying action goes Voting → DG → Timelock →
+AdminExecutor → Agent, and the veto-signalling escrow can stop a malicious
+proposal mid-flight. ResealManager holds `PAUSE`/`RESUME` on both sealables.
+`test/integration/dual-governance/dg-scratch.integration.ts` asserts exactly this
+end state.
+
+### Proposal lifecycle (timelock)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Submitted: dg.submitProposal(calls)
+    Submitted --> Scheduled: dg.scheduleProposal(id) after afterSubmitDelay
+    Scheduled --> Executed: timelock.execute(id) after afterScheduleDelay
+    Submitted --> Cancelled: cancelAllNonExecutedProposals()
+    Scheduled --> Cancelled
+    Executed --> [*]
+    Cancelled --> [*]
+```
+
+The scratch deploy submits no proposals — the timelock starts empty. The lifecycle
+is exercised by `scripts/utils/upgrade.ts:executeDGProposal`, which walks an
+already-submitted proposal through schedule + execute, advancing chain time across
+both delays (`retryOnTimeConstraint: true` steps past mainnet `TimeConstraints`
+windows; scratch sets none).
+
+### CI
+
+`.github/workflows/tests-integration-scratch.yml` runs four jobs — **with** and **without** Dual Governance
+(`DG_DEPLOYMENT_ENABLED=false`), each on a blank node (`hardhat-node:2.28.0-scratch`) and on a Sepolia fork
+(`hardhat-node:2.28.0-sepolia`, chainId `11155111` → step `0010`'s `SepoliaDepositAdapter` branch), all on the
+`:8555` service container. Each job runs `./scripts/dao-deploy.sh` (steps `0000–0160`), then
+`yarn test:integration:fork:local` — `MODE=scratch` + `--network local` (scenario C in
+[testing.md](./testing.md)), which drives the external node directly and re-deploys the protocol from `0000` for the
+test run. Because 0160 shells out to `forge` inside the submodule, CI needs the Foundry toolchain and a
+`submodules: recursive` checkout.
+
+### Files of interest
+
+| File                                                         | Role                                                           |
+| ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `scripts/dao-deploy.sh`                                      | Entry point; wipes state file, compiles, runs `migrate.ts`     |
+| `scripts/utils/migrate.ts`                                   | Iterates `steps.json`, imports each step, calls `main()`       |
+| `lib/scratch.ts`                                             | `applySteps`, `deployScratchProtocol`, `isDGDeploymentEnabled` |
+| `scripts/scratch/deploy-params-testnet.toml`                 | All deploy parameters (`[dualGovernance]` at the bottom)       |
+| `scripts/scratch/steps/0145-unpause-sealables.ts`            | DG prerequisite: resume WQ + VEBO pre-role-transfer            |
+| `scripts/scratch/steps/0150-transfer-roles.ts`               | Admin hand-off to Agent; defers WQ/VEBO renounce for DG        |
+| `scripts/scratch/steps/0160-deploy-dual-governance.ts`       | Forge bridge + ResealManager wiring + template finalize        |
+| `contracts/0.4.24/template/LidoTemplate.sol`                 | `finalizePermissions{After,Without}DGDeployment`, `setOwner`   |
+| `scripts/utils/upgrade.ts`                                   | Shared `executeDGProposal` helper                              |
+| `lib/state-file.ts`                                          | `Sk` enum, `getAddress`, `tryGetAddress`, state reset/persist  |
+| `lib/config-schemas.ts`                                      | Zod schema for `[dualGovernance]`                              |
+| `test/integration/dual-governance/dg-scratch.integration.ts` | Post-launch topology assertions + e2e proposal                 |
+
 ## Protocol Parameters
 
 This section describes part of the parameters and their values used during deployment. The values are specified in
-`testnet-defaults.json`.
+`scripts/scratch/deploy-params-testnet.toml`.
 
 ### OracleDaemonConfig
 

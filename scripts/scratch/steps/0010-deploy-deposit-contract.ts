@@ -35,10 +35,12 @@ async function deploySepoliaDepositAdapter(deployer: string): Promise<string> {
   const adapterIface = (await ethers.getContractFactory("SepoliaDepositAdapter")).interface;
   const initData = adapterIface.encodeFunctionData("initialize", [deployer]);
 
+  // Deployer holds proxy admin initially so deployment can proceed; ownership later handed to
+  // Agent (governance) for decentralized upgrade control.
   const proxy = await deployBehindOssifiableProxy(
     Sk.sepoliaDepositAdapter,
     "SepoliaDepositAdapter",
-    deployer, // proxy admin — transferred to Agent in step 0150
+    deployer, // proxy admin - supposed to be transferred to Agent later
     deployer,
     [SEPOLIA_ORIGINAL_DEPOSIT_CONTRACT],
     null, // implementation

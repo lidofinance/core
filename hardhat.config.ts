@@ -38,6 +38,11 @@ const config: HardhatUserConfig = {
       // minimal base fee is 1 for EIP-1559
       // gasPrice: 0,
       // initialBaseFeePerGas: 0,
+      // Hardhat does NOT inherit the forked chain's chainId (it defaults to
+      // 31337), and `hardhat node` has no --chainId flag. Set HARDHAT_CHAIN_ID
+      // to the source chain's id (e.g. 11155111 for Sepolia) so chainId-keyed
+      // deploy branches behave as on the real network. Leave unset for 31337.
+      chainId: process.env.HARDHAT_CHAIN_ID ? Number(process.env.HARDHAT_CHAIN_ID) : 31337,
       blockGasLimit: 30000000,
       allowUnlimitedContractSize: true,
       accounts: {

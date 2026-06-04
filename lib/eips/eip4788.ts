@@ -1,6 +1,8 @@
 import { ethers } from "hardhat";
 
-import { impersonate, log } from "lib";
+import { impersonate } from "lib";
+
+import { ensurePredeployedBytecode } from "./predeploy";
 
 // Address of the Beacon Block Storage contract, which exposes beacon chain roots.
 // This corresponds to `BEACON_ROOTS_ADDRESS` as specified in EIP-4788.
@@ -40,12 +42,5 @@ export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
 };
 
 export const ensureEIP4788BeaconBlockRootContractPresent = async (): Promise<void> => {
-  const code = await ethers.provider.getCode(BEACON_ROOTS_ADDRESS);
-
-  if (code === "0x") {
-    log.warning(`EIP4788 Beacon Block Root contract not found at ${BEACON_ROOTS_ADDRESS}`);
-
-    await deployEIP4788BeaconBlockRootContract();
-    log.success("EIP4788 Beacon Block Root contract is present");
-  }
+  await ensurePredeployedBytecode(BEACON_ROOTS_ADDRESS, EIP4788_RUNTIME_BYTECODE, "EIP4788 Beacon Block Root contract");
 };

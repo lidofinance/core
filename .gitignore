@@ -39,3 +39,4 @@ deployed-mainnet-upgrade.json
 # Editor swap files
 *.swp
 *.swo
+/.obsidian

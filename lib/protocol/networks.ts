@@ -130,7 +130,10 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
     locator: state[Sk.lidoLocator].proxy.address,
     agentAddress: state[Sk.appAgent].proxy.address,
     votingAddress: state[Sk.appVoting].proxy.address,
-    easyTrackAddress: state[Sk.easyTrackEVMScriptExecutor]?.address,
+    // Scratch deploys (e.g. forking a local anvil scratch deploy) have no
+    // EasyTrack; fall back to the Voting address, matching getLocalNetworkConfig.
+    // Real mainnet/hoodi forks still resolve the actual executor from state.
+    easyTrackAddress: state[Sk.easyTrackEVMScriptExecutor]?.address ?? state[Sk.appVoting]?.proxy.address,
     stakingVaultFactory: state[Sk.stakingVaultFactory]?.address,
     stakingVaultBeacon: state[Sk.stakingVaultBeacon]?.address,
     operatorGrid: state[Sk.operatorGrid]?.proxy.address,

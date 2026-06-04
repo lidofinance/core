@@ -30,7 +30,10 @@ export const provision = async (ctx: ProtocolContext) => {
     return;
   }
 
-  // Ensure necessary precompiled contracts are present
+  // Ensure necessary predeploys are present. Each helper injects bytecode via
+  // `hardhat_setCode` only when the address is empty (fresh local nodes); on a
+  // network that already ships the predeploy (any live/forked chain) the code is
+  // present, so setCode is never attempted.
   await ensureEIP7002WithdrawalRequestContractPresent();
   await ensureEIP4788BeaconBlockRootContractPresent();
   await ensureEIP7251MaxEffectiveBalanceRequestContractPresent();
