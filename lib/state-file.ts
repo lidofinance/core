@@ -134,9 +134,10 @@ export enum Sk {
   upgradeTemplate = "upgradeTemplate",
   upgradeVoteScript = "upgradeVoteScript",
   upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
-  // csm & cm
-  csm_CSM = "csm:CSM",
-  csm_CM = "csm:CM",
+  // Staking modules
+  sm_CSM = "sm:CSM",
+  sm_CSM0x02 = "sm:CSM0x02",
+  sm_CM = "sm:CM",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -172,6 +173,9 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
+    case Sk.sm_CSM:
+    case Sk.sm_CSM0x02:
+    case Sk.sm_CM:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
