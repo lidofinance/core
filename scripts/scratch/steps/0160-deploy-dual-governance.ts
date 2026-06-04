@@ -152,9 +152,17 @@ async function runForgeAndPersist(
   state: ReturnType<typeof readNetworkState>,
   dgParams: NonNullable<ScratchParameters["dualGovernance"]>,
 ): Promise<{ adminExecutorAddress: string; resealManagerAddress: string }> {
-  const rpcUrl = process.env.RPC_URL;
+  // Forge must broadcast against the same node the JS side is deploying to.
+  // That is the *hardhat network's* URL, not the raw RPC_URL env var: in the
+  // MODE=scratch integration phase `--network local` resolves to
+  // LOCAL_RPC_URL while a dotenv-loaded RPC_URL may point at a remote
+  // provider (exactly the CI layout, where .env carries the public default).
+  const rpcUrl = (network.config as { url?: string }).url || process.env.RPC_URL;
   if (!rpcUrl) {
-    throw new Error("RPC_URL must be set so the DG forge script can broadcast against the same node as scratch deploy");
+    throw new Error(
+      "Cannot resolve an RPC URL for the DG forge script: the selected hardhat network has no `url` " +
+        "(in-process network?) and RPC_URL is not set. Run scratch deploy against an external node.",
+    );
   }
 
   const chainId = Number(state.chainId);

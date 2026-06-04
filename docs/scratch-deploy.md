@@ -1,5 +1,9 @@
 # Deploy Lido protocol middleware from scratch
 
+Operator handbook: how to run, configure, and verify a scratch deploy. For how
+the pipeline works internally (step mechanics, Dual Governance wiring, state
+file semantics, CI architecture), see [flow.md](./flow.md).
+
 ## TL;DR
 
 ```shell
@@ -117,40 +121,31 @@ A detailed overview of the deployment script's process:
 - Set parameters of `OracleDaemonConfig`
 - Setup non-Aragon permissions
 - Plug NodeOperatorsRegistry as Curated staking module
-- Transfer all admin roles from deployer to `Agent`
-  - OpenZeppelin admin roles: `Burner`, `HashConsensus` for `AccountingOracle`, `HashConsensus` for
-    `ValidatorsExitBusOracle`,
-    `StakingRouter`, `AccountingOracle`, `ValidatorsExitBusOracle`, `WithdrawalQueueERC721`, `OracleDaemonConfig`
-  - OssifiableProxy admin roles: `LidoLocator`, `StakingRouter`, `AccountingOracle`, `ValidatorsExitBusOracle`,
-    `WithdrawalQueueERC721`
+- Unpause sealable withdrawal blockers (`0145`) — resume `WithdrawalQueueERC721`
+  and `ValidatorsExitBusOracle` so the upcoming DG deploy can register them as
+  withdrawal blockers; skipped when DG is disabled
+- Transfer all admin roles from deployer to `Agent` (`0150`)
+  - OpenZeppelin admin roles: `Burner`, both `HashConsensus` instances,
+    `StakingRouter`, `AccountingOracle`, `ValidatorsExitBusOracle`,
+    `WithdrawalQueueERC721`, `OracleDaemonConfig`, `OracleReportSanityChecker`,
+    `TriggerableWithdrawalsGateway`, `VaultHub`, `PredepositGuarantee`,
+    `OperatorGrid`, `LazyOracle`
+  - OssifiableProxy admin roles for the proxied contracts
   - `DepositSecurityModule` owner
-- Unpause sealable withdrawal blockers — `0145-unpause-sealables` runs before
-  `0150-transfer-roles` so the deployer (which still holds `DEFAULT_ADMIN_ROLE`
-  on `WithdrawalQueueERC721` and `ValidatorsExitBusOracle` at this point)
-  temporarily grants itself `RESUME_ROLE`, resumes both contracts, and renounces
-  the role. No impersonation — works on a live network.
-- Deploy Dual Governance — `0160-deploy-dual-governance` generates a per-deploy
-  TOML config (signalling tokens, sealables, admin proposer, etc.) from the
-  scratch state plus the `[dualGovernance]` knobs in
-  `scripts/scratch/deploy-params-testnet.toml`, then shells out to
-  `forge script DeployConfigurable.s.sol` against the local node and writes the
-  resulting addresses (timelock, AdminExecutor, ResealManager, escrow master copy,
-  config provider, tiebreaker core + sub-committees, emergency governance) into
-  the network state file. After the forge deploy, the step:
-  - Grants `ResealManager` `PAUSE_ROLE`/`RESUME_ROLE` on each sealable and
-    renounces the deployer's `DEFAULT_ADMIN_ROLE` on WQ + VEBO (deferred from
-    step `0150` when DG is enabled).
-  - Calls `LidoTemplate.finalizePermissionsAfterDGDeployment(adminExecutor)`
-    — this is the on-chain hand-off: the template grants AdminExecutor
-    `RUN_SCRIPT_ROLE`/`EXECUTE_ROLE` on `Agent`, revokes them from Voting, sets
-    `Agent` as permission manager for those roles, and migrates ACL
-    `CREATE_PERMISSIONS_ROLE` (Voting → Agent). No impersonation required.
-  - Calls `LidoTemplate.setOwner(agent)` to hand template ownership over.
+- Deploy and launch Dual Governance (`0160`) — deploys the DG contracts from the
+  `foundry/lib/dual-governance` submodule via `forge script`, records their
+  addresses in the network state file, wires `ResealManager` pause/resume rights
+  on the sealables, and performs the governance hand-off on-chain via
+  `LidoTemplate.finalizePermissionsAfterDGDeployment(adminExecutor)` (Voting
+  loses direct Agent control; DG's AdminExecutor gains it). No impersonation —
+  works on a live network. Mechanics, diagrams, and rationale:
+  [flow.md](./flow.md#phase-4-in-detail).
 
-To opt out of DG, set `DG_DEPLOYMENT_ENABLED=false` in the environment. With the
-toggle off, step `0145` is a no-op, step `0150` renounces WQ/VEBO admin
-normally, and step `0160` calls `LidoTemplate.finalizePermissionsWithoutDGDeployment()`
-(keeps Voting as permission manager) before setting the template owner to Agent.
+To opt out of DG, set `DG_DEPLOYMENT_ENABLED=false` (any of `false`/`0`/`off`/`no`,
+case-insensitive; default is enabled). With the toggle off, step `0145` is a
+no-op, step `0150` renounces WQ/VEBO admin immediately, and step `0160` calls
+`LidoTemplate.finalizePermissionsWithoutDGDeployment()` (keeps Voting as
+permission manager) before setting the template owner to Agent.
 
 ### Dual Governance configuration
 
@@ -208,6 +203,7 @@ To do a testnet deployment, the following parameters must be set up via env vari
   adequate amount of ether. The total deployment gas cost is approximately 120,000,000 gas, and this cost can vary based
   on whether specific components of the environment, such as the DepositContract, are deployed or not.
 - `RPC_URL`. Address of the Ethereum RPC node to use, e.g.: `https://<network>.infura.io/v3/<yourProjectId>`
+- `GENESIS_TIME`. Beacon chain genesis timestamp of the network, e.g. `1655733600` for Sepolia. Required (no default).
 - `GENESIS_FORK_VERSION`. Genesis fork version of the network to use, e.g. `0x00000000` for Mainnet, `0x90000069` for Sepolia,
   `0x10000910` for Hoodi. Used to properly calculate the deposit domain for the network.
 - `GAS_PRIORITY_FEE`. Gas priority fee. By default set to `2`
@@ -242,66 +238,67 @@ Deployment artifacts will be stored in the file pointed at by `NETWORK_STATE_FIL
 
 ### Verifying a Live-Testnet Scratch Deployment
 
-The integration suite (`test/integration/**/*.ts` — the ~40 core tests plus
-the DG-specific `test/integration/dual-governance/dg-scratch.integration.ts`)
-uses anvil/hardhat-only RPC methods (`evm_snapshot`/`evm_revert`,
-`hardhat_setCode`, `*_impersonateAccount`, chain-time manipulation), so it
-**cannot run directly against a live testnet RPC**. To verify a fresh
-Sepolia/Hoodi scratch deploy, fork the live testnet locally and point the
-suite at the fork plus the deployment artifact:
+The integration suite uses anvil/hardhat-only RPC methods
+(`evm_snapshot`/`evm_revert`, `hardhat_setCode`, `*_impersonateAccount`,
+chain-time manipulation), so it never runs against the live chain itself —
+it always works on a fork. There are two distinct modes; pick by what you
+want to verify:
+
+**Verify an existing deployment (forking mode)** — this is what testnet CI
+(`tests-integration-hoodi.yml`) runs. Hardhat forks the RPC in-process and
+the suite tests the contracts recorded in the deployment artifact; nothing
+is deployed, the live chain is never written to:
 
 ```shell
-# Terminal 1 — fork the live testnet at HEAD (chainId inherited from RPC)
-anvil --fork-url "$HOODI_RPC_URL" -p 8555 --base-fee 0 --gas-price 0
-
-# Terminal 2 — run the full suite against the fork + the deployment artifact
+RPC_URL="$HOODI_RPC_URL" \
 NETWORK_STATE_FILE=deployed-hoodi.json \
-LOCAL_RPC_URL=http://localhost:8555 \
-yarn test:integration:fork:local
+yarn test:integration
 ```
 
-For Sepolia, substitute `SEPOLIA_RPC_URL` and `deployed-sepolia.json` (or
-whichever filename you passed to the deploy step). Under the hood the
-script runs `MODE=scratch hardhat test test/integration/**/*.ts --network local`,
-which:
+For Sepolia, substitute the RPC and `deployed-sepolia.json` (or whichever
+filename you passed to the deploy step). `RPC_URL` can be the live testnet
+RPC directly or a local node in front of it.
 
-- Loads the state file from the live deploy, so the suite resolves real
-  on-chain addresses (DG contracts, oracles, Lido, etc.).
-- Re-invokes every scratch step entrypoint against the fork. Each step is
-  idempotent (`tryGetAddress`, `isPaused`, role-check guards throughout)
-  and short-circuits on the existing state — no contracts are re-deployed.
-- Runs the DG suite (`dg-scratch.integration.ts`) — gated on a fresh
-  post-scratch DG state (`dgAdminExecutor` present, not mainnet,
-  `DG_DEPLOYMENT_ENABLED` not opted out). It asserts the post-launch
-  topology (`timelock.governance == dualGovernance`, zero launch
-  proposals), role transfer (AdminExecutor has Agent's
-  `RUN_SCRIPT`/`EXECUTE`, Voting doesn't; Agent owns
-  `CREATE_PERMISSIONS_ROLE`), ResealManager wiring on every sealable, and
-  an end-to-end no-op proposal routed
-  Voting → DG → AdminExecutor → Agent.
-- Runs the standard core tests (accounting, oracle, withdrawals, staking
-  modules, vaults, etc.) against the same context.
+The DG suite (`dg-scratch.integration.ts`) runs as part of this whenever the
+artifact has `dg:adminExecutor` recorded (i.e. the deploy ran with DG), the
+network is not mainnet, and `DG_DEPLOYMENT_ENABLED` is not set to a falsy
+value. It asserts the post-launch topology (`timelock.governance ==
+dualGovernance`, zero launch proposals), the role moves (AdminExecutor has
+Agent's `RUN_SCRIPT`/`EXECUTE`, Voting doesn't; Agent owns
+`CREATE_PERMISSIONS_ROLE`), ResealManager wiring on every sealable, and an
+end-to-end no-op proposal routed Voting → DG → AdminExecutor → Agent. If the
+artifact has no DG entries, the suite self-skips and the core tests continue.
 
-Pass `DG_DEPLOYMENT_ENABLED=false` alongside if the deploy under test was
-done with DG opt-out — the DG suite self-skips and the rest continues.
-
-To run only the DG-specific suite (~20 s, useful for fast feedback on the
-DG handoff alone):
+To run only the DG suite for fast feedback on the governance hand-off:
 
 ```shell
+RPC_URL="$HOODI_RPC_URL" \
 NETWORK_STATE_FILE=deployed-hoodi.json \
-LOCAL_RPC_URL=http://localhost:8555 \
-MODE=scratch \
-yarn hardhat test test/integration/dual-governance/dg-scratch.integration.ts --network local
+MODE=forking \
+yarn hardhat test test/integration/dual-governance/dg-scratch.integration.ts
 ```
 
 Caveats:
 
-- Fork the testnet promptly after deploy. The DG test asserts
+- Verify promptly after deploy. The DG test asserts
   `timelock.getProposalsCount() == 0`; if anyone submits a proposal to the
   testnet's DG between deploy and verification, that assertion fails.
-- The fork-side test signers (Voting, Agent, deployer) are impersonated
-  via anvil. Don't expect the same calls to succeed against the live RPC.
+- Voting, Agent, and the deployer are impersonated on the fork. Don't expect
+  the same calls to succeed against the live RPC.
+
+**Re-deploy and test from scratch (scratch mode)** — `yarn
+test:integration:fork:local` (`MODE=scratch`, network `local`) does **not**
+verify an existing deployment: the test process performs a complete fresh
+scratch deploy against `LOCAL_RPC_URL` (step `0000` resets the state file
+from the deploy params, then every step runs — including a second forge DG
+deploy) and tests the instance it just deployed. This answers "does scratch
+deploy work against this chain", which is what scratch CI runs against a
+blank node. Two warnings:
+
+- Step `0000` **overwrites** whatever `NETWORK_STATE_FILE` points at. Never
+  aim it at a deployment artifact you want to keep — copy the file first.
+- The chain accumulates a full extra protocol instance per run; only use
+  disposable forks/nodes.
 
 ### Publishing Sources to Etherscan
 
