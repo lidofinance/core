@@ -23,6 +23,7 @@ import {
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import {
+  advanceChainTime,
   days,
   de0x,
   findEventsWithInterfaces,
@@ -32,6 +33,7 @@ import {
   log,
   prepareLocalMerkleTree,
   TOTAL_BASIS_POINTS,
+  updateBalance,
   Validator,
 } from "lib";
 
@@ -197,6 +199,19 @@ export async function autofillRoles(
     result[key] = signers[i + OFFSET];
   });
 
+  // Role accounts pay for their own role-method txs (fund/withdraw/…). The
+  // in-process hardhat node pre-funds all of its signers, but an external node
+  // (anvil via `--network local`) only funds its own dev accounts, leaving these
+  // higher-index signers at 0 ETH. Top them up so role-method tests work on any
+  // backend — a no-op when the account is already funded.
+  await Promise.all(
+    Object.values(result).map(async (signer) => {
+      if ((await ethers.provider.getBalance(signer)) < ether("100")) {
+        await updateBalance(signer.address, ether("10000"));
+      }
+    }),
+  );
+
   return result;
 }
 
@@ -250,6 +265,20 @@ export function createVaultsReportTree(vaultReports: VaultReportItem[]): Standar
   );
 }
 
+// LazyOracle's freshness check requires a new report's timestamp to be strictly
+// greater than the stored one (`VaultReportIsFreshEnough`). The in-process hardhat
+// node bumps block.timestamp by 1s per mined block, so back-to-back reports always
+// advance; external nodes (anvil via `--network local`) stamp blocks with the wall
+// clock at whole-second granularity, so two reports in the same second collide.
+// Nudge the chain just past the latest stored report to keep reports strictly
+// monotonic on every backend — a no-op when the clock has already moved on.
+async function reportTimestampStrictlyAfter(previousReportTs: bigint): Promise<bigint> {
+  const currentTs = await getCurrentBlockTimestamp();
+  if (currentTs > previousReportTs) return currentTs;
+  await advanceChainTime(previousReportTs - currentTs + 1n);
+  return getCurrentBlockTimestamp();
+}
+
 export async function reportVaultDataWithProof(
   ctx: ProtocolContext,
   stakingVault: StakingVault,
@@ -280,7 +309,8 @@ export async function reportVaultDataWithProof(
   }
 
   if (params.updateReportData ?? true) {
-    const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
+    const reportTimestampArg =
+      params.reportTimestamp ?? (await reportTimestampStrictlyAfter(BigInt(vaultRecord.report.timestamp)));
     const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
     const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
@@ -355,7 +385,13 @@ export async function reportVaultsDataWithProof(
 
   // Update report data once for all vaults
   if (params.updateReportData ?? true) {
-    const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
+    // A single report timestamp covers every vault in the tree, so it must clear
+    // the freshest stored report among them (see reportTimestampStrictlyAfter).
+    const maxPreviousReportTs = (await Promise.all(stakingVaults.map((v) => vaultHub.vaultRecord(v)))).reduce(
+      (max, r) => (BigInt(r.report.timestamp) > max ? BigInt(r.report.timestamp) : max),
+      0n,
+    );
+    const reportTimestampArg = params.reportTimestamp ?? (await reportTimestampStrictlyAfter(maxPreviousReportTs));
     const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
     const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));

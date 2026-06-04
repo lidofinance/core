@@ -82,7 +82,7 @@ export async function main() {
     log("AdminExecutor already has RUN_SCRIPT_ROLE on Agent — finalize already applied, skipping");
   }
 
-  await setTemplateOwnerIfNeeded(deployer, agentAddress, lidoTemplate);
+  await setTemplateOwnerToAgent(deployer, agentAddress, lidoTemplate);
 
   log.success("Dual Governance deployed and launched via LidoTemplate");
 }
@@ -93,16 +93,19 @@ async function finalizeWithoutDG(
   lidoTemplate: LoadedContract<LidoTemplate>,
 ): Promise<void> {
   log("DG deployment disabled — finalizing without Dual Governance");
+  // The owner==Agent short-circuit lives in setTemplateOwnerToAgent; once the
+  // template is owned by Agent, finalize has necessarily already run (it is
+  // onlyOwner and precedes setOwner), so skipping both together is correct.
   const [currentOwner] = await lidoTemplate.getConfig();
-  if (currentOwner.toLowerCase() === agentAddress.toLowerCase()) {
-    log(`LidoTemplate owner is already Agent (${cy(agentAddress)}), skipping`);
-    return;
+  if (currentOwner.toLowerCase() !== agentAddress.toLowerCase()) {
+    await makeTx(lidoTemplate, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
   }
-  await makeTx(lidoTemplate, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
-  await makeTx(lidoTemplate, "setOwner", [agentAddress], { from: deployer });
+  await setTemplateOwnerToAgent(deployer, agentAddress, lidoTemplate);
 }
 
-async function setTemplateOwnerIfNeeded(
+// Hand LidoTemplate ownership to Agent — the single "method" (A.15) shared by
+// both the DG and non-DG finalize paths. Idempotent: a no-op once Agent owns it.
+async function setTemplateOwnerToAgent(
   deployer: string,
   agentAddress: string,
   lidoTemplate: LoadedContract<LidoTemplate>,

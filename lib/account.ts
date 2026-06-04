@@ -21,7 +21,23 @@ export async function impersonate(address: string | Addressable, balance?: bigin
     await updateBalance(address, balance);
   }
 
-  return ethers.getSigner(address);
+  const signer = await ethers.getSigner(address);
+
+  // Against an external node (e.g. anvil via `--network local`), eth_sendTransaction
+  // can return before the transaction is mined, so the many read-after-write
+  // sequences in the protocol provisioning helpers race the miner and observe stale
+  // state. Make impersonated signers await their receipt so those helpers behave
+  // deterministically, matching the synchronous in-process hardhat network.
+  if (networkName !== "hardhat") {
+    const sendTransaction = signer.sendTransaction.bind(signer);
+    signer.sendTransaction = async (tx) => {
+      const response = await sendTransaction(tx);
+      await response.wait();
+      return response;
+    };
+  }
+
+  return signer;
 }
 
 export async function updateBalance(address: string | Addressable, balance: bigint): Promise<void> {

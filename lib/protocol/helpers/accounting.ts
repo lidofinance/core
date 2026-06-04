@@ -850,19 +850,40 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
   const { hashConsensus } = ctx.contracts;
 
-  const { initialEpoch } = await hashConsensus.getFrameConfig();
-  const latestBlockTimestamp = await getCurrentBlockTimestamp();
   const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
+  const secondsPerEpoch = slotsPerEpoch * secondsPerSlot;
+
+  let { initialEpoch } = await hashConsensus.getFrameConfig();
+  const currentEpoch = ((await getCurrentBlockTimestamp()) - genesisTime) / secondsPerEpoch;
+
   // HashConsensus's constructor sets initialEpoch to its derived farFutureEpoch
   // (depends on genesisTime, so it differs per network); we treat any
-  // initialEpoch still in the future as "not yet configured".
-  const currentEpoch = (latestBlockTimestamp - genesisTime) / (slotsPerEpoch * secondsPerSlot);
+  // initialEpoch still in the future as "not yet configured" and pin it to the
+  // current epoch. The scratch deploy may also leave initialEpoch one epoch
+  // ahead of the chain clock.
   if (initialEpoch > currentEpoch) {
     log.debug("Initializing hash consensus epoch...", {
       "Initial epoch": initialEpoch,
     });
 
     const agentSigner = await ctx.getSigner("agent");
-    await hashConsensus.connect(agentSigner).updateInitialEpoch(currentEpoch);
+    // NB: await the receipt — ethers resolves the method call on broadcast, so
+    // re-reading getFrameConfig() without wait() can race ahead of mining and
+    // observe the stale (far-future) sentinel.
+    const tx = await hashConsensus.connect(agentSigner).updateInitialEpoch(currentEpoch);
+    await tx.wait();
+    ({ initialEpoch } = await hashConsensus.getFrameConfig());
+  }
+
+  // Even with initialEpoch pinned, the first consensus frame only becomes
+  // queryable once the chain timestamp crosses the start slot of initialEpoch.
+  // On a freshly-started external node (anvil via `--network local`) the scratch
+  // deploy can leave the clock a few slots short, which makes getFastLaneMembers
+  // / getCurrentFrame revert InitialEpochIsYetToArrive in the very first
+  // provision. Nudge the clock just past the boundary when we're behind it.
+  const initialEpochStartTimestamp = genesisTime + initialEpoch * secondsPerEpoch;
+  const latestBlockTimestamp = await getCurrentBlockTimestamp();
+  if (latestBlockTimestamp < initialEpochStartTimestamp) {
+    await advanceChainTime(initialEpochStartTimestamp - latestBlockTimestamp + secondsPerSlot);
   }
 };
