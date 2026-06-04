@@ -7,6 +7,7 @@ import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, 
 import { discover } from "./discover";
 import { MAINNET_LOCATOR_ADDRESS } from "./mainnet";
 import { provision } from "./provision";
+import { SEPOLIA_CHAIN_ID } from "./sepolia";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
 const getSigner = async (signer: Signer, balance = ether("100"), signers: ProtocolSigners) => {
@@ -64,6 +65,8 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
   const { contracts, signers } = await discover(skipV3Contracts);
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
 
+  const { chainId } = await hre.ethers.provider.getNetwork();
+
   // By default, all flags are "on"
   const flags = {
     withCSM: withCSM(),
@@ -80,6 +83,8 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
     flags,
     isScratch,
     isMainnet: contracts.locator.address.toLowerCase() === MAINNET_LOCATOR_ADDRESS.toLowerCase(),
+    // see the comment on this field in ProtocolContext (lib/protocol/types.ts)
+    supportsVariableDepositAmounts: chainId !== BigInt(SEPOLIA_CHAIN_ID),
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
     getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
