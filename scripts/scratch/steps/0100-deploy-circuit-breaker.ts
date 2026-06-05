@@ -83,6 +83,8 @@ export async function main() {
       `--rpc-url ${rpcUrl}`,
       `--private-key ${privateKey}`,
       "--broadcast",
+      // Override forge gas estimation until Foundry supports Amsterdam gas accounting (EIP-7825/8037).
+      "--gas-limit 16000000",
     ];
 
     if (process.env.ETHERSCAN_API_KEY) {
