@@ -73,12 +73,10 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
             revert ErrorZeroAddressObserver();
         }
 
-        ObserverKind kind_;
+        ObserverKind kind_ = ObserverKind.Legacy;
         if (observer_.supportsInterface(REQUIRED_INTERFACE_WITH_ARGS)) {
             kind_ = ObserverKind.WithArgs;
-        } else if (observer_.supportsInterface(REQUIRED_INTERFACE)) {
-            kind_ = ObserverKind.Legacy;
-        } else {
+        } else if (!observer_.supportsInterface(REQUIRED_INTERFACE)) {
             revert ErrorBadObserverInterface();
         }
 
@@ -90,7 +88,7 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
         }
 
         observers.push(Observer({addr: observer_, kind: kind_}));
-        emit ObserverAdded(observer_, kind_);
+        emit ObserverAdded(observer_);
     }
 
     /// @notice Remove an observer (of any kind) by address.
@@ -100,13 +98,12 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
         if (indexToRemove == INDEX_NOT_FOUND) {
             revert ErrorNoObserverToRemove();
         }
-        ObserverKind removedKind = observers[indexToRemove].kind;
         uint256 lastIndex = observers.length - 1;
         if (indexToRemove != lastIndex) {
             observers[indexToRemove] = observers[lastIndex];
         }
         observers.pop();
-        emit ObserverRemoved(observer_, removedKind);
+        emit ObserverRemoved(observer_);
     }
 
     /// @inheritdoc IPostTokenRebaseReceiver
@@ -187,8 +184,8 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
     }
 
     event PushTokenRateFailed(address indexed observer, bytes lowLevelRevertData);
-    event ObserverAdded(address indexed observer, ObserverKind kind);
-    event ObserverRemoved(address indexed observer, ObserverKind kind);
+    event ObserverAdded(address indexed observer);
+    event ObserverRemoved(address indexed observer);
 
     error ErrorTokenRateNotifierRevertedWithNoData();
     error ErrorZeroAddressObserver();

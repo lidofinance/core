@@ -15,8 +15,9 @@ import {
 import { Snapshot } from "test/suite";
 
 // Mirrors `enum ObserverKind { Legacy, WithArgs }` in TokenRateNotifier.sol.
-const KIND_LEGACY = 0;
-const KIND_WITH_ARGS = 1;
+// Encoded as bigint to match the uint8 value returned by ethers v6 / TypeChain.
+const KIND_LEGACY = 0n;
+const KIND_WITH_ARGS = 1n;
 
 const MAX_OBSERVERS_COUNT = 32n;
 
@@ -149,9 +150,7 @@ describe("TokenRateNotifier.sol", () => {
       const mock = await deployLegacyMock();
       const addr = await mock.getAddress();
 
-      await expect(notifier.connect(owner).addObserver(mock))
-        .to.emit(notifier, "ObserverAdded")
-        .withArgs(addr, KIND_LEGACY);
+      await expect(notifier.connect(owner).addObserver(mock)).to.emit(notifier, "ObserverAdded").withArgs(addr);
 
       expect(await notifier.observersLength()).to.equal(1n);
       const entry = await notifier.observers(0);
@@ -163,9 +162,7 @@ describe("TokenRateNotifier.sol", () => {
       const mock = await deployWithArgsMock();
       const addr = await mock.getAddress();
 
-      await expect(notifier.connect(owner).addObserver(mock))
-        .to.emit(notifier, "ObserverAdded")
-        .withArgs(addr, KIND_WITH_ARGS);
+      await expect(notifier.connect(owner).addObserver(mock)).to.emit(notifier, "ObserverAdded").withArgs(addr);
 
       expect(await notifier.observersLength()).to.equal(1n);
       const entry = await notifier.observers(0);
@@ -177,9 +174,7 @@ describe("TokenRateNotifier.sol", () => {
       const dual = await deployDualSupportMock();
       const addr = await dual.getAddress();
 
-      await expect(notifier.connect(owner).addObserver(dual))
-        .to.emit(notifier, "ObserverAdded")
-        .withArgs(addr, KIND_WITH_ARGS);
+      await expect(notifier.connect(owner).addObserver(dual)).to.emit(notifier, "ObserverAdded").withArgs(addr);
 
       const entry = await notifier.observers(0);
       expect(entry[1]).to.equal(KIND_WITH_ARGS);
@@ -240,26 +235,22 @@ describe("TokenRateNotifier.sol", () => {
       );
     });
 
-    it("removes a legacy observer and emits the kind", async () => {
+    it("removes a legacy observer", async () => {
       const mock = await deployLegacyMock();
       const addr = await mock.getAddress();
       await notifier.connect(owner).addObserver(mock);
 
-      await expect(notifier.connect(owner).removeObserver(mock))
-        .to.emit(notifier, "ObserverRemoved")
-        .withArgs(addr, KIND_LEGACY);
+      await expect(notifier.connect(owner).removeObserver(mock)).to.emit(notifier, "ObserverRemoved").withArgs(addr);
 
       expect(await notifier.observersLength()).to.equal(0n);
     });
 
-    it("removes a WithArgs observer and emits the WithArgs kind", async () => {
+    it("removes a WithArgs observer", async () => {
       const mock = await deployWithArgsMock();
       const addr = await mock.getAddress();
       await notifier.connect(owner).addObserver(mock);
 
-      await expect(notifier.connect(owner).removeObserver(mock))
-        .to.emit(notifier, "ObserverRemoved")
-        .withArgs(addr, KIND_WITH_ARGS);
+      await expect(notifier.connect(owner).removeObserver(mock)).to.emit(notifier, "ObserverRemoved").withArgs(addr);
 
       expect(await notifier.observersLength()).to.equal(0n);
     });
@@ -276,7 +267,7 @@ describe("TokenRateNotifier.sol", () => {
 
       await expect(notifier.connect(owner).removeObserver(b))
         .to.emit(notifier, "ObserverRemoved")
-        .withArgs(await b.getAddress(), KIND_WITH_ARGS);
+        .withArgs(await b.getAddress());
 
       expect(await notifier.observersLength()).to.equal(2n);
 
