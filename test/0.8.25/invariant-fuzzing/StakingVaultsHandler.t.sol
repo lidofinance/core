@@ -50,6 +50,9 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     uint256 constant QUARANTINE_PERIOD = 3; // days
 
     uint256 public sv_otcDeposited = 0;
+    // slashingReserve to report on the next vault report; set by the updateVaultData handler
+    // and reset after each report cycle so that auto-reports (e.g. _ensureFreshReport) stay at 0.
+    uint256 public sv_slashingReserve = 0;
 
     bool public forceRebalanceReverted = false;
     bool public forceValidatorExitReverted = false;
@@ -154,7 +157,8 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
                 maxLiabilityShares: Math256.max(vr.maxLiabilityShares, ls),
                 reportTimestamp: uint64(block.timestamp)
             });
-            _report(1);
+            // slashingReserve must stay 0 here, otherwise applyVaultReport aborts the disconnect
+            _report(1, 0);
 
             if (stakingVault.pendingOwner() == userAccount) {
                 vm.prank(userAccount);
@@ -277,7 +281,13 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     /// @notice Simulates OTC deposit to the staking vault
     function otcDepositToStakingVault(uint256 amount) public {
-        amount = bound(amount, 1 ether, 10 ether);
+        // LazyOracle accepts a sudden total-value increase up to ~MAX_REWARD_RATIO_BP of the
+        // on-chain total value without quarantine (treated as EL/CL rewards). Sizing the deposit
+        // relative to the current total value lets it land both below the reward headroom
+        // (rewards-accept branch) and above it (quarantine branch).
+        uint256 totalValue = vaultHub.totalValue(address(stakingVault));
+        uint256 rewardHeadroom = (totalValue * Constants.MAX_REWARD_RATIO_BP) / Constants.TOTAL_BASIS_POINTS;
+        amount = bound(amount, 1, Math256.max(rewardHeadroom * 2, 1 ether));
         sv_otcDeposited += amount;
         deal(address(stakingVault), address(stakingVault).balance + amount);
     }
@@ -285,7 +295,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     // --- LazyOracle interactions ---
 
     /// @notice Updates vault data, simulating time shifts and quarantine logic
-    function updateVaultData() public withConnectedVault {
+    /// @param slashingReserve fuzzed slashing reserve to report, exercising the minimalReserve
+    ///        branch of VaultHub._locked() (minimalReserve = max(CONNECT_DEPOSIT, slashingReserve))
+    function updateVaultData(uint256 slashingReserve) public withConnectedVault {
+        sv_slashingReserve = bound(slashingReserve, 0, 20 ether);
         _updateVaultData();
     }
 
@@ -308,10 +321,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     }
 
     function _ensureFreshReport() internal {
-        uint256 latestReportTs = lazyOracle.latestReportTimestamp();
-        VaultHub.VaultRecord memory record = vaultHub.vaultRecord(address(stakingVault));
-        bool isFresh = uint48(latestReportTs) <= record.report.timestamp && block.timestamp - latestReportTs < 2 days;
-        if (!isFresh) {
+        if (!vaultHub.isReportFresh(address(stakingVault))) {
             _updateVaultData();
         }
     }
@@ -334,17 +344,18 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
         reportedTotalValue = lastReport.totalValue;
 
-        _report(2); // bypassing fresh report
+        _report(2, sv_slashingReserve); // bypassing fresh report
 
         lastReport.maxLiabilityShares = liabilityShares; // no minting between reports
 
-        _report(QUARANTINE_PERIOD); // bypassing quarantine period expiration
+        _report(QUARANTINE_PERIOD, sv_slashingReserve); // bypassing quarantine period expiration
 
         // we update the applied total value (TV should go through sanity checks, quarantine, etc.)
         appliedTotalValue = vaultHub.vaultRecord(_vault).report.totalValue;
 
-        //reset otc deposit value
+        //reset otc deposit and slashing reserve values
         sv_otcDeposited = 0;
+        sv_slashingReserve = 0;
 
         // Accept ownership if disconnect was successful
         if (stakingVault.pendingOwner() == userAccount) {
@@ -353,7 +364,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         }
     }
 
-    function _report(uint256 daysShift) internal {
+    function _report(uint256 daysShift, uint256 slashingReserve) internal {
         address _vault = address(stakingVault);
 
         // create the leaf for the new report
@@ -366,7 +377,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
                         lastReport.cumulativeLidoFees,
                         lastReport.liabilityShares,
                         lastReport.maxLiabilityShares,
-                        0 // slashingReserve
+                        slashingReserve
                     )
                 )
             )
@@ -388,7 +399,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
             lastReport.cumulativeLidoFees,
             lastReport.liabilityShares,
             lastReport.maxLiabilityShares,
-            0,
+            slashingReserve,
             new bytes32[](0) // empty proof, as we are not updating the report data
         );
     }

@@ -331,13 +331,14 @@ contract StakingVaultsTest is Test {
     {
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
         VaultHub.VaultConnection memory connection = vaultHubProxy.vaultConnection(address(stakingVaultProxy));
-        uint256 forcedRebalanceThresholdBP = connection.forcedRebalanceThresholdBP;
+        uint256 reserveRatioBP = connection.reserveRatioBP;
 
         uint256 lockedAmount = vaultHubProxy.locked(address(stakingVaultProxy));
-        uint256 liabilityStETH = ILido(address(lido_addr)).getPooledEthBySharesRoundUp(record.liabilityShares);
+        // VaultHub._locked() is computed from maxLiabilityShares (not liabilityShares) and reserveRatioBP
+        uint256 liabilityStETH = ILido(address(lido_addr)).getPooledEthBySharesRoundUp(record.maxLiabilityShares);
 
         uint256 minimumSafetyBuffer = (liabilityStETH * Constants.TOTAL_BASIS_POINTS) /
-            (Constants.TOTAL_BASIS_POINTS - forcedRebalanceThresholdBP);
+            (Constants.TOTAL_BASIS_POINTS - reserveRatioBP);
 
         assertGe(
             lockedAmount,
