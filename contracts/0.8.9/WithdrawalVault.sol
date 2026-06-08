@@ -118,7 +118,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
 
     /**
      * Transfers a given `_amount` of an ERC20-token (defined by the `_token` contract address)
-     * currently belonging to the burner contract address to the Lido treasury address.
+     * currently belonging to this contract address to the Lido treasury address.
      *
      * @param _token an ERC20-compatible token
      * @param _amount token amount
@@ -135,7 +135,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
 
     /**
      * Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
-     * currently belonging to the burner contract address to the Lido treasury address.
+     * currently belonging to this contract address to the Lido treasury address.
      *
      * @param _token an ERC721-compatible token
      * @param _tokenId minted token id
@@ -190,7 +190,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
      *         - The provided public key array is empty.
      *         - The provided public key array malformed.
      *         - The provided source public key and target public key arrays are not of equal length.
-     *         - The provided total withdrawal fee value is invalid.
+     *         - The provided total consolidation fee value is invalid.
      */
     function addConsolidationRequests(
         bytes[] calldata sourcePubkeys,

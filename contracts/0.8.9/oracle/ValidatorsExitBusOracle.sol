@@ -77,7 +77,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     }
 
     /**
-     * @notice A function to finalize upgrade to v3 (from v1). Can be called only once
+     * @notice A function to finalize upgrade to v3. Can be called only once
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      */
