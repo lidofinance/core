@@ -15,12 +15,10 @@ import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 
 interface ILidoLocator {
     function stakingRouter() external view returns (address);
-    function lido() external view returns (address);
 }
 
 interface IStakingRouter {
     function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32);
-    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
@@ -28,10 +26,6 @@ interface IStakingRouter {
         bytes[] calldata _pubkeys,
         uint256[] calldata _topUpLimits
     ) external;
-}
-
-interface ILido {
-    function canDeposit() external view returns (bool);
 }
 
 /**
@@ -182,13 +176,6 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
             revert MaxValidatorsPerTopUpExceeded();
         }
 
-        // Require validatorIndices to be strictly increasing.
-        for (uint256 i = 1; i < validatorsCount; ++i) {
-            if (_topUps.validatorIndices[i] <= _topUps.validatorIndices[i - 1]) {
-                revert InvalidValidatorIndicesSortOrder();
-            }
-        }
-
         // Distance is for flexibility in future to control top-up frequency
         _requireBlockDistancePassed();
 
@@ -209,6 +196,9 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
 
         uint256 totalLimits;
 
+        // Track previous validator index to enforce strictly increasing order inline (see check below).
+        uint256 prevValidatorIndex;
+
         // 1. Evaluate top-up limit based on current balance, pending deposits, and configured limits
         // 2. Verify proof data through CLValidatorProofVerifier
         unchecked {
@@ -220,9 +210,16 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
                     revert WrongPubkeyLength();
                 }
 
+                // Require validatorIndices to be strictly increasing (rejects duplicates and unsorted input).
+                uint256 validatorIndex = _topUps.validatorIndices[i];
+                if (i != 0 && validatorIndex <= prevValidatorIndex) {
+                    revert InvalidValidatorIndicesSortOrder();
+                }
+                prevValidatorIndex = validatorIndex;
+
                 _verifyValidatorWasActivated(_topUps.beaconRootData.slot, vw);
 
-                _verifyValidator(_topUps.beaconRootData, vw, _topUps.validatorIndices[i], withdrawalCredentials);
+                _verifyValidator(_topUps.beaconRootData, vw, validatorIndex, withdrawalCredentials);
 
                 pubkeys[i] = vw.pubkey;
 
@@ -402,10 +399,9 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         view
         returns (uint256)
     {
-        if (
-            _validator.exitEpoch != FAR_FUTURE_EPOCH || _validator.slashed
-                || _validator.withdrawableEpoch != FAR_FUTURE_EPOCH
-        ) {
+        // withdrawableEpoch is intentionally not checked: per the consensus spec it is only ever set
+        // together with exitEpoch, so `exitEpoch != FAR_FUTURE_EPOCH` already covers the exiting/exited case.
+        if (_validator.exitEpoch != FAR_FUTURE_EPOCH || _validator.slashed) {
             return 0;
         }
 

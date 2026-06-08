@@ -377,6 +377,27 @@ describe("TopUpGateway.sol", () => {
       );
     });
 
+    it("reverts when validatorIndices are not strictly increasing (descending)", async () => {
+      const data = await buildTopUpData();
+      data.validatorIndices = [2n, 1n];
+      data.keyIndices = [1n, 2n];
+      data.operatorIds = [1n, 2n];
+      const secondPubkey = `0x${"22".repeat(48)}`;
+      data.validatorWitness = [
+        data.validatorWitness[0],
+        {
+          ...data.validatorWitness[0],
+          pubkey: secondPubkey,
+        },
+      ];
+      data.pendingBalanceGwei = [0n, 0n];
+
+      await expect(topUpGateway.connect(topUpOperator).topUp(data)).to.be.revertedWithCustomError(
+        topUpGateway,
+        "InvalidValidatorIndicesSortOrder",
+      );
+    });
+
     it("reverts when beacon data is too old", async () => {
       await time.increase(400);
       const now = BigInt(await time.latest());
@@ -561,13 +582,20 @@ describe("TopUpGateway.sol", () => {
         .and.to.emit(topUpGateway, "LastTopUpChanged");
     });
 
-    it("returns zero when validator has withdrawableEpoch set", async () => {
+    it("does not gate on withdrawableEpoch alone (relies on exitEpoch invariant)", async () => {
+      // Per the consensus spec, withdrawableEpoch is only ever set together with exitEpoch
+      // (in initiate_validator_exit / slash_validator), so this is an impossible standalone state.
+      // The contract no longer checks withdrawableEpoch: gating relies on exitEpoch (and slashed).
       const data = await buildTopUpData();
       data.validatorWitness[0].withdrawableEpoch = 2000n; // not FAR_FUTURE_EPOCH
+      // exitEpoch stays FAR_FUTURE -> not gated, the top-up limit is still computed
+      data.pendingBalanceGwei = [0n];
+
+      const expectedLimit = (DEFAULT_TARGET_BALANCE_GWEI - data.validatorWitness[0].effectiveBalance) * 10n ** 9n;
 
       await expect(topUpGateway.connect(topUpOperator).topUp(data))
         .to.emit(stakingRouter, "TopUpCalled")
-        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [0n]);
+        .withArgs(MODULE_ID, data.keyIndices, data.operatorIds, [SAMPLE_PUBKEY], [expectedLimit]);
     });
 
     it("revert if validator is not active", async () => {
