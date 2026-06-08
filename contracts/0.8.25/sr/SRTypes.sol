@@ -185,11 +185,11 @@ struct ModuleState {
 struct RouterState {
     // moduleId => ModuleState
     mapping(uint256 => ModuleState) moduleStates; // slot 0
-    EnumerableSet.UintSet moduleIds; // slot 1
-    RouterStateAccounting accounting; // slot 2
-    bytes32 withdrawalCredentials; // slot 3
-    uint24 lastModuleId; // slot 4
-    uint64 maxTopUpPerBlockGwei; // slot 4
+    EnumerableSet.UintSet moduleIds; // slot 1,2
+    RouterStateAccounting accounting; // slot 3
+    bytes32 withdrawalCredentials; // slot 4
+    uint24 lastModuleId; // slot 5
+    uint64 maxTopUpPerBlockGwei; // slot 5
 }
 
 /// @notice A summary of the staking module's validators.
