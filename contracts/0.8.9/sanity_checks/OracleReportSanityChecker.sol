@@ -221,8 +221,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @dev Electra max effective balance of a single validator. The appeared ETH limit is prorated by elapsed time,
     ///      while CL activations are discrete, so one max validator is allowed as a report-window boundary allowance.
     uint256 private constant MAX_VALIDATOR_EFFECTIVE_BALANCE = 2_048 ether;
-    /// @dev Maximum withdrawals ether used for migration bootstrap, bounded by CL churn limit per report window
-    uint256 private constant MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT = 57_600 ether;
     /// @dev Time window for the CL balance decrease check
     uint256 private constant CL_BALANCE_WINDOW = 36 days;
 
