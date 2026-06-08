@@ -15,12 +15,10 @@ import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
 
 interface ILidoLocator {
     function stakingRouter() external view returns (address);
-    function lido() external view returns (address);
 }
 
 interface IStakingRouter {
     function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32);
-    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
     function topUp(
         uint256 _stakingModuleId,
         uint256[] calldata _keyIndices,
@@ -28,10 +26,6 @@ interface IStakingRouter {
         bytes[] calldata _pubkeys,
         uint256[] calldata _topUpLimits
     ) external;
-}
-
-interface ILido {
-    function canDeposit() external view returns (bool);
 }
 
 /**
