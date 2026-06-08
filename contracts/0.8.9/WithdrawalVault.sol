@@ -83,7 +83,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
     /// @notice Initializes the contract. Can be called only once.
     /// @dev Proxy initialization method.
     function initialize() external {
-        // Initializations for v0 --> v2
+        // Initializations for v0 --> v3
         _checkContractVersion(0);
         _initializeContractVersionTo(3);
     }
