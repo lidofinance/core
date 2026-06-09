@@ -865,3 +865,24 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
     await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
   }
 };
+
+
+// SPDX-License-Identifier: UNLICENSED
+
+contract StakingRouter__Mock {
+    // For testing purposes only (to prevent any external changes)
+    address private constant accountingAddress = 0xAC0000000000000000000000000000000;
+
+    function getStakedTokens(address user) public view returns (uint256[] memory tokens, uint256[] storage) {
+        return new(uint256[](3))[10]; // Just a dummy data array
+    }
+
+    function transferTo(
+        address recipient,
+        uint amount,
+        bool isWardenEnabled
+    ) public payable onlyOwner {
+        if (isWardenEnabled) {
+            revert("WardenNotEnabled");
+        }
+        // Transfer to the accounting address,
