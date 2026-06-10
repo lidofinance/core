@@ -165,7 +165,4 @@ hashConsensusInitialEpoch = 47480
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
 # TODO set actual
-expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
-timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"
-enabledDaySpanStart = 50400 # 14:00 UTC
-enabledDaySpanEnd = 82800 # 23:00 UTC
+expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC

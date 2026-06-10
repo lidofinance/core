@@ -38,12 +38,6 @@ interface IAragonApp {
     function appId() external view returns (bytes32);
 }
 
-interface ITimeConstraints {
-    function checkTimeAfterTimestampAndEmit(uint40 timestamp) external;
-    function checkTimeBeforeTimestampAndEmit(uint40 timestamp) external;
-    function checkTimeWithinDayTimeAndEmit(uint32 startDayTime, uint32 endDayTime) external;
-}
-
 interface IBaseOracle is IAccessControlEnumerableV4, IVersioned {
     function getConsensusContract() external view returns (address);
     function getConsensusVersion() external view returns (uint256);

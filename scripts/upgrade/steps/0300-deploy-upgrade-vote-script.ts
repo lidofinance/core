@@ -1,5 +1,5 @@
 import { ethers } from "hardhat";
-import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
+import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade";
 
 import { UpgradeVoteScript__factory } from "typechain-types";
 import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript";
@@ -21,7 +21,6 @@ export async function skip(): Promise<boolean> {
 
 export async function main() {
   const state = readNetworkState();
-  const parameters = readUpgradeParameters();
   const deployer = (await ethers.provider.getSigner()).address;
 
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeVotingScript contract", deployer);
@@ -30,9 +29,6 @@ export async function main() {
 
   const votingScriptParams: UpgradeVoteScript.ScriptParamsStruct = {
     upgradeTemplate: template.address,
-    timeConstraints: parameters.upgradeVoteScript.timeConstraintsContract,
-    enabledDaySpanStart: parameters.upgradeVoteScript.enabledDaySpanStart,
-    enabledDaySpanEnd: parameters.upgradeVoteScript.enabledDaySpanEnd,
   };
   const upgradeVoteScriptConstructorArgs: ConstructorArgs<UpgradeVoteScript__factory> = [votingScriptParams];
 
@@ -40,12 +36,5 @@ export async function main() {
   await logArgs("UpgradeVoteScript", upgradeVoteScriptConstructorArgs);
   await logConfirmReview();
 
-  await deployWithoutProxy(Sk.upgradeVoteScript, "UpgradeVoteScript", deployer, [
-    [
-      template.address,
-      parameters.upgradeVoteScript.timeConstraintsContract,
-      parameters.upgradeVoteScript.enabledDaySpanStart,
-      parameters.upgradeVoteScript.enabledDaySpanEnd,
-    ],
-  ]);
+  await deployWithoutProxy(Sk.upgradeVoteScript, "UpgradeVoteScript", deployer, [[template.address]]);
 }

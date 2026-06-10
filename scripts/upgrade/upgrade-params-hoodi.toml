@@ -161,11 +161,8 @@ hashConsensusInitialEpoch = 93833
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-# TODO set actual
-expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
-timeConstraintsContract = "0xB26Fd3b50280AbC55c572EE73071778A51088408"
-enabledDaySpanStart = 0 # 00:00:000 UTC
-enabledDaySpanEnd = 86399 # 23:59:59 UTC
+expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC
+
 # Vault hub configuration
 [vaultHub]
 maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)

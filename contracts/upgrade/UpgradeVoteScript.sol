@@ -11,8 +11,6 @@ import {UpgradeTemplate, UpgradeConfig} from "./UpgradeTemplate.sol";
 import {CallsScriptBuilder} from "./utils/CallScriptBuilder.sol";
 import {IForwarder} from "./interfaces/IForwarder.sol";
 import {
-
-    // ITimeConstraints,
     GlobalConfig,
     EasyTrackNewFactories,
     EasyTrackOldFactories,
@@ -101,16 +99,10 @@ contract UpgradeVoteScript is OmnibusBase {
     //
     address public immutable TEMPLATE;
     address public immutable CONFIG;
-    address public immutable TIME_CONSTRAINTS;
-    uint32 public immutable ENABLED_DAY_SPAN_START; // = 50400; // 14:00 UTC
-    uint32 public immutable ENABLED_DAY_SPAN_END; // = 82800; // 23:00 UTC
     address internal immutable AGENT;
 
     struct ScriptParams {
         address upgradeTemplate;
-        address timeConstraints;
-        uint32 enabledDaySpanStart;
-        uint32 enabledDaySpanEnd;
     }
 
     constructor(ScriptParams memory _params)
@@ -124,9 +116,6 @@ contract UpgradeVoteScript is OmnibusBase {
         TEMPLATE = address(template);
         CONFIG = address(config);
         AGENT = config.AGENT();
-        TIME_CONSTRAINTS = _params.timeConstraints;
-        ENABLED_DAY_SPAN_START = _params.enabledDaySpanStart; // e.g. 50400 = 14:00 UTC
-        ENABLED_DAY_SPAN_END = _params.enabledDaySpanEnd; // e.g. 82800 = 23:00 UTC
     }
 
     /// @dev Non DG voting items
@@ -266,15 +255,6 @@ contract UpgradeVoteScript is OmnibusBase {
         address agent = g.agent;
         address evmScriptExecutor = g.easyTrackEVMScriptExecutor;
         address stakingRouter = g.stakingRouter;
-
-        // TODO time constraints are not relevant on Hoodi testnet, but can be re-vised on mainnet
-        // items[i++] = _item({
-        //     description: "Ensure DG proposal execution is within defined time window",
-        //     to: TIME_CONSTRAINTS,
-        //     data: abi.encodeCall(
-        //         ITimeConstraints.checkTimeWithinDayTimeAndEmit, (ENABLED_DAY_SPAN_START, ENABLED_DAY_SPAN_END)
-        //     )
-        // });
 
         items[i++] = _item({
             description: "Call UpgradeTemplate.startUpgrade",
