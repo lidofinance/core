@@ -290,8 +290,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice A function to finalize upgrade to v4 (from v3). Can be called only once
+     * @param _depositsReserveTarget initial value for deposits reserve target (in wei)
      */
-    function finalizeUpgrade_v4() external {
+    function finalizeUpgrade_v4(uint256 _depositsReserveTarget) external {
         require(hasInitialized(), "NOT_INITIALIZED");
 
         /// @dev prevent migration if the last oracle report wasn't submitted, otherwise deposits
@@ -303,6 +304,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _checkContractVersion(3);
         _setContractVersion(4);
         _migrateStorage_v3_to_v4();
+        _setDepositsReserveTarget(_depositsReserveTarget);
     }
 
     function _migrateStorage_v3_to_v4() internal {
@@ -648,15 +650,23 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Sets deposits reserve target
+     * @param _newDepositsReserveTarget New target value in wei
+     */
+    function setDepositsReserveTarget(uint256 _newDepositsReserveTarget) external {
+        _auth(BUFFER_RESERVE_MANAGER_ROLE);
+
+        _setDepositsReserveTarget(_newDepositsReserveTarget);
+    }
+
+    /**
+     * @notice Store deposits reserve target
      * @dev Always updates target and emits DepositsReserveTargetSet
      *      If target is lowered below current reserve, reserve is reduced immediately
      *      If target is increased, reserve is not increased here and is synced on report processing via
      *      `_updateBufferedEtherAllocation()`
      * @param _newDepositsReserveTarget New target value in wei
      */
-    function setDepositsReserveTarget(uint256 _newDepositsReserveTarget) external {
-        _auth(BUFFER_RESERVE_MANAGER_ROLE);
-
+    function _setDepositsReserveTarget(uint256 _newDepositsReserveTarget) internal {
         DEPOSITS_RESERVE_TARGET_POSITION.setStorageUint256(_newDepositsReserveTarget);
         emit DepositsReserveTargetSet(_newDepositsReserveTarget);
 

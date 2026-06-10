@@ -367,7 +367,7 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] = _item({
                 description: "Call finalizeUpgrade_v4 on Lido",
                 to: g.lido,
-                data: abi.encodeCall(ILidoUpgrade.finalizeUpgrade_v4, ())
+                data: abi.encodeCall(ILidoUpgrade.finalizeUpgrade_v4, (c.lidoDepositsReserveTarget))
             });
 
             /// @notice grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor

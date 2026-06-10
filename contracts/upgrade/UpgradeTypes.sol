@@ -117,7 +117,7 @@ interface IOneShotCurveSetup {
 
 interface ILidoUpgrade is ILido {
     function getBufferedEther() external view returns (uint256);
-    function finalizeUpgrade_v4() external;
+    function finalizeUpgrade_v4(uint256 _depositsReserveTarget) external;
 }
 
 interface IAccountingOracleUpgrade is IBaseOracle {
