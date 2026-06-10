@@ -14,7 +14,6 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 import {IPausableUntil} from "contracts/common/interfaces/IPausableUntil.sol";
 import {ICircuitBreaker} from "contracts/common/interfaces/ICircuitBreaker.sol";
-import {ModuleStateConfig, StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 import {IUpgradeTemplate} from "./interfaces/IUpgradeTemplate.sol";
 import {
     UpgradeParameters,
