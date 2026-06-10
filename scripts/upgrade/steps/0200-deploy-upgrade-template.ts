@@ -57,7 +57,6 @@ export async function main() {
     agent: getAddress(Sk.appAgent, state),
     voting: getAddress(Sk.appVoting, state),
     dualGovernance: getAddress(Sk.dgDualGovernance, state),
-    resealManager: getAddress(Sk.resealManager, state),
     easyTrack: getAddress(Sk.easyTrack, state),
     circuitBreaker: getAddress(Sk.circuitBreaker, state),
 
@@ -106,7 +105,6 @@ export async function main() {
 
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
       curatedModuleCommittee: parameters.consolidationMigrator.committee!,
-      consolidationGatewayPauser: parameters.consolidationGateway.pauser!,
 
       lidoDepositsReserveTarget: parameters.lido.lidoDepositsReserveTarget,
 

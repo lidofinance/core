@@ -12,6 +12,11 @@ import {ModuleStateConfig, StakingModuleConfig} from "contracts/0.8.25/sr/SRType
 // Interfaces
 // ============================
 
+interface IDualGovernance {
+    function getResealCommittee() external view returns (address);
+    function getResealManager() external view returns (address);
+}
+
 interface IAragonKernel {
     function acl() external view returns (address); //IAragonACL
     function getApp(bytes32 _namespace, bytes32 _appId) external view returns (address);
@@ -257,7 +262,6 @@ struct UpgradeParameters {
     address agent;
     address voting;
     address dualGovernance;
-    address resealManager;
     address circuitBreaker;
     address easyTrack;
 
@@ -322,7 +326,6 @@ struct CoreUpgradeParams {
     uint256 lidoDepositsReserveTarget;
     address curatedModuleCommittee;
     address topUpGatewayDepositor;
-    address consolidationGatewayPauser;
 
     // twGateway limits
     uint256 twMaxExitRequestsLimit;
@@ -391,6 +394,7 @@ struct GlobalConfig {
     address lido;
     address burner;
     address resealManager;
+    address resealCommittee;
     address circuitBreaker;
     address easyTrack;
     address easyTrackEVMScriptExecutor;
@@ -440,7 +444,6 @@ struct CoreUpgradeConfig {
     uint256 lidoDepositsReserveTarget;
     address curatedModuleCommittee;
     address topUpGatewayDepositor;
-    address consolidationGatewayPauser;
 
     uint256 twMaxExitRequestsLimit;
     uint256 twExitsPerFrame;

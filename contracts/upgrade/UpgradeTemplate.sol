@@ -154,8 +154,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint64 public constant EXPECTED_FINAL_CM_FEE_DISTRIBUTOR_INITIALIZED_VERSION = 3;
     uint64 public constant EXPECTED_FINAL_CM_VALIDATOR_STRIKES_INITIALIZED_VERSION = 1;
 
-    uint256 public constant ORACLE_REPORT_SANITY_CHECKER_WITHDRAWAL_VAULT_BALANCE_LIMIT = 20_000 ether;
-
     bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
 
     // Initial value of upgradeBlockNumber storage variable
@@ -164,7 +162,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     // Upgrade config (self deployed internal contract)
     address public immutable CONFIG;
-    address public immutable AGENT;
 
     // Timestamp since which startUpgrade()
     // This behavior is introduced to disarm the template if the upgrade voting creation or enactment
@@ -198,7 +195,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     constructor(UpgradeParameters memory _params, uint256 _expireSinceInclusive) {
         UpgradeConfig config = new UpgradeConfig(_params);
         CONFIG = address(config);
-        AGENT = config.AGENT();
         EXPIRE_SINCE_INCLUSIVE = _expireSinceInclusive;
     }
 
@@ -222,16 +218,9 @@ contract UpgradeTemplate is IUpgradeTemplate {
         //
         CoreUpgradeConfig memory c = UpgradeConfig(CONFIG).getCoreUpgradeConfig();
 
-        // TODO: revise for mainnet
-        // OracleReportSanityChecker upgrade condition: WithdrawalVault balance
-        uint256 wvBalance = c.withdrawalVault.balance;
-        if (wvBalance >= ORACLE_REPORT_SANITY_CHECKER_WITHDRAWAL_VAULT_BALANCE_LIMIT) {
-            revert OracleReportSanityCheckerWithdrawalVaultBalanceExceed(wvBalance);
-        }
-
-        initialBufferedEther = ILidoUpgrade(g.lido).getBufferedEther();
-        (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) =
-            ILidoUpgrade(g.lido).getBeaconStat();
+        ILidoUpgrade lido = ILidoUpgrade(g.lido);
+        initialBufferedEther = lido.getBufferedEther();
+        (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) = lido.getBeaconStat();
 
         IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
         initialWithdrawalCredentials = sr.getWithdrawalCredentials();
@@ -273,7 +262,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertCSMFinalState(g);
         _assertCMFinalState(g);
 
-        _checkSRMigration(g, c);
+        _checkSRMFinalState(g, c);
         _checkLidoMigration(g, c);
         _checkDSMMigration(g, c);
 
@@ -351,20 +340,22 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertZeroOZRoleHolders(sr, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
         }
 
-        // Consolidation
         {
+            address resealManager = g.resealManager;
+            address resealCommittee = g.resealCommittee;
+            address cb = g.circuitBreaker;
+
+            // Consolidation
             address consGw = c.consolidationGateway;
             address consBus = c.consolidationBus;
             address consMigrator = c.consolidationMigrator;
-            address resealManager = g.resealManager;
-            address cb = g.circuitBreaker;
 
             _assertProxyImplementation(consBus, c.consolidationBusImpl);
             _assertProxyAdmin(consBus, agent);
             _assertSingleOZRoleHolder(consBus, DEFAULT_ADMIN_ROLE, agent);
             _assertSingleOZRoleHolder(consBus, PUBLISH_ROLE, consMigrator);
             _assertZeroOZRoleHolders(consBus, MANAGE_ROLE);
-            _assertZeroOZRoleHolders(consBus, REMOVE_ROLE);
+            _assertSingleOZRoleHolder(consBus, REMOVE_ROLE, c.curatedModuleCommittee);
 
             if (IConsolidationBus(consBus).CONSOLIDATION_GATEWAY() != consGw) {
                 revert InvalidConsolidationGatewayAddressInConsolidationBus();
@@ -375,6 +366,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertSingleOZRoleHolder(consMigrator, DEFAULT_ADMIN_ROLE, agent);
             _assertSingleOZRoleHolder(consMigrator, ALLOW_PAIR_ROLE, g.easyTrackEVMScriptExecutor);
             _assertSingleOZRoleHolder(consMigrator, DISALLOW_PAIR_ROLE, c.curatedModuleCommittee);
+
             if (IConsolidationMigrator(consMigrator).CONSOLIDATION_BUS() != consBus) {
                 revert InvalidConsolidationBusAddressInConsolidationMigrator();
             }
@@ -386,18 +378,21 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertSingleOZRoleHolder(consGw, RESUME_ROLE, resealManager);
             _assertSingleOZRoleHolder(consGw, ADD_CONSOLIDATION_REQUEST_ROLE, consBus);
 
-            _assertCircuitBreakerPauser(cb, consGw, c.consolidationGatewayPauser);
-        }
+            _assertCircuitBreakerPauser(cb, consGw, resealCommittee);
 
-        // TopUps
-        {
+            // TopUps
+
             address tuGw = c.topUpGateway;
             _assertProxyImplementation(tuGw, c.topUpGatewayImpl);
             _assertProxyAdmin(tuGw, agent);
             _assertLocatorAddress(locator.topUpGateway(), tuGw);
 
             _assertSingleOZRoleHolder(tuGw, DEFAULT_ADMIN_ROLE, agent);
+            _assertTwoOZRoleHolders(tuGw, PAUSE_ROLE, cb, resealManager);
+            _assertSingleOZRoleHolder(tuGw, RESUME_ROLE, resealManager);
             _assertSingleOZRoleHolder(tuGw, TOP_UP_ROLE, c.topUpGatewayDepositor);
+
+            _assertCircuitBreakerPauser(cb, tuGw, resealCommittee);
         }
 
         // TW
@@ -436,12 +431,16 @@ contract UpgradeTemplate is IUpgradeTemplate {
         address resealManager = g.resealManager;
         address cb = g.circuitBreaker;
         address csModule = csm.csm;
+        address csmCommittee = csm.csmCommittee;
+        address newVerifier = csm.newVerifier;
+        address vettedGate = csm.vettedGate;
+        address accounting = csm.accounting;
 
         _assertProxyImplementation(csModule, csm.csmImpl);
         _assertProxyImplementation(csm.parametersRegistry, csm.parametersRegistryImpl);
         _assertProxyImplementation(csm.feeOracle, csm.feeOracleImpl);
-        _assertProxyImplementation(csm.vettedGate, csm.vettedGateImpl);
-        _assertProxyImplementation(csm.accounting, csm.accountingImpl);
+        _assertProxyImplementation(vettedGate, csm.vettedGateImpl);
+        _assertProxyImplementation(accounting, csm.accountingImpl);
         _assertProxyImplementation(csm.feeDistributor, csm.feeDistributorImpl);
         _assertProxyImplementation(csm.exitPenalties, csm.exitPenaltiesImpl);
         _assertProxyImplementation(csm.strikes, csm.strikesImpl);
@@ -449,8 +448,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertProxyAdmin(csModule, agent);
         _assertProxyAdmin(csm.parametersRegistry, agent);
         _assertProxyAdmin(csm.feeOracle, agent);
-        _assertProxyAdmin(csm.vettedGate, agent);
-        _assertProxyAdmin(csm.accounting, agent);
+        _assertProxyAdmin(vettedGate, agent);
+        _assertProxyAdmin(accounting, agent);
         _assertProxyAdmin(csm.feeDistributor, agent);
         _assertProxyAdmin(csm.exitPenalties, agent);
         _assertProxyAdmin(csm.strikes, agent);
@@ -459,8 +458,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertInitializedContractVersion(
             csm.parametersRegistry, EXPECTED_FINAL_CSM_PARAMETERS_REGISTRY_INITIALIZED_VERSION
         );
-        _assertInitializedContractVersion(csm.vettedGate, EXPECTED_FINAL_CSM_VETTED_GATE_INITIALIZED_VERSION);
-        _assertInitializedContractVersion(csm.accounting, EXPECTED_FINAL_CSM_ACCOUNTING_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(vettedGate, EXPECTED_FINAL_CSM_VETTED_GATE_INITIALIZED_VERSION);
+        _assertInitializedContractVersion(accounting, EXPECTED_FINAL_CSM_ACCOUNTING_INITIALIZED_VERSION);
         _assertInitializedContractVersion(csm.feeDistributor, EXPECTED_FINAL_CSM_FEE_DISTRIBUTOR_INITIALIZED_VERSION);
         _assertInitializedContractVersion(csm.strikes, EXPECTED_FINAL_CSM_VALIDATOR_STRIKES_INITIALIZED_VERSION);
         _assertContractVersion(csm.feeOracle, EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION);
@@ -468,40 +467,41 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         _assertZeroOZRoleHolders(csModule, REPORT_EL_REWARDS_STEALING_PENALTY_ROLE);
         _assertZeroOZRoleHolders(csModule, SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE);
-        _assertSingleOZRoleHolder(csModule, REPORT_GENERAL_DELAYED_PENALTY_ROLE, csm.csmCommittee);
+        _assertSingleOZRoleHolder(csModule, REPORT_GENERAL_DELAYED_PENALTY_ROLE, csmCommittee);
         _assertSingleOZRoleHolder(csModule, SETTLE_GENERAL_DELAYED_PENALTY_ROLE, g.easyTrackEVMScriptExecutor);
-        _assertSingleOZRoleHolder(csModule, VERIFIER_ROLE, csm.newVerifier);
-        _assertSingleOZRoleHolder(csModule, REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE, csm.newVerifier);
+
+        _assertSingleOZRoleHolder(csModule, VERIFIER_ROLE, newVerifier);
+        _assertSingleOZRoleHolder(csModule, REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE, newVerifier);
         _assertSingleOZRoleHolder(csModule, REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE, g.easyTrackEVMScriptExecutor);
         _assertTwoOZRoleHolders(csModule, PAUSE_ROLE, cb, resealManager);
         _assertThreeOZRoleHolders(
-            csModule, CREATE_NODE_OPERATOR_ROLE, csm.vettedGate, csm.newPermissionlessGate, csm.identifiedDVTClusterGate
+            csModule, CREATE_NODE_OPERATOR_ROLE, vettedGate, csm.newPermissionlessGate, csm.identifiedDVTClusterGate
         );
 
-        _assertTwoOZRoleHolders(csm.accounting, PAUSE_ROLE, cb, resealManager);
+        _assertTwoOZRoleHolders(accounting, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(csm.feeOracle, PAUSE_ROLE, cb, resealManager);
-        _assertTwoOZRoleHolders(csm.vettedGate, PAUSE_ROLE, cb, resealManager);
+        _assertTwoOZRoleHolders(vettedGate, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(csm.identifiedDVTClusterGate, PAUSE_ROLE, cb, resealManager);
-        _assertTwoOZRoleHolders(csm.newVerifier, PAUSE_ROLE, cb, resealManager);
+        _assertTwoOZRoleHolders(newVerifier, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(csm.ejector, PAUSE_ROLE, cb, resealManager);
 
-        _assertCircuitBreakerPauser(cb, csm.identifiedDVTClusterGate, csm.csmCommittee);
-        _assertCircuitBreakerPauser(cb, csm.newVerifier, csm.csmCommittee);
-        _assertCircuitBreakerPauser(cb, csm.ejector, csm.csmCommittee);
+        _assertCircuitBreakerPauser(cb, csm.identifiedDVTClusterGate, csmCommittee);
+        _assertCircuitBreakerPauser(cb, newVerifier, csmCommittee);
+        _assertCircuitBreakerPauser(cb, csm.ejector, csmCommittee);
 
-        _assertNotOZRoleHolder(csm.vettedGate, START_REFERRAL_SEASON_ROLE, agent);
-        _assertNotOZRoleHolder(csm.vettedGate, END_REFERRAL_SEASON_ROLE, csm.csmCommittee);
+        _assertNotOZRoleHolder(vettedGate, START_REFERRAL_SEASON_ROLE, agent);
+        _assertNotOZRoleHolder(vettedGate, END_REFERRAL_SEASON_ROLE, csmCommittee);
 
-        _assertHasOZRole(csm.accounting, SET_BOND_CURVE_ROLE, csm.identifiedDVTClusterGate);
+        _assertHasOZRole(accounting, SET_BOND_CURVE_ROLE, csm.identifiedDVTClusterGate);
 
-        _assertNotOZRoleHolder(csm.accounting, MANAGE_BOND_CURVES_ROLE, csm.identifiedDVTClusterCurveSetup);
+        _assertNotOZRoleHolder(accounting, MANAGE_BOND_CURVES_ROLE, csm.identifiedDVTClusterCurveSetup);
         _assertNotOZRoleHolder(csm.parametersRegistry, MANAGE_CURVE_PARAMETERS_ROLE, csm.identifiedDVTClusterCurveSetup);
         _assertIdentifiedDVTClusterCurve(csm);
 
-        _assertSingleOZRoleHolder(csm.parametersRegistry, MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE, csm.csmCommittee);
+        _assertSingleOZRoleHolder(csm.parametersRegistry, MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE, csmCommittee);
 
-        _assertNotOZRoleHolder(g.burner, REQUEST_BURN_SHARES_ROLE, csm.accounting);
-        _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, csm.accounting);
+        _assertNotOZRoleHolder(g.burner, REQUEST_BURN_SHARES_ROLE, accounting);
+        _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, accounting);
 
         _assertNotOZRoleHolder(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.oldEjector);
         _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.ejector);
@@ -542,7 +542,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         _assertNotOZRoleHolder(cModule, RESUME_ROLE, agent);
         if (IPausableUntil(cModule).isPaused()) {
-            revert CMModuleIsPaused(cModule);
+            revert CMModuleIsPaused();
         }
 
         // slither-disable-next-line unused-return
@@ -552,7 +552,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
     }
 
-    function _checkSRMigration(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
+    function _checkSRMFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
         CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
 
         IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
@@ -575,13 +575,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             }
         }
 
-        ModuleStateConfig memory stateConfig = sr.getStakingModuleStateConfig(newModuleId);
-        if (
-            stateConfig.moduleAddress != cm.module || stateConfig.moduleFee != cm.stakingModuleFee
-                || stateConfig.treasuryFee != cm.treasuryFee || stateConfig.stakeShareLimit != cm.stakeShareLimit
-                || stateConfig.priorityExitShareThreshold != cm.priorityExitShareThreshold
-                || stateConfig.status != StakingModuleStatus.Active || stateConfig.withdrawalCredentialsType != 0x02
-        ) {
+        if (sr.getStakingModuleStateConfig(newModuleId).moduleAddress != cm.module) {
             revert SRMigrationIncorrectAddStakingModule();
         }
     }
@@ -625,10 +619,11 @@ contract UpgradeTemplate is IUpgradeTemplate {
             revert DSMMigrationIncorrectOwner();
         }
 
-        address[] memory guardians = dsm.getGuardians();
         if (dsm.getGuardianQuorum() != oldDsm.getGuardianQuorum()) {
             revert DSMMigrationIncorrectGuardianQuorum();
         }
+
+        address[] memory guardians = dsm.getGuardians();
         for (uint256 i = 0; i < guardians.length; ++i) {
             if (!oldDsm.isGuardian(guardians[i])) {
                 revert DSMMigrationIncorrectGuardians();
@@ -687,27 +682,21 @@ contract UpgradeTemplate is IUpgradeTemplate {
     }
 
     function _assertZeroOZRoleHolders(address _accessControlled, bytes32 _role) internal view {
-        if (_getRoleMemberCount(_accessControlled, _role) != 0) {
-            revert NonZeroRoleHolders(_accessControlled, _role);
-        }
+        _assertOZRoleMembersCount(_accessControlled, _role, 0);
     }
 
     function _assertSingleOZRoleHolder(address _accessControlled, bytes32 _role, address _holder) internal view {
-        if (
-            _getRoleMemberCount(_accessControlled, _role) != 1 || _getRoleMember(_accessControlled, _role, 0) != _holder
-        ) {
-            revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
-        }
+        _assertOZRoleMembersCount(_accessControlled, _role, 1);
+        _assertHasOZRole(_accessControlled, _role, _holder);
     }
 
     function _assertTwoOZRoleHolders(address _accessControlled, bytes32 _role, address _holder1, address _holder2)
         internal
         view
     {
-        address[] memory holders = new address[](2);
-        holders[0] = _holder1;
-        holders[1] = _holder2;
-        _assertOZRoleHolders(_accessControlled, _role, holders);
+        _assertOZRoleMembersCount(_accessControlled, _role, 2);
+        _assertHasOZRole(_accessControlled, _role, _holder1);
+        _assertHasOZRole(_accessControlled, _role, _holder2);
     }
 
     function _assertThreeOZRoleHolders(
@@ -717,21 +706,15 @@ contract UpgradeTemplate is IUpgradeTemplate {
         address _holder2,
         address _holder3
     ) internal view {
-        address[] memory holders = new address[](3);
-        holders[0] = _holder1;
-        holders[1] = _holder2;
-        holders[2] = _holder3;
-        _assertOZRoleHolders(_accessControlled, _role, holders);
+        _assertOZRoleMembersCount(_accessControlled, _role, 3);
+        _assertHasOZRole(_accessControlled, _role, _holder1);
+        _assertHasOZRole(_accessControlled, _role, _holder2);
+        _assertHasOZRole(_accessControlled, _role, _holder3);
     }
 
-    function _assertOZRoleHolders(address _accessControlled, bytes32 _role, address[] memory _holders) internal view {
-        if (_getRoleMemberCount(_accessControlled, _role) != _holders.length) {
+    function _assertOZRoleMembersCount(address _accessControlled, bytes32 _role, uint256 _count) internal view {
+        if (_getRoleMemberCount(_accessControlled, _role) != _count) {
             revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
-        }
-        for (uint256 i = 0; i < _holders.length; i++) {
-            if (!_hasRole(_accessControlled, _role, _holders[i])) {
-                revert IncorrectOZAccessControlRoleHolders(_accessControlled, _role);
-            }
         }
     }
 
@@ -844,13 +827,12 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error IncorrectAragonKernelImplementation(address kernel, address implementation);
     error IncorrectLinkedContractAddress(address contractAddress, address actualAddress, address expectedAddress);
     error InvalidHashConsensusInitialEpoch(address consensus, uint256 actualEpoch, uint256 expectedEpoch);
-    error CMModuleIsPaused(address module);
+    error CMModuleIsPaused();
     error InvalidInitializedContractVersion(address contractAddress, uint64 actualVersion, uint64 expectedVersion);
     error InvalidCircuitBreakerPauser(address pausable, address actualPauser, address expectedPauser);
     error IdentifiedDVTClusterCurveSetupNotExecuted(address curveSetup);
     error InvalidIdentifiedDVTClusterCurveId(address contractAddress, uint256 actualCurveId, uint256 expectedCurveId);
 
-    error OracleReportSanityCheckerWithdrawalVaultBalanceExceed(uint256 actualBalance);
     error InvalidConsolidationBusAddressInConsolidationMigrator();
     error InvalidConsolidationGatewayAddressInConsolidationBus();
     error InvalidConsolidationGatewayAddressInWithdrawalVault();

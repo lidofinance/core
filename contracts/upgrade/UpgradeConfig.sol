@@ -15,6 +15,7 @@ import {
     CoreUpgradeConfig,
     CuratedModuleConfig,
     CSMUpgradeConfig,
+    IDualGovernance,
     IAragonKernel,
     IAragonApp,
     IEasyTrack,
@@ -39,6 +40,7 @@ contract UpgradeConfig is IUpgradeConfig {
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
     address public immutable RESEAL_MANAGER;
+    address public immutable RESEAL_COMMITTEE;
     address public immutable CIRCUIT_BREAKER;
     address public immutable BURNER;
 
@@ -89,8 +91,6 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CONSOLIDATION_GATEWAY;
     address internal immutable CONSOLIDATION_BUS;
     address internal immutable CONSOLIDATION_MIGRATOR;
-    // address internal immutable ORACLE_REPORT_SANITY_CHECKER;
-    // address internal immutable DEPOSIT_SECURITY_MODULE;
     address internal immutable VALIDATOR_EXIT_DELAY_VERIFIER;
 
     //
@@ -99,7 +99,6 @@ contract UpgradeConfig is IUpgradeConfig {
     uint256 internal immutable LIDO_DEPOSITS_RESERVE_TARGET;
     address internal immutable CURATED_MODULE_COMMITTEE;
     address internal immutable TOP_UP_GATEWAY_DEPOSITOR;
-    address internal immutable CONSOLIDATION_GATEWAY_PAUSER;
     uint256 internal immutable TW_MAX_EXIT_REQUESTS_LIMIT;
     uint256 internal immutable TW_EXITS_PER_FRAME;
     uint256 internal immutable TW_FRAME_DURATION_IN_SEC;
@@ -208,7 +207,8 @@ contract UpgradeConfig is IUpgradeConfig {
 
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
-        RESEAL_MANAGER = params.resealManager;
+        RESEAL_MANAGER = IDualGovernance(DUAL_GOVERNANCE).getResealManager();
+        RESEAL_COMMITTEE = IDualGovernance(DUAL_GOVERNANCE).getResealCommittee();
         CIRCUIT_BREAKER = params.circuitBreaker;
 
         EASY_TRACK = params.easyTrack;
@@ -239,7 +239,6 @@ contract UpgradeConfig is IUpgradeConfig {
         LIDO_DEPOSITS_RESERVE_TARGET = coreUpgradeParams.lidoDepositsReserveTarget;
         CURATED_MODULE_COMMITTEE = coreUpgradeParams.curatedModuleCommittee;
         TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
-        CONSOLIDATION_GATEWAY_PAUSER = coreUpgradeParams.consolidationGatewayPauser;
         TW_MAX_EXIT_REQUESTS_LIMIT = coreUpgradeParams.twMaxExitRequestsLimit;
         TW_EXITS_PER_FRAME = coreUpgradeParams.twExitsPerFrame;
         TW_FRAME_DURATION_IN_SEC = coreUpgradeParams.twFrameDurationInSec;
@@ -363,6 +362,7 @@ contract UpgradeConfig is IUpgradeConfig {
             lido: LIDO,
             burner: BURNER,
             resealManager: RESEAL_MANAGER,
+            resealCommittee: RESEAL_COMMITTEE,
             circuitBreaker: CIRCUIT_BREAKER,
             easyTrack: EASY_TRACK,
             easyTrackEVMScriptExecutor: EASY_TRACK_EVM_SCRIPT_EXECUTOR,
@@ -433,7 +433,6 @@ contract UpgradeConfig is IUpgradeConfig {
             lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
             curatedModuleCommittee: CURATED_MODULE_COMMITTEE,
             topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
-            consolidationGatewayPauser: CONSOLIDATION_GATEWAY_PAUSER,
             // twGateway limits
             twMaxExitRequestsLimit: TW_MAX_EXIT_REQUESTS_LIMIT,
             twExitsPerFrame: TW_EXITS_PER_FRAME,

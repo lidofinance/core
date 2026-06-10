@@ -359,7 +359,7 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _item({
-                description: "Create and grant Aragon BUFFER_RESERVE_MANAGER_ROLE to the AGENT",
+                description: "Create Aragon BUFFER_RESERVE_MANAGER_ROLE and grant role manager to the AGENT",
                 to: c.acl,
                 data: abi.encodeCall(IAragonACL.createPermission, (agent, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent))
             });
@@ -411,8 +411,11 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _registerCircuitBreakerPauserItem(
-                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, c.consolidationGatewayPauser
+                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, g.resealCommittee
             );
+
+            items[i++] =
+                _registerCircuitBreakerPauserItem("TopUpGateway", g.circuitBreaker, c.topUpGateway, g.resealCommittee);
         }
 
         //

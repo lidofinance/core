@@ -65,9 +65,9 @@ contract UpgradeTemporaryAdmin {
 
         _setupDSM(depositSecurityModule, _oldDepositSecurityModule);
         _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationMigratorCommittee);
-        _setupConsolidationBus(_consolidationBus, _consolidationMigrator);
+        _setupConsolidationBus(_consolidationBus, _consolidationMigrator, _consolidationMigratorCommittee);
         _setupConsolidationGateway(consolidationGateway, _consolidationBus, _circuitBreaker, _resealManager);
-        _setupTopUpGateway(topUpGateway, _topUpGatewayDepositor);
+        _setupTopUpGateway(topUpGateway, _topUpGatewayDepositor, _circuitBreaker, _resealManager);
 
         emit SetupCompleted(_consolidationMigrator, _consolidationBus, consolidationGateway, topUpGateway);
     }
@@ -87,10 +87,9 @@ contract UpgradeTemporaryAdmin {
         _transferAdminToAgent(_migrator);
     }
 
-    function _setupConsolidationBus(address _bus, address _migrator) private {
+    function _setupConsolidationBus(address _bus, address _migrator, address _committee) private {
         IAccessControl(_bus).grantRole(PUBLISH_ROLE, _migrator);
-        IAccessControl(_bus).renounceRole(MANAGE_ROLE, address(this));
-        IAccessControl(_bus).renounceRole(REMOVE_ROLE, address(this));
+        IAccessControl(_bus).grantRole(REMOVE_ROLE, _committee);
 
         _transferAdminToAgent(_bus);
     }
@@ -104,7 +103,10 @@ contract UpgradeTemporaryAdmin {
         _transferAdminToAgent(_gateway);
     }
 
-    function _setupTopUpGateway(address _gateway, address _depositor) private {
+    function _setupTopUpGateway(address _gateway, address _depositor, address _cb, address _resealManager) private {
+        IAccessControl(_gateway).grantRole(PAUSE_ROLE, _cb);
+        IAccessControl(_gateway).grantRole(PAUSE_ROLE, _resealManager);
+        IAccessControl(_gateway).grantRole(RESUME_ROLE, _resealManager);
         IAccessControl(_gateway).grantRole(TOP_UP_ROLE, _depositor);
 
         _transferAdminToAgent(_gateway);

@@ -204,8 +204,6 @@ contract ConsolidationBus is AccessControlEnumerableUpgradeable {
         if (admin == address(0)) revert AdminCannotBeZero();
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(MANAGE_ROLE, admin);
-        _grantRole(REMOVE_ROLE, admin);
 
         _setBatchSize(initialBatchSize);
         _setMaxGroupsInBatch(initialMaxGroupsInBatch);
