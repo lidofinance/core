@@ -92,7 +92,7 @@ epochsPerFrame = 4                    # Epochs per consensus frame
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
 maxValidatorsPerReport = 600         # Maximum validators per request
-maxExitBalanceEth = 416000
+maxExitBalanceEth = 358400
 balancePerFrameEth = 32
 frameDurationInSec = 48               # Frame duration in seconds
 consensusVersion = 5                  # Consensus version
