@@ -217,9 +217,9 @@ const CuratedModuleConfigSchema = z.object({
 
 const UpgradeVoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
-  timeConstraintsContract: EthereumAddressSchema,
-  enabledDaySpanStart: NonNegativeIntSchema,
-  enabledDaySpanEnd: NonNegativeIntSchema,
+  timeConstraintsContract: EthereumAddressSchema.optional(),
+  enabledDaySpanStart: NonNegativeIntSchema.optional(),
+  enabledDaySpanEnd: NonNegativeIntSchema.optional(),
 });
 
 // CircuitBreaker schema (for scratch deployment)
