@@ -47,7 +47,7 @@ withdrawalRequestContract = "0x00000961Ef480Eb55e80D19ad83579A64c007002"
 consolidationRequestContract = "0x0000BBdDc7CE488642fb579F8B00f3a590007251"
 
 [triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 250
+maxExitRequestsLimit = 175
 exitsPerFrame = 1
 frameDurationInSec = 240
 
@@ -58,7 +58,7 @@ consensusVersion = 6
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
 maxValidatorsPerReport = 600
-maxExitBalanceEth = 416000
+maxExitBalanceEth = 358400
 balancePerFrameEth = 32
 frameDurationInSec = 48
 consensusVersion = 5
@@ -75,10 +75,8 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
-pauser = "0xFFe21561251c49AdccFad065C94Fb4931dF49081" # DG reseal committee
-
 [consolidationBus]
-initialBatchSize = 350                # Max number of requests in a batch
+initialBatchSize = 200                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 86400         # Delay before pending batch execution
 
@@ -157,8 +155,8 @@ stakeShareLimit = 2000
 priorityExitShareThreshold = 2500
 stakingModuleFee = 800
 treasuryFee = 200
-maxDepositsPerBlock = 30
-minDepositBlockDistance = 25
+maxDepositsPerBlock = 100
+minDepositBlockDistance = 75 # (15 minutes)
 feeOracleConsensusVersion = 4
 hashConsensusInitialEpoch = 47480
 
