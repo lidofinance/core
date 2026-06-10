@@ -248,6 +248,37 @@ Deployment artifacts will be stored in the file pointed at by `NETWORK_STATE_FIL
 
 ## Post-Deployment Tasks
 
+### state-mate check (runs automatically)
+
+`dao-deploy.sh` finishes with a [state-mate](https://github.com/lidofinance/state-mate)
+run that calls view functions on every deployed contract and diffs the results against
+the expectations in `scripts/scratch/state-mate/scratch.yaml` (~2000 checks: wiring,
+proxy admins/implementations, roles/ACL topology, deploy parameters). state-mate is
+vendored as the `foundry/lib/state-mate` submodule.
+
+The committed `scratch.yaml` holds only the _wiring_ — addresses and deploy-dependent
+values are referenced via YAML aliases whose anchors live in generated sibling files
+(state-mate's `.deployed`/`.inputs` feature). `prepare-state-mate-check.ts` derives
+them, plus the `abi/` directory, from the network state file and the compile artifacts,
+so no explorer access is needed and the check works on a blank local node.
+
+Dual-governance checks sit in the config's `l2` section (state-mate only allows `l1`/`l2`
+section names; both point at the same chain). When the state file has no DG entries the
+check runs with `--only l1`. Set `STATE_MATE_CHECK=off` to skip the check entirely.
+
+To re-run the check by hand against an existing deployment:
+
+```shell
+NETWORK_STATE_FILE=deployed-local.json yarn ts-node scripts/scratch/state-mate/prepare-state-mate-check.ts
+cd foundry/lib/state-mate
+LOCAL_RPC_URL=http://127.0.0.1:8555 yarn start "$(pwd)/../../../scripts/scratch/state-mate/scratch.yaml"
+```
+
+When the deployment surface changes (a contract added/removed from the state file), the
+generator fails listing the unmapped keys — extend its mapping tables and add a matching
+contract entry (state-mate requires every non-mutable function to be either checked or
+explicitly skipped with an empty value) in `scratch.yaml`.
+
 ### Verifying a Live-Testnet Scratch Deployment
 
 The integration suite uses anvil/hardhat-only RPC methods
@@ -409,6 +440,80 @@ await stakingRouter.addStakingModule(
 await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { from: agent.address });
 ```
 
+## Compatibility matrix
+
+Quick reference across the three independent choices: **chain spec** (blank / Sepolia
+fork), **DG** (on / off), and **test scenario** (A–D from
+[testing.md](./testing.md)). "Tests mutate the node" = scenario C (`--network local`,
+direct); "tests use their own fork" = scenario D (in-process EDR forks the node).
+
+### Scratch deploy
+
+All four `(blank / Sepolia fork) × (DG on / off)` combinations deploy successfully
+against both an external hardhat node and anvil. The in-process node (scenario A)
+cannot deploy DG: `forge` needs an HTTP RPC and the in-process node exposes none.
+
+| Node                                | Chain spec                                      |          DG on          |  DG off  |
+| ----------------------------------- | ----------------------------------------------- | :---------------------: | :------: |
+| External hardhat-node               | blank (`genesisForkVersion = 0x00000000`)       |          ✅ CI          |  ✅ CI   |
+| External hardhat-node               | Sepolia fork (`0x90000069`, chainId `11155111`) |          ✅ CI          |  ✅ CI   |
+| External anvil                      | blank                                           |        ✅ local         | ✅ local |
+| External anvil                      | Sepolia fork                                    |        ✅ local         | ✅ local |
+| In-process hardhat (`MODE=scratch`) | blank                                           | ❌ forge needs HTTP RPC |    ✅    |
+
+Sepolia-fork jobs use `ghcr.io/lidofinance/hardhat-node:2.28.0-sepolia` (chainId
+`11155111`); step `0010` takes the `SepoliaDepositAdapter` branch there and nowhere
+else.
+
+### Integration tests — scenario A: in-process scratch (`test:integration:scratch`)
+
+Self-contained; no external node. Always forces `DG_DEPLOYMENT_ENABLED=false`.
+
+| DG  | Result                                                               |
+| --- | -------------------------------------------------------------------- |
+| on  | ❌ — command forces DG off; `forge` cannot reach the in-process node |
+| off | ✅                                                                   |
+
+### Integration tests — scenario C: direct to external node (`test:integration:fork:local`)
+
+Tests connect to the external node with `--network local` and **mutate it directly**
+(snapshots, `evm_revert`, and the in-test re-deploy all happen on that same node).
+
+| Backend      | Chain spec   |  DG on   |  DG off  |
+| ------------ | ------------ | :------: | :------: |
+| hardhat-node | blank        |  ✅ CI   |  ✅ CI   |
+| hardhat-node | Sepolia fork | ✅ CI ⚠️ | ✅ CI ⚠️ |
+| anvil        | blank        |    ✅    |    ✅    |
+| anvil        | Sepolia fork |  ✅ ⚠️   |  ✅ ⚠️   |
+
+⚠️ **Sepolia fork**: ~14 tests self-skip (`supportsVariableDepositAmounts = false` on
+chainId `11155111`). Sepolia's deposit contract hardcodes 32 ETH in the
+`deposit_data_root` reconstruction; variable-amount deposits (PDG predeposit,
+stVault unguaranteed / side) are structurally impossible there — not a test bug.
+
+### Integration tests — scenario D: tests use their own in-process fork (`test:integration` against a local node)
+
+The in-process EDR node forks the external node; **the external node is never
+mutated**. `dao-local-deploy.sh` uses this pattern (deploy to anvil, then
+`yarn test:integration` with `PROVISION_ON_FORK=1`). **Anvil only** — a plain
+hardhat node returns `nonce: null` for the pending block, which EDR rejects at
+`evm_revert` time, collapsing snapshot isolation.
+
+| Backend      |               DG on               | DG off |
+| ------------ | :-------------------------------: | :----: |
+| anvil        |                ✅                 |   ✅   |
+| hardhat-node | ❌ `nonce: null` on pending block |   ❌   |
+
+### Structural limits at a glance
+
+| Constraint                                      | Root cause                                          | Fix / workaround                                                          |
+| ----------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| DG cannot deploy in-process (scenario A)        | `forge` needs an HTTP RPC                           | Use scenario C with an external node                                      |
+| Scenario D breaks on hardhat-node backend       | EDR rejects `nonce: null` from pending block        | Switch to anvil, or use scenario C                                        |
+| Sepolia variable-amount deposit tests skip      | Deposit contract hardcodes 32 ETH in root           | Structural — run blank node for full deposit coverage                     |
+| `ECONNRESET` after `forge` on hardhat-node      | Keep-alive socket closed during 30–60 s forge pause | `reEstablishRpcAfterForge()` in step 0160 (already applied)               |
+| chainId not inherited on a plain `hardhat node` | hardhat node defaults chainId to `31337`            | Set `HARDHAT_CHAIN_ID=11155111` in the forked node's config, or use anvil |
+
 ## Architecture & internals
 
 How the pipeline is wired and why. For step bodies, see `scripts/scratch/steps/`.
@@ -419,7 +524,7 @@ How the pipeline is wired and why. For step bodies, see `scripts/scratch/steps/`
   run in numeric-prefix order per `steps.json`.
 - **Network state file** — `deployed-<network>.json`, the bus between steps: each
   reads from and appends to it. There is no in-memory hand-off — each step runs
-  in isolation via `scripts/utils/migrate.ts` (or `lib/scratch.ts:applySteps` in
+  in isolation via `scripts/utils/migrate.ts` (or `lib/scratch.ts:applyDeploySteps` in
   tests).
 - **Voting / Agent** — Aragon DAO components. Voting is the proposer-of-record;
   Agent holds protocol admin (OZ `DEFAULT_ADMIN_ROLE`, ACL grants).
@@ -430,6 +535,35 @@ How the pipeline is wired and why. For step bodies, see `scripts/scratch/steps/`
 - **LidoTemplate** — the Aragon DAO factory; owns the permission bootstrap. The DG
   launch is one of its finalize paths.
 
+### What "scratch" means: recipe, run, result, test-knob
+
+"Scratch deploy" gets used for a recipe, a run, a result, and a test knob
+interchangeably. Pulling them apart removes most of the confusion in this doc — and
+explains the `isScratch` naming below, which otherwise reads backwards:
+
+- **The recipe** — the 20 steps under `scripts/scratch/steps/` plus `steps.json`. It
+  is driven by **two near-duplicate orchestrators over the same step list**:
+  - `scripts/utils/migrate.ts` — the **production** driver (`dao-deploy.sh`; real
+    testnet/mainnet). Lets the node mine each tx normally.
+  - `lib/scratch.ts:applyDeploySteps` (via `deployScratchProtocol`) — the **test** driver
+    (`MODE=scratch`). Adds an `evm_mine` after every step because the in-process node
+    does not auto-mine the way an external node does.
+    Same steps, different driver — see the [CI](#ci) caveat.
+- **A run** — one dated execution of the recipe against one chain (~120M gas; the tx
+  hashes land in the state file). Two runs against the same node leave two full
+  protocol instances on it.
+- **The result** — the contracts now on-chain. Its _description/carrier_ is the
+  **state file** `deployed-<network>.json`: the inter-step bus, **ephemeral** on the
+  scratch/CI path (step `0000` rewrites it every run), durable only if you copy it out.
+- **`MODE=scratch`** — a **test** knob, not a property of the deploy: "re-deploy the
+  whole protocol in-process now" (vs `MODE=forking` = "discover an existing
+  deployment"). See [testing.md](./testing.md).
+- **`isScratch`** — a property of the **protocol under test**, _not_ of how it was
+  deployed: Agent still holds the powers and there is no EasyTrack (the pre-launch
+  governance shape). That is why it is true even when `PROVISION_ON_FORK` _discovers_ a
+  scratch instance on a fork **without redeploying it** — the shape is scratch even
+  though no scratch run happened in that process.
+
 ### State file access
 
 - `getAddress(Sk.x, state)` — throws if missing (entry must exist).
@@ -439,11 +573,11 @@ How the pipeline is wired and why. For step bodies, see `scripts/scratch/steps/`
 DG single-address entries use `{ address: "0x…" }` (no upstream DG contract is a
 proxy); `dg:tiebreakerSubCommittees` holds `{ addresses: [...] }`.
 
-### Always a single clean pass
+### A single clean pass by default
 
-There is no incremental/resume mode: `dao-deploy.sh` does `rm -f` on the state
-file, and step `0000` unconditionally rewrites it from the deploy params, so
-nothing from a prior run survives. Two consequences:
+By default nothing from a prior run survives: `dao-deploy.sh` does `rm -f` on
+the state file, and step `0000` rewrites it from the deploy params. Two
+consequences:
 
 - **`MODE=scratch` integration runs re-deploy everything** — they call
   `deployScratchProtocol()`, which runs every step from `0000` and tests that
@@ -456,6 +590,43 @@ nothing from a prior run survives. Two consequences:
   cleanly — `tryGetAddress(dg:adminExecutor)` skips the forge redeploy, per-sealable
   `hasRole` checks skip already-done wiring, and the `hasPermission` / `owner ==
 Agent` checks skip an already-applied finalize.
+
+### Resuming a failed deploy (`RESUME=1`)
+
+A deploy that died at step N can be continued instead of re-run from zero. The
+step runner records each completed step in the state file under
+`scratchDeployCompletedSteps`; with `RESUME=1` (or `true`/`yes`/`on`) set:
+
+- `dao-deploy.sh` keeps the existing state file instead of `rm -f`-ing it;
+- step `0000` keeps the state file instead of resetting it from deploy params;
+- the step runner skips every step listed in `scratchDeployCompletedSteps` and
+  continues from the first incomplete one.
+
+```bash
+RESUME=1 ./scripts/dao-deploy.sh   # same env as the original run
+```
+
+Caveats:
+
+- **The failed step restarts from its beginning.** That is safe: deploy steps
+  either redeploy their contracts (overwriting the state entries) or carry
+  their own idempotency guards (0145/0150/0160).
+- **The node must be the same session** the state file came from — addresses in
+  the state are chain-bound. Resuming against a restarted blank anvil deploys
+  on top of stale addresses and fails in confusing ways.
+- A stale `RESUME=1` without an existing state file degrades gracefully to a
+  clean run.
+
+### Preflight checks
+
+Both deploy drivers run `scripts/scratch/preflight.ts` before step `0000`. It
+validates the whole environment up front — `DEPLOYER`/`GENESIS_TIME`/
+`GENESIS_FORK_VERSION` formats, the deploy-params TOML against its schema, RPC
+reachability, and (when DG is enabled) the forge binary, the populated
+`dual-governance` submodule, a resolvable forge RPC URL, the `[dualGovernance]`
+params section, and the dev-committee tripwire. Without it, a missing forge
+binary or `RPC_URL` would surface only at step 0160 — after ~120M gas. All
+findings are reported together so the environment is fixed in one iteration.
 
 ### Phase 4: hand-off + Dual Governance
 
@@ -558,28 +729,63 @@ windows; scratch sets none).
 `.github/workflows/tests-integration-scratch.yml` runs four jobs — **with** and **without** Dual Governance
 (`DG_DEPLOYMENT_ENABLED=false`), each on a blank node (`hardhat-node:2.28.0-scratch`) and on a Sepolia fork
 (`hardhat-node:2.28.0-sepolia`, chainId `11155111` → step `0010`'s `SepoliaDepositAdapter` branch), all on the
-`:8555` service container. Each job runs `./scripts/dao-deploy.sh` (steps `0000–0160`), then
-`yarn test:integration:fork:local` — `MODE=scratch` + `--network local` (scenario C in
-[testing.md](./testing.md)), which drives the external node directly and re-deploys the protocol from `0000` for the
-test run. Because 0160 shells out to `forge` inside the submodule, CI needs the Foundry toolchain and a
+`:8555` service container. Because 0160 shells out to `forge` inside the submodule, CI needs the Foundry toolchain and a
 `submodules: recursive` checkout.
+
+Each job **deploys the protocol twice**, which is intentional but easy to misread as a
+bug (the `justfile` recipes deploy only once):
+
+1. `./scripts/dao-deploy.sh` (steps `0000–0160`) runs the **production** driver
+   (`migrate.ts`) — the only CI exercise of the path a real testnet/mainnet deploy
+   takes. Its state file is then discarded; the `mine.ts` step just flushes its last txs.
+2. `yarn test:integration:fork:local` (`MODE=scratch` + `--network local`, scenario C in
+   [testing.md](./testing.md)) **re-deploys from `0000`** via the **test** driver
+   (`applyDeploySteps`) and asserts against _that_ instance.
+
+**Caveat (why this is spelled out).** The instance the assertions run against is the one
+built in step 2 (`applyDeploySteps`), not the one `dao-deploy.sh` built in step 1. So green CI
+proves the production driver _runs_ end-to-end, but the _functional_ assertions only ever
+cover the **test** driver's output. The two drivers are near-duplicates over the same
+`steps.json` (see [What "scratch" means](#what-scratch-means-recipe-run-result-test-knob)),
+so they rarely diverge — but the gap is real. Closing it would mean either converging the
+two drivers, or adding a "discover an existing deployment on an external node" test mode so
+step 2 can verify step 1's artifact instead of rebuilding it (which would also drop a full
+deploy per job). Neither exists today.
+
+#### Coverage (what is actually gated, and where)
+
+| Chain spec                                           | DG on                                                  | DG off             |
+| ---------------------------------------------------- | ------------------------------------------------------ | ------------------ |
+| Blank node (`genesisForkVersion = 0x00000000`)       | ✅ CI                                                  | ✅ CI              |
+| Sepolia fork (`0x90000069`, `SepoliaDepositAdapter`) | ✅ CI                                                  | ✅ CI              |
+| Mainnet fork                                         | ⚠️ `justfile` only (`just mainnet-fork-dg` / `-no-dg`) | ⚠️ `justfile` only |
+
+Two scope gaps to keep in mind:
+
+- **In-process scratch cannot cover DG at all** (`test:integration:scratch`, scenario A,
+  forces `DG_DEPLOYMENT_ENABLED=false` — DG's forge step needs an external RPC, see
+  [Phase 4](#phase-4-hand-off--dual-governance)). Every DG-on assertion comes from the
+  scenario-C jobs above.
+- **Mainnet-fork scratch is not CI-gated** — it is runnable only from the `justfile`
+  matrix, so treat it as a manual pre-release check, not a guarantee.
 
 ### Files of interest
 
-| File                                                         | Role                                                           |
-| ------------------------------------------------------------ | -------------------------------------------------------------- |
-| `scripts/dao-deploy.sh`                                      | Entry point; wipes state file, compiles, runs `migrate.ts`     |
-| `scripts/utils/migrate.ts`                                   | Iterates `steps.json`, imports each step, calls `main()`       |
-| `lib/scratch.ts`                                             | `applySteps`, `deployScratchProtocol`, `isDGDeploymentEnabled` |
-| `scripts/scratch/deploy-params-testnet.toml`                 | All deploy parameters (`[dualGovernance]` at the bottom)       |
-| `scripts/scratch/steps/0145-unpause-sealables.ts`            | DG prerequisite: resume WQ + VEBO pre-role-transfer            |
-| `scripts/scratch/steps/0150-transfer-roles.ts`               | Admin hand-off to Agent; defers WQ/VEBO renounce for DG        |
-| `scripts/scratch/steps/0160-deploy-dual-governance.ts`       | Forge bridge + ResealManager wiring + template finalize        |
-| `contracts/0.4.24/template/LidoTemplate.sol`                 | `finalizePermissions{After,Without}DGDeployment`, `setOwner`   |
-| `scripts/utils/upgrade.ts`                                   | Shared `executeDGProposal` helper                              |
-| `lib/state-file.ts`                                          | `Sk` enum, `getAddress`, `tryGetAddress`, state reset/persist  |
-| `lib/config-schemas.ts`                                      | Zod schema for `[dualGovernance]`                              |
-| `test/integration/dual-governance/dg-scratch.integration.ts` | Post-launch topology assertions + e2e proposal                 |
+| File                                                         | Role                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| `scripts/dao-deploy.sh`                                      | Entry point; wipes state file, compiles, runs `migrate.ts`    |
+| `scripts/utils/migrate.ts`                                   | Iterates `steps.json`, imports each step, calls `main()`      |
+| `lib/scratch.ts`                                             | `applyDeploySteps`, `deployScratchProtocol` (step runner)     |
+| `lib/env-flags.ts`                                           | `isDGDeploymentEnabled`, `isResumeEnabled`, `isTruthyEnv`     |
+| `scripts/scratch/deploy-params-testnet.toml`                 | All deploy parameters (`[dualGovernance]` at the bottom)      |
+| `scripts/scratch/steps/0145-unpause-sealables.ts`            | DG prerequisite: resume WQ + VEBO pre-role-transfer           |
+| `scripts/scratch/steps/0150-transfer-roles.ts`               | Admin hand-off to Agent; defers WQ/VEBO renounce for DG       |
+| `scripts/scratch/steps/0160-deploy-dual-governance.ts`       | Forge bridge + ResealManager wiring + template finalize       |
+| `contracts/0.4.24/template/LidoTemplate.sol`                 | `finalizePermissions{After,Without}DGDeployment`, `setOwner`  |
+| `scripts/utils/upgrade.ts`                                   | Shared `executeDGProposal` helper                             |
+| `lib/state-file.ts`                                          | `Sk` enum, `getAddress`, `tryGetAddress`, state reset/persist |
+| `lib/config-schemas.ts`                                      | Zod schema for `[dualGovernance]`                             |
+| `test/integration/dual-governance/dg-scratch.integration.ts` | Post-launch topology assertions + e2e proposal                |
 
 ## Protocol Parameters
 

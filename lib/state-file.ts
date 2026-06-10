@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { network as hardhatNetwork } from "hardhat";
@@ -91,6 +91,7 @@ export enum Sk {
   lidoLocator = "lidoLocator",
   chainSpec = "chainSpec",
   chainId = "chainId",
+  scratchDeployCompletedSteps = "scratchDeployCompletedSteps",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
   accounting = "accounting",
@@ -282,6 +283,10 @@ export async function resetStateFileFromDeployParams(): Promise<void> {
   const initialState = scratchParametersToDeploymentState(scratchParams);
   const data = JSON.stringify(_sortKeysAlphabetically(initialState), null, 2);
   writeFileSync(fileName, `${data}\n`, { encoding: "utf8", flag: "w" });
+}
+
+export function networkStateFileExists(): boolean {
+  return existsSync(_getStateFileFileName());
 }
 
 export function persistNetworkState(state: DeploymentState): void {

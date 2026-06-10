@@ -2,8 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ethers } from "hardhat";
+import { runScratchDeployPreflight } from "scripts/scratch/preflight";
 
+import { isResumeEnabled } from "./env-flags";
 import { log } from "./log";
+import { networkStateFileExists, persistNetworkState, readNetworkState, Sk } from "./state-file";
 
 class StepsFileNotFoundError extends Error {
   constructor(filePath: string) {
@@ -28,16 +31,74 @@ class MigrationMainFunctionError extends Error {
 
 const deployedSteps: string[] = [];
 
-async function applySteps(steps: string[]) {
+export { isDGDeploymentEnabled, isResumeEnabled } from "./env-flags";
+
+function getCompletedStepsFromState(): string[] {
+  if (!networkStateFileExists()) return [];
+  const completed = readNetworkState()[Sk.scratchDeployCompletedSteps];
+  return Array.isArray(completed) ? completed : [];
+}
+
+function markStepCompleted(step: string): void {
+  const state = readNetworkState();
+  const stored = state[Sk.scratchDeployCompletedSteps];
+  const completed = Array.isArray(stored) ? stored : [];
+  if (!completed.includes(step)) completed.push(step);
+  state[Sk.scratchDeployCompletedSteps] = completed;
+  persistNetworkState(state);
+}
+
+// A kept state file may describe a chain that no longer exists (e.g. the local node
+// was restarted since the previous run); skipping steps would then leave the deploy
+// pointing at dead addresses with no error until far downstream.
+async function assertChainMatchesState(): Promise<void> {
+  const locator = (readNetworkState()[Sk.lidoLocator] as { proxy?: { address?: unknown } } | undefined)?.proxy?.address;
+  if (typeof locator !== "string") return; // previous run failed before the locator step: nothing cheap to probe
+  if ((await ethers.provider.getCode(locator)) === "0x") {
+    throw new Error(
+      `RESUME is set, but the lidoLocator address ${locator} recorded in the state file has no code on-chain. ` +
+        `The node was likely restarted since the previous run; unset RESUME to redeploy from scratch.`,
+    );
+  }
+}
+
+interface ApplyStepsOptions {
+  mine?: boolean; // mine a block after each step (in-process hardhat doesn't auto-mine)
+  trackProgress?: boolean; // record completed steps in the state file; enables RESUME
+}
+
+export async function applyDeploySteps(steps: string[], options: ApplyStepsOptions = {}) {
+  const { mine = false, trackProgress = false } = options;
+
   if (steps.every((step) => deployedSteps.includes(step))) {
     return; // All steps have been deployed
   }
 
+  const resume = trackProgress && isResumeEnabled();
+  const completedInState = resume ? getCompletedStepsFromState() : [];
+  if (resume && completedInState.length > 0) {
+    log(`RESUME is set: ${completedInState.length} step(s) already completed according to the state file`);
+    await assertChainMatchesState();
+  }
+
   for (const step of steps) {
+    if (resume && completedInState.includes(step)) {
+      log(`Skipping ${step} (already completed; RESUME is set)`);
+      deployedSteps.push(step);
+      continue;
+    }
+
     const migrationFile = resolveMigrationFile(step);
 
     await applyMigrationScript(migrationFile);
-    await ethers.provider.send("evm_mine", []); // Persist the state after each step
+    // Record completion before the mine: the step's txs are already applied, and a
+    // transient RPC failure on evm_mine must not cause a non-idempotent re-run on RESUME
+    if (trackProgress) {
+      markStepCompleted(step);
+    }
+    if (mine) {
+      await ethers.provider.send("evm_mine", []); // Persist the state after each step
+    }
 
     deployedSteps.push(step);
   }
@@ -51,7 +112,7 @@ export async function deployUpgrade(networkName: string, stepsFile: string): Pro
 
   try {
     const steps = loadSteps(stepsFile);
-    await applySteps(steps);
+    await applyDeploySteps(steps, { mine: true });
   } catch (error) {
     if (error instanceof StepsFileNotFoundError) {
       log.warning(`Upgrade steps not found in ${stepsFile}, assuming the protocol is already deployed`);
@@ -65,18 +126,15 @@ export async function deployScratchProtocol(): Promise<void> {
   const stepsFile = process.env.STEPS_FILE || "scratch/steps.json";
   const steps = loadSteps(stepsFile);
 
-  await applySteps(steps);
-}
+  // getProtocolContext() calls this for every MODE=scratch test file; once the steps
+  // are deployed (applyDeploySteps memo) the preflight would be pure repeated overhead
+  if (steps.every((step) => deployedSteps.includes(step))) {
+    return;
+  }
 
-// `DG_DEPLOYMENT_ENABLED` is opt-out: default ON, disabled via any of the
-// common falsy strings ("false", "0", "off", "no" — case-insensitive). The
-// strict `=== "false"` check used previously rejected the rest, which
-// surprised users typing `DG_DEPLOYMENT_ENABLED=0`.
-const DG_DISABLE_VALUES = new Set(["false", "0", "off", "no"]);
+  await runScratchDeployPreflight();
 
-export function isDGDeploymentEnabled(): boolean {
-  const v = process.env.DG_DEPLOYMENT_ENABLED?.trim().toLowerCase();
-  return !v || !DG_DISABLE_VALUES.has(v);
+  await applyDeploySteps(steps, { mine: true, trackProgress: true });
 }
 
 type StepsFile = {
