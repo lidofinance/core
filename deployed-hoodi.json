@@ -343,7 +343,7 @@
   },
   "circuitBreaker": {
     "address": "0x44a5789dFeDa59cD176Ab5709ec2F4829dE4d555",
-     "constructorArgs": {
+    "constructorArgs": {
       "admin": "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
       "initialHeartbeatInterval": 31536000,
       "initialPauseDuration": 3600,
