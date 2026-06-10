@@ -18,6 +18,7 @@ import {
   ether,
   getNextBlock,
   impersonate,
+  MAX_TOP_UP_PER_BLOCK_GWEI,
   randomString,
   randomWCType1,
   StakingModuleStatus,
@@ -83,7 +84,7 @@ describe("StakingRouter.sol:module-sync", () => {
     ));
 
     // initialize staking router with Lido mock
-    await stakingRouter.initialize(admin, withdrawalCredentials);
+    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
 
     // Set staking router address on Lido mock so it can send ETH
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());

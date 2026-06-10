@@ -15,7 +15,7 @@ import {
   WithdrawalQueue__MockForSanityChecker,
 } from "typechain-types";
 
-import { ether, impersonate, ONE_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib";
+import { ether, impersonate, MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib";
 
 import { deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -126,7 +126,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     };
     const moduleIds: bigint[] = [];
 
-    await routerHarness.stakingRouter.connect(admin).initialize(admin.address, randomWCType1());
+    await routerHarness.stakingRouter
+      .connect(admin)
+      .initialize(admin.address, randomWCType1(), MAX_TOP_UP_PER_BLOCK_GWEI);
     await routerHarness.stakingRouter
       .connect(admin)
       .grantRole(await routerHarness.stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin.address);

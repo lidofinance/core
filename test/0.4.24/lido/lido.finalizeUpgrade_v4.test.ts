@@ -11,12 +11,10 @@ import {
   LidoLocator,
 } from "typechain-types";
 
-import { ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib";
+import { DEPOSITS_RESERVE_TARGET, ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib";
 
 import { deployLidoLocator } from "test/deploy/locator";
 import { Snapshot } from "test/suite";
-
-const DEPOSITS_RESERVE_TARGET = ether("1500"); // 1500 ETH
 
 describe("Lido.sol:finalizeUpgrade_v4", () => {
   let deployer: HardhatEthersSigner;

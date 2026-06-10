@@ -273,7 +273,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev NB: by default, staking and the whole Lido pool are in paused state
      * @dev The contract's balance must be non-zero to mint initial shares of stETH
      */
-    function initialize(address _lidoLocator, address _eip712StETH) public payable onlyInit {
+    function initialize(address _lidoLocator, address _eip712StETH, uint256 _depositsReserveTarget) public payable onlyInit {
         _bootstrapInitialHolder(); // stone in the elevator
 
         _setLidoLocator(_lidoLocator);
@@ -285,6 +285,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         ILidoLocator locator = ILidoLocator(_lidoLocator);
 
         _approve(_withdrawalQueue(locator), _burner(locator), INFINITE_ALLOWANCE);
+        _setDepositsReserveTarget(_depositsReserveTarget);
         initialized();
     }
 

@@ -56,6 +56,7 @@ describe("Lido.sol:misc", () => {
         accounting,
         accountingOracle,
       },
+      depositsReserveTarget: ether("0"), // no initial deposit reserver target
     }));
 
     await acl.createPermission(user, lido, await lido.STAKING_CONTROL_ROLE(), deployer);

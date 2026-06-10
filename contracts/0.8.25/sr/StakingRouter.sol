@@ -112,11 +112,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     /// @param _admin Lido DAO Aragon agent contract address.
     /// @param _withdrawalCredentials 0x01 credentials to withdraw ETH on Consensus Layer side.
     /// @dev Proxy initialization method.
-    function initialize(address _admin, bytes32 _withdrawalCredentials) external reinitializer(4) {
+    function initialize(address _admin, bytes32 _withdrawalCredentials, uint256 _maxTopUpPerBlockGwei) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddress();
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setWithdrawalCredentials(_withdrawalCredentials);
+        _setMaxTopUpPerBlockGwei(_maxTopUpPerBlockGwei);
     }
 
     /// @notice A function to migrate upgrade to v4 (from v3) and use OpenZeppelin versioning.
