@@ -564,7 +564,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _preInternalShares number of internal shares before the report
     /// @param _preCLBalance sum of all Lido validators' active and pending balances on the CL + sum of EL deposits before the
     ///     current oracle report
-    /// @param _postCLBalance sum of all Lido validators' and pending balances balances on the CL after the
+    /// @param _postCLBalance sum of all Lido validators' and pending balances on the CL after the
     ///     current oracle report
     /// @param _withdrawalVaultBalance withdrawal vault balance on Execution Layer for the report calculation moment
     /// @param _elRewardsVaultBalance elRewards vault balance on Execution Layer for the report calculation moment
