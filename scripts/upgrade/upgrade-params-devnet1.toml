@@ -38,7 +38,7 @@ exitedValidatorEthAmountLimit = 32                     # Exited validator ETH am
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
 [lido]
-lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
+depositsReserveTarget = "1000000000000000000000" # 1000 eth
 
 [withdrawalVault]
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification

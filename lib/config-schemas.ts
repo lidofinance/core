@@ -344,7 +344,7 @@ const LidoApmSchema = z.object({
 });
 
 const LidoSchema = z.object({
-  lidoDepositsReserveTarget: BigIntStringSchema,
+  depositsReserveTarget: BigIntStringSchema,
 });
 
 // Scratch parameters schema

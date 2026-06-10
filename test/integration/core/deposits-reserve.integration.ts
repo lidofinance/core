@@ -264,6 +264,7 @@ describe("Integration: Deposits reserve", () => {
       .requestTimestampMargin;
     await advanceChainTime(requestTimestampMargin + 1n);
 
+    const depositsReserveTargetBefore = await lido.getDepositsReserveTarget();
     const withdrawalsReserveBefore = await lido.getWithdrawalsReserve();
     const depositsReserveBefore = await lido.getDepositsReserve();
     expect(withdrawalsReserveBefore).to.be.gt(0n);
@@ -292,7 +293,7 @@ describe("Integration: Deposits reserve", () => {
     );
 
     // Target increase after refSlot is deferred and must not affect current withdrawals finalization budget.
-    await lido.connect(reserveManager).setDepositsReserveTarget(ether("120"));
+    await lido.connect(reserveManager).setDepositsReserveTarget(depositsReserveTargetBefore + ether("20"));
     expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveBefore);
     expect(await lido.getDepositsReserve()).to.equal(depositsReserveBefore);
 
