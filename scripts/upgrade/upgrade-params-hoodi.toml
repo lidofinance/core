@@ -29,7 +29,7 @@ maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight
 maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
 maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
 requestTimestampMargin = 128                           # Request timestamp margin
-maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
+maxPositiveTokenRebase = 750000                       # Maximum positive token rebase
 maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
