@@ -1,0 +1,92 @@
+# Staking Router v3 (LIP-35) protocol parameters
+
+Module-level parameters (CMv2, CSMv3) are not duplicated here - see "modules_parameters.txt".
+
+## Lido
+
+- lidoDepositsReserveTarget = 1500000000000000000000 // 1500 ETH in wei, deposits reserve target
+
+## StakingRouter
+
+- _maxEBType1 = 32000000000000000000 // 32 ETH in wei, max effective balance for 0x01 WC
+- _maxEBType2 = 2048000000000000000000 // 2048 ETH in wei, max effective balance for 0x02 WC
+- _maxTopUpPerBlockGwei = 3200000000000 // 3200 ETH, max total ETH topped up in a single block
+
+## AccountingOracle
+
+- consensusVersion = 6 // new consensus version bumped on upgrade
+
+## ValidatorsExitBusOracle
+
+- maxValidatorsPerReport = 600 // max validator exit requests per oracle report
+- maxExitBalanceEth = 358400 // max cumulative ETH of validators referenced in exit requests, = 11200 * 32
+- balancePerFrameEth = 32 // ETH restored to the exit-balance bucket per frame, = 1 * 32
+- frameDurationInSec = 48 // duration of each refill frame, in seconds
+- consensusVersion = 5 // new consensus version bumped on upgrade
+
+## WithdrawalVault
+
+- _withdrawalRequest = 0x00000961Ef480Eb55e80D19ad83579A64c007002 // EIP-7002 withdrawal request predeploy
+- _consolidationRequest = 0x0000BBdDc7CE488642fb579F8B00f3a590007251 // EIP-7251 consolidation request predeploy
+
+## DepositSecurityModule
+
+- maxOperatorsPerUnvetting = 200 // not specified in LIP-35, current on-chain value
+- pauseIntentValidityPeriodBlocks = 6646 // not specified in LIP-35, current on-chain value
+
+## OracleReportSanityChecker
+
+- maxEffectiveBalanceWeightWCType01 = 32 // per-key weight in ETH for 0x01 keys used in VEBO check
+- maxEffectiveBalanceWeightWCType02 = 2048 // per-key weight in ETH for 0x02 keys used in VEBO check
+- maxCLBalanceDecreaseBP = 360 // max CL balance decrease over 36-day window (BP, 3.6%)
+- consolidationEthAmountPerDayLimit = 93375 // max ETH consolidated per day
+- exitedValidatorEthAmountLimit = 32 // per-validator ETH amount used in exit reporting
+- externalPendingBalanceCapEth = 300 // extra external pending balance cap for bounded side deposits / top-ups
+- exitedEthAmountPerDayLimit = 57600 // max ETH amount of validators that may exit per day
+- appearedEthAmountPerDayLimit = 57600 // max ETH amount of validators that may appear per day
+- maxBalanceExitRequestedPerReportInEth = 19200 // max ETH of validators referenced in exits within one report, = 600 * 32
+- annualBalanceIncreaseBPLimit = 1000 // not specified in LIP-35, current on-chain value
+- simulatedShareRateDeviationBPLimit = 50 // not specified in LIP-35, current on-chain value
+- maxItemsPerExtraDataTransaction = 8 // not specified in LIP-35, current on-chain value
+- maxNodeOperatorsPerExtraDataItem = 24 // not specified in LIP-35, current on-chain value
+- requestTimestampMargin = 7680 // not specified in LIP-35, current on-chain value
+- maxPositiveTokenRebase = 750000 // not specified in LIP-35, current on-chain value
+- clBalanceOraclesErrorUpperBPLimit = 50 // not specified in LIP-35, current on-chain value
+
+## ConsolidationGateway
+
+- maxConsolidationRequestsLimit = 2900 // max consolidation requests accepted before rate-limit applies
+- consolidationsPerFrame = 1 // consolidations processed per frame
+- frameDurationInSec = 30 // frame duration used for limit refill (seconds)
+- gIFirstValidatorPrev = 0x0000000000000000000000000000000000000000000000000096000000000028 // generalized index for first validator before fork pivot
+- gIFirstValidatorCurr = 0x0000000000000000000000000000000000000000000000000096000000000028 // generalized index for first validator after fork pivot
+- pivotSlot = 0 // slot at which the active generalized index switches
+
+## ConsolidationBus
+
+- initialBatchSize = 200 // max consolidation requests per batch
+- initialMaxGroupsInBatch = 10 // max target validator groups per batch
+- initialExecutionDelay = 86400 // 24 hours, delay (seconds) between batch publishing and executability
+
+## ConsolidationMigrator
+
+- _sourceModuleId = 1 // NOR / CMv1, immutable source module ID
+- _targetModuleId = 4 // CMv2, immutable target module ID
+
+## TopUpGateway
+
+- _gIFirstValidatorPrev = 0x0000000000000000000000000000000000000000000000000096000000000028 // generalized index for first validator before fork pivot
+- _gIFirstValidatorCurr = 0x0000000000000000000000000000000000000000000000000096000000000028 // generalized index for first validator after fork pivot
+- _pivotSlot = 0 // slot at which the active generalized index switches
+- _slotsPerEpoch = 32 // slots per epoch (from chain spec)
+- _maxValidatorsPerTopUp = 32 // max validators a single topUp can process
+- _minTopUpBlockDistance = 75 // min block distance between topUp calls
+- _maxRootAgeSec = 600 // max age (seconds) of the beacon root used to prove validator state
+- _targetBalanceGwei = 2046750000000 // 2046.75 ETH, validator target balance ceiling after top-up (1.25 ETH safety margin below MaxEB)
+- _minTopUpGwei = 2000000000 // 2 ETH, minimum top-up amount, smaller calculated top-ups are skipped
+
+## TriggerableWithdrawalGateway
+
+- maxExitRequestsLimit = 250 // max triggerable exit requests in the limit bucket
+- exitsPerFrame = 1 // exit requests restored to the bucket per frame
+- frameDurationInSec = 240 // duration of each refill frame, in seconds
