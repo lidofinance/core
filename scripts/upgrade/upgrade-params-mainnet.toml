@@ -23,14 +23,14 @@ CSMSetVettedGateTree = "0xBc5642bDD6F2a54b01A75605aAe9143525D97308"
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
 annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
-simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
+simulatedShareRateDeviationBPLimit = 50                # Simulated share rate deviation limit (BP)
 maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
 maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
 maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
 maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
 maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
-requestTimestampMargin = 128                           # Request timestamp margin
-maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
+requestTimestampMargin = 7680                          # Request timestamp margin
+maxPositiveTokenRebase = 750000                       # Maximum positive token rebase
 maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
@@ -38,7 +38,7 @@ exitedValidatorEthAmountLimit = 32                     # Exited validator ETH am
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
 [lido]
-lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
+depositsReserveTarget = "1500000000000000000000" # 1500 eth
 
 [withdrawalVault]
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification
@@ -58,7 +58,7 @@ consensusVersion = 6
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
 maxValidatorsPerReport = 600
-maxExitBalanceEth = 416000
+maxExitBalanceEth = 358400
 balancePerFrameEth = 32
 frameDurationInSec = 48
 consensusVersion = 5
@@ -75,10 +75,8 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
-pauser = "0xFFe21561251c49AdccFad065C94Fb4931dF49081" # DG reseal committee
-
 [consolidationBus]
-initialBatchSize = 350                # Max number of requests in a batch
+initialBatchSize = 200                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 86400         # Delay before pending batch execution
 
@@ -86,7 +84,7 @@ initialExecutionDelay = 86400         # Delay before pending batch execution
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
 #TODO  update upon deployment
-committee = "0x0000000000000000000000000000000000000000"
+consolidationCommittee = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address
 
        # Frame duration in seconds
 [topUpGateway]
@@ -157,8 +155,8 @@ stakeShareLimit = 2000
 priorityExitShareThreshold = 2500
 stakingModuleFee = 800
 treasuryFee = 200
-maxDepositsPerBlock = 30
-minDepositBlockDistance = 25
+maxDepositsPerBlock = 100
+minDepositBlockDistance = 75 # (15 minutes)
 feeOracleConsensusVersion = 4
 hashConsensusInitialEpoch = 47480
 
@@ -167,7 +165,4 @@ hashConsensusInitialEpoch = 47480
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
 # TODO set actual
-expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
-timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"
-enabledDaySpanStart = 50400 # 14:00 UTC
-enabledDaySpanEnd = 82800 # 23:00 UTC
+expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC

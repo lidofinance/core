@@ -92,7 +92,6 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
         uint256 _minTopUpGwei
     ) external initializer {
         if (_admin == address(0)) revert ZeroArgument("_admin");
-        __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _setMaxValidatorsPerTopUp(_maxValidatorsPerTopUp);
         _setMinBlockDistance(_minTopUpBlockDistance);

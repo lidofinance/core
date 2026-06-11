@@ -104,7 +104,7 @@ const ConsolidationBusSchema = z.object({
 const ConsolidationMigratorSchema = z.object({
   sourceModuleId: PositiveIntSchema,
   targetModuleId: PositiveIntSchema,
-  committee: EthereumAddressSchema.optional(),
+  consolidationCommittee: EthereumAddressSchema.optional(),
 });
 
 // Top-up gateway schema
@@ -217,9 +217,9 @@ const CuratedModuleConfigSchema = z.object({
 
 const UpgradeVoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
-  timeConstraintsContract: EthereumAddressSchema,
-  enabledDaySpanStart: NonNegativeIntSchema,
-  enabledDaySpanEnd: NonNegativeIntSchema,
+  timeConstraintsContract: EthereumAddressSchema.optional(),
+  enabledDaySpanStart: NonNegativeIntSchema.optional(),
+  enabledDaySpanEnd: NonNegativeIntSchema.optional(),
 });
 
 // CircuitBreaker schema (for scratch deployment)
@@ -344,7 +344,7 @@ const LidoApmSchema = z.object({
 });
 
 const LidoSchema = z.object({
-  lidoDepositsReserveTarget: BigIntStringSchema,
+  depositsReserveTarget: BigIntStringSchema,
 });
 
 // Scratch parameters schema

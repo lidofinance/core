@@ -6,7 +6,14 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingRouter } from "typechain-types";
 
-import { certainAddress, getNextBlock, randomString, randomWCType1, WithdrawalCredentialsType } from "lib";
+import {
+  certainAddress,
+  getNextBlock,
+  MAX_TOP_UP_PER_BLOCK_GWEI,
+  randomString,
+  randomWCType1,
+  WithdrawalCredentialsType,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 
@@ -39,7 +46,7 @@ describe("StakingRouter.sol:module-management", () => {
     ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
 
     // initialize staking router
-    await stakingRouter.initialize(admin, withdrawalCredentials);
+    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
 
     // grant roles
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);

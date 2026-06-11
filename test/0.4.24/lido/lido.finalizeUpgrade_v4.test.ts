@@ -11,7 +11,7 @@ import {
   LidoLocator,
 } from "typechain-types";
 
-import { ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib";
+import { DEPOSITS_RESERVE_TARGET, ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib";
 
 import { deployLidoLocator } from "test/deploy/locator";
 import { Snapshot } from "test/suite";
@@ -43,7 +43,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   it("Reverts if not initialized", async () => {
-    await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("NOT_INITIALIZED");
+    await expect(lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET)).to.be.revertedWith("NOT_INITIALIZED");
   });
 
   context("initialized", () => {
@@ -61,17 +61,26 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
     it("Reverts if contract version does not equal 3", async () => {
       const unexpectedVersion = 1n;
       await lido.harness_setContractVersion(unexpectedVersion);
-      await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("UNEXPECTED_CONTRACT_VERSION");
+      await expect(lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET)).to.be.revertedWith("UNEXPECTED_CONTRACT_VERSION");
     });
 
     it("Sets contract version to 4", async () => {
-      await expect(lido.finalizeUpgrade_v4()).to.emit(lido, "ContractVersionSet").withArgs(finalizeVersion);
+      await expect(lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET))
+        .to.emit(lido, "ContractVersionSet")
+        .withArgs(finalizeVersion);
       expect(await lido.getContractVersion()).to.equal(finalizeVersion);
+    });
+
+    it("Sets deposits reserve target", async () => {
+      await expect(lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET))
+        .to.emit(lido, "DepositsReserveTargetSet")
+        .withArgs(DEPOSITS_RESERVE_TARGET);
+      expect(await lido.getDepositsReserveTarget()).to.equal(DEPOSITS_RESERVE_TARGET);
     });
 
     it("Reverts upgrade if occurred before report", async () => {
       await accountingOracle.mock_setProcessingState(1, false, false);
-      await expect(lido.finalizeUpgrade_v4()).to.be.revertedWith("NO_REPORT");
+      await expect(lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET)).to.be.revertedWith("NO_REPORT");
     });
 
     it("Migrates storage successfully after report and before next frame", async () => {
@@ -87,7 +96,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
 
       const depositedBalance = (depositedValidators - clValidators) * ether("32");
 
-      await expect(lido.finalizeUpgrade_v4()).to.not.be.reverted;
+      await expect(lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET)).to.not.be.reverted;
 
       expect(await lido.getBufferedEther()).to.equal(bufferedEther);
       expect((await lido.getBeaconStat()).beaconBalance).to.equal(clBalance);
@@ -124,7 +133,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
       );
       const migratedDeposits = (depositedValidators - clValidators) * ether("32");
 
-      await lido.finalizeUpgrade_v4();
+      await lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET);
       const totalPooledEtherAfterMigration = await lido.getTotalPooledEther();
 
       await accountingOracle.mock_setProcessingState(2, false, false);

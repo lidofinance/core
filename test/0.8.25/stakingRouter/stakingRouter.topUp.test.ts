@@ -13,7 +13,7 @@ import {
 } from "typechain-types";
 
 import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib";
-import { ONE_GWEI, WithdrawalCredentialsType } from "lib/constants";
+import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "lib/constants";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -65,7 +65,7 @@ describe("StakingRouter.sol:topUp", () => {
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());
 
     // initialize staking router with the mock lido and topUpGateway as a signer
-    await stakingRouter.initialize(admin, withdrawalCredentials);
+    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
 
     // grant roles
     await Promise.all([stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin)]);

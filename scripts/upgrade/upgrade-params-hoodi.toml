@@ -29,7 +29,7 @@ maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight
 maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
 maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
 requestTimestampMargin = 128                           # Request timestamp margin
-maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
+maxPositiveTokenRebase = 750000                       # Maximum positive token rebase
 maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
 clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
@@ -37,7 +37,7 @@ exitedValidatorEthAmountLimit = 32                     # Exited validator ETH am
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
 [lido]
-lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
+depositsReserveTarget = "1500000000000000000000" # 1500 eth
 
 [withdrawalVault]
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification
@@ -75,18 +75,15 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
-pauser = "0x83BCE68B4e8b7071b2a664a26e6D3Bc17eEe3102" # DG reseal committee
-
 [consolidationBus]
-initialBatchSize = 350                # Max number of requests in a batch
+initialBatchSize = 200                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 86400         # Delay before pending batch execution
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 5                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-
-committee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" #m-sig
+consolidationCommittee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" # Curated Module Committee (CMC) multisig address
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
@@ -154,8 +151,8 @@ stakeShareLimit = 10000
 priorityExitShareThreshold = 10000
 stakingModuleFee = 400
 treasuryFee = 600
-maxDepositsPerBlock = 150
-minDepositBlockDistance = 25
+maxDepositsPerBlock = 100
+minDepositBlockDistance = 75
 feeOracleConsensusVersion = 4
 hashConsensusInitialEpoch = 93833
 
@@ -163,11 +160,4 @@ hashConsensusInitialEpoch = 93833
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-# TODO set actual
-expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
-timeConstraintsContract = "0xB26Fd3b50280AbC55c572EE73071778A51088408"
-enabledDaySpanStart = 0 # 00:00:000 UTC
-enabledDaySpanEnd = 86399 # 23:59:59 UTC
-# Vault hub configuration
-[vaultHub]
-maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)
+expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC

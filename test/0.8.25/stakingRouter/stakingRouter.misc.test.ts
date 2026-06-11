@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccountingOracle__MockForStakingRouter, LidoLocator, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, randomAddress, randomBytes32, randomWCType1 } from "lib";
+import { certainAddress, ether, MAX_TOP_UP_PER_BLOCK_GWEI, randomAddress, randomBytes32, randomWCType1 } from "lib";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -28,7 +28,6 @@ describe("StakingRouter.sol:misc", () => {
   const depositSecurityModule = certainAddress("test:staking-router:depositSecurityModule");
   const accounting = certainAddress("test:staking-router:accounting");
   const withdrawalCredentials = randomWCType1();
-  const MAX_TOP_UP_PER_BLOCK_GWEI = 3200n * 10n ** 9n; // 3200 ETH in gwei
 
   before(async () => {
     [deployer, admin, stakingRouterAdmin, user] = await ethers.getSigners();
@@ -55,14 +54,27 @@ describe("StakingRouter.sol:misc", () => {
 
   context("initialize", () => {
     it("Reverts if admin is zero address", async () => {
-      await expect(stakingRouter.initialize(ZeroAddress, withdrawalCredentials)).to.be.revertedWithCustomError(
-        stakingRouter,
-        "ZeroAddress",
-      );
+      await expect(
+        stakingRouter.initialize(ZeroAddress, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI),
+      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddress");
+    });
+
+    it("reverts when maxTopUpPerBlockGwei is zero", async () => {
+      await expect(
+        stakingRouter.initialize(stakingRouterAdmin.address, withdrawalCredentials, 0n),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMaxTopUpPerBlockGwei");
+    });
+
+    it("reverts when maxTopUpPerBlockGwei exceeds uint64", async () => {
+      await expect(
+        stakingRouter.initialize(stakingRouterAdmin.address, withdrawalCredentials, 2n ** 64n),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMaxTopUpPerBlockGwei");
     });
 
     it("Initializes the contract version, sets up roles and variables", async () => {
-      await expect(stakingRouter.initialize(stakingRouterAdmin.address, withdrawalCredentials))
+      await expect(
+        stakingRouter.initialize(stakingRouterAdmin.address, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI),
+      )
         .to.emit(stakingRouter, "Initialized")
         .withArgs(4)
         .and.to.emit(stakingRouter, "RoleGranted")
@@ -73,6 +85,7 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.getContractVersion()).to.equal(4);
       expect(await stakingRouter.LIDO_LOCATOR()).to.equal(locator);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
+      expect(await stakingRouter.getMaxTopUpPerBlockGwei()).to.equal(MAX_TOP_UP_PER_BLOCK_GWEI);
 
       // fails with InvalidInitialization error when called after initialize
       await expect(stakingRouter.finalizeUpgrade_v4(MAX_TOP_UP_PER_BLOCK_GWEI)).to.be.revertedWithCustomError(

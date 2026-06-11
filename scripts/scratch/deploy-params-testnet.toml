@@ -92,7 +92,7 @@ epochsPerFrame = 4                    # Epochs per consensus frame
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
 maxValidatorsPerReport = 600         # Maximum validators per request
-maxExitBalanceEth = 416000
+maxExitBalanceEth = 358400
 balancePerFrameEth = 32
 frameDurationInSec = 48               # Frame duration in seconds
 consensusVersion = 5                  # Consensus version
@@ -227,3 +227,6 @@ pivotSlot = 0                         # Pivot slot for fork-aware gIndex selecti
 maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
 maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2
 maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-up cap
+
+[lido]
+depositsReserveTarget = "1500000000000000000000" # 1500 ETH

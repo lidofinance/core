@@ -12,6 +12,11 @@ import {ModuleStateConfig, StakingModuleConfig} from "contracts/0.8.25/sr/SRType
 // Interfaces
 // ============================
 
+interface IDualGovernance {
+    function getResealCommittee() external view returns (address);
+    function getResealManager() external view returns (address);
+}
+
 interface IAragonKernel {
     function acl() external view returns (address); //IAragonACL
     function getApp(bytes32 _namespace, bytes32 _appId) external view returns (address);
@@ -31,12 +36,6 @@ interface IAragonACL {
 interface IAragonApp {
     function kernel() external view returns (address); //IAragonKernel
     function appId() external view returns (bytes32);
-}
-
-interface ITimeConstraints {
-    function checkTimeAfterTimestampAndEmit(uint40 timestamp) external;
-    function checkTimeBeforeTimestampAndEmit(uint40 timestamp) external;
-    function checkTimeWithinDayTimeAndEmit(uint32 startDayTime, uint32 endDayTime) external;
 }
 
 interface IBaseOracle is IAccessControlEnumerableV4, IVersioned {
@@ -117,7 +116,7 @@ interface IOneShotCurveSetup {
 
 interface ILidoUpgrade is ILido {
     function getBufferedEther() external view returns (uint256);
-    function finalizeUpgrade_v4() external;
+    function finalizeUpgrade_v4(uint256 _depositsReserveTarget) external;
 }
 
 interface IAccountingOracleUpgrade is IBaseOracle {
@@ -257,7 +256,6 @@ struct UpgradeParameters {
     address agent;
     address voting;
     address dualGovernance;
-    address resealManager;
     address circuitBreaker;
     address easyTrack;
 
@@ -320,9 +318,8 @@ struct CoreUpgradeParams {
 
     // params
     uint256 lidoDepositsReserveTarget;
-    address curatedModuleCommittee;
+    address consolidationCommittee;
     address topUpGatewayDepositor;
-    address consolidationGatewayPauser;
 
     // twGateway limits
     uint256 twMaxExitRequestsLimit;
@@ -391,6 +388,7 @@ struct GlobalConfig {
     address lido;
     address burner;
     address resealManager;
+    address resealCommittee;
     address circuitBreaker;
     address easyTrack;
     address easyTrackEVMScriptExecutor;
@@ -438,9 +436,8 @@ struct CoreUpgradeConfig {
     address topUpGateway;
 
     uint256 lidoDepositsReserveTarget;
-    address curatedModuleCommittee;
+    address consolidationCommittee;
     address topUpGatewayDepositor;
-    address consolidationGatewayPauser;
 
     uint256 twMaxExitRequestsLimit;
     uint256 twExitsPerFrame;

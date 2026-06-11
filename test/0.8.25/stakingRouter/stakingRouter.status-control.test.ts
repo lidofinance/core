@@ -5,12 +5,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, randomWCType1, WithdrawalCredentialsType } from "lib";
+import { certainAddress, MAX_TOP_UP_PER_BLOCK_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter";
+
 enum Status {
   Active,
   DepositsPaused,
@@ -45,7 +46,7 @@ context("StakingRouter.sol:status-control", () => {
     // deploy staking router
     ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
 
-    await stakingRouter.initialize(admin, withdrawalCredentials);
+    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
 
     // give the necessary role to the admin
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);
