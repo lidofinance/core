@@ -652,11 +652,6 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
             _getModuleDepositAllocation(_stakingModuleId, _maxDepositsValue, false) / MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
     }
 
-    function canDeposit(uint256 _stakingModuleId) external view returns (bool) {
-        return hasStakingModule(_stakingModuleId)
-            && _stakingModuleId.getModuleState().config.status == StakingModuleStatus.Active;
-    }
-
     /**
      * @notice A payable function for depositable eth acquisition. Can be called only by `Lido`
      */

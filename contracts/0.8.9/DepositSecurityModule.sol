@@ -18,7 +18,6 @@ interface IStakingRouter {
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
-    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
     function decreaseStakingModuleVettedKeysCountByNodeOperator(
         uint256 _stakingModuleId,
         bytes calldata _nodeOperatorIds,
@@ -398,36 +397,6 @@ contract DepositSecurityModule {
         if (!isDepositsPaused) revert DepositsNotPaused();
         isDepositsPaused = false;
         emit DepositsUnpaused();
-    }
-
-    /**
-     * @notice Returns whether STAKING_ROUTER.deposit() can be called, given that the caller
-     * will provide guardian attestations of a non-stale deposit root and nonce,
-     * the number of such attestations is enough to reach the quorum,
-     * and the deposit count for the module is greater than zero.
-     *
-     * @param stakingModuleId The ID of the staking module.
-     * @return canDeposit Whether a deposit can be made.
-     * @dev Returns true if all of the following conditions are met:
-     *   - deposits are not paused;
-     *   - the staking module is active;
-     *   - the guardian quorum is set and reachable;
-     *   - the deposit distance is greater than the minimum required;
-     *   - LIDO.canDeposit() returns true;
-     *   - STAKING_ROUTER.canDeposit() returns true.
-     * @dev This method is intended for off-chain tooling to check security conditions
-     * such as protocol pauses. However, to confirm that a deposit can actually be
-     * performed for the module, off-chain services should additionally verify that
-     * LIDO.getDepositableEther() and the module's allocation are both non-zero.
-     */
-    function canDeposit(uint256 stakingModuleId) external view returns (bool) {
-        if (!STAKING_ROUTER.canDeposit(stakingModuleId)) return false;
-
-        bool isDepositDistancePassed = _isMinDepositDistancePassed(stakingModuleId);
-        bool isLidoCanDeposit = LIDO.canDeposit();
-        bool isQuorumReachable = quorum > 0 && quorum <= guardians.length;
-
-        return (!isDepositsPaused && isQuorumReachable && isDepositDistancePassed && isLidoCanDeposit);
     }
 
     /**
