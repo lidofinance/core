@@ -1,5 +1,3 @@
-import { ethers } from "hardhat";
-
 import { impersonate } from "lib";
 
 import { ensurePredeployedBytecode } from "./predeploy";
@@ -18,10 +16,6 @@ export const BEACON_ROOTS_ADDRESS = "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02"
 // Source: https://eips.ethereum.org/EIPS/eip-4788 ("Bytecode" section).
 const EIP4788_RUNTIME_BYTECODE =
   "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500";
-
-export const deployEIP4788BeaconBlockRootContract = async (): Promise<void> => {
-  await ethers.provider.send("hardhat_setCode", [BEACON_ROOTS_ADDRESS, EIP4788_RUNTIME_BYTECODE]);
-};
 
 export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
   const beaconRootUpdater = await impersonate(

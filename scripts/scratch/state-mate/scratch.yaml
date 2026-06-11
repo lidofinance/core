@@ -49,9 +49,9 @@ misc:
   # holds (NodeOperatorsRegistry v4 deprecated the stuck penalty delay).
   - &unconsumedDeployInputs [*lidoApmEnsName, *norStuckPenaltyDelay, *sdvtStuckPenaltyDelay]
 
-  # HashConsensus initialEpoch right after scratch deploy: "far future epoch"
-  # derived from genesisTime: (2^64 - 1 - genesisTime) / (secondsPerSlot * slotsPerEpoch)
-  - &HC_FAR_FUTURE_INITIAL_EPOCH 48038396021015343
+  # HC_FAR_FUTURE_INITIAL_EPOCH (HashConsensus initialEpoch right after scratch
+  # deploy) is genesis-time-dependent, so it is computed per deploy by
+  # prepare-state-mate-check.ts and anchored in the generated .inputs sibling.
 
 roles:
   - &DEFAULT_ADMIN_ROLE "0x0000000000000000000000000000000000000000000000000000000000000000"

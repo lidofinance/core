@@ -7,11 +7,11 @@ import { readScratchParameters, ScratchParameters, scratchParametersToDeployment
 
 import { isDGDeploymentEnabled, isResumeEnabled } from "lib/env-flags";
 import { log } from "lib/log";
+import { SEPOLIA_CHAIN_ID } from "lib/protocol/sepolia";
 import { networkStateFileExists, readNetworkState } from "lib/state-file";
 
 import { assertNoDevCommitteesOnPublicChain, DG_SUBMODULE_DIR, resolveDgForgeRpcUrl } from "./dg-checks";
 
-const SEPOLIA_CHAIN_ID = 11155111;
 const SEPOLIA_GENESIS_FORK_VERSION = "0x90000069";
 
 // State file paths that step 0000 legitimately overrides from env vars after the

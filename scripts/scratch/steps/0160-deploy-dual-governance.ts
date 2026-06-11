@@ -47,7 +47,7 @@ export async function main() {
   const lidoTemplate = await loadContract<LidoTemplate>("LidoTemplate", getAddress(Sk.lidoTemplate, state));
 
   if (!isDGDeploymentEnabled()) {
-    await finalizeWithoutDG(deployer, agentAddress, lidoTemplate);
+    await finalizeWithoutDG(deployer, agentAddress, lidoTemplate, state);
     return;
   }
 
@@ -99,8 +99,10 @@ async function finalizeWithoutDG(
   deployer: string,
   agentAddress: string,
   lidoTemplate: LoadedContract<LidoTemplate>,
+  state: ReturnType<typeof readNetworkState>,
 ): Promise<void> {
   log("DG deployment disabled — finalizing without Dual Governance");
+  await renounceSealableAdminDeferredFor0160(deployer, state);
   // The owner==Agent short-circuit lives in setTemplateOwnerToAgent; once the
   // template is owned by Agent, finalize has necessarily already run (it is
   // onlyOwner and precedes setOwner), so skipping both together is correct.
@@ -109,6 +111,39 @@ async function finalizeWithoutDG(
     await makeTx(lidoTemplate, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
   }
   await setTemplateOwnerToAgent(deployer, agentAddress, lidoTemplate);
+}
+
+// When DG is enabled at 0150-time, that step defers the deployer's
+// DEFAULT_ADMIN_ROLE renounce on WQ/VEBO to 0160's DG path (which needs the
+// role to wire ResealManager). If DG_DEPLOYMENT_ENABLED is then flipped off
+// before a resumed 0160, that DG path never runs — so the no-DG finalize must
+// catch up on the renounce, or the deploy ends with the deployer still
+// holding admin on both sealables.
+async function renounceSealableAdminDeferredFor0160(
+  deployer: string,
+  state: ReturnType<typeof readNetworkState>,
+): Promise<void> {
+  const wq = await loadContract<WithdrawalQueueERC721>(
+    "WithdrawalQueueERC721",
+    getAddress(Sk.withdrawalQueueERC721, state),
+  );
+  const vebo = await loadContract<ValidatorsExitBusOracle>(
+    "ValidatorsExitBusOracle",
+    getAddress(Sk.validatorsExitBusOracle, state),
+  );
+
+  for (const [label, c] of [
+    ["WithdrawalQueueERC721", wq],
+    ["ValidatorsExitBusOracle", vebo],
+  ] as const) {
+    if (await c.hasRole(DEFAULT_ADMIN_ROLE, deployer)) {
+      log.warning(
+        `${label}: deployer still holds DEFAULT_ADMIN_ROLE (deferred by 0150 while DG was enabled); renouncing. ` +
+          `Note the sealables may also have been unpaused by 0145 — review whether that matches the intended no-DG state.`,
+      );
+      await makeTx(c, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+    }
+  }
 }
 
 // Hand LidoTemplate ownership to Agent — the single "method" (A.15) shared by

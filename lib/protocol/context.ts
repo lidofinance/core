@@ -3,6 +3,7 @@ import hre from "hardhat";
 import { getMode } from "hardhat.helpers";
 
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
+import { isTruthyEnv } from "lib/env-flags";
 
 import { discover } from "./discover";
 import { MAINNET_LOCATOR_ADDRESS } from "./mainnet";
@@ -23,8 +24,7 @@ export const withCSM = () => {
 // provisioning a MODE=scratch run does so the fork is fully operational. Set by
 // dao-local-deploy.sh / dao-sepolia-fork-deploy.sh; leave unset for real
 // testnet forks, which are already operational.
-const PROVISION_ON_FORK_VALUES = new Set(["1", "true", "yes", "on"]);
-const provisionOnFork = () => PROVISION_ON_FORK_VALUES.has((process.env.PROVISION_ON_FORK ?? "").trim().toLowerCase());
+const provisionOnFork = () => isTruthyEnv("PROVISION_ON_FORK");
 
 export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
   const { operatorGrid } = ctx.contracts;

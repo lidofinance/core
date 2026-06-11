@@ -40,11 +40,22 @@ yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
 # Functional post-deploy checks live in the integration suite (see docs/testing.md).
 if [[ "${STATE_MATE_CHECK:-on}" != "off" ]]; then
   state_file="${NETWORK_STATE_FILE:-deployed-${NETWORK}.json}"
-  if [[ -z "${LOCAL_RPC_URL:-}${RPC_URL:-}" ]]; then
-    echo "Error: the state-mate check needs LOCAL_RPC_URL or RPC_URL to be set (or set STATE_MATE_CHECK=off to skip it)"
+  # Resolve the RPC the same way hardhat.config.ts resolves $NETWORK, so the
+  # check runs against the chain the deploy actually went to (a deploy driven
+  # by e.g. HOODI_RPC_URL must not be checked through a stale RPC_URL).
+  case "$NETWORK" in
+    hoodi | hoodi-fork) state_mate_rpc="${HOODI_RPC_URL:-${RPC_URL:-}}" ;;
+    sepolia | sepolia-fork) state_mate_rpc="${SEPOLIA_RPC_URL:-${RPC_URL:-}}" ;;
+    mainnet-fork) state_mate_rpc="${MAINNET_RPC_URL:-${RPC_URL:-}}" ;;
+    local | local-devnet) state_mate_rpc="${LOCAL_RPC_URL:-${RPC_URL:-}}" ;;
+    *) state_mate_rpc="${RPC_URL:-}" ;;
+  esac
+  if [[ -z "$state_mate_rpc" ]]; then
+    echo "Error: the state-mate check cannot resolve an RPC URL for NETWORK=$NETWORK (set STATE_MATE_CHECK=off to skip it)"
     exit 1
   fi
-  export LOCAL_RPC_URL="${LOCAL_RPC_URL:-$RPC_URL}"
+  # scratch.yaml reads the RPC from the LOCAL_RPC_URL env var
+  export LOCAL_RPC_URL="$state_mate_rpc"
   [[ -d foundry/lib/state-mate/node_modules ]] || (cd foundry/lib/state-mate && yarn install --immutable)
   NETWORK_STATE_FILE="$state_file" yarn ts-node scripts/scratch/state-mate/prepare-state-mate-check.ts
   state_mate_args=()

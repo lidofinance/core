@@ -68,7 +68,6 @@ const SINGLES: Record<string, string> = {
   "callsScript": "callsScript",
   "daoFactory": "daoFactory",
   "dashboardImpl": "dashboardImplAddress",
-  "depositContract": "depositContract",
   "depositSecurityModule": "depositSecurityModule",
   "dummyEmptyContract": "dummyEmptyContract",
   "eip712StETH": "eip712StETH",
@@ -111,6 +110,12 @@ const DG_SINGLES: Record<string, string> = {
 
 const DG_TIEBREAKER_SUB_COMMITTEES_COUNT = 3; // referenced as tiebreakerSubCommittee0..2 in scratch.yaml
 
+// Handled explicitly in buildDeployedYaml rather than via the tables above:
+// on Sepolia (chainId 11155111) step 0010 deploys SepoliaDepositAdapter
+// (stored under "sepoliaDepositAdapter") instead of a plain DepositContract,
+// and the effective deposit contract address lives in chainSpec.depositContract.
+const EXPLICITLY_HANDLED_KEYS = ["depositContract", "sepoliaDepositAdapter"];
+
 // State file keys that intentionally have no address anchors (params, tx hashes, metadata)
 const IGNORED_KEYS = new Set([
   "aragonEnsLabelName",
@@ -140,7 +145,7 @@ interface StateFile {
 }
 
 function quote(value: unknown): string {
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
   return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
@@ -181,6 +186,16 @@ function buildDeployedYaml(state: StateFile): { yaml: string; dgDeployed: boolea
     l1.push([label, addressOf(get(state, key), "implementation", key)]);
   for (const [key, label] of Object.entries(SINGLES)) l1.push([label, addressOf(get(state, key), "", key)]);
 
+  // On Sepolia, step 0010 deploys SepoliaDepositAdapter instead of DepositContract
+  // and there is no top-level "depositContract" key (likewise when DEPOSIT_CONTRACT
+  // is preset via env); either way the effective address is recorded in chainSpec.
+  const chainSpecDeposit = (get(state, "chainSpec") as { depositContract?: unknown }).depositContract;
+  const depositContract = (state["depositContract"] as { address?: unknown } | undefined)?.address ?? chainSpecDeposit;
+  if (typeof depositContract !== "string" || !depositContract.startsWith("0x")) {
+    die(`cannot resolve the deposit contract address from "depositContract" or "chainSpec.depositContract"`);
+  }
+  l1.push(["depositContract", depositContract]);
+
   const dgDeployed = typeof state["dg:dualGovernance"] === "object" && state["dg:dualGovernance"] !== null;
   const dg: [string, string][] = [];
   for (const [key, label] of Object.entries(DG_SINGLES)) {
@@ -214,6 +229,13 @@ function buildInputsYaml(state: StateFile): string {
   const withdrawalVault = addressOf(get(state, "withdrawalVault"), "proxy", "withdrawalVault");
   const withdrawalCredentials = `0x01${"0".repeat(22)}${withdrawalVault.slice(2).toLowerCase()}`;
 
+  // HashConsensus initialEpoch right after scratch deploy: "far future epoch"
+  // derived from genesisTime: (2^64 - 1 - genesisTime) / (secondsPerSlot * slotsPerEpoch).
+  // Genesis-time-dependent, so it must be computed per deploy, not hardcoded.
+  const hcFarFutureInitialEpoch =
+    (2n ** 64n - 1n - BigInt(String(chainSpec.genesisTime))) /
+    (BigInt(String(chainSpec.secondsPerSlot)) * BigInt(String(chainSpec.slotsPerEpoch)));
+
   const config: [string, unknown][] = [
     ["daoTokenName", token.name],
     ["daoTokenSymbol", token.symbol],
@@ -230,6 +252,7 @@ function buildInputsYaml(state: StateFile): string {
     ["slotsPerEpoch", chainSpec.slotsPerEpoch],
     ["secondsPerSlot", chainSpec.secondsPerSlot],
     ["lidoWithdrawalCredentials", withdrawalCredentials],
+    ["HC_FAR_FUTURE_INITIAL_EPOCH", hcFarFutureInitialEpoch],
   ];
   const externals: [string, unknown][] = [
     ["chainId", state["chainId"]],
@@ -249,6 +272,7 @@ function checkAllStateKeysCovered(state: StateFile) {
     ...Object.keys(IMPL_ONLY),
     ...Object.keys(SINGLES),
     ...Object.keys(DG_SINGLES),
+    ...EXPLICITLY_HANDLED_KEYS,
     ...IGNORED_KEYS,
   ]);
   const unknown = Object.keys(state).filter((key) => !known.has(key));

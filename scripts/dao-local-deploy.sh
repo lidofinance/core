@@ -2,8 +2,12 @@
 set -e +u
 set -o pipefail
 
-# Scratch-deploy the protocol to a local node (anvil/hardhat) on RPC_URL, then
-# run the acceptance/integration suite against the freshly deployed instance.
+# Scratch-deploy the protocol to a local node on RPC_URL, then run the
+# acceptance/integration suite against the freshly deployed instance.
+# The deploy phase works on anvil or hardhat node, but the test phase forks the
+# node in-process ("fork of a fork"), which is reliable on ANVIL ONLY — with a
+# hardhat-node backend run `yarn test:integration:fork:local` instead (see
+# docs/external-node-test-compat.md).
 #
 # Output mode: by default this SELF-LOGS — the full combined deploy + test
 # output is written to $LOG_FILE (default logs/scratch-deploy.log) while only

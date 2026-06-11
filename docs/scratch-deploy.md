@@ -72,8 +72,10 @@ needs:
 
 The repository contains bash scripts for deploying the DAO across various environments:
 
-- Local Node Deployment - `scripts/dao-local-deploy.sh` (Supports Ganache, Anvil, Hardhat Network, and other local
-  Ethereum nodes)
+- Local Node Deployment - `scripts/dao-local-deploy.sh` (the deploy phase supports Anvil, Hardhat Network, and other
+  local Ethereum nodes, but the final test phase forks the node in-process — a "fork of a fork" that is reliable on
+  Anvil only, see [external-node-test-compat.md](external-node-test-compat.md); with a `hardhat node` backend run the
+  suite via `yarn test:integration:fork:local` instead)
 
 The protocol requires configuration of numerous parameters for a scratch deployment. These live in a TOML
 deploy-params file — by default `scripts/scratch/deploy-params-testnet.toml` (override with the
@@ -206,6 +208,12 @@ anvil -p 8555 --mnemonic "test test test test test test test test test test test
 ```shell
 yarn hardhat node
 ```
+
+> [!WARNING]
+> A `hardhat node` backend works for the deploy phase only. The script's final test phase (`yarn test:integration`,
+> MODE=forking) forks the node in-process, and that "fork of a fork" breaks against a hardhat node (pending-block
+> `"nonce": null` on `evm_revert`, see [external-node-test-compat.md](external-node-test-compat.md)). Either use Anvil,
+> or run the suite against the hardhat node directly with `yarn test:integration:fork:local`.
 
 ### Testnet Deployment
 

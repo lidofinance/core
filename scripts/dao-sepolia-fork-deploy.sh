@@ -72,4 +72,9 @@ export INTEGRATION_WITH_CSM="off"
 # in-process fork provisions itself (oracle committee, hash-consensus initial
 # epoch, unpause, seed TVL) — the same setup a MODE=scratch run does in-process.
 export PROVISION_ON_FORK=1
+# The in-process hardhat network does NOT inherit the forked chain's chainId
+# (defaults to 31337) — set it explicitly so the Sepolia-only code paths
+# (SepoliaDepositAdapter funding, variable-deposit-amount test skips) key off
+# 11155111 exactly as they do against the anvil fork itself.
+export HARDHAT_CHAIN_ID=11155111
 yarn test:integration   # MODE=forking: in-process fork of $RPC_URL, deployment from $NETWORK_STATE_FILE

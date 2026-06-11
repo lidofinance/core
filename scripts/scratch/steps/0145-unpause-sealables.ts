@@ -35,11 +35,18 @@ export async function main() {
     ["WithdrawalQueueERC721", wq],
     ["ValidatorsExitBusOracle", vebo],
   ] as const) {
+    const resumeRole = await c.RESUME_ROLE();
     if (!(await c.isPaused())) {
-      log(`Sealable ${cy(await c.getAddress())} (${label}) is not paused, skipping`);
+      // A previous run may have died between resume() and renounceRole() —
+      // don't let the deployer keep RESUME_ROLE just because the unpause is done.
+      if (await c.hasRole(resumeRole, deployer)) {
+        log(`Sealable ${cy(await c.getAddress())} (${label}) is not paused, renouncing leftover RESUME_ROLE`);
+        await makeTx(c, "renounceRole", [resumeRole, deployer], { from: deployer });
+      } else {
+        log(`Sealable ${cy(await c.getAddress())} (${label}) is not paused, skipping`);
+      }
       continue;
     }
-    const resumeRole = await c.RESUME_ROLE();
     await makeTx(c, "grantRole", [resumeRole, deployer], { from: deployer });
     await makeTx(c, "resume", [], { from: deployer });
     await makeTx(c, "renounceRole", [resumeRole, deployer], { from: deployer });

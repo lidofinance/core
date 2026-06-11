@@ -13,16 +13,18 @@ import { log } from "lib/log";
 export const DG_SUBMODULE_DIR = path.resolve(__dirname, "../../foundry/lib/dual-governance");
 
 // Forge must broadcast against the same node the JS side is deploying to.
-// That is the *hardhat network's* URL, not the raw RPC_URL env var: in the
-// MODE=scratch integration phase `--network local` resolves to
-// LOCAL_RPC_URL while a dotenv-loaded RPC_URL may point at a remote
-// provider (exactly the CI layout, where .env carries the public default).
+// That is the *hardhat network's* URL, never the raw RPC_URL env var: a
+// dotenv-loaded RPC_URL may point at an unrelated remote provider (exactly
+// the CI layout, where .env carries the public default), and the only
+// network without a url is the in-process one, which forge cannot reach at
+// all — so there is deliberately no RPC_URL fallback here.
 export function resolveDgForgeRpcUrl(): string {
-  const rpcUrl = (network.config as { url?: string }).url || process.env.RPC_URL;
+  const rpcUrl = (network.config as { url?: string }).url;
   if (!rpcUrl) {
     throw new Error(
       "Cannot resolve an RPC URL for the DG forge script: the selected hardhat network has no `url` " +
-        "(in-process network?) and RPC_URL is not set. Run scratch deploy against an external node.",
+        "(in-process network?), and forge cannot broadcast to an in-process EVM. Run the scratch deploy " +
+        "against an external node, or set DG_DEPLOYMENT_ENABLED=false to skip DG.",
     );
   }
   return rpcUrl;
