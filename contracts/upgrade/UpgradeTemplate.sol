@@ -366,7 +366,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertZeroOZRoleHolders(consBus, MANAGE_ROLE);
             _assertZeroOZRoleHolders(consBus, REMOVE_ROLE);
 
-            if (IConsolidationBus(consBus).CONSOLIDATION_GATEWAY() != consGw) {
+            if (IConsolidationBus(consBus).getConsolidationGateway() != consGw) {
                 revert InvalidConsolidationGatewayAddressInConsolidationBus();
             }
 
@@ -375,7 +375,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertSingleOZRoleHolder(consMigrator, DEFAULT_ADMIN_ROLE, agent);
             _assertSingleOZRoleHolder(consMigrator, ALLOW_PAIR_ROLE, g.easyTrackEVMScriptExecutor);
             _assertSingleOZRoleHolder(consMigrator, DISALLOW_PAIR_ROLE, c.curatedModuleCommittee);
-            if (IConsolidationMigrator(consMigrator).CONSOLIDATION_BUS() != consBus) {
+            if (IConsolidationMigrator(consMigrator).getConsolidationBus() != consBus) {
                 revert InvalidConsolidationBusAddressInConsolidationMigrator();
             }
             /// @note correctness of TARGET_MODULE_ID is checked inside the SR migration checks
