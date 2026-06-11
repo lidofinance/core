@@ -207,7 +207,6 @@ export async function main() {
   if (depositSecurityModuleAddress === null) {
     depositSecurityModuleAddress = (
       await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
-        lidoAddress,
         depositContract,
         stakingRouter_.address,
         depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,

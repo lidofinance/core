@@ -149,7 +149,6 @@ export async function main() {
       chainSpec.slotsPerEpoch,
     ],
     DepositSecurityModule: [
-      lidoAddress,
       depositContractAddress,
       stakingRouterAddress,
       parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,

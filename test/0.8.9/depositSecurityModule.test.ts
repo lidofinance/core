@@ -19,7 +19,6 @@ import { mineUpTo, setBalance, time } from "@nomicfoundation/hardhat-network-hel
 import {
   DepositContract__MockForDepositSecurityModule,
   DepositSecurityModule,
-  Lido__MockForDepositSecurityModule,
   StakingRouter__MockForDepositSecurityModule,
 } from "typechain-types";
 
@@ -27,7 +26,6 @@ import { certainAddress, DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage, eth
 
 import { Snapshot } from "test/suite";
 
-const UNREGISTERED_STAKING_MODULE_ID = 1;
 const STAKING_MODULE_ID = 100;
 const MAX_DEPOSITS_PER_BLOCK = 100;
 // const MAX_DEPOSITS_AMOUNT_PER_BLOCK_WEI = BigInt(MAX_DEPOSITS_PER_BLOCK) * parseEther("32");
@@ -38,15 +36,7 @@ const MODULE_NONCE = 12;
 const DEPOSIT_ROOT = "0xd151867719c94ad8458feaf491809f9bc8096c702a72747403ecaac30c179137";
 const DSM_VERSION = 4;
 
-// status enum
-const StakingModuleStatus = {
-  Active: 0, // deposits and rewards allowed
-  DepositsPaused: 1, // deposits NOT allowed, rewards allowed
-  Stopped: 2, // deposits and rewards NOT allowed
-};
-
 type Params = {
-  lido: string;
   depositContract: string;
   stakingRouter: string;
   pauseIntentValidityPeriodBlocks: number;
@@ -61,7 +51,6 @@ type Block = {
 
 function initialParams(): Params {
   return {
-    lido: "",
     depositContract: "",
     stakingRouter: "",
     pauseIntentValidityPeriodBlocks: PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS,
@@ -73,7 +62,7 @@ describe("DepositSecurityModule.sol", () => {
   const config = initialParams();
 
   let dsm: DepositSecurityModule;
-  let lido: Lido__MockForDepositSecurityModule;
+
   let stakingRouter: StakingRouter__MockForDepositSecurityModule;
   let depositContract: DepositContract__MockForDepositSecurityModule;
 
@@ -150,11 +139,9 @@ describe("DepositSecurityModule.sol", () => {
     await setBalance(unrelatedGuardian1.address, ether("100"));
     await setBalance(unrelatedGuardian2.address, ether("100"));
 
-    lido = await ethers.deployContract("Lido__MockForDepositSecurityModule");
     stakingRouter = await ethers.deployContract("StakingRouter__MockForDepositSecurityModule", [STAKING_MODULE_ID]);
     depositContract = await ethers.deployContract("DepositContract__MockForDepositSecurityModule");
 
-    config.lido = await lido.getAddress();
     config.stakingRouter = await stakingRouter.getAddress();
     config.depositContract = await depositContract.getAddress();
 
@@ -187,15 +174,6 @@ describe("DepositSecurityModule.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    it("Reverts if the `lido` is zero address", async () => {
-      const cfg = { ...config };
-      cfg.lido = ZeroAddress;
-      await expect(ethers.deployContract("DepositSecurityModule", Object.values(cfg))).to.be.revertedWithCustomError(
-        dsm,
-        "ZeroAddress",
-      );
-    });
-
     it("Reverts if the `depositContract` is zero address", async () => {
       const cfg = { ...config };
       cfg.depositContract = ZeroAddress;
@@ -269,10 +247,6 @@ describe("DepositSecurityModule.sol", () => {
       );
 
       expect(await dsm.UNVET_MESSAGE_PREFIX()).to.equal(encodedPauseMessagePrefix);
-    });
-
-    it("Returns the LIDO address", async () => {
-      expect(await dsm.LIDO()).to.equal(config.lido);
     });
 
     it("Returns the STAKING_ROUTER address", async () => {
@@ -824,122 +798,6 @@ describe("DepositSecurityModule.sol", () => {
       const tx = await dsm.unpauseDeposits();
       await expect(tx).to.emit(dsm, "DepositsUnpaused").withArgs();
       await expect(dsm.unpauseDeposits()).to.be.revertedWithCustomError(dsm, "DepositsNotPaused");
-    });
-  });
-
-  context("Function `canDeposit`", () => {
-    let originalContextState: string;
-
-    beforeEach(async () => {
-      originalContextState = await Snapshot.take();
-
-      await dsm.addGuardian(guardian1, 1);
-      const lastDepositBlockNumber = await time.latestBlock();
-      await stakingRouter.setStakingModuleLastDepositBlock(lastDepositBlockNumber);
-      await mineUpTo((await time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
-    });
-
-    afterEach(async () => {
-      await Snapshot.restore(originalContextState);
-    });
-
-    it("Returns `false` if staking module is unregistered in StakingRouter", async () => {
-      expect(await dsm.canDeposit(UNREGISTERED_STAKING_MODULE_ID)).to.equal(false);
-    });
-
-    it("Returns `true` if: \n\t\t1) Deposits is not paused \n\t\t2) Module is active \n\t\t3) DSM quorum > 0 \n\t\t4) Min deposit block distance is passed \n\t\t5) Lido.canDeposit() is true", async () => {
-      const dsmLastDepositBlock = await dsm.getLastDepositBlock();
-      const moduleLastDepositBlock = await stakingRouter.getStakingModuleLastDepositBlock(STAKING_MODULE_ID);
-      const minDepositBlockDistance = await stakingRouter.getStakingModuleMinDepositBlockDistance(STAKING_MODULE_ID);
-      const currentBlockNumber = await time.latestBlock();
-      const maxLastDepositBlock = Math.max(Number(dsmLastDepositBlock), Number(moduleLastDepositBlock));
-
-      expect(await dsm.isDepositsPaused()).to.equal(false);
-      expect(await stakingRouter.getStakingModuleIsActive(STAKING_MODULE_ID)).to.equal(true);
-      expect(await dsm.getGuardianQuorum()).to.equal(1);
-      expect(currentBlockNumber - maxLastDepositBlock >= minDepositBlockDistance).to.equal(true);
-      expect(await lido.canDeposit()).to.equal(true);
-
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(true);
-    });
-
-    it("Returns `false` if deposits paused", async () => {
-      const blockNumber = await time.latestBlock();
-      const sig: DepositSecurityModule.SignatureStruct = {
-        r: encodeBytes32String(""),
-        vs: encodeBytes32String(""),
-      };
-
-      await dsm.connect(guardian1).pauseDeposits(blockNumber, sig);
-      expect(await dsm.isDepositsPaused()).to.equal(true);
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
-    });
-
-    it("Returns `false` if module is paused", async () => {
-      await stakingRouter.setStakingModuleStatus(STAKING_MODULE_ID, StakingModuleStatus.DepositsPaused);
-      expect(await stakingRouter.getStakingModuleIsActive(STAKING_MODULE_ID)).to.equal(false);
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
-    });
-
-    it("Returns `false` if module is stopped", async () => {
-      await stakingRouter.setStakingModuleStatus(STAKING_MODULE_ID, StakingModuleStatus.Stopped);
-      expect(await stakingRouter.getStakingModuleIsActive(STAKING_MODULE_ID)).to.equal(false);
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
-    });
-
-    it("Returns `false` if quorum is 0", async () => {
-      await dsm.setGuardianQuorum(0);
-      expect(await dsm.getGuardianQuorum()).to.equal(0);
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
-    });
-
-    it("Returns `false` if quorum is greater than guardians length", async () => {
-      const guardiansCount = (await dsm.getGuardians()).length;
-      expect(guardiansCount).to.greaterThan(0);
-
-      await dsm.setGuardianQuorum(guardiansCount + 1);
-      expect(await dsm.getGuardianQuorum()).to.equal(guardiansCount + 1);
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
-    });
-
-    it("Returns `false` if min deposit block distance is not passed and dsm.lastDepositBlock < module.lastDepositBlock", async () => {
-      const moduleLastDepositBlock = await time.latestBlock();
-      const dsmLastDepositBlock = Number(await dsm.getLastDepositBlock());
-
-      await stakingRouter.setStakingModuleLastDepositBlock(moduleLastDepositBlock);
-      await mineUpTo((await time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE / 2);
-
-      const minDepositBlockDistance = await stakingRouter.getStakingModuleMinDepositBlockDistance(STAKING_MODULE_ID);
-      const currentBlockNumber = await time.latestBlock();
-
-      expect(dsmLastDepositBlock < moduleLastDepositBlock).to.equal(true);
-      expect(currentBlockNumber - dsmLastDepositBlock >= minDepositBlockDistance).to.equal(true);
-      expect(currentBlockNumber - moduleLastDepositBlock < minDepositBlockDistance).to.equal(true);
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
-    });
-
-    it("Returns `false` if min deposit block distance is not passed and dsm.lastDepositBlock > module.lastDepositBlock", async () => {
-      await mineUpTo((await time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
-      await deposit([guardian1]);
-
-      const dsmLastDepositBlock = Number(await dsm.getLastDepositBlock());
-      const moduleLastDepositBlock = dsmLastDepositBlock - MIN_DEPOSIT_BLOCK_DISTANCE;
-      await stakingRouter.setStakingModuleLastDepositBlock(moduleLastDepositBlock);
-
-      const minDepositBlockDistance = await stakingRouter.getStakingModuleMinDepositBlockDistance(STAKING_MODULE_ID);
-      const currentBlockNumber = await time.latestBlock();
-
-      expect(dsmLastDepositBlock > moduleLastDepositBlock).to.equal(true);
-      expect(currentBlockNumber - dsmLastDepositBlock < minDepositBlockDistance).to.equal(true);
-      expect(currentBlockNumber - moduleLastDepositBlock >= minDepositBlockDistance).to.equal(true);
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
-    });
-
-    it("Returns `false` if Lido.canDeposit() is false", async () => {
-      await lido.setCanDeposit(false);
-
-      expect(await lido.canDeposit()).to.equal(false);
-      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
     });
   });
 
