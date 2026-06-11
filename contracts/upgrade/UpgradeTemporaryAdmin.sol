@@ -46,7 +46,7 @@ contract UpgradeTemporaryAdmin {
         address _resealManager,
         address _circuitBreaker,
         address _consolidationMigrator,
-        address _consolidationMigratorCommittee,
+        address _consolidationCommittee,
         address _consolidationBus,
         address _topUpGatewayDepositor,
         address _oldDepositSecurityModule
@@ -64,8 +64,8 @@ contract UpgradeTemporaryAdmin {
         address depositSecurityModule = locator.depositSecurityModule();
 
         _setupDSM(depositSecurityModule, _oldDepositSecurityModule);
-        _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationMigratorCommittee);
-        _setupConsolidationBus(_consolidationBus, _consolidationMigrator, _consolidationMigratorCommittee);
+        _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationCommittee);
+        _setupConsolidationBus(_consolidationBus, _consolidationMigrator, _consolidationCommittee);
         _setupConsolidationGateway(consolidationGateway, _consolidationBus, _circuitBreaker, _resealManager);
         _setupTopUpGateway(topUpGateway, _topUpGatewayDepositor, _circuitBreaker, _resealManager);
 

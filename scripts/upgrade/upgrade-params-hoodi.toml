@@ -83,8 +83,7 @@ initialExecutionDelay = 86400         # Delay before pending batch execution
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 5                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-
-committee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" #m-sig
+consolidationCommittee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" # Curated Module Committee (CMC) multisig address
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
@@ -162,7 +161,3 @@ hashConsensusInitialEpoch = 93833
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
 expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC
-
-# Vault hub configuration
-[vaultHub]
-maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)

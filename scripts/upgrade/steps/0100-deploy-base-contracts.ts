@@ -420,7 +420,7 @@ export async function main() {
     resealManagerAddress,
     circuitBreakerAddress,
     consolidationMigrator.address,
-    parameters.consolidationMigrator.committee!,
+    parameters.consolidationMigrator.consolidationCommittee!,
     consolidationBus.address,
     parameters.topUpGateway.depositor!,
     await locator.depositSecurityModule(),
@@ -430,22 +430,7 @@ export async function main() {
   await logArgs("UpgradeTemporaryAdmin", tempAdminCompleteSetupArgs, "completeSetup", "complete initial setup");
   await logConfirmReview();
 
-  await makeTx(
-    tempAdmin,
-    "completeSetup",
-    [
-      lidoLocatorImpl.address,
-      easyTrackAddress,
-      resealManagerAddress,
-      circuitBreakerAddress,
-      consolidationMigrator.address,
-      parameters.consolidationMigrator.committee!,
-      consolidationBus.address,
-      parameters.topUpGateway.depositor!,
-      await locator.depositSecurityModule(),
-    ],
-    {
-      from: deployer,
-    },
-  );
+  await makeTx(tempAdmin, "completeSetup", tempAdminCompleteSetupArgs, {
+    from: deployer,
+  });
 }

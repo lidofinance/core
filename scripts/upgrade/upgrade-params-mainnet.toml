@@ -84,7 +84,7 @@ initialExecutionDelay = 86400         # Delay before pending batch execution
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
 #TODO  update upon deployment
-committee = "0x0000000000000000000000000000000000000000"
+consolidationCommittee = "0x0000000000000000000000000000000000000000" # Curated Module Committee (CMC) multisig address
 
        # Frame duration in seconds
 [topUpGateway]

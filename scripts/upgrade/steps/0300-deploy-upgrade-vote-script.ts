@@ -36,5 +36,5 @@ export async function main() {
   await logArgs("UpgradeVoteScript", upgradeVoteScriptConstructorArgs);
   await logConfirmReview();
 
-  await deployWithoutProxy(Sk.upgradeVoteScript, "UpgradeVoteScript", deployer, [[template.address]]);
+  await deployWithoutProxy(Sk.upgradeVoteScript, "UpgradeVoteScript", deployer, upgradeVoteScriptConstructorArgs);
 }

@@ -318,7 +318,7 @@ struct CoreUpgradeParams {
 
     // params
     uint256 lidoDepositsReserveTarget;
-    address curatedModuleCommittee;
+    address consolidationCommittee;
     address topUpGatewayDepositor;
 
     // twGateway limits
@@ -436,7 +436,7 @@ struct CoreUpgradeConfig {
     address topUpGateway;
 
     uint256 lidoDepositsReserveTarget;
-    address curatedModuleCommittee;
+    address consolidationCommittee;
     address topUpGatewayDepositor;
 
     uint256 twMaxExitRequestsLimit;

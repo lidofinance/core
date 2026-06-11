@@ -104,7 +104,7 @@ const ConsolidationBusSchema = z.object({
 const ConsolidationMigratorSchema = z.object({
   sourceModuleId: PositiveIntSchema,
   targetModuleId: PositiveIntSchema,
-  committee: EthereumAddressSchema.optional(),
+  consolidationCommittee: EthereumAddressSchema.optional(),
 });
 
 // Top-up gateway schema

@@ -354,7 +354,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertSingleOZRoleHolder(consBus, DEFAULT_ADMIN_ROLE, agent);
             _assertSingleOZRoleHolder(consBus, PUBLISH_ROLE, consMigrator);
             _assertZeroOZRoleHolders(consBus, MANAGE_ROLE);
-            _assertSingleOZRoleHolder(consBus, REMOVE_ROLE, c.curatedModuleCommittee);
+            _assertSingleOZRoleHolder(consBus, REMOVE_ROLE, c.consolidationCommittee);
 
             if (IConsolidationBus(consBus).getConsolidationGateway() != consGw) {
                 revert InvalidConsolidationGatewayAddressInConsolidationBus();
@@ -364,7 +364,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertProxyAdmin(consMigrator, agent);
             _assertSingleOZRoleHolder(consMigrator, DEFAULT_ADMIN_ROLE, agent);
             _assertSingleOZRoleHolder(consMigrator, ALLOW_PAIR_ROLE, g.easyTrackEVMScriptExecutor);
-            _assertSingleOZRoleHolder(consMigrator, DISALLOW_PAIR_ROLE, c.curatedModuleCommittee);
+            _assertSingleOZRoleHolder(consMigrator, DISALLOW_PAIR_ROLE, c.consolidationCommittee);
             if (IConsolidationMigrator(consMigrator).getConsolidationBus() != consBus) {
                 revert InvalidConsolidationBusAddressInConsolidationMigrator();
             }
@@ -379,7 +379,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertCircuitBreakerPauser(cb, consGw, resealCommittee);
 
             // TopUps
-
             address tuGw = c.topUpGateway;
             _assertProxyImplementation(tuGw, c.topUpGatewayImpl);
             _assertProxyAdmin(tuGw, agent);

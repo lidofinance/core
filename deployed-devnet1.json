@@ -936,7 +936,7 @@
           "veboConsensusVersion": 5,
           "consolidationBus": "0xAd9cfEB98bD1D4769C45Bd2Ec551197096e26e64",
           "consolidationMigrator": "0x36dD4b2B46a27A33b1caAe819F53E4E7a0cE785b",
-          "curatedModuleCommittee": "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
+          "consolidationCommittee": "0x8943545177806ED17B9F23F0a21ee5948eCaa776",
           "lidoDepositsReserveTarget": "1000000000000000000000"
         },
         "csmUpgrade": {

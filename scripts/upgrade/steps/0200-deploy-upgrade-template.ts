@@ -104,7 +104,7 @@ export async function main() {
       consolidationBus: getAddress(Sk.consolidationBus, state),
 
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
-      curatedModuleCommittee: parameters.consolidationMigrator.committee!,
+      consolidationCommittee: parameters.consolidationMigrator.consolidationCommittee!,
 
       lidoDepositsReserveTarget: parameters.lido.depositsReserveTarget,
 

@@ -97,7 +97,7 @@ contract UpgradeConfig is IUpgradeConfig {
     // -------- Upgrade parameters --------
     //
     uint256 internal immutable LIDO_DEPOSITS_RESERVE_TARGET;
-    address internal immutable CURATED_MODULE_COMMITTEE;
+    address internal immutable CONSOLIDATION_COMMITTEE;
     address internal immutable TOP_UP_GATEWAY_DEPOSITOR;
     uint256 internal immutable TW_MAX_EXIT_REQUESTS_LIMIT;
     uint256 internal immutable TW_EXITS_PER_FRAME;
@@ -237,7 +237,7 @@ contract UpgradeConfig is IUpgradeConfig {
         CONSOLIDATION_MIGRATOR = coreUpgradeParams.consolidationMigrator;
 
         LIDO_DEPOSITS_RESERVE_TARGET = coreUpgradeParams.lidoDepositsReserveTarget;
-        CURATED_MODULE_COMMITTEE = coreUpgradeParams.curatedModuleCommittee;
+        CONSOLIDATION_COMMITTEE = coreUpgradeParams.consolidationCommittee;
         TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
         TW_MAX_EXIT_REQUESTS_LIMIT = coreUpgradeParams.twMaxExitRequestsLimit;
         TW_EXITS_PER_FRAME = coreUpgradeParams.twExitsPerFrame;
@@ -431,7 +431,7 @@ contract UpgradeConfig is IUpgradeConfig {
             topUpGateway: TOP_UP_GATEWAY,
             // params
             lidoDepositsReserveTarget: LIDO_DEPOSITS_RESERVE_TARGET,
-            curatedModuleCommittee: CURATED_MODULE_COMMITTEE,
+            consolidationCommittee: CONSOLIDATION_COMMITTEE,
             topUpGatewayDepositor: TOP_UP_GATEWAY_DEPOSITOR,
             // twGateway limits
             twMaxExitRequestsLimit: TW_MAX_EXIT_REQUESTS_LIMIT,
