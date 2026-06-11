@@ -94,11 +94,11 @@ interface IConsolidationMigrator {
     function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external;
     function sourceModuleId() external view returns (uint256);
     function targetModuleId() external view returns (uint256);
-    function CONSOLIDATION_BUS() external view returns (address);
+    function getConsolidationBus() external view returns (address);
 }
 
 interface IConsolidationBus {
-    function CONSOLIDATION_GATEWAY() external view returns (address);
+    function getConsolidationGateway() external view returns (address);
 }
 
 interface IMerkleGate {

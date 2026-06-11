@@ -893,6 +893,15 @@ describe("DepositSecurityModule.sol", () => {
       expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
     });
 
+    it("Returns `false` if quorum is greater than guardians length", async () => {
+      const guardiansCount = (await dsm.getGuardians()).length;
+      expect(guardiansCount).to.greaterThan(0);
+
+      await dsm.setGuardianQuorum(guardiansCount + 1);
+      expect(await dsm.getGuardianQuorum()).to.equal(guardiansCount + 1);
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
+    });
+
     it("Returns `false` if min deposit block distance is not passed and dsm.lastDepositBlock < module.lastDepositBlock", async () => {
       const moduleLastDepositBlock = await time.latestBlock();
       const dsmLastDepositBlock = Number(await dsm.getLastDepositBlock());

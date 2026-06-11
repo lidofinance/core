@@ -85,7 +85,7 @@ library BeaconChainDepositor {
 
             uint256 amount = _amount[i];
 
-            // obtainDepositData can return 0 amount for some keys
+            // skip zero amounts
             if (amount == 0) continue;
 
             // Amounts below minimum deposit (1 ETH) would fail at deposit contract

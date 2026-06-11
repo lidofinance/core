@@ -154,6 +154,7 @@ struct CLBalanceDecreaseCheckParams {
     uint256 clBalanceOraclesErrorUpperBPLimit;
     uint256 preCLBalance;
     uint256 postCLBalance;
+    uint256 postCLValidatorsBalance;
     uint256 withdrawalVaultBalance;
     uint256 withdrawalsVaultTransfer;
     uint256 deposits;
@@ -221,8 +222,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @dev Electra max effective balance of a single validator. The appeared ETH limit is prorated by elapsed time,
     ///      while CL activations are discrete, so one max validator is allowed as a report-window boundary allowance.
     uint256 private constant MAX_VALIDATOR_EFFECTIVE_BALANCE = 2_048 ether;
-    /// @dev Maximum withdrawals ether used for migration bootstrap, bounded by CL churn limit per report window
-    uint256 private constant MAX_WITHDRAWALS_ETH_BY_CHURN_LIMIT_PER_REPORT = 57_600 ether;
     /// @dev Time window for the CL balance decrease check
     uint256 private constant CL_BALANCE_WINDOW = 36 days;
 
@@ -563,9 +562,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ///     rewards vault during Lido's oracle report processing
     /// @param _preInternalEther amount of internal ETH controlled by the protocol before the report
     /// @param _preInternalShares number of internal shares before the report
-    /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
+    /// @param _preCLBalance sum of all Lido validators' active and pending balances on the CL + sum of EL deposits before the
     ///     current oracle report
-    /// @param _postCLBalance sum of all Lido validators' balances on the Consensus Layer after the
+    /// @param _postCLBalance sum of all Lido validators' and pending balances on the CL after the
     ///     current oracle report
     /// @param _withdrawalVaultBalance withdrawal vault balance on Execution Layer for the report calculation moment
     /// @param _elRewardsVaultBalance elRewards vault balance on Execution Layer for the report calculation moment
@@ -669,6 +668,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
+    /// @dev Collects two CL balance notions for the decrease check:
+    ///      validators + pending is used by the on-chain sliding-window formula;
+    ///      validators-only balance is used for matching the second opinion oracle.
     function _checkAccountingOracleReportCLBalances(
         CLBalanceChangeCheckParams memory _checkParams,
         uint256 _withdrawalVaultBalance,
@@ -681,10 +683,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         decreaseCheckParams.preCLBalance =
             _checkParams.preCLValidatorsBalance + _checkParams.preCLPendingBalance + _checkParams.deposits;
         decreaseCheckParams.postCLBalance = _checkParams.postCLValidatorsBalance + _checkParams.postCLPendingBalance;
+        decreaseCheckParams.postCLValidatorsBalance = _checkParams.postCLValidatorsBalance;
         decreaseCheckParams.withdrawalVaultBalance = _withdrawalVaultBalance;
         decreaseCheckParams.withdrawalsVaultTransfer = _withdrawalsVaultTransfer;
         decreaseCheckParams.deposits = _checkParams.deposits;
         decreaseCheckParams.timeElapsed = _checkParams.timeElapsed;
+
         uint256 clWithdrawals = _getCLWithdrawals(_withdrawalVaultBalance);
         _checkWithdrawalsVaultTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
         _checkCLPendingBalanceIncrease(limitsList, _checkParams, clWithdrawals);
@@ -1150,7 +1154,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             }
             _askSecondOpinion(
                 refSlot,
-                _checkParams.postCLBalance,
+                _checkParams.postCLValidatorsBalance,
                 _checkParams.withdrawalVaultBalance,
                 _checkParams.clBalanceOraclesErrorUpperBPLimit
             );
@@ -1242,7 +1246,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _askSecondOpinion(
         uint256 _refSlot,
-        uint256 _postCLBalance,
+        uint256 _postCLValidatorsBalance,
         uint256 _withdrawalVaultBalance,
         uint256 _clBalanceOraclesErrorUpperBPLimit
     ) internal {
@@ -1251,19 +1255,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         if (success) {
             uint256 clBalanceWei = clOracleBalanceGwei * 1 gwei;
-            if (clBalanceWei < _postCLBalance) {
+            if (clBalanceWei < _postCLValidatorsBalance) {
                 revert NegativeRebaseFailedCLBalanceMismatch(
-                    _postCLBalance,
+                    _postCLValidatorsBalance,
                     clBalanceWei,
                     _clBalanceOraclesErrorUpperBPLimit
                 );
             }
             if (
-                MAX_BASIS_POINTS * (clBalanceWei - _postCLBalance) >
+                MAX_BASIS_POINTS * (clBalanceWei - _postCLValidatorsBalance) >
                 _clBalanceOraclesErrorUpperBPLimit * clBalanceWei
             ) {
                 revert NegativeRebaseFailedCLBalanceMismatch(
-                    _postCLBalance,
+                    _postCLValidatorsBalance,
                     clBalanceWei,
                     _clBalanceOraclesErrorUpperBPLimit
                 );
@@ -1274,7 +1278,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
                     oracleWithdrawalVaultBalanceWei
                 );
             }
-            emit NegativeCLRebaseConfirmed(_refSlot, _postCLBalance, _withdrawalVaultBalance);
+            emit NegativeCLRebaseConfirmed(_refSlot, _postCLValidatorsBalance, _withdrawalVaultBalance);
         } else {
             revert NegativeRebaseFailedSecondOpinionReportIsNotReady();
         }

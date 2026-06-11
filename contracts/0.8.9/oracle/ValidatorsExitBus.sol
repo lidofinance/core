@@ -524,7 +524,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /**
      * @notice Returns validator exit request data by index.
      * @param exitRequests Encoded list of validator exit requests.
-     * @param dataFormat Format of the encoded exit request data. Currently, only DATA_FORMAT_LIST = 1 is supported.
+     * @param dataFormat Format of the encoded exit request data. Currently, only DATA_FORMAT_LIST = 1 OR 2 is supported.
      * @param index Index of the exit request within the `exitRequests` list.
      * @return pubkey Public key of the validator.
      * @return nodeOpId ID of the node operator.

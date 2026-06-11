@@ -1018,6 +1018,30 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         .withArgs(baseRefSlot, ether("9500"), ether("0"));
     });
 
+    it("matches second opinion against validators-only balance when pending balance is reported", async () => {
+      await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
+      await callCheck(ether("10000"), ether("10000"));
+
+      await setRefSlot(baseRefSlot);
+
+      const secondOpinionOracle = await deploySecondOpinionOracle();
+      const postCLBalance = ether("9500");
+      const postCLPendingBalance = ether("100");
+      const postCLValidatorsBalance = postCLBalance - postCLPendingBalance;
+
+      await secondOpinionOracle.addReport(baseRefSlot, {
+        success: true,
+        clBalanceGwei: parseUnits("9400", "gwei"),
+        withdrawalVaultBalanceWei: 0,
+        numValidators: 0,
+        exitedValidators: 0,
+      });
+
+      await expect(callCheckWithPendingDeposits(ether("10000"), postCLBalance, postCLPendingBalance))
+        .to.emit(checker, "NegativeCLRebaseConfirmed")
+        .withArgs(baseRefSlot, postCLValidatorsBalance, ether("0"));
+    });
+
     it("works for reports close together", async () => {
       await setRefSlot(baseRefSlot - SLOTS_PER_DAY);
       await callCheck(ether("10000"), ether("10000"));

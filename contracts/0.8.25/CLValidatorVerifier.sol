@@ -40,7 +40,7 @@ abstract contract CLValidatorVerifier {
         PIVOT_SLOT = _pivotSlot;
     }
 
-    /// @notice Proves validator[i] under the same EIP-4788 anchor, checks WC, checks active status
+    /// @notice Proves validator[i] under the same EIP-4788 anchor, checks WC
     function _verifyValidator(
         BeaconRootData calldata _beaconRootData,
         ValidatorWitness calldata _vw,

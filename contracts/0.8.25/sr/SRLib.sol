@@ -64,13 +64,11 @@ library SRLib {
         bytes32 CONTRACT_VERSION_POS = keccak256("lido.Versioned.contractVersion");
         bytes32 STAKING_MODULES_MAPPING_POS = keccak256("lido.StakingRouter.stakingModules");
         bytes32 STAKING_MODULE_INDICES_POS = keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
-        bytes32 LEGACY_CONTRACT_VERSION_POSITION = keccak256("lido.Versioned.contractVersion");
 
-        uint256 actualVersion = LEGACY_CONTRACT_VERSION_POSITION.getUint256Slot().value;
+        uint256 actualVersion = CONTRACT_VERSION_POS.getUint256Slot().value;
         if (actualVersion != expectedVersion) {
             revert ISRBase.UnexpectedContractVersion(expectedVersion, actualVersion);
         }
-        delete LEGACY_CONTRACT_VERSION_POSITION.getBytes32Slot().value;
 
         // cleanup old storage slots
         delete LIDO_POS.getBytes32Slot().value;
