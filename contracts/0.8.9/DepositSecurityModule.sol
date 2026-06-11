@@ -6,10 +6,6 @@ pragma solidity 0.8.9;
 
 import {ECDSA} from "../common/lib/ECDSA.sol";
 
-interface ILido {
-    function canDeposit() external view returns (bool);
-}
-
 interface IDepositContract {
     function get_deposit_root() external view returns (bytes32 rootHash);
 }
@@ -77,7 +73,6 @@ contract DepositSecurityModule {
     /// @notice Prefix for the message signed by guardians to unvet signing keys.
     bytes32 public immutable UNVET_MESSAGE_PREFIX;
 
-    ILido public immutable LIDO;
     IStakingRouter public immutable STAKING_ROUTER;
     IDepositContract public immutable DEPOSIT_CONTRACT;
 
@@ -102,17 +97,14 @@ contract DepositSecurityModule {
      * Sets the last deposit block to the current block number.
      */
     constructor(
-        address _lido,
         address _depositContract,
         address _stakingRouter,
         uint256 _pauseIntentValidityPeriodBlocks,
         uint256 _maxOperatorsPerUnvetting
     ) {
-        if (_lido == address(0)) revert ZeroAddress("_lido");
         if (_depositContract == address(0)) revert ZeroAddress("_depositContract");
         if (_stakingRouter == address(0)) revert ZeroAddress("_stakingRouter");
 
-        LIDO = ILido(_lido);
         STAKING_ROUTER = IStakingRouter(_stakingRouter);
         DEPOSIT_CONTRACT = IDepositContract(_depositContract);
 

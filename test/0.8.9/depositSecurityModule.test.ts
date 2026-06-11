@@ -19,7 +19,6 @@ import { mineUpTo, setBalance, time } from "@nomicfoundation/hardhat-network-hel
 import {
   DepositContract__MockForDepositSecurityModule,
   DepositSecurityModule,
-  Lido__MockForDepositSecurityModule,
   StakingRouter__MockForDepositSecurityModule,
 } from "typechain-types";
 
@@ -38,7 +37,6 @@ const DEPOSIT_ROOT = "0xd151867719c94ad8458feaf491809f9bc8096c702a72747403ecaac3
 const DSM_VERSION = 4;
 
 type Params = {
-  lido: string;
   depositContract: string;
   stakingRouter: string;
   pauseIntentValidityPeriodBlocks: number;
@@ -53,7 +51,6 @@ type Block = {
 
 function initialParams(): Params {
   return {
-    lido: "",
     depositContract: "",
     stakingRouter: "",
     pauseIntentValidityPeriodBlocks: PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS,
@@ -65,7 +62,7 @@ describe("DepositSecurityModule.sol", () => {
   const config = initialParams();
 
   let dsm: DepositSecurityModule;
-  let lido: Lido__MockForDepositSecurityModule;
+
   let stakingRouter: StakingRouter__MockForDepositSecurityModule;
   let depositContract: DepositContract__MockForDepositSecurityModule;
 
@@ -142,11 +139,9 @@ describe("DepositSecurityModule.sol", () => {
     await setBalance(unrelatedGuardian1.address, ether("100"));
     await setBalance(unrelatedGuardian2.address, ether("100"));
 
-    lido = await ethers.deployContract("Lido__MockForDepositSecurityModule");
     stakingRouter = await ethers.deployContract("StakingRouter__MockForDepositSecurityModule", [STAKING_MODULE_ID]);
     depositContract = await ethers.deployContract("DepositContract__MockForDepositSecurityModule");
 
-    config.lido = await lido.getAddress();
     config.stakingRouter = await stakingRouter.getAddress();
     config.depositContract = await depositContract.getAddress();
 
@@ -179,15 +174,6 @@ describe("DepositSecurityModule.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    it("Reverts if the `lido` is zero address", async () => {
-      const cfg = { ...config };
-      cfg.lido = ZeroAddress;
-      await expect(ethers.deployContract("DepositSecurityModule", Object.values(cfg))).to.be.revertedWithCustomError(
-        dsm,
-        "ZeroAddress",
-      );
-    });
-
     it("Reverts if the `depositContract` is zero address", async () => {
       const cfg = { ...config };
       cfg.depositContract = ZeroAddress;
@@ -261,10 +247,6 @@ describe("DepositSecurityModule.sol", () => {
       );
 
       expect(await dsm.UNVET_MESSAGE_PREFIX()).to.equal(encodedPauseMessagePrefix);
-    });
-
-    it("Returns the LIDO address", async () => {
-      expect(await dsm.LIDO()).to.equal(config.lido);
     });
 
     it("Returns the STAKING_ROUTER address", async () => {
