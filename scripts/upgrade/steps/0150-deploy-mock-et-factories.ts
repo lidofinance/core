@@ -19,8 +19,8 @@ const EASY_TRACK_NEW_FACTORIES_SECTION = "easyTrack.newFactories";
 export const easyTrackFactoriesStateMap = {
   [Sk.stakingRouter]: ["UpdateStakingModuleShareLimits"],
   [Sk.consolidationMigrator]: ["AllowConsolidationPair"],
-  [Sk.csm_CSM]: ["SetMerkleGateTree", "ReportWithdrawalsForSlashedValidators", "SettleGeneralDelayedPenalty"],
-  [Sk.csm_CM]: [
+  [Sk.sm_CSM]: ["SetMerkleGateTree", "ReportWithdrawalsForSlashedValidators", "SettleGeneralDelayedPenalty"],
+  [Sk.sm_CM]: [
     "SetMerkleGateTree",
     "ReportWithdrawalsForSlashedValidators",
     "SettleGeneralDelayedPenalty",
@@ -29,11 +29,11 @@ export const easyTrackFactoriesStateMap = {
 } satisfies EasyTrackFactoriesStateMap;
 
 function getFactoryParamName(contractKey: Sk, etName: string): string {
-  if (contractKey === Sk.csm_CSM) {
+  if (contractKey === Sk.sm_CSM) {
     return `${etName}ForCSM`;
   }
 
-  if (contractKey === Sk.csm_CM) {
+  if (contractKey === Sk.sm_CM) {
     return `${etName}ForCM`;
   }
 
