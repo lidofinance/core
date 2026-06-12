@@ -34,6 +34,9 @@ export const norSdvtEnsureOperators = async (
   for (let operatorId = 0n; operatorId < minOperatorsCount; operatorId++) {
     const nodeOperatorBefore = await module.getNodeOperator(operatorId, false);
 
+    // cannot set staking limit for a deactivated operator
+    if (!nodeOperatorBefore.active) continue;
+
     if (nodeOperatorBefore.totalVettedValidators < nodeOperatorBefore.totalAddedValidators) {
       await norSdvtSetOperatorStakingLimit(ctx, module, {
         operatorId,
