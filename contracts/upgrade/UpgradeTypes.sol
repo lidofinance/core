@@ -202,6 +202,16 @@ interface IValidatorStrikesV3 {
     function setEjector(address newEjector) external;
 }
 
+interface ISetMerkleGateTree {
+    function validateInputData(
+        address gate,
+        bytes32 currentTreeRoot,
+        string memory currentTreeCid,
+        bytes32 newTreeRoot,
+        string memory newTreeCid
+    ) external view;
+}
+
 interface IUpdateStakingModuleShareLimits {
     struct ModuleShareParams {
         uint16 currentStakeShareLimit;
@@ -240,6 +250,14 @@ interface IMetaRegistry {
     }
 
     function createOrUpdateOperatorGroup(uint256 groupId, OperatorGroup calldata groupInfo) external;
+}
+
+interface ICreateOrUpdateOperatorGroup {
+    function validateInputData(
+        uint256 groupId,
+        IMetaRegistry.OperatorGroup memory currentGroupInfo,
+        IMetaRegistry.OperatorGroup memory newGroupInfo
+    ) external view;
 }
 
 interface IInitializedVersionView {
