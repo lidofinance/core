@@ -157,6 +157,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     // Initial value of upgradeBlockNumber storage variable
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
+    // TODO: Unused. Remove
     uint256 internal constant INFINITE_ALLOWANCE = type(uint256).max;
 
     // Upgrade config (self deployed internal contract)
@@ -225,6 +226,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
 
+        // TODO: Either extend to all proxies, or remove at all.
         // Check initial implementations of the proxies to be upgraded
         _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.oldLidoImpl);
 

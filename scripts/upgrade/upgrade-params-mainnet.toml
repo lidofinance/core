@@ -81,12 +81,11 @@ initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 86400         # Delay before pending batch execution
 
 [consolidationMigrator]
-sourceModuleId = 1                    # Source staking module ID
-targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-#TODO  update upon deployment
-consolidationCommittee = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address
+sourceModuleId = 1                                                    # Source staking module ID
+targetModuleId = 4                                                    # Target staking module ID
+consolidationCommittee = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address https://research.lido.fi/t/proposal-transition-the-lnosg-into-the-cmc/11341/27
 
-       # Frame duration in seconds
+# Frame duration in seconds
 [topUpGateway]
 maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process
 minBlockDistance = 75 # Minimum block distance between topUp calls
@@ -94,8 +93,7 @@ maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove valida
 targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
 minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
 # Generalized indices for validator/balance/pending state verification
-# TODO: replace with mainnet values
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000056000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 # Pivot slot for fork-aware gIndex selection
 pivotSlot = 0
@@ -109,26 +107,35 @@ maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-
 
 [csmUpgrade]
 csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"
+# TODO: replace with deployed CSM implementation before execution
 csmImpl = "0x1eB6d4da13ca9566c17F526aE0715325d7a07665"
 vettedGateProxy = "0xB314D4A76C457c93150d308787939063F4Cc67E0"
+# TODO: replace with deployed Vetted Gate implementation before execution
+vettedGateImpl = "0x65D4D92Cd0EabAa05cD5A46269C24b71C21cfdc4"
 # TODO: replace with deployed IDVTC gate before execution
 identifiedDVTClusterGate = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed IDVTC curve setup before execution
 identifiedDVTClusterCurveSetup = "0x0000000000000000000000000000000000000000"
 # TODO: replace with expected IDVTC bond curve id before execution
 identifiedDVTClusterBondCurveId = 0
+# TODO: replace with deployed Parameters Registry implementation before execution
 parametersRegistryImpl = "0x25fdC3BE9977CD4da679dF72A64C8B6Bd5216A78"
+# TODO: replace with deployed Fee Oracle implementation before execution
 feeOracleImpl = "0xe0B234f99E413E27D9Bc31aBba9A49A3e570Da97"
 feeOracleConsensusVersion = 4
-vettedGateImpl = "0x65D4D92Cd0EabAa05cD5A46269C24b71C21cfdc4"
+# TODO: replace with deployed Accounting implementation before execution
 accountingImpl = "0x6f09d2426c7405C5546413e6059F884D2D03f449"
+# TODO: replace with deployed Fee Distributor implementation before execution
 feeDistributorImpl = "0x5DCF7cF7c6645E9E822a379dF046a8b0390251A1"
+# TODO: replace with deployed Penalties implementation before execution
 exitPenaltiesImpl = "0xDa22fA1CEa40d05Fe4CD536967afdD839586D546"
+# TODO: replace with deployed Strikes implementation before execution
 strikesImpl = "0x3E5021424c9e13FC853e523Cd68ebBec848956a0"
 oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 oldVerifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
 # TODO: replace with deployed new verifier
 newVerifier = "0x0000000000000000000000000000000000000000"
+# TODO: replace with deployed new permissionless gate before execution
 newPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 # TODO: replace with new deployed ejector
 ejector = "0x0000000000000000000000000000000000000000"
@@ -149,15 +156,16 @@ curatedGates = [
 ]
 # TODO: replace with deployed curated verifier before execution
 verifier = "0x0000000000000000000000000000000000000000"
-circuitBreakerPauser = "0x0000000000000000000000000000000000000000"
+circuitBreakerPauser = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address https://research.lido.fi/t/proposal-transition-the-lnosg-into-the-cmc/11341/27
 moduleName = "curated-onchain-v2"
-stakeShareLimit = 2000
-priorityExitShareThreshold = 2500
-stakingModuleFee = 800
-treasuryFee = 200
+stakeShareLimit = 10000 # 100% (unlimited)
+priorityExitShareThreshold = 10000 # 100% (unlimited)
+stakingModuleFee = 400
+treasuryFee = 600
 maxDepositsPerBlock = 100
 minDepositBlockDistance = 75 # (15 minutes)
 feeOracleConsensusVersion = 4
+# TODO: Update with actual initial epoch before the vote contracts deployment
 hashConsensusInitialEpoch = 47480
 
 [upgradeVoteScript]

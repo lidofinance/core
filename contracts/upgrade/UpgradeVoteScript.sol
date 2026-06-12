@@ -464,13 +464,13 @@ contract UpgradeVoteScript is OmnibusBase {
             // --- Role & permission updates ---
 
             items[i++] = _item({
-                description: "Point ValidatorStrikes to the new Ejector",
+                description: "Point ValidatorStrikes to the New Ejector",
                 to: c.strikes,
                 data: abi.encodeCall(IValidatorStrikesV3.setEjector, (c.ejector))
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke REPORT_EL_REWARDS_STEALING_PENALTY_ROLE",
+                description: "Revoke REPORT_EL_REWARDS_STEALING_PENALTY_ROLE (due to role removal)",
                 to: csm,
                 role: REPORT_EL_REWARDS_STEALING_PENALTY_ROLE,
                 account: c.csmCommittee
@@ -484,7 +484,7 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE",
+                description: "Revoke SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE (due to role removal)",
                 to: csm,
                 role: SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE,
                 account: evmScriptExecutor
@@ -498,18 +498,18 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke VERIFIER_ROLE from old verifier",
+                description: "Revoke VERIFIER_ROLE from the Old Verifier",
                 to: csm,
                 role: VERIFIER_ROLE,
                 account: c.oldVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant VERIFIER_ROLE to new verifier", to: csm, role: VERIFIER_ROLE, account: c.newVerifier
+                description: "Grant VERIFIER_ROLE to the New Verifier", to: csm, role: VERIFIER_ROLE, account: c.newVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE to VerifierV3",
+                description: "Grant REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE to the New Verifier",
                 to: csm,
                 role: REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE,
                 account: c.newVerifier
@@ -523,28 +523,28 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke CREATE_NODE_OPERATOR_ROLE from old PermissionlessGate",
+                description: "Revoke CREATE_NODE_OPERATOR_ROLE from the Old PermissionlessGate",
                 to: csm,
                 role: CREATE_NODE_OPERATOR_ROLE,
                 account: c.oldPermissionlessGate
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant CREATE_NODE_OPERATOR_ROLE to new PermissionlessGate",
+                description: "Grant CREATE_NODE_OPERATOR_ROLE to the New PermissionlessGate",
                 to: csm,
                 role: CREATE_NODE_OPERATOR_ROLE,
                 account: c.newPermissionlessGate
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke START_REFERRAL_SEASON_ROLE",
+                description: "Revoke START_REFERRAL_SEASON_ROLE (due to role removal)",
                 to: vettedGate,
                 role: START_REFERRAL_SEASON_ROLE,
                 account: agent
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke END_REFERRAL_SEASON_ROLE",
+                description: "Revoke END_REFERRAL_SEASON_ROLE (due to role removal)",
                 to: vettedGate,
                 role: END_REFERRAL_SEASON_ROLE,
                 account: c.csmCommittee
@@ -557,36 +557,36 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] =
-                _registerCircuitBreakerPauserItem("CSM new verifier", g.circuitBreaker, c.newVerifier, c.csmCommittee);
-            items[i++] = _registerCircuitBreakerPauserItem("CSM Ejector", g.circuitBreaker, c.ejector, c.csmCommittee);
+                _registerCircuitBreakerPauserItem("New CSM verifier", g.circuitBreaker, c.newVerifier, c.csmCommittee);
+            items[i++] = _registerCircuitBreakerPauserItem("New CSM Ejector", g.circuitBreaker, c.ejector, c.csmCommittee);
             items[i++] = _registerCircuitBreakerPauserItem(
-                "CSM identified DVT cluster gate", g.circuitBreaker, c.identifiedDVTClusterGate, c.csmCommittee
+                "CSM Identified DVT cluster gate", g.circuitBreaker, c.identifiedDVTClusterGate, c.csmCommittee
             );
 
             // --- New IDVTC type ---
             items[i++] = _ozGrantRoleItem({
-                description: "Grant CREATE_NODE_OPERATOR_ROLE to identified DVT cluster gate",
+                description: "Grant CREATE_NODE_OPERATOR_ROLE to Identified DVT cluster gate",
                 to: csm,
                 role: CREATE_NODE_OPERATOR_ROLE,
                 account: c.identifiedDVTClusterGate
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_BOND_CURVE_ROLE to identified DVT cluster gate",
+                description: "Grant SET_BOND_CURVE_ROLE to Identified DVT cluster gate",
                 to: c.accounting,
                 role: SET_BOND_CURVE_ROLE,
                 account: c.identifiedDVTClusterGate
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant MANAGE_BOND_CURVES_ROLE to identified DVT cluster curve setup",
+                description: "Grant MANAGE_BOND_CURVES_ROLE to Identified DVT cluster curve setup",
                 to: c.accounting,
                 role: MANAGE_BOND_CURVES_ROLE,
                 account: c.identifiedDVTClusterCurveSetup
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant MANAGE_CURVE_PARAMETERS_ROLE to identified DVT cluster curve setup",
+                description: "Grant MANAGE_CURVE_PARAMETERS_ROLE to Identified DVT cluster curve setup",
                 to: c.parametersRegistry,
                 role: MANAGE_CURVE_PARAMETERS_ROLE,
                 account: c.identifiedDVTClusterCurveSetup
@@ -594,7 +594,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             // The setup contract renounces its temporary Accounting/Registry roles during execute().
             items[i++] = _item({
-                description: "Execute identified DVT cluster curve setup",
+                description: "Execute Identified DVT cluster curve setup",
                 to: c.identifiedDVTClusterCurveSetup,
                 data: abi.encodeCall(IOneShotCurveSetup.execute, ())
             });
@@ -625,14 +625,14 @@ contract UpgradeVoteScript is OmnibusBase {
             // --- TWG role migration ---
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke TWG full-withdrawal role from old Ejector",
+                description: "Revoke TWG full-withdrawal role from the Old Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
                 account: c.oldEjector
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant TWG full-withdrawal role to new Ejector",
+                description: "Grant TWG full-withdrawal role to the New Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
                 account: c.ejector
@@ -646,7 +646,7 @@ contract UpgradeVoteScript is OmnibusBase {
             CuratedModuleConfig memory c = config.getCuratedModuleConfig();
 
             items[i++] = _item({
-                description: "Add Curated module to StakingRouter",
+                description: "Add Curated Module v2 to StakingRouter",
                 to: stakingRouter,
                 data: abi.encodeCall(
                     IStakingRouterUpgrade.addStakingModule,
@@ -681,18 +681,18 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant RESUME_ROLE to agent on Curated module",
+                description: "Grant RESUME_ROLE to agent on Curated Module v2",
                 to: c.module,
                 role: RESUME_ROLE,
                 account: agent
             });
 
             items[i++] = _item({
-                description: "Resume Curated module", to: c.module, data: abi.encodeCall(ICSModuleV3.resume, ())
+                description: "Resume Curated Module v2", to: c.module, data: abi.encodeCall(ICSModuleV3.resume, ())
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke RESUME_ROLE from agent on Curated module",
+                description: "Revoke RESUME_ROLE from agent on Curated Module v2",
                 to: c.module,
                 role: RESUME_ROLE,
                 account: agent
@@ -705,7 +705,7 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] =
-                _registerCircuitBreakerPauserItem("CuratedModule", g.circuitBreaker, c.module, c.circuitBreakerPauser);
+                _registerCircuitBreakerPauserItem("Curated Module v2", g.circuitBreaker, c.module, c.circuitBreakerPauser);
             items[i++] = _registerCircuitBreakerPauserItem(
                 "Curated Accounting", g.circuitBreaker, c.accounting, c.circuitBreakerPauser
             );
