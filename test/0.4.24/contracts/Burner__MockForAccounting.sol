@@ -19,7 +19,7 @@ contract Burner__MockForAccounting {
         emit Mock__StETHBurnRequested(false, msg.sender, _stETHAmount, _sharesAmountToBurn);
     }
 
-    function commitSharesToBurn(uint256 _sharesToBurn) external {
+    function commitSharesToBurn(uint256 _sharesToBurn, uint256) external {
         _sharesToBurn;
 
         emit Mock__CommitSharesToBurnWasCalled(_sharesToBurn);

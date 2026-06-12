@@ -575,7 +575,7 @@ describe("Burner.sol", () => {
 
     context("Reverts", () => {
       it("if the caller is not stETH", async () => {
-        await expect(burner.connect(stranger).commitSharesToBurn(1n)).to.be.revertedWithCustomError(
+        await expect(burner.connect(stranger).commitSharesToBurn(1n, 0)).to.be.revertedWithCustomError(
           burner,
           "AppAuthFailed",
         );
@@ -586,14 +586,14 @@ describe("Burner.sol", () => {
         const totalSharesRequestedToBurn = coverShares + nonCoverShares;
         const invalidAmount = totalSharesRequestedToBurn + 1n;
 
-        await expect(burner.connect(accountingSigner).commitSharesToBurn(invalidAmount))
+        await expect(burner.connect(accountingSigner).commitSharesToBurn(invalidAmount, 0))
           .to.be.revertedWithCustomError(burner, "BurnAmountExceedsActual")
           .withArgs(invalidAmount, totalSharesRequestedToBurn);
       });
     });
 
     it("Doesn't do anything if passing zero shares to burn", async () => {
-      await expect(burner.connect(accountingSigner).commitSharesToBurn(0n)).not.to.emit(burner, "StETHBurnt");
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(0n, 0)).not.to.emit(burner, "StETHBurnt");
     });
 
     it("Marks shares as burnt when there are only cover shares to burn", async () => {
@@ -609,7 +609,7 @@ describe("Burner.sol", () => {
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      await expect(burner.connect(accountingSigner).commitSharesToBurn(coverSharesToBurn))
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(coverSharesToBurn, 0))
         .to.emit(burner, "StETHBurnt")
         .withArgs(true, balancesBefore.stethRequestedToBurn, coverSharesToBurn);
 
@@ -638,7 +638,7 @@ describe("Burner.sol", () => {
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      await expect(burner.connect(accountingSigner).commitSharesToBurn(nonCoverSharesToBurn))
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(nonCoverSharesToBurn, 0))
         .to.emit(burner, "StETHBurnt")
         .withArgs(false, balancesBefore.stethRequestedToBurn, nonCoverSharesToBurn);
 
@@ -671,7 +671,7 @@ describe("Burner.sol", () => {
         nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
       });
 
-      await expect(burner.connect(accountingSigner).commitSharesToBurn(totalCoverSharesToBurn))
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(totalCoverSharesToBurn, 0))
         .to.emit(burner, "StETHBurnt")
         .withArgs(true, balancesBefore.coverStethRequestedToBurn, coverSharesToBurn)
         .and.to.emit(burner, "StETHBurnt")
@@ -692,6 +692,136 @@ describe("Burner.sol", () => {
         balancesBefore.sharesRequestedToBurn.nonCoverShares - nonCoverSharesToBurn,
       );
       expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt + nonCoverSharesToBurn);
+    });
+  });
+
+  context("commitSharesToBurn with _minNonCoverSharesToBurn", () => {
+    beforeEach(async () => {
+      await expect(steth.approve(burner, MaxUint256))
+        .to.emit(steth, "Approval")
+        .withArgs(holder.address, await burner.getAddress(), MaxUint256);
+
+      expect(await steth.allowance(holder, burner)).to.equal(MaxUint256);
+    });
+
+    it("burns nonCover first when _minNonCoverSharesToBurn > 0", async () => {
+      const coverShares = ether("3");
+      const nonCoverShares = ether("2");
+
+      // Deposit 10 cover + 5 nonCover on Burner
+      await burner.connect(accountingSigner).requestBurnSharesForCover(holder, coverShares);
+      await burner.connect(accountingSigner).requestBurnShares(holder, nonCoverShares);
+
+      const balancesBefore = await batch({
+        sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
+        coverSharesBurnt: burner.getCoverSharesBurnt(),
+        nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
+      });
+
+      expect(balancesBefore.sharesRequestedToBurn.coverShares).to.equal(coverShares);
+      expect(balancesBefore.sharesRequestedToBurn.nonCoverShares).to.equal(nonCoverShares);
+
+      const nonCoverSteth = await steth.getPooledEthByShares(nonCoverShares);
+      const coverBurnShares = ether("1"); // 3 - 2 = 1 cover share
+      const coverSteth = await steth.getPooledEthByShares(coverBurnShares);
+
+      // commitSharesToBurn(3, 2) — burn 2 nonCover first, then 1 cover
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(ether("3"), nonCoverShares))
+        .to.emit(burner, "StETHBurnt")
+        .withArgs(false, nonCoverSteth, nonCoverShares) // nonCover first
+        .and.to.emit(burner, "StETHBurnt")
+        .withArgs(true, coverSteth, coverBurnShares); // then cover
+
+      const balancesAfter = await batch({
+        sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
+        coverSharesBurnt: burner.getCoverSharesBurnt(),
+        nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
+      });
+
+      // Post state: coverSharesBurnRequested = 3 - 1 = 2, nonCoverSharesBurnRequested = 2 - 2 = 0
+      expect(balancesAfter.sharesRequestedToBurn.coverShares).to.equal(ether("2"));
+      expect(balancesAfter.sharesRequestedToBurn.nonCoverShares).to.equal(0n);
+      expect(balancesAfter.coverSharesBurnt).to.equal(balancesBefore.coverSharesBurnt + coverBurnShares);
+      expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt + nonCoverShares);
+    });
+
+    it("clamps _minNonCoverSharesToBurn to available nonCover", async () => {
+      const coverShares = ether("3");
+      const nonCoverShares = ether("1");
+
+      // Deposit 10 cover + 2 nonCover on Burner
+      await burner.connect(accountingSigner).requestBurnSharesForCover(holder, coverShares);
+      await burner.connect(accountingSigner).requestBurnShares(holder, nonCoverShares);
+
+      const balancesBefore = await batch({
+        sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
+        coverSharesBurnt: burner.getCoverSharesBurnt(),
+        nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
+      });
+
+      expect(balancesBefore.sharesRequestedToBurn.coverShares).to.equal(coverShares);
+      expect(balancesBefore.sharesRequestedToBurn.nonCoverShares).to.equal(nonCoverShares);
+
+      const nonCoverSteth = await steth.getPooledEthByShares(nonCoverShares);
+      const coverBurnShares = ether("2"); // 3 - 1 = 2 cover shares (nonCover clamped to 1)
+      const coverSteth = await steth.getPooledEthByShares(coverBurnShares);
+
+      // commitSharesToBurn(3, 2) — _minNonCoverSharesToBurn=2 clamped to available nonCover=1, then 2 cover
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(ether("3"), ether("2")))
+        .to.emit(burner, "StETHBurnt")
+        .withArgs(false, nonCoverSteth, nonCoverShares) // 1 nonCover (clamped)
+        .and.to.emit(burner, "StETHBurnt")
+        .withArgs(true, coverSteth, coverBurnShares); // 2 cover
+
+      const balancesAfter = await batch({
+        sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
+        coverSharesBurnt: burner.getCoverSharesBurnt(),
+        nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
+      });
+
+      // Post state: coverSharesBurnRequested = 3 - 2 = 1, nonCoverSharesBurnRequested = 1 - 1 = 0
+      expect(balancesAfter.sharesRequestedToBurn.coverShares).to.equal(ether("1"));
+      expect(balancesAfter.sharesRequestedToBurn.nonCoverShares).to.equal(0n);
+      expect(balancesAfter.coverSharesBurnt).to.equal(balancesBefore.coverSharesBurnt + coverBurnShares);
+      expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt + nonCoverShares);
+    });
+
+    it("works with _minNonCoverSharesToBurn = 0 (legacy cover-first behavior)", async () => {
+      const coverShares = ether("2");
+      const nonCoverShares = ether("2");
+
+      // Deposit 5 cover + 5 nonCover on Burner
+      await burner.connect(accountingSigner).requestBurnSharesForCover(holder, coverShares);
+      await burner.connect(accountingSigner).requestBurnShares(holder, nonCoverShares);
+
+      const balancesBefore = await batch({
+        sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
+        coverSharesBurnt: burner.getCoverSharesBurnt(),
+        nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
+      });
+
+      const coverSteth = await steth.getPooledEthByShares(coverShares);
+      const nonCoverBurnShares = ether("1"); // 3 - 2 = 1 nonCover
+      const nonCoverSteth = await steth.getPooledEthByShares(nonCoverBurnShares);
+
+      // commitSharesToBurn(3, 0) — cover-first: burn 2 cover, then 1 nonCover
+      await expect(burner.connect(accountingSigner).commitSharesToBurn(ether("3"), 0))
+        .to.emit(burner, "StETHBurnt")
+        .withArgs(true, coverSteth, coverShares) // cover first
+        .and.to.emit(burner, "StETHBurnt")
+        .withArgs(false, nonCoverSteth, nonCoverBurnShares); // then nonCover
+
+      const balancesAfter = await batch({
+        sharesRequestedToBurn: burner.getSharesRequestedToBurn(),
+        coverSharesBurnt: burner.getCoverSharesBurnt(),
+        nonCoverSharesBurnt: burner.getNonCoverSharesBurnt(),
+      });
+
+      // Post state: coverSharesBurnRequested = 0, nonCoverSharesBurnRequested = 2 - 1 = 1
+      expect(balancesAfter.sharesRequestedToBurn.coverShares).to.equal(0n);
+      expect(balancesAfter.sharesRequestedToBurn.nonCoverShares).to.equal(ether("1"));
+      expect(balancesAfter.coverSharesBurnt).to.equal(balancesBefore.coverSharesBurnt + coverShares);
+      expect(balancesAfter.nonCoverSharesBurnt).to.equal(balancesBefore.nonCoverSharesBurnt + nonCoverBurnShares);
     });
   });
 
@@ -724,7 +854,7 @@ describe("Burner.sol", () => {
 
       const coverSharesToBurnBefore = await burner.getCoverSharesBurnt();
 
-      await burner.connect(accountingSigner).commitSharesToBurn(coverSharesToBurn);
+      await burner.connect(accountingSigner).commitSharesToBurn(coverSharesToBurn, 0);
 
       expect(await burner.getCoverSharesBurnt()).to.equal(coverSharesToBurnBefore + coverSharesToBurn);
     });
@@ -740,7 +870,7 @@ describe("Burner.sol", () => {
 
       const nonCoverSharesToBurnBefore = await burner.getNonCoverSharesBurnt();
 
-      await burner.connect(accountingSigner).commitSharesToBurn(nonCoverSharesToBurn);
+      await burner.connect(accountingSigner).commitSharesToBurn(nonCoverSharesToBurn, 0);
 
       expect(await burner.getNonCoverSharesBurnt()).to.equal(nonCoverSharesToBurnBefore + nonCoverSharesToBurn);
     });

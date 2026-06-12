@@ -12,4 +12,6 @@ interface IWithdrawalQueue {
     ) external view returns (uint256 ethToLock, uint256 sharesToBurn);
 
     function isPaused() external view returns (bool);
+
+    function isBunkerModeActive() external view returns (bool);
 }

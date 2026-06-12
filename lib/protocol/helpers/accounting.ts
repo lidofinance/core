@@ -508,6 +508,10 @@ export const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
+  // sharesRequestedToBurn must include redeem shares (they're nonCover on Burner)
+  const [simCoverShares, simNonCoverShares] = await ctx.contracts.burner.getSharesRequestedToBurn();
+  const simSharesRequestedToBurn = simCoverShares + simNonCoverShares;
+
   const reportValues: ReportValuesStruct = {
     timestamp: reportTimestamp,
     // timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
@@ -516,7 +520,7 @@ export const simulateReport = async (
     clPendingBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    sharesRequestedToBurn: 0n,
+    sharesRequestedToBurn: simSharesRequestedToBurn,
     withdrawalFinalizationBatches: [],
     simulatedShareRate: 10n ** 27n,
   };

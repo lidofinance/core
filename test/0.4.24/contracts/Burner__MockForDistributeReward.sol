@@ -19,7 +19,7 @@ contract Burner__MockForDistributeReward {
         emit StETHBurnRequested(false, msg.sender, _stETHAmount, _sharesAmountToBurn);
     }
 
-    function commitSharesToBurn(uint256 _sharesToBurn) external {
+    function commitSharesToBurn(uint256 _sharesToBurn, uint256) external {
         _sharesToBurn;
 
         emit Mock__CommitSharesToBurnWasCalled();

@@ -53,7 +53,7 @@ describe("Scenario: Burn Shares", () => {
 
   it("Should not allow stranger to burn shares", async () => {
     const { burner } = ctx.contracts;
-    const burnTx = burner.connect(stranger).commitSharesToBurn(sharesToBurn);
+    const burnTx = burner.connect(stranger).commitSharesToBurn(sharesToBurn, 0);
 
     await expect(burnTx).to.be.revertedWithCustomError(burner, "AppAuthFailed");
   });

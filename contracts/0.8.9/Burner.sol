@@ -345,8 +345,10 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
      * Does nothing if zero amount passed.
      *
      * @param _sharesToBurn amount of shares to be burnt
+     * @param _minNonCoverSharesToBurn floor on shares drawn from non-cover before the cover-first split applies to
+     *        the remainder. At least this many shares will come from the non-cover counter (capped by what's requested).
      */
-    function commitSharesToBurn(uint256 _sharesToBurn) external virtual override {
+    function commitSharesToBurn(uint256 _sharesToBurn, uint256 _minNonCoverSharesToBurn) external virtual override {
         if (msg.sender != LOCATOR.accounting()) revert AppAuthFailed();
 
         if (_sharesToBurn == 0) {
@@ -357,39 +359,31 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
         uint256 memCoverSharesBurnRequested = $.coverSharesBurnRequested;
         uint256 memNonCoverSharesBurnRequested = $.nonCoverSharesBurnRequested;
 
-        uint256 burnAmount = memCoverSharesBurnRequested + memNonCoverSharesBurnRequested;
-
-        if (_sharesToBurn > burnAmount) {
-            revert BurnAmountExceedsActual(_sharesToBurn, burnAmount);
+        if (_sharesToBurn > memCoverSharesBurnRequested + memNonCoverSharesBurnRequested) {
+            revert BurnAmountExceedsActual(_sharesToBurn, memCoverSharesBurnRequested + memNonCoverSharesBurnRequested);
         }
 
-        uint256 sharesToBurnNow;
-        if (memCoverSharesBurnRequested > 0) {
-            uint256 sharesToBurnNowForCover = Math.min(_sharesToBurn, memCoverSharesBurnRequested);
+        uint256 nonCoverFloor = Math.min(_minNonCoverSharesToBurn, memNonCoverSharesBurnRequested);
+        uint256 remaining = _sharesToBurn - nonCoverFloor;
+        uint256 coverToBurn = Math.min(remaining, memCoverSharesBurnRequested);
+        uint256 nonCoverToBurn = nonCoverFloor + Math.min(
+            remaining - coverToBurn,
+            memNonCoverSharesBurnRequested - nonCoverFloor
+        );
 
-            $.totalCoverSharesBurnt += sharesToBurnNowForCover;
-            uint256 stETHToBurnNowForCover = LIDO.getPooledEthByShares(sharesToBurnNowForCover);
-            emit StETHBurnt(true /* isCover */, stETHToBurnNowForCover, sharesToBurnNowForCover);
-
-            $.coverSharesBurnRequested -= sharesToBurnNowForCover;
-            sharesToBurnNow += sharesToBurnNowForCover;
+        if (nonCoverToBurn > 0) {
+            $.totalNonCoverSharesBurnt += nonCoverToBurn;
+            $.nonCoverSharesBurnRequested -= nonCoverToBurn;
+            emit StETHBurnt(false /* isCover */, LIDO.getPooledEthByShares(nonCoverToBurn), nonCoverToBurn);
         }
-        if (memNonCoverSharesBurnRequested > 0 && sharesToBurnNow < _sharesToBurn) {
-            uint256 sharesToBurnNowForNonCover = Math.min(
-                _sharesToBurn - sharesToBurnNow,
-                memNonCoverSharesBurnRequested
-            );
-
-            $.totalNonCoverSharesBurnt += sharesToBurnNowForNonCover;
-            uint256 stETHToBurnNowForNonCover = LIDO.getPooledEthByShares(sharesToBurnNowForNonCover);
-            emit StETHBurnt(false /* isCover */, stETHToBurnNowForNonCover, sharesToBurnNowForNonCover);
-
-            $.nonCoverSharesBurnRequested -= sharesToBurnNowForNonCover;
-            sharesToBurnNow += sharesToBurnNowForNonCover;
+        if (coverToBurn > 0) {
+            $.totalCoverSharesBurnt += coverToBurn;
+            $.coverSharesBurnRequested -= coverToBurn;
+            emit StETHBurnt(true /* isCover */, LIDO.getPooledEthByShares(coverToBurn), coverToBurn);
         }
 
         LIDO.burnShares(_sharesToBurn);
-        assert(sharesToBurnNow == _sharesToBurn);
+        assert(coverToBurn + nonCoverToBurn == _sharesToBurn);
     }
 
     /**

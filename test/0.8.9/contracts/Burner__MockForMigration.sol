@@ -28,8 +28,13 @@ contract Burner__MockForMigration {
         return totalNonCoverSharesBurnt;
     }
 
-    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares) {
+    function getSharesRequestedToBurn()
+        external
+        view
+        returns (uint256 coverShares, uint256 nonCoverShares, uint256 redeemShares)
+    {
         coverShares = coverSharesBurnRequested;
         nonCoverShares = nonCoverSharesBurnRequested;
+        redeemShares = 0;
     }
 }

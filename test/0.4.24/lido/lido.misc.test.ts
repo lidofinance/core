@@ -269,7 +269,7 @@ describe("Lido.sol:misc", () => {
 
       await lido.submit(ZeroAddress, { value: ether("100.0") });
       await lido.setDepositsReserveTarget(ether("25.0"));
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
 
       const unfinalized = ether("50.0");
       await withdrawalQueue.mock__unfinalizedStETH(unfinalized);
@@ -302,7 +302,7 @@ describe("Lido.sol:misc", () => {
 
       await lido.submit(ZeroAddress, { value: ether("100.0") });
       await lido.setDepositsReserveTarget(ether("25.0"));
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
 
       const depositsReserve = await lido.getDepositsReserve();
       expect(depositsReserve).to.equal(ether("25.0"));
@@ -320,7 +320,7 @@ describe("Lido.sol:misc", () => {
 
       await lido.submit(ZeroAddress, { value: ether("100.0") });
       await lido.setDepositsReserveTarget(ether("10.0"));
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
       await withdrawalQueue.mock__unfinalizedStETH(ether("100.0"));
 
       const depositableBefore = await lido.getDepositableEther();
@@ -340,7 +340,7 @@ describe("Lido.sol:misc", () => {
     let accountingSigner: HardhatEthersSigner;
 
     const syncReserveWithOracleReport = async () => {
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
     };
 
     const assertDepositsReserveInvariants = async () => {
@@ -590,7 +590,7 @@ describe("Lido.sol:misc", () => {
       await lido.connect(stakingRouterSigner).withdrawDepositableEther(ether("5.0"), 0n);
       expect(await lido.getDepositsReserve()).to.equal(ether("15.0"));
 
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
 
       expect(await lido.getDepositsReserveTarget()).to.equal(ether("20.0"));
       expect(await lido.getDepositsReserve()).to.equal(ether("20.0"));
@@ -653,7 +653,7 @@ describe("Lido.sol:misc", () => {
     it("Returns 0 when unfinalizedStETH is zero", async () => {
       await lido.submit(ZeroAddress, { value: ether("100.0") });
       await lido.setDepositsReserveTarget(ether("30.0"));
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
       await withdrawalQueue.mock__unfinalizedStETH(0n);
 
       expect(await lido.getWithdrawalsReserve()).to.equal(0n);
@@ -663,7 +663,7 @@ describe("Lido.sol:misc", () => {
       const deposit = ether("100.0");
       await lido.submit(ZeroAddress, { value: deposit });
       await lido.setDepositsReserveTarget(ether("40.0"));
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
       await withdrawalQueue.mock__unfinalizedStETH(ether("80.0"));
 
       const buffered = await lido.getBufferedEther();
@@ -681,14 +681,14 @@ describe("Lido.sol:misc", () => {
       const highTarget = ether("50.0");
 
       await lido.setDepositsReserveTarget(lowTarget);
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
       const withdrawalsReserveWithLowTarget = await lido.getWithdrawalsReserve();
       expect(withdrawalsReserveWithLowTarget).to.equal(buffered - lowTarget);
 
       await lido.setDepositsReserveTarget(highTarget);
       // target increase is deferred until report, so withdrawals reserve is unchanged before sync
       expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveWithLowTarget);
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
       const withdrawalsReserveWithHighTarget = await lido.getWithdrawalsReserve();
       expect(withdrawalsReserveWithHighTarget).to.equal(buffered - highTarget);
       expect(withdrawalsReserveWithHighTarget).to.be.lt(withdrawalsReserveWithLowTarget);
@@ -697,11 +697,11 @@ describe("Lido.sol:misc", () => {
     it("Does not change on oracle report when no withdrawals are finalized", async () => {
       await lido.submit(ZeroAddress, { value: ether("100.0") });
       await lido.setDepositsReserveTarget(ether("30.0"));
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
       await withdrawalQueue.mock__unfinalizedStETH(ether("40.0"));
       const before = await lido.getWithdrawalsReserve();
 
-      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lido.connect(accountingSigner).collectRewardsAndProcessWithdrawals(0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n);
 
       expect(await lido.getWithdrawalsReserve()).to.equal(before);
     });

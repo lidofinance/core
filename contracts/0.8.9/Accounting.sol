@@ -11,6 +11,7 @@ import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
 
+import {IRedeemsBuffer} from "contracts/common/interfaces/IRedeemsBuffer.sol";
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 
 import {WithdrawalQueue} from "./WithdrawalQueue.sol";
@@ -44,6 +45,7 @@ contract Accounting {
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
         IStakingRouter stakingRouter;
         IVaultHub vaultHub;
+        IRedeemsBuffer redeemsBuffer;
     }
 
     /// @notice snapshot of the protocol state that may be changed during the report
@@ -57,6 +59,8 @@ contract Accounting {
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
+        uint256 redeemedEther;
+        uint256 redeemedShares;
     }
 
     /// @notice precalculated values that is used to change the state of the protocol during the report
@@ -159,6 +163,18 @@ contract Accounting {
         } else {
             pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
         }
+
+        (pre.redeemedEther, pre.redeemedShares) = _getRedeemed(_contracts, isSimulation);
+    }
+
+    function _getRedeemed(Contracts memory _contracts, bool _isSimulation)
+        internal
+        view
+        returns (uint256 redeemedEther, uint256 redeemedShares)
+    {
+        if (address(_contracts.redeemsBuffer) == address(0)) return (0, 0);
+        if (_isSimulation) return _contracts.redeemsBuffer.getRedeemed();
+        return _contracts.redeemsBuffer.getRedeemedForLastRefSlot();
     }
 
     /// @dev calculates all the state changes that is required to apply the report
@@ -188,23 +204,24 @@ contract Accounting {
             update.sharesToBurnForWithdrawals,
             update.totalSharesToBurn // shares to burn from Burner balance
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
-            _pre.totalPooledEther - _pre.externalEther, // we need to change the base as shareRate is now calculated on
-            _pre.totalShares - _pre.externalShares,     // internal ether and shares, but inside it's still total
+            _pre.totalPooledEther - _pre.externalEther - _pre.redeemedEther, // we need to change the base as shareRate is now calculated on
+            _pre.totalShares - _pre.externalShares - _pre.redeemedShares,    // internal ether and shares, but inside it's still total
             update.principalClBalance,
             _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
-            _report.sharesRequestedToBurn,
+            _report.sharesRequestedToBurn - _pre.redeemedShares,
             update.etherToFinalizeWQ,
             update.sharesToFinalizeWQ
         );
 
         uint256 postInternalSharesBeforeFees = _pre.totalShares -
             _pre.externalShares - // internal shares before
-            update.totalSharesToBurn; // shares to be burned for withdrawals and cover
+            update.totalSharesToBurn - // shares to be burned for withdrawals and cover
+            _pre.redeemedShares;
 
         update.postInternalEther =
-            _pre.totalPooledEther - _pre.externalEther // internal ether before
+            _pre.totalPooledEther - _pre.externalEther - _pre.redeemedEther // internal ether before
             + _report.clValidatorsBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
             + update.elRewardsVaultTransfer
             - update.etherToFinalizeWQ;
@@ -366,8 +383,11 @@ contract Accounting {
             LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
         }
 
-        if (_update.totalSharesToBurn > 0) {
-            _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
+        {
+            uint256 totalBurn = _update.totalSharesToBurn + _pre.redeemedShares;
+            if (totalBurn > 0) {
+                _contracts.burner.commitSharesToBurn(totalBurn, _pre.redeemedShares);
+            }
         }
 
         LIDO.collectRewardsAndProcessWithdrawals(
@@ -378,7 +398,9 @@ contract Accounting {
             _update.elRewardsVaultTransfer,
             lastWithdrawalRequestToFinalize,
             _report.simulatedShareRate,
-            _update.etherToFinalizeWQ
+            _update.etherToFinalizeWQ,
+            _pre.redeemedEther,
+            _pre.redeemedShares
         );
 
         if (_update.sharesToMintAsFees > 0) {
@@ -502,6 +524,8 @@ contract Accounting {
             address vaultHub
         ) = LIDO_LOCATOR.oracleReportComponents();
 
+        address redeemsBuffer = LIDO.getRedeemsBuffer();
+
         return
             Contracts(
                 accountingOracle,
@@ -510,7 +534,8 @@ contract Accounting {
                 WithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
                 IStakingRouter(stakingRouter),
-                IVaultHub(vaultHub)
+                IVaultHub(vaultHub),
+                IRedeemsBuffer(redeemsBuffer)
             );
     }
 

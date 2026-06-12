@@ -116,6 +116,7 @@ export enum Sk {
   validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
   topUpGateway = "topUpGateway",
+  redeemsBuffer = "redeemsBuffer",
   v3TemporaryAdmin = "v3TemporaryAdmin",
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
@@ -172,6 +173,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
+    case Sk.redeemsBuffer:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:

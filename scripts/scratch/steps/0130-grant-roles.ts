@@ -11,7 +11,7 @@ import {
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { log } from "lib/log";
-import { readNetworkState, Sk } from "lib/state-file";
+import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -128,6 +128,11 @@ export async function main() {
     from: deployer,
   });
   await makeTx(burner, "grantRole", [requestBurnSharesRole, accountingAddress], {
+    from: deployer,
+  });
+
+  const redeemsBufferAddress = getAddress(Sk.redeemsBuffer, state);
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, redeemsBufferAddress], {
     from: deployer,
   });
 }
