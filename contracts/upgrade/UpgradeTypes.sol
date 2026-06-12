@@ -33,12 +33,6 @@ interface IAragonApp {
     function appId() external view returns (bytes32);
 }
 
-interface ITimeConstraints {
-    function checkTimeAfterTimestampAndEmit(uint40 timestamp) external;
-    function checkTimeBeforeTimestampAndEmit(uint40 timestamp) external;
-    function checkTimeWithinDayTimeAndEmit(uint32 startDayTime, uint32 endDayTime) external;
-}
-
 interface IBaseOracle is IAccessControlEnumerableV4, IVersioned {
     function getConsensusContract() external view returns (address);
     function getConsensusVersion() external view returns (uint256);
@@ -56,7 +50,7 @@ interface IStakingRouterUpgrade is IAccessControlEnumerable {
     // existing roles
 
     function getWithdrawalCredentials() external view returns (bytes32);
-    function finalizeUpgrade_v4() external;
+    function finalizeUpgrade_v4(uint256 _maxTopUpPerBlockGwei) external;
     function updateModuleShares(uint256 _stakingModuleId, uint16 _stakeShareLimit, uint16 _priorityExitShareThreshold)
         external;
 
@@ -77,6 +71,10 @@ interface IStakingRouterUpgrade is IAccessControlEnumerable {
     function STAKING_MODULE_UNVETTING_ROLE() external view returns (bytes32);
 }
 
+interface IOracleReportSanityCheckerUpgrade {
+    function migrateBaselineSnapshot() external;
+}
+
 interface IDepositSecurityModule {
     function getOwner() external view returns (address);
     function setOwner(address newValue) external;
@@ -91,10 +89,17 @@ interface IConsolidationMigrator {
     function disallowPair(uint256 sourceOperatorId, uint256 targetOperatorId) external;
     function sourceModuleId() external view returns (uint256);
     function targetModuleId() external view returns (uint256);
+    function getConsolidationBus() external view returns (address);
+}
+
+interface IConsolidationBus {
+    function getConsolidationGateway() external view returns (address);
 }
 
 interface IMerkleGate {
+    function name() external view returns (string memory);
     function curveId() external view returns (uint256);
+    function setName(string calldata name) external;
     function setTreeParams(bytes32 treeRoot, string calldata treeCid) external;
 }
 
@@ -106,7 +111,7 @@ interface IOneShotCurveSetup {
 
 interface ILidoUpgrade is ILido {
     function getBufferedEther() external view returns (uint256);
-    function finalizeUpgrade_v4() external;
+    function finalizeUpgrade_v4(uint256 _depositsReserveTarget) external;
 }
 
 interface IAccountingOracleUpgrade is IBaseOracle {
@@ -125,6 +130,8 @@ interface IValidatorsExitBusOracleUpgrade is IBaseOracle {
 
 interface IWithdrawalVaultUpgrade {
     function finalizeUpgrade_v3() external;
+    function TRIGGERABLE_WITHDRAWALS_GATEWAY() external view returns (address);
+    function CONSOLIDATION_GATEWAY() external view returns (address);
 }
 
 interface IWithdrawalsManagerProxy {
@@ -190,6 +197,16 @@ interface IValidatorStrikesV3 {
     function setEjector(address newEjector) external;
 }
 
+interface ISetMerkleGateTree {
+    function validateInputData(
+        address gate,
+        bytes32 currentTreeRoot,
+        string memory currentTreeCid,
+        bytes32 newTreeRoot,
+        string memory newTreeCid
+    ) external view;
+}
+
 interface IUpdateStakingModuleShareLimits {
     struct ModuleShareParams {
         uint16 currentStakeShareLimit;
@@ -222,11 +239,20 @@ interface IMetaRegistry {
     }
 
     struct OperatorGroup {
+        string name;
         SubNodeOperator[] subNodeOperators;
         ExternalOperator[] externalOperators;
     }
 
     function createOrUpdateOperatorGroup(uint256 groupId, OperatorGroup calldata groupInfo) external;
+}
+
+interface ICreateOrUpdateOperatorGroup {
+    function validateInputData(
+        uint256 groupId,
+        IMetaRegistry.OperatorGroup memory currentGroupInfo,
+        IMetaRegistry.OperatorGroup memory newGroupInfo
+    ) external view;
 }
 
 interface IInitializedVersionView {
@@ -243,7 +269,6 @@ struct UpgradeParameters {
     address agent;
     address voting;
     address dualGovernance;
-    address resealManager;
     address circuitBreaker;
     address easyTrack;
 
@@ -306,9 +331,8 @@ struct CoreUpgradeParams {
 
     // params
     uint256 lidoDepositsReserveTarget;
-    address curatedModuleCommittee;
+    address consolidationCommittee;
     address topUpGatewayDepositor;
-    address consolidationGatewayPauser;
 
     // twGateway limits
     uint256 twMaxExitRequestsLimit;
@@ -324,6 +348,9 @@ struct CoreUpgradeParams {
     uint256 veboBalancePerFrameEth;
     uint256 veboFrameDurationInSec;
     uint256 veboConsensusVersion;
+
+    // staking router
+    uint256 maxTopUpPerBlockGwei;
 }
 
 struct CSMUpgradeParams {
@@ -374,6 +401,7 @@ struct GlobalConfig {
     address lido;
     address burner;
     address resealManager;
+    address resealCommittee;
     address circuitBreaker;
     address easyTrack;
     address easyTrackEVMScriptExecutor;
@@ -421,9 +449,8 @@ struct CoreUpgradeConfig {
     address topUpGateway;
 
     uint256 lidoDepositsReserveTarget;
-    address curatedModuleCommittee;
+    address consolidationCommittee;
     address topUpGatewayDepositor;
-    address consolidationGatewayPauser;
 
     uint256 twMaxExitRequestsLimit;
     uint256 twExitsPerFrame;
@@ -435,6 +462,9 @@ struct CoreUpgradeConfig {
     uint256 veboBalancePerFrameEth;
     uint256 veboFrameDurationInSec;
     uint256 veboConsensusVersion;
+
+    // staking router
+    uint256 maxTopUpPerBlockGwei;
 }
 
 struct CSMUpgradeConfig {

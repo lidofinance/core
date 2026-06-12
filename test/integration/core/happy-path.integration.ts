@@ -18,7 +18,7 @@ import {
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
 
-import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
 import { LogDescriptionExtended } from "../../../lib/protocol/types";
 
@@ -239,7 +239,7 @@ describe("Scenario: Protocol Happy Path", () => {
     norPendingDepositsGwei = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
-      const depositTx = await stakingRouter.connect(dsmSigner).deposit(module.id, ZERO_HASH);
+      const depositTx = await stakingRouter.connect(dsmSigner).deposit(module.id, "0x");
       const depositReceipt = (await depositTx.wait()) as ContractTransactionReceipt;
       const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];
       const unbufferedAmount = unbufferedEvent?.args[0] || 0n;
@@ -365,13 +365,10 @@ describe("Scenario: Protocol Happy Path", () => {
       [, toNorTransfer, toSdvtTransfer] = transferEvents;
     }
 
-    let toTreasuryTransferIdx = numExpectedTransferEvents - 1;
-
     if (csm !== undefined) {
       if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
         // +1 for the CSM internal transfer
         numExpectedTransferEvents += 1;
-        toTreasuryTransferIdx -= 1;
       } else {
         // no reward transfer to modules with 0 validators balance
         numExpectedTransferEvents -= 1;
@@ -381,16 +378,26 @@ describe("Scenario: Protocol Happy Path", () => {
       if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
         // +1 for the CSM internal transfer
         numExpectedTransferEvents += 1;
-        toTreasuryTransferIdx -= 1;
       } else {
         // no reward transfer to modules with 0 validators balance
         numExpectedTransferEvents -= 1;
       }
     }
-    const toTreasuryTransfer = transferEvents[toTreasuryTransferIdx];
-    const toTreasuryTransferShares = transferSharesEvents[toTreasuryTransferIdx];
+    const findTransferFromAccountingTo = (events: LogDescriptionExtended[], to: string) =>
+      events.find((event) => {
+        const args = event.args.toObject();
+        return args.from === accounting.address && args.to === to;
+      });
+    const toTreasuryTransfer = findTransferFromAccountingTo(transferEvents, treasuryAddress);
+    const toTreasuryTransferShares = findTransferFromAccountingTo(transferSharesEvents, treasuryAddress);
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
+    if (toTreasuryTransfer === undefined) {
+      throw new Error("Transfer to Treasury event not found");
+    }
+    if (toTreasuryTransferShares === undefined) {
+      throw new Error("Transfer shares to Treasury event not found");
+    }
 
     if (toBurnerTransfer) {
       expect(toBurnerTransfer?.args.toObject()).to.include(
@@ -418,14 +425,14 @@ describe("Scenario: Protocol Happy Path", () => {
       "Transfer to SDVT",
     );
 
-    expect(toTreasuryTransfer?.args.toObject()).to.include(
+    expect(toTreasuryTransfer.args.toObject()).to.include(
       {
         from: accounting.address,
         to: treasuryAddress,
       },
       "Transfer to Treasury",
     );
-    expect(toTreasuryTransferShares?.args.toObject()).to.include(
+    expect(toTreasuryTransferShares.args.toObject()).to.include(
       {
         from: accounting.address,
         to: treasuryAddress,

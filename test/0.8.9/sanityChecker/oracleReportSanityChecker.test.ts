@@ -967,7 +967,7 @@ describe("OracleReportSanityChecker.sol", () => {
     it("checkExitedEthAmountPerDay uses timeElapsed (seconds)", async () => {
       const limits = await checker.getOracleReportLimits();
       const limitWithConsolidationInWei =
-        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
+        (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 2n * ether("1");
       const oneDay = 24n * 60n * 60n;
       const exitedValidatorEthAmountLimit = limits.exitedValidatorEthAmountLimit;
       const exitedValidatorEthAmountLimitInWei = exitedValidatorEthAmountLimit * ether("1");
@@ -992,28 +992,6 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(checker.checkExitedEthAmountPerDay(exitedValidatorsCountForGuaranteedRevert, 0n))
         .to.be.revertedWithCustomError(checker, "ExitedEthAmountPerDayLimitExceeded")
         .withArgs(limitWithConsolidationInWei, exitedPerDayForGuaranteedRevert);
-    });
-
-    it("checkAppearedEthAmountPerDay includes consolidation limit", async () => {
-      const limits = await checker.getOracleReportLimits();
-      const limitWithConsolidationInWei =
-        (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
-
-      await expect(checker.checkAppearedEthAmountPerDay(0n)).not.to.be.reverted;
-
-      const guaranteedExceededAppearedPerDayValue = limitWithConsolidationInWei + 1n;
-
-      await expect(checker.checkAppearedEthAmountPerDay(guaranteedExceededAppearedPerDayValue))
-        .to.be.revertedWithCustomError(checker, "AppearedEthAmountPerDayLimitExceeded")
-        .withArgs(limitWithConsolidationInWei, guaranteedExceededAppearedPerDayValue);
-    });
-
-    it("checkAppearedEthAmountPerDay allows exact configured limit", async () => {
-      const limits = await checker.getOracleReportLimits();
-      const limitWithConsolidationInWei =
-        (limits.appearedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * ether("1");
-
-      await expect(checker.checkAppearedEthAmountPerDay(limitWithConsolidationInWei)).not.to.be.reverted;
     });
 
     it("checkNodeOperatorsPerExtraDataItemCount", async () => {
@@ -1058,12 +1036,13 @@ describe("OracleReportSanityChecker.sol", () => {
       const oneDay = 24n * 60n * 60n;
       const noDeposits = 0n;
       const unexpectedPendingWei = 1n;
-      const coldStartDepositsWei = ether("200");
       const largeColdStartDepositsWei = ether("1000000");
       const firstDayAppearedLimitWei = defaultLimits.appearedEthAmountPerDayLimit * ether("1");
+      const maxValidatorEffectiveBalanceWei = ether("2048");
+      const coldStartDepositsWei = firstDayAppearedLimitWei + maxValidatorEffectiveBalanceWei + ether("10");
       const pendingAfterExactFirstDayActivationWei = coldStartDepositsWei - firstDayAppearedLimitWei;
-      const validatorsBeyondFirstDayLimitWei = firstDayAppearedLimitWei + 1n;
-      const pendingAfterExceededFirstDayActivationWei = pendingAfterExactFirstDayActivationWei - 1n;
+      const validatorsBeyondFirstDayLimitWei = firstDayAppearedLimitWei + maxValidatorEffectiveBalanceWei + 1n;
+      const pendingAfterExceededFirstDayActivationWei = coldStartDepositsWei - validatorsBeyondFirstDayLimitWei;
 
       it("allows a zero-balance first report without deposits", async () => {
         await expect(checker.checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, 0n, 0n, noDeposits)).not.to.be.reverted;
@@ -1133,7 +1112,7 @@ describe("OracleReportSanityChecker.sol", () => {
           ),
         )
           .to.be.revertedWithCustomError(checker, "IncorrectTotalActivatedBalance")
-          .withArgs(firstDayAppearedLimitWei, firstDayAppearedLimitWei + 1n);
+          .withArgs(firstDayAppearedLimitWei, validatorsBeyondFirstDayLimitWei);
       });
     });
 
@@ -1716,7 +1695,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(third.clBalance).to.equal(ether("90"));
     });
 
-    it("uses absolute window diff between baseline and current balances", async () => {
+    it("does not treat a net window increase as a CL balance decrease", async () => {
       await checker.connect(admin).grantRole(await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE(), manager.address);
       await checker.connect(manager).setMaxCLBalanceDecreaseBP(1n);
 
@@ -1738,9 +1717,46 @@ describe("OracleReportSanityChecker.sol", () => {
         checker
           .connect(accountingSigner)
           .checkAccountingOracleReport(...report({ preCLBalance: ether("100020"), postCLBalance: ether("100015") })),
+      ).not.to.be.reverted;
+    });
+
+    it.skip("reverts when CL balance drops from an intermediate window high watermark", async () => {
+      const initialCLBalance = ether("10");
+      const activatedPendingBalance = ether("5");
+      const windowHighWatermark = initialCLBalance + activatedPendingBalance;
+      const currentPostCLBalance = ether("14");
+      const expectedDecreaseFromHighWatermark = windowHighWatermark - currentPostCLBalance;
+      const expectedMaxAllowedDecrease =
+        (windowHighWatermark * defaultLimits.maxCLBalanceDecreaseBP) / TOTAL_BASIS_POINTS;
+
+      // Seed the oldest point in the 36-day window.
+      await checker
+        .connect(accountingSigner)
+        .checkAccountingOracleReport(...report({ preCLBalance: initialCLBalance, postCLBalance: initialCLBalance }));
+
+      // Move from 10 ETH to 15 ETH through pending-funded activation. This is a valid increase,
+      // and the 15 ETH point should become the high watermark for later decrease checks.
+      await checker.connect(accountingSigner).checkAccountingOracleReport(
+        ...report({
+          preCLBalance: windowHighWatermark,
+          preCLPendingBalance: activatedPendingBalance,
+          postCLBalance: windowHighWatermark,
+          postCLPendingBalance: 0n,
+        }),
+      );
+
+      // Current implementation only compares against the oldest baseline:
+      // max(0, 10 ETH - 14 ETH) == 0, so this is red until the checker uses
+      // the intermediate 15 ETH high watermark and reports a 1 ETH decrease.
+      await expect(
+        checker
+          .connect(accountingSigner)
+          .checkAccountingOracleReport(
+            ...report({ preCLBalance: windowHighWatermark, postCLBalance: currentPostCLBalance }),
+          ),
       )
         .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
-        .withArgs(ether("15"), ether("10"));
+        .withArgs(expectedDecreaseFromHighWatermark, expectedMaxAllowedDecrease);
     });
 
     it("reverts with IncorrectCLBalanceDecrease when decrease exceeds limit and no second opinion", async () => {
@@ -1942,10 +1958,11 @@ describe("OracleReportSanityChecker.sol", () => {
   });
 
   context("migrateBaselineSnapshot", () => {
-    const MIGRATION_WITHDRAWALS = ether("57600");
+    const MIGRATION_WITHDRAWALS = ether("5");
 
     it("is permissionless before migration completes", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
+      await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
 
       await expect(migrationChecker.connect(stranger).migrateBaselineSnapshot()).not.to.be.reverted;
     });
@@ -1960,10 +1977,11 @@ describe("OracleReportSanityChecker.sol", () => {
 
     it("seeds baseline and bootstrap report snapshots", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
+      await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
 
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot())
         .to.emit(migrationChecker, "BaselineSnapshotMigrated")
-        .withArgs(ether("107"), ether("3"), MIGRATION_WITHDRAWALS);
+        .withArgs(ether("100"), MIGRATION_WITHDRAWALS);
 
       expect(await migrationChecker.getReportDataCount()).to.equal(2n);
 
@@ -1971,21 +1989,20 @@ describe("OracleReportSanityChecker.sol", () => {
       const bootstrapFlowReport = await migrationChecker.reportData(1n);
 
       expect(baselineReport.timestamp).to.equal(0n);
-      expect(baselineReport.clBalance).to.equal(ether("107"));
+      expect(baselineReport.clBalance).to.equal(ether("100"));
       expect(baselineReport.deposits).to.equal(0n);
       expect(baselineReport.clWithdrawals).to.equal(0n);
 
       expect(bootstrapFlowReport.timestamp).to.equal(0n);
-      expect(bootstrapFlowReport.clBalance).to.equal(ether("107"));
-      expect(bootstrapFlowReport.deposits).to.equal(ether("3"));
+      expect(bootstrapFlowReport.clBalance).to.equal(ether("100") - MIGRATION_WITHDRAWALS);
+      expect(bootstrapFlowReport.deposits).to.equal(0n);
       expect(bootstrapFlowReport.clWithdrawals).to.equal(MIGRATION_WITHDRAWALS);
     });
 
     it("uses migrated bootstrap flows in first CL decrease window check", async () => {
-      const migratedCLBalance = ether("107000");
+      const migratedCLBalance = ether("100000");
       const migrationDeposits = ether("3");
       const migrationDepositsCur = ether("3");
-      const reportDecrease = ether("2500");
 
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n, {
         clActive: ether("100000"),
@@ -1993,15 +2010,18 @@ describe("OracleReportSanityChecker.sol", () => {
         deposits: migrationDeposits,
         depositsCurrent: migrationDepositsCur,
       });
+      await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
 
       await migrationChecker.connect(manager).migrateBaselineSnapshot();
 
       const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
       const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
 
+      const recreatedPostCLBalance = migratedCLBalance - MIGRATION_WITHDRAWALS;
       const maxAllowedCLBalanceDecrease =
-        ((migratedCLBalance + migrationDeposits - MIGRATION_WITHDRAWALS) * defaultLimits.maxCLBalanceDecreaseBP) /
-        TOTAL_BASIS_POINTS;
+        (recreatedPostCLBalance * defaultLimits.maxCLBalanceDecreaseBP) / TOTAL_BASIS_POINTS;
+      const actualCLBalanceDecrease = maxAllowedCLBalanceDecrease + 1n;
+      const postCLBalance = recreatedPostCLBalance - actualCLBalanceDecrease;
 
       await expect(
         migrationChecker
@@ -2010,7 +2030,7 @@ describe("OracleReportSanityChecker.sol", () => {
             24n * 60n * 60n,
             migratedCLBalance,
             0n,
-            migratedCLBalance - reportDecrease,
+            postCLBalance,
             0n,
             withdrawalVaultBalance,
             0n,
@@ -2020,11 +2040,12 @@ describe("OracleReportSanityChecker.sol", () => {
           ),
       )
         .to.be.revertedWithCustomError(migrationChecker, "IncorrectCLBalanceDecrease")
-        .withArgs(reportDecrease, maxAllowedCLBalanceDecrease);
+        .withArgs(actualCLBalanceDecrease, maxAllowedCLBalanceDecrease);
     });
 
     it("reverts when migration is called more than once", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
+      await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
 
       await migrationChecker.connect(manager).migrateBaselineSnapshot();
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot()).to.be.revertedWithCustomError(

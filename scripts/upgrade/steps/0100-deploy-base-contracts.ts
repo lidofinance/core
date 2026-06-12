@@ -43,6 +43,7 @@ import {
   readNetworkState,
   Sk,
 } from "lib";
+import { OracleReportSanityCheckerSchema } from "lib/config-schemas";
 
 export async function skip(): Promise<boolean> {
   return await checkArtifactDeployedAndLog(Sk.upgradeTemporaryAdmin);
@@ -79,30 +80,22 @@ export async function main() {
   const treasuryAddress = agentAddress;
   const proxyContractsOwner = agentAddress;
 
-  // old sanity checker
+  // get unchanged values from the old sanity checker
   const oldSanityChecker = await loadContract<IOracleReportSanityChecker_preV4>(
     "IOracleReportSanityChecker_preV4",
     await locator.oracleReportSanityChecker(),
   );
   const oldCheckerLimits = await oldSanityChecker.getOracleReportLimits();
-  const newCheckerLimits = {
-    exitedEthAmountPerDayLimit: parameters.oracleReportSanityChecker.exitedEthAmountPerDayLimit,
-    appearedEthAmountPerDayLimit: parameters.oracleReportSanityChecker.appearedEthAmountPerDayLimit,
-    annualBalanceIncreaseBPLimit: oldCheckerLimits.annualBalanceIncreaseBPLimit,
-    simulatedShareRateDeviationBPLimit: oldCheckerLimits.simulatedShareRateDeviationBPLimit,
-    maxBalanceExitRequestedPerReportInEth: parameters.oracleReportSanityChecker.maxBalanceExitRequestedPerReportInEth,
-    maxEffectiveBalanceWeightWCType01: parameters.oracleReportSanityChecker.maxEffectiveBalanceWeightWCType01,
-    maxEffectiveBalanceWeightWCType02: parameters.oracleReportSanityChecker.maxEffectiveBalanceWeightWCType02,
-    maxItemsPerExtraDataTransaction: oldCheckerLimits.maxItemsPerExtraDataTransaction,
-    maxNodeOperatorsPerExtraDataItem: oldCheckerLimits.maxNodeOperatorsPerExtraDataItem,
-    requestTimestampMargin: oldCheckerLimits.requestTimestampMargin,
-    maxPositiveTokenRebase: oldCheckerLimits.maxPositiveTokenRebase,
-    maxCLBalanceDecreaseBP: parameters.oracleReportSanityChecker.maxCLBalanceDecreaseBP,
-    clBalanceOraclesErrorUpperBPLimit: oldCheckerLimits.clBalanceOraclesErrorUpperBPLimit,
-    consolidationEthAmountPerDayLimit: parameters.oracleReportSanityChecker.consolidationEthAmountPerDayLimit,
-    exitedValidatorEthAmountLimit: parameters.oracleReportSanityChecker.exitedValidatorEthAmountLimit,
-    externalPendingBalanceCapEth: parameters.oracleReportSanityChecker.externalPendingBalanceCapEth,
-  };
+  const sanityCheckerLimits = OracleReportSanityCheckerSchema.parse({
+    annualBalanceIncreaseBPLimit: Number(oldCheckerLimits.annualBalanceIncreaseBPLimit),
+    simulatedShareRateDeviationBPLimit: Number(oldCheckerLimits.simulatedShareRateDeviationBPLimit),
+    maxItemsPerExtraDataTransaction: Number(oldCheckerLimits.maxItemsPerExtraDataTransaction),
+    maxNodeOperatorsPerExtraDataItem: Number(oldCheckerLimits.maxNodeOperatorsPerExtraDataItem),
+    requestTimestampMargin: Number(oldCheckerLimits.requestTimestampMargin),
+    maxPositiveTokenRebase: Number(oldCheckerLimits.maxPositiveTokenRebase),
+    clBalanceOraclesErrorUpperBPLimit: Number(oldCheckerLimits.clBalanceOraclesErrorUpperBPLimit),
+    ...parameters.oracleReportSanityChecker, // apply new items
+  });
 
   //
   // Deploy TemporaryAdmin
@@ -149,13 +142,12 @@ export async function main() {
       chainSpec.slotsPerEpoch,
     ],
     DepositSecurityModule: [
-      lidoAddress,
       depositContractAddress,
       stakingRouterAddress,
       parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
       parameters.depositSecurityModule.maxOperatorsPerUnvetting,
     ],
-    OracleReportSanityChecker: [locatorAddress, accountingAddress, agentAddress, newCheckerLimits],
+    OracleReportSanityChecker: [locatorAddress, accountingAddress, agentAddress, sanityCheckerLimits],
     ConsolidationGateway: [
       tempAdmin.address, // grant DEFAULT_ADMIT role to TemporaryAdmin,
       locatorAddress,
@@ -367,7 +359,6 @@ export async function main() {
 
   await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, withdrawalVaultConstructorArgs);
 
-  // todo match locator vs state
   //
   // Deploy Lido Locator new implementation
   //
@@ -420,7 +411,7 @@ export async function main() {
     resealManagerAddress,
     circuitBreakerAddress,
     consolidationMigrator.address,
-    parameters.consolidationMigrator.committee!,
+    parameters.consolidationMigrator.consolidationCommittee!,
     consolidationBus.address,
     parameters.topUpGateway.depositor!,
     await locator.depositSecurityModule(),
@@ -430,22 +421,7 @@ export async function main() {
   await logArgs("UpgradeTemporaryAdmin", tempAdminCompleteSetupArgs, "completeSetup", "complete initial setup");
   await logConfirmReview();
 
-  await makeTx(
-    tempAdmin,
-    "completeSetup",
-    [
-      lidoLocatorImpl.address,
-      easyTrackAddress,
-      resealManagerAddress,
-      circuitBreakerAddress,
-      consolidationMigrator.address,
-      parameters.consolidationMigrator.committee!,
-      consolidationBus.address,
-      parameters.topUpGateway.depositor!,
-      await locator.depositSecurityModule(),
-    ],
-    {
-      from: deployer,
-    },
-  );
+  await makeTx(tempAdmin, "completeSetup", tempAdminCompleteSetupArgs, {
+    from: deployer,
+  });
 }

@@ -12,8 +12,6 @@ import {
   TOTAL_BASIS_POINTS,
 } from "lib";
 
-import { ZERO_HASH } from "test/suite";
-
 import { ProtocolContext } from "../types";
 
 import { adjustReportModuleBalances, report, submitReportDataWithConsensusAndEmptyExtraData } from "./accounting";
@@ -194,7 +192,7 @@ const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint
 
   try {
     const dsmSigner = await impersonate(await depositSecurityModule.getAddress(), ether("1"));
-    await stakingRouter.connect(dsmSigner).deposit(moduleId, ZERO_HASH);
+    await stakingRouter.connect(dsmSigner).deposit(moduleId, "0x");
   } finally {
     if (shouldRestoreMaxDepositsPerBlock) {
       await stakingRouter
@@ -239,26 +237,45 @@ export const depositValidatorsWithoutReport = async (
 
   const depositedBefore = (await lido.getBalanceStats()).depositedSinceLastReport;
 
-  const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(ethToDeposit, false);
-
-  if (totalAllocated < ethToDeposit) {
-    throw new Error(`Not enough allocation capacity in staking modules`);
-  }
-
   const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
   const validatorsDeltaGweiByModule = new Map<bigint, bigint>();
+  let remainingToDeposit = ethToDeposit;
 
-  for (let i = 0; i < moduleIds.length; i++) {
-    if (allocated[i] === 0n) {
-      continue;
+  while (remainingToDeposit > 0n) {
+    const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(
+      remainingToDeposit,
+      false,
+    );
+
+    if (totalAllocated < remainingToDeposit) {
+      throw new Error(`Not enough allocation capacity in staking modules`);
     }
-    const moduleDepositsCount = allocated[i] / DEPOSIT_SIZE;
+
+    const moduleIndex = allocated.findIndex((amount) => amount > 0n);
+    if (moduleIndex === -1) {
+      throw new Error(`Not enough allocation capacity in staking modules`);
+    }
+
+    const moduleId = moduleIds[moduleIndex];
+    const moduleDepositsCount = allocated[moduleIndex] / DEPOSIT_SIZE;
     if (moduleDepositsCount === 0n) {
-      throw new Error(`Wrong deposits allocated to Module ${moduleIds[i]}`);
+      throw new Error(`Wrong deposits allocated to Module ${moduleId}`);
     }
-    await depositValidatorsViaRouter(ctx, moduleIds[i], moduleDepositsCount);
 
-    validatorsDeltaGweiByModule.set(moduleIds[i], allocated[i] / ONE_GWEI);
+    const depositedBeforeModule = (await lido.getBalanceStats()).depositedSinceLastReport;
+    await depositValidatorsViaRouter(ctx, moduleId, moduleDepositsCount);
+
+    const depositedAfterModule = (await lido.getBalanceStats()).depositedSinceLastReport;
+    const depositedByModule = depositedAfterModule - depositedBeforeModule;
+    if (depositedByModule === 0n) {
+      throw new Error(`No deposits applied to Module ${moduleId}`);
+    }
+
+    remainingToDeposit -= depositedByModule;
+    validatorsDeltaGweiByModule.set(
+      moduleId,
+      (validatorsDeltaGweiByModule.get(moduleId) ?? 0n) + depositedByModule / ONE_GWEI,
+    );
   }
 
   const { depositedSinceLastReport } = await lido.getBalanceStats();

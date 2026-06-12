@@ -7,7 +7,7 @@ import { setStorageAt, time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Lido, LidoLocator } from "typechain-types";
 
-import { certainAddress, INITIAL_STETH_HOLDER, proxify, streccak } from "lib";
+import { certainAddress, DEPOSITS_RESERVE_TARGET, INITIAL_STETH_HOLDER, proxify, streccak } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -49,25 +49,27 @@ describe("Lido.sol:initialize", () => {
     });
 
     it("Reverts if Locator is zero address", async () => {
-      await expect(lido.initialize(ZeroAddress, eip712helperAddress)).to.be.reverted;
+      await expect(lido.initialize(ZeroAddress, eip712helperAddress, DEPOSITS_RESERVE_TARGET)).to.be.reverted;
     });
 
     it("Reverts if EIP-712 helper is zero address", async () => {
-      await expect(lido.initialize(locator, ZeroAddress)).to.be.reverted;
+      await expect(lido.initialize(locator, ZeroAddress, DEPOSITS_RESERVE_TARGET)).to.be.reverted;
     });
 
     it("Reverts if already initialized", async () => {
-      await lido.initialize(locator, eip712helperAddress, { value: initialValue });
+      await lido.initialize(locator, eip712helperAddress, DEPOSITS_RESERVE_TARGET, { value: initialValue });
 
-      await expect(lido.initialize(locator, eip712helperAddress, { value: initialValue })).to.be.revertedWith(
-        "INIT_ALREADY_INITIALIZED",
-      );
+      await expect(
+        lido.initialize(locator, eip712helperAddress, DEPOSITS_RESERVE_TARGET, { value: initialValue }),
+      ).to.be.revertedWith("INIT_ALREADY_INITIALIZED");
     });
 
     it("Bootstraps initial holder, sets the locator and EIP-712 helper", async () => {
       const latestBlock = BigInt(await time.latestBlock());
 
-      await expect(lido.initialize(locator, eip712helperAddress, { value: initialValue }))
+      await expect(lido.initialize(locator, eip712helperAddress, DEPOSITS_RESERVE_TARGET, { value: initialValue }))
+        .to.emit(lido, "DepositsReserveTargetSet")
+        .withArgs(DEPOSITS_RESERVE_TARGET)
         .to.emit(lido, "Submitted")
         .withArgs(INITIAL_STETH_HOLDER, initialValue, ZeroAddress)
         .and.to.emit(lido, "Transfer")
@@ -83,6 +85,7 @@ describe("Lido.sol:initialize", () => {
         .and.to.emit(lido, "LidoLocatorSet")
         .withArgs(await locator.getAddress());
 
+      expect(await lido.getDepositsReserveTarget()).to.equal(DEPOSITS_RESERVE_TARGET);
       expect(await lido.getBufferedEther()).to.equal(initialValue);
       expect(await lido.getLidoLocator()).to.equal(await locator.getAddress());
       expect(await lido.getEIP712StETH()).to.equal(eip712helperAddress);
@@ -95,7 +98,7 @@ describe("Lido.sol:initialize", () => {
       const totalSharesSlot = streccak("lido.StETH.totalAndExternalShares");
       await setStorageAt(await lido.getAddress(), totalSharesSlot, 1n);
 
-      await expect(lido.initialize(locator, eip712helperAddress, { value: initialValue }))
+      await expect(lido.initialize(locator, eip712helperAddress, DEPOSITS_RESERVE_TARGET, { value: initialValue }))
         .not.to.emit(lido, "Submitted")
         .and.not.to.emit(lido, "Transfer")
         .and.not.to.emit(lido, "TransferShares");

@@ -16,6 +16,7 @@ export async function main() {
   const simpleDvtRegistryParams = state[Sk.simpleDvt].deployParameters;
   const lidoLocatorAddress = state[Sk.lidoLocator].proxy.address;
   const eip712StETHAddress = state[Sk.eip712StETH].address;
+  const lidoParams = state[Sk.appLido].deployParameters;
 
   // Initialize NodeOperatorsRegistry
 
@@ -49,8 +50,10 @@ export async function main() {
 
   // Initialize Lido
   const bootstrapInitBalance = 10n; // wei
+  const depositsReserveTarget = lidoParams.depositsReserveTarget;
+
   const lido = await loadContract("Lido", lidoAddress);
-  await makeTx(lido, "initialize", [lidoLocatorAddress, eip712StETHAddress], {
+  await makeTx(lido, "initialize", [lidoLocatorAddress, eip712StETHAddress, depositsReserveTarget], {
     value: bootstrapInitBalance,
     from: deployer,
   });

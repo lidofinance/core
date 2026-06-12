@@ -2,6 +2,7 @@ import fs from "fs";
 
 import * as toml from "@iarna/toml";
 
+import { Sk } from "lib";
 import { ScratchParameters, validateScratchParameters } from "lib/config-schemas";
 
 const SCRATCH_DEPLOY_CONFIG = process.env.SCRATCH_DEPLOY_CONFIG || "scripts/scratch/deploy-params-testnet.toml";
@@ -127,11 +128,14 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     operatorGrid: {
       deployParameters: params.operatorGrid,
     },
-    topUpGateway: {
+    [Sk.topUpGateway]: {
       deployParameters: params.topUpGateway,
     },
-    stakingRouter: {
+    [Sk.stakingRouter]: {
       deployParameters: params.stakingRouter,
+    },
+    [Sk.appLido]: {
+      deployParameters: params.lido,
     },
   };
 }

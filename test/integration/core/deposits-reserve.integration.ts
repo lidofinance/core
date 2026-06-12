@@ -14,7 +14,7 @@ import {
   setStakingLimit,
 } from "lib/protocol";
 
-import { Snapshot, ZERO_HASH } from "test/suite";
+import { Snapshot } from "test/suite";
 
 describe("Integration: Deposits reserve", () => {
   let ctx: ProtocolContext;
@@ -69,9 +69,14 @@ describe("Integration: Deposits reserve", () => {
   it("Applies target decrease immediately and defers target increase until report sync", async () => {
     const { lido } = ctx.contracts;
 
+    await lido.connect(holder).submit(ZeroAddress, { value: ether("100") });
+    await lido.connect(reserveManager).setDepositsReserveTarget(ether("40"));
+    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false, skipWithdrawals: true });
+
     const targetBefore = await lido.getDepositsReserveTarget();
     const reserveBeforeIncrease = await lido.getDepositsReserve();
-    await lido.connect(holder).submit(ZeroAddress, { value: ether("100") });
+    expect(targetBefore).to.equal(ether("40"));
+    expect(reserveBeforeIncrease).to.equal(targetBefore);
 
     const increasedTarget = targetBefore + ether("2");
     // Increase is stored in target immediately but reserve value is synchronized on report.
@@ -242,13 +247,13 @@ describe("Integration: Deposits reserve", () => {
       0,
       "Expected non-empty withdrawal finalization batches after late deposit",
     );
-    const [afterLock] = await withdrawalQueue.prefinalize(
+    const [afterLockAtRefSlotShareRate] = await withdrawalQueue.prefinalize(
       after.data.withdrawalFinalizationBatches,
-      after.data.simulatedShareRate,
+      before.data.simulatedShareRate,
     );
 
-    expect(afterLock).to.equal(beforeLock);
-    // Batches and ETH lock must stay unchanged: post-refSlot deposits must not affect finalization inputs.
+    expect(afterLockAtRefSlotShareRate).to.equal(beforeLock);
+    // Batches and ETH lock at the refSlot share rate must stay unchanged.
     expect(after.data.withdrawalFinalizationBatches).to.deep.equal(before.data.withdrawalFinalizationBatches);
   });
 
@@ -264,6 +269,7 @@ describe("Integration: Deposits reserve", () => {
       .requestTimestampMargin;
     await advanceChainTime(requestTimestampMargin + 1n);
 
+    const depositsReserveTargetBefore = await lido.getDepositsReserveTarget();
     const withdrawalsReserveBefore = await lido.getWithdrawalsReserve();
     const depositsReserveBefore = await lido.getDepositsReserve();
     expect(withdrawalsReserveBefore).to.be.gt(0n);
@@ -292,7 +298,7 @@ describe("Integration: Deposits reserve", () => {
     );
 
     // Target increase after refSlot is deferred and must not affect current withdrawals finalization budget.
-    await lido.connect(reserveManager).setDepositsReserveTarget(ether("120"));
+    await lido.connect(reserveManager).setDepositsReserveTarget(depositsReserveTargetBefore + ether("20"));
     expect(await lido.getWithdrawalsReserve()).to.equal(withdrawalsReserveBefore);
     expect(await lido.getDepositsReserve()).to.equal(depositsReserveBefore);
 
@@ -328,7 +334,7 @@ describe("Integration: Deposits reserve", () => {
 
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     // Spend depositable ether through CL deposit path.
-    const depositTx = await stakingRouter.connect(dsmSigner).deposit(1n, ZERO_HASH);
+    const depositTx = await stakingRouter.connect(dsmSigner).deposit(1n, "0x");
     await depositTx.wait();
 
     const bufferedAfter = await lido.getBufferedEther();

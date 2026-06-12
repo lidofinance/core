@@ -57,7 +57,6 @@ export async function main() {
     agent: getAddress(Sk.appAgent, state),
     voting: getAddress(Sk.appVoting, state),
     dualGovernance: getAddress(Sk.dgDualGovernance, state),
-    resealManager: getAddress(Sk.resealManager, state),
     easyTrack: getAddress(Sk.easyTrack, state),
     circuitBreaker: getAddress(Sk.circuitBreaker, state),
 
@@ -105,10 +104,12 @@ export async function main() {
       consolidationBus: getAddress(Sk.consolidationBus, state),
 
       consolidationMigrator: getAddress(Sk.consolidationMigrator, state),
-      curatedModuleCommittee: parameters.consolidationMigrator.committee!,
-      consolidationGatewayPauser: parameters.consolidationGateway.pauser!,
+      consolidationCommittee: parameters.consolidationMigrator.consolidationCommittee!,
 
-      lidoDepositsReserveTarget: parameters.lido.lidoDepositsReserveTarget,
+      lidoDepositsReserveTarget: parameters.lido.depositsReserveTarget,
+
+      // StakingRouter
+      maxTopUpPerBlockGwei: parameters.stakingRouter.maxTopUpPerBlockGwei,
     },
     csmUpgrade: parameters.csmUpgrade,
     curatedModule: parameters.curatedModule,

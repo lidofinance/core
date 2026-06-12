@@ -2,27 +2,25 @@
 set -e +u
 set -o pipefail
 
-if [ -f .env ]; then
-  . .env
-fi
+. scripts/utils/common-env.sh
 
-if [[ -z ${NETWORK} ]]; then
-  echo "Error: Environment variable NETWORK must be set"
+load_env_var NETWORK || {
+  echo "Error: NETWORK must be set"
   exit 1
-fi
+}
 echo "NETWORK: $NETWORK"
 
 # Derive RPC_URL from <NETWORK>_RPC_URL if not set explicitly
-if [[ -z ${RPC_URL} ]]; then
+load_env_var RPC_URL || {
   RPC_VAR="${NETWORK^^}_RPC_URL"
-  RPC_URL="${!RPC_VAR}"
-  if [[ -z ${RPC_URL} ]]; then
-    echo "Error: RPC_URL is not set and ${RPC_VAR} is also not set"
+
+  load_env_var "$RPC_VAR" || {
+    echo "Error: RPC_URL or ${RPC_VAR} must be set"
     exit 1
-  fi
-  echo "RPC_URL derived from \${${RPC_VAR}}"
-  export RPC_URL
-fi
+  }
+  echo "Derive RPC_URL from ${RPC_VAR}"
+  export RPC_URL="${!RPC_VAR:-}"
+}
 # echo "RPC_URL: $RPC_URL"
 
 # Generic migration steps files
@@ -33,6 +31,10 @@ export UPGRADE_PARAMETERS_FILE=${UPGRADE_PARAMETERS_FILE-"scripts/upgrade/upgrad
 echo "UPGRADE_PARAMETERS_FILE: $UPGRADE_PARAMETERS_FILE"
 export STEPS_FILE=${STEPS_FILE-"upgrade/steps-upgrade.json"}
 echo "STEPS_FILE: $STEPS_FILE"
+
+# Set default to local test deployer
+load_env_var DEPLOYER "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+echo "DEPLOYER: $DEPLOYER"
 
 if [[ ${MODE:-} == "forking" ]]; then
   echo "MODE: forking!"
@@ -57,21 +59,25 @@ if [[ ${MODE:-} == "forking" ]]; then
 
   export NETWORK="local"
   export LOCAL_RPC_URL="http://localhost:8545"
-  export HOLDER=${HOLDER-"${DEPLOYER}"}
-  echo "HOLDER: $HOLDER"
+
+  load_env_var HOLDER
+  if [[ -n ${HOLDER:-} ]]; then
+    echo "HOLDER: $HOLDER"
+  fi
+
   export DEPLOYER="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-  export ALLOW_SKIP_STEPS=${ALLOW_SKIP_STEPS-"true"}
+
+  load_env_var ALLOW_SKIP_STEPS "true"
   echo "ALLOW_SKIP_STEPS: $ALLOW_SKIP_STEPS"
-  export AUTO_CONFIRM=${AUTO_CONFIRM-"false"}
+
+  load_env_var AUTO_CONFIRM "false"
   echo "AUTO_CONFIRM: $AUTO_CONFIRM"
-  # export GAS_LIMIT=16000000
+
+  export GAS_LIMIT=16000000
   export GAS_PRIORITY_FEE=1
   export GAS_MAX_FEE=100
 fi
 
-# Set default to local test deployer
-export DEPLOYER=${DEPLOYER-"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"}
-echo "DEPLOYER: $DEPLOYER"
 
 echo "Compiling contracts..."
 yarn hardhat compile

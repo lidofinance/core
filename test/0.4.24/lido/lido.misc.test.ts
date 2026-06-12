@@ -44,7 +44,6 @@ describe("Lido.sol:misc", () => {
     withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForLidoMisc", deployer);
     stakingRouter = await ethers.deployContract("StakingRouter__MockForLidoMisc", deployer);
     accounting = await ethers.deployContract("Accounting__MockForAccountingOracle", deployer);
-    accounting = await ethers.deployContract("Accounting__MockForAccountingOracle", deployer);
     accountingOracle = await ethers.deployContract("AccountingOracle__MockForStakingRouter", deployer);
 
     ({ lido, acl } = await deployLidoDao({
@@ -57,6 +56,7 @@ describe("Lido.sol:misc", () => {
         accounting,
         accountingOracle,
       },
+      depositsReserveTarget: ether("0"), // no initial deposit reserver target
     }));
 
     await acl.createPermission(user, lido, await lido.STAKING_CONTROL_ROLE(), deployer);
@@ -773,7 +773,9 @@ describe("Lido.sol:misc", () => {
       // Use actual depositable amount
       const amountToWithdraw = depositableEther;
       await expect(lido.connect(stakingRouterSigner).withdrawDepositableEther(amountToWithdraw, 1n))
-        .to.emit(lido, "Unbuffered")
+        .to.emit(lido, "DepositedPostReportUpdated")
+        .withArgs(beforeDeposit.balanceStats.depositedSinceLastReport + amountToWithdraw)
+        .and.to.emit(lido, "Unbuffered")
         .withArgs(amountToWithdraw)
         .and.to.emit(lido, "DepositedValidatorsChanged")
         .withArgs(beforeDeposit.beaconStat.depositedValidators + 1n);
@@ -788,6 +790,44 @@ describe("Lido.sol:misc", () => {
       // Verify ETH moved from Lido to StakingRouter
       expect(afterDeposit.lidoBalance).to.be.lessThan(beforeDeposit.lidoBalance);
       expect(afterDeposit.stakingRouterBalance).to.be.greaterThan(beforeDeposit.stakingRouterBalance);
+    });
+
+    it("deposited ether lags to next refSlot", async () => {
+      const depositAmount = ether("32.0");
+      // top up Lido buffer enough for deposit
+      await lido.submit(ZeroAddress, { value: depositAmount });
+      // Get actual depositable ether which may be less due to withdrawal reservations
+      const depositableEther = await lido.getDepositableEther();
+      expect(depositableEther).to.be.greaterThan(0n);
+
+      const currentRefSlot = (await accountingOracle.getCurrentFrame()).refSlot;
+      const balanceStatsBeforeDeposit = await lido.getBalanceStats();
+
+      // Use actual depositable amount
+      const amountToWithdraw = depositableEther;
+      await lido.connect(stakingRouterSigner).withdrawDepositableEther(amountToWithdraw, 1n);
+      const balanceStatsAfterDeposit = await lido.getBalanceStats();
+      expect(balanceStatsAfterDeposit.depositedSinceLastReport).to.be.equal(
+        balanceStatsBeforeDeposit.depositedSinceLastReport + amountToWithdraw,
+      );
+      // Immediately check depositedAmountForLastRefSlot - should be less then deposited (or even 0) because increase applies to next refSlot
+      expect(balanceStatsAfterDeposit.depositedForCurrentReport).to.be.lessThan(
+        balanceStatsAfterDeposit.depositedSinceLastReport,
+      );
+
+      // Wait for next refSlot
+      await accountingOracle.mock_setProcessingState(currentRefSlot + 1n, true, true);
+      const newRefSlot = (await accountingOracle.getCurrentFrame()).refSlot;
+      expect(newRefSlot).to.be.greaterThan(currentRefSlot, "Advanced to next refSlot");
+
+      // Now depositedAmountForLastRefSlot should show the correct amount
+      const balanceStatsAfterRefSlot = await lido.getBalanceStats();
+      expect(balanceStatsAfterRefSlot.depositedSinceLastReport).to.be.equal(
+        balanceStatsBeforeDeposit.depositedSinceLastReport + amountToWithdraw,
+      );
+      expect(balanceStatsAfterRefSlot.depositedForCurrentReport).to.be.equal(
+        balanceStatsAfterDeposit.depositedSinceLastReport,
+      );
     });
 
     it("Does not emit `DepositedValidatorsChanged` event when depositsCount is 0 (top-up scenario)", async () => {

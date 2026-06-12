@@ -6,10 +6,6 @@ pragma solidity 0.8.9;
 
 import {ECDSA} from "../common/lib/ECDSA.sol";
 
-interface ILido {
-    function canDeposit() external view returns (bool);
-}
-
 interface IDepositContract {
     function get_deposit_root() external view returns (bytes32 rootHash);
 }
@@ -18,7 +14,6 @@ interface IStakingRouter {
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
-    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
     function decreaseStakingModuleVettedKeysCountByNodeOperator(
         uint256 _stakingModuleId,
         bytes calldata _nodeOperatorIds,
@@ -57,7 +52,6 @@ contract DepositSecurityModule {
     error SignaturesNotSorted();
     error DepositNoQuorum();
     error DepositRootChanged();
-    error DepositInactiveModule();
     error DepositTooFrequent();
     error DepositUnexpectedBlockHash();
     error DepositsArePaused();
@@ -70,7 +64,7 @@ contract DepositSecurityModule {
     error ZeroParameter(string parameter);
 
     /// @notice Represents the code version to help distinguish contract interfaces.
-    uint256 public constant VERSION = 3;
+    uint256 public constant VERSION = 4;
 
     /// @notice Prefix for the message signed by guardians to attest a deposit.
     bytes32 public immutable ATTEST_MESSAGE_PREFIX;
@@ -79,7 +73,6 @@ contract DepositSecurityModule {
     /// @notice Prefix for the message signed by guardians to unvet signing keys.
     bytes32 public immutable UNVET_MESSAGE_PREFIX;
 
-    ILido public immutable LIDO;
     IStakingRouter public immutable STAKING_ROUTER;
     IDepositContract public immutable DEPOSIT_CONTRACT;
 
@@ -104,17 +97,14 @@ contract DepositSecurityModule {
      * Sets the last deposit block to the current block number.
      */
     constructor(
-        address _lido,
         address _depositContract,
         address _stakingRouter,
         uint256 _pauseIntentValidityPeriodBlocks,
         uint256 _maxOperatorsPerUnvetting
     ) {
-        if (_lido == address(0)) revert ZeroAddress("_lido");
         if (_depositContract == address(0)) revert ZeroAddress("_depositContract");
         if (_stakingRouter == address(0)) revert ZeroAddress("_stakingRouter");
 
-        LIDO = ILido(_lido);
         STAKING_ROUTER = IStakingRouter(_stakingRouter);
         DEPOSIT_CONTRACT = IDepositContract(_depositContract);
 
@@ -365,7 +355,7 @@ contract DepositSecurityModule {
      * The signature, if present, must be produced for the keccak256 hash of the following
      * message (each component taking 32 bytes):
      *
-     * | PAUSE_MESSAGE_PREFIX | blockNumber |
+     * | PAUSE_MESSAGE_PREFIX | contractVersion | blockNumber |
      */
     function pauseDeposits(uint256 blockNumber, Signature memory sig) external {
         /// @dev In case of an emergency function `pauseDeposits` is supposed to be called
@@ -378,7 +368,7 @@ contract DepositSecurityModule {
         int256 guardianIndex = _getGuardianIndex(msg.sender);
 
         if (guardianIndex == -1) {
-            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, blockNumber));
+            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, VERSION, blockNumber));
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
             if (guardianIndex == -1) revert InvalidSignature();
@@ -399,30 +389,6 @@ contract DepositSecurityModule {
         if (!isDepositsPaused) revert DepositsNotPaused();
         isDepositsPaused = false;
         emit DepositsUnpaused();
-    }
-
-    /**
-     * @notice Returns whether LIDO.deposit() can be called, given that the caller
-     * will provide guardian attestations of non-stale deposit root and nonce,
-     * and the number of such attestations will be enough to reach the quorum.
-     *
-     * @param stakingModuleId The ID of the staking module.
-     * @return canDeposit Whether a deposit can be made.
-     * @dev Returns true if all of the following conditions are met:
-     *   - deposits are not paused;
-     *   - the staking module is active;
-     *   - the guardian quorum is not set to zero;
-     *   - the deposit distance is greater than the minimum required;
-     *   - LIDO.canDeposit() returns true;
-     *   - STAKING_ROUTER.canDeposit returns true.
-     */
-    function canDeposit(uint256 stakingModuleId) external view returns (bool) {
-        if (!STAKING_ROUTER.canDeposit(stakingModuleId)) return false;
-
-        bool isDepositDistancePassed = _isMinDepositDistancePassed(stakingModuleId);
-        bool isLidoCanDeposit = LIDO.canDeposit();
-
-        return (!isDepositsPaused && quorum > 0 && isDepositDistancePassed && isLidoCanDeposit);
     }
 
     /**
@@ -466,7 +432,6 @@ contract DepositSecurityModule {
      * @param depositRoot The deposit root hash.
      * @param stakingModuleId The ID of the staking module.
      * @param nonce The nonce of the staking module.
-     * @param depositCalldata The calldata for the deposit.
      * @param sortedGuardianSignatures The list of guardian signatures ascendingly sorted by address.
      * @dev Reverts if any of the following is true:
      *   - onchain deposit root is different from the provided one;
@@ -482,7 +447,7 @@ contract DepositSecurityModule {
      * Signatures must be sorted in ascending order by address of the guardian. Each signature must
      * be produced for the keccak256 hash of the following message (each component taking 32 bytes):
      *
-     * | ATTEST_MESSAGE_PREFIX | blockNumber | blockHash | depositRoot | stakingModuleId | nonce |
+     * | ATTEST_MESSAGE_PREFIX | contractVersion | blockNumber | blockHash | depositRoot | stakingModuleId | nonce |
      */
     function depositBufferedEther(
         uint256 blockNumber,
@@ -490,7 +455,6 @@ contract DepositSecurityModule {
         bytes32 depositRoot,
         uint256 stakingModuleId,
         uint256 nonce,
-        bytes calldata depositCalldata,
         Signature[] calldata sortedGuardianSignatures
     ) external {
         /// @dev The first most likely reason for the signature to go stale
@@ -502,7 +466,6 @@ contract DepositSecurityModule {
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
         if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
-        if (!STAKING_ROUTER.canDeposit(stakingModuleId)) revert DepositInactiveModule();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();
@@ -510,7 +473,7 @@ contract DepositSecurityModule {
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
         // Call StakingRouter instead of Lido - SR will pull ETH from Lido
-        STAKING_ROUTER.deposit(stakingModuleId, depositCalldata);
+        STAKING_ROUTER.deposit(stakingModuleId, "");
 
         _setLastDepositBlock(block.number);
     }
@@ -524,7 +487,15 @@ contract DepositSecurityModule {
         Signature[] memory sigs
     ) internal view {
         bytes32 msgHash = keccak256(
-            abi.encodePacked(ATTEST_MESSAGE_PREFIX, blockNumber, blockHash, depositRoot, stakingModuleId, nonce)
+            abi.encodePacked(
+                ATTEST_MESSAGE_PREFIX,
+                VERSION,
+                blockNumber,
+                blockHash,
+                depositRoot,
+                stakingModuleId,
+                nonce
+            )
         );
 
         address prevSignerAddr;
@@ -561,7 +532,7 @@ contract DepositSecurityModule {
      *
      * The signature, if present, must be produced for the keccak256 hash of the following message:
      *
-     * | UNVET_MESSAGE_PREFIX | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
+     * | UNVET_MESSAGE_PREFIX | contractVersion | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
      */
     function unvetSigningKeys(
         uint256 blockNumber,
@@ -596,6 +567,7 @@ contract DepositSecurityModule {
                 // values with a dynamic type checked earlier
                 abi.encodePacked(
                     UNVET_MESSAGE_PREFIX,
+                    VERSION,
                     blockNumber,
                     blockHash,
                     stakingModuleId,

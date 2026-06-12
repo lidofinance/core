@@ -6,7 +6,14 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingRouter } from "typechain-types";
 
-import { certainAddress, getNextBlock, randomString, randomWCType1, WithdrawalCredentialsType } from "lib";
+import {
+  certainAddress,
+  getNextBlock,
+  MAX_TOP_UP_PER_BLOCK_GWEI,
+  randomString,
+  randomWCType1,
+  WithdrawalCredentialsType,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 
@@ -39,7 +46,7 @@ describe("StakingRouter.sol:module-management", () => {
     ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
 
     // initialize staking router
-    await stakingRouter.initialize(admin, withdrawalCredentials);
+    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
 
     // grant roles
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);
@@ -140,6 +147,15 @@ describe("StakingRouter.sol:module-management", () => {
       await expect(
         stakingRouter.addStakingModule(NAME_TOO_LONG, ADDRESS, stakingModuleConfig),
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
+    });
+
+    it("Reverts if the max deposits per block is zero", async () => {
+      await expect(
+        stakingRouter.addStakingModule(NAME, ADDRESS, {
+          ...stakingModuleConfig,
+          maxDepositsPerBlock: 0n,
+        }),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMaxDepositPerBlockValue");
     });
 
     it("Reverts if the max number of staking modules is reached", async () => {
@@ -337,6 +353,20 @@ describe("StakingRouter.sol:module-management", () => {
           0n,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidMinDepositBlockDistance");
+    });
+
+    it("Reverts if the new max deposits per block is zero", async () => {
+      await expect(
+        stakingRouter.updateStakingModule(
+          ID,
+          NEW_STAKE_SHARE_LIMIT,
+          NEW_PRIORITY_EXIT_SHARE_THRESHOLD,
+          NEW_MODULE_FEE,
+          NEW_TREASURY_FEE,
+          0n,
+          NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+        ),
+      ).to.be.revertedWithCustomError(stakingRouter, "InvalidMaxDepositPerBlockValue");
     });
 
     it("Reverts if the new deposit block distance is great then uint64 max", async () => {

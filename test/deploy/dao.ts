@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Kernel, LidoLocator } from "typechain-types";
 
-import { ether, findEvents, streccak } from "lib";
+import { DEPOSITS_RESERVE_TARGET, ether, findEvents, streccak } from "lib";
 
 import { deployLidoLocator } from "./locator";
 
@@ -20,6 +20,7 @@ interface DeployLidoDaoArgs {
   rootAccount: HardhatEthersSigner;
   initialized: boolean;
   locatorConfig?: Partial<LidoLocator.ConfigStruct>;
+  depositsReserveTarget?: bigint;
 }
 
 async function createAragonDao(rootAccount: HardhatEthersSigner) {
@@ -59,7 +60,12 @@ export async function addAragonApp({ dao, name, impl, rootAccount }: CreateAddAp
 }
 
 // TODO: extract initialization from this function
-export async function deployLidoDao({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
+export async function deployLidoDao({
+  rootAccount,
+  initialized,
+  locatorConfig = {},
+  depositsReserveTarget = DEPOSITS_RESERVE_TARGET,
+}: DeployLidoDaoArgs) {
   const { dao, acl } = await createAragonDao(rootAccount);
 
   const impl = await ethers.deployContract("Lido", {
@@ -78,13 +84,18 @@ export async function deployLidoDao({ rootAccount, initialized, locatorConfig = 
   if (initialized) {
     const locator = await deployLidoLocator({ lido, ...locatorConfig }, rootAccount);
     const eip712steth = await ethers.deployContract("EIP712StETH", [lido], rootAccount);
-    await lido.initialize(locator, eip712steth, { value: ether("1.0") });
+    await lido.initialize(locator, eip712steth, depositsReserveTarget, { value: ether("1.0") });
   }
 
   return { lido, dao, acl };
 }
 
-export async function deployLidoDaoForNor({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
+export async function deployLidoDaoForNor({
+  rootAccount,
+  initialized,
+  locatorConfig = {},
+  depositsReserveTarget = DEPOSITS_RESERVE_TARGET,
+}: DeployLidoDaoArgs) {
   const { dao, acl } = await createAragonDao(rootAccount);
 
   const impl = await ethers.deployContract("Lido__HarnessForDistributeReward", {
@@ -105,7 +116,7 @@ export async function deployLidoDaoForNor({ rootAccount, initialized, locatorCon
   if (initialized) {
     const locator = await deployLidoLocator({ lido, burner, ...locatorConfig }, rootAccount);
     const eip712steth = await ethers.deployContract("EIP712StETH", [lido], rootAccount);
-    await lido.initialize(locator, eip712steth, { value: ether("1.0") });
+    await lido.initialize(locator, eip712steth, depositsReserveTarget, { value: ether("1.0") });
   }
 
   return { lido, dao, acl, burner };

@@ -11,7 +11,7 @@ import {
 } from "typechain-types";
 
 import { randomWCType1 } from "lib";
-import { ONE_GWEI, StakingModuleStatus, WithdrawalCredentialsType } from "lib/constants";
+import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, StakingModuleStatus, WithdrawalCredentialsType } from "lib/constants";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -49,7 +49,7 @@ describe("StakingRouter.sol:getDepositAllocations", () => {
     ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator, lido: lidoMock }));
 
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());
-    await stakingRouter.initialize(admin, withdrawalCredentials);
+    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
     await stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin);
 
     ctx = {
