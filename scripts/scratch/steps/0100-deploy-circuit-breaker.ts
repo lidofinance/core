@@ -83,6 +83,8 @@ export async function main() {
       `--rpc-url ${rpcUrl}`,
       `--private-key ${privateKey}`,
       "--broadcast",
+      // Override gas estimation for Amsterdam HF, EIP-8037
+      "--gas-limit 16000000",
     ];
 
     if (process.env.ETHERSCAN_API_KEY) {
