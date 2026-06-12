@@ -6,9 +6,6 @@
     "upgrade/steps/0150-deploy-mock-et-factories",
     "upgrade/steps/0200-deploy-upgrade-template",
     "upgrade/steps/0300-deploy-upgrade-vote-script",
-    "upgrade/steps/0500-mock-upgrade",
-    "upgrade/steps/0911-upd1-deploy",
-    "upgrade/steps/0911-upd1-voting",
-    "upgrade/steps/1000-mock-voting"
+    "upgrade/steps/0500-mock-upgrade"
   ]
 }
