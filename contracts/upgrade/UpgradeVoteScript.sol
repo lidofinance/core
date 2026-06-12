@@ -35,6 +35,7 @@ import {
     IAccountingV3,
     IFeeDistributorV3,
     IValidatorStrikesV3,
+    ISetMerkleGateTree,
     IUpdateStakingModuleShareLimits,
     IBaseModuleV3,
     IMerkleGate,
@@ -194,7 +195,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 "Add SetMerkleGateTree CSM ET factory",
                 easyTrack,
                 etn.SetMerkleGateTreeForCSM,
-                _setMerkleGateTreePermissions(csmGates)
+                _setMerkleGateTreePermissions(etn.SetMerkleGateTreeForCSM, csmGates)
             );
 
             items[i++] = _addETFactoryItem(
@@ -219,7 +220,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 "Add SetMerkleGateTree CM ET factory",
                 easyTrack,
                 etn.SetMerkleGateTreeForCM,
-                _setMerkleGateTreePermissions(c.curatedGates)
+                _setMerkleGateTreePermissions(etn.SetMerkleGateTreeForCM, c.curatedGates)
             );
 
             items[i++] = _addETFactoryItem(
@@ -812,7 +813,12 @@ contract UpgradeVoteScript is OmnibusBase {
         });
     }
 
-    function _setMerkleGateTreePermissions(address[] memory gates) private pure returns (bytes memory permissions) {
+    function _setMerkleGateTreePermissions(address factory, address[] memory gates)
+        private
+        pure
+        returns (bytes memory permissions)
+    {
+        permissions = bytes.concat(bytes20(factory), bytes4(ISetMerkleGateTree.validateInputData.selector));
         for (uint256 i = 0; i < gates.length; ++i) {
             if (gates[i] == address(0)) revert InvalidMerkleGateAddress();
             permissions = bytes.concat(permissions, bytes20(gates[i]), bytes4(IMerkleGate.setTreeParams.selector));

@@ -202,6 +202,16 @@ interface IValidatorStrikesV3 {
     function setEjector(address newEjector) external;
 }
 
+interface ISetMerkleGateTree {
+    function validateInputData(
+        address gate,
+        bytes32 currentTreeRoot,
+        string memory currentTreeCid,
+        bytes32 newTreeRoot,
+        string memory newTreeCid
+    ) external view;
+}
+
 interface IUpdateStakingModuleShareLimits {
     struct ModuleShareParams {
         uint16 currentStakeShareLimit;
