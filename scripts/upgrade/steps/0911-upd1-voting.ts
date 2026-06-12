@@ -41,6 +41,7 @@ const STAKING_MODULE_UNVETTING_ROLE = id("STAKING_MODULE_UNVETTING_ROLE");
 const PAUSE_ROLE = id("PAUSE_ROLE");
 const RESUME_ROLE = id("RESUME_ROLE");
 const MANAGE_ROLE = id("MANAGE_ROLE"); // ConsolidationBus
+const REMOVE_ROLE = id("REMOVE_ROLE"); // ConsolidationBus
 const MANAGE_LIMITS_ROLE = id("MANAGE_LIMITS_ROLE"); // TopUpGateway
 
 // Curated module (curated-onchain-v2) id in the StakingRouter
@@ -97,6 +98,7 @@ export async function main() {
   const depositsReserveTarget = parameters.lido.depositsReserveTarget;
   const maxTopUpPerBlockGwei = parameters.stakingRouter.maxTopUpPerBlockGwei;
   const consolidationBusBatchSize = parameters.consolidationBus.initialBatchSize;
+  const consolidationCommittee = parameters.consolidationMigrator.consolidationCommittee!;
   const topUpGatewayMinBlockDistance = parameters.topUpGateway.minBlockDistance;
   const curatedModuleParams = parameters.curatedModule;
 
@@ -179,6 +181,13 @@ export async function main() {
       call: {
         to: consolidationBusAddress,
         data: proxyIface.encodeFunctionData("proxy__upgradeTo", [newConsolidationBusImpl]),
+      },
+    },
+    {
+      description: "Grant ConsolidationBus REMOVE_ROLE to ConsolidationCommittee",
+      call: {
+        to: consolidationBusAddress,
+        data: accessControlIface.encodeFunctionData("grantRole", [REMOVE_ROLE, consolidationCommittee]),
       },
     },
     ...(agentHasConsolidationBusManageRole
