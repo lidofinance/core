@@ -62,6 +62,8 @@ export async function main() {
   const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
     locatorAddress,
     lidoAddress,
+    Number(chainSpec.secondsPerSlot),
+    Number(chainSpec.genesisTime),
   ]);
 
   //
@@ -311,6 +313,20 @@ export async function main() {
   ]);
   console.log("VaultFactory address", await vaultFactory.getAddress());
 
+  const consolidationGateway = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
+    agentAddress, // TODO: check
+    locator.address,
+    // ToDo: Replace dummy parameters with real ones
+    10, // maxConsolidationRequestsLimit,
+    1, // consolidationsPerFrame,
+    60, // frameDurationInSec
+    pdgDeployParams.gIndex, // gIFirstValidatorPrev
+    pdgDeployParams.gIndexAfterChange, // gIFirstValidatorCurr
+    pdgDeployParams.changeSlot, // pivotSlot
+  ]);
+
+  console.log("ConsolidationGateway address", await consolidationGateway.getAddress());
+
   //
   // Deploy new LidoLocator implementation
   //
@@ -330,6 +346,7 @@ export async function main() {
     oracleDaemonConfig: await locator.oracleDaemonConfig(),
     validatorExitDelayVerifier: getAddress(Sk.validatorExitDelayVerifier, state),
     triggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),
+    consolidationGateway: consolidationGateway.address,
     accounting: accounting.address,
     predepositGuarantee: predepositGuarantee.address,
     wstETH: wstethAddress,
@@ -337,6 +354,7 @@ export async function main() {
     vaultFactory: vaultFactory.address,
     lazyOracle: lazyOracle.address,
     operatorGrid: operatorGrid.address,
+    topUpGateway: getAddress(Sk.topUpGateway, state),
   };
   const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 

@@ -707,11 +707,12 @@ describe("Integration: Vault with bad debt", () => {
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares, "Bad debt to internalize is the same");
 
       // simulate the report at the refSlot (like the Oracle would do)
-      const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
+      const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+      const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
       const simulationAtRefSlot = await simulateReport(ctx, {
         refSlot: nextRefSlot,
-        beaconValidators,
-        clBalance: beaconBalance,
+        clValidatorsBalance: clBalance,
+        clPendingBalance: 0n,
         withdrawalVaultBalance: 0n,
         elRewardsVaultBalance: 0n,
       });
@@ -723,8 +724,8 @@ describe("Integration: Vault with bad debt", () => {
       expect(
         await simulateReport(ctx, {
           refSlot: (await hashConsensus.getCurrentFrame()).refSlot,
-          beaconValidators,
-          clBalance: beaconBalance,
+          clValidatorsBalance: clBalance,
+          clPendingBalance: 0n,
           withdrawalVaultBalance: 0n,
           elRewardsVaultBalance: 0n,
         }),

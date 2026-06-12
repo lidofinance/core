@@ -17,6 +17,10 @@ import {
 
 import { deployHashConsensus } from "./hashConsensus";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
+import {
+  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
+} from "./validatorExitBusOracle";
 
 export const ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
 export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
@@ -24,8 +28,18 @@ export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_E
 async function deployMockAccountingAndStakingRouter() {
   const stakingRouter = await ethers.deployContract("StakingRouter__MockForAccountingOracle");
   const withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForAccountingOracle");
+  const lido = await ethers.deployContract("Lido__MockForAccounting");
   const accounting = await ethers.deployContract("Accounting__MockForAccountingOracle");
-  return { accounting, stakingRouter, withdrawalQueue };
+
+  // Initialize Lido mock with reasonable defaults for balance-based accounting
+  await lido.mock__setClValidatorsBalance(300n * 10n ** 18n); // 300 ETH active
+  await lido.mock__setClPendingBalance(20n * 10n ** 18n); // 20 ETH pending
+  await lido.mock__setDepositedValidators(10);
+  // Router mock stores validators balance only; pending balance is seeded on the Lido mock.
+  await stakingRouter.mock__registerStakingModule(1);
+  await stakingRouter.reportValidatorBalancesByStakingModule([1], [300n * 10n ** 9n]);
+
+  return { accounting, stakingRouter, withdrawalQueue, lido };
 }
 
 async function deployMockLazyOracle() {
@@ -46,7 +60,7 @@ export async function deployAccountingOracleSetup(
 ) {
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
-  const { accounting, stakingRouter, withdrawalQueue } = await getLidoAndStakingRouter();
+  const { accounting, stakingRouter, withdrawalQueue, lido } = await getLidoAndStakingRouter();
 
   const oracle = await ethers.deployContract("AccountingOracle__Harness", [
     lidoLocatorAddr || locatorAddr,
@@ -71,13 +85,13 @@ export async function deployAccountingOracleSetup(
     withdrawalQueue: await withdrawalQueue.getAddress(),
     accountingOracle: accountingOracleAddress,
     accounting: accountingAddress,
+    lido: await lido.getAddress(),
   });
 
   const lazyOracle = await deployMockLazyOracle();
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(
     locatorAddr,
-    accountingOracleAddress,
     accountingAddress,
     admin,
   );
@@ -94,6 +108,7 @@ export async function deployAccountingOracleSetup(
     accounting,
     stakingRouter,
     withdrawalQueue,
+    lido,
     locatorAddr,
     oracle,
     consensus,
@@ -135,28 +150,27 @@ export async function initAccountingOracle({
   return initTx;
 }
 
-async function deployOracleReportSanityCheckerForAccounting(
-  lidoLocator: string,
-  accountingOracle: string,
-  accounting: string,
-  admin: string,
-) {
-  const exitedValidatorsPerDayLimit = 55;
-  const appearedValidatorsPerDayLimit = 100;
+async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, accounting: string, admin: string) {
+  const exitedEthAmountPerDayLimit = 65_535n;
+  const appearedEthAmountPerDayLimit = 65_535n;
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, accountingOracle, accounting, admin, {
-      exitedValidatorsPerDayLimit,
-      appearedValidatorsPerDayLimit,
+    f.deploy(lidoLocator, accounting, admin, {
+      exitedEthAmountPerDayLimit,
+      appearedEthAmountPerDayLimit,
       annualBalanceIncreaseBPLimit: 0n,
       simulatedShareRateDeviationBPLimit: 0n,
-      maxValidatorExitRequestsPerReport: 32n * 12n,
+      maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
+      maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+      maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
       maxItemsPerExtraDataTransaction: 15n,
       maxNodeOperatorsPerExtraDataItem: 16n,
       requestTimestampMargin: 0n,
-      maxPositiveTokenRebase: 0n,
-      initialSlashingAmountPWei: 0n,
-      inactivityPenaltiesAmountPWei: 0n,
+      maxPositiveTokenRebase: 1n,
+      maxCLBalanceDecreaseBP: 360n,
       clBalanceOraclesErrorUpperBPLimit: 0n,
+      consolidationEthAmountPerDayLimit: 0n,
+      exitedValidatorEthAmountLimit: 1n,
+      externalPendingBalanceCapEth: 0n,
     }),
   );
 }

@@ -118,6 +118,7 @@ export async function main(): Promise<void> {
     oracleDaemonConfig: await locator.oracleDaemonConfig(),
     validatorExitDelayVerifier: await locator.validatorExitDelayVerifier(),
     triggerableWithdrawalsGateway: await locator.triggerableWithdrawalsGateway(),
+    consolidationGateway: await locator.consolidationGateway(),
     accounting: await locator.accounting(),
     predepositGuarantee: await locator.predepositGuarantee(),
     wstETH: wstethAddress,
@@ -125,6 +126,7 @@ export async function main(): Promise<void> {
     vaultFactory: newVaultFactoryAddress,
     lazyOracle: await locator.lazyOracle(),
     operatorGrid: await locator.operatorGrid(),
+    topUpGateway: await locator.topUpGateway(),
   };
   const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
   const newLocatorAddress = await lidoLocatorImpl.getAddress();

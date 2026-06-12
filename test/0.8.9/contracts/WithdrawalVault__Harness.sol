@@ -9,8 +9,20 @@ contract WithdrawalVault__Harness is WithdrawalVault {
     constructor(
         address _lido,
         address _treasury,
-        address _triggerableWithdrawalsGateway
-    ) WithdrawalVault(_lido, _treasury, _triggerableWithdrawalsGateway) {}
+        address _triggerableWithdrawalsGateway,
+        address _consolidationGateway,
+        address _withdrawalRequest,
+        address _consolidationRequest
+    )
+        WithdrawalVault(
+            _lido,
+            _treasury,
+            _triggerableWithdrawalsGateway,
+            _consolidationGateway,
+            _withdrawalRequest,
+            _consolidationRequest
+        )
+    {}
 
     function harness__initializeContractVersionTo(uint256 _version) external {
         _initializeContractVersionTo(_version);

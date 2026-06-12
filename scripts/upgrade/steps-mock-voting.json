@@ -1,0 +1,11 @@
+{
+  "steps": [
+    "upgrade/steps/0000-check-env",
+    "upgrade/steps/0050-deploy-mock-circuit-breaker",
+    "upgrade/steps/0100-deploy-base-contracts",
+    "upgrade/steps/0150-deploy-mock-et-factories",
+    "upgrade/steps/0200-deploy-upgrade-template",
+    "upgrade/steps/0300-deploy-upgrade-vote-script",
+    "upgrade/steps/1000-mock-voting"
+  ]
+}

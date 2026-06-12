@@ -5,13 +5,20 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   HashConsensus__Harness,
+  StakingModule__MockForKeyVerification,
   TriggerableWithdrawalsGateway__MockForVEB,
   ValidatorsExitBus__Harness,
 } from "typechain-types";
 
 import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO, SECONDS_PER_FRAME } from "test/deploy";
+import {
+  DATA_FORMAT_LIST_WITH_KEY_INDEX,
+  deployVEBO,
+  initVEBO,
+  SECONDS_PER_FRAME,
+  seedMockModuleSigningKeys,
+} from "test/deploy";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers
@@ -37,6 +44,7 @@ interface ExitRequest {
   moduleId: number;
   nodeOpId: number;
   valIndex: number;
+  keyIndex: number;
   valPubkey: string;
 }
 
@@ -56,10 +64,16 @@ const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
   return reportDataHash;
 };
 
-const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
+const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey, keyIndex }: ExitRequest) => {
   const pubkeyHex = de0x(valPubkey);
   expect(pubkeyHex.length).to.equal(48 * 2);
-  return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
+  return (
+    numberToHex(moduleId, 3) +
+    numberToHex(nodeOpId, 5) +
+    numberToHex(valIndex, 8) +
+    numberToHex(keyIndex, 8) +
+    pubkeyHex
+  );
 };
 
 const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
@@ -85,6 +99,14 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let triggerableWithdrawalsGateway: TriggerableWithdrawalsGateway__MockForVEB;
+  let mockModules: {
+    module1: StakingModule__MockForKeyVerification;
+    module2: StakingModule__MockForKeyVerification;
+    module3: StakingModule__MockForKeyVerification;
+    module4: StakingModule__MockForKeyVerification;
+    module5: StakingModule__MockForKeyVerification;
+    module7: StakingModule__MockForKeyVerification;
+  };
 
   let oracleVersion: bigint;
 
@@ -99,6 +121,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     triggerableWithdrawalsGateway = deployed.triggerableWithdrawalsGateway;
+    mockModules = deployed.mockModules;
 
     await initVEBO({
       admin: admin.address,
@@ -124,10 +147,10 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
   describe("Submit via oracle flow ", async () => {
     const exitRequests = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, keyIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, keyIndex: 1, valPubkey: PUBKEYS[1] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 1, keyIndex: 2, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 3, keyIndex: 3, valPubkey: PUBKEYS[3] },
     ];
 
     let reportFields: ReportFields;
@@ -135,8 +158,8 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
     before(async () => {
       [admin, member1, member2, member3, authorizedEntity, stranger] = await ethers.getSigners();
-
       await deploy();
+      await seedMockModuleSigningKeys(mockModules, exitRequests);
     });
 
     it("some time passes", async () => {
@@ -150,7 +173,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
         consensusVersion: VEBO_CONSENSUS_VERSION,
         refSlot: refSlot,
         requestsCount: exitRequests.length,
-        dataFormat: DATA_FORMAT_LIST,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: encodeExitRequestsDataList(exitRequests),
       };
 
@@ -286,13 +309,13 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
   describe("Submit via trustfull method", () => {
     const exitRequests = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, keyIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, keyIndex: 1, valPubkey: PUBKEYS[1] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 2, keyIndex: 2, valPubkey: PUBKEYS[1] },
     ];
 
     const exitRequest = {
-      dataFormat: DATA_FORMAT_LIST,
+      dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
       data: encodeExitRequestsDataList(exitRequests),
     };
 
@@ -300,8 +323,8 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
     before(async () => {
       [admin, member1, member2, member3, authorizedEntity] = await ethers.getSigners();
-
       await deploy();
+      await seedMockModuleSigningKeys(mockModules, exitRequests);
     });
 
     it("should revert if request was not submitted", async () => {
@@ -380,13 +403,14 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
     it("should revert with error if module id is equal to 0", async () => {
       const requests = [
-        { moduleId: 0, nodeOpId: 1, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-        { moduleId: 2, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 0, nodeOpId: 1, valIndex: 0, keyIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, keyIndex: 1, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 2, keyIndex: 2, valPubkey: PUBKEYS[1] },
       ];
+      await seedMockModuleSigningKeys(mockModules, requests);
 
       const request = {
-        dataFormat: DATA_FORMAT_LIST,
+        dataFormat: DATA_FORMAT_LIST_WITH_KEY_INDEX,
         data: encodeExitRequestsDataList(requests),
       };
 

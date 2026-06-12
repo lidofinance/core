@@ -21,7 +21,9 @@ describe("Lido.sol:initialize", () => {
 
   before(async () => {
     [deployer] = await ethers.getSigners();
-    const impl = await ethers.deployContract("Lido", deployer);
+    const impl = await ethers.deployContract("Lido", {
+      signer: deployer,
+    });
 
     expect(await impl.getInitializationBlock()).to.equal(MaxUint256);
     [lido] = await proxify({ impl, admin: deployer });
@@ -33,7 +35,7 @@ describe("Lido.sol:initialize", () => {
 
   context("initialize", () => {
     const initialValue = 1n;
-    const contractVersion = 3n;
+    const contractVersion = 4n;
 
     let withdrawalQueueAddress: string;
     let burnerAddress: string;

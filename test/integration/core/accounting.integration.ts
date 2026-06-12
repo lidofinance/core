@@ -4,9 +4,17 @@ import { ethers } from "hardhat";
 
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { ether, impersonate, ONE_GWEI, updateBalance } from "lib";
+import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
-import { getProtocolContext, getReportTimeElapsed, ProtocolContext, removeStakingLimit, report } from "lib/protocol";
+import {
+  getProtocolContext,
+  getReportTimeElapsed,
+  ProtocolContext,
+  removeStakingLimit,
+  report,
+  seedProtocolPendingBaseline,
+} from "lib/protocol";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
@@ -98,7 +106,7 @@ describe("Integration: Accounting", () => {
   }
 
   async function readState() {
-    const { lido, accountingOracle, elRewardsVault, withdrawalVault, burner } = ctx.contracts;
+    const { lido, accountingOracle, elRewardsVault, withdrawalVault, burner, withdrawalQueue } = ctx.contracts;
 
     const lastProcessingRefSlot = await accountingOracle.getLastProcessingRefSlot();
     const totalELRewardsCollected = await lido.getTotalELRewardsCollected();
@@ -108,6 +116,12 @@ describe("Integration: Accounting", () => {
     const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault);
     const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault);
     const burnerShares = await lido.sharesOf(burner);
+    const bufferedEther = await lido.getBufferedEther();
+    const depositsReserveTarget = await lido.getDepositsReserveTarget();
+    const depositsReserve = await lido.getDepositsReserve();
+    const withdrawalsReserve = await lido.getWithdrawalsReserve();
+    const depositableEther = await lido.getDepositableEther();
+    const unfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
 
     return {
       lastProcessingRefSlot,
@@ -118,6 +132,12 @@ describe("Integration: Accounting", () => {
       elRewardsVaultBalance,
       withdrawalVaultBalance,
       burnerShares,
+      bufferedEther,
+      depositsReserveTarget,
+      depositsReserve,
+      withdrawalsReserve,
+      depositableEther,
+      unfinalizedStETH,
     };
   }
 
@@ -134,6 +154,12 @@ describe("Integration: Accounting", () => {
       elRewardsVaultBalance,
       withdrawalVaultBalance,
       burnerShares,
+      bufferedEther,
+      depositsReserveTarget,
+      depositsReserve,
+      withdrawalsReserve,
+      depositableEther,
+      unfinalizedStETH,
     } = await readState();
 
     expect(lastProcessingRefSlot).to.be.greaterThan(
@@ -166,27 +192,59 @@ describe("Integration: Accounting", () => {
       beforeState.internalShares + (expectedDelta.internalShares ?? 0n),
       "Internal shares mismatch",
     );
+
+    expect(depositsReserveTarget).to.equal(
+      beforeState.depositsReserveTarget,
+      "Deposits reserve target should not change during report processing",
+    );
+    const expectedDepositsReserve = bufferedEther < depositsReserveTarget ? bufferedEther : depositsReserveTarget;
+    expect(depositsReserve).to.equal(
+      expectedDepositsReserve,
+      "Deposits reserve should be synced to min(buffered ether, deposits reserve target)",
+    );
+    expect(depositsReserve).to.be.lte(depositsReserveTarget, "Deposits reserve should not exceed target");
+    expect(depositsReserve).to.be.lte(bufferedEther, "Deposits reserve should not exceed buffered ether");
+    expect(depositableEther).to.equal(
+      bufferedEther - withdrawalsReserve,
+      "Depositable should equal buffered minus withdrawals reserve",
+    );
+    expect(withdrawalsReserve).to.be.lte(unfinalizedStETH, "Withdrawals reserve should not exceed demand");
+    expect(withdrawalsReserve).to.be.lte(bufferedEther, "Withdrawals reserve should not exceed buffered ether");
   }
 
   async function expectTransferFeesEvents(
     reportTxReceipt: ContractTransactionReceipt,
     noRewards: boolean = false,
   ): Promise<bigint> {
-    const { stakingRouter } = ctx.contracts;
-
-    const stakingModulesCount = await stakingRouter.getStakingModulesCount();
-
-    const numberOfCSMModules = (await stakingRouter.getStakingModules()).filter(
-      (module) => module.name === "Community Staking",
-    ).length;
+    const { stakingRouter, csm, cmv2 } = ctx.contracts;
 
     const { amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
     const hasWithdrawals = amountOfETHLocked !== 0n;
 
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
-    const expectedRewardsDistributionEventsCount = noRewards
-      ? 0n
-      : BigInt(stakingModulesCount) + BigInt(numberOfCSMModules) + 2n;
+    let expectedRewardsDistributionEventsCount = 0n;
+
+    if (!noRewards) {
+      expectedRewardsDistributionEventsCount = BigInt(await stakingRouter.getStakingModulesCount()) + 2n; // +1 initial mint, +1 for the treasury
+      if (csm !== undefined) {
+        if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
+          // +1 for the CSM internal transfer
+          expectedRewardsDistributionEventsCount += 1n;
+        } else {
+          // no reward transfer to modules with 0 validators balance
+          expectedRewardsDistributionEventsCount -= 1n;
+        }
+      }
+      if (cmv2 !== undefined) {
+        if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
+          // +1 for the CSM internal transfer
+          expectedRewardsDistributionEventsCount += 1n;
+        } else {
+          // no reward transfer to modules with 0 validators balance
+          expectedRewardsDistributionEventsCount -= 1n;
+        }
+      }
+    }
     const expectedWithdrawalsTransferEventCount = hasWithdrawals ? 1n : 0n;
     expect(transferSharesEvents.length).to.equal(
       expectedWithdrawalsTransferEventCount + expectedRewardsDistributionEventsCount,
@@ -227,7 +285,7 @@ describe("Integration: Accounting", () => {
         reportBurner: false,
         skipWithdrawals: true,
       }),
-    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease(uint256)");
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
   });
 
   it("Should account correctly with no CL rebase", async () => {
@@ -249,6 +307,86 @@ describe("Integration: Accounting", () => {
     const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased");
     const { sharesRateBefore, sharesRateAfter } = shareRateFromEvent(tokenRebasedEvent[0]);
     expect(sharesRateBefore).to.be.lessThanOrEqual(sharesRateAfter);
+  });
+
+  it("Should account correctly with non-zero deposits and withdrawals reserves", async () => {
+    const { lido, withdrawalQueue } = ctx.contracts;
+    const agent = await ctx.getSigner("agent");
+
+    await lido.connect(agent).setDepositsReserveTarget(ether("10"));
+    await lido.connect(agent).submit(ZeroAddress, { value: ether("90") });
+    await lido.connect(agent).approve(withdrawalQueue, ether("5"));
+    await withdrawalQueue.connect(agent).requestWithdrawals([ether("5")], agent.address);
+    await report(ctx, {
+      clDiff: 0n,
+      excludeVaultsBalances: true,
+      reportBurner: false,
+      skipWithdrawals: true,
+      dryRun: false,
+    });
+
+    const beforeState = await readState();
+    expect(beforeState.depositsReserveTarget).to.equal(ether("10"));
+    expect(beforeState.depositsReserve).to.equal(ether("10"));
+    expect(beforeState.withdrawalsReserve).to.be.gt(0n);
+    const expectedWithdrawalsReserve =
+      beforeState.unfinalizedStETH < beforeState.bufferedEther - beforeState.depositsReserve
+        ? beforeState.unfinalizedStETH
+        : beforeState.bufferedEther - beforeState.depositsReserve;
+    expect(beforeState.withdrawalsReserve).to.equal(expectedWithdrawalsReserve);
+    expect(beforeState.depositableEther).to.equal(beforeState.bufferedEther - beforeState.withdrawalsReserve);
+
+    // Deferred target increase must not change effective reserves before report processing.
+    const increasedTarget = beforeState.bufferedEther + ether("1000");
+    await lido.connect(agent).setDepositsReserveTarget(increasedTarget);
+    expect(await lido.getDepositsReserve()).to.equal(beforeState.depositsReserve);
+    expect(await lido.getWithdrawalsReserve()).to.equal(beforeState.withdrawalsReserve);
+    const beforeStateAfterTargetUpdate = await readState();
+    expect(beforeStateAfterTargetUpdate.depositsReserveTarget).to.equal(increasedTarget);
+
+    const requestTimestampMargin = (await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits())
+      .requestTimestampMargin;
+    await advanceChainTime(requestTimestampMargin + 1n);
+
+    const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
+    const dryRunParams = {
+      refSlot,
+      waitNextReportTime: false,
+      dryRun: true,
+      clDiff: 0n,
+      reportElVault: false,
+      reportWithdrawalsVault: false,
+      reportBurner: false,
+      excludeVaultsBalances: true,
+    } as const;
+
+    const dryRunBefore = await report(ctx, dryRunParams);
+    expect(dryRunBefore.data.withdrawalFinalizationBatches.length).to.be.gt(
+      0,
+      "Expected non-empty withdrawal finalization batches in dry-run report",
+    );
+    const [lockBefore] = await withdrawalQueue.prefinalize(
+      dryRunBefore.data.withdrawalFinalizationBatches,
+      dryRunBefore.data.simulatedShareRate,
+    );
+    expect(lockBefore).to.be.lte(beforeStateAfterTargetUpdate.withdrawalsReserve);
+
+    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false });
+    const reportTxReceipt = (await reportTx!.wait())!;
+    const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
+
+    await expectStateChanges(beforeStateAfterTargetUpdate, {
+      totalELRewardsCollected: 0n,
+      internalEther: amountOfETHLocked * -1n,
+      internalShares: sharesBurntAmount * -1n,
+      lidoBalance: amountOfETHLocked * -1n,
+    });
+
+    const afterState = await readState();
+    expect(afterState.depositsReserveTarget).to.equal(increasedTarget);
+    expect(afterState.depositsReserve).to.equal(afterState.bufferedEther);
+    expect(afterState.withdrawalsReserve).to.equal(0n);
+    expect(afterState.depositableEther).to.equal(afterState.bufferedEther);
   });
 
   it("Should account correctly with negative CL rebase", async () => {
@@ -282,27 +420,26 @@ describe("Integration: Accounting", () => {
   it("Should account correctly with positive CL rebase close to the limits", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
 
+    await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
+
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-    const { beaconBalance } = await lido.getBeaconStat();
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
-    // To calculate the rebase amount close to the annual increase limit
-    // we use (ONE_DAY + 1n) to slightly underperform for the daily limit
-    // This ensures we're testing a scenario very close to, but not exceeding, the annual limit
-    const time = timeElapsed + 1n;
-    let rebaseAmount = (beaconBalance * annualBalanceIncreaseBPLimit * time) / (365n * ONE_DAY) / MAX_BASIS_POINTS;
+    // `report()` submits the raw post-vs-pre CL delta. In this seeded scenario the
+    // pending baseline is activated inside the same report, so the raw boundary is
+    // the safety-cap component computed from the post-activation validators base.
+    let rebaseAmount =
+      ((clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) * annualBalanceIncreaseBPLimit * timeElapsed) /
+      (365n * ONE_DAY) /
+      MAX_BASIS_POINTS;
     rebaseAmount = roundToGwei(rebaseAmount);
 
-    // At this point, rebaseAmount represents a positive CL rebase that is
-    // just slightly below the maximum allowed daily increase, testing the system's
-    // behavior near its operational limits
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: rebaseAmount, excludeVaultsBalances: true };
-
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await report(ctx, { clDiff: rebaseAmount, excludeVaultsBalances: true })) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -575,7 +712,10 @@ describe("Integration: Accounting", () => {
 
     await expectStateChanges(stateBefore, {
       internalShares: -1n * sharesBurntAmount,
-      burnerShares: -1n * sharesLimit,
+      // On Hoodi, this report can finalize withdrawal requests at the same time.
+      // WQ shares first arrive in Burner, and smoothing may leave part of them for
+      // the next report; sharesLimit itself is checked separately from withdrawal burn below.
+      burnerShares: sharesToBurn - sharesBurntAmount,
       internalEther: -1n * amountOfETHLocked,
       lidoBalance: -1n * amountOfETHLocked,
     });

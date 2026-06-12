@@ -27,12 +27,9 @@ export function readScratchParameters(): ScratchParameters {
 export function scratchParametersToDeploymentState(params: ScratchParameters): Record<string, unknown> {
   return {
     deployer: null, // Set by deployment scripts
-    gateSeal: {
+    circuitBreaker: {
       address: null, // Set by deployment scripts
-      factoryAddress: null, // Set by deployment scripts
-      sealDuration: params.gateSeal.sealDuration,
-      expiryTimestamp: params.gateSeal.expiryTimestamp,
-      sealingCommittee: params.gateSeal.sealingCommittee,
+      deployParameters: params.circuitBreaker,
     },
     lidoApmEnsName: params.lidoApm.ensName,
     lidoApmEnsRegDurationSec: params.lidoApm.ensRegDurationSec,
@@ -115,11 +112,26 @@ export function scratchParametersToDeploymentState(params: ScratchParameters): R
     triggerableWithdrawalsGateway: {
       deployParameters: params.triggerableWithdrawalsGateway,
     },
+    consolidationGateway: {
+      deployParameters: params.consolidationGateway,
+    },
+    consolidationBus: {
+      deployParameters: params.consolidationBus,
+    },
+    consolidationMigrator: {
+      deployParameters: params.consolidationMigrator,
+    },
     predepositGuarantee: {
       deployParameters: params.predepositGuarantee,
     },
     operatorGrid: {
       deployParameters: params.operatorGrid,
+    },
+    topUpGateway: {
+      deployParameters: params.topUpGateway,
+    },
+    stakingRouter: {
+      deployParameters: params.stakingRouter,
     },
   };
 }

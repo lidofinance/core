@@ -53,6 +53,21 @@ const PAIRS_TO_SKIP: {
       "function transferFrom(address sender, address recipient, uint256 amount) returns (bool)",
     ],
   },
+  {
+    interfaceFqn: "contracts/0.4.24/Lido.sol:IAccountingOracle",
+    contractFqn: "contracts/0.8.9/oracle/AccountingOracle.sol:AccountingOracle",
+    reason: "Fixing requires Lido redeploy",
+  },
+  {
+    interfaceFqn: "contracts/0.4.24/Lido.sol:IStakingRouter",
+    contractFqn: "contracts/0.8.25/sr/StakingRouter.sol:StakingRouter",
+    reason: "only var names/state modifiers are diff., can be safely ignored",
+  },
+  {
+    interfaceFqn: "contracts/0.8.25/sr/SRTypes.sol:IAccountingOracle",
+    contractFqn: "contracts/0.8.9/oracle/AccountingOracle.sol:AccountingOracle",
+    reason: "Optimization to avoid memory struct allocation on each deposit.",
+  },
 ];
 
 task("check-interfaces").setAction(async (_, hre) => {

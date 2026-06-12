@@ -18,7 +18,7 @@ import {
   RewardDistributionState,
   setAnnualBalanceIncreaseLimit,
 } from "lib";
-import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, seedProtocolPendingBaseline, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
 import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
@@ -28,6 +28,7 @@ import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MIN_KEYS_PER_OPERATOR = 5n;
 const MIN_OPERATORS_COUNT = 30n;
+const MAIN_REPORT_EFFECTIVE_CL_REWARD = ether("1");
 
 class ListKeyMapHelper<ValueType> {
   private map: Map<string, ValueType> = new Map();
@@ -237,13 +238,29 @@ describe("Integration: AccountingOracle extra data full items", () => {
         );
       }
 
+      // This suite also relies on the reward-bearing main report to enter
+      // TransferredToModule before extra-data finalization. Snapshot protocol
+      // pending first so the original reward-bearing path remains reachable.
+      await seedProtocolPendingBaseline(ctx, SDVT_MODULE_ID);
+
+      // Keep the original 1 ETH reward-bearing main report, but give the pending-backed
+      // safety cap enough elapsed time after snapshotting the pending baseline.
+      await advanceChainTime(15n * 24n * 60n * 60n);
+
       const { submitter, extraDataChunks } = await reportWithoutExtraData(
         ctx,
         numExitedValidatorsByStakingModule,
         modulesWithExited,
         extraData,
+        {
+          // Snapshot protocol pending into the previous report first, then run the original
+          // reward-bearing main report so this suite still exercises
+          // TransferredToModule -> ReadyForDistribution -> Distributed.
+          effectiveClDiff: MAIN_REPORT_EFFECTIVE_CL_REWARD,
+        },
       );
 
+      // Make the main-report transition explicit before extra data finalization moves modules to ReadyForDistribution.
       await assertModulesRewardDistributionState(RewardDistributionState.TransferredToModule);
 
       for (let i = 0; i < extraDataChunks.length; i++) {

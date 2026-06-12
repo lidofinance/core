@@ -7,8 +7,8 @@ pragma solidity >=0.4.24;
 
 interface IOracleReportSanityChecker {
     function smoothenTokenRebase(
-        uint256 _preTotalPooledEther,
-        uint256 _preTotalShares,
+        uint256 _preInternalEther,
+        uint256 _preInternalShares,
         uint256 _preCLBalance,
         uint256 _postCLBalance,
         uint256 _withdrawalVaultBalance,
@@ -21,14 +21,27 @@ interface IOracleReportSanityChecker {
     //
     function checkAccountingOracleReport(
         uint256 _timeElapsed,
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
+        uint256 _preCLValidatorsBalance,
+        uint256 _preCLPendingBalance,
+        uint256 _postCLValidatorsBalance,
+        uint256 _postCLPendingBalance,
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
-        uint256 _preCLValidators,
-        uint256 _postCLValidators
+        uint256 _deposits,
+        uint256 _withdrawalsVaultTransfer
     ) external;
+
+    //
+    function checkCLPendingBalanceIncrease(
+        uint256 _timeElapsed,
+        uint256 _preCLValidatorsBalance,
+        uint256 _preCLPendingBalance,
+        uint256 _postCLValidatorsBalance,
+        uint256 _postCLPendingBalance,
+        uint256 _withdrawalVaultBalance,
+        uint256 _deposits
+    ) external view;
 
     //
     function checkWithdrawalQueueOracleReport(
@@ -38,10 +51,10 @@ interface IOracleReportSanityChecker {
 
     //
     function checkSimulatedShareRate(
-        uint256 _postTotalPooledEther,
-        uint256 _postTotalShares,
-        uint256 _etherLockedOnWithdrawalQueue,
-        uint256 _sharesBurntDueToWithdrawals,
+        uint256 _postInternalEther,
+        uint256 _postInternalShares,
+        uint256 _etherToFinalizeWQ,
+        uint256 _sharesToBurnForWithdrawals,
         uint256 _simulatedShareRate
     ) external view;
 }
