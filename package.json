@@ -34,7 +34,7 @@
     "test:integration:upgrade": "MODE=forking UPGRADE=true bash scripts/run-test-integration-upgrade.sh",
     "test:integration:upgrade-template": "TEMPLATE_TEST=true yarn test:integration:upgrade",
     "test:integration:upgrade:mainnet": "NETWORK=mainnet yarn test:integration:upgrade",
-    "test:integration:upgrade:local": "TRACE=fulltrace MODE=forking UPGRADE=true NETWORK=local bash scripts/run-test-integration.sh",
+    "test:integration:upgrade:local": "MODE=forking UPGRADE=true NETWORK=local bash scripts/run-test-integration.sh",
     "test:integration:scratch": "DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true SKIP_GAS_REPORT=true GENESIS_TIME=1639659600 GAS_PRIORITY_FEE=1 GAS_MAX_FEE=100 yarn test:integration:scratch:helper test/integration/**/*.ts",
     "test:integration:scratch:helper": "MODE=scratch hardhat test",
     "test:integration:scratch:trace": "MODE=scratch hardhat test test/integration/**/*.ts --trace --disabletracer",
@@ -56,8 +56,9 @@
     "upgrade:deploy:upd1:local": "MODE=forking yarn upgrade:deploy:upd1",
     "upgrade:voting:upd1": "STEPS_FILE=upgrade/steps-upd1-voting.json yarn upgrade:helper:run",
     "upgrade:voting:upd1:local": "MODE=forking yarn upgrade:voting:upd1",
-    "upgrade:mock-voting": "MODE=forking STEPS_FILE=upgrade/steps-mock-voting.json yarn upgrade:helper:run",
-    "upgrade:mock-upgrade": "MODE=forking STEPS_FILE=upgrade/steps-mock-upgrade.json yarn upgrade:helper:run",
+    "upgrade:mock:upd1:local": "AUTO_CONFIRM=true MODE=forking STEPS_FILE=upgrade/steps-upd1-mock.json yarn upgrade:helper:run",
+    "upgrade:mock:voting": "MODE=forking STEPS_FILE=upgrade/steps-mock-voting.json yarn upgrade:helper:run",
+    "upgrade:mock:upgrade": "MODE=forking STEPS_FILE=upgrade/steps-mock-upgrade.json yarn upgrade:helper:run",
     "postinstall": "husky"
   },
   "lint-staged": {
