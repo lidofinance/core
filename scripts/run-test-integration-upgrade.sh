@@ -27,7 +27,7 @@ load_env_var RPC_URL || {
 load_env_var DEPLOYER "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 echo "DEPLOYER: $DEPLOYER"
 
-load_env_var HOLDER
+load_env_var HOLDER ""
 if [[ -n ${HOLDER:-} ]]; then
   echo "HOLDER: $HOLDER"
 fi
@@ -58,7 +58,7 @@ TEMP_UPGRADE_PARAMETERS_FILE="upgrade-params-${NETWORK}-upgrade.toml"
 cp -f "$UPGRADE_PARAMETERS_FILE" "$TEMP_UPGRADE_PARAMETERS_FILE"
 export UPGRADE_PARAMETERS_FILE=$TEMP_UPGRADE_PARAMETERS_FILE
 
-load_env_var FORKING_BLOCK_NUMBER
+load_env_var FORKING_BLOCK_NUMBER ""
 if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
   echo "FORKING_BLOCK_NUMBER: ${FORKING_BLOCK_NUMBER}"
 fi

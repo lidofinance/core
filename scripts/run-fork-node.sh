@@ -61,7 +61,7 @@ load_env_var FORK_NODE "anvil"
 echo "FORK_NODE: $FORK_NODE"
 
 BLOCK_ARG=()
-load_env_var FORKING_BLOCK_NUMBER
+load_env_var FORKING_BLOCK_NUMBER ""
 if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
   echo "FORKING_BLOCK_NUMBER: ${FORKING_BLOCK_NUMBER}"
   BLOCK_ARG=(--fork-block-number "$FORKING_BLOCK_NUMBER")
