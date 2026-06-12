@@ -3,7 +3,9 @@ import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
   Accounting__factory,
+  AccountingOracle__factory,
   ConsolidationBus__factory,
+  ConsolidationMigrator__factory,
   DepositSecurityModule,
   DepositSecurityModule__factory,
   Lido__factory,
@@ -13,6 +15,7 @@ import {
   OracleReportSanityChecker__factory,
   StakingRouter__factory,
   TopUpGateway__factory,
+  ValidatorsExitBusOracle__factory,
 } from "typechain-types";
 
 import {
@@ -55,6 +58,8 @@ export async function main() {
   const stakingRouterAddress = await locator.stakingRouter();
   const accountingAddress = await locator.accounting();
   const consolidationGatewayAddress = await locator.consolidationGateway();
+  const consolidationBusAddress = getAddress(Sk.consolidationBus, state);
+
   const oldDepositSecurityModule = await loadContract<DepositSecurityModule>(
     "DepositSecurityModule",
     await locator.depositSecurityModule(),
@@ -90,17 +95,31 @@ export async function main() {
   // -8. OracleReportSanityChecker.sol
   // -9. Accounting.sol
   // -10. DepositSecurityModule.sol
+  // -11. ConsolidationMigrator.sol
+  // -12. AccountingOracle.sol
+  // -13. ValidatorsExitBusOracle.sol
 
   const constructorArgs: {
     Lido: ConstructorArgs<Lido__factory>;
     Accounting: ConstructorArgs<Accounting__factory>;
+    AccountingOracle: ConstructorArgs<AccountingOracle__factory>;
+    ValidatorsExitBusOracle: ConstructorArgs<ValidatorsExitBusOracle__factory>;
     ConsolidationBus: ConstructorArgs<ConsolidationBus__factory>;
+    ConsolidationMigrator: ConstructorArgs<ConsolidationMigrator__factory>;
     StakingRouter: ConstructorArgs<StakingRouter__factory>;
     TopUpGateway: ConstructorArgs<TopUpGateway__factory>;
   } = {
     Lido: [],
     Accounting: [locatorAddress, lidoAddress],
+    AccountingOracle: [locatorAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
+    ValidatorsExitBusOracle: [Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime), locatorAddress],
     ConsolidationBus: [consolidationGatewayAddress],
+    ConsolidationMigrator: [
+      stakingRouterAddress,
+      consolidationBusAddress,
+      parameters.consolidationMigrator.sourceModuleId,
+      parameters.consolidationMigrator.targetModuleId,
+    ],
     StakingRouter: [
       depositContractAddress,
       lidoAddress,
@@ -120,9 +139,12 @@ export async function main() {
   logStartReview();
   await logArgs("Lido", constructorArgs.Lido);
   await logArgs("Accounting", constructorArgs.Accounting);
+  await logArgs("AccountingOracle", constructorArgs.AccountingOracle);
+  await logArgs("ValidatorsExitBusOracle", constructorArgs.ValidatorsExitBusOracle);
   await logArgs("StakingRouter", constructorArgs.StakingRouter);
   await logArgs("TopUpGateway", constructorArgs.TopUpGateway);
   await logArgs("ConsolidationBus", constructorArgs.ConsolidationBus);
+  await logArgs("ConsolidationMigrator", constructorArgs.ConsolidationMigrator);
   await logConfirmReview();
 
   // Lido
@@ -134,9 +156,31 @@ export async function main() {
   // vote: upgrade impl
   await deployImplementation(Sk.accounting, "Accounting", deployer, constructorArgs.Accounting);
 
+  // AccountingOracle
+  // vote: upgrade impl
+  await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, constructorArgs.AccountingOracle);
+
+  // ValidatorsExitBusOracle
+  // vote: upgrade impl (finalizeUpgrade_v3 was already called, contract version stays 3)
+  await deployImplementation(
+    Sk.validatorsExitBusOracle,
+    "ValidatorsExitBusOracle",
+    deployer,
+    constructorArgs.ValidatorsExitBusOracle,
+  );
+
   // ConsolidationBus
   // vote: upgrade impl
   await deployImplementation(Sk.consolidationBus, "ConsolidationBus", deployer, constructorArgs.ConsolidationBus);
+
+  // ConsolidationMigrator
+  // vote: upgrade impl
+  await deployImplementation(
+    Sk.consolidationMigrator,
+    "ConsolidationMigrator",
+    deployer,
+    constructorArgs.ConsolidationMigrator,
+  );
 
   // SR
   // vote: set maxTopUpPerBlockGwei 3200000000000
@@ -164,6 +208,7 @@ export async function main() {
   await deployImplementation(Sk.topUpGateway, "TopUpGateway", deployer, constructorArgs.TopUpGateway);
 
   // DepositSecurityModule
+  // setup: migrate guardians
   // vote: swap role in SR
   const dsmConstructorArgs: ConstructorArgs<DepositSecurityModule__factory> = [
     depositContractAddress,
@@ -207,9 +252,9 @@ export async function main() {
     oscConstructorArgs,
   );
   // seed report data
-  await makeTx(oracleReportSanityChecker, "migrateBaselineSnapshot", [], {
-    from: deployer,
-  });
+  // await makeTx(oracleReportSanityChecker, "migrateBaselineSnapshot", [], {
+  //   from: deployer,
+  // });
 
   // LidoLocator
   // vote: upgrade locator
