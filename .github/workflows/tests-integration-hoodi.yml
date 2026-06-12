@@ -25,4 +25,5 @@ jobs:
           NETWORK: "hoodi"
           RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
           FORKING_BLOCK_NUMBER: "2983230"
+          HOLDER: "0xD500a8aDB182F55741E267730dfbfb4F1944C205"
           NETWORK_STATE_FILE: deployed-hoodi.json
