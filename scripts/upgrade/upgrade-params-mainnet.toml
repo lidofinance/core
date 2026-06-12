@@ -22,17 +22,10 @@ CSMSetVettedGateTree = "0xBc5642bDD6F2a54b01A75605aAe9143525D97308"
 [oracleReportSanityChecker]
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
-annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
-simulatedShareRateDeviationBPLimit = 50                # Simulated share rate deviation limit (BP)
 maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
 maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
 maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
-maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
-maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
-requestTimestampMargin = 7680                          # Request timestamp margin
-maxPositiveTokenRebase = 750000                       # Maximum positive token rebase
 maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
-clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
