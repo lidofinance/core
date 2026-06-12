@@ -2,7 +2,7 @@ import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
 import { getMode } from "hardhat.helpers";
 
-import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
+import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log, toBool } from "lib";
 
 import { discover } from "./discover";
 import { MAINNET_LOCATOR_ADDRESS } from "./mainnet";
@@ -61,7 +61,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
 
   if (isScratch) {
     await deployScratchProtocol();
-  } else if (process.env.UPGRADE) {
+  } else if (toBool(process.env.UPGRADE)) {
     await deployUpgrade(hre.network.name, process.env.STEPS_FILE!);
   }
 

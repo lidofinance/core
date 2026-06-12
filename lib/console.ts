@@ -15,7 +15,7 @@ export async function confirm(question: string): Promise<void> {
   return new Promise((resolve, reject) => {
     rl.question(question, (answer) => {
       rl.close();
-      if (answer.trim().toLowerCase() === "yes") {
+      if (answer.trim().toLowerCase() === "yes" || answer.trim().toLowerCase() === "y") {
         resolve();
       } else {
         reject(new Error(`Aborted by user (got "${answer.trim()}")`));
@@ -57,7 +57,7 @@ export async function logConfirmReview(msg?: string) {
   log.splitter();
   log.warning(" •", rd(msg || `Please review ${or("↑↑↑")} and confirm!`));
   log.splitter();
-  await confirm(`Type ${gr("yes")} to confirm and start deployment: `);
+  await confirm(`Looks good? (type ${gr("[y/yes]")} to confirm): `);
   log.splitter();
   log.emptyLine();
 }

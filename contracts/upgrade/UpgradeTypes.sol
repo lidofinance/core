@@ -12,11 +12,6 @@ import {ModuleStateConfig, StakingModuleConfig} from "contracts/0.8.25/sr/SRType
 // Interfaces
 // ============================
 
-interface IDualGovernance {
-    function getResealCommittee() external view returns (address);
-    function getResealManager() external view returns (address);
-}
-
 interface IAragonKernel {
     function acl() external view returns (address); //IAragonACL
     function getApp(bytes32 _namespace, bytes32 _appId) external view returns (address);
