@@ -4,6 +4,7 @@ pragma solidity 0.8.25;
 import {Bytes32String} from "contracts/common/lib/Bytes32String.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IUpgradeConfig} from "./interfaces/IUpgradeConfig.sol";
+import {IDualGovernance} from "./interfaces/IDualGovernance.sol";
 import {
     UpgradeParameters,
     EasyTrackNewFactories,
@@ -15,7 +16,6 @@ import {
     CoreUpgradeConfig,
     CuratedModuleConfig,
     CSMUpgradeConfig,
-    IDualGovernance,
     IAragonKernel,
     IAragonApp,
     IEasyTrack,
