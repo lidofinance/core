@@ -446,16 +446,6 @@
   "depositSecurityModule": {
     "deployParameters": {
       "maxOperatorsPerUnvetting": 200,
-      "dashboardImpl": {
-        "contract": "contracts/0.8.25/vaults/dashboard/Dashboard.sol",
-        "address": "0xdEf8fc6a09f76FdB45700094f06249C3EE25cf04",
-        "constructorArgs": [
-          "0x3508A952176b3c15387C97BE809eaffB1982176a",
-          "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
-          "0x65D891287364401340169980a9b6491c5e644F39",
-          "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"
-        ]
-      },
       "pauseIntentValidityPeriodBlocks": 6646,
       "usePredefinedAddressInstead": null
     },
