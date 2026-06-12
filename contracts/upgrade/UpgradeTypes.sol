@@ -252,6 +252,14 @@ interface IMetaRegistry {
     function createOrUpdateOperatorGroup(uint256 groupId, OperatorGroup calldata groupInfo) external;
 }
 
+interface ICreateOrUpdateOperatorGroup {
+    function validateInputData(
+        uint256 groupId,
+        IMetaRegistry.OperatorGroup memory currentGroupInfo,
+        IMetaRegistry.OperatorGroup memory newGroupInfo
+    ) external view;
+}
+
 interface IInitializedVersionView {
     function getInitializedVersion() external view returns (uint64);
 }

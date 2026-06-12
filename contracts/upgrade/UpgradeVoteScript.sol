@@ -37,6 +37,7 @@ import {
     IValidatorStrikesV3,
     ISetMerkleGateTree,
     IUpdateStakingModuleShareLimits,
+    ICreateOrUpdateOperatorGroup,
     IBaseModuleV3,
     IMerkleGate,
     IOneShotCurveSetup,
@@ -241,7 +242,12 @@ contract UpgradeVoteScript is OmnibusBase {
                 "Add CreateOrUpdateOperatorGroup CM ET factory",
                 easyTrack,
                 etn.CreateOrUpdateOperatorGroupForCM,
-                bytes.concat(bytes20(c.metaRegistry), bytes4(IMetaRegistry.createOrUpdateOperatorGroup.selector))
+                bytes.concat(
+                    bytes20(etn.CreateOrUpdateOperatorGroupForCM),
+                    bytes4(ICreateOrUpdateOperatorGroup.validateInputData.selector),
+                    bytes20(c.metaRegistry),
+                    bytes4(IMetaRegistry.createOrUpdateOperatorGroup.selector)
+                )
             );
         }
         if (i != VOTING_ITEMS_COUNT) revert InvalidItemsCount(i, VOTING_ITEMS_COUNT);
