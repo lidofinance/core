@@ -28,9 +28,12 @@ Assertion.addMethod("revertedWithOZAccessControlError", async function (address:
     const msg = (error as Error).message.toUpperCase().replace(/^error:\s*/i, "");
     const reason = `AccessControl: account ${address} is missing role ${role}`;
 
-    expect(msg).to.equal(
-      `VM Exception while processing transaction: reverted with reason string '${reason}'`.toUpperCase(),
-    );
+    // The in-process hardhat node reports reverts as "VM Exception while processing
+    // transaction: reverted with reason string '<reason>'", while external nodes
+    // (e.g. anvil via `--network local`) report "execution reverted: <reason>".
+    // Assert on the revert marker and the OZ reason to cover both backends.
+    expect(msg).to.include("REVERTED");
+    expect(msg).to.include(reason.toUpperCase());
     return;
   }
 

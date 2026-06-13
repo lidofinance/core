@@ -402,14 +402,10 @@
     ]
   },
   "dg:dualGovernance": {
-    "proxy": {
-      "address": "0x9CAaCCc62c66d817CC59c44780D1b722359795bF"
-    }
+    "address": "0x9CAaCCc62c66d817CC59c44780D1b722359795bF"
   },
   "dg:emergencyProtectedTimelock": {
-    "proxy": {
-      "address": "0x0A5E22782C0Bd4AddF10D771f0bF0406B038282d"
-    }
+    "address": "0x0A5E22782C0Bd4AddF10D771f0bF0406B038282d"
   },
   "dummyEmptyContract": {
     "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",

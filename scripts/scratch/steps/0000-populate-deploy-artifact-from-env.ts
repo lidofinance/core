@@ -1,7 +1,14 @@
 import { ethers } from "hardhat";
 
 import { log } from "lib";
-import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "lib/state-file";
+import { isResumeEnabled } from "lib/scratch";
+import {
+  networkStateFileExists,
+  persistNetworkState,
+  readNetworkState,
+  resetStateFileFromDeployParams,
+  Sk,
+} from "lib/state-file";
 
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;
@@ -23,7 +30,14 @@ export async function main() {
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
   const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", "0x00000000");
 
-  await resetStateFileFromDeployParams();
+  // RESUME keeps the existing state file so a failed deploy can continue from
+  // where it stopped (the step runner skips completed steps). Without an
+  // existing state file a stale RESUME=1 still gets a clean initialization.
+  if (isResumeEnabled() && networkStateFileExists()) {
+    log("RESUME is set and a state file exists: keeping it instead of resetting from deploy params");
+  } else {
+    await resetStateFileFromDeployParams();
+  }
   const state = readNetworkState();
 
   // Update network-related information

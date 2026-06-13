@@ -20,6 +20,7 @@ export {
 export { ensureDsmGuardians } from "./dsm";
 export { ensurePredepositGuaranteeUnpaused } from "./pdg";
 export { norSdvtEnsureOperators } from "./nor-sdvt";
+export { ensureSepoliaDepositAdapterFunded } from "./sepolia-deposit-adapter";
 export { calcNodeOperatorRewards } from "./staking-module";
 
 export * from "./vaults";

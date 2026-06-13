@@ -2,9 +2,26 @@ import { ethers } from "hardhat";
 
 import { impersonate } from "lib";
 
+import { ensurePredeployedBytecode } from "./predeploy";
+
 // Address of the Beacon Block Storage contract, which exposes beacon chain roots.
 // This corresponds to `BEACON_ROOTS_ADDRESS` as specified in EIP-4788.
 export const BEACON_ROOTS_ADDRESS = "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02";
+
+// Verbatim runtime bytecode of the Beacon Roots predeploy from EIP-4788.
+// It is hand-written EVM (not Solidity-compiled), so it lives here as a
+// literal and must match the spec byte-for-byte — that is what Dencun
+// installs at BEACON_ROOTS_ADDRESS on real networks. We inject it via
+// `hardhat_setCode` on fresh nodes (scratch deploy, integration tests) so
+// the post-Dencun environment is reproduced before any contract under test
+// reads a beacon block root.
+// Source: https://eips.ethereum.org/EIPS/eip-4788 ("Bytecode" section).
+const EIP4788_RUNTIME_BYTECODE =
+  "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500";
+
+export const deployEIP4788BeaconBlockRootContract = async (): Promise<void> => {
+  await ethers.provider.send("hardhat_setCode", [BEACON_ROOTS_ADDRESS, EIP4788_RUNTIME_BYTECODE]);
+};
 
 export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
   const beaconRootUpdater = await impersonate(
@@ -25,9 +42,5 @@ export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
 };
 
 export const ensureEIP4788BeaconBlockRootContractPresent = async (): Promise<void> => {
-  const code = await ethers.provider.getCode(BEACON_ROOTS_ADDRESS);
-
-  if (code === "0x") {
-    throw new Error(`EIP7788 Beacon Block Root contract not found at ${BEACON_ROOTS_ADDRESS}`);
-  }
+  await ensurePredeployedBytecode(BEACON_ROOTS_ADDRESS, EIP4788_RUNTIME_BYTECODE, "EIP4788 Beacon Block Root contract");
 };

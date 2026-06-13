@@ -23,4 +23,9 @@ jobs:
         run: yarn test:integration
         env:
           RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
+          # Last block before the on-chain Lido v4 upgrade (executed at block 2722011 on 2026-04-30).
+          # This branch carries v3 contracts and the v3 deployed-hoodi.json artifact, so the fork
+          # must be pinned to the pre-upgrade state. Same approach as develop, which pins 2722012
+          # (first post-upgrade block) for its v4 contracts.
+          FORKING_BLOCK_NUMBER: "2722010"
           NETWORK_STATE_FILE: deployed-hoodi.json

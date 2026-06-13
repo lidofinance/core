@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { network as hardhatNetwork } from "hardhat";
@@ -86,10 +86,12 @@ export enum Sk {
   validatorsExitBusOracle = "validatorsExitBusOracle",
   withdrawalQueueERC721 = "withdrawalQueueERC721",
   depositContract = "depositContract",
+  sepoliaDepositAdapter = "sepoliaDepositAdapter",
   wstETH = "wstETH",
   lidoLocator = "lidoLocator",
   chainSpec = "chainSpec",
   chainId = "chainId",
+  scratchDeployCompletedSteps = "scratchDeployCompletedSteps",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
   accounting = "accounting",
@@ -115,6 +117,12 @@ export enum Sk {
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
+  dgAdminExecutor = "dg:adminExecutor",
+  dgConfigProvider = "dg:configProvider",
+  dgEmergencyGovernance = "dg:emergencyGovernance",
+  dgTiebreakerCoreCommittee = "dg:tiebreakerCoreCommittee",
+  dgTiebreakerSubCommittees = "dg:tiebreakerSubCommittees",
+  dgEscrowMasterCopy = "dg:escrowMasterCopy",
   // Easy Track
   easyTrack = "easyTrack",
   easyTrackEVMScriptExecutor = "easyTrackEVMScriptExecutor",
@@ -151,8 +159,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.appSimpleDvt:
     case Sk.predepositGuarantee:
     case Sk.vaultHub:
-    case Sk.dgDualGovernance:
-    case Sk.dgEmergencyProtectedTimelock:
+    case Sk.sepoliaDepositAdapter:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
@@ -188,9 +195,31 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.v3VoteScript:
     case Sk.easyTrack:
     case Sk.gateSealFactory:
+    // DG contracts (none are proxies upstream — stored as { address }):
+    case Sk.dgDualGovernance: // eslint-disable-line no-fallthrough
+    case Sk.dgEmergencyProtectedTimelock:
+    case Sk.dgAdminExecutor:
+    case Sk.dgConfigProvider:
+    case Sk.dgEmergencyGovernance:
+    case Sk.dgTiebreakerCoreCommittee:
+    case Sk.dgEscrowMasterCopy:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
+  }
+}
+
+/**
+ * Like {@link getAddress} but returns `undefined` if the entry is missing.
+ * Useful when a step needs to detect whether a prior step has populated the
+ * state (e.g. idempotency guards) without throwing.
+ */
+export function tryGetAddress(contractKey: Sk, state: DeploymentState): string | undefined {
+  if (state[contractKey] === undefined) return undefined;
+  try {
+    return getAddress(contractKey, state);
+  } catch {
+    return undefined;
   }
 }
 
@@ -254,6 +283,10 @@ export async function resetStateFileFromDeployParams(): Promise<void> {
   const initialState = scratchParametersToDeploymentState(scratchParams);
   const data = JSON.stringify(_sortKeysAlphabetically(initialState), null, 2);
   writeFileSync(fileName, `${data}\n`, { encoding: "utf8", flag: "w" });
+}
+
+export function networkStateFileExists(): boolean {
+  return existsSync(_getStateFileFileName());
 }
 
 export function persistNetworkState(state: DeploymentState): void {
