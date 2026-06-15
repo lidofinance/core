@@ -72,7 +72,7 @@ describe("Integration: Second opinion", () => {
       await report(ctx, {
         clDiff: INITIAL_REPORTED_BALANCE,
         clAppearedValidators: 3n,
-        excludeVaultsBalances: true,
+        reportElVault: false,
       });
       balanceStats = await lido.getBalanceStats();
       clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
@@ -100,7 +100,7 @@ describe("Integration: Second opinion", () => {
 
     const reportedDiff = getDiffAmount(totalSupply);
 
-    await expect(report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true })).to.be.revertedWithCustomError(
+    await expect(report(ctx, { clDiff: -reportedDiff, reportElVault: false })).to.be.revertedWithCustomError(
       oracleReportSanityChecker,
       "NegativeRebaseFailedSecondOpinionReportIsNotReady",
     );
@@ -117,7 +117,7 @@ describe("Integration: Second opinion", () => {
     await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance, 0n);
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
-    await report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true });
+    await report(ctx, { clDiff: -reportedDiff, reportElVault: false });
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(
       lastProcessingRefSlotAfter,
@@ -134,7 +134,7 @@ describe("Integration: Second opinion", () => {
     const expectedBalance = (totalSupply - reportedDiff) / ONE_GWEI - 1n;
     await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance, 0n);
 
-    await expect(report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true })).to.be.revertedWithCustomError(
+    await expect(report(ctx, { clDiff: -reportedDiff, reportElVault: false })).to.be.revertedWithCustomError(
       oracleReportSanityChecker,
       "NegativeRebaseFailedCLBalanceMismatch",
     );
@@ -159,7 +159,7 @@ describe("Integration: Second opinion", () => {
     });
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
-    await report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true });
+    await report(ctx, { clDiff: -reportedDiff, reportElVault: false });
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(
       lastProcessingRefSlotAfter,
@@ -185,7 +185,7 @@ describe("Integration: Second opinion", () => {
       "expected + correction": expectedBalance + correction,
     });
 
-    await expect(report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true })).to.be.revertedWithCustomError(
+    await expect(report(ctx, { clDiff: -reportedDiff, reportElVault: false })).to.be.revertedWithCustomError(
       oracleReportSanityChecker,
       "NegativeRebaseFailedCLBalanceMismatch",
     );

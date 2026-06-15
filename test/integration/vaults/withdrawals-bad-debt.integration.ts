@@ -12,7 +12,7 @@ import {
   ProtocolContext,
   queueBadDebtInternalization,
   removeStakingLimit,
-  report,
+  reportWithEffectiveClDiff,
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
@@ -202,12 +202,11 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     // Perform report which will finalize withdrawals.
     // reportBurner: false — pre-existing Burner balance on the fork must not bleed into
     //   the burn, otherwise totalSharesToBurn no longer matches our threshold model.
-    // excludeVaultsBalances: true — EL/withdrawal vault balances on the fork would be
-    //   added to internal ether by the rebase limiter (increaseEther) and shrink real
-    //   maxSharesToBurn below what the model predicts, breaking the threshold edge.
-    const { reportTx } = await report(ctx, {
-      clDiff: 0n,
-      excludeVaultsBalances: true,
+    // reportElVault: false — EL rewards on the fork would be added to internal ether by
+    //   the rebase limiter (increaseEther) and shrink real maxSharesToBurn below what the
+    //   model predicts, breaking the threshold edge.
+    const { reportTx } = await reportWithEffectiveClDiff(ctx, 0n, {
+      reportElVault: false,
       skipWithdrawals: false,
       reportBurner: false,
       waitNextReportTime: true,

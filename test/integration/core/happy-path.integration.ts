@@ -14,6 +14,7 @@ import {
   ProtocolContext,
   removeStakingLimit,
   report,
+  reportWithEffectiveClDiff,
   setStakingLimit,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
@@ -209,7 +210,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
     await lido.connect(agent).setDepositsReserveTarget(ether("128"));
-    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false, skipWithdrawals: true });
+    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, reportBurner: false, skipWithdrawals: true });
 
     const withdrawalsUnfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositsReserveTarget = await lido.getDepositsReserveTarget();
@@ -320,7 +321,7 @@ describe("Scenario: Protocol Happy Path", () => {
     const { data: pendingBaselineData } = await report(ctx, {
       clDiff: depositedSinceLastReport,
       dryRun: true,
-      excludeVaultsBalances: true,
+      reportElVault: false,
       skipWithdrawals: true,
       ...(await buildModuleAccountingReportParams(ctx)),
     });
