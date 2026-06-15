@@ -84,7 +84,6 @@ export async function main() {
 
       // TopUp GW
       topUpGatewayImpl: state[Sk.topUpGateway].implementation.address,
-      topUpGateway: getAddress(Sk.topUpGateway, state),
       topUpGatewayDepositor: parameters.topUpGateway.depositor!,
 
       // TW GW

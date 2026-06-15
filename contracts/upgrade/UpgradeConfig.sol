@@ -54,7 +54,6 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable OLD_STAKING_ROUTER_IMPL;
     address internal immutable OLD_WITHDRAWAL_VAULT_IMPL;
     address internal immutable OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
-    address internal immutable OLD_ORACLE_REPORT_SANITY_CHECKER;
     address internal immutable OLD_DEPOSIT_SECURITY_MODULE;
 
     //
@@ -91,7 +90,6 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CONSOLIDATION_GATEWAY;
     address internal immutable CONSOLIDATION_BUS;
     address internal immutable CONSOLIDATION_MIGRATOR;
-    address internal immutable VALIDATOR_EXIT_DELAY_VERIFIER;
 
     //
     // -------- Upgrade parameters --------
@@ -190,14 +188,12 @@ contract UpgradeConfig is IUpgradeConfig {
     uint256 internal immutable CURATED_HASH_CONSENSUS_INITIAL_EPOCH;
     address internal immutable CURATED_META_REGISTRY;
 
-    // UpgradeParameters public upgradeParams;
-
     constructor(UpgradeParameters memory params) {
         // Core upgrade params
         CoreUpgradeParams memory coreUpgradeParams = params.coreUpgrade;
 
         if (coreUpgradeParams.newLocatorImpl == coreUpgradeParams.oldLocatorImpl) {
-            revert NewAndOldLocatorImplementationsMustBeDifferent();
+            revert SameLocatorImplementation();
         }
 
         // Save passed parameters
@@ -273,7 +269,6 @@ contract UpgradeConfig is IUpgradeConfig {
         // Discover via locator
         LOCATOR = params.locator;
         ILidoLocator oldLocator = ILidoLocator(params.locator);
-        OLD_ORACLE_REPORT_SANITY_CHECKER = oldLocator.oracleReportSanityChecker();
         OLD_DEPOSIT_SECURITY_MODULE = oldLocator.depositSecurityModule();
 
         ILidoLocator locator = ILidoLocator(coreUpgradeParams.newLocatorImpl);
@@ -288,10 +283,15 @@ contract UpgradeConfig is IUpgradeConfig {
         TOP_UP_GATEWAY = locator.topUpGateway();
         BURNER = locator.burner();
         TRIGGERABLE_WITHDRAWALS_GATEWAY = locator.triggerableWithdrawalsGateway();
-        VALIDATOR_EXIT_DELAY_VERIFIER = locator.validatorExitDelayVerifier();
         CONSOLIDATION_GATEWAY = locator.consolidationGateway();
         NEW_ORACLE_REPORT_SANITY_CHECKER = locator.oracleReportSanityChecker();
+        if (NEW_ORACLE_REPORT_SANITY_CHECKER == oldLocator.oracleReportSanityChecker()) {
+            revert SameOracleSanityCheckerImplementation();
+        }
         NEW_DEPOSIT_SECURITY_MODULE = locator.depositSecurityModule();
+        if (NEW_DEPOSIT_SECURITY_MODULE == OLD_DEPOSIT_SECURITY_MODULE) {
+            revert SameDepositSecurityModuleImplementation();
+        }
 
         /// CSMv3
         CSMUpgradeParams memory csmUpgradeParams = params.csmUpgrade;
@@ -405,7 +405,6 @@ contract UpgradeConfig is IUpgradeConfig {
             oldStakingRouterImpl: OLD_STAKING_ROUTER_IMPL,
             oldWithdrawalVaultImpl: OLD_WITHDRAWAL_VAULT_IMPL,
             oldValidatorsExitBusOracleImpl: OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL,
-            oldOracleReportSanityChecker: OLD_ORACLE_REPORT_SANITY_CHECKER,
             oldDepositSecurityModule: OLD_DEPOSIT_SECURITY_MODULE,
             // new impl
             newLocatorImpl: NEW_LOCATOR_IMPL,
@@ -506,5 +505,7 @@ contract UpgradeConfig is IUpgradeConfig {
         });
     }
 
-    error NewAndOldLocatorImplementationsMustBeDifferent();
+    error SameLocatorImplementation();
+    error SameOracleSanityCheckerImplementation();
+    error SameDepositSecurityModuleImplementation();
 }

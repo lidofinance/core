@@ -67,7 +67,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
     bytes32 internal constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 internal constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
-    bytes32 internal constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
     bytes32 internal constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
     bytes32 internal constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
     // csm roles
@@ -98,11 +97,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
     bytes32 internal constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
-    bytes32 internal constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
-    bytes32 internal constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
-    bytes32 internal constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
-    bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
-    bytes32 internal constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 internal constant BUFFER_RESERVE_MANAGER_ROLE = keccak256("BUFFER_RESERVE_MANAGER_ROLE");
     bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
@@ -157,8 +151,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     // Initial value of upgradeBlockNumber storage variable
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
-    // TODO: Unused. Remove
-    uint256 internal constant INFINITE_ALLOWANCE = type(uint256).max;
 
     // Upgrade config (self deployed internal contract)
     address public immutable CONFIG;
@@ -822,9 +814,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
     error MissingOZAccessControlRoleHolder(address contractAddress, bytes32 role, address holder);
     error UnexpectedOZAccessControlRoleHolder(address contractAddress, bytes32 role, address holder);
-    error NonZeroRoleHolders(address contractAddress, bytes32 role);
     error IncorrectAragonKernelImplementation(address kernel, address implementation);
-    error IncorrectLinkedContractAddress(address contractAddress, address actualAddress, address expectedAddress);
     error InvalidHashConsensusInitialEpoch(address consensus, uint256 actualEpoch, uint256 expectedEpoch);
     error CMModuleIsPaused();
     error InvalidInitializedContractVersion(address contractAddress, uint64 actualVersion, uint64 expectedVersion);
