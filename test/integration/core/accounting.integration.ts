@@ -68,8 +68,18 @@ describe("Integration: Accounting", () => {
     return (maxPositiveTokeRebase * internalEther) / LIMITER_PRECISION_BASE;
   };
 
-  const allowVaultBalanceReports = async () => {
+  const allowWithdrawalVaultBalanceReport = async (withdrawalVaultBalance: bigint) => {
+    const { lido } = ctx.contracts;
+
     await updateOracleReportLimits(ctx, { annualBalanceIncreaseBPLimit: MAX_BASIS_POINTS });
+
+    const { clValidatorsBalanceAtLastReport } = await lido.getBalanceStats();
+    if (clValidatorsBalanceAtLastReport === 0n) return;
+
+    const requiredElapsed =
+      (withdrawalVaultBalance * 365n * ONE_DAY + clValidatorsBalanceAtLastReport - 1n) /
+      clValidatorsBalanceAtLastReport;
+    await advanceChainTime(requiredElapsed + ONE_DAY);
   };
 
   function getWithdrawalParamsFromEvent(tx: ContractTransactionReceipt): {
@@ -619,9 +629,9 @@ describe("Integration: Accounting", () => {
 
   it("Should account correctly with withdrawals at limits", async () => {
     const { withdrawalVault } = ctx.contracts;
-    await allowVaultBalanceReports();
 
     const withdrawals = await rebaseLimitWei();
+    await allowWithdrawalVaultBalanceReport(withdrawals);
     await impersonate(withdrawalVault.address, withdrawals);
 
     const beforeState = await readState();
@@ -655,12 +665,12 @@ describe("Integration: Accounting", () => {
 
   it("Should account correctly with withdrawals above limits", async () => {
     const { withdrawalVault } = ctx.contracts;
-    await allowVaultBalanceReports();
 
     const expectedWithdrawals = await rebaseLimitWei();
     const withdrawalsExcess = ether("10");
     const withdrawals = expectedWithdrawals + withdrawalsExcess;
 
+    await allowWithdrawalVaultBalanceReport(withdrawals);
     await impersonate(withdrawalVault.address, withdrawals);
 
     const beforeState = await readState();
@@ -776,12 +786,12 @@ describe("Integration: Accounting", () => {
 
   it("Should account correctly overfill both vaults", async () => {
     const { withdrawalVault, elRewardsVault } = ctx.contracts;
-    await allowVaultBalanceReports();
 
     const limit = await rebaseLimitWei();
     const excess = limit / 2n; // 2nd report will take two halves of the excess of the limit size
     const limitWithExcess = limit + excess;
 
+    await allowWithdrawalVaultBalanceReport(limitWithExcess);
     await setBalance(withdrawalVault.address, limitWithExcess);
     await setBalance(elRewardsVault.address, limitWithExcess);
 
