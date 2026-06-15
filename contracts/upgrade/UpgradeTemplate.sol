@@ -327,8 +327,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         {
             address resealManager = g.resealManager;
-            address resealCommittee = g.resealCommittee;
             address cb = g.circuitBreaker;
+            address circuitBreakerCommittee = g.circuitBreakerCommittee;
 
             // Consolidation
             address consGw = c.consolidationGateway;
@@ -362,7 +362,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertSingleOZRoleHolder(consGw, RESUME_ROLE, resealManager);
             _assertSingleOZRoleHolder(consGw, ADD_CONSOLIDATION_REQUEST_ROLE, consBus);
 
-            _assertCircuitBreakerPauser(cb, consGw, resealCommittee);
+            _assertCircuitBreakerPauser(cb, consGw, circuitBreakerCommittee);
 
             // TopUps
             address tuGw = c.topUpGateway;
@@ -375,7 +375,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertSingleOZRoleHolder(tuGw, RESUME_ROLE, resealManager);
             _assertSingleOZRoleHolder(tuGw, TOP_UP_ROLE, c.topUpGatewayDepositor);
 
-            _assertCircuitBreakerPauser(cb, tuGw, resealCommittee);
+            _assertCircuitBreakerPauser(cb, tuGw, circuitBreakerCommittee);
         }
 
         // TW

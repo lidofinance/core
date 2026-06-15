@@ -394,11 +394,11 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _registerCircuitBreakerPauserItem(
-                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, g.resealCommittee
+                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, g.circuitBreakerCommittee
             );
 
             items[i++] =
-                _registerCircuitBreakerPauserItem("TopUpGateway", g.circuitBreaker, c.topUpGateway, g.resealCommittee);
+                _registerCircuitBreakerPauserItem("TopUpGateway", g.circuitBreaker, c.topUpGateway, g.circuitBreakerCommittee);
         }
 
         //

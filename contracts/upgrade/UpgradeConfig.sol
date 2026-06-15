@@ -40,8 +40,8 @@ contract UpgradeConfig is IUpgradeConfig {
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
     address public immutable RESEAL_MANAGER;
-    address public immutable RESEAL_COMMITTEE;
     address public immutable CIRCUIT_BREAKER;
+    address public immutable CIRCUIT_BREAKER_COMMITTEE;
     address public immutable BURNER;
 
     //
@@ -204,8 +204,8 @@ contract UpgradeConfig is IUpgradeConfig {
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
         RESEAL_MANAGER = IDualGovernance(DUAL_GOVERNANCE).getResealManager();
-        RESEAL_COMMITTEE = IDualGovernance(DUAL_GOVERNANCE).getResealCommittee();
         CIRCUIT_BREAKER = params.circuitBreaker;
+        CIRCUIT_BREAKER_COMMITTEE = params.circuitBreakerCommittee;
 
         EASY_TRACK = params.easyTrack;
         EASY_TRACK_EVM_SCRIPT_EXECUTOR = IEasyTrack(params.easyTrack).evmScriptExecutor();
@@ -362,8 +362,8 @@ contract UpgradeConfig is IUpgradeConfig {
             lido: LIDO,
             burner: BURNER,
             resealManager: RESEAL_MANAGER,
-            resealCommittee: RESEAL_COMMITTEE,
             circuitBreaker: CIRCUIT_BREAKER,
+            circuitBreakerCommittee: CIRCUIT_BREAKER_COMMITTEE,
             easyTrack: EASY_TRACK,
             easyTrackEVMScriptExecutor: EASY_TRACK_EVM_SCRIPT_EXECUTOR,
             stakingRouter: STAKING_ROUTER,

@@ -59,6 +59,7 @@ export async function main() {
     dualGovernance: getAddress(Sk.dgDualGovernance, state),
     easyTrack: getAddress(Sk.easyTrack, state),
     circuitBreaker: getAddress(Sk.circuitBreaker, state),
+    circuitBreakerCommittee: state[Sk.gateSeal].sealingCommittee,
 
     newFactories: parameters.easyTrack.newFactories,
     oldFactories: parameters.easyTrack.oldFactories,
