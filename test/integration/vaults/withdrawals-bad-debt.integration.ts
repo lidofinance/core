@@ -202,9 +202,9 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     // Perform report which will finalize withdrawals.
     // reportBurner: false — pre-existing Burner balance on the fork must not bleed into
     //   the burn, otherwise totalSharesToBurn no longer matches our threshold model.
-    // reportElVault: false — EL rewards on the fork would be added to internal ether by
-    //   the rebase limiter (increaseEther) and shrink real maxSharesToBurn below what the
-    //   model predicts, breaking the threshold edge.
+    // reportElVault: false — keep the report neutral to fork EL rewards, but do not
+    //   zero WithdrawalVault. The migrated checker baseline must still see the actual
+    //   WVB, otherwise sanity checks fail before this threshold scenario is exercised.
     const { reportTx } = await reportWithEffectiveClDiff(ctx, 0n, {
       reportElVault: false,
       skipWithdrawals: false,
