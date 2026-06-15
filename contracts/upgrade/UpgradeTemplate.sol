@@ -109,16 +109,10 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     //sanitychecker roles
     bytes32 internal constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
-    bytes32 internal constant EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
-    bytes32 internal constant APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
     bytes32 internal constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
         keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
     bytes32 internal constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
         keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
-    bytes32 internal constant MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE =
-        keccak256("MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE");
     bytes32 internal constant MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE =
         keccak256("MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE");
     bytes32 internal constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE =
@@ -128,8 +122,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
         keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
     bytes32 internal constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
-    bytes32 internal constant INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE =
-        keccak256("INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE");
 
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_STAKING_ROUTER_VERSION = 4;
@@ -404,19 +396,15 @@ contract UpgradeTemplate is IUpgradeTemplate {
             address checker = c.newOracleReportSanityChecker;
             _assertLocatorAddress(locator.oracleReportSanityChecker(), checker);
             _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, agent);
-            bytes32[12] memory roles = [
+            bytes32[8] memory roles = [
                 ALL_LIMITS_MANAGER_ROLE,
-                EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
-                APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
                 ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE,
                 SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE,
-                MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
                 MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE,
                 MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE,
                 REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE,
                 MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE,
-                SECOND_OPINION_MANAGER_ROLE,
-                INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
+                SECOND_OPINION_MANAGER_ROLE
             ];
             for (uint256 i = 0; i < roles.length; ++i) {
                 _assertZeroOZRoleHolders(checker, roles[i]);
