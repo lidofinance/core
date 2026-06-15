@@ -52,8 +52,15 @@ contract UpgradeTemporaryAdmin {
         address _oldDepositSecurityModule
     ) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
-        if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
-        if (_easyTrack == address(0)) revert ZeroEasyTrack();
+        if (_lidoLocatorImpl == address(0)) revert ZeroAddress();
+        if (_easyTrack == address(0)) revert ZeroAddress();
+        if (_resealManager == address(0)) revert ZeroAddress();
+        if (_circuitBreaker == address(0)) revert ZeroAddress();
+        if (_consolidationMigrator == address(0)) revert ZeroAddress();
+        if (_consolidationCommittee == address(0)) revert ZeroAddress();
+        if (_consolidationBus == address(0)) revert ZeroAddress();
+        if (_topUpGatewayDepositor == address(0)) revert ZeroAddress();
+        if (_oldDepositSecurityModule == address(0)) revert ZeroAddress();
 
         isSetupComplete = true;
 
@@ -69,7 +76,7 @@ contract UpgradeTemporaryAdmin {
         _setupConsolidationGateway(consolidationGateway, _consolidationBus, _circuitBreaker, _resealManager);
         _setupTopUpGateway(topUpGateway, _topUpGatewayDepositor, _circuitBreaker, _resealManager);
 
-        emit SetupCompleted(_consolidationMigrator, _consolidationBus, consolidationGateway, topUpGateway);
+        emit SetupCompleted();
     }
 
     function _setupDSM(address _dsm, address _oldDsm) private {
@@ -118,11 +125,7 @@ contract UpgradeTemporaryAdmin {
     }
 
     error ZeroAddress();
-    error ZeroLidoLocator();
-    error ZeroEasyTrack();
     error SetupAlreadyCompleted();
 
-    event SetupCompleted(
-        address consolidationMigrator, address consolidationBus, address consolidationGateway, address topUpGateway
-    );
+    event SetupCompleted();
 }

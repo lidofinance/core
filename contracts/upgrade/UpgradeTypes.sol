@@ -327,7 +327,6 @@ struct CoreUpgradeParams {
     // New fancy proxy and blueprint contracts
     address consolidationBus;
     address consolidationMigrator;
-    address topUpGateway;
 
     // params
     uint256 lidoDepositsReserveTarget;
@@ -423,7 +422,6 @@ struct CoreUpgradeConfig {
     address oldStakingRouterImpl;
     address oldWithdrawalVaultImpl;
     address oldValidatorsExitBusOracleImpl;
-    address oldOracleReportSanityChecker;
     address oldDepositSecurityModule;
 
     address newLocatorImpl;
