@@ -270,6 +270,7 @@ struct UpgradeParameters {
     address voting;
     address dualGovernance;
     address circuitBreaker;
+    address circuitBreakerCommittee;
     address easyTrack;
 
     EasyTrackNewFactories newFactories;
@@ -400,8 +401,8 @@ struct GlobalConfig {
     address lido;
     address burner;
     address resealManager;
-    address resealCommittee;
     address circuitBreaker;
+    address circuitBreakerCommittee;
     address easyTrack;
     address easyTrackEVMScriptExecutor;
     address stakingRouter;
