@@ -864,9 +864,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         .withArgs(baseRefSlot, ether("1"), baseline - ether("1"), baseline);
     });
 
-    it("reverts with IncorrectCLBalanceDecreaseWindowData when stored withdrawals exceed adjusted balance", async () => {
+    it("passes when stored withdrawals exceed adjusted balance", async () => {
       const baseline = ether("100");
-      const hugeWithdrawals = baseline + 1n;
 
       await setRefSlot(baseRefSlot - 3n * SLOTS_PER_DAY);
       await callCheck(baseline, baseline);
@@ -878,11 +877,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       await setRefSlot(baseRefSlot - 1n);
       await callCheck(1n, 0n, 1n, 0n, 1n);
 
-      // adjusted = baseline + 0 - hugeWithdrawals -> invalid window inputs for subtraction
+      // adjustedWindowBalance <= totalCLWithdrawals saturates the recreated CL balance to zero.
       await setRefSlot(baseRefSlot);
-      await expect(callCheck(ether("80"), ether("50")))
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseWindowData")
-        .withArgs(baseline, 0n, hugeWithdrawals);
+      await expect(callCheck(ether("80"), ether("50"))).not.to.be.reverted;
     });
 
     it("reverts with IncorrectCLWithdrawalsVaultBalance when reported vault balance is below previous post-transfer state", async () => {

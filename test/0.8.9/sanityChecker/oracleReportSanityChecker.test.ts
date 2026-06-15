@@ -1771,7 +1771,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(ether("10"), ether("3.6"));
     });
 
-    it("reverts with IncorrectCLBalanceDecreaseWindowData on baseline/flows underflow", async () => {
+    it("passes when cumulative withdrawals cover the adjusted window balance", async () => {
       await checker.connect(accountingSigner).checkAccountingOracleReport(...report());
 
       await expect(
@@ -1783,9 +1783,7 @@ describe("OracleReportSanityChecker.sol", () => {
             deposits: 0n,
           }),
         ),
-      )
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseWindowData")
-        .withArgs(ether("100"), 0n, ether("200"));
+      ).not.to.be.reverted;
     });
 
     it("reverts with NegativeRebaseFailedSecondOpinionReportIsNotReady when second opinion report is absent", async () => {

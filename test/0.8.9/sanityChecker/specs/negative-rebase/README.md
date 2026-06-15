@@ -147,7 +147,8 @@ To fill a 36-day window with identical reports:
 The recreated post-CL balance is:
 
 ```ts
-recreatedPostCLBalance = baselineCLBalance + totalDeposits - totalCLWithdrawals;
+adjustedWindowBalance = baselineCLBalance + totalDeposits;
+recreatedPostCLBalance = adjustedWindowBalance > totalCLWithdrawals ? adjustedWindowBalance - totalCLWithdrawals : 0n;
 ```
 
 The negative rebase diff is:

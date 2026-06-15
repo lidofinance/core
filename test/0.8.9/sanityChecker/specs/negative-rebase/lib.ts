@@ -151,7 +151,9 @@ export const calcExpectedWindowDiff = (storedReports: StoredReportModel[], limit
     totalCLWithdrawals += storedReports[i].clWithdrawals;
   }
 
-  const recreatedPostCLBalance = baselineCLBalance + totalDeposits - totalCLWithdrawals;
+  const adjustedWindowBalance = baselineCLBalance + totalDeposits;
+  const recreatedPostCLBalance =
+    adjustedWindowBalance > totalCLWithdrawals ? adjustedWindowBalance - totalCLWithdrawals : 0n;
   const actualCLBalanceDiff =
     recreatedPostCLBalance > currentPostCLBalance ? recreatedPostCLBalance - currentPostCLBalance : 0n;
 

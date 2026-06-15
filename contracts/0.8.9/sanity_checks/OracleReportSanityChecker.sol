@@ -1222,16 +1222,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             totalCLWithdrawals += reportData[i].clWithdrawals;
         }
 
-        uint256 recreatedPostCLBalance = baselineBalance + totalDeposits;
-        if (recreatedPostCLBalance < totalCLWithdrawals) {
-            revert IncorrectCLBalanceDecreaseWindowData(baselineBalance, totalDeposits, totalCLWithdrawals);
-        }
-        recreatedPostCLBalance -= totalCLWithdrawals;
+        uint256 adjustedWindowBalance = baselineBalance + totalDeposits;
+        if (adjustedWindowBalance <= totalCLWithdrawals) return (0, 0);
 
-        actualCLBalanceDiff = recreatedPostCLBalance > _postCLBalance
-            ? recreatedPostCLBalance - _postCLBalance
-            : 0;
-        maxAllowedCLBalanceDiff = (recreatedPostCLBalance * _maxDecreaseBP) / MAX_BASIS_POINTS;
+        uint256 expectedPostCLBalance = adjustedWindowBalance - totalCLWithdrawals;
+        if (expectedPostCLBalance <= _postCLBalance) return (0, 0);
+
+        actualCLBalanceDiff = expectedPostCLBalance - _postCLBalance;
+        maxAllowedCLBalanceDiff = (expectedPostCLBalance * _maxDecreaseBP) / MAX_BASIS_POINTS;
     }
 
     function _findWindowStartIndex(
