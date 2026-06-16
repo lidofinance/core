@@ -60,7 +60,7 @@ if [[ ${MODE:-} == "forking" ]]; then
   export NETWORK="local"
   export LOCAL_RPC_URL="http://localhost:8545"
 
-  load_env_var HOLDER
+  load_env_var HOLDER ""
   if [[ -n ${HOLDER:-} ]]; then
     echo "HOLDER: $HOLDER"
   fi

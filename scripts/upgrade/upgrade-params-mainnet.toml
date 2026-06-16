@@ -131,7 +131,7 @@ newVerifier = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed new permissionless gate before execution
 newPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 # TODO: replace with new deployed ejector
-ejector = "0x0000000000000000000000000000000000000000"
+newEjector = "0x0000000000000000000000000000000000000000"
 csmCommittee = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 
 [curatedModule]

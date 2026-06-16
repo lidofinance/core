@@ -270,6 +270,7 @@ struct UpgradeParameters {
     address voting;
     address dualGovernance;
     address circuitBreaker;
+    address circuitBreakerCommittee;
     address easyTrack;
 
     EasyTrackNewFactories newFactories;
@@ -303,15 +304,6 @@ struct EasyTrackOldFactories {
 }
 
 struct CoreUpgradeParams {
-    // Old implementations
-    address oldLocatorImpl;
-    address oldLidoImpl;
-    address oldAccountingImpl;
-    address oldAccountingOracleImpl;
-    address oldStakingRouterImpl;
-    address oldWithdrawalVaultImpl;
-    address oldValidatorsExitBusOracleImpl;
-
     // New implementations
     address newLocatorImpl;
     address newLidoImpl;
@@ -327,7 +319,6 @@ struct CoreUpgradeParams {
     // New fancy proxy and blueprint contracts
     address consolidationBus;
     address consolidationMigrator;
-    address topUpGateway;
 
     // params
     uint256 lidoDepositsReserveTarget;
@@ -372,7 +363,7 @@ struct CSMUpgradeParams {
     address newPermissionlessGate;
     address oldVerifier;
     address newVerifier;
-    address ejector;
+    address newEjector;
     address csmCommittee;
 }
 
@@ -401,8 +392,8 @@ struct GlobalConfig {
     address lido;
     address burner;
     address resealManager;
-    address resealCommittee;
     address circuitBreaker;
+    address circuitBreakerCommittee;
     address easyTrack;
     address easyTrackEVMScriptExecutor;
     address stakingRouter;
@@ -416,14 +407,6 @@ struct CoreUpgradeConfig {
 
     address locator;
 
-    address oldLocatorImpl;
-    address oldLidoImpl;
-    address oldAccountingImpl;
-    address oldAccountingOracleImpl;
-    address oldStakingRouterImpl;
-    address oldWithdrawalVaultImpl;
-    address oldValidatorsExitBusOracleImpl;
-    address oldOracleReportSanityChecker;
     address oldDepositSecurityModule;
 
     address newLocatorImpl;
@@ -476,10 +459,10 @@ struct CSMUpgradeConfig {
     address feeOracleImpl;
     uint256 feeOracleConsensusVersion;
     address vettedGate;
+    address vettedGateImpl;
     address identifiedDVTClusterGate;
     address identifiedDVTClusterCurveSetup;
     uint256 identifiedDVTClusterBondCurveId;
-    address vettedGateImpl;
     address accounting;
     address accountingImpl;
     address feeDistributor;
@@ -489,11 +472,11 @@ struct CSMUpgradeConfig {
     address strikes;
     address strikesImpl;
     address oldPermissionlessGate;
+    address newPermissionlessGate;
     address oldVerifier;
     address newVerifier;
-    address newPermissionlessGate;
     address oldEjector;
-    address ejector;
+    address newEjector;
     address csmCommittee;
 }
 

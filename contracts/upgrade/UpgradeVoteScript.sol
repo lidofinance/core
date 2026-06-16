@@ -56,8 +56,7 @@ contract UpgradeVoteScript is OmnibusBase {
     //
     // Constants
     //
-    // TODO set upon finish with items
-    uint256 public constant DG_ITEMS_COUNT = 66;
+    uint256 public constant DG_ITEMS_COUNT = 69;
     uint256 public constant VOTING_ITEMS_COUNT = 11;
 
     // Aragon Kernel APP_BASES_NAMESPACE
@@ -86,13 +85,10 @@ contract UpgradeVoteScript is OmnibusBase {
     bytes32 internal constant MANAGE_CURVE_PARAMETERS_ROLE = keccak256("MANAGE_CURVE_PARAMETERS_ROLE");
     bytes32 internal constant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE =
         keccak256("MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE");
-    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
     bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
     bytes32 internal constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
     bytes32 internal constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
-    bytes32 internal constant SET_TREE_ROLE = keccak256("SET_TREE_ROLE");
-    bytes32 internal constant MANAGE_OPERATOR_GROUPS_ROLE = keccak256("MANAGE_OPERATOR_GROUPS_ROLE");
     bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
 
     string internal constant IDENTIFIED_COMMUNITY_STAKERS_GATE_NAME = "Identified Community Stakers Gate";
@@ -398,11 +394,12 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _registerCircuitBreakerPauserItem(
-                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, g.resealCommittee
+                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, g.circuitBreakerCommittee
             );
 
-            items[i++] =
-                _registerCircuitBreakerPauserItem("TopUpGateway", g.circuitBreaker, c.topUpGateway, g.resealCommittee);
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "TopUpGateway", g.circuitBreaker, c.topUpGateway, g.circuitBreakerCommittee
+            );
         }
 
         //
@@ -466,7 +463,7 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] = _item({
                 description: "Point ValidatorStrikes to the New Ejector",
                 to: c.strikes,
-                data: abi.encodeCall(IValidatorStrikesV3.setEjector, (c.ejector))
+                data: abi.encodeCall(IValidatorStrikesV3.setEjector, (c.newEjector))
             });
 
             items[i++] = _ozRevokeRoleItem({
@@ -505,7 +502,10 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant VERIFIER_ROLE to the New Verifier", to: csm, role: VERIFIER_ROLE, account: c.newVerifier
+                description: "Grant VERIFIER_ROLE to the New Verifier",
+                to: csm,
+                role: VERIFIER_ROLE,
+                account: c.newVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
@@ -556,9 +556,13 @@ contract UpgradeVoteScript is OmnibusBase {
                 data: abi.encodeCall(IMerkleGate.setName, (IDENTIFIED_COMMUNITY_STAKERS_GATE_NAME))
             });
 
+            items[i++] = _unregisterCircuitBreakerPauserItem("Old CSM Verifier", g.circuitBreaker, c.oldVerifier);
+            items[i++] = _unregisterCircuitBreakerPauserItem("Old CSM Ejector", g.circuitBreaker, c.oldEjector);
+
             items[i++] =
-                _registerCircuitBreakerPauserItem("New CSM verifier", g.circuitBreaker, c.newVerifier, c.csmCommittee);
-            items[i++] = _registerCircuitBreakerPauserItem("New CSM Ejector", g.circuitBreaker, c.ejector, c.csmCommittee);
+                _registerCircuitBreakerPauserItem("New CSM Verifier", g.circuitBreaker, c.newVerifier, c.csmCommittee);
+            items[i++] =
+                _registerCircuitBreakerPauserItem("New CSM Ejector", g.circuitBreaker, c.newEjector, c.csmCommittee);
             items[i++] = _registerCircuitBreakerPauserItem(
                 "CSM Identified DVT cluster gate", g.circuitBreaker, c.identifiedDVTClusterGate, c.csmCommittee
             );
@@ -592,7 +596,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 account: c.identifiedDVTClusterCurveSetup
             });
 
-            // The setup contract renounces its temporary Accounting/Registry roles during execute().
+            // The setup contract renounces its temporary Accounting/ParametersRegistry roles during execute().
             items[i++] = _item({
                 description: "Execute Identified DVT cluster curve setup",
                 to: c.identifiedDVTClusterCurveSetup,
@@ -635,7 +639,7 @@ contract UpgradeVoteScript is OmnibusBase {
                 description: "Grant TWG full-withdrawal role to the New Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
-                account: c.ejector
+                account: c.newEjector
             });
         }
 
@@ -704,8 +708,9 @@ contract UpgradeVoteScript is OmnibusBase {
                 data: abi.encodeCall(IHashConsensusV3.updateInitialEpoch, (c.hashConsensusInitialEpoch))
             });
 
-            items[i++] =
-                _registerCircuitBreakerPauserItem("Curated Module v2", g.circuitBreaker, c.module, c.circuitBreakerPauser);
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated Module v2", g.circuitBreaker, c.module, c.circuitBreakerPauser
+            );
             items[i++] = _registerCircuitBreakerPauserItem(
                 "Curated Accounting", g.circuitBreaker, c.accounting, c.circuitBreakerPauser
             );
@@ -816,6 +821,18 @@ contract UpgradeVoteScript is OmnibusBase {
             description: string.concat("Register CircuitBreaker pauser for ", label),
             to: circuitBreaker,
             data: abi.encodeCall(ICircuitBreaker.registerPauser, (pausable, pauser))
+        });
+    }
+
+    function _unregisterCircuitBreakerPauserItem(string memory label, address circuitBreaker, address pausable)
+        private
+        pure
+        returns (VoteItem memory)
+    {
+        return _item({
+            description: string.concat("Unregister CircuitBreaker pauser for ", label),
+            to: circuitBreaker,
+            data: abi.encodeCall(ICircuitBreaker.registerPauser, (pausable, address(0)))
         });
     }
 

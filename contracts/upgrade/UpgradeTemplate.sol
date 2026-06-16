@@ -67,7 +67,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
     bytes32 internal constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
     bytes32 internal constant PUBLISH_ROLE = keccak256("PUBLISH_ROLE");
-    bytes32 internal constant EXECUTE_ROLE = keccak256("EXECUTE_ROLE");
     bytes32 internal constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
     bytes32 internal constant MANAGE_ROLE = keccak256("MANAGE_ROLE");
     // csm roles
@@ -98,27 +97,16 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
     bytes32 internal constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
-    bytes32 internal constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
-    bytes32 internal constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
-    bytes32 internal constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
-    bytes32 internal constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
-    bytes32 internal constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
     bytes32 internal constant BUFFER_RESERVE_MANAGER_ROLE = keccak256("BUFFER_RESERVE_MANAGER_ROLE");
     bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
 
     //sanitychecker roles
     bytes32 internal constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
-    bytes32 internal constant EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
-    bytes32 internal constant APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
     bytes32 internal constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
         keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
     bytes32 internal constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
         keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
-    bytes32 internal constant MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE =
-        keccak256("MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE");
     bytes32 internal constant MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE =
         keccak256("MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE");
     bytes32 internal constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE =
@@ -128,8 +116,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
     bytes32 internal constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
         keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
     bytes32 internal constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
-    bytes32 internal constant INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE =
-        keccak256("INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE");
 
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_STAKING_ROUTER_VERSION = 4;
@@ -157,8 +143,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     // Initial value of upgradeBlockNumber storage variable
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
-    // TODO: Unused. Remove
-    uint256 internal constant INFINITE_ALLOWANCE = type(uint256).max;
 
     // Upgrade config (self deployed internal contract)
     address public immutable CONFIG;
@@ -216,8 +200,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         //
         // PreUpgrade steps
         //
-        CoreUpgradeConfig memory c = UpgradeConfig(CONFIG).getCoreUpgradeConfig();
-
         ILidoUpgrade lido = ILidoUpgrade(g.lido);
         initialBufferedEther = lido.getBufferedEther();
         (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) = lido.getBeaconStat();
@@ -225,18 +207,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
         initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
-
-        // TODO: Either extend to all proxies, or remove at all.
-        // Check initial implementations of the proxies to be upgraded
-        _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.oldLidoImpl);
-
-        _assertProxyImplementation(c.locator, c.oldLocatorImpl);
-        _assertProxyImplementation(c.accounting, c.oldAccountingImpl);
-        _assertProxyImplementation(c.accountingOracle, c.oldAccountingOracleImpl);
-        _assertProxyImplementation(g.stakingRouter, c.oldStakingRouterImpl);
-        _assertProxyImplementation(c.validatorsExitBusOracle, c.oldValidatorsExitBusOracleImpl);
-
-        _assertWithdrawalsManagerProxyImplementation(c.withdrawalVault, c.oldWithdrawalVaultImpl);
 
         emit UpgradeStarted();
     }
@@ -343,8 +313,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         {
             address resealManager = g.resealManager;
-            address resealCommittee = g.resealCommittee;
             address cb = g.circuitBreaker;
+            address circuitBreakerCommittee = g.circuitBreakerCommittee;
 
             // Consolidation
             address consGw = c.consolidationGateway;
@@ -378,7 +348,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertSingleOZRoleHolder(consGw, RESUME_ROLE, resealManager);
             _assertSingleOZRoleHolder(consGw, ADD_CONSOLIDATION_REQUEST_ROLE, consBus);
 
-            _assertCircuitBreakerPauser(cb, consGw, resealCommittee);
+            _assertCircuitBreakerPauser(cb, consGw, circuitBreakerCommittee);
 
             // TopUps
             address tuGw = c.topUpGateway;
@@ -391,7 +361,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertSingleOZRoleHolder(tuGw, RESUME_ROLE, resealManager);
             _assertSingleOZRoleHolder(tuGw, TOP_UP_ROLE, c.topUpGatewayDepositor);
 
-            _assertCircuitBreakerPauser(cb, tuGw, resealCommittee);
+            _assertCircuitBreakerPauser(cb, tuGw, circuitBreakerCommittee);
         }
 
         // TW
@@ -404,19 +374,15 @@ contract UpgradeTemplate is IUpgradeTemplate {
             address checker = c.newOracleReportSanityChecker;
             _assertLocatorAddress(locator.oracleReportSanityChecker(), checker);
             _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, agent);
-            bytes32[12] memory roles = [
+            bytes32[8] memory roles = [
                 ALL_LIMITS_MANAGER_ROLE,
-                EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
-                APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
                 ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE,
                 SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE,
-                MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
                 MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE,
                 MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE,
                 REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE,
                 MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE,
-                SECOND_OPINION_MANAGER_ROLE,
-                INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
+                SECOND_OPINION_MANAGER_ROLE
             ];
             for (uint256 i = 0; i < roles.length; ++i) {
                 _assertZeroOZRoleHolders(checker, roles[i]);
@@ -482,11 +448,13 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertTwoOZRoleHolders(vettedGate, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(csm.identifiedDVTClusterGate, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(newVerifier, PAUSE_ROLE, cb, resealManager);
-        _assertTwoOZRoleHolders(csm.ejector, PAUSE_ROLE, cb, resealManager);
+        _assertTwoOZRoleHolders(csm.newEjector, PAUSE_ROLE, cb, resealManager);
 
         _assertCircuitBreakerPauser(cb, csm.identifiedDVTClusterGate, csmCommittee);
         _assertCircuitBreakerPauser(cb, newVerifier, csmCommittee);
-        _assertCircuitBreakerPauser(cb, csm.ejector, csmCommittee);
+        _assertCircuitBreakerPauser(cb, csm.newEjector, csmCommittee);
+        _assertCircuitBreakerPauser(cb, csm.oldVerifier, address(0));
+        _assertCircuitBreakerPauser(cb, csm.oldEjector, address(0));
 
         _assertNotOZRoleHolder(vettedGate, START_REFERRAL_SEASON_ROLE, agent);
         _assertNotOZRoleHolder(vettedGate, END_REFERRAL_SEASON_ROLE, csmCommittee);
@@ -503,7 +471,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, accounting);
 
         _assertNotOZRoleHolder(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.oldEjector);
-        _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.ejector);
+        _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.newEjector);
     }
 
     function _assertCMFinalState(GlobalConfig memory g) internal view {
@@ -822,9 +790,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
     error MissingOZAccessControlRoleHolder(address contractAddress, bytes32 role, address holder);
     error UnexpectedOZAccessControlRoleHolder(address contractAddress, bytes32 role, address holder);
-    error NonZeroRoleHolders(address contractAddress, bytes32 role);
     error IncorrectAragonKernelImplementation(address kernel, address implementation);
-    error IncorrectLinkedContractAddress(address contractAddress, address actualAddress, address expectedAddress);
     error InvalidHashConsensusInitialEpoch(address consensus, uint256 actualEpoch, uint256 expectedEpoch);
     error CMModuleIsPaused();
     error InvalidInitializedContractVersion(address contractAddress, uint64 actualVersion, uint64 expectedVersion);
