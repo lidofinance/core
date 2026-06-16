@@ -314,7 +314,7 @@ contract UpgradeConfig is IUpgradeConfig {
         CSM_OLD_VERIFIER = csmUpgradeParams.oldVerifier;
         CSM_NEW_VERIFIER = csmUpgradeParams.newVerifier;
         CSM_NEW_PERMISSIONLESS_GATE = csmUpgradeParams.newPermissionlessGate;
-        CSM_EJECTOR = csmUpgradeParams.ejector;
+        CSM_EJECTOR = csmUpgradeParams.newEjector;
         CSM_COMMITTEE = csmUpgradeParams.csmCommittee;
 
         IBaseModuleV3 csm = IBaseModuleV3(CSM);
@@ -457,10 +457,10 @@ contract UpgradeConfig is IUpgradeConfig {
             feeOracleImpl: CSM_FEE_ORACLE_IMPL,
             feeOracleConsensusVersion: CSM_FEE_ORACLE_CONSENSUS_VERSION,
             vettedGate: CSM_VETTED_GATE,
+            vettedGateImpl: CSM_VETTED_GATE_IMPL,
             identifiedDVTClusterGate: CSM_IDENTIFIED_DVT_CLUSTER_GATE,
             identifiedDVTClusterCurveSetup: CSM_IDENTIFIED_DVT_CLUSTER_CURVE_SETUP,
             identifiedDVTClusterBondCurveId: CSM_IDENTIFIED_DVT_CLUSTER_BOND_CURVE_ID,
-            vettedGateImpl: CSM_VETTED_GATE_IMPL,
             accounting: CSM_ACCOUNTING,
             accountingImpl: CSM_ACCOUNTING_IMPL,
             feeDistributor: CSM_FEE_DISTRIBUTOR,
@@ -470,11 +470,11 @@ contract UpgradeConfig is IUpgradeConfig {
             strikes: CSM_STRIKES,
             strikesImpl: CSM_STRIKES_IMPL,
             oldPermissionlessGate: CSM_OLD_PERMISSIONLESS_GATE,
+            newPermissionlessGate: CSM_NEW_PERMISSIONLESS_GATE,
             oldVerifier: CSM_OLD_VERIFIER,
             newVerifier: CSM_NEW_VERIFIER,
-            newPermissionlessGate: CSM_NEW_PERMISSIONLESS_GATE,
             oldEjector: CSM_OLD_EJECTOR,
-            ejector: CSM_EJECTOR,
+            newEjector: CSM_EJECTOR,
             csmCommittee: CSM_COMMITTEE
         });
     }
