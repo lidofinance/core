@@ -304,15 +304,6 @@ struct EasyTrackOldFactories {
 }
 
 struct CoreUpgradeParams {
-    // Old implementations
-    address oldLocatorImpl;
-    address oldLidoImpl;
-    address oldAccountingImpl;
-    address oldAccountingOracleImpl;
-    address oldStakingRouterImpl;
-    address oldWithdrawalVaultImpl;
-    address oldValidatorsExitBusOracleImpl;
-
     // New implementations
     address newLocatorImpl;
     address newLidoImpl;
@@ -416,13 +407,6 @@ struct CoreUpgradeConfig {
 
     address locator;
 
-    address oldLocatorImpl;
-    address oldLidoImpl;
-    address oldAccountingImpl;
-    address oldAccountingOracleImpl;
-    address oldStakingRouterImpl;
-    address oldWithdrawalVaultImpl;
-    address oldValidatorsExitBusOracleImpl;
     address oldDepositSecurityModule;
 
     address newLocatorImpl;

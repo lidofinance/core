@@ -200,8 +200,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         //
         // PreUpgrade steps
         //
-        CoreUpgradeConfig memory c = UpgradeConfig(CONFIG).getCoreUpgradeConfig();
-
         ILidoUpgrade lido = ILidoUpgrade(g.lido);
         initialBufferedEther = lido.getBufferedEther();
         (initialDepositedValidators, initialBeaconValidators, initialBeaconBalance) = lido.getBeaconStat();
@@ -209,18 +207,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
         initialWithdrawalCredentials = sr.getWithdrawalCredentials();
         initialModulesCount = sr.getStakingModulesCount();
-
-        // TODO: Either extend to all proxies, or remove at all.
-        // Check initial implementations of the proxies to be upgraded
-        _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.oldLidoImpl);
-
-        _assertProxyImplementation(c.locator, c.oldLocatorImpl);
-        _assertProxyImplementation(c.accounting, c.oldAccountingImpl);
-        _assertProxyImplementation(c.accountingOracle, c.oldAccountingOracleImpl);
-        _assertProxyImplementation(g.stakingRouter, c.oldStakingRouterImpl);
-        _assertProxyImplementation(c.validatorsExitBusOracle, c.oldValidatorsExitBusOracleImpl);
-
-        _assertWithdrawalsManagerProxyImplementation(c.withdrawalVault, c.oldWithdrawalVaultImpl);
 
         emit UpgradeStarted();
     }
