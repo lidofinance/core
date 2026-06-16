@@ -95,7 +95,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       clDiff: clDiff + clPendingBalanceGwei * ONE_GWEI, //simulate full total increase
       clPendingBalanceGwei: 0n,
       dryRun: true,
-      excludeVaultsBalances: true,
+      reportElVault: false,
       skipWithdrawals: true,
       stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule,
@@ -112,7 +112,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
   const submitModuleBalancesSanityBaseline = async () => {
     const { data } = await report(ctx, {
       dryRun: true,
-      excludeVaultsBalances: true,
+      reportElVault: false,
       skipWithdrawals: true,
     });
 

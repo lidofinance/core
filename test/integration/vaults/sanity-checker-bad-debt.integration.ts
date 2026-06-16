@@ -99,9 +99,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
 
       // Report with zero CL diff, skip withdrawals, don't report burner
-      const { reportTx } = await report(ctx, {
-        clDiff: 0n,
-        excludeVaultsBalances: true,
+      const { reportTx } = await reportWithEffectiveClDiff(ctx, 0n, {
+        reportElVault: false,
         skipWithdrawals: true,
         reportBurner: false,
         waitNextReportTime: true,
@@ -143,8 +142,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
         const largeRewards = ether("10000");
         await setBalance(await elRewardsVault.getAddress(), largeRewards);
 
-        const { reportTx } = await report(ctx, {
-          clDiff: 0n,
+        const { reportTx } = await reportWithEffectiveClDiff(ctx, 0n, {
           excludeVaultsBalances: false, // Include vault balances to collect rewards
           skipWithdrawals: true,
           waitNextReportTime: true,
@@ -220,9 +218,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
         // Verify burner has shares to burn
         expect(stateBefore.burnerShares).to.be.gte(sharesToRequest, "Burner should have shares to burn");
 
-        const { reportTx } = await report(ctx, {
-          clDiff: 0n,
-          excludeVaultsBalances: true,
+        const { reportTx } = await reportWithEffectiveClDiff(ctx, 0n, {
+          reportElVault: false,
           skipWithdrawals: true,
           waitNextReportTime: true,
         });
@@ -283,7 +280,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       const smallDecrease = ether("-1");
 
       await reportWithEffectiveClDiff(ctx, smallDecrease, {
-        excludeVaultsBalances: true,
+        reportElVault: false,
         skipWithdrawals: true,
         // Burner state on the fork can hold pending cover/non-cover shares; burning them
         // produces a positive rebase that masks the share-rate drop we want to observe here.
@@ -323,7 +320,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
       const { reportTx } = await report(ctx, {
         clDiff: clSlashing,
-        excludeVaultsBalances: true,
+        reportElVault: false,
         skipWithdrawals: true,
         waitNextReportTime: true,
       });
@@ -379,7 +376,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await expect(
         report(ctx, {
           clDiff: maxBalanceIncrease + ONE_GWEI,
-          excludeVaultsBalances: true,
+          reportElVault: false,
           skipWithdrawals: true,
         }),
       ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
@@ -387,7 +384,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Report exactly at the limit should pass despite bad debt internalization
       await report(ctx, {
         clDiff: maxBalanceIncrease,
-        excludeVaultsBalances: true,
+        reportElVault: false,
         skipWithdrawals: true,
       });
 

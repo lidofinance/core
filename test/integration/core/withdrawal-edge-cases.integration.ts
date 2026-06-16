@@ -59,7 +59,7 @@ describe("Integration: Withdrawal edge cases", () => {
       clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport + effectiveClDiff;
 
     await reportWithEffectiveClDiff(ctx, effectiveClDiff, {
-      excludeVaultsBalances: true,
+      reportElVault: false,
       skipWithdrawals,
       ...adjustReportModuleBalances(await buildModuleAccountingReportParams(ctx), toGwei(postCLBalanceWei)),
     });
@@ -77,7 +77,7 @@ describe("Integration: Withdrawal edge cases", () => {
 
     await report(ctx, {
       clDiff: depositedSinceLastReport,
-      excludeVaultsBalances: true,
+      reportElVault: false,
       skipWithdrawals: true,
       ...adjustReportModuleBalances(
         await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule }),

@@ -299,7 +299,7 @@ export const seedProtocolPendingBaseline = async (
   const { data } = await report(ctx, {
     clDiff: depositedSinceLastReport,
     dryRun: true,
-    excludeVaultsBalances: true,
+    reportElVault: false,
     skipWithdrawals: true,
     waitNextReportTime: true,
     // adjust modules balances in case of unaccounted cl balance in tests
@@ -389,10 +389,11 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
 
   // Add new validators to beacon chain
   const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[moduleId, toGwei(ethToDeposit)]]);
-  const postCLBalanceWei = before.clValidatorsBalanceAtLastReport + before.clPendingBalanceAtLastReport + ethToDeposit;
+  const rawClDiff = before.depositedSinceLastReport;
+  const postCLBalanceWei = before.clValidatorsBalanceAtLastReport + before.clPendingBalanceAtLastReport + rawClDiff;
 
   await report(ctx, {
-    clDiff: ethToDeposit,
+    clDiff: rawClDiff,
     clAppearedValidators: depositsCount,
     skipWithdrawals: true,
     ...adjustReportModuleBalances(

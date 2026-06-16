@@ -137,8 +137,7 @@ export const report = async (
     vaultsDataTreeCid = "",
   }: OracleReportParams = {},
 ): Promise<OracleReportResults> => {
-  const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle, oracleReportSanityChecker } =
-    ctx.contracts;
+  const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle } = ctx.contracts;
 
   if (waitNextReportTime) {
     await waitNextAvailableReportTime(ctx);
@@ -174,23 +173,6 @@ export const report = async (
 
   withdrawalVaultBalance = reportWithdrawalsVault ? withdrawalVaultBalance : 0n;
   elRewardsVaultBalance = reportElVault ? elRewardsVaultBalance : 0n;
-
-  if (reportWithdrawalsVault) {
-    const lastVaultBalanceAfterTransfer = BigInt(await ethers.provider.getStorage(oracleReportSanityChecker, 4n));
-    if (withdrawalVaultBalance < lastVaultBalanceAfterTransfer) {
-      throw new Error("Reported withdrawal vault balance is below last vault balance after transfer");
-    }
-    // Sync _lastVaultBalanceAfterTransfer with the current vault balance so the pending check
-    // does not interpret test-funded vault balance as CL withdrawals (zero-sum rebalancing).
-    // The contract will update _lastVaultBalanceAfterTransfer = vaultBalance - transfer after the report.
-    if (withdrawalVaultBalance > lastVaultBalanceAfterTransfer) {
-      await ethers.provider.send("hardhat_setStorageAt", [
-        await oracleReportSanityChecker.getAddress(),
-        ethers.toBeHex(4n, 32),
-        ethers.toBeHex(withdrawalVaultBalance, 32),
-      ]);
-    }
-  }
 
   const postCLBalance = preCLBalance + clDiff;
 
@@ -318,7 +300,7 @@ export const resetCLBalanceDecreaseWindow = async (
   // Move report timestamp beyond the 36-day window and submit an effective neutral report.
   await advanceChainTime(CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS);
   return reportWithEffectiveClDiff(ctx, 0n, {
-    excludeVaultsBalances: true,
+    reportElVault: false,
     skipWithdrawals: true,
     ...params,
   });
@@ -343,11 +325,11 @@ export async function reportWithoutExtraData(
 
   const reportData: Partial<OracleReportParams> = {
     ...(clDiff === undefined ? {} : { clDiff }),
-    excludeVaultsBalances: true,
     extraDataFormat: EXTRA_DATA_FORMAT_LIST,
     extraDataHash: extraDataChunkHashes[0],
     extraDataItemsCount: BigInt(extraDataItemsCount),
     numExitedValidatorsByStakingModule,
+    reportElVault: false,
     stakingModuleIdsWithNewlyExitedValidators,
     skipWithdrawals: true,
   };

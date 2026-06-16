@@ -66,7 +66,7 @@ describe("Integration: Negative rebase", () => {
     if (reportDataCount === 0n) {
       await reportWithEffectiveClDiff(ctx, 0n, {
         skipWithdrawals: true,
-        excludeVaultsBalances: true,
+        reportElVault: false,
       });
     }
   };
