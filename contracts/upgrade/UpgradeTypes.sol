@@ -372,7 +372,7 @@ struct CSMUpgradeParams {
     address newPermissionlessGate;
     address oldVerifier;
     address newVerifier;
-    address ejector;
+    address newEjector;
     address csmCommittee;
 }
 
@@ -475,10 +475,10 @@ struct CSMUpgradeConfig {
     address feeOracleImpl;
     uint256 feeOracleConsensusVersion;
     address vettedGate;
+    address vettedGateImpl;
     address identifiedDVTClusterGate;
     address identifiedDVTClusterCurveSetup;
     uint256 identifiedDVTClusterBondCurveId;
-    address vettedGateImpl;
     address accounting;
     address accountingImpl;
     address feeDistributor;
@@ -488,11 +488,11 @@ struct CSMUpgradeConfig {
     address strikes;
     address strikesImpl;
     address oldPermissionlessGate;
+    address newPermissionlessGate;
     address oldVerifier;
     address newVerifier;
-    address newPermissionlessGate;
     address oldEjector;
-    address ejector;
+    address newEjector;
     address csmCommittee;
 }
 

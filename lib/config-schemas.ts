@@ -195,7 +195,7 @@ const CSMUpgradeConfigSchema = z.object({
   oldVerifier: EthereumAddressSchema,
   newVerifier: EthereumAddressSchema,
   newPermissionlessGate: EthereumAddressSchema,
-  ejector: EthereumAddressSchema,
+  newEjector: EthereumAddressSchema,
   csmCommittee: EthereumAddressSchema,
 });
 

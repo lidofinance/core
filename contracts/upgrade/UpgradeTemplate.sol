@@ -462,11 +462,13 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertTwoOZRoleHolders(vettedGate, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(csm.identifiedDVTClusterGate, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(newVerifier, PAUSE_ROLE, cb, resealManager);
-        _assertTwoOZRoleHolders(csm.ejector, PAUSE_ROLE, cb, resealManager);
+        _assertTwoOZRoleHolders(csm.newEjector, PAUSE_ROLE, cb, resealManager);
 
         _assertCircuitBreakerPauser(cb, csm.identifiedDVTClusterGate, csmCommittee);
         _assertCircuitBreakerPauser(cb, newVerifier, csmCommittee);
-        _assertCircuitBreakerPauser(cb, csm.ejector, csmCommittee);
+        _assertCircuitBreakerPauser(cb, csm.newEjector, csmCommittee);
+        _assertCircuitBreakerPauser(cb, csm.oldVerifier, address(0));
+        _assertCircuitBreakerPauser(cb, csm.oldEjector, address(0));
 
         _assertNotOZRoleHolder(vettedGate, START_REFERRAL_SEASON_ROLE, agent);
         _assertNotOZRoleHolder(vettedGate, END_REFERRAL_SEASON_ROLE, csmCommittee);
@@ -483,7 +485,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, accounting);
 
         _assertNotOZRoleHolder(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.oldEjector);
-        _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.ejector);
+        _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.newEjector);
     }
 
     function _assertCMFinalState(GlobalConfig memory g) internal view {
