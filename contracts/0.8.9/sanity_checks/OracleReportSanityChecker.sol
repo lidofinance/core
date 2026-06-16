@@ -704,40 +704,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _finalizePostReportState(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
     }
 
-    /// @notice Check total pending CL balance from the current report against protocol state and growth limits.
-    function checkCLPendingBalanceIncrease(
-        uint256 _timeElapsed,
-        uint256 _preCLValidatorsBalance,
-        uint256 _preCLPendingBalance,
-        uint256 _postCLValidatorsBalance,
-        uint256 _postCLPendingBalance,
-        uint256 _withdrawalVaultBalance,
-        uint256 _deposits
-    ) external view {
-        CLBalanceChangeCheckParams memory checkParams = CLBalanceChangeCheckParams({
-            timeElapsed: _timeElapsed,
-            preCLValidatorsBalance: _preCLValidatorsBalance,
-            preCLPendingBalance: _preCLPendingBalance,
-            postCLValidatorsBalance: _postCLValidatorsBalance,
-            postCLPendingBalance: _postCLPendingBalance,
-            deposits: _deposits
-        });
-        _checkCLPendingBalanceIncrease(_accountingCoreLimits, checkParams, _getCLWithdrawals(_withdrawalVaultBalance));
-    }
-
-    /// @notice Check that per-module validators CL balances in wei are consistent with reported total validators balance.
-    function checkCLBalancesConsistency(
-        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
-        uint256[] calldata _validatorBalancesWeiByStakingModule,
-        uint256 _clValidatorsBalanceWei
-    ) external pure {
-        _checkCLBalancesConsistency(
-            _stakingModuleIdsWithUpdatedBalance,
-            _validatorBalancesWeiByStakingModule,
-            _clValidatorsBalanceWei
-        );
-    }
-
     /// @notice Check per-module validators balances consistency and global CL growth budget derived from protocol pending, all in wei.
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,

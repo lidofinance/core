@@ -9,7 +9,7 @@ import {
   AccountingOracle__MockForStakingRouter,
   Lido__HarnessForFinalizeUpgradeV4,
   LidoLocator,
-  OracleReportSanityChecker,
+  OracleReportSanityCheckerWrapper,
 } from "typechain-types";
 
 import { ether, impersonate, proxify, randomAddress } from "lib";
@@ -170,7 +170,7 @@ export type LidoBalanceStats = {
 };
 
 export type FinalizeUpgradeV4CheckerFixture = {
-  checker: OracleReportSanityChecker;
+  checker: OracleReportSanityCheckerWrapper;
   accountingSigner: HardhatEthersSigner;
   accountingOracle: AccountingOracle__MockForStakingRouter;
   lido: Lido__HarnessForFinalizeUpgradeV4;
@@ -205,12 +205,13 @@ export const deployFinalizeUpgradeV4Checker = async (
     value: FINALIZE_UPGRADE_V4_INITIAL_BUFFERED_ETHER,
   });
 
-  const checker = (await ethers.deployContract("OracleReportSanityChecker", [
+  const checker = (await ethers.deployContract("OracleReportSanityCheckerWrapper", [
     await locator.getAddress(),
     await accounting.getAddress(),
     deployer.address,
     limitsList,
-  ])) as OracleReportSanityChecker;
+    false,
+  ])) as OracleReportSanityCheckerWrapper;
 
   await updateLidoLocatorImplementation(
     await locator.getAddress(),
@@ -297,7 +298,7 @@ export const moveToFirstPostMigrationReportFrame = async (
   };
 };
 
-export const setLastVaultBalanceAfterTransfer = async (checker: OracleReportSanityChecker, value: bigint) => {
+export const setLastVaultBalanceAfterTransfer = async (checker: OracleReportSanityCheckerWrapper, value: bigint) => {
   await ethers.provider.send("hardhat_setStorageAt", [
     await checker.getAddress(),
     ethers.toBeHex(LAST_VAULT_BALANCE_AFTER_TRANSFER_SLOT, 32),
