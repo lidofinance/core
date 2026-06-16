@@ -44,16 +44,6 @@ contract UpgradeConfig is IUpgradeConfig {
     address public immutable CIRCUIT_BREAKER_COMMITTEE;
     address public immutable BURNER;
 
-    //
-    // -------- Pre-upgrade old implementations --------
-    //
-    address internal immutable OLD_LOCATOR_IMPL;
-    address internal immutable OLD_LIDO_IMPL;
-    address internal immutable OLD_ACCOUNTING_IMPL;
-    address internal immutable OLD_ACCOUNTING_ORACLE_IMPL;
-    address internal immutable OLD_STAKING_ROUTER_IMPL;
-    address internal immutable OLD_WITHDRAWAL_VAULT_IMPL;
-    address internal immutable OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
     address internal immutable OLD_DEPOSIT_SECURITY_MODULE;
 
     //
@@ -192,10 +182,6 @@ contract UpgradeConfig is IUpgradeConfig {
         // Core upgrade params
         CoreUpgradeParams memory coreUpgradeParams = params.coreUpgrade;
 
-        if (coreUpgradeParams.newLocatorImpl == coreUpgradeParams.oldLocatorImpl) {
-            revert SameLocatorImplementation();
-        }
-
         // Save passed parameters
         AGENT = params.agent;
         KERNEL = IAragonApp(AGENT).kernel();
@@ -209,14 +195,6 @@ contract UpgradeConfig is IUpgradeConfig {
 
         EASY_TRACK = params.easyTrack;
         EASY_TRACK_EVM_SCRIPT_EXECUTOR = IEasyTrack(params.easyTrack).evmScriptExecutor();
-
-        OLD_LOCATOR_IMPL = coreUpgradeParams.oldLocatorImpl;
-        OLD_LIDO_IMPL = coreUpgradeParams.oldLidoImpl;
-        OLD_ACCOUNTING_IMPL = coreUpgradeParams.oldAccountingImpl;
-        OLD_ACCOUNTING_ORACLE_IMPL = coreUpgradeParams.oldAccountingOracleImpl;
-        OLD_STAKING_ROUTER_IMPL = coreUpgradeParams.oldStakingRouterImpl;
-        OLD_WITHDRAWAL_VAULT_IMPL = coreUpgradeParams.oldWithdrawalVaultImpl;
-        OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL = coreUpgradeParams.oldValidatorsExitBusOracleImpl;
 
         NEW_LOCATOR_IMPL = coreUpgradeParams.newLocatorImpl;
         NEW_LIDO_IMPL = coreUpgradeParams.newLidoImpl;
@@ -285,13 +263,7 @@ contract UpgradeConfig is IUpgradeConfig {
         TRIGGERABLE_WITHDRAWALS_GATEWAY = locator.triggerableWithdrawalsGateway();
         CONSOLIDATION_GATEWAY = locator.consolidationGateway();
         NEW_ORACLE_REPORT_SANITY_CHECKER = locator.oracleReportSanityChecker();
-        if (NEW_ORACLE_REPORT_SANITY_CHECKER == oldLocator.oracleReportSanityChecker()) {
-            revert SameOracleSanityCheckerImplementation();
-        }
         NEW_DEPOSIT_SECURITY_MODULE = locator.depositSecurityModule();
-        if (NEW_DEPOSIT_SECURITY_MODULE == OLD_DEPOSIT_SECURITY_MODULE) {
-            revert SameDepositSecurityModuleImplementation();
-        }
 
         /// CSMv3
         CSMUpgradeParams memory csmUpgradeParams = params.csmUpgrade;
@@ -397,14 +369,6 @@ contract UpgradeConfig is IUpgradeConfig {
             acl: ACL,
             lidoAppId: LIDO_APP_ID,
             locator: LOCATOR,
-            // old impl
-            oldLocatorImpl: OLD_LOCATOR_IMPL,
-            oldLidoImpl: OLD_LIDO_IMPL,
-            oldAccountingImpl: OLD_ACCOUNTING_IMPL,
-            oldAccountingOracleImpl: OLD_ACCOUNTING_ORACLE_IMPL,
-            oldStakingRouterImpl: OLD_STAKING_ROUTER_IMPL,
-            oldWithdrawalVaultImpl: OLD_WITHDRAWAL_VAULT_IMPL,
-            oldValidatorsExitBusOracleImpl: OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL,
             oldDepositSecurityModule: OLD_DEPOSIT_SECURITY_MODULE,
             // new impl
             newLocatorImpl: NEW_LOCATOR_IMPL,
@@ -504,8 +468,4 @@ contract UpgradeConfig is IUpgradeConfig {
             metaRegistry: CURATED_META_REGISTRY
         });
     }
-
-    error SameLocatorImplementation();
-    error SameOracleSanityCheckerImplementation();
-    error SameDepositSecurityModuleImplementation();
 }
