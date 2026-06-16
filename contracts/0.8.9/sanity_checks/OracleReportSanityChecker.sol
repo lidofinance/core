@@ -1212,7 +1212,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 lastIndex = _reportCount - 1;
         uint256 lastTimestamp = reportData[lastIndex].timestamp;
         uint256 windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0;
-        uint256 baselineIndex = _findWindowStartIndex(lastIndex, windowStart);
+        uint256 baselineIndex = _findWindowBaselineIndex(lastIndex, windowStart);
 
         uint256 baselineBalance = reportData[baselineIndex].clBalance;
         uint256 totalDeposits;
@@ -1232,13 +1232,19 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         maxAllowedCLBalanceDiff = (expectedPostCLBalance * _maxDecreaseBP) / MAX_BASIS_POINTS;
     }
 
-    function _findWindowStartIndex(
+    function _findWindowBaselineIndex(
         uint256 _lastIndex,
         uint256 _windowStart
-    ) internal view returns (uint256 windowStartIndex) {
-        windowStartIndex = _lastIndex;
-        while (windowStartIndex > 0 && reportData[windowStartIndex - 1].timestamp >= _windowStart) {
-            --windowStartIndex;
+    ) internal view returns (uint256 baselineIndex) {
+        baselineIndex = _lastIndex;
+        while (baselineIndex > 0) {
+            uint256 previousIndex = baselineIndex - 1;
+            if (reportData[previousIndex].timestamp < _windowStart) {
+                // If the current report is the only snapshot inside the window, use the nearest
+                // pre-window snapshot as an anchor so the negative rebase baseline cannot reset.
+                return baselineIndex == _lastIndex ? previousIndex : baselineIndex;
+            }
+            baselineIndex = previousIndex;
         }
     }
 

@@ -94,6 +94,18 @@ export const repeatReports = (
 export const maxDiffFor = (recreatedPostCLBalance: bigint, limits: OracleReportLimits) =>
   (recreatedPostCLBalance * limits.maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
 
+const findWindowBaselineIndex = (storedReports: StoredReportModel[], lastIndex: number, windowStart: bigint) => {
+  let baselineIndex = lastIndex;
+  while (baselineIndex > 0) {
+    const previousIndex = baselineIndex - 1;
+    if (storedReports[previousIndex].timestamp < windowStart) {
+      return baselineIndex === lastIndex ? previousIndex : baselineIndex;
+    }
+    baselineIndex = previousIndex;
+  }
+  return baselineIndex;
+};
+
 export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => {
   let timestamp = 0n;
   const storedReports: StoredReportModel[] = [];
@@ -135,11 +147,7 @@ export const calcExpectedWindowDiff = (storedReports: StoredReportModel[], limit
   const lastIndex = storedReports.length - 1;
   const lastTimestamp = storedReports[lastIndex].timestamp;
   const windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0n;
-
-  let baselineIndex = lastIndex;
-  while (baselineIndex > 0 && storedReports[baselineIndex - 1].timestamp >= windowStart) {
-    --baselineIndex;
-  }
+  const baselineIndex = findWindowBaselineIndex(storedReports, lastIndex, windowStart);
 
   const baselineCLBalance = storedReports[baselineIndex].postCLBalance;
   const currentPostCLBalance = storedReports[lastIndex].postCLBalance;

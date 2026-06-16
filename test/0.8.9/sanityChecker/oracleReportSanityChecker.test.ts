@@ -1667,7 +1667,7 @@ describe("OracleReportSanityChecker.sol", () => {
       expect(third.timestamp).to.equal(46n * ONE_DAY);
     });
 
-    it("excludes all outdated snapshots from the window after a long gap", async () => {
+    it("falls back to the latest previous snapshot after a long gap", async () => {
       const ONE_DAY = 24n * 60n * 60n;
 
       await checker
@@ -1678,21 +1678,20 @@ describe("OracleReportSanityChecker.sol", () => {
       await checker
         .connect(accountingSigner)
         .checkAccountingOracleReport(
-          ...report({ timeElapsed: ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("100") }),
+          ...report({ timeElapsed: ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("99") }),
         );
 
       await expect(
         checker
           .connect(accountingSigner)
           .checkAccountingOracleReport(
-            ...report({ timeElapsed: 48n * ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("90") }),
+            ...report({ timeElapsed: 48n * ONE_DAY, preCLBalance: ether("99"), postCLBalance: 0n }),
           ),
-      ).not.to.be.reverted;
+      )
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+        .withArgs(ether("99"), ether("3.564"));
 
-      expect(await checker.getReportDataCount()).to.equal(3n);
-      const third = await checker.reportData(2n);
-      expect(third.timestamp).to.equal(50n * ONE_DAY);
-      expect(third.clBalance).to.equal(ether("90"));
+      expect(await checker.getReportDataCount()).to.equal(2n);
     });
 
     it("does not treat a net window increase as a CL balance decrease", async () => {
