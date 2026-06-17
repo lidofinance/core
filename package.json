@@ -52,6 +52,9 @@
     "upgrade:deploy:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn upgrade:helper:run",
     "upgrade:deploy:base:local": "MODE=forking yarn upgrade:deploy:base",
     "upgrade:deploy:template:local": "MODE=forking yarn upgrade:deploy:template",
+    "upgrade:voting:upd2": "STEPS_FILE=upgrade/steps-upd2-voting.json yarn upgrade:helper:run",
+    "upgrade:voting:upd2:local": "MODE=forking yarn upgrade:voting:upd2",
+    "upgrade:mock:upd2:local": "AUTO_CONFIRM=true MODE=forking STEPS_FILE=upgrade/steps-upd2-mock.json yarn upgrade:helper:run",
     "upgrade:mock:voting": "MODE=forking STEPS_FILE=upgrade/steps-mock-voting.json yarn upgrade:helper:run",
     "upgrade:mock:upgrade": "MODE=forking STEPS_FILE=upgrade/steps-mock-upgrade.json yarn upgrade:helper:run",
     "postinstall": "husky"
