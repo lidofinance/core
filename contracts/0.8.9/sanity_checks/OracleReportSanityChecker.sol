@@ -921,6 +921,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether,
             result.effectiveTimeElapsed
         );
+        // Electra activations consume balance churn per whole pending deposit, so the report boundary
+        // may include one max-size validator above the prorated appeared ETH limit.
         if (activatedBalance > appearedEthLimitPerPeriod + MAX_VALIDATOR_EFFECTIVE_BALANCE) {
             revert IncorrectTotalActivatedBalance(appearedEthLimitPerPeriod, activatedBalance);
         }
