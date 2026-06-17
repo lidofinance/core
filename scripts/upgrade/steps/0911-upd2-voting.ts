@@ -22,7 +22,7 @@ const STAKING_MODULE_SHARE_MANAGE_ROLE = id("STAKING_MODULE_SHARE_MANAGE_ROLE");
 
 const MODULE_ID = 1;
 const STAKE_SHARE_LIMIT = 0;
-const PRIORITY_EXIT_SHARE_THRESHOLD = 10_000;
+const PRIORITY_EXIT_SHARE_THRESHOLD = 0;
 
 export async function main() {
   const state = readNetworkState();
