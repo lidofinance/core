@@ -759,7 +759,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Check exited ETH amount rate per day based on exited validators count.
+    /// @notice Checks the exited ETH amount per day derived from the number of newly exited validators.
+    /// @dev The check converts newly exited validators to ETH using `exitedValidatorEthAmountLimit`,
+    ///     normalizes the result by `_timeElapsed`, and compares it with the stored exited and
+    ///     consolidation per-day limits. The stored limits are expressed in 16 ETH exit units and
+    ///     are doubled before comparison.
     /// @param _newlyExitedValidatorsCount Number of newly exited validators since previous report.
     /// @param _timeElapsed Time elapsed in seconds since previous report.
     function checkExitedEthAmountPerDay(
@@ -767,9 +771,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _timeElapsed
     ) external view {
         AccountingCoreLimitsPacked memory limitsList = _accountingCoreLimits;
-        uint256 exitedEthAmount = _newlyExitedValidatorsCount * uint256(limitsList.exitedValidatorEthAmountLimit) * 1 ether;
-        uint256 exitedEthAmountPerDay = _normalizePerDay(exitedEthAmount, _timeElapsed);
-        _checkExitedEthAmountPerDay(limitsList, exitedEthAmountPerDay);
+        uint256 newlyExitedValidatorsEthAmount =
+            _newlyExitedValidatorsCount * uint256(limitsList.exitedValidatorEthAmountLimit) * 1 ether;
+        uint256 newlyExitedValidatorsEthAmountPerDay =
+            _normalizePerDay(newlyExitedValidatorsEthAmount, _timeElapsed);
+        _checkExitedEthAmountPerDay(limitsList, newlyExitedValidatorsEthAmountPerDay);
     }
 
     /// @notice check the number of node operators reported per extra data item in the accounting oracle report.
@@ -857,13 +863,15 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         AccountingCoreLimitsPacked memory _limitsList,
         uint256 _exitedEthAmountPerDay
     ) internal pure {
-        /// @dev The limit is set for the number of exits assuming 16 ETH per validator
-        uint256 exitedEthLimitWithConsolidation =
+        uint256 exitedEthAmountPerDayLimitWithConsolidation =
             (uint256(_limitsList.exitedEthAmountPerDayLimit) + uint256(_limitsList.consolidationEthAmountPerDayLimit)) *
             2 *
             1 ether;
-        if (_exitedEthAmountPerDay > exitedEthLimitWithConsolidation) {
-            revert ExitedEthAmountPerDayLimitExceeded(exitedEthLimitWithConsolidation, _exitedEthAmountPerDay);
+        if (_exitedEthAmountPerDay > exitedEthAmountPerDayLimitWithConsolidation) {
+            revert ExitedEthAmountPerDayLimitExceeded(
+                exitedEthAmountPerDayLimitWithConsolidation,
+                _exitedEthAmountPerDay
+            );
         }
     }
 
@@ -982,6 +990,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256(_limitsList.consolidationEthAmountPerDayLimit) * 1 ether,
             activationCheckResult.effectiveTimeElapsed
         );
+        // During consolidation, positive per-module validators balance deltas may exceed
+        // activation-backed growth, so the consolidation allowance is added separately.
         uint256 totalActivatedInClByModulesLimit =
             activationCheckResult.activatedBalanceWithGap + consolidationLimitPerPeriodWei;
         if (totalActivatedInClByModules > totalActivatedInClByModulesLimit) {
