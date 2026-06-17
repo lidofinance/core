@@ -40,21 +40,10 @@ contract UpgradeConfig is IUpgradeConfig {
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
     address public immutable RESEAL_MANAGER;
-    address public immutable RESEAL_COMMITTEE;
     address public immutable CIRCUIT_BREAKER;
+    address public immutable CIRCUIT_BREAKER_COMMITTEE;
     address public immutable BURNER;
 
-    //
-    // -------- Pre-upgrade old implementations --------
-    //
-    address internal immutable OLD_LOCATOR_IMPL;
-    address internal immutable OLD_LIDO_IMPL;
-    address internal immutable OLD_ACCOUNTING_IMPL;
-    address internal immutable OLD_ACCOUNTING_ORACLE_IMPL;
-    address internal immutable OLD_STAKING_ROUTER_IMPL;
-    address internal immutable OLD_WITHDRAWAL_VAULT_IMPL;
-    address internal immutable OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL;
-    address internal immutable OLD_ORACLE_REPORT_SANITY_CHECKER;
     address internal immutable OLD_DEPOSIT_SECURITY_MODULE;
 
     //
@@ -91,7 +80,6 @@ contract UpgradeConfig is IUpgradeConfig {
     address internal immutable CONSOLIDATION_GATEWAY;
     address internal immutable CONSOLIDATION_BUS;
     address internal immutable CONSOLIDATION_MIGRATOR;
-    address internal immutable VALIDATOR_EXIT_DELAY_VERIFIER;
 
     //
     // -------- Upgrade parameters --------
@@ -190,15 +178,9 @@ contract UpgradeConfig is IUpgradeConfig {
     uint256 internal immutable CURATED_HASH_CONSENSUS_INITIAL_EPOCH;
     address internal immutable CURATED_META_REGISTRY;
 
-    // UpgradeParameters public upgradeParams;
-
     constructor(UpgradeParameters memory params) {
         // Core upgrade params
         CoreUpgradeParams memory coreUpgradeParams = params.coreUpgrade;
-
-        if (coreUpgradeParams.newLocatorImpl == coreUpgradeParams.oldLocatorImpl) {
-            revert NewAndOldLocatorImplementationsMustBeDifferent();
-        }
 
         // Save passed parameters
         AGENT = params.agent;
@@ -208,19 +190,11 @@ contract UpgradeConfig is IUpgradeConfig {
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
         RESEAL_MANAGER = IDualGovernance(DUAL_GOVERNANCE).getResealManager();
-        RESEAL_COMMITTEE = IDualGovernance(DUAL_GOVERNANCE).getResealCommittee();
         CIRCUIT_BREAKER = params.circuitBreaker;
+        CIRCUIT_BREAKER_COMMITTEE = params.circuitBreakerCommittee;
 
         EASY_TRACK = params.easyTrack;
         EASY_TRACK_EVM_SCRIPT_EXECUTOR = IEasyTrack(params.easyTrack).evmScriptExecutor();
-
-        OLD_LOCATOR_IMPL = coreUpgradeParams.oldLocatorImpl;
-        OLD_LIDO_IMPL = coreUpgradeParams.oldLidoImpl;
-        OLD_ACCOUNTING_IMPL = coreUpgradeParams.oldAccountingImpl;
-        OLD_ACCOUNTING_ORACLE_IMPL = coreUpgradeParams.oldAccountingOracleImpl;
-        OLD_STAKING_ROUTER_IMPL = coreUpgradeParams.oldStakingRouterImpl;
-        OLD_WITHDRAWAL_VAULT_IMPL = coreUpgradeParams.oldWithdrawalVaultImpl;
-        OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL = coreUpgradeParams.oldValidatorsExitBusOracleImpl;
 
         NEW_LOCATOR_IMPL = coreUpgradeParams.newLocatorImpl;
         NEW_LIDO_IMPL = coreUpgradeParams.newLidoImpl;
@@ -273,7 +247,6 @@ contract UpgradeConfig is IUpgradeConfig {
         // Discover via locator
         LOCATOR = params.locator;
         ILidoLocator oldLocator = ILidoLocator(params.locator);
-        OLD_ORACLE_REPORT_SANITY_CHECKER = oldLocator.oracleReportSanityChecker();
         OLD_DEPOSIT_SECURITY_MODULE = oldLocator.depositSecurityModule();
 
         ILidoLocator locator = ILidoLocator(coreUpgradeParams.newLocatorImpl);
@@ -288,7 +261,6 @@ contract UpgradeConfig is IUpgradeConfig {
         TOP_UP_GATEWAY = locator.topUpGateway();
         BURNER = locator.burner();
         TRIGGERABLE_WITHDRAWALS_GATEWAY = locator.triggerableWithdrawalsGateway();
-        VALIDATOR_EXIT_DELAY_VERIFIER = locator.validatorExitDelayVerifier();
         CONSOLIDATION_GATEWAY = locator.consolidationGateway();
         NEW_ORACLE_REPORT_SANITY_CHECKER = locator.oracleReportSanityChecker();
         NEW_DEPOSIT_SECURITY_MODULE = locator.depositSecurityModule();
@@ -314,7 +286,7 @@ contract UpgradeConfig is IUpgradeConfig {
         CSM_OLD_VERIFIER = csmUpgradeParams.oldVerifier;
         CSM_NEW_VERIFIER = csmUpgradeParams.newVerifier;
         CSM_NEW_PERMISSIONLESS_GATE = csmUpgradeParams.newPermissionlessGate;
-        CSM_EJECTOR = csmUpgradeParams.ejector;
+        CSM_EJECTOR = csmUpgradeParams.newEjector;
         CSM_COMMITTEE = csmUpgradeParams.csmCommittee;
 
         IBaseModuleV3 csm = IBaseModuleV3(CSM);
@@ -362,8 +334,8 @@ contract UpgradeConfig is IUpgradeConfig {
             lido: LIDO,
             burner: BURNER,
             resealManager: RESEAL_MANAGER,
-            resealCommittee: RESEAL_COMMITTEE,
             circuitBreaker: CIRCUIT_BREAKER,
+            circuitBreakerCommittee: CIRCUIT_BREAKER_COMMITTEE,
             easyTrack: EASY_TRACK,
             easyTrackEVMScriptExecutor: EASY_TRACK_EVM_SCRIPT_EXECUTOR,
             stakingRouter: STAKING_ROUTER,
@@ -397,15 +369,6 @@ contract UpgradeConfig is IUpgradeConfig {
             acl: ACL,
             lidoAppId: LIDO_APP_ID,
             locator: LOCATOR,
-            // old impl
-            oldLocatorImpl: OLD_LOCATOR_IMPL,
-            oldLidoImpl: OLD_LIDO_IMPL,
-            oldAccountingImpl: OLD_ACCOUNTING_IMPL,
-            oldAccountingOracleImpl: OLD_ACCOUNTING_ORACLE_IMPL,
-            oldStakingRouterImpl: OLD_STAKING_ROUTER_IMPL,
-            oldWithdrawalVaultImpl: OLD_WITHDRAWAL_VAULT_IMPL,
-            oldValidatorsExitBusOracleImpl: OLD_VALIDATORS_EXIT_BUS_ORACLE_IMPL,
-            oldOracleReportSanityChecker: OLD_ORACLE_REPORT_SANITY_CHECKER,
             oldDepositSecurityModule: OLD_DEPOSIT_SECURITY_MODULE,
             // new impl
             newLocatorImpl: NEW_LOCATOR_IMPL,
@@ -458,10 +421,10 @@ contract UpgradeConfig is IUpgradeConfig {
             feeOracleImpl: CSM_FEE_ORACLE_IMPL,
             feeOracleConsensusVersion: CSM_FEE_ORACLE_CONSENSUS_VERSION,
             vettedGate: CSM_VETTED_GATE,
+            vettedGateImpl: CSM_VETTED_GATE_IMPL,
             identifiedDVTClusterGate: CSM_IDENTIFIED_DVT_CLUSTER_GATE,
             identifiedDVTClusterCurveSetup: CSM_IDENTIFIED_DVT_CLUSTER_CURVE_SETUP,
             identifiedDVTClusterBondCurveId: CSM_IDENTIFIED_DVT_CLUSTER_BOND_CURVE_ID,
-            vettedGateImpl: CSM_VETTED_GATE_IMPL,
             accounting: CSM_ACCOUNTING,
             accountingImpl: CSM_ACCOUNTING_IMPL,
             feeDistributor: CSM_FEE_DISTRIBUTOR,
@@ -471,11 +434,11 @@ contract UpgradeConfig is IUpgradeConfig {
             strikes: CSM_STRIKES,
             strikesImpl: CSM_STRIKES_IMPL,
             oldPermissionlessGate: CSM_OLD_PERMISSIONLESS_GATE,
+            newPermissionlessGate: CSM_NEW_PERMISSIONLESS_GATE,
             oldVerifier: CSM_OLD_VERIFIER,
             newVerifier: CSM_NEW_VERIFIER,
-            newPermissionlessGate: CSM_NEW_PERMISSIONLESS_GATE,
             oldEjector: CSM_OLD_EJECTOR,
-            ejector: CSM_EJECTOR,
+            newEjector: CSM_EJECTOR,
             csmCommittee: CSM_COMMITTEE
         });
     }
@@ -505,6 +468,4 @@ contract UpgradeConfig is IUpgradeConfig {
             metaRegistry: CURATED_META_REGISTRY
         });
     }
-
-    error NewAndOldLocatorImplementationsMustBeDifferent();
 }

@@ -12,7 +12,9 @@ import {
   ProtocolContext,
   removeStakingLimit,
   report,
+  reportWithEffectiveClDiff,
   seedProtocolPendingBaseline,
+  updateOracleReportLimits,
 } from "lib/protocol";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
@@ -29,7 +31,7 @@ describe("Integration: Accounting", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, skipWithdrawals: true });
+    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, skipWithdrawals: true });
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -64,6 +66,20 @@ describe("Integration: Accounting", () => {
     expect(maxPositiveTokeRebase).to.be.greaterThanOrEqual(0);
 
     return (maxPositiveTokeRebase * internalEther) / LIMITER_PRECISION_BASE;
+  };
+
+  const allowWithdrawalVaultBalanceReport = async (withdrawalVaultBalance: bigint) => {
+    const { lido } = ctx.contracts;
+
+    await updateOracleReportLimits(ctx, { annualBalanceIncreaseBPLimit: MAX_BASIS_POINTS });
+
+    const { clValidatorsBalanceAtLastReport } = await lido.getBalanceStats();
+    if (clValidatorsBalanceAtLastReport === 0n) return;
+
+    const requiredElapsed =
+      (withdrawalVaultBalance * 365n * ONE_DAY + clValidatorsBalanceAtLastReport - 1n) /
+      clValidatorsBalanceAtLastReport;
+    await advanceChainTime(requiredElapsed + ONE_DAY);
   };
 
   function getWithdrawalParamsFromEvent(tx: ContractTransactionReceipt): {
@@ -281,7 +297,7 @@ describe("Integration: Accounting", () => {
     await expect(
       report(ctx, {
         clDiff: maxCLRebaseViaLimiter,
-        excludeVaultsBalances: true,
+        reportElVault: false,
         reportBurner: false,
         skipWithdrawals: true,
       }),
@@ -292,7 +308,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true });
+    const { reportTx } = await report(ctx, { clDiff: 0n, reportElVault: false });
 
     const reportTxReceipt = (await reportTx!.wait())!;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
@@ -317,9 +333,8 @@ describe("Integration: Accounting", () => {
     await lido.connect(agent).submit(ZeroAddress, { value: ether("90") });
     await lido.connect(agent).approve(withdrawalQueue, ether("5"));
     await withdrawalQueue.connect(agent).requestWithdrawals([ether("5")], agent.address);
-    await report(ctx, {
-      clDiff: 0n,
-      excludeVaultsBalances: true,
+    await reportWithEffectiveClDiff(ctx, 0n, {
+      reportElVault: false,
       reportBurner: false,
       skipWithdrawals: true,
       dryRun: false,
@@ -371,7 +386,7 @@ describe("Integration: Accounting", () => {
     );
     expect(lockBefore).to.be.lte(beforeStateAfterTargetUpdate.withdrawalsReserve);
 
-    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false });
+    const { reportTx } = await report(ctx, { clDiff: 0n, reportElVault: false, reportBurner: false });
     const reportTxReceipt = (await reportTx!.wait())!;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
@@ -390,12 +405,17 @@ describe("Integration: Accounting", () => {
   });
 
   it("Should account correctly with negative CL rebase", async () => {
-    const CL_REBASE_AMOUNT = ether("-100");
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
+    const { maxCLBalanceDecreaseBP } = await oracleReportSanityChecker.getOracleReportLimits();
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const maxDecrease =
+      ((clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) * maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
+    const CL_REBASE_AMOUNT = -roundToGwei(maxDecrease / 2n);
 
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: CL_REBASE_AMOUNT, excludeVaultsBalances: true, skipWithdrawals: true };
+    const params = { clDiff: CL_REBASE_AMOUNT, reportElVault: false, skipWithdrawals: true };
     const { reportTx } = await report(ctx, params);
     const reportTxReceipt = (await reportTx!.wait())!;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
@@ -439,7 +459,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const { reportTx } = (await report(ctx, { clDiff: rebaseAmount, excludeVaultsBalances: true })) as {
+    const { reportTx } = (await report(ctx, { clDiff: rebaseAmount, reportElVault: false })) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -469,7 +489,7 @@ describe("Integration: Accounting", () => {
   it("Should account correctly if no EL rewards", async () => {
     const beforeState = await readState();
 
-    const params = { clDiff: 0n, excludeVaultsBalances: true };
+    const params = { clDiff: 0n, reportElVault: false };
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
@@ -499,7 +519,7 @@ describe("Integration: Accounting", () => {
 
     const beforeState = await readState();
 
-    const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: false };
+    const params = { clDiff: 0n, reportElVault: true };
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
@@ -529,7 +549,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: false };
+    const params = { clDiff: 0n, reportElVault: true };
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
@@ -562,7 +582,7 @@ describe("Integration: Accounting", () => {
 
     const beforeState = await readState();
 
-    const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: false };
+    const params = { clDiff: 0n, reportElVault: true };
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
@@ -588,7 +608,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: 0n, excludeVaultsBalances: true };
+    const params = { clDiff: 0n, reportElVault: false };
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
@@ -609,7 +629,9 @@ describe("Integration: Accounting", () => {
 
   it("Should account correctly with withdrawals at limits", async () => {
     const { withdrawalVault } = ctx.contracts;
+
     const withdrawals = await rebaseLimitWei();
+    await allowWithdrawalVaultBalanceReport(withdrawals);
     await impersonate(withdrawalVault.address, withdrawals);
 
     const beforeState = await readState();
@@ -648,6 +670,7 @@ describe("Integration: Accounting", () => {
     const withdrawalsExcess = ether("10");
     const withdrawals = expectedWithdrawals + withdrawalsExcess;
 
+    await allowWithdrawalVaultBalanceReport(withdrawals);
     await impersonate(withdrawalVault.address, withdrawals);
 
     const beforeState = await readState();
@@ -705,7 +728,7 @@ describe("Integration: Accounting", () => {
     const stateBefore = await readState();
 
     // Report
-    const { reportTx } = await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, skipWithdrawals: true });
+    const { reportTx } = await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, skipWithdrawals: true });
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
     const { sharesBurntAmount, sharesToBurn, amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
@@ -753,7 +776,7 @@ describe("Integration: Accounting", () => {
     expect(limit2).to.equal(limit);
 
     // Report
-    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, skipWithdrawals: true });
+    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, skipWithdrawals: true });
 
     await expectStateChanges(stateBefore, {
       internalShares: -1n * limit,
@@ -768,6 +791,7 @@ describe("Integration: Accounting", () => {
     const excess = limit / 2n; // 2nd report will take two halves of the excess of the limit size
     const limitWithExcess = limit + excess;
 
+    await allowWithdrawalVaultBalanceReport(limitWithExcess);
     await setBalance(withdrawalVault.address, limitWithExcess);
     await setBalance(elRewardsVault.address, limitWithExcess);
 

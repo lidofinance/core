@@ -5,7 +5,7 @@ import { LIMITER_PRECISION_BASE } from "lib/constants";
 
 import { ProtocolContext } from "../types";
 
-import { report } from "./accounting";
+import { reportWithEffectiveClDiff } from "./accounting";
 import { setMaxPositiveTokenRebase } from "./sanity-checker";
 import { removeStakingLimit, setStakingLimit } from "./staking";
 
@@ -42,10 +42,10 @@ export const finalizeWQViaElVault = async (ctx: ProtocolContext) => {
       to: elRewardsVaultAddress,
       value: ethToSubmit,
     });
-    await report(ctx, { clDiff: 0n, reportElVault: true });
+    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: true });
   }
   await setMaxPositiveTokenRebase(ctx, initialMaxPositiveTokenRebase);
-  await report(ctx, { clDiff: 0n, reportElVault: true });
+  await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: true });
 };
 
 export const finalizeWQViaSubmit = async (ctx: ProtocolContext) => {
@@ -60,7 +60,7 @@ export const finalizeWQViaSubmit = async (ctx: ProtocolContext) => {
   const lastRequestId = await withdrawalQueue.getLastRequestId();
   while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
     await lido.connect(ethHolder).submit(ZeroAddress, { value: ethToSubmit });
-    await report(ctx, { clDiff: 0n, reportElVault: false });
+    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false });
   }
 
   await setStakingLimit(

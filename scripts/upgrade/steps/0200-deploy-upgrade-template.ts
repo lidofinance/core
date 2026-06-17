@@ -1,19 +1,13 @@
 import { ethers } from "hardhat";
 import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
 
-import {
-  IAragonKernel,
-  IWithdrawalsManagerProxy__factory,
-  OssifiableProxy__factory,
-  UpgradeTemplate__factory,
-} from "typechain-types";
+import { UpgradeTemplate__factory } from "typechain-types";
 import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
 
 import {
   ConstructorArgs,
   deployWithoutProxy,
   getAddress,
-  loadContract,
   logArgs,
   logConfirmReview,
   logScriptHeader,
@@ -34,23 +28,6 @@ export async function main() {
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeTemplate contract", deployer.address);
 
   const locatorAddress = getAddress(Sk.lidoLocator, state);
-  const locatorProxy = OssifiableProxy__factory.connect(locatorAddress, deployer);
-  const oldLocatorImpl = await locatorProxy.proxy__getImplementation();
-
-  const kernel = await loadContract<IAragonKernel>("IAragonKernel", getAddress(Sk.aragonKernel, state));
-  const oldLidoImpl = await kernel.getApp(await kernel.APP_BASES_NAMESPACE(), state[Sk.appLido].aragonApp.id);
-
-  const accountingProxy = OssifiableProxy__factory.connect(getAddress(Sk.accounting, state), deployer);
-  const accountingOracleProxy = OssifiableProxy__factory.connect(getAddress(Sk.accountingOracle, state), deployer);
-  const stakingRouterProxy = OssifiableProxy__factory.connect(getAddress(Sk.stakingRouter, state), deployer);
-  const withdrawalVaultProxy = IWithdrawalsManagerProxy__factory.connect(
-    getAddress(Sk.withdrawalVault, state),
-    deployer,
-  );
-  const validatorsExitBusOracleProxy = OssifiableProxy__factory.connect(
-    getAddress(Sk.validatorsExitBusOracle, state),
-    deployer,
-  );
 
   const upgradeParams: UpgradeParametersStruct = {
     locator: locatorAddress,
@@ -59,19 +36,12 @@ export async function main() {
     dualGovernance: getAddress(Sk.dgDualGovernance, state),
     easyTrack: getAddress(Sk.easyTrack, state),
     circuitBreaker: getAddress(Sk.circuitBreaker, state),
+    circuitBreakerCommittee: state[Sk.gateSeal].sealingCommittee,
 
     newFactories: parameters.easyTrack.newFactories,
     oldFactories: parameters.easyTrack.oldFactories,
 
     coreUpgrade: {
-      oldLocatorImpl,
-      oldLidoImpl,
-      oldAccountingImpl: await accountingProxy.proxy__getImplementation(),
-      oldAccountingOracleImpl: await accountingOracleProxy.proxy__getImplementation(),
-      oldStakingRouterImpl: await stakingRouterProxy.proxy__getImplementation(),
-      oldWithdrawalVaultImpl: await withdrawalVaultProxy.implementation(),
-      oldValidatorsExitBusOracleImpl: await validatorsExitBusOracleProxy.proxy__getImplementation(),
-
       newLocatorImpl: state[Sk.lidoLocator].implementation.address,
       newLidoImpl: state[Sk.appLido].implementation.address,
       newAccountingImpl: state[Sk.accounting].implementation.address,
@@ -84,7 +54,6 @@ export async function main() {
 
       // TopUp GW
       topUpGatewayImpl: state[Sk.topUpGateway].implementation.address,
-      topUpGateway: getAddress(Sk.topUpGateway, state),
       topUpGatewayDepositor: parameters.topUpGateway.depositor!,
 
       // TW GW
