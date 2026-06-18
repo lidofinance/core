@@ -1504,11 +1504,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 lastWithdrawalVaultBalanceAfterTransfer
     );
     error IncorrectWithdrawalsVaultTransfer(uint256 withdrawalVaultBalance, uint256 withdrawalsVaultTransfer);
-    error IncorrectCLBalanceDecreaseWindowData(
-        uint256 baselineBalance,
-        uint256 totalDeposits,
-        uint256 totalCLWithdrawals
-    );
     error MigrationAlreadyDone();
     error UnexpectedLidoVersion(uint256 actual, uint256 expected);
 
