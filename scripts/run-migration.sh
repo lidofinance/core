@@ -5,7 +5,6 @@ set -o pipefail
 . scripts/utils/migration-env.sh
 
 prepare_migration_env
-print_migration_env
 
 echo "Compiling contracts..."
 yarn hardhat compile

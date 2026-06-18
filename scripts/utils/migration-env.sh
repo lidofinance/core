@@ -30,9 +30,7 @@ derive_rpc_url() {
 }
 
 prepare_migration_env() {
-  local command="${1:-migrate}"
-
-  # MODE env is undefined by default (though it will be set inside the ts scripts)
+  # MODE env is undefined by default, this allows to identify real forking mode
   load_env_var MODE ""
   load_env_var NETWORK "hardhat"
   echo "MODE: $MODE"
@@ -43,6 +41,10 @@ prepare_migration_env() {
   load_env_var RUN_NETWORK || {
     if [[ $NETWORK != "local" && $MODE == "forking" ]]; then
       export RUN_NETWORK="hardhat"
+      load_env_var FORKING_BLOCK_NUMBER ""
+      if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
+        echo "FORKING_BLOCK_NUMBER: ${FORKING_BLOCK_NUMBER}"
+      fi
     else
       export RUN_NETWORK="$NETWORK"
     fi
@@ -61,6 +63,34 @@ prepare_migration_env() {
     load_env_var SCRATCH_DEPLOY_CONFIG "scripts/scratch/deploy-params-testnet.toml"
     load_env_var STEPS_FILE "scratch/steps.json"
   else
+    # if MODE env is undefined, it means run migration on external node directly
+    if [[ $MODE == "forking" ]]; then
+      local fork_network_state_file="deployed-${RUN_NETWORK}.json"
+      # always delete any files from previous runs of HardHat in-process node
+      if [[ $RUN_NETWORK == "hardhat" ]]; then
+        rm -f $fork_network_state_file
+      fi
+
+      if [[ -f $NETWORK_STATE_FILE ]]; then
+        # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
+        if [[ ! -f $fork_network_state_file ]]; then
+          cp "$NETWORK_STATE_FILE" "$fork_network_state_file"
+          echo "$NETWORK_STATE_FILE ==> $fork_network_state_file"
+        else
+          echo "Using existed: $fork_network_state_file"
+        fi
+      fi
+      export NETWORK_STATE_FILE="${fork_network_state_file}"
+
+      load_env_var HOLDER ""
+      # export ALLOW_SKIP_STEPS=1
+      # export AUTO_CONFIRM=1
+      export DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+      export GAS_LIMIT=16000000
+      export GAS_PRIORITY_FEE=1
+      export GAS_MAX_FEE=100
+    fi
+
     normalize_bool_env UPGRADE "false"
     echo "UPGRADE: $UPGRADE"
 
@@ -68,42 +98,24 @@ prepare_migration_env() {
       load_env_var UPGRADE_PARAMETERS_FILE "scripts/upgrade/upgrade-params-${NETWORK}.toml"
       load_env_var STEPS_FILE "upgrade/steps-mock-upgrade.json"
 
+      # if MODE env is undefined, it means run migration on external node directly
       if [[ $MODE == "forking" ]]; then
-        local fork_network_state_file="deployed-${RUN_NETWORK}.json"
         local fork_upgrade_parameters_file="scripts/upgrade/upgrade-params-${RUN_NETWORK}.toml"
         # always delete any files from previous runs of HardHat in-process node
         if [[ $RUN_NETWORK == "hardhat" ]]; then
-          rm -f $fork_network_state_file
           rm -f $fork_upgrade_parameters_file
         fi
-
-        if [[ -f $NETWORK_STATE_FILE ]]; then
-          # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
-          if [[ ! -f $fork_network_state_file ]]; then
-            cp "$NETWORK_STATE_FILE" "$fork_network_state_file"
-            echo "$NETWORK_STATE_FILE ==> $fork_network_state_file"
-          fi
-        fi
-        export NETWORK_STATE_FILE="${fork_network_state_file}"
 
         if [[ -f $UPGRADE_PARAMETERS_FILE ]]; then
           # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
           if [[ ! -f $fork_upgrade_parameters_file ]]; then
             cp "$UPGRADE_PARAMETERS_FILE" "$fork_upgrade_parameters_file"
             echo "$UPGRADE_PARAMETERS_FILE ==> $fork_upgrade_parameters_file"
+          else
+            echo "Using existed: $fork_upgrade_parameters_file"
           fi
         fi
         export UPGRADE_PARAMETERS_FILE="${fork_upgrade_parameters_file}"
-
-        load_env_var HOLDER ""
-
-        # export ALLOW_SKIP_STEPS=1
-        # export AUTO_CONFIRM=1
-
-        export DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-        export GAS_LIMIT=16000000
-        export GAS_PRIORITY_FEE=1
-        export GAS_MAX_FEE=100
       fi
     fi
     export MODE="forking"
@@ -113,11 +125,11 @@ prepare_migration_env() {
   load_env_var GAS_MAX_FEE "100"
   load_env_var GAS_LIMIT "16000000"
   load_env_var GENESIS_TIME "1639659600"
-}
 
-print_migration_env() {
   echo "NETWORK_STATE_FILE: $NETWORK_STATE_FILE"
-  echo "STEPS_FILE: $STEPS_FILE"
+  if [[ -n ${STEPS_FILE:-} ]]; then
+    echo "STEPS_FILE: $STEPS_FILE"
+  fi
   if [[ -n ${UPGRADE_PARAMETERS_FILE:-} ]]; then
     echo "UPGRADE_PARAMETERS_FILE: $UPGRADE_PARAMETERS_FILE"
   fi
@@ -127,9 +139,6 @@ print_migration_env() {
   echo "DEPLOYER: $DEPLOYER"
   if [[ -n ${HOLDER:-} ]]; then
     echo "HOLDER: $HOLDER"
-  fi
-  if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
-    echo "FORKING_BLOCK_NUMBER: $FORKING_BLOCK_NUMBER"
   fi
   echo "ALLOW_SKIP_STEPS: $ALLOW_SKIP_STEPS"
   echo "AUTO_CONFIRM: $AUTO_CONFIRM"

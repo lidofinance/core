@@ -10,29 +10,16 @@ load_env_var NETWORK || {
 }
 echo "NETWORK: $NETWORK"
 
-if [[ ${NETWORK:-} == "local" ]]; then
-  echo "Error: Network cannot be 'local'"
+if [[ $NETWORK == "local" || $NETWORK == "hardhat" ]]; then
+  echo "Error: Network cannot be $(${NETWORK})"
   exit 1
 fi
 
-# Derive RPC_URL from <NETWORK>_RPC_URL if not set explicitly
-load_env_var RPC_URL || {
-  RPC_VAR="${NETWORK^^}_RPC_URL"
-
-  load_env_var "$RPC_VAR" || {
-    echo "Error: RPC_URL or ${RPC_VAR} must be set"
-    exit 1
-  }
-  echo "Derive RPC_URL from ${RPC_VAR}"
-  export RPC_URL="${!RPC_VAR:-}"
-}
+derive_rpc_url "$NETWORK"
 # echo "RPC_URL: $RPC_URL"
 
 load_env_var NETWORK_STATE_FILE "deployed-${NETWORK}.json"
-echo "NETWORK_STATE_FILE: $NETWORK_STATE_FILE"
-
 load_env_var UPGRADE_PARAMETERS_FILE "scripts/upgrade/upgrade-params-${NETWORK}.toml"
-echo "UPGRADE_PARAMETERS_FILE: $UPGRADE_PARAMETERS_FILE"
 
 TEMP_NETWORK_STATE_FILE="deployed-local.json"
 TEMP_UPGRADE_PARAMETERS_FILE="scripts/upgrade/upgrade-params-local.toml"
@@ -52,10 +39,11 @@ if [[ -f $UPGRADE_PARAMETERS_FILE ]]; then
   export UPGRADE_PARAMETERS_FILE=$TEMP_UPGRADE_PARAMETERS_FILE
 fi
 
-load_env_var FORK_NODE "anvil"
-echo "FORK_NODE: $FORK_NODE"
+echo "NETWORK_STATE_FILE: $NETWORK_STATE_FILE"
+echo "UPGRADE_PARAMETERS_FILE: $UPGRADE_PARAMETERS_FILE"
 
-load_env_var TRACE "false"
+load_env_var FORK_NODE "anvil"
+load_env_var TRACE ""
 
 BLOCK_ARG=()
 load_env_var FORKING_BLOCK_NUMBER ""
@@ -65,14 +53,13 @@ if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
 fi
 
 if [[ ${FORK_NODE:-} == "anvil" ]]; then
-  if [[ ${TRACE:-} == "true" ]]; then
-    # --config-out localhost.json
+  if [[ -n ${TRACE:-} ]]; then
     anvil -f $RPC_URL "${BLOCK_ARG[@]}" --timeout 90000 --print-traces --steps-tracing --auto-impersonate
   else
     anvil -f $RPC_URL "${BLOCK_ARG[@]}" --timeout 90000 --auto-impersonate
   fi
 else
-  if [[ ${TRACE:-} == "true" ]]; then
+  if [[ -n ${TRACE:-} ]]; then
     yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile --trace --gascost --vvv
   else
     yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile

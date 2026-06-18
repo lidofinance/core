@@ -4,4 +4,4 @@ set -o pipefail
 
 export UPGRADE=true
 
-bash scripts/doa-deploy.sh
+bash scripts/dao-deploy.sh
