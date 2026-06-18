@@ -20,9 +20,9 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Run integration tests
-        run: yarn test:integration:upgrade
+        run: yarn test:integration
         env:
           NETWORK: "hoodi"
           RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
-          FORKING_BLOCK_NUMBER: "3003000"
+          # FORKING_BLOCK_NUMBER: "3003000"
           NETWORK_STATE_FILE: deployed-hoodi.json
