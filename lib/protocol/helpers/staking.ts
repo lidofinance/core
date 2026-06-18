@@ -15,6 +15,8 @@ import {
 import { ProtocolContext } from "../types";
 
 import { adjustReportModuleBalances, report, submitReportDataWithConsensusAndEmptyExtraData } from "./accounting";
+import { norSdvtSetOperatorStakingLimit } from "./nor-sdvt";
+import { NOR_MODULE_ID, SDVT_MODULE_ID } from "./staking-module";
 
 const DEPOSIT_SIZE = ether("32");
 
@@ -210,6 +212,40 @@ const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint
   }
 };
 
+const getNorSdvtModule = (ctx: ProtocolContext, moduleId: bigint) => {
+  if (moduleId === NOR_MODULE_ID) return ctx.contracts.nor;
+  if (moduleId === SDVT_MODULE_ID) return ctx.contracts.sdvt;
+  return undefined;
+};
+
+export const ensureOperatorsHaveAvailableKeys = async (ctx: ProtocolContext) => {
+  const modules: Array<{
+    module: NonNullable<ReturnType<typeof getNorSdvtModule>>;
+    operatorsCount: bigint;
+  }> = [];
+
+  for (const moduleId of await ctx.contracts.stakingRouter.getStakingModuleIds()) {
+    const module = getNorSdvtModule(ctx, moduleId);
+    if (module === undefined) continue;
+
+    const operatorsCount = await module.getNodeOperatorsCount();
+    modules.push({ module, operatorsCount });
+  }
+
+  for (const { module, operatorsCount } of modules) {
+    for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {
+      const { active, totalVettedValidators, totalAddedValidators } = await module.getNodeOperator(operatorId, true);
+      if (!active) continue;
+      if (totalVettedValidators < totalAddedValidators) {
+        await norSdvtSetOperatorStakingLimit(ctx, module, {
+          operatorId,
+          limit: totalAddedValidators,
+        });
+      }
+    }
+  }
+};
+
 export const depositValidatorsWithoutReport = async (
   ctx: ProtocolContext,
   depositsCount: bigint,
@@ -240,6 +276,8 @@ export const depositValidatorsWithoutReport = async (
   const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
   const validatorsDeltaGweiByModule = new Map<bigint, bigint>();
   let remainingToDeposit = ethToDeposit;
+
+  await ensureOperatorsHaveAvailableKeys(ctx);
 
   while (remainingToDeposit > 0n) {
     const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(
