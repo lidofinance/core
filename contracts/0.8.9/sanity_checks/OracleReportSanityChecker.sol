@@ -550,6 +550,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // Seed the decrease-check window with two migration snapshots:
         // 1) pre-withdrawals CL balance with zero flows;
         // 2) post-withdrawals CL balance with migration-time vault balance recorded as CL withdrawals.
+        // Since `_calcWindowDiff` sums flows only after the baseline item, migration
+        // withdrawals must be stored in a separate, next reportData entry.
         // Migrated transient deposits are not stored here; they belong to the first post-migration report.
         uint256 migrationReportTimestamp = lastReportTimestamp;
         _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
