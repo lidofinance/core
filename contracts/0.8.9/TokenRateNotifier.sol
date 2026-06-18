@@ -8,6 +8,7 @@ import {ERC165Checker} from "@openzeppelin/contracts-v4.4/utils/introspection/ER
 import {ITokenRatePusher} from "./interfaces/ITokenRatePusher.sol";
 import {ITokenRatePusherWithArgs} from "./interfaces/ITokenRatePusherWithArgs.sol";
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
+import {Versioned} from "./utils/Versioned.sol";
 
 
 /// @author kovalgek
@@ -17,7 +18,7 @@ import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.so
 ///      - WithArgs observers implement `ITokenRatePusherWithArgs` and are notified via
 ///        `pushTokenRate(...)` with the full per-rebase payload forwarded from
 ///        `handlePostTokenRebase` (mirrors `IPostTokenRebaseReceiver` 1:1).
-contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
+contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver, Versioned {
     using ERC165Checker for address;
 
     /// @notice Distinguishes the two notification flavors an observer can subscribe to.
@@ -48,17 +49,26 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
     /// @notice All observers, in insertion order. Mixed kinds; an address may appear at most once.
     Observer[] public observers;
 
-    /// @param initialOwner_ initial owner
-    /// @param tokenRateProvider_ Address of token rate provider contract that is allowed to call handlePostTokenRebase.
-    constructor(address initialOwner_, address tokenRateProvider_) {
-        if (initialOwner_ == address(0)) {
-            revert ErrorZeroAddressOwner();
-        }
+    /// @param tokenRateProvider_ Address of token rate provider contract that is allowed to call
+    ///        handlePostTokenRebase. Baked into the implementation's bytecode via `immutable`; a
+    ///        future change requires deploying a new implementation and upgrading the proxy.
+    /// @dev The `Versioned()` parent constructor petrifies this implementation's storage so
+    ///      `initialize` cannot be called on the implementation directly — only through a proxy.
+    constructor(address tokenRateProvider_) Versioned() {
         if (tokenRateProvider_ == address(0)) {
             revert ErrorZeroAddressTokenRateProvider();
         }
-        _transferOwnership(initialOwner_);
         TOKEN_RATE_PROVIDER = tokenRateProvider_;
+    }
+
+    /// @notice Initializes the proxy storage. Callable exactly once via the proxy's setup call.
+    /// @param initialOwner_ initial owner
+    function initialize(address initialOwner_) external {
+        if (initialOwner_ == address(0)) {
+            revert ErrorZeroAddressOwner();
+        }
+        _initializeContractVersionTo(1);
+        _transferOwnership(initialOwner_);
     }
 
     /// @notice Register an observer. The notification flavor is auto-detected from the observer's

@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   NoInterface__Mock,
   TokenRateNotifier,
+  TokenRateNotifier__factory,
   TokenRatePusher__Mock,
   TokenRatePusherDualSupport__Mock,
   TokenRatePusherWithArgs__Mock,
@@ -58,6 +59,7 @@ describe("TokenRateNotifier.sol", () => {
   let deployer: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let provider: HardhatEthersSigner;
+  let proxyAdmin: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let notifier: TokenRateNotifier;
@@ -65,6 +67,21 @@ describe("TokenRateNotifier.sol", () => {
   let originalState: string;
 
   // ---------- deploy helpers ----------
+
+  async function deployImpl(providerAddr: string): Promise<TokenRateNotifier> {
+    return await ethers.deployContract("TokenRateNotifier", [providerAddr], deployer);
+  }
+
+  async function deployNotifierBehindProxy(ownerAddr: string, providerAddr: string): Promise<TokenRateNotifier> {
+    const impl = await deployImpl(providerAddr);
+    const initData = impl.interface.encodeFunctionData("initialize", [ownerAddr]);
+    const proxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [await impl.getAddress(), proxyAdmin.address, initData],
+      deployer,
+    );
+    return TokenRateNotifier__factory.connect(await proxy.getAddress(), deployer);
+  }
 
   async function deployLegacyMock(): Promise<TokenRatePusher__Mock> {
     return await ethers.deployContract("TokenRatePusher__Mock", [], deployer);
@@ -83,29 +100,52 @@ describe("TokenRateNotifier.sol", () => {
   }
 
   before(async () => {
-    [deployer, owner, provider, stranger] = await ethers.getSigners();
+    [deployer, owner, provider, proxyAdmin, stranger] = await ethers.getSigners();
   });
 
   beforeEach(async () => {
     originalState = await Snapshot.take();
-    notifier = await ethers.deployContract("TokenRateNotifier", [owner.address, provider.address], deployer);
+    notifier = await deployNotifierBehindProxy(owner.address, provider.address);
   });
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  // ---------- constructor ----------
+  // ---------- constructor (implementation) ----------
 
   describe("constructor", () => {
-    it("reverts with zero owner", async () => {
-      await expect(
-        ethers.deployContract("TokenRateNotifier", [ZeroAddress, provider.address], deployer),
-      ).to.be.revertedWithCustomError(notifier, "ErrorZeroAddressOwner");
+    it("reverts with zero token rate provider", async () => {
+      await expect(deployImpl(ZeroAddress)).to.be.revertedWithCustomError(
+        notifier,
+        "ErrorZeroAddressTokenRateProvider",
+      );
     });
 
-    it("reverts with zero token rate provider", async () => {
+    it("petrifies the implementation (initialize is disallowed on the impl directly)", async () => {
+      const impl = await deployImpl(provider.address);
+      // Versioned() in the constructor sets contract version to PETRIFIED_VERSION_MARK, so
+      // _initializeContractVersionTo(1) inside initialize must revert with NonZeroContractVersionOnInit.
+      await expect(impl.initialize(owner.address)).to.be.revertedWithCustomError(impl, "NonZeroContractVersionOnInit");
+    });
+  });
+
+  // ---------- initialize (via proxy) ----------
+
+  describe("initialize", () => {
+    it("reverts with zero owner", async () => {
+      const impl = await deployImpl(provider.address);
+      const initData = impl.interface.encodeFunctionData("initialize", [ZeroAddress]);
+      // OssifiableProxy delegatecalls `initData` on the impl atomically with deployment; the
+      // initialize revert bubbles up as the proxy deployment revert.
       await expect(
-        ethers.deployContract("TokenRateNotifier", [owner.address, ZeroAddress], deployer),
-      ).to.be.revertedWithCustomError(notifier, "ErrorZeroAddressTokenRateProvider");
+        ethers.deployContract("OssifiableProxy", [await impl.getAddress(), proxyAdmin.address, initData], deployer),
+      ).to.be.revertedWithCustomError(impl, "ErrorZeroAddressOwner");
+    });
+
+    it("cannot be called a second time", async () => {
+      await expect(notifier.initialize(owner.address)).to.be.revertedWithCustomError(
+        notifier,
+        "NonZeroContractVersionOnInit",
+      );
     });
 
     it("sets initial state correctly", async () => {
@@ -114,6 +154,7 @@ describe("TokenRateNotifier.sol", () => {
       expect(await notifier.MAX_OBSERVERS_COUNT()).to.equal(MAX_OBSERVERS_COUNT);
       expect(await notifier.INDEX_NOT_FOUND()).to.equal(2n ** 256n - 1n);
       expect(await notifier.observersLength()).to.equal(0n);
+      expect(await notifier.getContractVersion()).to.equal(1n);
 
       const reqLegacy = await notifier.REQUIRED_INTERFACE();
       const reqWithArgs = await notifier.REQUIRED_INTERFACE_WITH_ARGS();
