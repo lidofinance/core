@@ -921,8 +921,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256(_limitsList.appearedEthAmountPerDayLimit) * 1 ether,
             result.effectiveTimeElapsed
         );
-        // Electra activations consume balance churn per whole pending deposit, so the report boundary
-        // may include one max-size validator above the prorated appeared ETH limit.
+        // When a large validator deposit reaches the CL pending queue, it is not processed in parts.
+        // The churn limit is counted as up to 256 ETH per epoch, so a 2048 ETH deposit has to wait
+        // for about 8 epochs and then moves to the CL validator balance as a whole.
+        //
+        // This check calculates the limit for the report period: 225 * 256 = 57_600 ETH per day.
+        // That means we expect linear growth over the period, while the observed pending delta can
+        // be bursty. The burst capacity is bounded by the max possible validator size.
         if (activatedBalance > appearedEthLimitPerPeriod + MAX_VALIDATOR_EFFECTIVE_BALANCE) {
             revert IncorrectTotalActivatedBalance(appearedEthLimitPerPeriod, activatedBalance);
         }
