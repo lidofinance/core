@@ -50,8 +50,13 @@
     "upgrade:deploy:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn upgrade:helper:run",
     "upgrade:deploy:base:local": "MODE=forking NETWORK=local yarn upgrade:deploy:base",
     "upgrade:deploy:template:local": "MODE=forking NETWORK=local yarn upgrade:deploy:template",
+    "upgrade:deploy:local": "MODE=forking NETWORK=local yarn upgrade:deploy:template",
     "upgrade:mock:voting": "MODE=forking STEPS_FILE=upgrade/steps-mock-voting.json yarn upgrade:helper:run",
     "upgrade:mock:upgrade": "MODE=forking STEPS_FILE=upgrade/steps-mock-upgrade.json yarn upgrade:helper:run",
+    "upgrade:mock:upgrade:local": "NETWORK=local yarn upgrade:mock:upgrade",
+    "deploy:helper:run": "bash scripts/dao-deploy.sh",
+    "deploy:scratch": "MODE=scratch yarn deploy:helper:run",
+    "deploy:scratch:local": "NETWORK=local yarn deploy:scratch",
     "postinstall": "husky"
   },
   "lint-staged": {

@@ -100,7 +100,7 @@ prepare_migration_env() {
 
     if [[ $UPGRADE == "true" ]]; then
       load_env_var UPGRADE_PARAMETERS_FILE "scripts/upgrade/upgrade-params-${NETWORK}.toml"
-      load_env_var STEPS_FILE "upgrade/steps-mock-upgrade.json"
+      load_env_var STEPS_FILE "upgrade/steps-upgrade.json"
 
       # if MODE env is undefined, it means run migration on external node directly
       if [[ $NETWORK != $RUN_NETWORK ]]; then

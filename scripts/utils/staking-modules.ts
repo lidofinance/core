@@ -10,7 +10,9 @@ import {
   writeUpgradeParameterAddresses,
 } from "scripts/utils/upgrade";
 
-import { cy, log, warmUpJsonRpcProvider } from "lib";
+import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types";
+
+import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
@@ -34,7 +36,7 @@ type ContractMap =
   | { kind: "list"; listKey: string };
 
 export const CSM_CONTRACTS: Record<string, ContractMap> = {
-  csm: { kind: "proxied", proxyKey: "CSModule", implKey: "CSModuleImpl" },
+  module: { kind: "proxied", proxyKey: "CSModule", implKey: "CSModuleImpl" },
   vettedGate: { kind: "proxied", proxyKey: "VettedGate", implKey: "VettedGateImpl" },
   parametersRegistry: { kind: "proxied", proxyKey: "ParametersRegistry", implKey: "ParametersRegistryImpl" },
   feeOracle: { kind: "proxied", proxyKey: "FeeOracle", implKey: "FeeOracleImpl" },
@@ -74,7 +76,7 @@ type TomlMap = { proxyParam?: string; implParam?: string; addressParam?: string;
 
 const CSM_TOML_SECTION = "csmUpgrade";
 const CSM_TOML_MAP: Record<string, TomlMap> = {
-  csm: { proxyParam: "csmProxy", implParam: "csmImpl" },
+  module: { proxyParam: "csmProxy", implParam: "csmImpl" },
   vettedGate: { proxyParam: "vettedGateProxy", implParam: "vettedGateImpl" },
   parametersRegistry: { implParam: "parametersRegistryImpl" },
   feeOracle: { implParam: "feeOracleImpl" },
@@ -241,8 +243,8 @@ function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifac
   if (!artifact.CSModule) throw new Error("CSM deploy artifact does not contain CSModule address");
 
   const existing = (state[Sk.sm_CSM]?.contracts ?? {}) as Substate;
-  const proxyAddress = isNonZeroAddress(existing.csm?.proxy?.address)
-    ? (existing.csm!.proxy!.address as string)
+  const proxyAddress = isNonZeroAddress(existing.module?.proxy?.address)
+    ? (existing.module!.proxy!.address as string)
     : artifact.CSModule;
   const contracts = buildSubstate(artifact, CSM_CONTRACTS, existing);
 
@@ -314,10 +316,18 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
   const chainSpec = state[Sk.chainSpec];
   const slotsPerEpoch = Number(chainSpec.slotsPerEpoch);
   const genesisTime = Number(chainSpec.genesisTime);
-  const capellaSlot = Number(state[Sk.validatorExitDelayVerifier].deployParameters.capellaSlot);
-  const capellaEpoch = Math.floor(capellaSlot / slotsPerEpoch);
-  const hashConsensusParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
 
+  const validatorExitDelayVerifier = await loadContract<ValidatorExitDelayVerifier>(
+    "ValidatorExitDelayVerifier",
+    getAddress(Sk.validatorExitDelayVerifier, state),
+  );
+  const capellaSlot = Number(await validatorExitDelayVerifier.CAPELLA_SLOT());
+  const capellaEpoch = Math.floor(capellaSlot / slotsPerEpoch);
+  const hashConsensus = await loadContract<HashConsensus>(
+    "HashConsensus",
+    getAddress(Sk.hashConsensusForAccountingOracle, state),
+  );
+  const { epochsPerFrame } = await hashConsensus.getFrameConfig();
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "staking-modules-"));
   log(`Cloning staking modules repo to ${tmpDir}...`);
 
@@ -335,7 +345,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       DEVNET_GENESIS_TIME: genesisTime.toString(),
       DEVNET_CAPELLA_EPOCH: capellaEpoch.toString(),
       DEVNET_ELECTRA_EPOCH: capellaEpoch.toString(),
-      CSM_EPOCHS_PER_FRAME: hashConsensusParams.epochsPerFrame.toString(),
+      CSM_EPOCHS_PER_FRAME: epochsPerFrame.toString(),
       CSM_LOCATOR_ADDRESS: state[Sk.lidoLocator].proxy.address,
       CSM_ARAGON_AGENT_ADDRESS: state[Sk.appAgent].proxy.address,
       CSM_FIRST_ADMIN_ADDRESS: state[Sk.appAgent].proxy.address,
