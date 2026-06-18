@@ -174,7 +174,11 @@ export const report = async (
   withdrawalVaultBalance = reportWithdrawalsVault ? withdrawalVaultBalance : 0n;
   elRewardsVaultBalance = reportElVault ? elRewardsVaultBalance : 0n;
 
-  const postCLBalance = preCLBalance + clDiff;
+  let postCLBalance = preCLBalance + clDiff;
+  // adjust postCLBalance to keep correct cl balance increase
+  if (postCLBalance > withdrawalVaultBalance) {
+    postCLBalance -= withdrawalVaultBalance;
+  }
 
   log.debug("Beacon", {
     "Beacon validators delta": clAppearedValidators,
