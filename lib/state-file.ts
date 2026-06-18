@@ -96,6 +96,7 @@ export enum Sk {
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
   tokenRebaseNotifierV3 = "tokenRebaseNotifierV3",
+  tokenRebaseNotifierNest = "tokenRebaseNotifierNest",
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
@@ -172,6 +173,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
+    case Sk.tokenRebaseNotifierNest:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:

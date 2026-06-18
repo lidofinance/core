@@ -59,6 +59,7 @@
     "upgrade:mock-voting": "MODE=forking STEPS_FILE=upgrade/steps-mock-voting.json yarn upgrade:helper:run",
     "upgrade:mock-upgrade": "MODE=forking STEPS_FILE=upgrade/steps-mock-upgrade.json yarn upgrade:helper:run",
     "deploy:v3.0.2": "STEPS_FILE=upgrade/steps-deploy-v3-02.json hardhat run scripts/utils/migrate.ts",
+    "deploy:token-rate-notifier-nest": "STEPS_FILE=upgrade/steps-deploy-token-rate-notifier-nest.json hardhat run scripts/utils/migrate.ts",
     "postinstall": "husky"
   },
   "lint-staged": {
