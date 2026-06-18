@@ -38,7 +38,7 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         _addReportData(_timestamp, _clBalance, _deposits, _clWithdrawals);
     }
 
-    function harness__checkCLPendingBalanceIncrease(
+    function harness__checkCLPendingAndValidatorsBalanceIncrease(
         uint256 _timeElapsed,
         uint256 _preCLValidatorsBalance,
         uint256 _preCLPendingBalance,
@@ -55,7 +55,7 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
             postCLPendingBalance: _postCLPendingBalance,
             deposits: _deposits
         });
-        _checkCLPendingBalanceIncrease(
+        _checkCLPendingAndValidatorsBalanceIncrease(
             getOracleReportLimits().packAccountingCore(),
             checkParams,
             _getCLWithdrawals(_withdrawalVaultBalance)

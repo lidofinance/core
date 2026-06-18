@@ -1038,7 +1038,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(newTs);
     });
 
-    context("checkCLPendingBalanceIncrease cold start", () => {
+    context("checkCLPendingAndValidatorsBalanceIncrease cold start", () => {
       const oneDay = 24n * 60n * 60n;
       const noDeposits = 0n;
       const unexpectedPendingWei = 1n;
@@ -1051,13 +1051,22 @@ describe("OracleReportSanityChecker.sol", () => {
       const pendingAfterExceededFirstDayActivationWei = coldStartDepositsWei - validatorsBeyondFirstDayLimitWei;
 
       it("allows a zero-balance first report without deposits", async () => {
-        await expect(checker.harness__checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, 0n, 0n, noDeposits)).not.to.be
-          .reverted;
+        await expect(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(oneDay, 0n, 0n, 0n, 0n, 0n, noDeposits),
+        ).not.to.be.reverted;
       });
 
       it("rejects a positive first report without deposits", async () => {
         await expect(
-          checker.harness__checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, unexpectedPendingWei, 0n, noDeposits),
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
+            oneDay,
+            0n,
+            0n,
+            0n,
+            unexpectedPendingWei,
+            0n,
+            noDeposits,
+          ),
         )
           .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
           .withArgs(0n, unexpectedPendingWei);
@@ -1073,13 +1082,21 @@ describe("OracleReportSanityChecker.sol", () => {
         await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
 
         await expect(
-          checker.harness__checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, reportedPendingWei, 0n, noDeposits),
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
+            oneDay,
+            0n,
+            0n,
+            0n,
+            reportedPendingWei,
+            0n,
+            noDeposits,
+          ),
         ).not.to.be.reverted;
       });
 
       it("allows the first-report total CL increase up to deposits", async () => {
         await expect(
-          checker.harness__checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             0n,
             0n,
@@ -1093,7 +1110,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       it("does not cap first-report deposits by annual growth allowance when they remain pending", async () => {
         await expect(
-          checker.harness__checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             0n,
             0n,
@@ -1107,7 +1124,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       it("limits first-report validator activation by appeared ETH amount per day", async () => {
         await expect(
-          checker.harness__checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             0n,
             0n,
@@ -1119,7 +1136,7 @@ describe("OracleReportSanityChecker.sol", () => {
         ).not.to.be.reverted;
 
         await expect(
-          checker.harness__checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             0n,
             0n,
@@ -1134,7 +1151,7 @@ describe("OracleReportSanityChecker.sol", () => {
       });
     });
 
-    context("checkCLPendingBalanceIncrease with existing state", () => {
+    context("checkCLPendingAndValidatorsBalanceIncrease with existing state", () => {
       const oneDay = 24n * 60n * 60n;
       const previousValidatorsWei = ether("3650");
       const previousPendingWei = ether("2");
@@ -1143,7 +1160,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       it("allows a non-cold-start report within the pending corridor", async () => {
         await expect(
-          checker.harness__checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             previousValidatorsWei,
             previousPendingWei,
@@ -1157,7 +1174,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       it("reverts with IncorrectTotalCLBalanceIncrease when validators growth exceeds the activated budget", async () => {
         await expect(
-          checker.harness__checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             previousValidatorsWei,
             0n,
@@ -1172,8 +1189,9 @@ describe("OracleReportSanityChecker.sol", () => {
       });
 
       it("reverts with InvalidClBalancesData when CL withdrawals exceed previous validators balance", async () => {
-        await expect(checker.harness__checkCLPendingBalanceIncrease(oneDay, ether("10"), 0n, 0n, 0n, ether("11"), 0n))
-          .not.to.be.reverted;
+        await expect(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(oneDay, ether("10"), 0n, 0n, 0n, ether("11"), 0n),
+        ).not.to.be.reverted;
       });
     });
   });

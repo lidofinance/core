@@ -188,7 +188,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
 
-    return checker.harness__checkCLPendingBalanceIncrease(
+    return checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
       report.timeElapsed,
       report.cl.preValidatorsBalance,
       report.cl.prePendingBalance,
