@@ -1,5 +1,5 @@
 import { artifacts, ethers } from "hardhat";
-import { readUpgradeParameters, writeUpgradeEasyTrackFactoryAddress } from "scripts/utils/upgrade";
+import { readUpgradeParameters, writeUpgradeParameterAddress } from "scripts/utils/upgrade";
 
 import {
   bl,
@@ -70,7 +70,7 @@ export async function main() {
 
       if (isStateDeployed) {
         log.success(`Skip ${yl(paramName)}[${bl(stateAddress)}] - found in state`);
-        writeUpgradeEasyTrackFactoryAddress(EASY_TRACK_NEW_FACTORIES_SECTION, paramName, stateAddress);
+        writeUpgradeParameterAddress(EASY_TRACK_NEW_FACTORIES_SECTION, paramName, stateAddress);
         continue;
       }
 
@@ -86,7 +86,7 @@ export async function main() {
       log.success(`Deployed ${or(artifactName)} aa ${yl(paramName)}[${bl(deployedContract.address)}]`);
       deployedFactories[etName] = deployedContract.address;
       state = updateObjectInState(contractKey, { easyTrackFactories: deployedFactories });
-      writeUpgradeEasyTrackFactoryAddress(EASY_TRACK_NEW_FACTORIES_SECTION, paramName, deployedContract.address);
+      writeUpgradeParameterAddress(EASY_TRACK_NEW_FACTORIES_SECTION, paramName, deployedContract.address);
     }
   }
 }
