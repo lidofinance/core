@@ -882,10 +882,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return (_amount * SECONDS_PER_DAY) / _getTimeElapsedForRateNormalization(_timeElapsed);
     }
 
+    /// @dev Uses the smallest non-zero interval for zero elapsed time so rate checks
+    ///      avoid division by zero without relaxing per-day limits.
     function _getTimeElapsedForRateNormalization(uint256 _timeElapsed) internal pure returns (uint256) {
         return _timeElapsed == 0 ? 1 : _timeElapsed;
     }
 
+    /// @dev Allows scratch-deploy reports with zero elapsed time by giving allowance
+    ///      checks a bounded one-hour effective window.
     function _getTimeElapsedForAllowanceChecks(uint256 _timeElapsed) internal pure returns (uint256) {
         return _timeElapsed == 0 ? DEFAULT_TIME_ELAPSED : _timeElapsed;
     }
@@ -1105,18 +1109,21 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
+    /// @dev Stores the current report snapshot and checks the sliding-window CL balance decrease.
+    ///      Historical snapshots include CL balance (validators + pending), deposits, and actual CL withdrawals.
+    ///      The window diff restores the expected CL balance from the selected baseline by adding
+    ///      deposits and subtracting withdrawals, then compares it with the current post-report CL balance.
+    ///      Reverts when the actual decrease exceeds the max allowed decrease derived from the restored balance.
     function _checkCLBalanceDecrease(
         CLBalanceDecreaseCheckParams memory _checkParams,
         uint256 _clWithdrawals
     ) internal {
-        // Compute actual CL withdrawals for this period:
-        // clWithdrawals = current vault balance - vault balance after last report's transfer
         uint256 reportTimestamp = lastReportTimestamp + _checkParams.timeElapsed;
         _addReportData(reportTimestamp, _checkParams.postCLBalance, _checkParams.deposits, _clWithdrawals);
         lastReportTimestamp = reportTimestamp;
 
-        // If the CL balance didn't decrease accounting for withdrawals, skip the window check
         if (_checkParams.preCLBalance <= _checkParams.postCLBalance) return;
+        // If the balance difference is less than or equal to withdrawals, no check is needed.
         if (_checkParams.preCLBalance - _checkParams.postCLBalance <= _clWithdrawals) return;
 
         uint256 len = reportData.length;
@@ -1156,6 +1163,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
+    /// @dev Calculates actual CL withdrawals accumulated between successful reports.
+    ///      `_finalizePostReportState` stores the withdrawal vault balance after each report transfer,
+    ///      and the next report compares its vault balance against that stored post-transfer balance.
+    /// @param _withdrawalVaultBalance Withdrawal vault balance reported for the current report, before transfer.
+    /// @return CL withdrawals observed since the previous successful report.
     function _getCLWithdrawals(uint256 _withdrawalVaultBalance) internal view returns (uint256) {
         if (_withdrawalVaultBalance < lastVaultBalanceAfterTransfer) {
             revert IncorrectCLWithdrawalsVaultBalance(_withdrawalVaultBalance, lastVaultBalanceAfterTransfer);
