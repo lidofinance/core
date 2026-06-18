@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="5999"  lines-covered="5749"  line-rate="0.9582999999999999"  branches-valid="2780"  branches-covered="2528"  branch-rate="0.9094"  timestamp="1781767181903" complexity="0" version="0.1">
+<coverage lines-valid="5999"  lines-covered="5749"  line-rate="0.9582999999999999"  branches-valid="2780"  branches-covered="2528"  branch-rate="0.9094"  timestamp="1781767375738" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -4696,10 +4696,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="35"  branch="false" />
-			<line number="173"  hits="35"  branch="false" />
-			<line number="175"  hits="35"  branch="false" />
-			<line number="176"  hits="35"  branch="false" />
+			<line number="172"  hits="30"  branch="false" />
+			<line number="173"  hits="30"  branch="false" />
+			<line number="175"  hits="30"  branch="false" />
+			<line number="176"  hits="30"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -10121,16 +10121,16 @@
 				<lines><line number="1428"  hits="136" /></lines>
 			</method>
 			<method name="packAccountingCore"  hits="150"  signature="()V" >
-				<lines><line number="1521"  hits="150" /></lines>
+				<lines><line number="1516"  hits="150" /></lines>
 			</method>
 			<method name="packOperational"  hits="113"  signature="()V" >
-				<lines><line number="1536"  hits="113" /></lines>
+				<lines><line number="1531"  hits="113" /></lines>
 			</method>
 			<method name="toBasisPoints"  hits="623"  signature="()V" >
-				<lines><line number="1547"  hits="623" /></lines>
+				<lines><line number="1542"  hits="623" /></lines>
 			</method>
 			<method name="unpack"  hits="70"  signature="()V" >
-				<lines><line number="1556"  hits="70" /></lines>
+				<lines><line number="1551"  hits="70" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -10481,25 +10481,30 @@
 			<line number="1446"  hits="136"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="1447"  hits="67"  branch="false" />
 			<line number="1450"  hits="136"  branch="false" />
-			<line number="1524"  hits="150"  branch="false" />
-			<line number="1525"  hits="150"  branch="false" />
-			<line number="1526"  hits="150"  branch="false" />
-			<line number="1527"  hits="150"  branch="false" />
+			<line number="1519"  hits="150"  branch="false" />
+			<line number="1520"  hits="150"  branch="false" />
+			<line number="1521"  hits="150"  branch="false" />
+			<line number="1522"  hits="150"  branch="false" />
+			<line number="1523"  hits="149"  branch="false" />
+			<line number="1524"  hits="149"  branch="false" />
+			<line number="1525"  hits="149"  branch="false" />
+			<line number="1526"  hits="149"  branch="false" />
+			<line number="1527"  hits="149"  branch="false" />
 			<line number="1528"  hits="149"  branch="false" />
-			<line number="1529"  hits="149"  branch="false" />
-			<line number="1530"  hits="149"  branch="false" />
-			<line number="1531"  hits="149"  branch="false" />
-			<line number="1532"  hits="149"  branch="false" />
-			<line number="1533"  hits="149"  branch="false" />
+			<line number="1534"  hits="113"  branch="false" />
+			<line number="1535"  hits="113"  branch="false" />
+			<line number="1536"  hits="113"  branch="false" />
+			<line number="1537"  hits="113"  branch="false" />
+			<line number="1538"  hits="113"  branch="false" />
 			<line number="1539"  hits="113"  branch="false" />
-			<line number="1540"  hits="113"  branch="false" />
-			<line number="1541"  hits="113"  branch="false" />
-			<line number="1542"  hits="113"  branch="false" />
-			<line number="1543"  hits="113"  branch="false" />
-			<line number="1544"  hits="113"  branch="false" />
-			<line number="1548"  hits="623"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="1549"  hits="1"  branch="false" />
-			<line number="1551"  hits="622"  branch="false" />
+			<line number="1543"  hits="623"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="1544"  hits="1"  branch="false" />
+			<line number="1546"  hits="622"  branch="false" />
+			<line number="1555"  hits="70"  branch="false" />
+			<line number="1556"  hits="70"  branch="false" />
+			<line number="1557"  hits="70"  branch="false" />
+			<line number="1558"  hits="70"  branch="false" />
+			<line number="1559"  hits="70"  branch="false" />
 			<line number="1560"  hits="70"  branch="false" />
 			<line number="1561"  hits="70"  branch="false" />
 			<line number="1562"  hits="70"  branch="false" />
@@ -10511,11 +10516,6 @@
 			<line number="1568"  hits="70"  branch="false" />
 			<line number="1569"  hits="70"  branch="false" />
 			<line number="1570"  hits="70"  branch="false" />
-			<line number="1571"  hits="70"  branch="false" />
-			<line number="1572"  hits="70"  branch="false" />
-			<line number="1573"  hits="70"  branch="false" />
-			<line number="1574"  hits="70"  branch="false" />
-			<line number="1575"  hits="70"  branch="false" />
 		</lines>
 		</class>
 	</classes>
