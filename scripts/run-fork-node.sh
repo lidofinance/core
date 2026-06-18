@@ -2,7 +2,7 @@
 set -e +u
 set -o pipefail
 
-. scripts/utils/common-env.sh
+. scripts/utils/migration-env.sh
 
 load_env_var NETWORK || {
   echo "Error: NETWORK must be set"
@@ -37,13 +37,8 @@ echo "UPGRADE_PARAMETERS_FILE: $UPGRADE_PARAMETERS_FILE"
 TEMP_NETWORK_STATE_FILE="deployed-local.json"
 TEMP_UPGRADE_PARAMETERS_FILE="scripts/upgrade/upgrade-params-local.toml"
 
-if [[ -f $TEMP_NETWORK_STATE_FILE ]]; then
-  rm -f $TEMP_NETWORK_STATE_FILE
-fi
-
-if [[ -f $TEMP_UPGRADE_PARAMETERS_FILE ]]; then
-  rm -f $TEMP_UPGRADE_PARAMETERS_FILE
-fi
+rm -f $TEMP_NETWORK_STATE_FILE
+rm -f $TEMP_UPGRADE_PARAMETERS_FILE
 
 if [[ -f $NETWORK_STATE_FILE ]]; then
   cp "$NETWORK_STATE_FILE" "$TEMP_NETWORK_STATE_FILE"
@@ -60,6 +55,8 @@ fi
 load_env_var FORK_NODE "anvil"
 echo "FORK_NODE: $FORK_NODE"
 
+load_env_var TRACE "false"
+
 BLOCK_ARG=()
 load_env_var FORKING_BLOCK_NUMBER ""
 if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
@@ -68,8 +65,16 @@ if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
 fi
 
 if [[ ${FORK_NODE:-} == "anvil" ]]; then
-  # --config-out localhost.json
-  anvil -f $RPC_URL "${BLOCK_ARG[@]}" --timeout 90000 --print-traces --steps-tracing --auto-impersonate
+  if [[ ${TRACE:-} == "true" ]]; then
+    # --config-out localhost.json
+    anvil -f $RPC_URL "${BLOCK_ARG[@]}" --timeout 90000 --print-traces --steps-tracing --auto-impersonate
+  else
+    anvil -f $RPC_URL "${BLOCK_ARG[@]}" --timeout 90000 --auto-impersonate
+  fi
 else
-  yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile --trace --gascost --vvv
+  if [[ ${TRACE:-} == "true" ]]; then
+    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile --trace --gascost --vvv
+  else
+    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile
+  fi
 fi
