@@ -30,6 +30,8 @@ derive_rpc_url() {
 }
 
 prepare_migration_env() {
+   local command="${1:-migrate}"
+
   # MODE env is undefined by default, this allows to identify real forking mode
   load_env_var MODE ""
   load_env_var NETWORK "hardhat"
@@ -69,7 +71,7 @@ prepare_migration_env() {
     if [[ $NETWORK != $RUN_NETWORK ]]; then
       local fork_network_state_file="deployed-${RUN_NETWORK}.json"
       # always delete any files from previous runs of HardHat in-process node
-      if [[ $RUN_NETWORK == "hardhat" ]]; then
+      if [[ $RUN_NETWORK == "hardhat" || $command == "test" ]]; then
         rm -f $fork_network_state_file
       fi
 
@@ -104,7 +106,7 @@ prepare_migration_env() {
       if [[ $NETWORK != $RUN_NETWORK ]]; then
         local fork_upgrade_parameters_file="scripts/upgrade/upgrade-params-${RUN_NETWORK}.toml"
         # always delete any files from previous runs of HardHat in-process node
-        if [[ $RUN_NETWORK == "hardhat" ]]; then
+        if [[ $RUN_NETWORK == "hardhat" || $command == "test" ]]; then
           rm -f $fork_upgrade_parameters_file
         fi
 
