@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { advanceChainTime, batch, ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
 import {
   buildModuleAccountingReportParams,
+  ensureOperatorsHaveAvailableKeys,
   finalizeWQViaElVault,
   getProtocolContext,
   norSdvtEnsureOperators,
@@ -49,6 +50,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     await removeStakingLimit(ctx);
     await setStakingLimit(ctx, ether("200000"), ether("20"));
+    await ensureOperatorsHaveAvailableKeys(ctx);
   });
 
   after(async () => await Snapshot.restore(snapshot));
@@ -235,11 +237,13 @@ describe("Scenario: Protocol Happy Path", () => {
     });
 
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
-    const stakingModules = (await stakingRouter.getStakingModules()).filter((m) => m.id === 1n);
+    const stakingModules = await stakingRouter.getStakingModules();
     depositCount = 0n;
     norPendingDepositsGwei = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
+      const maxDepositsCount = await stakingRouter.getStakingModuleMaxDepositsCount(module.id, ether("32"));
+      if (maxDepositsCount == 0n) continue;
       const depositTx = await stakingRouter.connect(dsmSigner).deposit(module.id, "0x");
       const depositReceipt = (await depositTx.wait()) as ContractTransactionReceipt;
       const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];

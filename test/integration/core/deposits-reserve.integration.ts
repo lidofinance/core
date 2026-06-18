@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { advanceChainTime, ether, impersonate, updateBalance } from "lib";
 import {
   depositValidatorsWithoutReport,
+  ensureOperatorsHaveAvailableKeys,
   finalizeWQViaSubmit,
   getProtocolContext,
   ProtocolContext,
@@ -41,6 +42,7 @@ describe("Integration: Deposits reserve", () => {
 
     await setStakingLimit(ctx, ether("200000"), ether("20"));
     await finalizeWQViaSubmit(ctx);
+    await ensureOperatorsHaveAvailableKeys(ctx);
 
     const { acl, lido } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
