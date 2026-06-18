@@ -164,7 +164,7 @@ export const report = async (
   });
 
   if (excludeVaultsBalances) {
-    if (!reportWithdrawalsVault || !reportElVault) {
+    if (reportWithdrawalsVault || reportElVault) {
       log.warning("excludeVaultsBalances overrides reportWithdrawalsVault and reportElVault");
     }
     reportWithdrawalsVault = false;
