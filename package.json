@@ -38,7 +38,7 @@
     "test:integration:scratch:trace": "MODE=scratch yarn test:integration:trace",
     "test:integration:scratch:fulltrace": "MODE=scratch yarn test:integration:fulltrace",
     "test:integration:fork:local": "MODE=forking NETWORK=local yarn test:integration",
-    "scratch:deploy:localhost": "MODE=scratch NETWORK=localhost bash scripts/dao-deploy.sh",
+    "scratch:deploy:localhost": "SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true SKIP_GAS_REPORT=true GENESIS_TIME=1639659600 GAS_PRIORITY_FEE=1 GAS_MAX_FEE=100 DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 MODE=scratch hardhat run scripts/scratch/scratch-deploy.ts --network localhost",
     "test:fork:pdg-validator": "MODE=forking hardhat test test/integration/vaults/scenario/pdg-specific-validator.integration.ts",
     "validate:configs": "yarn hardhat validate-configs",
     "typecheck": "tsc --noEmit",

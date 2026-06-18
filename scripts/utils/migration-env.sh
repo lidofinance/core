@@ -62,9 +62,11 @@ prepare_migration_env() {
 
     load_env_var SCRATCH_DEPLOY_CONFIG "scripts/scratch/deploy-params-testnet.toml"
     load_env_var STEPS_FILE "scratch/steps.json"
+
+    export GENESIS_TIME=1639659600
   else
     # if MODE env is undefined, it means run migration on external node directly
-    if [[ $MODE == "forking" ]]; then
+    if [[ $NETWORK != $RUN_NETWORK ]]; then
       local fork_network_state_file="deployed-${RUN_NETWORK}.json"
       # always delete any files from previous runs of HardHat in-process node
       if [[ $RUN_NETWORK == "hardhat" ]]; then
@@ -99,7 +101,7 @@ prepare_migration_env() {
       load_env_var STEPS_FILE "upgrade/steps-mock-upgrade.json"
 
       # if MODE env is undefined, it means run migration on external node directly
-      if [[ $MODE == "forking" ]]; then
+      if [[ $NETWORK != $RUN_NETWORK ]]; then
         local fork_upgrade_parameters_file="scripts/upgrade/upgrade-params-${RUN_NETWORK}.toml"
         # always delete any files from previous runs of HardHat in-process node
         if [[ $RUN_NETWORK == "hardhat" ]]; then

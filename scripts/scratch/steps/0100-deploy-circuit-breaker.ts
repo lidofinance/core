@@ -43,11 +43,11 @@ export async function main() {
   log(`Cloning CircuitBreaker repo to ${tmpDir}...`);
 
   try {
-    const cloneCmd = `git clone --depth 1 --branch ${CIRCUIT_BREAKER_BRANCH} ${CIRCUIT_BREAKER_REPO} ${tmpDir}`;
+    const cloneCmd = `git clone --quiet --depth 1 --branch ${CIRCUIT_BREAKER_BRANCH} ${CIRCUIT_BREAKER_REPO} ${tmpDir}`;
     execSync(cloneCmd, { stdio: "inherit" });
 
     // Install foundry dependencies
-    execSync("forge install", { cwd: tmpDir, stdio: "inherit" });
+    execSync("forge install -q", { cwd: tmpDir, stdio: "inherit" });
 
     // Extract RPC URL and private key from Hardhat's network config
     const networkConfig = hardhatNetwork.config;
@@ -71,7 +71,7 @@ export async function main() {
     }
 
     const forgeArgs = [
-      "forge script script/Deploy.s.sol:Deploy",
+      "forge -q script script/Deploy.s.sol:Deploy",
       `--sig "run(address,uint256,uint256,uint256,uint256,uint256,uint256)"`,
       agentAddress,
       params.minPauseDuration.toString(),
