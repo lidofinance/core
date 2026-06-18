@@ -13,13 +13,13 @@ jobs:
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
 
-    services:
-      hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.28.0-hoodi
-        env:
-          ETH_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
-        ports:
-          - 8555:8545
+    # services:
+    #   hardhat-node:
+    #     image: ghcr.io/lidofinance/hardhat-node:2.28.0-hoodi
+    #     env:
+    #       ETH_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
+    #     ports:
+    #       - 8555:8545
 
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +31,7 @@ jobs:
         run: yarn test:integration:upgrade
         env:
           NETWORK: "hoodi"
-          RUN_NETWORK: "local"
-          RPC_URL: "http://localhost:8555"
-          # FORKING_BLOCK_NUMBER: "3003000"
+          # RUN_NETWORK: "local"
+          # RPC_URL: "http://localhost:8555"
+          FORKING_BLOCK_NUMBER: "3038996"
+          RPC_URL: ${{ secrets.HOODI_RPC_URL }}
