@@ -929,6 +929,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // for about 8 epochs and then moves to the CL validator balance as a whole.
         //
         // This check calculates the limit for the report period: 225 * 256 = 57_600 ETH per day.
+        // If the previous report lands after epoch 7, this frame can observe the whole 2048 ETH jump.
         // That means we expect linear growth over the period, while the observed pending delta can
         // be bursty. The burst capacity is bounded by the max possible validator size.
         if (activatedBalance > appearedEthLimitPerPeriod + MAX_VALIDATOR_EFFECTIVE_BALANCE) {
@@ -1196,9 +1197,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _reportCount
     ) internal view returns (uint256 actualCLBalanceDiff, uint256 maxAllowedCLBalanceDiff) {
         uint256 lastIndex = _reportCount - 1;
-        uint256 lastTimestamp = reportData[lastIndex].timestamp;
-        uint256 windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0;
-        uint256 baselineIndex = _findWindowBaselineIndex(lastIndex, windowStart);
+        uint256 baselineIndex = _findWindowBaselineIndex(lastIndex);
 
         uint256 baselineBalance = reportData[baselineIndex].clBalance;
         uint256 totalDeposits;
@@ -1218,16 +1217,23 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         maxAllowedCLBalanceDiff = (expectedPostCLBalance * _maxDecreaseBP) / MAX_BASIS_POINTS;
     }
 
-    function _findWindowBaselineIndex(
-        uint256 _lastIndex,
-        uint256 _windowStart
-    ) internal view returns (uint256 baselineIndex) {
+    /// @dev Finds the earliest available report within `CL_BALANCE_WINDOW`, or starts from
+    ///      the first stored report when the observed history is shorter than the window.
+    ///      If the latest report is the only one inside the window, returns the nearest
+    ///      pre-window report as an anchor so a long reporting gap cannot reset the baseline.
+    /// @param _lastIndex Index of the latest/current `reportData` item.
+    /// @return baselineIndex Index of the snapshot whose CL balance anchors the window diff.
+    function _findWindowBaselineIndex(uint256 _lastIndex) internal view returns (uint256 baselineIndex) {
+        uint256 lastTimestamp = reportData[_lastIndex].timestamp;
+        uint256 windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0;
+
         baselineIndex = _lastIndex;
         while (baselineIndex > 0) {
             uint256 previousIndex = baselineIndex - 1;
-            if (reportData[previousIndex].timestamp < _windowStart) {
-                // If the current report is the only snapshot inside the window, use the nearest
-                // pre-window snapshot as an anchor so the negative rebase baseline cannot reset.
+            // If the previous snapshot is outside the window, stop at the current baseline candidate.
+            if (reportData[previousIndex].timestamp < windowStart) {
+                // If no earlier in-window snapshot was found, use the previous one as an anchor
+                // so reporting gaps cannot reset the baseline.
                 return baselineIndex == _lastIndex ? previousIndex : baselineIndex;
             }
             baselineIndex = previousIndex;
