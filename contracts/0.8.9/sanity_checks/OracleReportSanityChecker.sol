@@ -172,7 +172,7 @@ struct CLBalanceChangeCheckParams {
 
 struct ActivationBalanceCheckResult {
     uint256 effectiveTimeElapsed;
-    uint256 activatedBalanceWithGap;
+    uint256 maxPossibleActivatedBalance;
 }
 
 uint256 constant MAX_BASIS_POINTS = 10_000;
@@ -902,7 +902,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return (_preCLValidatorsBalance * _annualBalanceIncreaseMultiplier) / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
     }
 
-    function _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(
+    function _checkCLPendingBalanceAndCalculateMaxPossibleActivatedBalance(
         AccountingCoreLimitsPacked memory _limitsList,
         CLBalanceChangeCheckParams memory _checkParams
     ) internal pure returns (ActivationBalanceCheckResult memory result) {
@@ -933,7 +933,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             revert IncorrectTotalActivatedBalance(appearedEthLimitPerPeriod, activatedBalance);
         }
 
-        result.activatedBalanceWithGap =
+        result.maxPossibleActivatedBalance =
             activatedBalance +
             _calculateValidatorsBalanceAprSafetyCap(
                 _checkParams.preCLValidatorsBalance + activatedBalance,
@@ -946,7 +946,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         CLBalanceChangeCheckParams memory _checkParams,
         uint256 _clWithdrawals
     ) internal pure {
-        ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(
+        ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateMaxPossibleActivatedBalance(
             _limitsList,
             _checkParams
         );
@@ -956,9 +956,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (_checkParams.postCLValidatorsBalance > preCLValidatorsBalanceAfterWithdrawals) {
             uint256 validatorsBalanceIncrease =
                 _checkParams.postCLValidatorsBalance - preCLValidatorsBalanceAfterWithdrawals;
-            if (validatorsBalanceIncrease > activationCheckResult.activatedBalanceWithGap) {
+            if (validatorsBalanceIncrease > activationCheckResult.maxPossibleActivatedBalance) {
                 revert IncorrectTotalCLBalanceIncrease(
-                    activationCheckResult.activatedBalanceWithGap,
+                    activationCheckResult.maxPossibleActivatedBalance,
                     validatorsBalanceIncrease
                 );
             }
@@ -972,7 +972,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256[] calldata _validatorBalancesWeiByStakingModule,
         CLBalanceChangeCheckParams memory _checkParams
     ) internal view {
-        ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateActivatedBalanceWithGap(
+        ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateMaxPossibleActivatedBalance(
             _limitsList,
             _checkParams
         );
@@ -980,9 +980,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (_checkParams.postCLValidatorsBalance > _checkParams.preCLValidatorsBalance) {
             uint256 validatorsBalanceIncrease =
                 _checkParams.postCLValidatorsBalance - _checkParams.preCLValidatorsBalance;
-            if (validatorsBalanceIncrease > activationCheckResult.activatedBalanceWithGap) {
+            if (validatorsBalanceIncrease > activationCheckResult.maxPossibleActivatedBalance) {
                 revert IncorrectTotalCLBalanceIncrease(
-                    activationCheckResult.activatedBalanceWithGap,
+                    activationCheckResult.maxPossibleActivatedBalance,
                     validatorsBalanceIncrease
                 );
             }
@@ -1001,7 +1001,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // During consolidation, positive per-module validators balance deltas may exceed
         // activation-backed growth, so the consolidation allowance is added separately.
         uint256 totalActivatedInClByModulesLimit =
-            activationCheckResult.activatedBalanceWithGap + consolidationLimitPerPeriodWei;
+            activationCheckResult.maxPossibleActivatedBalance + consolidationLimitPerPeriodWei;
         if (totalActivatedInClByModules > totalActivatedInClByModulesLimit) {
             revert IncorrectTotalModuleValidatorsBalanceIncrease(
                 totalActivatedInClByModulesLimit,
