@@ -691,10 +691,11 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         uint256 clWithdrawals = _getCLWithdrawals(_withdrawalVaultBalance);
         _checkWithdrawalsVaultTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
+        // 4. Consensus Layer pending and validators balances increase
         _checkCLPendingAndValidatorsBalanceIncrease(limitsList, _checkParams, clWithdrawals);
-        // 4. Consensus Layer balance decrease
+        // 5. Consensus Layer balance decrease
         _checkCLBalanceDecrease(decreaseCheckParams, clWithdrawals);
-        // 5. Consensus Layer annual balances increase
+        // 6. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(
             limitsList,
             decreaseCheckParams.preCLBalance,
