@@ -1238,6 +1238,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             }
             baselineIndex = previousIndex;
         }
+
+        return baselineIndex;
     }
 
     function _askSecondOpinion(
