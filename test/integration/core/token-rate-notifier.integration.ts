@@ -62,7 +62,6 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     // The notifier only accepts `handlePostTokenRebase` from the accounting contract.
     expect(await notifier.TOKEN_RATE_PROVIDER()).to.equal(await locator.accounting());
     expect(await notifier.owner()).to.equal(agent.address);
-    expect(await notifier.getContractVersion()).to.equal(1n);
   });
 
   it("forwards the exact rebase payload to a WithArgs observer", async () => {

@@ -2,19 +2,7 @@ import readline from "node:readline";
 
 import { ethers, network } from "hardhat";
 
-import {
-  bl,
-  cy,
-  deployBehindOssifiableProxy,
-  deployImplementation,
-  gr,
-  log,
-  mg,
-  rd,
-  readNetworkState,
-  Sk,
-  yl,
-} from "lib";
+import { bl, cy, deployImplementation, deployWithoutProxy, gr, log, mg, rd, readNetworkState, Sk, yl } from "lib";
 
 async function confirm(question: string): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -63,17 +51,16 @@ export async function main(): Promise<void> {
     balance: `${gr(ethers.formatEther(deployerBalance))} ETH`,
   });
 
-  log.info("TokenRateNotifier (behind OssifiableProxy, atomic initialize)", {
+  log.info("TokenRateNotifier (non-upgradeable)", {
     "contract": cy("TokenRateNotifier"),
-    "change: ": yl("adds ITokenRatePusherWithArgs flavor + moves under upgradeable proxy"),
-    "impl ctor arg [0] tokenRateProvider_": bl(accountingAddress),
-    "proxy admin": bl(agentAddress),
-    "initialize arg [0] initialOwner_": bl(agentAddress),
+    "change: ": yl("adds ITokenRatePusherWithArgs flavor"),
+    "ctor arg [0] initialOwner_": bl(agentAddress),
+    "ctor arg [1] tokenRateProvider_": bl(accountingAddress),
   });
 
   log.info("LidoLocator implementation", {
     "contract": cy("LidoLocator"),
-    "change: ": yl("retargets postTokenRebaseReceiver to the new TokenRateNotifier proxy"),
+    "change: ": yl("retargets postTokenRebaseReceiver to the new TokenRateNotifier"),
     "current postTokenRebaseReceiver": bl(locatorConfig.postTokenRebaseReceiver),
   });
 
@@ -86,24 +73,13 @@ export async function main(): Promise<void> {
   log.splitter();
 
   //
-  // Deploy new TokenRateNotifier behind OssifiableProxy with atomic initialize.
-  // OssifiableProxy delegatecalls `initData` on the impl as part of its constructor — owner is
-  // set in the proxy's storage atomically with deployment, no front-run window.
+  // Deploy new TokenRateNotifier (non-upgradeable). Owner (agent) and token rate provider
+  // (accounting) are set in the constructor.
   //
-  const notifierFactory = await ethers.getContractFactory("TokenRateNotifier");
-  const initData = notifierFactory.interface.encodeFunctionData("initialize", [agentAddress]);
-
-  const newNotifierProxy = await deployBehindOssifiableProxy(
-    Sk.tokenRebaseNotifierNest,
-    "TokenRateNotifier",
+  const newNotifier = await deployWithoutProxy(Sk.tokenRebaseNotifier, "TokenRateNotifier", deployer, [
     agentAddress,
-    deployer,
-    [accountingAddress],
-    null,
-    true,
-    undefined,
-    initData,
-  );
+    accountingAddress,
+  ]);
 
   //
   // Deploy new LidoLocator implementation with `postTokenRebaseReceiver` overridden. All other
@@ -111,16 +87,16 @@ export async function main(): Promise<void> {
   //
   const newLocatorConfig = {
     ...locatorConfig,
-    postTokenRebaseReceiver: newNotifierProxy.address,
+    postTokenRebaseReceiver: newNotifier.address,
   };
   const newLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [newLocatorConfig]);
 
   log.splitter();
   log.header("Deployment complete");
   log.info("Summary", {
-    "New TokenRateNotifier (proxy)": bl(newNotifierProxy.address),
+    "New TokenRateNotifier": bl(newNotifier.address),
     "New LidoLocator implementation": bl(newLocatorImpl.address),
-    "Target postTokenRebaseReceiver": bl(newNotifierProxy.address),
+    "Target postTokenRebaseReceiver": bl(newNotifier.address),
   });
   log.splitter();
 }

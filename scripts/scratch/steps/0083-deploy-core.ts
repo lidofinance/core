@@ -571,19 +571,9 @@ export async function main() {
   );
 
   //
-  // Deploy new TokenRateNotifier behind OssifiableProxy.
-  // The implementation petrifies its storage via `Versioned`, so it must live behind a proxy and
-  // be set up via `initialize`. Constructor takes a single arg (`tokenRateProvider_` = accounting);
-  // the owner is assigned to the agent in a separate `initialize` call.
+  // Deploy new TokenRateNotifier (non-upgradeable). Constructor takes the initial owner (agent)
+  // and the token rate provider (accounting); both are baked in at deployment.
   //
 
-  const tokenRateNotifier = await deployBehindOssifiableProxy(
-    Sk.tokenRebaseNotifierNest,
-    "TokenRateNotifier",
-    proxyContractsOwner,
-    deployer,
-    [accounting.address],
-  );
-  const notifier = await loadContract("TokenRateNotifier", tokenRateNotifier.address);
-  await makeTx(notifier, "initialize", [agentAddress], { from: deployer });
+  await deployWithoutProxy(Sk.tokenRebaseNotifier, "TokenRateNotifier", deployer, [agentAddress, accounting.address]);
 }

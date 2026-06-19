@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { deployBehindOssifiableProxy, deployImplementation, loadContract, makeTx, readNetworkState, Sk } from "lib";
+import { deployImplementation, deployWithoutProxy, loadContract, makeTx, readNetworkState, Sk } from "lib";
 import { impersonate } from "lib/account";
 
 // Minimal ABI for the legacy on-chain TokenRateNotifier (address[] observers). The current source
@@ -37,22 +37,13 @@ export async function main(): Promise<void> {
   }
 
   //
-  // 2. Deploy new TokenRateNotifier behind OssifiableProxy with atomic initialize.
+  // 2. Deploy new TokenRateNotifier (non-upgradeable). Owner (agent) and token rate provider
+  //    (accounting) are set in the constructor.
   //
-  const notifierFactory = await ethers.getContractFactory("TokenRateNotifier");
-  const initData = notifierFactory.interface.encodeFunctionData("initialize", [agentAddress]);
-
-  const newNotifierProxy = await deployBehindOssifiableProxy(
-    Sk.tokenRebaseNotifierNest,
-    "TokenRateNotifier",
+  const newNotifierContract = await deployWithoutProxy(Sk.tokenRebaseNotifier, "TokenRateNotifier", deployer, [
     agentAddress,
-    deployer,
-    [accountingAddress],
-    null,
-    true,
-    undefined,
-    initData,
-  );
+    accountingAddress,
+  ]);
 
   //
   // 3. Migrate observers (BEFORE flipping the locator pointer, so the new notifier is fully
@@ -60,7 +51,7 @@ export async function main(): Promise<void> {
   //    kind via ERC165 — pre-existing observers implement only `ITokenRatePusher`, so they get
   //    registered as NoArgs.
   //
-  const newNotifier = await loadContract("TokenRateNotifier", newNotifierProxy.address, agent);
+  const newNotifier = await loadContract("TokenRateNotifier", newNotifierContract.address, agent);
   for (const observerAddr of oldObservers) {
     await makeTx(newNotifier, "addObserver", [observerAddr], { from: agentAddress });
   }
@@ -77,7 +68,7 @@ export async function main(): Promise<void> {
   const TEST_ONLY_PLACEHOLDER = "0x000000000000000000000000000000000000dEaD";
   const newLocatorConfig = {
     ...locatorConfig,
-    postTokenRebaseReceiver: newNotifierProxy.address,
+    postTokenRebaseReceiver: newNotifierContract.address,
     consolidationGateway: locatorConfig.consolidationGateway ?? TEST_ONLY_PLACEHOLDER,
     topUpGateway: locatorConfig.topUpGateway ?? TEST_ONLY_PLACEHOLDER,
   };
