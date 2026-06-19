@@ -4,7 +4,7 @@ pragma solidity 0.8.9;
 
 import {ITokenRatePusher} from "contracts/0.8.9/interfaces/ITokenRatePusher.sol";
 
-/// @notice Legacy ITokenRatePusher implementer used in TokenRateNotifier tests.
+/// @notice No-arg ITokenRatePusher implementer used in TokenRateNotifier tests.
 contract TokenRatePusher__Mock is ITokenRatePusher {
     uint256 public pushCount;
     bool public shouldRevertWithData;
@@ -29,7 +29,7 @@ contract TokenRatePusher__Mock is ITokenRatePusher {
             }
         }
         if (shouldRevertWithData) {
-            revert("legacy push failed");
+            revert("no-arg push failed");
         }
         pushCount++;
         emit Mock__Pushed();
