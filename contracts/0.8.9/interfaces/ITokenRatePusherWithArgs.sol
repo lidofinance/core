@@ -4,7 +4,7 @@
 pragma solidity 0.8.9;
 
 /// @notice An interface for an entity that pushes token rate and consumes the full per-rebase
-///         payload forwarded from `Lido.handlePostTokenRebase` via the `TokenRateNotifier`.
+///         payload forwarded from `Accounting.handleOracleReport` via the `TokenRateNotifier`.
 /// @dev This is the args-bearing variant of `ITokenRatePusher`. Observers implementing this
 ///      interface are auto-detected by `TokenRateNotifier.addObserver` via ERC165 and called with
 ///      the full rebase payload instead of the no-arg `pushTokenRate()`. Field semantics mirror

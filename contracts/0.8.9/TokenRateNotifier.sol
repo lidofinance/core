@@ -14,7 +14,7 @@ import {Versioned} from "./utils/Versioned.sol";
 /// @author kovalgek
 /// @notice Notifies all `observers` when rebase event occurs.
 /// @dev Observers are kept in a single registry tagged with their kind:
-///      - Legacy observers implement `ITokenRatePusher` and are notified via `pushTokenRate()`;
+///      - NoArgs observers implement `ITokenRatePusher` and are notified via `pushTokenRate()`;
 ///      - WithArgs observers implement `ITokenRatePusherWithArgs` and are notified via
 ///        `pushTokenRate(...)` with the full per-rebase payload forwarded from
 ///        `handlePostTokenRebase` (mirrors `IPostTokenRebaseReceiver` 1:1).
@@ -22,7 +22,7 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver, Versioned {
     using ERC165Checker for address;
 
     /// @notice Distinguishes the two notification flavors an observer can subscribe to.
-    enum ObserverKind { Legacy, WithArgs }
+    enum ObserverKind { NoArgs, WithArgs }
 
     /// @notice A single observer entry: the contract address and its notification kind.
     /// @dev `addr` (20 bytes) and `kind` (1 byte) pack into a single 32-byte storage slot.
@@ -40,13 +40,14 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver, Versioned {
     /// @notice A value that indicates that value was not found.
     uint256 public constant INDEX_NOT_FOUND = type(uint256).max;
 
-    /// @notice An interface that each legacy observer should support.
-    bytes4 public constant REQUIRED_INTERFACE = type(ITokenRatePusher).interfaceId;
+    /// @notice An interface that each no-arg observer should support.
+    bytes4 public constant REQUIRED_INTERFACE_NO_ARGS = type(ITokenRatePusher).interfaceId;
 
     /// @notice An interface that each args-bearing observer should support.
     bytes4 public constant REQUIRED_INTERFACE_WITH_ARGS = type(ITokenRatePusherWithArgs).interfaceId;
 
-    /// @notice All observers, in insertion order. Mixed kinds; an address may appear at most once.
+    /// @notice All observers. Mixed kinds; an address may appear at most once. Order is not stable:
+    ///         `removeObserver` swaps the removed entry with the last one before popping.
     Observer[] public observers;
 
     /// @param tokenRateProvider_ Address of token rate provider contract that is allowed to call
@@ -74,19 +75,19 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver, Versioned {
     /// @notice Register an observer. The notification flavor is auto-detected from the observer's
     ///         `supportsInterface` declaration: if it claims `REQUIRED_INTERFACE_WITH_ARGS` it is
     ///         registered as `WithArgs` (and notified with the full rebase payload); otherwise it
-    ///         must claim `REQUIRED_INTERFACE` and is registered as `Legacy` (no-arg notification).
+    ///         must claim `REQUIRED_INTERFACE_NO_ARGS` and is registered as `NoArgs`.
     /// @dev If the observer claims BOTH interfaces, `WithArgs` wins (richer payload). Observers
-    ///      that want the legacy flavor must NOT declare support for `ITokenRatePusherWithArgs`.
+    ///      that want the no-arg flavor must NOT declare support for `ITokenRatePusherWithArgs`.
     /// @param observer_ observer address
     function addObserver(address observer_) external onlyOwner {
         if (observer_ == address(0)) {
             revert ErrorZeroAddressObserver();
         }
 
-        ObserverKind kind_ = ObserverKind.Legacy;
+        ObserverKind kind_ = ObserverKind.NoArgs;
         if (observer_.supportsInterface(REQUIRED_INTERFACE_WITH_ARGS)) {
             kind_ = ObserverKind.WithArgs;
-        } else if (!observer_.supportsInterface(REQUIRED_INTERFACE)) {
+        } else if (!observer_.supportsInterface(REQUIRED_INTERFACE_NO_ARGS)) {
             revert ErrorBadObserverInterface();
         }
 
@@ -117,7 +118,7 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver, Versioned {
     }
 
     /// @inheritdoc IPostTokenRebaseReceiver
-    /// @dev Legacy observers receive no parameters because they fetch all required data on their
+    /// @dev NoArgs observers receive no parameters because they fetch all required data on their
     ///      own (e.g. read `wstETH.stEthPerToken()` directly). Args-bearing observers receive the
     ///      full rebase payload forwarded as-is, so they can consume per-rebase values
     ///      (notably `_sharesMintedAsFees`) without back-deriving them from rate deltas.
@@ -139,7 +140,7 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver, Versioned {
         for (uint256 obIndex = 0; obIndex < observersLength_; obIndex++) {
             Observer storage entry = observers[obIndex];
             address observerAddr = entry.addr;
-            if (entry.kind == ObserverKind.Legacy) {
+            if (entry.kind == ObserverKind.NoArgs) {
                 // solhint-disable-next-line no-empty-blocks
                 try ITokenRatePusher(observerAddr).pushTokenRate() {}
                 catch (bytes memory lowLevelRevertData) {

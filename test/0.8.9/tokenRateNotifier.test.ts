@@ -15,9 +15,9 @@ import {
 
 import { Snapshot } from "test/suite";
 
-// Mirrors `enum ObserverKind { Legacy, WithArgs }` in TokenRateNotifier.sol.
+// Mirrors `enum ObserverKind { NoArgs, WithArgs }` in TokenRateNotifier.sol.
 // Encoded as bigint to match the uint8 value returned by ethers v6 / TypeChain.
-const KIND_LEGACY = 0n;
+const KIND_NO_ARGS = 0n;
 const KIND_WITH_ARGS = 1n;
 
 const MAX_OBSERVERS_COUNT = 32n;
@@ -83,7 +83,7 @@ describe("TokenRateNotifier.sol", () => {
     return TokenRateNotifier__factory.connect(await proxy.getAddress(), deployer);
   }
 
-  async function deployLegacyMock(): Promise<TokenRatePusher__Mock> {
+  async function deployNoArgsMock(): Promise<TokenRatePusher__Mock> {
     return await ethers.deployContract("TokenRatePusher__Mock", [], deployer);
   }
 
@@ -156,11 +156,11 @@ describe("TokenRateNotifier.sol", () => {
       expect(await notifier.observersLength()).to.equal(0n);
       expect(await notifier.getContractVersion()).to.equal(1n);
 
-      const reqLegacy = await notifier.REQUIRED_INTERFACE();
+      const reqNoArgs = await notifier.REQUIRED_INTERFACE_NO_ARGS();
       const reqWithArgs = await notifier.REQUIRED_INTERFACE_WITH_ARGS();
-      expect(reqLegacy).to.not.equal("0x00000000");
+      expect(reqNoArgs).to.not.equal("0x00000000");
       expect(reqWithArgs).to.not.equal("0x00000000");
-      expect(reqLegacy).to.not.equal(reqWithArgs);
+      expect(reqNoArgs).to.not.equal(reqWithArgs);
     });
   });
 
@@ -168,7 +168,7 @@ describe("TokenRateNotifier.sol", () => {
 
   describe("addObserver", () => {
     it("reverts when called by non-owner", async () => {
-      const mock = await deployLegacyMock();
+      const mock = await deployNoArgsMock();
       await expect(notifier.connect(stranger).addObserver(mock)).to.be.revertedWith("Ownable: caller is not the owner");
     });
 
@@ -187,8 +187,8 @@ describe("TokenRateNotifier.sol", () => {
       );
     });
 
-    it("registers legacy observer when only ITokenRatePusher is supported", async () => {
-      const mock = await deployLegacyMock();
+    it("registers no-arg observer when only ITokenRatePusher is supported", async () => {
+      const mock = await deployNoArgsMock();
       const addr = await mock.getAddress();
 
       await expect(notifier.connect(owner).addObserver(mock)).to.emit(notifier, "ObserverAdded").withArgs(addr);
@@ -196,7 +196,7 @@ describe("TokenRateNotifier.sol", () => {
       expect(await notifier.observersLength()).to.equal(1n);
       const entry = await notifier.observers(0);
       expect(entry[0]).to.equal(addr);
-      expect(entry[1]).to.equal(KIND_LEGACY);
+      expect(entry[1]).to.equal(KIND_NO_ARGS);
     });
 
     it("registers WithArgs observer when only ITokenRatePusherWithArgs is supported", async () => {
@@ -221,8 +221,8 @@ describe("TokenRateNotifier.sol", () => {
       expect(entry[1]).to.equal(KIND_WITH_ARGS);
     });
 
-    it("reverts when registering the same observer twice (legacy)", async () => {
-      const mock = await deployLegacyMock();
+    it("reverts when registering the same observer twice (no-arg)", async () => {
+      const mock = await deployNoArgsMock();
       await notifier.connect(owner).addObserver(mock);
       await expect(notifier.connect(owner).addObserver(mock)).to.be.revertedWithCustomError(
         notifier,
@@ -244,12 +244,12 @@ describe("TokenRateNotifier.sol", () => {
     it("respects the combined MAX_OBSERVERS_COUNT cap (mixed kinds)", async () => {
       // Register 32 mixed-kind observers, then assert the 33rd fails.
       for (let i = 0; i < Number(MAX_OBSERVERS_COUNT); i++) {
-        const m = i % 2 === 0 ? await deployLegacyMock() : await deployWithArgsMock();
+        const m = i % 2 === 0 ? await deployNoArgsMock() : await deployWithArgsMock();
         await notifier.connect(owner).addObserver(m);
       }
       expect(await notifier.observersLength()).to.equal(MAX_OBSERVERS_COUNT);
 
-      const extra = await deployLegacyMock();
+      const extra = await deployNoArgsMock();
       await expect(notifier.connect(owner).addObserver(extra)).to.be.revertedWithCustomError(
         notifier,
         "ErrorMaxObserversCountExceeded",
@@ -261,7 +261,7 @@ describe("TokenRateNotifier.sol", () => {
 
   describe("removeObserver", () => {
     it("reverts when called by non-owner", async () => {
-      const mock = await deployLegacyMock();
+      const mock = await deployNoArgsMock();
       await notifier.connect(owner).addObserver(mock);
       await expect(notifier.connect(stranger).removeObserver(mock)).to.be.revertedWith(
         "Ownable: caller is not the owner",
@@ -269,15 +269,15 @@ describe("TokenRateNotifier.sol", () => {
     });
 
     it("reverts when removing a non-registered observer", async () => {
-      const mock = await deployLegacyMock();
+      const mock = await deployNoArgsMock();
       await expect(notifier.connect(owner).removeObserver(mock)).to.be.revertedWithCustomError(
         notifier,
         "ErrorNoObserverToRemove",
       );
     });
 
-    it("removes a legacy observer", async () => {
-      const mock = await deployLegacyMock();
+    it("removes a no-arg observer", async () => {
+      const mock = await deployNoArgsMock();
       const addr = await mock.getAddress();
       await notifier.connect(owner).addObserver(mock);
 
@@ -297,10 +297,10 @@ describe("TokenRateNotifier.sol", () => {
     });
 
     it("swap-and-pop preserves the moved entry's kind", async () => {
-      // Add A(Legacy), B(WithArgs), C(Legacy). Remove B → C slides into B's slot.
-      const a = await deployLegacyMock();
+      // Add A(NoArgs), B(WithArgs), C(NoArgs). Remove B → C slides into B's slot.
+      const a = await deployNoArgsMock();
       const b = await deployWithArgsMock();
-      const c = await deployLegacyMock();
+      const c = await deployNoArgsMock();
 
       await notifier.connect(owner).addObserver(a);
       await notifier.connect(owner).addObserver(b);
@@ -314,11 +314,11 @@ describe("TokenRateNotifier.sol", () => {
 
       const slot0 = await notifier.observers(0);
       expect(slot0[0]).to.equal(await a.getAddress());
-      expect(slot0[1]).to.equal(KIND_LEGACY);
+      expect(slot0[1]).to.equal(KIND_NO_ARGS);
 
       const slot1 = await notifier.observers(1);
       expect(slot1[0]).to.equal(await c.getAddress());
-      expect(slot1[1]).to.equal(KIND_LEGACY);
+      expect(slot1[1]).to.equal(KIND_NO_ARGS);
     });
   });
 
@@ -331,8 +331,8 @@ describe("TokenRateNotifier.sol", () => {
       ).to.be.revertedWithCustomError(notifier, "ErrorNotAuthorizedRebaseCaller");
     });
 
-    it("dispatches no-arg pushTokenRate() to legacy observers", async () => {
-      const mock = await deployLegacyMock();
+    it("dispatches no-arg pushTokenRate() to no-arg observers", async () => {
+      const mock = await deployNoArgsMock();
       await notifier.connect(owner).addObserver(mock);
 
       await notifier.connect(provider).handlePostTokenRebase(...reportTuple(REPORT));
@@ -358,7 +358,7 @@ describe("TokenRateNotifier.sol", () => {
     });
 
     it("dispatches to a mixed set in one rebase", async () => {
-      const lg = await deployLegacyMock();
+      const lg = await deployNoArgsMock();
       const wa = await deployWithArgsMock();
       await notifier.connect(owner).addObserver(lg);
       await notifier.connect(owner).addObserver(wa);
@@ -395,8 +395,8 @@ describe("TokenRateNotifier.sol", () => {
       expect(received[6]).to.equal(max);
     });
 
-    it("soft-fails when a legacy observer reverts with non-empty data", async () => {
-      const mock = await deployLegacyMock();
+    it("soft-fails when a no-arg observer reverts with non-empty data", async () => {
+      const mock = await deployNoArgsMock();
       await notifier.connect(owner).addObserver(mock);
       await mock.setShouldRevertWithData(true);
 
@@ -421,8 +421,8 @@ describe("TokenRateNotifier.sol", () => {
       expect(await mock.pushCount()).to.equal(0n);
     });
 
-    it("bubbles up empty-data revert from a legacy observer (OOG guard)", async () => {
-      const mock = await deployLegacyMock();
+    it("bubbles up empty-data revert from a no-arg observer (OOG guard)", async () => {
+      const mock = await deployNoArgsMock();
       await notifier.connect(owner).addObserver(mock);
       await mock.setShouldRevertWithoutData(true);
 
@@ -442,9 +442,9 @@ describe("TokenRateNotifier.sol", () => {
     });
 
     it("skips a removed observer in subsequent rebases (post-swap-and-pop iteration)", async () => {
-      const a = await deployLegacyMock();
+      const a = await deployNoArgsMock();
       const b = await deployWithArgsMock();
-      const c = await deployLegacyMock();
+      const c = await deployNoArgsMock();
 
       await notifier.connect(owner).addObserver(a);
       await notifier.connect(owner).addObserver(b);

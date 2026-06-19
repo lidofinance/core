@@ -55,7 +55,7 @@ export async function main(): Promise<void> {
   // 3. Migrate observers (BEFORE flipping the locator pointer, so the new notifier is fully
   //    populated by the time it becomes the canonical receiver). addObserver auto-detects the
   //    kind via ERC165 — pre-existing observers implement only `ITokenRatePusher`, so they get
-  //    registered as Legacy.
+  //    registered as NoArgs.
   //
   const newNotifier = await loadContract("TokenRateNotifier", newNotifierProxy.address, agent);
   for (const observerAddr of oldObservers) {
