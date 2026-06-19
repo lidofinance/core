@@ -19,7 +19,10 @@ export async function main(): Promise<void> {
   const accountingAddress = state[Sk.accounting].proxy.address;
   const locatorProxyAddress = state[Sk.lidoLocator].proxy.address;
   const locatorConfig = state[Sk.lidoLocator].implementation.constructorArgs[0];
-  const oldNotifierAddress = state[Sk.tokenRebaseNotifier].address;
+  // The old notifier is whatever the locator currently points to. Source it from the locator config
+  // rather than a fixed state key: the deployed contract lives under different keys across networks
+  // (e.g. `tokenRebaseNotifier` on mainnet, `tokenRebaseNotifierV3` on hoodi).
+  const oldNotifierAddress = locatorConfig.postTokenRebaseReceiver;
 
   const agent = await impersonate(agentAddress, ethers.parseEther("1"));
 

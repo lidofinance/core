@@ -7,7 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { TokenRateNotifier, TokenRatePusher__Mock, TokenRatePusherWithArgs__Mock } from "typechain-types";
 
 import { ether } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, report, resetCLBalanceDecreaseWindow } from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -32,8 +32,10 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     notifier = await ethers.getContractAt("TokenRateNotifier", notifierAddress);
     agent = await ctx.getSigner("agent");
 
-    // Warm up to a steady reporting frame (mirrors other accounting scenarios).
-    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, skipWithdrawals: true });
+    // Land on a steady reporting baseline. On forks the last on-chain report can be stale, so a
+    // naive clDiff=0 report trips IncorrectCLBalanceDecrease; this advances past the 36-day window
+    // and submits a neutral report to reset it. Harmless on scratch.
+    await resetCLBalanceDecreaseWindow(ctx);
   });
 
   // Per-test isolation: each scenario registers observers / pushes reports, so restore to the

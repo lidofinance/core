@@ -6,6 +6,7 @@
     "upgrade/steps/0150-deploy-mock-et-factories",
     "upgrade/steps/0200-deploy-upgrade-template",
     "upgrade/steps/0300-deploy-upgrade-vote-script",
-    "upgrade/steps/0500-mock-upgrade"
+    "upgrade/steps/0500-mock-upgrade",
+    "upgrade/steps/0110-mock-upgrade-token-rate-notifier-nest"
   ]
 }
