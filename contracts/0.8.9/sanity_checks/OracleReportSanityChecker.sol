@@ -1127,17 +1127,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // If the balance difference is less than or equal to withdrawals, no check is needed.
         if (_checkParams.preCLBalance - _checkParams.postCLBalance <= _clWithdrawals) return;
 
-        uint256 len = reportData.length;
-        // Need at least two snapshots to build a window: baseline B[X-k] and current point B[X].
-        // With migration we seed them upfront (baseline + bootstrap flow chunk), so checks work immediately.
-        // Without migration this still works, but the very first report cannot be checked and pre-deploy
-        // state is not part of the window until enough post-deploy snapshots are accumulated.
-        if (len < 2) return;
-
         (uint256 actualCLBalanceDiff, uint256 maxAllowedCLBalanceDiff) = _calcWindowDiff(
             _checkParams.maxCLBalanceDecreaseBP,
             _checkParams.postCLBalance,
-            len
+            reportData.length
         );
 
         if (actualCLBalanceDiff == 0) return;
