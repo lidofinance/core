@@ -1,4 +1,4 @@
-import { type BigNumberish, solidityPackedKeccak256 } from "ethers";
+import { solidityPackedKeccak256 } from "ethers";
 
 import { DepositSecurityModule } from "typechain-types";
 
@@ -6,12 +6,6 @@ import { sign, toEip2098 } from "./ec";
 
 class DSMMessage {
   static MESSAGE_PREFIX: string;
-
-  contractVersion: BigNumberish;
-
-  constructor(contractVersion: BigNumberish) {
-    this.contractVersion = contractVersion;
-  }
 
   static setMessagePrefix(newMessagePrefix: string) {
     this.MESSAGE_PREFIX = newMessagePrefix;
@@ -29,10 +23,6 @@ class DSMMessage {
     throw new Error("Unimplemented");
   }
 
-  get isVersionedHash(): boolean {
-    return BigInt(this.contractVersion.toString()) >= 4n;
-  }
-
   sign(signerPrivateKey: string): DepositSecurityModule.SignatureStruct {
     return toEip2098(sign(this.hash, signerPrivateKey));
   }
@@ -45,15 +35,8 @@ export class DSMAttestMessage extends DSMMessage {
   stakingModule: number;
   nonce: number;
 
-  constructor(
-    contractVersion: BigNumberish,
-    blockNumber: number,
-    blockHash: string,
-    depositRoot: string,
-    stakingModule: number,
-    nonce: number,
-  ) {
-    super(contractVersion);
+  constructor(blockNumber: number, blockHash: string, depositRoot: string, stakingModule: number, nonce: number) {
+    super();
     this.blockNumber = blockNumber;
     this.blockHash = blockHash;
     this.depositRoot = depositRoot;
@@ -62,24 +45,9 @@ export class DSMAttestMessage extends DSMMessage {
   }
 
   get hash() {
-    if (!this.isVersionedHash) {
-      return solidityPackedKeccak256(
-        ["bytes32", "uint256", "bytes32", "bytes32", "uint256", "uint256"],
-        [this.messagePrefix, this.blockNumber, this.blockHash, this.depositRoot, this.stakingModule, this.nonce],
-      );
-    }
-
     return solidityPackedKeccak256(
-      ["bytes32", "uint256", "uint256", "bytes32", "bytes32", "uint256", "uint256"],
-      [
-        this.messagePrefix,
-        this.contractVersion,
-        this.blockNumber,
-        this.blockHash,
-        this.depositRoot,
-        this.stakingModule,
-        this.nonce,
-      ],
+      ["bytes32", "uint256", "bytes32", "bytes32", "uint256", "uint256"],
+      [this.messagePrefix, this.blockNumber, this.blockHash, this.depositRoot, this.stakingModule, this.nonce],
     );
   }
 }
@@ -87,20 +55,13 @@ export class DSMAttestMessage extends DSMMessage {
 export class DSMPauseMessage extends DSMMessage {
   blockNumber: number;
 
-  constructor(contractVersion: BigNumberish, blockNumber: number) {
-    super(contractVersion);
+  constructor(blockNumber: number) {
+    super();
     this.blockNumber = blockNumber;
   }
 
   get hash() {
-    if (!this.isVersionedHash) {
-      return solidityPackedKeccak256(["bytes32", "uint256"], [this.messagePrefix, this.blockNumber]);
-    }
-
-    return solidityPackedKeccak256(
-      ["bytes32", "uint256", "uint256"],
-      [this.messagePrefix, this.contractVersion, this.blockNumber],
-    );
+    return solidityPackedKeccak256(["bytes32", "uint256"], [this.messagePrefix, this.blockNumber]);
   }
 }
 
@@ -113,7 +74,6 @@ export class DSMUnvetMessage extends DSMMessage {
   vettedSigningKeysCounts: string;
 
   constructor(
-    contractVersion: BigNumberish,
     blockNumber: number,
     blockHash: string,
     stakingModule: number,
@@ -121,7 +81,7 @@ export class DSMUnvetMessage extends DSMMessage {
     nodeOperatorIds: string,
     vettedSigningKeysCounts: string,
   ) {
-    super(contractVersion);
+    super();
     this.blockNumber = blockNumber;
     this.blockHash = blockHash;
     this.stakingModule = stakingModule;
@@ -131,26 +91,10 @@ export class DSMUnvetMessage extends DSMMessage {
   }
 
   get hash() {
-    if (!this.isVersionedHash) {
-      return solidityPackedKeccak256(
-        ["bytes32", "uint256", "bytes32", "uint256", "uint256", "bytes", "bytes"],
-        [
-          this.messagePrefix,
-          this.blockNumber,
-          this.blockHash,
-          this.stakingModule,
-          this.nonce,
-          this.nodeOperatorIds,
-          this.vettedSigningKeysCounts,
-        ],
-      );
-    }
-
     return solidityPackedKeccak256(
-      ["bytes32", "uint256", "uint256", "bytes32", "uint256", "uint256", "bytes", "bytes"],
+      ["bytes32", "uint256", "bytes32", "uint256", "uint256", "bytes", "bytes"],
       [
         this.messagePrefix,
-        this.contractVersion,
         this.blockNumber,
         this.blockHash,
         this.stakingModule,

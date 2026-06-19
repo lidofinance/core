@@ -116,7 +116,7 @@ describe("DepositSecurityModule.sol", () => {
     const signingArgs = await getDepositArgs(overridingArgs);
 
     const sortedGuardianSignatures = sortedGuardianWallets.map((guardian) => {
-      const validAttestMessage = new DSMAttestMessage(DSM_VERSION, ...signingArgs);
+      const validAttestMessage = new DSMAttestMessage(...signingArgs);
       return validAttestMessage.sign(guardian.privateKey);
     });
 
@@ -644,21 +644,9 @@ describe("DepositSecurityModule.sol", () => {
       await expect(dsm.pauseDeposits(blockNumber, sig)).to.be.revertedWith("ECDSA: invalid signature");
     });
 
-    it("Reverts if signature contract version is unexpected", async () => {
-      const blockNumber = await time.latestBlock();
-
-      const pauseMessage = new DSMPauseMessage(DSM_VERSION - 1, blockNumber);
-      const sig = pauseMessage.sign(guardian1.privateKey);
-
-      await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
-        dsm,
-        "InvalidSignature",
-      );
-    });
-
     it("Reverts if signature is not guardian", async () => {
       const blockNumber = await time.latestBlock();
-      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
+      const validPauseMessage = new DSMPauseMessage(blockNumber);
 
       const sig = validPauseMessage.sign(guardian3.privateKey);
 
@@ -667,7 +655,7 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Reverts if called by an anon submitting an unrelated sig", async () => {
       const blockNumber = await time.latestBlock();
-      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
+      const validPauseMessage = new DSMPauseMessage(blockNumber);
 
       const sig = validPauseMessage.sign(guardian3.privateKey);
 
@@ -680,7 +668,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Reverts if called with an expired `blockNumber` by a guardian", async () => {
       const blockNumber = await time.latestBlock();
       const staleBlockNumber = blockNumber - PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
-      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
+      const validPauseMessage = new DSMPauseMessage(blockNumber);
 
       const sig = validPauseMessage.sign(guardian1.privateKey);
 
@@ -694,7 +682,7 @@ describe("DepositSecurityModule.sol", () => {
       const blockNumber = await time.latestBlock();
       const staleBlockNumber = blockNumber - PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
 
-      const stalePauseMessage = new DSMPauseMessage(DSM_VERSION, staleBlockNumber);
+      const stalePauseMessage = new DSMPauseMessage(staleBlockNumber);
       const sig = stalePauseMessage.sign(guardian1.privateKey);
 
       await expect(dsm.connect(stranger).pauseDeposits(staleBlockNumber, sig)).to.be.revertedWithCustomError(
@@ -719,7 +707,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Reverts if called with a future `blockNumber` by an anon submitting a guardian's sig", async () => {
       const futureBlockNumber = (await time.latestBlock()) + 100;
 
-      const futurePauseMessage = new DSMPauseMessage(DSM_VERSION, futureBlockNumber);
+      const futurePauseMessage = new DSMPauseMessage(futureBlockNumber);
       const sig = futurePauseMessage.sign(guardian1.privateKey);
 
       await expect(dsm.connect(stranger).pauseDeposits(futureBlockNumber, sig)).to.be.revertedWithPanic(
@@ -742,7 +730,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Pause if called by anon submitting sig of guardian", async () => {
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
+      const validPauseMessage = new DSMPauseMessage(blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -753,7 +741,7 @@ describe("DepositSecurityModule.sol", () => {
     it("Do not pause and emits events if was paused before", async () => {
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
+      const validPauseMessage = new DSMPauseMessage(blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx1 = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -774,7 +762,7 @@ describe("DepositSecurityModule.sol", () => {
 
       const blockNumber = await time.latestBlock();
 
-      const validPauseMessage = new DSMPauseMessage(DSM_VERSION, blockNumber);
+      const validPauseMessage = new DSMPauseMessage(blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
 
       const tx = await dsm.connect(stranger).pauseDeposits(blockNumber, sig);
@@ -912,22 +900,6 @@ describe("DepositSecurityModule.sol", () => {
         expect(await dsm.getGuardianQuorum()).to.equal(1);
 
         await expect(deposit([guardian2])).to.be.revertedWithCustomError(dsm, "InvalidSignature");
-      });
-
-      it("Reverts if signature contract version is unexpected", async () => {
-        await dsm.addGuardian(guardian1, 1);
-        expect(await dsm.getGuardians()).to.deep.equal([guardian1.address]);
-        expect(await dsm.getGuardians()).to.have.length(1);
-        expect(await dsm.getGuardianQuorum()).to.equal(1);
-
-        const signingArgs = await getDepositArgs();
-        const attestMessage = new DSMAttestMessage(DSM_VERSION - 1, ...signingArgs);
-        const sig = attestMessage.sign(guardian1.privateKey);
-
-        await expect(dsm.depositBufferedEther(...signingArgs, [sig])).to.be.revertedWithCustomError(
-          dsm,
-          "InvalidSignature",
-        );
       });
 
       it("Reverts if deposit contract root changed", async () => {
@@ -1201,7 +1173,7 @@ describe("DepositSecurityModule.sol", () => {
 
     async function getUnvetSignature(from: Wallet, overridingArgs?: UnvetArgs) {
       const args = await getUnvetArgs(overridingArgs);
-      const validUnvetMessage = new DSMUnvetMessage(DSM_VERSION, ...args);
+      const validUnvetMessage = new DSMUnvetMessage(...args);
       return validUnvetMessage.sign(from.privateKey);
     }
 
@@ -1229,16 +1201,6 @@ describe("DepositSecurityModule.sol", () => {
       await expect(unvetSigningKeys(guardian1, { nonce: nonceBefore })).to.be.revertedWithCustomError(
         dsm,
         "ModuleNonceChanged",
-      );
-    });
-
-    it("Reverts if signature contract version is unexpected", async () => {
-      const args = await getUnvetArgs();
-      const sig = new DSMUnvetMessage(DSM_VERSION - 1, ...args).sign(guardian1.privateKey);
-
-      await expect(dsm.connect(unrelatedGuardian1).unvetSigningKeys(...args, sig)).to.be.revertedWithCustomError(
-        dsm,
-        "InvalidSignature",
       );
     });
 
