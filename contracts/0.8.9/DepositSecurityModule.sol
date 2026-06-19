@@ -558,7 +558,7 @@ contract DepositSecurityModule {
         uint256 nodeOperatorsCount = nodeOperatorIds.length / NODE_OPERATOR_ID_LENGTH;
 
         if (
-            nodeOperatorIds.length % 8 != 0 ||
+            nodeOperatorIds.length % NODE_OPERATOR_ID_LENGTH != 0 ||
             vettedSigningKeysCounts.length % VETTED_KEYS_COUNT_LENGTH != 0 ||
             vettedSigningKeysCounts.length / VETTED_KEYS_COUNT_LENGTH != nodeOperatorsCount ||
             nodeOperatorsCount > maxOperatorsPerUnvetting
