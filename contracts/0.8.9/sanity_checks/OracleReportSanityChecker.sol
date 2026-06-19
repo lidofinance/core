@@ -38,6 +38,8 @@ interface IWithdrawalQueue {
 }
 
 interface IBaseOracle {
+    function SECONDS_PER_SLOT() external view returns (uint256);
+    function GENESIS_TIME() external view returns (uint256);
     function getLastProcessingRefSlot() external view returns (uint256);
 }
 
@@ -143,7 +145,7 @@ struct OperationalLimitsPacked {
 }
 
 struct ReportData {
-    uint64 timestamp;       // Logical report timestamp in seconds
+    uint64 timestamp;       // Report-window timestamp in seconds
     uint128 clBalance;      // Total CL balance (validators + pending) in Wei
     uint128 deposits;       // Deposits for the period since the last report in Wei
     uint128 clWithdrawals;  // Actual ETH moved from CL to withdrawal vault this period
@@ -241,7 +243,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ///      Used to compute actual CL withdrawals: clWithdrawals = WVB_current - lastVaultBalanceAfterTransfer
     uint256 public lastVaultBalanceAfterTransfer;
 
-    /// @dev Logical timestamp of the latest stored report snapshot.
+    /// @dev Timestamp of the latest stored report snapshot used by the CL balance decrease window.
     ///      It is advanced by `_timeElapsed` on each accounting report.
     uint256 public lastReportTimestamp;
 
@@ -553,7 +555,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // Since `_calcWindowDiff` sums flows only after the baseline item, migration
         // withdrawals must be stored in a separate, next reportData entry.
         // Migrated transient deposits are not stored here; they belong to the first post-migration report.
-        uint256 migrationReportTimestamp = lastReportTimestamp;
+        // Align the migrated baseline with the latest processed oracle report so that the next
+        // `+ timeElapsed` lands on the current report's ref-slot timestamp.
+        IBaseOracle accountingOracle = IBaseOracle(LIDO_LOCATOR.accountingOracle());
+        uint256 migrationReportTimestamp = accountingOracle.GENESIS_TIME() +
+            accountingOracle.getLastProcessingRefSlot() *
+            accountingOracle.SECONDS_PER_SLOT();
+        lastReportTimestamp = migrationReportTimestamp;
         _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
         _addReportData(migrationReportTimestamp, postWithdrawalsMigrationCLBalance, 0, migrationCLWithdrawals);
 
@@ -1230,7 +1238,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @return baselineIndex Index of the snapshot whose CL balance anchors the window diff.
     function _findWindowBaselineIndex(uint256 _lastIndex) internal view returns (uint256 baselineIndex) {
         uint256 lastTimestamp = reportData[_lastIndex].timestamp;
-        uint256 windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0;
+        uint256 windowStart = lastTimestamp - CL_BALANCE_WINDOW;
 
         baselineIndex = _lastIndex;
         while (baselineIndex > 0) {

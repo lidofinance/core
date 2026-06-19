@@ -23,6 +23,8 @@ import { Snapshot } from "test/suite";
 const OVER_UINT16 = 1n << 16n;
 const OVER_UINT32 = 1n << 32n;
 const OVER_UINT64 = 1n << 64n;
+const ONE_DAY = 24n * 60n * 60n;
+const CL_BALANCE_WINDOW = 36n * ONE_DAY;
 
 describe("OracleReportSanityChecker.sol", () => {
   let checker: OracleReportSanityCheckerWrapper;
@@ -115,6 +117,7 @@ describe("OracleReportSanityChecker.sol", () => {
       defaultLimits,
       false,
     ]);
+    await checker.harness__setLastReportTimestamp(CL_BALANCE_WINDOW);
   });
 
   beforeEach(async () => {
@@ -1587,6 +1590,7 @@ describe("OracleReportSanityChecker.sol", () => {
     });
 
     it("stores post-cl balance snapshots in reportData", async () => {
+      const initialReportTimestamp = await checker.lastReportTimestamp();
       await expect(
         checker
           .connect(accountingSigner)
@@ -1604,11 +1608,11 @@ describe("OracleReportSanityChecker.sol", () => {
 
       const first = await checker.reportData(0n);
       const second = await checker.reportData(1n);
-      expect(first.timestamp).to.equal(24n * 60n * 60n);
+      expect(first.timestamp).to.equal(initialReportTimestamp + 24n * 60n * 60n);
       expect(first.clBalance).to.equal(ether("100"));
       expect(first.deposits).to.equal(0n);
       expect(first.clWithdrawals).to.equal(0n);
-      expect(second.timestamp).to.equal(2n * 24n * 60n * 60n);
+      expect(second.timestamp).to.equal(initialReportTimestamp + 2n * 24n * 60n * 60n);
       expect(second.clBalance).to.equal(ether("100"));
       expect(second.deposits).to.equal(2n);
       expect(second.clWithdrawals).to.equal(0n);
@@ -1667,9 +1671,9 @@ describe("OracleReportSanityChecker.sol", () => {
     });
 
     it("uses 36-day timestamp window (not report count) and keeps left boundary report in range", async () => {
-      const ONE_DAY = 24n * 60n * 60n;
+      const initialReportTimestamp = await checker.lastReportTimestamp();
 
-      // Report timestamps become: day 1, day 10, day 46.
+      // Report timestamps become: T + day 1, T + day 10, T + day 46.
       // For the third report, windowStart = 46 - 36 = day 10.
       // So baseline must be day 10 report (left boundary is included), not day 1.
       await checker
@@ -1698,14 +1702,12 @@ describe("OracleReportSanityChecker.sol", () => {
       const first = await checker.reportData(0n);
       const second = await checker.reportData(1n);
       const third = await checker.reportData(2n);
-      expect(first.timestamp).to.equal(ONE_DAY);
-      expect(second.timestamp).to.equal(10n * ONE_DAY);
-      expect(third.timestamp).to.equal(46n * ONE_DAY);
+      expect(first.timestamp).to.equal(initialReportTimestamp + ONE_DAY);
+      expect(second.timestamp).to.equal(initialReportTimestamp + 10n * ONE_DAY);
+      expect(third.timestamp).to.equal(initialReportTimestamp + 46n * ONE_DAY);
     });
 
     it("falls back to the latest previous snapshot after a long gap", async () => {
-      const ONE_DAY = 24n * 60n * 60n;
-
       await checker
         .connect(accountingSigner)
         .checkAccountingOracleReport(
@@ -2011,6 +2013,10 @@ describe("OracleReportSanityChecker.sol", () => {
     it("seeds baseline and bootstrap report snapshots", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
       await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
+      const lastProcessingRefSlot = 12345n;
+      await accountingOracle.setLastProcessingRefSlot(lastProcessingRefSlot);
+      const expectedMigrationTimestamp =
+        (await accountingOracle.GENESIS_TIME()) + lastProcessingRefSlot * (await accountingOracle.SECONDS_PER_SLOT());
 
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot())
         .to.emit(migrationChecker, "BaselineSnapshotMigrated")
@@ -2021,12 +2027,12 @@ describe("OracleReportSanityChecker.sol", () => {
       const baselineReport = await migrationChecker.reportData(0n);
       const bootstrapFlowReport = await migrationChecker.reportData(1n);
 
-      expect(baselineReport.timestamp).to.equal(0n);
+      expect(baselineReport.timestamp).to.equal(expectedMigrationTimestamp);
       expect(baselineReport.clBalance).to.equal(ether("100"));
       expect(baselineReport.deposits).to.equal(0n);
       expect(baselineReport.clWithdrawals).to.equal(0n);
 
-      expect(bootstrapFlowReport.timestamp).to.equal(0n);
+      expect(bootstrapFlowReport.timestamp).to.equal(expectedMigrationTimestamp);
       expect(bootstrapFlowReport.clBalance).to.equal(ether("100") - MIGRATION_WITHDRAWALS);
       expect(bootstrapFlowReport.deposits).to.equal(0n);
       expect(bootstrapFlowReport.clWithdrawals).to.equal(MIGRATION_WITHDRAWALS);

@@ -1,5 +1,6 @@
 import {
   DAY,
+  FINALIZE_UPGRADE_V4_MIGRATION_REPORT_TIMESTAMP,
   FormulaFixtureSet,
   getMigrationCLValidatorsBalance,
   migrate,
@@ -112,6 +113,7 @@ export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => 
 
   for (const step of steps) {
     if (step.kind === "migration") {
+      timestamp = FINALIZE_UPGRADE_V4_MIGRATION_REPORT_TIMESTAMP;
       const migrationCLBalance = getMigrationCLValidatorsBalance(step);
       const migrationCLWithdrawals = step.withdrawalVaultBalance;
       storedReports.push({
@@ -146,7 +148,7 @@ export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => 
 export const calcExpectedWindowDiff = (storedReports: StoredReportModel[], limits: OracleReportLimits) => {
   const lastIndex = storedReports.length - 1;
   const lastTimestamp = storedReports[lastIndex].timestamp;
-  const windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0n;
+  const windowStart = lastTimestamp - CL_BALANCE_WINDOW;
   const baselineIndex = findWindowBaselineIndex(storedReports, lastIndex, windowStart);
 
   const baselineCLBalance = storedReports[baselineIndex].postCLBalance;

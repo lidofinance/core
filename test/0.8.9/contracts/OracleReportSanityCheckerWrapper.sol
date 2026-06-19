@@ -38,6 +38,10 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
         _addReportData(_timestamp, _clBalance, _deposits, _clWithdrawals);
     }
 
+    function harness__setLastReportTimestamp(uint256 _timestamp) external {
+        lastReportTimestamp = _timestamp;
+    }
+
     function harness__checkCLPendingAndValidatorsBalanceIncrease(
         uint256 _timeElapsed,
         uint256 _preCLValidatorsBalance,
