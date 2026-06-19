@@ -18,6 +18,7 @@ export {
   getReportDataItems,
   getNextReportContext,
   getReportTimeElapsed,
+  adjustReportModuleBalances,
   waitNextAvailableReportTime,
   handleOracleReport,
   OracleReportParams,

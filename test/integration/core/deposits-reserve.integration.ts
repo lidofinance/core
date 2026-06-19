@@ -4,8 +4,9 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, ether, impersonate, updateBalance } from "lib";
+import { advanceChainTime, ether, updateBalance } from "lib";
 import {
+  depositAllocatedValidatorsFromBuffer,
   depositValidatorsWithoutReport,
   finalizeWQViaSubmit,
   getProtocolContext,
@@ -326,7 +327,7 @@ describe("Integration: Deposits reserve", () => {
   });
 
   it("Does not reduce withdrawals reserve when CL deposits consume depositable ether", async () => {
-    const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
+    const { lido, withdrawalQueue } = ctx.contracts;
 
     const requestAmount = ether("10");
     await lido.connect(reserveManager).submit(ZeroAddress, { value: ether("3200") });
@@ -340,16 +341,13 @@ describe("Integration: Deposits reserve", () => {
     expect(withdrawalsReserveBefore).to.be.gt(0n);
     expect(depositableBefore).to.equal(bufferedBefore - withdrawalsReserveBefore);
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     // Spend depositable ether through CL deposit path.
-    const depositTx = await stakingRouter.connect(dsmSigner).deposit(1n, "0x");
-    await depositTx.wait();
+    const { consumed } = await depositAllocatedValidatorsFromBuffer(ctx);
 
     const bufferedAfter = await lido.getBufferedEther();
     const depositsReserveAfter = await lido.getDepositsReserve();
     const withdrawalsReserveAfter = await lido.getWithdrawalsReserve();
     const depositableAfter = await lido.getDepositableEther();
-    const consumed = bufferedBefore - bufferedAfter;
 
     expect(consumed).to.be.gt(0n, "Expected non-zero buffered ether consumption during CL deposit");
     // CL deposit consumes only depositable ether; withdrawals reserve must remain unchanged.

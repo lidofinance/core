@@ -4,9 +4,11 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, batch, ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
+import { advanceChainTime, batch, ether, log, updateBalance } from "lib";
 import {
+  adjustReportModuleBalances,
   buildModuleAccountingReportParams,
+  depositAllocatedValidatorsFromBuffer,
   finalizeWQViaElVault,
   getProtocolContext,
   norSdvtEnsureOperators,
@@ -18,6 +20,7 @@ import {
   setStakingLimit,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -205,7 +208,7 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should deposit to staking modules", async () => {
-    const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
+    const { lido, withdrawalQueue } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
 
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
@@ -234,36 +237,21 @@ describe("Scenario: Protocol Happy Path", () => {
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
-    const stakingModules = (await stakingRouter.getStakingModules()).filter((m) => m.id === 1n);
-    depositCount = 0n;
-    norPendingDepositsGwei = 0n;
-    let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
-    for (const module of stakingModules) {
-      const depositTx = await stakingRouter.connect(dsmSigner).deposit(module.id, "0x");
-      const depositReceipt = (await depositTx.wait()) as ContractTransactionReceipt;
-      const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];
-      const unbufferedAmount = unbufferedEvent?.args[0] || 0n;
-      const deposits = unbufferedAmount / ether("32");
-
-      log.debug("Staking module", {
-        "Module": module.name,
-        "Deposits": deposits,
-        "Unbuffered amount": ethers.formatEther(unbufferedAmount),
-      });
-
-      depositCount += deposits;
-      norPendingDepositsGwei += unbufferedAmount / ONE_GWEI;
-      expectedBufferedEtherAfterDeposit -= unbufferedAmount;
-    }
+    const depositResult = await depositAllocatedValidatorsFromBuffer(ctx, 1n, NOR_MODULE_ID);
+    depositCount = depositResult.depositsCount;
+    norPendingDepositsGwei = depositResult.pendingGweiDelta;
 
     expect(depositCount).to.be.gt(0n, "No deposits applied");
 
     const bufferedEtherAfterDeposit = await lido.getBufferedEther();
-    expect(bufferedEtherAfterDeposit).to.equal(expectedBufferedEtherAfterDeposit, "Buffered ether after deposit");
+    expect(bufferedEtherAfterDeposit).to.equal(
+      bufferedEtherBeforeDeposit - depositResult.consumed,
+      "Buffered ether after deposit",
+    );
 
     log.debug("After deposit", {
       "Deposits": depositCount,
+      "Module ID": depositResult.moduleId,
       "Buffered ether": ethers.formatEther(bufferedEtherAfterDeposit),
     });
   });
@@ -322,13 +310,19 @@ describe("Scenario: Protocol Happy Path", () => {
       clDiff: depositedSinceLastReport,
       dryRun: true,
       reportElVault: false,
+      reportWithdrawalsVault: false,
       skipWithdrawals: true,
-      ...(await buildModuleAccountingReportParams(ctx)),
     });
+    const clValidatorsBalanceGwei = BigInt(pendingBaselineData.clValidatorsBalanceGwei) - norPendingDepositsGwei;
+    const moduleBalanceParams = adjustReportModuleBalances(
+      await buildModuleAccountingReportParams(ctx),
+      clValidatorsBalanceGwei,
+    );
     await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
       ...pendingBaselineData,
-      clValidatorsBalanceGwei: BigInt(pendingBaselineData.clValidatorsBalanceGwei) - norPendingDepositsGwei,
+      clValidatorsBalanceGwei,
       clPendingBalanceGwei: norPendingDepositsGwei,
+      ...moduleBalanceParams,
     });
 
     const reportData: Partial<OracleReportParams> = {

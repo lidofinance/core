@@ -29,6 +29,13 @@ export type ModuleAccountingReportParams = {
   validatorBalancesGweiByStakingModule: bigint[];
 };
 
+export type BufferedDepositResult = {
+  moduleId: bigint;
+  consumed: bigint;
+  depositsCount: bigint;
+  pendingGweiDelta: bigint;
+};
+
 export const unpauseStaking = async (ctx: ProtocolContext) => {
   const { lido } = ctx.contracts;
   if (await lido.isStakingPaused()) {
@@ -212,6 +219,135 @@ const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint
   }
 };
 
+const getTotalDepositedValidators = async (ctx: ProtocolContext) => {
+  const moduleDigests = await ctx.contracts.stakingRouter.getAllStakingModuleDigests();
+  return moduleDigests.reduce((sum, digest) => sum + digest.summary.totalDepositedValidators, 0n);
+};
+
+const getAllocatedModuleForBufferDeposit = async (
+  ctx: ProtocolContext,
+  depositsCount: bigint,
+  preferredModuleId?: bigint,
+) => {
+  const { lido, stakingRouter } = ctx.contracts;
+  const ethToDeposit = depositsCount * DEPOSIT_SIZE;
+  const depositableEther = await lido.getDepositableEther();
+
+  if (depositableEther < ethToDeposit) {
+    throw new Error(`Not enough depositable ether: ${depositableEther}, expected at least ${ethToDeposit}`);
+  }
+
+  const { allocated } = await stakingRouter.getDepositAllocations(depositableEther, false);
+  const moduleIds = await stakingRouter.getStakingModuleIds();
+
+  if (preferredModuleId !== undefined) {
+    const moduleIndex = moduleIds.findIndex((moduleId) => moduleId === preferredModuleId);
+    if (moduleIndex === -1) {
+      throw new Error(`Staking module ${preferredModuleId} is not registered`);
+    }
+    if ((allocated[moduleIndex] ?? 0n) < ethToDeposit) {
+      throw new Error(`Not enough allocation for staking module ${preferredModuleId}`);
+    }
+    return preferredModuleId;
+  }
+
+  const moduleIndex = allocated.findIndex((amount) => amount >= ethToDeposit);
+  if (moduleIndex === -1) {
+    throw new Error(`No staking module has allocation for ${depositsCount} buffered deposits`);
+  }
+
+  return moduleIds[moduleIndex];
+};
+
+const pauseOtherModulesIfNeeded = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
+  const { lido, stakingRouter } = ctx.contracts;
+  const managerSigner = await getStakingModuleManagerSigner(ctx);
+  if (!managerSigner) {
+    throw new Error("staking module manager signer is required for deposit setup");
+  }
+
+  const ethToDeposit = depositsCount * DEPOSIT_SIZE;
+  const isMaxDepositsCountEnough = async () => {
+    const depositableEther = await lido.getDepositableEther();
+    const maxDepositsCount = await stakingRouter.getStakingModuleMaxDepositsCount(moduleId, depositableEther);
+    return maxDepositsCount >= depositsCount;
+  };
+
+  const otherModulesStatusesBefore = await getStakingModuleStatuses(ctx);
+  delete otherModulesStatusesBefore[Number(moduleId)];
+
+  const restoreModules = async () => {
+    for (const [mId, originalStatus] of Object.entries(otherModulesStatusesBefore)) {
+      const currentStatus = await stakingRouter.getStakingModuleStatus(mId);
+      if (currentStatus === BigInt(originalStatus)) continue;
+      await stakingRouter.connect(managerSigner).setStakingModuleStatus(mId, originalStatus);
+    }
+  };
+
+  if (await isMaxDepositsCountEnough()) {
+    return async () => {};
+  }
+
+  for (const mId of Object.keys(otherModulesStatusesBefore)) {
+    const currentStatus = await stakingRouter.getStakingModuleStatus(mId);
+    if (currentStatus === BigInt(StakingModuleStatus.DepositsPaused)) continue;
+    await stakingRouter.connect(managerSigner).setStakingModuleStatus(Number(mId), StakingModuleStatus.DepositsPaused);
+  }
+
+  if (!(await isMaxDepositsCountEnough())) {
+    await restoreModules();
+    throw new Error(`Not enough allocation for staking module ${moduleId} to deposit ${ethToDeposit}`);
+  }
+
+  return restoreModules;
+};
+
+export const depositAllocatedValidatorsFromBuffer = async (
+  ctx: ProtocolContext,
+  depositsCount: bigint = 1n,
+  preferredModuleId?: bigint,
+): Promise<BufferedDepositResult> => {
+  const { lido } = ctx.contracts;
+  const ethToDeposit = depositsCount * DEPOSIT_SIZE;
+
+  await ensureOperatorsHaveAvailableKeys(ctx);
+
+  const restoreModules = preferredModuleId
+    ? await pauseOtherModulesIfNeeded(ctx, preferredModuleId, depositsCount)
+    : async () => {};
+
+  try {
+    const moduleId = await getAllocatedModuleForBufferDeposit(ctx, depositsCount, preferredModuleId);
+    const bufferedBefore = await lido.getBufferedEther();
+    const depositedBefore = (await lido.getBalanceStats()).depositedSinceLastReport;
+    const validatorsBefore = await getTotalDepositedValidators(ctx);
+
+    await depositValidatorsViaRouter(ctx, moduleId, depositsCount);
+
+    const bufferedAfter = await lido.getBufferedEther();
+    const depositedAfter = (await lido.getBalanceStats()).depositedSinceLastReport;
+    const validatorsAfter = await getTotalDepositedValidators(ctx);
+    const consumed = bufferedBefore - bufferedAfter;
+    const depositedDelta = depositedAfter - depositedBefore;
+
+    if (consumed !== ethToDeposit || depositedDelta !== ethToDeposit) {
+      throw new Error(`Deposited ${depositedDelta} wei and consumed ${consumed} wei, expected ${ethToDeposit}`);
+    }
+    if (validatorsAfter !== validatorsBefore + depositsCount) {
+      throw new Error(`Deposited ${validatorsAfter - validatorsBefore} validators, expected ${depositsCount}`);
+    }
+
+    return {
+      moduleId,
+      consumed,
+      depositsCount,
+      pendingGweiDelta: depositedDelta / ONE_GWEI,
+    };
+  } finally {
+    await restoreModules();
+  }
+};
+
 const getNorSdvtModule = (ctx: ProtocolContext, moduleId: bigint) => {
   if (moduleId === NOR_MODULE_ID) return ctx.contracts.nor;
   if (moduleId === SDVT_MODULE_ID) return ctx.contracts.sdvt;
@@ -327,31 +463,40 @@ export const depositValidatorsWithoutReport = async (
 
 export const seedProtocolPendingBaseline = async (
   ctx: ProtocolContext,
-  moduleId: bigint,
+  _moduleId: bigint,
   depositsCount: bigint = 1n,
 ) => {
   await depositValidatorsWithoutReport(ctx, depositsCount);
-  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
-    await ctx.contracts.lido.getBalanceStats();
+  const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
 
   const { data } = await report(ctx, {
     clDiff: depositedSinceLastReport,
     dryRun: true,
     reportElVault: false,
+    reportWithdrawalsVault: false,
     skipWithdrawals: true,
     waitNextReportTime: true,
-    // adjust modules balances in case of unaccounted cl balance in tests
-    ...adjustReportModuleBalances(
-      await buildModuleAccountingReportParams(ctx),
-      toGwei(clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport),
-    ),
   });
 
   const pendingBaselineGwei = toGwei(depositedSinceLastReport);
+  const clValidatorsBalanceGwei = BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei;
+  const moduleBalanceParams = adjustReportModuleBalances(
+    await buildModuleAccountingReportParams(ctx),
+    clValidatorsBalanceGwei,
+  );
+  const moduleBalancesSum = moduleBalanceParams.validatorBalancesGweiByStakingModule.reduce(
+    (sum, balance) => sum + balance,
+    0n,
+  );
+  if (moduleBalancesSum !== clValidatorsBalanceGwei) {
+    throw new Error(`Module balances sum ${moduleBalancesSum} does not match CL validators ${clValidatorsBalanceGwei}`);
+  }
+
   return submitReportDataWithConsensusAndEmptyExtraData(ctx, {
     ...data,
-    clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei,
+    clValidatorsBalanceGwei,
     clPendingBalanceGwei: pendingBaselineGwei,
+    ...moduleBalanceParams,
   });
 };
 
@@ -393,17 +538,12 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     throw new Error(`Not enough max deposits count for staking module ${moduleId}`);
   }
 
-  const getTotalDepositedValidators = async () => {
-    const moduleDigests = await stakingRouter.getAllStakingModuleDigests();
-    return moduleDigests.reduce((sum, digest) => sum + digest.summary.totalDepositedValidators, 0n);
-  };
-
-  const numDepositedBefore = await getTotalDepositedValidators();
+  const numDepositedBefore = await getTotalDepositedValidators(ctx);
 
   // Deposit validators via StakingRouter (DSM calls SR which pulls ETH from Lido)
   await depositValidatorsViaRouter(ctx, moduleId, depositsCount);
 
-  const numDepositedAfter = await getTotalDepositedValidators();
+  const numDepositedAfter = await getTotalDepositedValidators(ctx);
 
   if (numDepositedAfter !== numDepositedBefore + depositsCount) {
     throw new Error(`Deposited ${numDepositedAfter} validators, expected ${numDepositedBefore + depositsCount}`);
@@ -433,6 +573,8 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   await report(ctx, {
     clDiff: rawClDiff,
     clAppearedValidators: depositsCount,
+    reportElVault: false,
+    reportWithdrawalsVault: false,
     skipWithdrawals: true,
     ...adjustReportModuleBalances(
       await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule }),
