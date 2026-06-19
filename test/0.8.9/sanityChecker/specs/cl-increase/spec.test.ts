@@ -8,7 +8,7 @@ import {
   Accounting__MockForSanityChecker,
   AccountingOracle__MockForSanityChecker,
   Lido__MockForSanityChecker,
-  OracleReportSanityChecker,
+  OracleReportSanityCheckerWrapper,
 } from "typechain-types";
 
 import { ether, impersonate, randomAddress } from "lib";
@@ -31,7 +31,7 @@ import { calcClIncreaseFormula, ClIncreaseCase, OracleReportLimits, ResolvedClIn
 
 describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   type MockCheckerFixture = {
-    checker: OracleReportSanityChecker;
+    checker: OracleReportSanityCheckerWrapper;
     accountingSigner: HardhatEthersSigner;
     lido: Lido__MockForSanityChecker;
     withdrawalVaultAddress: string;
@@ -86,12 +86,13 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
       },
     ]);
 
-    const checker = (await ethers.deployContract("OracleReportSanityChecker", [
+    const checker = (await ethers.deployContract("OracleReportSanityCheckerWrapper", [
       await locator.getAddress(),
       await accounting.getAddress(),
       deployer.address,
       limitsList,
-    ])) as OracleReportSanityChecker;
+      false,
+    ])) as OracleReportSanityCheckerWrapper;
 
     return {
       checker,
@@ -128,7 +129,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   };
 
   const callAccountingReport = (
-    checker: OracleReportSanityChecker,
+    checker: OracleReportSanityCheckerWrapper,
     accountingSigner: HardhatEthersSigner,
     state: ScenarioState,
     report: ResolvedClIncreaseReport,
@@ -153,7 +154,7 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   };
 
   const runAcceptedReportStep = async (
-    checker: OracleReportSanityChecker,
+    checker: OracleReportSanityCheckerWrapper,
     accountingSigner: HardhatEthersSigner,
     withdrawalVaultAddress: string,
     state: ScenarioState,
@@ -181,13 +182,13 @@ describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   };
 
   const callPendingBalanceCheck = (
-    checker: OracleReportSanityChecker,
+    checker: OracleReportSanityCheckerWrapper,
     state: ScenarioState,
     report: ResolvedClIncreaseReport,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
 
-    return checker.checkCLPendingBalanceIncrease(
+    return checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
       report.timeElapsed,
       report.cl.preValidatorsBalance,
       report.cl.prePendingBalance,
