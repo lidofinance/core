@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2026 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -65,6 +65,14 @@ contract DepositSecurityModule {
 
     /// @notice Represents the code version to help distinguish contract interfaces.
     uint256 public constant VERSION = 4;
+    
+    /// @dev Byte length of one packed node operator id (uint64) in `nodeOperatorIds`.
+    ///      Must match the packing expected by StakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator.
+    uint256 internal constant NODE_OPERATOR_ID_LENGTH = 8;
+
+    /// @dev Byte length of one packed vetted signing keys count (uint128) in `vettedSigningKeysCounts`.
+    ///      Must match the packing expected by StakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator.
+    uint256 internal constant VETTED_KEYS_COUNT_LENGTH = 16;
 
     /// @notice Prefix for the message signed by guardians to attest a deposit.
     bytes32 public immutable ATTEST_MESSAGE_PREFIX;
@@ -458,14 +466,15 @@ contract DepositSecurityModule {
         Signature[] calldata sortedGuardianSignatures
     ) external {
         /// @dev The first most likely reason for the signature to go stale
-        bytes32 onchainDepositRoot = IDepositContract(DEPOSIT_CONTRACT).get_deposit_root();
+        bytes32 onchainDepositRoot = DEPOSIT_CONTRACT.get_deposit_root();
         if (depositRoot != onchainDepositRoot) revert DepositRootChanged();
 
         /// @dev The second most likely reason for the signature to go stale
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
-        if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
+        uint256 _quorum = quorum;
+        if (_quorum == 0 || sortedGuardianSignatures.length < _quorum) revert DepositNoQuorum();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();
@@ -546,12 +555,12 @@ contract DepositSecurityModule {
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
-        uint256 nodeOperatorsCount = nodeOperatorIds.length / 8;
+        uint256 nodeOperatorsCount = nodeOperatorIds.length / NODE_OPERATOR_ID_LENGTH;
 
         if (
-            nodeOperatorIds.length % 8 != 0 ||
-            vettedSigningKeysCounts.length % 16 != 0 ||
-            vettedSigningKeysCounts.length / 16 != nodeOperatorsCount ||
+            nodeOperatorIds.length % NODE_OPERATOR_ID_LENGTH != 0 ||
+            vettedSigningKeysCounts.length % VETTED_KEYS_COUNT_LENGTH != 0 ||
+            vettedSigningKeysCounts.length / VETTED_KEYS_COUNT_LENGTH != nodeOperatorsCount ||
             nodeOperatorsCount > maxOperatorsPerUnvetting
         ) {
             revert UnvetPayloadInvalid();
