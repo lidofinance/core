@@ -75,12 +75,16 @@ const defaultEnv = {
   nor: "NODE_OPERATORS_REGISTRY_ADDRESS",
   sdvt: "SIMPLE_DVT_REGISTRY_ADDRESS",
   csm: "CSM_REGISTRY_ADDRESS",
+  cmv2: "CURATED_MODULE_V2_ADDRESS",
   // hash consensus
   hashConsensus: "HASH_CONSENSUS_ADDRESS",
   // vaults
   stakingVaultFactory: "STAKING_VAULT_FACTORY_ADDRESS",
   stakingVaultBeacon: "STAKING_VAULT_BEACON_ADDRESS",
   validatorConsolidationRequests: "VALIDATOR_CONSOLIDATION_REQUESTS_ADDRESS",
+  // consolidation
+  consolidationBus: "CONSOLIDATION_BUS_ADDRESS",
+  consolidationMigrator: "CONSOLIDATION_MIGRATOR_ADDRESS",
 } as ProtocolNetworkItems;
 
 const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
@@ -101,6 +105,8 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     stakingVaultBeacon: config[Sk.stakingVaultBeacon].address,
     operatorGrid: config[Sk.operatorGrid].proxy.address,
     validatorConsolidationRequests: config[Sk.validatorConsolidationRequests].address,
+    consolidationBus: config[Sk.consolidationBus].proxy.address,
+    consolidationMigrator: config[Sk.consolidationMigrator].proxy.address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }
@@ -135,6 +141,8 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
     stakingVaultBeacon: state[Sk.stakingVaultBeacon]?.address,
     operatorGrid: state[Sk.operatorGrid]?.proxy.address,
     validatorConsolidationRequests: state[Sk.validatorConsolidationRequests]?.address,
+    consolidationBus: state[Sk.consolidationBus]?.proxy.address,
+    consolidationMigrator: state[Sk.consolidationMigrator]?.proxy.address,
   };
 
   const chainId = state[Sk.chainId];
@@ -146,6 +154,7 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
   switch (network) {
     case "hardhat":
+    case "localhost":
       if (getMode() === "scratch") {
         return getLocalNetworkConfig(network, "scratch");
       }

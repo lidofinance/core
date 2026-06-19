@@ -52,9 +52,33 @@ const hashExitRequest = (request: { dataFormat: number; data: string }) => {
   );
 };
 
+// Helper to extract timestamp from ValidatorExitRequest event
+// More memory-efficient than keeping full receipt in scope
+const getTimestampFromTx = async (
+  tx: Awaited<ReturnType<ValidatorsExitBus__Harness["submitExitRequestsData"]>>,
+  oracleInterface: ValidatorsExitBus__Harness["interface"],
+): Promise<bigint> => {
+  const receipt = await tx.wait();
+  if (!receipt) {
+    throw new Error("Transaction receipt is null");
+  }
+  for (const log of receipt.logs) {
+    try {
+      const parsed = oracleInterface.parseLog({ topics: [...log.topics], data: log.data });
+      if (parsed?.name === "ValidatorExitRequest") {
+        return parsed.args[4]; // Return timestamp immediately
+      }
+    } catch {
+      // Skip logs from other contracts
+    }
+  }
+  throw new Error("ValidatorExitRequest event not found");
+};
+
 describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
+
   let admin: HardhatEthersSigner;
 
   let exitRequests = [
@@ -172,7 +196,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Should revert if wrong DATA_FORMAT", async () => {
       const exitRequestWrongDataFormat: ExitRequestData = {
-        dataFormat: 2,
+        dataFormat: 3,
         data: encodeExitRequestsDataList(exitRequests),
       };
       const hash = hashExitRequest(exitRequestWrongDataFormat);
@@ -182,7 +206,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await expect(oracle.submitExitRequestsData(exitRequestWrongDataFormat))
         .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
-        .withArgs(2);
+        .withArgs(3);
     });
 
     it("Should revert if contains duplicates", async () => {
@@ -298,20 +322,21 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await oracle.grantRole(submitRole, authorizedEntity);
     });
 
-    // -----------------------------------------------------------------------------
-    // Shared test data
-    // -----------------------------------------------------------------------------
-    const MAX_EXIT_REQUESTS_LIMIT = 5;
-    const EXITS_PER_FRAME = 1;
+    // Limit configuration (in ETH, as used by the contract)
+    // The limit allows up to 5 validators worth of balance:
+    // 2 legacy (64 ETH) + 3 MaxEB slots (6144 ETH) = 6208 ETH total
+    const MAX_EXIT_BALANCE_ETH = 6_208n; // Total balance of all 5 validators in ETH
+    const BALANCE_PER_FRAME_ETH = 2_048n; // 1 MaxEB validator per frame (2048 ETH)
     const FRAME_DURATION = 48;
 
     // Data for case when limit is not enough to process entire request
+    // Total: 2×32 ETH (module 1) + 2×2048 ETH (module 2) + 1×2048 ETH (module 3) = 6208 ETH
     const VALIDATORS: ExitRequest[] = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
-      { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }, // 32 ETH
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] }, // 32 ETH
+      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] }, // 2048 ETH
+      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] }, // 2048 ETH
+      { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] }, // 2048 ETH
     ];
 
     const REQUEST = {
@@ -325,28 +350,29 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
 
       await expect(
-        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
+        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_BALANCE_ETH, BALANCE_PER_FRAME_ETH, FRAME_DURATION),
       ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), reportLimitRole);
     });
 
     it("Should not allow to set exits per frame bigger than max limit", async () => {
       await expect(
-        oracle.connect(authorizedEntity).setExitRequestLimit(10, 12, FRAME_DURATION),
-      ).to.be.revertedWithCustomError(oracle, "TooLargeExitsPerFrame");
+        oracle.connect(authorizedEntity).setExitRequestLimit(10n * 2048n, 12n * 2048n, FRAME_DURATION),
+      ).to.be.revertedWithCustomError(oracle, "TooLargeItemsPerFrame");
     });
 
     it("Should deliver request as it is below limit", async () => {
       const exitLimitTx = await oracle
         .connect(authorizedEntity)
-        .setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION);
+        .setExitRequestLimit(MAX_EXIT_BALANCE_ETH, BALANCE_PER_FRAME_ETH, FRAME_DURATION);
       await expect(exitLimitTx)
-        .to.emit(oracle, "ExitRequestsLimitSet")
-        .withArgs(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION);
+        .to.emit(oracle, "ExitBalanceLimitSet")
+        .withArgs(MAX_EXIT_BALANCE_ETH, BALANCE_PER_FRAME_ETH, FRAME_DURATION);
 
       exitRequests = [
-        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }, // 32 ETH
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] }, // 32 ETH
       ];
+      // Total: 64 ETH = 64,000,000,000 Gwei (well below limit)
 
       exitRequest = {
         dataFormat: DATA_FORMAT_LIST,
@@ -369,36 +395,51 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not allow to deliver if limit doesnt cover full request", async () => {
+      // Previous test consumed 64 ETH (2 legacy validators × 32 ETH)
+      // The limit starts at MAX_EXIT_BALANCE_ETH (6208 ETH), not BALANCE_PER_FRAME_ETH
+      // Remaining: 6208 - 64 = 6144 ETH
+      const consumedEth = 64n; // 2 legacy validators × 32 ETH
+      const remainingEth = MAX_EXIT_BALANCE_ETH - consumedEth; // 6144 ETH
+      const requestTotalEth = 6208n; // 2×32 + 3×2048 ETH
+
       await oracle.connect(authorizedEntity).submitExitRequestsHash(HASH_REQUEST);
       await expect(oracle.submitExitRequestsData(REQUEST))
         .to.be.revertedWithCustomError(oracle, "ExitRequestsLimitExceeded")
-        .withArgs(5, 3);
+        .withArgs(requestTotalEth, remainingEth);
     });
 
-    it("Current limit should be equal to 0", async () => {
+    it("Current limit should reflect consumed balance", async () => {
       const data = await oracle.getExitRequestLimitFullInfo();
 
-      expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
-      expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
+      const consumedEth = 64n; // 64 ETH from previous test
+      const remainingEth = MAX_EXIT_BALANCE_ETH - consumedEth; // 6144 ETH
+
+      expect(data.maxExitBalanceEth).to.equal(MAX_EXIT_BALANCE_ETH);
+      expect(data.balancePerFrameEth).to.equal(BALANCE_PER_FRAME_ETH);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(3);
-      expect(data.currentExitRequestsLimit).to.equal(3);
+      expect(data.prevExitBalanceEth).to.equal(remainingEth);
+      expect(data.currentExitBalanceEth).to.equal(remainingEth);
     });
 
-    it("Should current limit should be increased on 2 if 2*48 seconds passed", async () => {
+    it("Should current limit should be increased if 2*48 seconds passed", async () => {
       await consensus.advanceTimeBy(2 * 4 * 12);
       const data = await oracle.getExitRequestLimitFullInfo();
 
-      expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
-      expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
+      const consumedEth = 64n; // 64 ETH from first test
+      const remainingEth = MAX_EXIT_BALANCE_ETH - consumedEth; // 6144 ETH
+
+      expect(data.maxExitBalanceEth).to.equal(MAX_EXIT_BALANCE_ETH);
+      expect(data.balancePerFrameEth).to.equal(BALANCE_PER_FRAME_ETH);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(3);
-      expect(data.currentExitRequestsLimit).to.equal(5);
+      expect(data.prevExitBalanceEth).to.equal(remainingEth);
+      // After 2 frames (2×48 seconds), we get 2 more frames worth of balance: 6144 + 4096 = 10240 ETH
+      // But capped at MAX_EXIT_BALANCE_ETH (6208 ETH)
+      expect(data.currentExitBalanceEth).to.equal(MAX_EXIT_BALANCE_ETH);
     });
 
     it("Should process requests after 2 frames passes", async () => {
       const emitTx = await oracle.submitExitRequestsData(REQUEST);
-      const timestamp = await oracle.getTime();
+      const timestamp = await getTimestampFromTx(emitTx, oracle.interface);
 
       for (let i = 0; i < 5; i++) {
         const request = VALIDATORS[i];
@@ -438,9 +479,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not allow to process request larger than MAX_VALIDATORS_PER_REPORT", async () => {
-      await consensus.advanceTimeBy(MAX_EXIT_REQUESTS_LIMIT * 4 * 12);
+      // Advance time to ensure we have enough balance limit
+      await consensus.advanceTimeBy(MAX_EXIT_BALANCE_ETH * 4n * 12n);
       const data = await oracle.getExitRequestLimitFullInfo();
-      expect(data.currentExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
+      expect(data.currentExitBalanceEth).to.equal(MAX_EXIT_BALANCE_ETH);
 
       const maxRequestsPerReport = 4;
 
@@ -448,6 +490,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await expect(tx).to.emit(oracle, "SetMaxValidatorsPerReport").withArgs(maxRequestsPerReport);
       expect(await oracle.connect(authorizedEntity).getMaxValidatorsPerReport()).to.equal(maxRequestsPerReport);
 
+      // Create a request with 5 validators (exceeds maxRequestsPerReport of 4)
       const exitRequestsRandom = [
         { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
         { moduleId: 101, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
@@ -465,26 +508,27 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHashRandom);
 
+      // Should fail because 5 validators > maxRequestsPerReport (4)
       await expect(oracle.submitExitRequestsData(exitRequestRandom))
         .to.be.revertedWithCustomError(oracle, "TooManyExitRequestsInReport")
         .withArgs(5, 4);
     });
 
-    it("Should set maxExitRequestsLimit equal to 0 and return as currentExitRequestsLimit type(uint256).max", async () => {
-      // can't set just maxExitRequestsLimit to 0, as it will be less than exitsPerFrame
+    it("Should set maxExitBalanceEth equal to 0 and return as currentExitBalanceEth type(uint256).max", async () => {
+      // can't set just maxExitBalanceEth to 0, as it will be less than balancePerFrameEth
       const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit(0, 0, FRAME_DURATION);
-      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(0, 0, FRAME_DURATION);
+      await expect(exitLimitTx).to.emit(oracle, "ExitBalanceLimitSet").withArgs(0, 0, FRAME_DURATION);
 
       const data = await oracle.getExitRequestLimitFullInfo();
 
-      expect(data.maxExitRequestsLimit).to.equal(0);
-      expect(data.exitsPerFrame).to.equal(0);
+      expect(data.maxExitBalanceEth).to.equal(0);
+      expect(data.balancePerFrameEth).to.equal(0);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(0);
-      expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
+      expect(data.prevExitBalanceEth).to.equal(0);
+      expect(data.currentExitBalanceEth).to.equal(2n ** 256n - 1n);
     });
 
-    it("Should not check limit, if maxLimitRequests equal to 0 (means limit was not set)", async () => {
+    it("Should not check limit, if maxExitBalanceEth equal to 0 (means limit was not set)", async () => {
       const exitRequestsRandom = [
         { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
         { moduleId: 101, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
@@ -500,25 +544,23 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestRandomHash);
 
       const emitTx = await oracle.submitExitRequestsData(exitRequestRandom);
-      const timestamp = await oracle.getTime();
+      const timestamp = await getTimestampFromTx(emitTx, oracle.interface);
 
-      for (let i = 0; i < 2; i++) {
-        const request = exitRequestsRandom[i];
-        await expect(emitTx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
-      }
+      // Check each event individually
+      await expect(emitTx).to.emit(oracle, "ValidatorExitRequest").withArgs(100, 0, 0, PUBKEYS[0], timestamp);
+
+      await expect(emitTx).to.emit(oracle, "ValidatorExitRequest").withArgs(101, 0, 2, PUBKEYS[1], timestamp);
 
       await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestRandomHash);
 
       const data = await oracle.getExitRequestLimitFullInfo();
 
-      expect(data.maxExitRequestsLimit).to.equal(0);
-      expect(data.exitsPerFrame).to.equal(0);
+      expect(data.maxExitBalanceEth).to.equal(0);
+      expect(data.balancePerFrameEth).to.equal(0);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(0);
+      expect(data.prevExitBalanceEth).to.equal(0);
       // as time is mocked and we didnt change it since last consume, currentExitRequestsLimit was not increased
-      expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
+      expect(data.currentExitBalanceEth).to.equal(2n ** 256n - 1n);
     });
   });
 
@@ -546,7 +588,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Check version", async () => {
       // set in initialize in deployVEBO
-      expect(await oracle.getContractVersion()).to.equal(2);
+      expect(await oracle.getContractVersion()).to.equal(3);
     });
 
     it("Store exit hash", async () => {
@@ -554,14 +596,14 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("set new version", async () => {
-      await oracle.setContractVersion(3);
-      expect(await oracle.getContractVersion()).to.equal(3);
+      await oracle.setContractVersion(4);
+      expect(await oracle.getContractVersion()).to.equal(4);
     });
 
     it("Should revert if request has old contract version", async () => {
       await expect(oracle.submitExitRequestsData(REQUEST))
         .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
-        .withArgs(3, 2);
+        .withArgs(4, 3);
     });
   });
 });

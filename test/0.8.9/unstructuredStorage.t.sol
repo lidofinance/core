@@ -21,7 +21,6 @@ contract ExposedUnstructuredStorageTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_getStorageBool_Uninitialized(bytes32 position) public view {
@@ -35,7 +34,6 @@ contract ExposedUnstructuredStorageTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_getStorageAddress_Uninitialized(bytes32 position) public view {
@@ -50,7 +48,6 @@ contract ExposedUnstructuredStorageTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_getStorageBytes32_Uninitialized(bytes32 position) public view {
@@ -66,7 +63,6 @@ contract ExposedUnstructuredStorageTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_getStorageUint256_Uninitialized(bytes32 position) public view {
@@ -96,7 +92,6 @@ contract ExposedUnstructuredStorageTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_setStorageAddress(address data, bytes32 position) public {
@@ -117,7 +112,6 @@ contract ExposedUnstructuredStorageTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_setStorageBytes32(bytes32 data, bytes32 position) public {
@@ -140,7 +134,6 @@ contract ExposedUnstructuredStorageTest is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_setStorageUint256(uint256 data, bytes32 position) public {

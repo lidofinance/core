@@ -10,6 +10,7 @@ import {
   Accounting__MockForAccountingOracle,
   AccountingOracle__Harness,
   HashConsensus__Harness,
+  Lido__MockForAccounting,
   OracleReportSanityChecker,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForAccountingOracle,
@@ -47,6 +48,7 @@ describe("AccountingOracle.sol:submitReport", () => {
   let extraDataItems: string[];
   let oracleVersion: bigint;
   let deadline: BigNumberish;
+  let mockLido: Lido__MockForAccounting;
   let mockStakingRouter: StakingRouter__MockForAccountingOracle;
   let extraData: ExtraDataType;
   let mockAccounting: Accounting__MockForAccountingOracle;
@@ -61,10 +63,12 @@ describe("AccountingOracle.sol:submitReport", () => {
   const getReportFields = (override = {}) => ({
     consensusVersion: AO_CONSENSUS_VERSION,
     refSlot: 0n,
-    numValidators: 10n,
-    clBalanceGwei: 320n * ONE_GWEI,
+    clValidatorsBalanceGwei: 300n * ONE_GWEI,
+    clPendingBalanceGwei: 20n * ONE_GWEI,
     stakingModuleIdsWithNewlyExitedValidators: [1],
     numExitedValidatorsByStakingModule: [3],
+    stakingModuleIdsWithUpdatedBalance: [1],
+    validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
     withdrawalVaultBalance: ether("1"),
     elRewardsVaultBalance: ether("2"),
     sharesRequestedToBurn: ether("3"),
@@ -105,6 +109,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
     oracle = deployed.oracle;
     consensus = deployed.consensus;
+    mockLido = deployed.lido;
     mockStakingRouter = deployed.stakingRouter;
     mockAccounting = deployed.accounting;
     sanityChecker = deployed.oracleReportSanityChecker;
@@ -351,7 +356,7 @@ describe("AccountingOracle.sol:submitReport", () => {
       it("reverts with UnexpectedDataHash", async () => {
         const incorrectReportFields = {
           ...reportFields,
-          numValidators: Number(reportFields.numValidators) - 1,
+          clValidatorsBalanceGwei: getBigInt(reportFields.clValidatorsBalanceGwei) - ONE_GWEI,
         };
         const incorrectReportItems = getReportDataItems(incorrectReportFields);
 
@@ -424,24 +429,32 @@ describe("AccountingOracle.sol:submitReport", () => {
         ).to.be.revertedWithCustomError(oracle, "InvalidExitedValidatorsData");
       });
 
-      it("reverts with ExitedValidatorsLimitExceeded if exited validators rate limit will be reached", async () => {
-        // Really simple test here for now
-        // TODO: Come up with more tests for better coverage of edge-case scenarios that can be accrued
-        //       during calculation `exitedValidatorsPerDay` rate in AccountingOracle:612
-        const totalExitedValidators = reportFields.numExitedValidatorsByStakingModule.reduce(
-          (sum: BigNumberish, curr: BigNumberish) => getBigInt(sum) + getBigInt(curr),
-          0,
+      it("reverts with ExitedEthAmountPerDayLimitExceeded if exited ETH amount per day limit is reached", async () => {
+        const totalExitedValidators: bigint = reportFields.numExitedValidatorsByStakingModule.reduce<bigint>(
+          (sum, curr) => sum + getBigInt(curr),
+          0n,
         );
-        const exitingRateLimit = getBigInt(totalExitedValidators) - 1n;
+        const exitingRateLimit = 0n;
         await sanityChecker.grantRole(
-          await sanityChecker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
+          await sanityChecker.EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE(),
           admin.address,
         );
-        await sanityChecker.setExitedValidatorsPerDayLimit(exitingRateLimit);
-        expect((await sanityChecker.getOracleReportLimits()).exitedValidatorsPerDayLimit).to.equal(exitingRateLimit);
+        await sanityChecker.setExitedEthAmountPerDayLimit(exitingRateLimit);
+
+        const limits = await sanityChecker.getOracleReportLimits();
+        expect(limits.exitedEthAmountPerDayLimit).to.equal(exitingRateLimit);
+
+        const refSlotDelta = reportFields.refSlot - (await oracle.getLastProcessingRefSlot());
+        const timeElapsed = refSlotDelta * SECONDS_PER_SLOT;
+        const exitedEthAmount = totalExitedValidators * limits.exitedValidatorEthAmountLimit * 10n ** 18n;
+        const exitedEthAmountPerDay =
+          timeElapsed === 0n ? exitedEthAmount * 86_400n : (exitedEthAmount * 86_400n) / timeElapsed;
+        const exitedEthAmountPerDayLimitWithConsolidation =
+          (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 10n ** 18n;
+
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
-          .to.be.revertedWithCustomError(sanityChecker, "ExitedValidatorsLimitExceeded")
-          .withArgs(exitingRateLimit, totalExitedValidators);
+          .to.be.revertedWithCustomError(sanityChecker, "ExitedEthAmountPerDayLimitExceeded")
+          .withArgs(exitedEthAmountPerDayLimitWithConsolidation, exitedEthAmountPerDay);
       });
     });
 
@@ -463,7 +476,12 @@ describe("AccountingOracle.sol:submitReport", () => {
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
 
-        expect(lastOracleReportToAccounting.arg.clBalance).to.equal(reportFields.clBalanceGwei + "000000000");
+        expect(lastOracleReportToAccounting.arg.clValidatorsBalance).to.equal(
+          reportFields.clValidatorsBalanceGwei + "000000000",
+        );
+        expect(lastOracleReportToAccounting.arg.clPendingBalance).to.equal(
+          reportFields.clPendingBalanceGwei + "000000000",
+        );
         expect(lastOracleReportToAccounting.arg.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
         expect(lastOracleReportToAccounting.arg.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
         expect(lastOracleReportToAccounting.arg.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
@@ -638,6 +656,213 @@ describe("AccountingOracle.sol:submitReport", () => {
         expect(data.itemsProcessed).to.equal(0);
         expect(data.lastSortingKey).to.equal(0);
         expect(data.dataHash).to.equal(reportFields.extraDataHash);
+      });
+    });
+
+    context("Balance-based accounting", () => {
+      it("should revert with InvalidClBalancesData if a staking module id does not exist", async () => {
+        const { newReportFields } = await prepareNextReportInNextFrame(
+          getReportFields({
+            stakingModuleIdsWithUpdatedBalance: [999],
+            validatorBalancesGweiByStakingModule: [300n * ONE_GWEI],
+          }),
+        );
+
+        await expect(
+          oracle.connect(member1).submitReportData(newReportFields, oracleVersion),
+        ).to.be.revertedWithCustomError(mockStakingRouter, "InvalidValidatorBalancesReport");
+      });
+
+      it("should accept different balance values", async () => {
+        await consensus.setTime(deadline);
+        await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion)).not.to.be.reverted;
+      });
+
+      it("should process balance data correctly", async () => {
+        expect((await mockAccounting.lastCall__handleOracleReport()).callCount).to.equal(0);
+
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+
+        const lastCall = await mockAccounting.lastCall__handleOracleReport();
+        expect(lastCall.callCount).to.equal(1);
+        expect(lastCall.arg.clValidatorsBalance).to.equal(BigInt(reportFields.clValidatorsBalanceGwei) * 1000000000n);
+        expect(lastCall.arg.clPendingBalance).to.equal(BigInt(reportFields.clPendingBalanceGwei) * 1000000000n);
+      });
+
+      it("should accept zero active balance", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        // Router mock stores validators balance only; pending is seeded on the Lido mock.
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(64n * 10n ** 18n);
+
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clValidatorsBalanceGwei: 0n,
+            clPendingBalanceGwei: 64n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [0n],
+          }),
+        );
+
+        await consensus.setTime(deadline);
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
+      });
+
+      it("should accept zero pending balance", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        // Seed the previous router balances to the target values; this case checks zero pending itself, not one-frame growth.
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [1000n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(1000n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(0n);
+
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clValidatorsBalanceGwei: 1000n * ONE_GWEI,
+            clPendingBalanceGwei: 0n,
+            validatorBalancesGweiByStakingModule: [1000n * ONE_GWEI],
+          }),
+        );
+
+        await consensus.setTime(deadline);
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
+      });
+
+      it("should accept large balance values", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [60000n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(60000n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(5000n * 10n ** 18n);
+
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clValidatorsBalanceGwei: 60000n * ONE_GWEI,
+            clPendingBalanceGwei: 5000n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [60000n * ONE_GWEI],
+          }),
+        );
+
+        await consensus.setTime(deadline);
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
+      });
+
+      it("should handle pending larger than active", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(500n * 10n ** 18n);
+
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clValidatorsBalanceGwei: 100n * ONE_GWEI,
+            clPendingBalanceGwei: 500n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [100n * ONE_GWEI],
+          }),
+        );
+
+        await consensus.setTime(deadline);
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
+      });
+
+      it("should convert gwei to wei correctly", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [300n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(300n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(456n * 10n ** 18n);
+
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clValidatorsBalanceGwei: 123n * ONE_GWEI,
+            clPendingBalanceGwei: 456n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [123n * ONE_GWEI],
+          }),
+        );
+
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion);
+
+        const lastCall = await mockAccounting.lastCall__handleOracleReport();
+        expect(lastCall.arg.clValidatorsBalance).to.equal(123n * ONE_GWEI * 1000000000n);
+        expect(lastCall.arg.clPendingBalance).to.equal(456n * ONE_GWEI * 1000000000n);
+      });
+
+      it("should accept both balances zero", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clValidatorsBalanceGwei: 0n,
+            clPendingBalanceGwei: 0n,
+            validatorBalancesGweiByStakingModule: [0n],
+          }),
+        );
+
+        await consensus.setTime(deadline);
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
+      });
+
+      it("should accept minimal gwei values", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clValidatorsBalanceGwei: 1n,
+            clPendingBalanceGwei: 1n,
+            validatorBalancesGweiByStakingModule: [1n],
+          }),
+        );
+
+        await consensus.setTime(deadline);
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
+      });
+
+      it("should handle realistic scenarios", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+        await mockStakingRouter.reportValidatorBalancesByStakingModule([1], [30000n * ONE_GWEI]);
+        await mockLido.mock__setClValidatorsBalance(30000n * 10n ** 18n);
+        await mockLido.mock__setClPendingBalance(1000n * 10n ** 18n);
+
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clValidatorsBalanceGwei: 30000n * ONE_GWEI,
+            clPendingBalanceGwei: 1000n * ONE_GWEI,
+            validatorBalancesGweiByStakingModule: [30000n * ONE_GWEI],
+          }),
+        );
+
+        await consensus.setTime(deadline);
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
+      });
+
+      it("should verify ReportValues structure", async () => {
+        await consensus.setTime(deadline);
+        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+
+        const lastCall = await mockAccounting.lastCall__handleOracleReport();
+
+        expect(lastCall.arg).to.be.an("array");
+        expect(lastCall.arg).to.have.length(9);
+        expect(lastCall.arg[0]).to.be.a("bigint");
+        expect(lastCall.arg[1]).to.be.a("bigint");
+        expect(lastCall.arg[2]).to.be.a("bigint");
+        expect(lastCall.arg[3]).to.be.a("bigint");
+        expect(lastCall.arg[2]).to.equal(BigInt(reportFields.clValidatorsBalanceGwei) * 1000000000n);
+        expect(lastCall.arg[3]).to.equal(BigInt(reportFields.clPendingBalanceGwei) * 1000000000n);
       });
     });
   });

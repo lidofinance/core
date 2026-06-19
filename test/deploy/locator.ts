@@ -29,6 +29,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     oracleDaemonConfig: certainAddress("dummy-locator:oracleDaemonConfig"),
     validatorExitDelayVerifier: certainAddress("dummy-locator:validatorExitDelayVerifier"),
     triggerableWithdrawalsGateway: certainAddress("dummy-locator:triggerableWithdrawalsGateway"),
+    consolidationGateway: certainAddress("dummy-locator:consolidationGateway"),
     accounting: certainAddress("dummy-locator:accounting"),
     predepositGuarantee: certainAddress("dummy-locator:predepositGuarantee"),
     wstETH: certainAddress("dummy-locator:wstETH"),
@@ -36,6 +37,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     vaultFactory: certainAddress("dummy-locator:vaultFactory"),
     operatorGrid: certainAddress("dummy-locator:operatorGrid"),
     lazyOracle: certainAddress("dummy-locator:lazyOracle"),
+    topUpGateway: certainAddress("dummy-locator:topUpGateway"),
     ...config,
   });
 
@@ -111,6 +113,7 @@ async function getLocatorConfig(locatorAddress: string): Promise<LidoLocator.Con
     "oracleDaemonConfig",
     "validatorExitDelayVerifier",
     "triggerableWithdrawalsGateway",
+    "consolidationGateway",
     "accounting",
     "predepositGuarantee",
     "wstETH",
@@ -118,6 +121,7 @@ async function getLocatorConfig(locatorAddress: string): Promise<LidoLocator.Con
     "vaultFactory",
     "lazyOracle",
     "operatorGrid",
+    "topUpGateway",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

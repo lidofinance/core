@@ -1,8 +1,11 @@
+import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01 } from "lib";
+
 export const ONE_HOUR = 60n * 60n;
 export const ONE_DAY = 24n * 60n * 60n;
 export const MAX_BASIS_POINTS = 100_00n;
 
 export const MAX_DEPOSIT = 150n;
+export const MAX_DEPOSIT_AMOUNT = MAX_DEPOSIT * MAX_EFFECTIVE_BALANCE_WC_TYPE_01; // 150 * 32 ETH
 export const CURATED_MODULE_ID = 1n;
 export const SIMPLE_DVT_MODULE_ID = 2n;
 
@@ -12,3 +15,5 @@ export const ZERO_HASH = new Uint8Array(32).fill(0);
 export const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 
 export const VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP = 10_00n;
+
+export const FUSAKA_TX_GAS_LIMIT = 2n ** 24n; // 16M =  16_777_216

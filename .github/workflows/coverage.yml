@@ -9,8 +9,6 @@ jobs:
   coverage:
     name: Hardhat / Unit Tests
     runs-on: ubuntu-latest
-    env:
-      NODE_OPTIONS: --max_old_space_size=6400
 
     permissions:
       contents: write
@@ -18,13 +16,14 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Common setup
         uses: ./.github/workflows/setup
 
       - name: Collect coverage
-        run: yarn test:coverage
+        run: NODE_OPTIONS="--max-old-space-size=10240" yarn test:coverage
+        timeout-minutes: 30
 
       - name: Produce the coverage report
         uses: lidofinance/coverage-action@a94351baa279790f736655b1891178b1515594ea

@@ -15,12 +15,18 @@ contract MinFirstAllocationStrategyInvariants is Test {
     uint256 private constant MAX_CAPACITY_VALUE = 8192;
     uint256 private constant MAX_ALLOCATION_SIZE = 1024;
 
-    MinFirstAllocationStrategyBase internal handler;
+    MinFirstAllocationStrategyAllocateHandler internal handler;
     MinFirstAllocationStrategy__Harness internal harness;
 
     function setUp() external {
         handler = new MinFirstAllocationStrategyAllocateHandler();
         harness = new MinFirstAllocationStrategy__Harness();
+
+        targetContract(address(handler));
+
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = MinFirstAllocationStrategyAllocateHandler.allocate.selector;
+        targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
 
     function test_allocateToBestCandidate_ReturnsZeroWhenAllocationSizeIsZero() public view {
@@ -58,7 +64,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 1. the allocated value should be equal to the expected output
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -73,7 +78,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 2. the bucket values should be equal to the expected output
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -90,7 +94,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 3. the bucket value should not exceed the capacity
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -109,7 +112,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 4. the sum of new allocation minus the sum of prev allocation equal to distributed value
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
@@ -132,7 +134,6 @@ contract MinFirstAllocationStrategyInvariants is Test {
      * invariant 5. the allocated value should be less than or equal to the allocation size
      *
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 512
      * forge-config: default.invariant.depth = 32
      * forge-config: default.invariant.fail-on-revert = true
      */
