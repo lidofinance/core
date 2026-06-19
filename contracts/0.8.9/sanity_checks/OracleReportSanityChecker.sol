@@ -762,14 +762,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Checks the exited ETH amount per day derived from the number of newly exited validators.
+    /// @notice Checks the newly exited validators count against the exited ETH amount per day limit.
     /// @dev The check converts newly exited validators to ETH using `exitedValidatorEthAmountLimit`,
     ///     normalizes the result by `_timeElapsed`, and compares it with the stored exited and
     ///     consolidation per-day limits. The stored limits are expressed in 16 ETH exit units and
     ///     are doubled before comparison.
     /// @param _newlyExitedValidatorsCount Number of newly exited validators since previous report.
     /// @param _timeElapsed Time elapsed in seconds since previous report.
-    function checkExitedEthAmountPerDay(
+    function checkExitedValidatorsCount(
         uint256 _newlyExitedValidatorsCount,
         uint256 _timeElapsed
     ) external view {
@@ -778,7 +778,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _newlyExitedValidatorsCount * uint256(limitsList.exitedValidatorEthAmountLimit) * 1 ether;
         uint256 newlyExitedValidatorsEthAmountPerDay =
             _normalizePerDay(newlyExitedValidatorsEthAmount, _timeElapsed);
-        _checkExitedEthAmountPerDay(limitsList, newlyExitedValidatorsEthAmountPerDay);
+        uint256 exitedEthAmountPerDayLimitWithConsolidation =
+            (uint256(limitsList.exitedEthAmountPerDayLimit) + uint256(limitsList.consolidationEthAmountPerDayLimit)) *
+            2 *
+            1 ether;
+        if (newlyExitedValidatorsEthAmountPerDay > exitedEthAmountPerDayLimitWithConsolidation) {
+            revert ExitedEthAmountPerDayLimitExceeded(
+                exitedEthAmountPerDayLimitWithConsolidation,
+                newlyExitedValidatorsEthAmountPerDay
+            );
+        }
     }
 
     /// @notice check the number of node operators reported per extra data item in the accounting oracle report.
@@ -859,22 +868,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         if (validatorBalancesSum != _clValidatorsBalanceWei) {
             revert InconsistentValidatorsBalanceByModule(_clValidatorsBalanceWei, validatorBalancesSum);
-        }
-    }
-
-    function _checkExitedEthAmountPerDay(
-        AccountingCoreLimitsPacked memory _limitsList,
-        uint256 _exitedEthAmountPerDay
-    ) internal pure {
-        uint256 exitedEthAmountPerDayLimitWithConsolidation =
-            (uint256(_limitsList.exitedEthAmountPerDayLimit) + uint256(_limitsList.consolidationEthAmountPerDayLimit)) *
-            2 *
-            1 ether;
-        if (_exitedEthAmountPerDay > exitedEthAmountPerDayLimitWithConsolidation) {
-            revert ExitedEthAmountPerDayLimitExceeded(
-                exitedEthAmountPerDayLimitWithConsolidation,
-                _exitedEthAmountPerDay
-            );
         }
     }
 

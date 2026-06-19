@@ -964,7 +964,7 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(checker.checkExitBusOracleReport(limit - 1n)).not.to.be.reverted;
     });
 
-    it("checkExitedEthAmountPerDay uses timeElapsed (seconds)", async () => {
+    it("checkExitedValidatorsCount uses timeElapsed (seconds)", async () => {
       const limits = await checker.getOracleReportLimits();
       const exitedEthAmountPerDayLimitWithConsolidationInWei =
         (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 2n * ether("1");
@@ -972,14 +972,14 @@ describe("OracleReportSanityChecker.sol", () => {
       const exitedValidatorEthAmountLimit = limits.exitedValidatorEthAmountLimit;
       const exitedValidatorEthAmountLimitInWei = exitedValidatorEthAmountLimit * ether("1");
 
-      await expect(checker.checkExitedEthAmountPerDay(0n, oneDay)).not.to.be.reverted;
+      await expect(checker.checkExitedValidatorsCount(0n, oneDay)).not.to.be.reverted;
 
       const exitedValidatorsCountForDailyExceededRevert =
         exitedEthAmountPerDayLimitWithConsolidationInWei / exitedValidatorEthAmountLimitInWei + 1n;
       const newlyExitedValidatorsEthAmountPerDayForDailyExceededRevert =
         exitedValidatorsCountForDailyExceededRevert * exitedValidatorEthAmountLimitInWei;
 
-      await expect(checker.checkExitedEthAmountPerDay(exitedValidatorsCountForDailyExceededRevert, oneDay))
+      await expect(checker.checkExitedValidatorsCount(exitedValidatorsCountForDailyExceededRevert, oneDay))
         .to.be.revertedWithCustomError(checker, "ExitedEthAmountPerDayLimitExceeded")
         .withArgs(
           exitedEthAmountPerDayLimitWithConsolidationInWei,
@@ -992,7 +992,7 @@ describe("OracleReportSanityChecker.sol", () => {
       const newlyExitedValidatorsEthAmountPerDayForGuaranteedRevert =
         exitedValidatorsCountForGuaranteedRevert * newlyExitedValidatorEthAmountPerDayForZeroTime;
 
-      await expect(checker.checkExitedEthAmountPerDay(exitedValidatorsCountForGuaranteedRevert, 0n))
+      await expect(checker.checkExitedValidatorsCount(exitedValidatorsCountForGuaranteedRevert, 0n))
         .to.be.revertedWithCustomError(checker, "ExitedEthAmountPerDayLimitExceeded")
         .withArgs(
           exitedEthAmountPerDayLimitWithConsolidationInWei,
