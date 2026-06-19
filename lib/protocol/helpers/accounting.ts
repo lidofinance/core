@@ -334,6 +334,7 @@ export async function reportWithoutExtraData(
     extraDataItemsCount: BigInt(extraDataItemsCount),
     numExitedValidatorsByStakingModule,
     reportElVault: false,
+    reportWithdrawalsVault: false,
     stakingModuleIdsWithNewlyExitedValidators,
     skipWithdrawals: true,
   };

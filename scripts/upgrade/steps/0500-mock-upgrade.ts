@@ -18,6 +18,12 @@ import {
   Sk,
 } from "lib";
 
+let beforeDgVoteItemsExecutionHook: (() => Promise<void>) | undefined;
+
+export function setBeforeDgVoteItemsExecutionHookForTests(hook: (() => Promise<void>) | undefined) {
+  beforeDgVoteItemsExecutionHook = hook;
+}
+
 export async function skip(): Promise<boolean> {
   const state = readNetworkState();
   // NOT skip if contract object exists in deployed state but address set as empty string or zero address
@@ -65,6 +71,9 @@ export async function main() {
 
   const voteItemsDG = (await voteScript.getVoteItems()) as VoteItem[];
   const executor = await impersonate(proposers[0].executor, ether("100"));
+  if (beforeDgVoteItemsExecutionHook) {
+    await beforeDgVoteItemsExecutionHook();
+  }
   await execVoteItems(voteItemsDG, executor);
 }
 

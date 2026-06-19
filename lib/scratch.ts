@@ -51,10 +51,35 @@ async function applySteps(steps: string[]) {
   }
 }
 
+export function resetDeployedStepsForTests(): void {
+  deployedSteps.length = 0;
+}
+
 export async function deployUpgrade(networkName: string, stepsFile: string): Promise<void> {
   try {
     const steps = loadSteps(stepsFile);
     await applySteps(steps);
+  } catch (error) {
+    if (error instanceof StepsFileNotFoundError) {
+      log.warning(`Upgrade steps not found in ${stepsFile}, assuming the protocol is already deployed`);
+    } else {
+      log.error("Upgrade failed:", (error as Error).message);
+    }
+  }
+}
+
+export async function deployUpgradeUntilStep(
+  networkName: string,
+  stepsFile: string,
+  stopBeforeStep: string,
+): Promise<void> {
+  try {
+    const steps = loadSteps(stepsFile);
+    const stopIndex = steps.indexOf(stopBeforeStep);
+    if (stopIndex === -1) {
+      throw new Error(`Step ${stopBeforeStep} not found in ${stepsFile}`);
+    }
+    await applySteps(steps.slice(0, stopIndex));
   } catch (error) {
     if (error instanceof StepsFileNotFoundError) {
       log.warning(`Upgrade steps not found in ${stepsFile}, assuming the protocol is already deployed`);
