@@ -7,6 +7,7 @@ import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, 
 import { discover } from "./discover";
 import { MAINNET_LOCATOR_ADDRESS } from "./mainnet";
 import { provision } from "./provision";
+import { SEPOLIA_CHAIN_ID } from "./sepolia";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
 const getSigner = async (signer: Signer, balance = ether("100"), signers: ProtocolSigners) => {
@@ -17,6 +18,13 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
 export const withCSM = () => {
   return process.env.INTEGRATION_WITH_CSM !== "off";
 };
+
+// Opt-in (default off): when forking a local scratch deploy, run the same
+// provisioning a MODE=scratch run does so the fork is fully operational. Set by
+// dao-local-deploy.sh / dao-sepolia-fork-deploy.sh; leave unset for real
+// testnet forks, which are already operational.
+const PROVISION_ON_FORK_VALUES = new Set(["1", "true", "yes", "on"]);
+const provisionOnFork = () => PROVISION_ON_FORK_VALUES.has((process.env.PROVISION_ON_FORK ?? "").trim().toLowerCase());
 
 export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
   const { operatorGrid } = ctx.contracts;
@@ -53,9 +61,18 @@ export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
 };
 
 export const getProtocolContext = async (skipV3Contracts: boolean = false): Promise<ProtocolContext> => {
-  const isScratch = getMode() === "scratch";
+  // Two distinct concerns, deliberately separated:
+  //  - deployFromScratch: re-deploy the whole protocol in-process now (MODE=scratch).
+  //  - isScratch: the protocol under test is a *scratch* deployment — agent still
+  //    holds the powers, there is no EasyTrack. Tests branch on this to pick the
+  //    privileged signer (agent vs easyTrack). Forking a scratch deploy
+  //    (PROVISION_ON_FORK) discovers it rather than redeploying, but it is still
+  //    semantically scratch, so isScratch must be true there too — otherwise
+  //    tests take the real-testnet EasyTrack path and hit APP_AUTH_FAILED.
+  const deployFromScratch = getMode() === "scratch";
+  const isScratch = deployFromScratch || provisionOnFork();
 
-  if (isScratch) {
+  if (deployFromScratch) {
     await deployScratchProtocol();
   } else if (process.env.UPGRADE) {
     await deployUpgrade(hre.network.name, process.env.STEPS_FILE!);
@@ -63,6 +80,8 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
 
   const { contracts, signers } = await discover(skipV3Contracts);
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
+
+  const { chainId } = await hre.ethers.provider.getNetwork();
 
   // By default, all flags are "on"
   const flags = {
@@ -80,12 +99,20 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
     flags,
     isScratch,
     isMainnet: contracts.locator.address.toLowerCase() === MAINNET_LOCATOR_ADDRESS.toLowerCase(),
+    // see the comment on this field in ProtocolContext (lib/protocol/types.ts)
+    supportsVariableDepositAmounts: chainId !== BigInt(SEPOLIA_CHAIN_ID),
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
     getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
   if (isScratch) {
+    // A scratch deploy is deployed-but-not-operational, so provision it: oracle
+    // committee, hash-consensus initial epoch, unpause, seed TVL. This covers
+    // both a fresh in-process scratch deploy (MODE=scratch) and forking a local
+    // scratch deploy (PROVISION_ON_FORK) — the latter runs the same setup on the
+    // robust in-process fork instead of mutating the external anvil. Real
+    // testnet forks are already operational and only top up the share limit.
     await provision(context);
   } else {
     await ensureVaultsShareLimit(context);

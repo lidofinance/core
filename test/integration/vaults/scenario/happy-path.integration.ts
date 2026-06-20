@@ -197,7 +197,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
   });
 
-  it("Should allow NodeOperator to deposit validators from the vault via PDG", async () => {
+  it("Should allow NodeOperator to deposit validators from the vault via PDG", async function () {
+    if (!ctx.supportsVariableDepositAmounts) this.skip();
+
     const { predepositGuarantee, vaultHub } = ctx.contracts;
     const keysToAdd = VALIDATORS_PER_VAULT;
 

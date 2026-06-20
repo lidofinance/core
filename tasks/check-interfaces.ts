@@ -53,6 +53,23 @@ const PAIRS_TO_SKIP: {
       "function transferFrom(address sender, address recipient, uint256 amount) returns (bool)",
     ],
   },
+  {
+    interfaceFqn: "contracts/upgrade/V3Template.sol:ITokenRateNotifier",
+    contractFqn: "contracts/0.8.9/TokenRateNotifier.sol:TokenRateNotifier",
+    reason:
+      "Cosmetic parameter name mismatches (do not alter bytecode/selectors) - fixing requires TokenRateNotifier redeploy",
+    skipInterfaceSignatures: ["function observers(uint256 index) returns (address)"],
+  },
+  {
+    interfaceFqn: "contracts/upgrade/V3TemporaryAdmin.sol:ITokenRateNotifier",
+    contractFqn: "contracts/0.8.9/TokenRateNotifier.sol:TokenRateNotifier",
+    reason:
+      "Cosmetic parameter name mismatches (do not alter bytecode/selectors) - fixing requires TokenRateNotifier redeploy",
+    skipInterfaceSignatures: [
+      "function addObserver(address observer) returns ()",
+      "function observers(uint256 index) returns (address)",
+    ],
+  },
 ];
 
 task("check-interfaces").setAction(async (_, hre) => {

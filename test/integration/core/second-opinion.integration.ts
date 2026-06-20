@@ -5,6 +5,7 @@ import { SecondOpinionOracle__Mock } from "typechain-types";
 
 import { ether, impersonate, log, ONE_GWEI } from "lib";
 import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { SEPOLIA_BEPOLIA_WHALE, SEPOLIA_ORIGINAL_DEPOSIT_CONTRACT } from "lib/protocol/sepolia";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -39,13 +40,10 @@ describe("Integration: Second opinion", () => {
     const { chainId } = await ethers.provider.getNetwork();
     // Sepolia-specific initialization
     if (chainId === 11155111n) {
-      // Sepolia deposit contract address https://sepolia.etherscan.io/token/0x7f02c3e3c98b133055b8b348b2ac625669ed295d
-      const sepoliaDepositContractAddress = "0x7f02C3E3c98b133055B8B348B2Ac625669Ed295D";
-      const bepoliaWhaleHolder = "0xf97e180c050e5Ab072211Ad2C213Eb5AEE4DF134";
       const BEPOLIA_TO_TRANSFER = 20;
 
-      const bepoliaToken = await ethers.getContractAt("ISepoliaDepositContract", sepoliaDepositContractAddress);
-      const bepiloaSigner = await ethers.getImpersonatedSigner(bepoliaWhaleHolder);
+      const bepoliaToken = await ethers.getContractAt("ISepoliaDepositContract", SEPOLIA_ORIGINAL_DEPOSIT_CONTRACT);
+      const bepiloaSigner = await ethers.getImpersonatedSigner(SEPOLIA_BEPOLIA_WHALE);
 
       const adapterAddr = await ctx.contracts.stakingRouter.DEPOSIT_CONTRACT();
       await bepoliaToken.connect(bepiloaSigner).transfer(adapterAddr, BEPOLIA_TO_TRANSFER);

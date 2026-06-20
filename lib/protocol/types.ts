@@ -195,6 +195,13 @@ export type ProtocolContext = {
   flags: ProtocolContextFlags;
   isScratch: boolean;
   isMainnet: boolean;
+  // Whether the network's beacon deposit contract accepts deposit data for
+  // amounts other than 32 ETH. False on Sepolia: its deposit contract
+  // reconstructs every deposit_data_root with a hardcoded 32 ETH (msg.value is
+  // refunded; one BEPOLIA is burned instead), so variable-amount flows — PDG
+  // predeposits/activations/top-ups, stVault unguaranteed and side deposits —
+  // can never pass it. Tests covering those flows skip when this is false.
+  supportsVariableDepositAmounts: boolean;
   getSigner: (signer: Signer, balance?: bigint) => Promise<HardhatEthersSigner>;
   getEvents: (
     receipt: ContractTransactionReceipt,

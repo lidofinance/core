@@ -185,3 +185,86 @@ forcedRebalanceThresholdBP = 4975     # Threshold for forced rebalancing in basi
 infraFeeBP = 100                      # Infrastructure fee in basis points (5%)
 liquidityFeeBP = 650                  # Liquidity provision fee in basis points (4%)
 reservationFeeBP = 0                # Reservation fee in basis points (1%)
+
+# Dual Governance configuration for the scratch deploy.
+#
+# Source of the numeric values and dev addresses below:
+#   foundry/lib/dual-governance/deploy-config/deploy-config-scratch.toml
+# (the DG submodule's own scratch config — short timings + anvil dev keys,
+# suitable for local-fork integration tests). Keys here are camelCase to match
+# the rest of this file; the DG submodule's file uses snake_case.
+#
+# The inline `# (mainnet: …)` annotations cross-reference the production
+# values in the sibling file:
+#   foundry/lib/dual-governance/deploy-config/deploy-config-mainnet.toml
+#
+# Override per network when running against Sepolia/Hoodi/etc. The signalling
+# tokens (stETH/wstETH/withdrawalQueue), the sealable withdrawal blockers, the
+# admin proposer, and the proposals canceller are filled in by the config
+# generator from the scratch deployment state — they are not known until the
+# protocol is deployed. All other knobs come from this section.
+[dualGovernance]
+# Tiebreaker activation timeout: time DG must spend in a "locked" state before
+# the tiebreaker committee can schedule proposals.
+tiebreakerActivationTimeout = 900     # 15 minutes (mainnet: 1 year)
+
+# Reseal committee — Gnosis Multisig on mainnet. Dev address for scratch.
+resealCommittee = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" # anvil[1]
+
+[dualGovernance.sanityCheckParams]
+maxMinAssetsLockDuration = 3600                   # 1 hour (mainnet: 48 days)
+maxSealableWithdrawalBlockersCount = 255
+maxTiebreakerActivationTimeout = 1800             # 30 min (mainnet: 2 years)
+minTiebreakerActivationTimeout = 300              # 5 min (mainnet: 6 months)
+minWithdrawalsBatchSize = 1
+
+[dualGovernance.configProvider]
+# All values use D16 fixed-point (10^16 = 1%). 100% = 100 * 10^16 = 1e18.
+firstSealRageQuitSupport = "10000000000000000"      # 1%
+secondSealRageQuitSupport = "100000000000000000"    # 10%
+minAssetsLockDuration = 300                         # 5 min (mainnet: 5 hours)
+vetoSignallingMinDuration = 300                     # 5 min (mainnet: 5 days)
+vetoSignallingMinActiveDuration = 300               # 5 min (mainnet: 5 hours)
+vetoSignallingMaxDuration = 1800                    # 30 min (mainnet: 45 days)
+vetoSignallingDeactivationMaxDuration = 600         # 10 min (mainnet: 3 days)
+vetoCooldownDuration = 600                          # 10 min (mainnet: 5 hours)
+rageQuitExtensionPeriodDuration = 900               # 15 min (mainnet: 7 days)
+rageQuitEthWithdrawalsMinDelay = 300                # 5 min (mainnet: 60 days)
+rageQuitEthWithdrawalsMaxDelay = 1800               # 30 min (mainnet: 180 days)
+rageQuitEthWithdrawalsDelayGrowth = 600             # 10 min (mainnet: 15 days)
+
+[dualGovernance.timelock]
+afterSubmitDelay = 900                              # 15 min (mainnet: 3 days)
+afterScheduleDelay = 900                            # 15 min (mainnet: 1 day)
+
+[dualGovernance.timelock.sanityCheckParams]
+minExecutionDelay = 600                             # 10 min (mainnet: 3 days)
+maxAfterSubmitDelay = 1800                          # 30 min (mainnet: 30 days)
+maxAfterScheduleDelay = 1800                        # 30 min (mainnet: 10 days)
+maxEmergencyModeDuration = 86400                    # 1 day (mainnet: 1 year)
+maxEmergencyProtectionDuration = 31536000           # 1 year (mainnet: 3 years)
+
+[dualGovernance.timelock.emergencyProtection]
+emergencyModeDuration = 3600                        # 1 hour (mainnet: 1 month)
+# emergencyProtectionEndDate is rendered as deployment timestamp + this offset.
+emergencyProtectionEndOffset = 31536000             # 1 year from deploy
+# Dev addresses for scratch — replace with real multisigs per network.
+emergencyGovernanceProposer = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" # anvil[1]
+emergencyActivationCommittee = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" # anvil[2]
+emergencyExecutionCommittee = "0x90F79bf6EB2c4f870365E785982E1f101E93b906"  # anvil[3]
+
+[dualGovernance.tiebreaker]
+quorum = 2
+executionDelay = 900                                # 15 min (mainnet: 1 month)
+
+[[dualGovernance.tiebreaker.committees]]
+quorum = 1
+members = ["0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"] # anvil[4]
+
+[[dualGovernance.tiebreaker.committees]]
+quorum = 1
+members = ["0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"] # anvil[5]
+
+[[dualGovernance.tiebreaker.committees]]
+quorum = 1
+members = ["0x976EA74026E726554dB657fA54763abd0C3a0aa9"] # anvil[6]

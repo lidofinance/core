@@ -42,6 +42,9 @@ contract LidoTemplate is IsContract {
     string private constant ERROR_BAD_AMOUNTS_LEN = "TMPL_BAD_AMOUNTS_LEN";
     string private constant ERROR_INVALID_ID = "TMPL_INVALID_ID";
     string private constant ERROR_UNEXPECTED_TOTAL_SUPPLY = "TMPL_UNEXPECTED_TOTAL_SUPPLY";
+    // Short message keeps LidoTemplate under the 24KB EIP-170 limit after the
+    // DG-finalization functions were added (see hardhat.config.ts override).
+    string private constant ERROR_INVALID_DG_ADMIN_EXECUTOR = "TMPL_0_ADDR";
 
     // Operational errors
     string private constant ERROR_PERMISSION_DENIED = "TMPL_PERMISSION_DENIED";
@@ -404,11 +407,38 @@ contract LidoTemplate is IsContract {
 
         _setupPermissions(state, repos);
         _transferRootPermissionsFromTemplateAndFinalizeDAO(state.dao, state.voting);
-        _resetState();
 
         aragonID.register(keccak256(abi.encodePacked(_daoName)), state.dao);
 
         emit TmplDaoFinalized();
+    }
+
+    /**
+     * @dev Hand root authority to Dual Governance and clear the template's deploy state.
+     *
+     *      After `finalizeDAO()` the template intentionally retains CREATE_PERMISSIONS_ROLE and the
+     *      Agent permission-manager rights (the root permission transfer was moved out of finalizeDAO
+     *      and into `_finalizePermissions`). Until one of the `finalizePermissions*` functions runs,
+     *      the template is therefore a single point of full control over the DAO. This MUST be called
+     *      in the same deployment session as `finalizeDAO()`, before relinquishing the template owner
+     *      key, to keep that trusted window as short as possible.
+     */
+    function finalizePermissionsAfterDGDeployment(address dgAdminExecutor) external onlyOwner {
+        require(dgAdminExecutor != address(0), ERROR_INVALID_DG_ADMIN_EXECUTOR);
+
+        deployState.acl.grantPermission(dgAdminExecutor, address(deployState.agent), deployState.agent.RUN_SCRIPT_ROLE());
+        deployState.acl.grantPermission(dgAdminExecutor, address(deployState.agent), deployState.agent.EXECUTE_ROLE());
+
+        deployState.acl.revokePermission(address(deployState.voting), address(deployState.agent), deployState.agent.RUN_SCRIPT_ROLE());
+        deployState.acl.revokePermission(address(deployState.voting), address(deployState.agent), deployState.agent.EXECUTE_ROLE());
+
+        _finalizePermissions(address(deployState.agent));
+    }
+
+    /// @dev Non-DG counterpart of `finalizePermissionsAfterDGDeployment`; same trusted-window
+    ///      contract applies — call in the same deployment session as `finalizeDAO()`.
+    function finalizePermissionsWithoutDGDeployment() external onlyOwner {
+        _finalizePermissions(address(deployState.voting));
     }
 
     /* DAO AND APPS */
@@ -564,7 +594,6 @@ contract LidoTemplate is IsContract {
 
         _transferPermissionFromTemplate(apmACL, _state.lidoRegistry, voting, _state.lidoRegistry.CREATE_REPO_ROLE());
         apmACL.setPermissionManager(agent, apmDAO, apmDAO.APP_MANAGER_ROLE());
-        _transferPermissionFromTemplate(apmACL, apmACL, agent, apmACL.CREATE_PERMISSIONS_ROLE());
         apmACL.setPermissionManager(voting, apmRegistrar, apmRegistrar.CREATE_NAME_ROLE());
         apmACL.setPermissionManager(voting, apmRegistrar, apmRegistrar.POINT_ROOTNODE_ROLE());
 
@@ -634,8 +663,8 @@ contract LidoTemplate is IsContract {
     }
 
     function _createAgentPermissions(ACL _acl, Agent _agent, address _voting) internal {
-        _createPermissionForVoting(_acl, _agent, _agent.EXECUTE_ROLE(), _voting);
-        _createPermissionForVoting(_acl, _agent, _agent.RUN_SCRIPT_ROLE(), _voting);
+        _acl.createPermission(_voting, _agent, _agent.EXECUTE_ROLE(), address(this));
+        _acl.createPermission(_voting, _agent, _agent.RUN_SCRIPT_ROLE(), address(this));
     }
 
     function _createVaultPermissions(ACL _acl, Vault _vault, address _finance, address _voting) internal {
@@ -678,7 +707,6 @@ contract LidoTemplate is IsContract {
     function _transferRootPermissionsFromTemplateAndFinalizeDAO(Kernel _dao, address _voting) private {
         ACL _acl = ACL(_dao.acl());
         _transferPermissionFromTemplate(_acl, _dao, _voting, _dao.APP_MANAGER_ROLE(), _voting);
-        _transferPermissionFromTemplate(_acl, _acl, _voting, _acl.CREATE_PERMISSIONS_ROLE(), _voting);
     }
 
     function _transferPermissionFromTemplate(ACL _acl, address _app, address _to, bytes32 _permission) private {
@@ -718,9 +746,15 @@ contract LidoTemplate is IsContract {
         return keccak256(abi.encodePacked(_apmRootNode, keccak256(abi.encodePacked(_appName))));
     }
 
-    /* STATE RESET */
+    function _finalizePermissions(address newManager) private {
+        deployState.acl.setPermissionManager(newManager, address(deployState.agent), deployState.agent.RUN_SCRIPT_ROLE());
+        deployState.acl.setPermissionManager(newManager, address(deployState.agent), deployState.agent.EXECUTE_ROLE());
 
-    function _resetState() private {
+        ACL apmACL = ACL(deployState.lidoRegistry.kernel().acl());
+        _transferPermissionFromTemplate(apmACL, apmACL, address(deployState.agent), apmACL.CREATE_PERMISSIONS_ROLE());
+
+        _transferPermissionFromTemplate(deployState.acl, address(deployState.acl), newManager, deployState.acl.CREATE_PERMISSIONS_ROLE(), newManager);
+
         delete deployState.lidoRegistryEnsNode;
         delete deployState.lidoRegistry;
         delete deployState.dao;

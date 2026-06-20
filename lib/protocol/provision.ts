@@ -9,6 +9,7 @@ import {
   ensureDsmGuardians,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
+  ensureSepoliaDepositAdapterFunded,
   ensureSomeOddShareRate,
   ensureStakeLimit,
   norSdvtEnsureOperators,
@@ -29,7 +30,10 @@ export const provision = async (ctx: ProtocolContext) => {
     return;
   }
 
-  // Ensure necessary precompiled contracts are present
+  // Ensure necessary predeploys are present. Each helper injects bytecode via
+  // `hardhat_setCode` only when the address is empty (fresh local nodes); on a
+  // network that already ships the predeploy (any live/forked chain) the code is
+  // present, so setCode is never attempted.
   await ensureEIP7002WithdrawalRequestContractPresent();
   await ensureEIP4788BeaconBlockRootContractPresent();
   await ensureEIP7251MaxEffectiveBalanceRequestContractPresent();
@@ -41,6 +45,9 @@ export const provision = async (ctx: ProtocolContext) => {
 
   await unpauseStaking(ctx);
   await unpauseWithdrawalQueue(ctx);
+
+  // On Sepolia the deposit contract is a BEPOLIA-gated adapter and must be pre-funded.
+  await ensureSepoliaDepositAdapterFunded(ctx);
 
   await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 10n, 15n, 10n);
 

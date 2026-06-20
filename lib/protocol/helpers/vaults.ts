@@ -23,6 +23,7 @@ import {
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import {
+  advanceChainTime,
   days,
   de0x,
   findEventsWithInterfaces,
@@ -32,6 +33,7 @@ import {
   log,
   prepareLocalMerkleTree,
   TOTAL_BASIS_POINTS,
+  updateBalance,
   Validator,
 } from "lib";
 
@@ -157,6 +159,10 @@ export const getRoleMethods = (dashboard: Dashboard): VaultRoleMethods => {
   };
 };
 
+// The dev mnemonic shared by in-process hardhat, anvil, and hardhat-node —
+// used to derive role accounts past the end of the node's own account list.
+const DEV_MNEMONIC = "test test test test test test test test test test test junk";
+
 export async function autofillRoles(
   dashboard: Dashboard,
   nodeOperatorManager: HardhatEthersSigner,
@@ -168,10 +174,28 @@ export async function autofillRoles(
 
   const OFFSET = 10;
 
+  // Role accounts are the dev-mnemonic accounts at indices 10..24. On the
+  // in-process hardhat network (30 configured accounts) getSigners() has them
+  // natively. On external nodes getSigners() is NOT a reliable source: anvil
+  // creates only 10 dev accounts and then appends every address the node was
+  // ever asked to impersonate (agent, whale, …), so the high indices hold
+  // arbitrary protocol accounts that vary with whatever ran before. Trust a
+  // node-provided signer only when it IS the expected mnemonic account;
+  // otherwise impersonate the derived address — deterministic on any backend.
+  const roleAccounts: HardhatEthersSigner[] = await Promise.all(
+    roleIds.map((_, i) => {
+      const index = i + OFFSET;
+      const expected = ethers.HDNodeWallet.fromPhrase(DEV_MNEMONIC, undefined, `m/44'/60'/0'/0/${index}`);
+      const fromNode = signers[index];
+      if (fromNode && fromNode.address === expected.address) return fromNode;
+      return impersonate(expected.address, ether("10000"));
+    }),
+  );
+
   const roleAssignments: Permissions.RoleAssignmentStruct[] = roleIds.map((roleId, i) => {
     return {
       role: roleId,
-      account: signers[i + OFFSET],
+      account: roleAccounts[i],
     };
   });
 
@@ -194,8 +218,21 @@ export async function autofillRoles(
   // Build the result using the keys
   const result = {} as VaultRoles;
   vaultRoleKeys.forEach((key, i) => {
-    result[key] = signers[i + OFFSET];
+    result[key] = roleAccounts[i];
   });
+
+  // Role accounts pay for their own role-method txs (fund/withdraw/…). The
+  // in-process hardhat node pre-funds all of its signers, but an external node
+  // (anvil via `--network local`) only funds its own dev accounts, leaving these
+  // higher-index signers at 0 ETH. Top them up so role-method tests work on any
+  // backend — a no-op when the account is already funded.
+  await Promise.all(
+    Object.values(result).map(async (signer) => {
+      if ((await ethers.provider.getBalance(signer)) < ether("100")) {
+        await updateBalance(signer.address, ether("10000"));
+      }
+    }),
+  );
 
   return result;
 }
@@ -250,6 +287,44 @@ export function createVaultsReportTree(vaultReports: VaultReportItem[]): Standar
   );
 }
 
+// LazyOracle's sanity checks constrain a derived report timestamp in two ways:
+// 1. it must be strictly greater than the stored one (`VaultReportIsFreshEnough`);
+// 2. a report's cumulativeLidoFees increase is capped at
+//    (reportTimestamp - previousReportTs) * maxLidoFeeRatePerSecond
+//    (`CumulativeLidoFeesTooLarge`).
+// The in-process hardhat node bumps block.timestamp by 1s per mined block, so
+// back-to-back reports always advance and accumulate fee-cap headroom; external
+// nodes (anvil via `--network local`) stamp blocks with the wall clock at
+// whole-second granularity, so two reports in the same second collide and a
+// ~1s report delta cannot authorize a multi-ETH fee jump. Compute the minimal
+// timestamp satisfying both constraints — tests exercising these sanity checks
+// pass an explicit reportTimestamp and never reach this path.
+async function minimalReportTimestamp(
+  ctx: ProtocolContext,
+  previousReportTs: bigint,
+  lidoFeesIncrease: bigint,
+): Promise<bigint> {
+  let minDelta = 1n;
+  if (lidoFeesIncrease > 0n) {
+    const maxFeeRate = await ctx.contracts.lazyOracle.maxLidoFeeRatePerSecond();
+    // a zero rate means no delta can authorize the increase; let the revert surface
+    if (maxFeeRate > 0n) {
+      const capDelta = (lidoFeesIncrease + maxFeeRate - 1n) / maxFeeRate; // ceil
+      if (capDelta > minDelta) minDelta = capDelta;
+    }
+  }
+  return previousReportTs + minDelta;
+}
+
+// Nudge the chain up to the requested timestamp — a no-op when the clock has
+// already moved on (always the case on the in-process hardhat node).
+async function chainTimestampAtLeast(minTs: bigint): Promise<bigint> {
+  const currentTs = await getCurrentBlockTimestamp();
+  if (currentTs >= minTs) return currentTs;
+  await advanceChainTime(minTs - currentTs);
+  return getCurrentBlockTimestamp();
+}
+
 export async function reportVaultDataWithProof(
   ctx: ProtocolContext,
   stakingVault: StakingVault,
@@ -280,7 +355,15 @@ export async function reportVaultDataWithProof(
   }
 
   if (params.updateReportData ?? true) {
-    const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
+    const reportTimestampArg =
+      params.reportTimestamp ??
+      (await chainTimestampAtLeast(
+        await minimalReportTimestamp(
+          ctx,
+          BigInt(vaultRecord.report.timestamp),
+          vaultReport.cumulativeLidoFees - vaultRecord.cumulativeLidoFees,
+        ),
+      ));
     const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
     const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
@@ -355,7 +438,22 @@ export async function reportVaultsDataWithProof(
 
   // Update report data once for all vaults
   if (params.updateReportData ?? true) {
-    const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
+    // A single report timestamp covers every vault in the tree, so it must clear
+    // the freshest stored report among them and leave enough fee-rate headroom
+    // for every vault's reported fee increase (see minimalReportTimestamp).
+    const vaultRecords = await Promise.all(stakingVaults.map((v) => vaultHub.vaultRecord(v)));
+    const requiredTimestamps = await Promise.all(
+      vaultRecords.map((record, index) =>
+        minimalReportTimestamp(
+          ctx,
+          BigInt(record.report.timestamp),
+          vaultReports[index].cumulativeLidoFees - record.cumulativeLidoFees,
+        ),
+      ),
+    );
+    const reportTimestampArg =
+      params.reportTimestamp ??
+      (await chainTimestampAtLeast(requiredTimestamps.reduce((max, ts) => (ts > max ? ts : max), 0n)));
     const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
     const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));

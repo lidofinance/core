@@ -22,7 +22,7 @@ export * from "./proxy";
 export * from "./scratch";
 export * from "./signing-keys";
 export * from "./state-file";
-export * from "./string";
 export * from "./storage";
+export * from "./string";
 export * from "./time";
 export * from "./units";
