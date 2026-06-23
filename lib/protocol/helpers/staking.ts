@@ -267,10 +267,16 @@ const pauseOtherModulesIfNeeded = async (ctx: ProtocolContext, moduleId: bigint,
   }
 
   const ethToDeposit = depositsCount * DEPOSIT_SIZE;
-  const isMaxDepositsCountEnough = async () => {
+  const hasPreferredModuleAllocation = async () => {
     const depositableEther = await lido.getDepositableEther();
-    const maxDepositsCount = await stakingRouter.getStakingModuleMaxDepositsCount(moduleId, depositableEther);
-    return maxDepositsCount >= depositsCount;
+    const moduleIds = await stakingRouter.getStakingModuleIds();
+    const moduleIndex = moduleIds.findIndex((id) => id === moduleId);
+    if (moduleIndex === -1) {
+      throw new Error(`Staking module ${moduleId} is not registered`);
+    }
+
+    const { allocated } = await stakingRouter.getDepositAllocations(depositableEther, false);
+    return (allocated[moduleIndex] ?? 0n) >= ethToDeposit;
   };
 
   const otherModulesStatusesBefore = await getStakingModuleStatuses(ctx);
@@ -284,7 +290,7 @@ const pauseOtherModulesIfNeeded = async (ctx: ProtocolContext, moduleId: bigint,
     }
   };
 
-  if (await isMaxDepositsCountEnough()) {
+  if (await hasPreferredModuleAllocation()) {
     return async () => {};
   }
 
@@ -294,7 +300,7 @@ const pauseOtherModulesIfNeeded = async (ctx: ProtocolContext, moduleId: bigint,
     await stakingRouter.connect(managerSigner).setStakingModuleStatus(Number(mId), StakingModuleStatus.DepositsPaused);
   }
 
-  if (!(await isMaxDepositsCountEnough())) {
+  if (!(await hasPreferredModuleAllocation())) {
     await restoreModules();
     throw new Error(`Not enough allocation for staking module ${moduleId} to deposit ${ethToDeposit}`);
   }
@@ -385,6 +391,7 @@ export const ensureOperatorsHaveAvailableKeys = async (ctx: ProtocolContext) => 
 export const depositValidatorsWithoutReport = async (
   ctx: ProtocolContext,
   depositsCount: bigint,
+  preferredModuleId?: bigint,
 ): Promise<Map<bigint, bigint>> => {
   const { lido, withdrawalQueue } = ctx.contracts;
 
@@ -413,43 +420,52 @@ export const depositValidatorsWithoutReport = async (
   const validatorsDeltaGweiByModule = new Map<bigint, bigint>();
   let remainingToDeposit = ethToDeposit;
 
-  await ensureOperatorsHaveAvailableKeys(ctx);
-
-  while (remainingToDeposit > 0n) {
-    const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(
-      remainingToDeposit,
-      false,
+  if (preferredModuleId !== undefined) {
+    const { moduleId, pendingGweiDelta } = await depositAllocatedValidatorsFromBuffer(
+      ctx,
+      depositsCount,
+      preferredModuleId,
     );
+    validatorsDeltaGweiByModule.set(moduleId, pendingGweiDelta);
+  } else {
+    await ensureOperatorsHaveAvailableKeys(ctx);
 
-    if (totalAllocated < remainingToDeposit) {
-      throw new Error(`Not enough allocation capacity in staking modules`);
+    while (remainingToDeposit > 0n) {
+      const { totalAllocated, allocated } = await ctx.contracts.stakingRouter.getDepositAllocations(
+        remainingToDeposit,
+        false,
+      );
+
+      if (totalAllocated < remainingToDeposit) {
+        throw new Error(`Not enough allocation capacity in staking modules`);
+      }
+
+      const moduleIndex = allocated.findIndex((amount) => amount > 0n);
+      if (moduleIndex === -1) {
+        throw new Error(`Not enough allocation capacity in staking modules`);
+      }
+
+      const moduleId = moduleIds[moduleIndex];
+      const moduleDepositsCount = allocated[moduleIndex] / DEPOSIT_SIZE;
+      if (moduleDepositsCount === 0n) {
+        throw new Error(`Wrong deposits allocated to Module ${moduleId}`);
+      }
+
+      const depositedBeforeModule = (await lido.getBalanceStats()).depositedSinceLastReport;
+      await depositValidatorsViaRouter(ctx, moduleId, moduleDepositsCount);
+
+      const depositedAfterModule = (await lido.getBalanceStats()).depositedSinceLastReport;
+      const depositedByModule = depositedAfterModule - depositedBeforeModule;
+      if (depositedByModule === 0n) {
+        throw new Error(`No deposits applied to Module ${moduleId}`);
+      }
+
+      remainingToDeposit -= depositedByModule;
+      validatorsDeltaGweiByModule.set(
+        moduleId,
+        (validatorsDeltaGweiByModule.get(moduleId) ?? 0n) + depositedByModule / ONE_GWEI,
+      );
     }
-
-    const moduleIndex = allocated.findIndex((amount) => amount > 0n);
-    if (moduleIndex === -1) {
-      throw new Error(`Not enough allocation capacity in staking modules`);
-    }
-
-    const moduleId = moduleIds[moduleIndex];
-    const moduleDepositsCount = allocated[moduleIndex] / DEPOSIT_SIZE;
-    if (moduleDepositsCount === 0n) {
-      throw new Error(`Wrong deposits allocated to Module ${moduleId}`);
-    }
-
-    const depositedBeforeModule = (await lido.getBalanceStats()).depositedSinceLastReport;
-    await depositValidatorsViaRouter(ctx, moduleId, moduleDepositsCount);
-
-    const depositedAfterModule = (await lido.getBalanceStats()).depositedSinceLastReport;
-    const depositedByModule = depositedAfterModule - depositedBeforeModule;
-    if (depositedByModule === 0n) {
-      throw new Error(`No deposits applied to Module ${moduleId}`);
-    }
-
-    remainingToDeposit -= depositedByModule;
-    validatorsDeltaGweiByModule.set(
-      moduleId,
-      (validatorsDeltaGweiByModule.get(moduleId) ?? 0n) + depositedByModule / ONE_GWEI,
-    );
   }
 
   const { depositedSinceLastReport } = await lido.getBalanceStats();
@@ -463,10 +479,10 @@ export const depositValidatorsWithoutReport = async (
 
 export const seedProtocolPendingBaseline = async (
   ctx: ProtocolContext,
-  _moduleId: bigint,
+  moduleId: bigint,
   depositsCount: bigint = 1n,
 ) => {
-  await depositValidatorsWithoutReport(ctx, depositsCount);
+  await depositValidatorsWithoutReport(ctx, depositsCount, moduleId);
   const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
 
   const { data } = await report(ctx, {

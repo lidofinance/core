@@ -1,38 +1,18 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt, TransactionResponse, ZeroAddress } from "ethers";
 import hre, { ethers } from "hardhat";
-import { getMode } from "hardhat.helpers";
 
-import { reset, setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { setBalance, setStorageAt } from "@nomicfoundation/hardhat-network-helpers";
 
-import {
-  deployUpgradeUntilStep,
-  ether,
-  getCurrentBlockTimestamp,
-  impersonate,
-  resetDeployedStepsForTests,
-  toGwei,
-} from "lib";
+import { ether, toGwei } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
-import {
-  getProtocolContext,
-  ProtocolContext,
-  provisionWithoutReports,
-  report,
-  resetProvisionedForTests,
-  waitNextAvailableReportTime,
-} from "lib/protocol";
+import { getProtocolContext, ProtocolContext, report, waitNextAvailableReportTime } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 import { SHARE_RATE_PRECISION } from "test/suite/constants";
 
-import {
-  main as executeMockUpgrade,
-  setBeforeDgVoteItemsExecutionHookForTests,
-} from "../../../scripts/upgrade/steps/0500-mock-upgrade";
-
-const MOCK_UPGRADE_STEP = "upgrade/steps/0500-mock-upgrade";
-const SCRATCH_MIGRATION_CL_BALANCE = ether("10000000");
+// Mirrors ORSC layout: slots 0/1 are packed limits, 2 is reportData, 3 is secondOpinionOracle.
+const ORSC_LAST_VAULT_BALANCE_AFTER_TRANSFER_SLOT = 4n;
 
 describe("Integration: Accounting WVB baseline", () => {
   let ctx: ProtocolContext;
@@ -40,56 +20,23 @@ describe("Integration: Accounting WVB baseline", () => {
 
   before(async function () {
     if (hre.network.name !== "hardhat") {
-      this.skip();
+      throw new Error("Accounting WVB integration requires the Hardhat network for snapshot and vault funding setup");
     }
 
-    if (getMode() === "forking" && process.env.UPGRADE !== "true") {
-      this.skip();
-    }
-
-    await resetIsolatedNetwork(getMode() === "scratch");
-
-    if (getMode() === "scratch") {
-      ctx = await getProtocolContext({ provision: false });
-      await provisionWithoutReports(ctx);
-    } else {
-      await deployUpgradeUntilStep(
-        hre.network.name,
-        process.env.STEPS_FILE ?? "upgrade/steps-mock-upgrade.json",
-        MOCK_UPGRADE_STEP,
-      );
-    }
-
+    ctx = await getProtocolContext();
+    await ctx.contracts.oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
     baseState = await Snapshot.take();
   });
 
   beforeEach(async () => {
     baseState = await Snapshot.refresh(baseState);
-    setBeforeDgVoteItemsExecutionHookForTests(undefined);
-  });
-
-  afterEach(() => {
-    setBeforeDgVoteItemsExecutionHookForTests(undefined);
   });
 
   after(async () => {
-    setBeforeDgVoteItemsExecutionHookForTests(undefined);
     if (baseState) {
       await Snapshot.restore(baseState);
     }
   });
-
-  async function resetIsolatedNetwork(resetChain: boolean) {
-    if (resetChain) {
-      await reset();
-    }
-    resetDeployedStepsForTests();
-    resetProvisionedForTests();
-
-    for (const signer of await ethers.getSigners()) {
-      await ethers.provider.send("hardhat_setCode", [signer.address, "0x"]);
-    }
-  }
 
   const getFirstEvent = (receipt: ContractTransactionReceipt, eventName: string) => {
     const events = ctx.getEvents(receipt, eventName);
@@ -285,88 +232,46 @@ describe("Integration: Accounting WVB baseline", () => {
     return mintedSharesSum;
   }
 
-  async function seedScratchMigrationCLBalance(migrationCLBalance: bigint) {
-    const { accounting, lido } = ctx.contracts;
-    const accountingSigner = await impersonate(accounting, ether("1"));
-
-    await lido.connect(accountingSigner).processClStateUpdate(await getCurrentBlockTimestamp(), migrationCLBalance, 0n);
-
-    const {
-      clValidatorsBalanceAtLastReport,
-      clPendingBalanceAtLastReport,
-      depositedSinceLastReport,
-      depositedForCurrentReport,
-    } = await lido.getBalanceStats();
-    expect(clValidatorsBalanceAtLastReport).to.equal(migrationCLBalance, "Migration CL validators mismatch");
-    expect(clPendingBalanceAtLastReport).to.equal(0n, "Migration CL pending mismatch");
-    expect(depositedSinceLastReport).to.equal(0n, "Migration depositedSinceLastReport mismatch");
-    expect(depositedForCurrentReport).to.equal(0n, "Migration depositedForCurrentReport mismatch");
-  }
-
-  async function migrateScratchBaseline(baselineWVB: bigint) {
+  async function seedWvbBaseline(baselineWVB: bigint) {
     const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
-
-    expect(await oracleReportSanityChecker.getReportDataCount()).to.equal(0n, "Unexpected pre-migration report data");
-    expect(SCRATCH_MIGRATION_CL_BALANCE).to.be.greaterThan(baselineWVB, "Migration CL balance must cover WVB");
+    const reportDataCountBefore = await oracleReportSanityChecker.getReportDataCount();
+    const lastReportTimestampBefore = await oracleReportSanityChecker.lastReportTimestamp();
+    const isPostMigrationFirstReportDoneBefore = await oracleReportSanityChecker.isPostMigrationFirstReportDone();
 
     await setBalance(withdrawalVault.address, baselineWVB);
-    expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(baselineWVB);
-
-    await oracleReportSanityChecker.migrateBaselineSnapshot();
-    await expectMigratedBaseline(SCRATCH_MIGRATION_CL_BALANCE, baselineWVB);
-  }
-
-  async function executeUpgradeBaseline(baselineWVB: bigint) {
-    const preUpgradeCtx = await getProtocolContext({ deploy: false, provision: false });
-    const withdrawalVaultAddress = preUpgradeCtx.contracts.withdrawalVault.address;
-
-    setBeforeDgVoteItemsExecutionHookForTests(async () => {
-      await setBalance(withdrawalVaultAddress, baselineWVB);
-      expect(await ethers.provider.getBalance(withdrawalVaultAddress)).to.equal(baselineWVB);
-    });
-
-    await executeMockUpgrade();
-    setBeforeDgVoteItemsExecutionHookForTests(undefined);
-
-    ctx = await getProtocolContext({ deploy: false });
-    const { clValidatorsBalanceAtLastReport } = await ctx.contracts.lido.getBalanceStats();
-    await expectMigratedBaseline(clValidatorsBalanceAtLastReport, baselineWVB);
-  }
-
-  async function expectMigratedBaseline(migrationCLBalance: bigint, baselineWVB: bigint) {
-    const { oracleReportSanityChecker } = ctx.contracts;
+    await setStorageAt(
+      oracleReportSanityChecker.address,
+      ORSC_LAST_VAULT_BALANCE_AFTER_TRANSFER_SLOT,
+      ethers.toBeHex(baselineWVB, 32),
+    );
 
     expect(await oracleReportSanityChecker.lastVaultBalanceAfterTransfer()).to.equal(
       baselineWVB,
-      "Migrated WVB baseline mismatch",
+      "Seeded WVB baseline mismatch",
     );
-    expect(await oracleReportSanityChecker.getReportDataCount()).to.equal(2n, "Migration report data count mismatch");
-
-    const baselineData = await oracleReportSanityChecker.reportData(0n);
-    const bootstrapFlowData = await oracleReportSanityChecker.reportData(1n);
-
-    expect(baselineData.clBalance).to.equal(migrationCLBalance, "Migration baseline CL mismatch");
-    expect(baselineData.deposits).to.equal(0n, "Migration baseline deposits mismatch");
-    expect(baselineData.clWithdrawals).to.equal(0n, "Migration baseline withdrawals mismatch");
-
-    expect(bootstrapFlowData.clBalance).to.equal(migrationCLBalance - baselineWVB, "Migration bootstrap CL mismatch");
-    expect(bootstrapFlowData.deposits).to.equal(0n, "Migration bootstrap deposits mismatch");
-    expect(bootstrapFlowData.clWithdrawals).to.equal(baselineWVB, "Migration bootstrap withdrawals mismatch");
+    expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(
+      baselineWVB,
+      "Seeded withdrawal vault balance mismatch",
+    );
+    expect(await oracleReportSanityChecker.getReportDataCount()).to.equal(
+      reportDataCountBefore,
+      "WVB baseline seed must not alter ORSC report history",
+    );
+    expect(await oracleReportSanityChecker.lastReportTimestamp()).to.equal(
+      lastReportTimestampBefore,
+      "WVB baseline seed must not alter ORSC logical report timestamp",
+    );
+    expect(await oracleReportSanityChecker.isPostMigrationFirstReportDone()).to.equal(
+      isPostMigrationFirstReportDoneBefore,
+      "WVB baseline seed must not alter ORSC migration report flag",
+    );
   }
 
   async function prepareScenarioBaseline<T extends { baselineWVB: bigint }>(
     makeScenario: () => Promise<T>,
   ): Promise<T> {
-    if (getMode() === "scratch") {
-      await seedScratchMigrationCLBalance(SCRATCH_MIGRATION_CL_BALANCE);
-      const scenario = await makeScenario();
-      await migrateScratchBaseline(scenario.baselineWVB);
-      return scenario;
-    }
-
-    ctx = await getProtocolContext({ deploy: false, provision: false });
     const scenario = await makeScenario();
-    await executeUpgradeBaseline(scenario.baselineWVB);
+    await seedWvbBaseline(scenario.baselineWVB);
     return scenario;
   }
 

@@ -9,12 +9,6 @@ import { MAINNET_LOCATOR_ADDRESS } from "./mainnet";
 import { provision } from "./provision";
 import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
 
-export type ProtocolContextOptions = {
-  skipV3Contracts?: boolean;
-  deploy?: boolean;
-  provision?: boolean;
-};
-
 const getSigner = async (signer: Signer, balance = ether("100"), signers: ProtocolSigners) => {
   const signerAddress = signers[signer] ?? signer;
   return impersonate(signerAddress, balance);
@@ -84,19 +78,12 @@ export const ensureCuratedModuleShares = async (ctx: ProtocolContext) => {
   });
 };
 
-export const getProtocolContext = async (
-  optionsOrSkipV3Contracts: boolean | ProtocolContextOptions = false,
-): Promise<ProtocolContext> => {
-  const options =
-    typeof optionsOrSkipV3Contracts === "boolean"
-      ? { skipV3Contracts: optionsOrSkipV3Contracts }
-      : optionsOrSkipV3Contracts;
-  const { skipV3Contracts = false, deploy = true, provision: shouldProvision = true } = options;
+export const getProtocolContext = async (skipV3Contracts: boolean = false): Promise<ProtocolContext> => {
   const isScratch = getMode() === "scratch";
 
-  if (deploy && isScratch) {
+  if (isScratch) {
     await deployScratchProtocol();
-  } else if (deploy && toBool(process.env.UPGRADE)) {
+  } else if (toBool(process.env.UPGRADE)) {
     await deployUpgrade(hre.network.name, process.env.STEPS_FILE!);
   }
 
@@ -126,10 +113,6 @@ export const getProtocolContext = async (
     getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
-
-  if (!shouldProvision) {
-    return context;
-  }
 
   if (isScratch) {
     await provision(context);
