@@ -623,6 +623,13 @@
       "verifier": { "address": "0xdC5FE1782B6943f318E05230d688713a560063DC" },
       "permissionlessGate": { "address": "0xcF33a38111d0B1246A3F38a838fb41D626B454f0" },
       "ejector": { "address": "0xc72b58aa02E0e98cF8A4a0E9Dce75e763800802C" }
+    },
+    "gateSeal": {
+      "address": "0xE1686C2E90eb41a48356c1cC7FaA17629af3ADB3",
+      "factoryAddress": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24",
+      "sealDuration": 950400,
+      "expiryTimestamp": 1789648283,
+      "sealingCommittee": "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
     }
   },
   "stakingRouter": {

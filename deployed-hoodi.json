@@ -840,6 +840,13 @@
       "permissionlessGate": { "address": "0xd7bD8D2A9888D1414c770B35ACF55890B15de26a" },
       "ejector": { "address": "0xCAe028378d69D54dc8bF809e6C44CF751F997b80" },
       "identifiedDVTClusterGate": { "address": "0x887F8512F9998045f4b5993e6eaa6BCfE5F02A94" }
+    },
+    "gateSeal": {
+      "address": "0x725166f143DdcD9EC1b96dfb70f16E3f44968A65",
+      "factoryAddress": "0xA402349F560D45310D301E92B1AA4DeCABe147B3",
+      "sealDuration": 950400,
+      "expiryTimestamp": 1789541328,
+      "sealingCommittee": "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
     }
   },
   "srLib": {
