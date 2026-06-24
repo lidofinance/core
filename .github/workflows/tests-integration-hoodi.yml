@@ -20,7 +20,7 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Run integration tests
-        run: yarn test:integration:upgrade
+        run: yarn test:integration:upgrade:upd2
         env:
           NETWORK: "hoodi"
           RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
