@@ -28,7 +28,7 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Run integration tests
-        run: yarn test:integration:upgrade
+        run: yarn test:integration
         env:
           NETWORK: "hoodi"
           # RUN_NETWORK: "local"
