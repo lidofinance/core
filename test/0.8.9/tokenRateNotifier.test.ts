@@ -134,11 +134,13 @@ describe("TokenRateNotifier.sol", () => {
   describe("addObserver", () => {
     it("reverts when called by non-owner", async () => {
       const mock = await deployNoArgsMock();
-      await expect(notifier.connect(stranger).addObserver(mock)).to.be.revertedWith("Ownable: caller is not the owner");
+      await expect(notifier.connect(stranger).addObserver(mock, KIND_NO_ARGS)).to.be.revertedWith(
+        "Ownable: caller is not the owner",
+      );
     });
 
     it("reverts on zero address observer", async () => {
-      await expect(notifier.connect(owner).addObserver(ZeroAddress)).to.be.revertedWithCustomError(
+      await expect(notifier.connect(owner).addObserver(ZeroAddress, KIND_NO_ARGS)).to.be.revertedWithCustomError(
         notifier,
         "ErrorZeroAddressObserver",
       );
@@ -146,17 +148,34 @@ describe("TokenRateNotifier.sol", () => {
 
     it("reverts on observer with no supported interface (no supportsInterface fn)", async () => {
       const bad = await deployNoInterfaceMock();
-      await expect(notifier.connect(owner).addObserver(bad)).to.be.revertedWithCustomError(
+      await expect(notifier.connect(owner).addObserver(bad, KIND_NO_ARGS)).to.be.revertedWithCustomError(
         notifier,
         "ErrorBadObserverInterface",
       );
     });
 
-    it("registers no-arg observer when only ITokenRatePusher is supported", async () => {
+    it("reverts when the observer does not support the requested kind's interface", async () => {
+      // A no-arg-only observer cannot be registered as WithArgs, and vice versa.
+      const noArgs = await deployNoArgsMock();
+      await expect(notifier.connect(owner).addObserver(noArgs, KIND_WITH_ARGS)).to.be.revertedWithCustomError(
+        notifier,
+        "ErrorBadObserverInterface",
+      );
+
+      const withArgs = await deployWithArgsMock();
+      await expect(notifier.connect(owner).addObserver(withArgs, KIND_NO_ARGS)).to.be.revertedWithCustomError(
+        notifier,
+        "ErrorBadObserverInterface",
+      );
+    });
+
+    it("registers a no-arg observer", async () => {
       const mock = await deployNoArgsMock();
       const addr = await mock.getAddress();
 
-      await expect(notifier.connect(owner).addObserver(mock)).to.emit(notifier, "ObserverAdded").withArgs(addr);
+      await expect(notifier.connect(owner).addObserver(mock, KIND_NO_ARGS))
+        .to.emit(notifier, "ObserverAdded")
+        .withArgs(addr);
 
       expect(await notifier.observersLength()).to.equal(1n);
       const entry = await notifier.observers(0);
@@ -164,11 +183,13 @@ describe("TokenRateNotifier.sol", () => {
       expect(entry[1]).to.equal(KIND_NO_ARGS);
     });
 
-    it("registers WithArgs observer when only ITokenRatePusherWithArgs is supported", async () => {
+    it("registers a WithArgs observer", async () => {
       const mock = await deployWithArgsMock();
       const addr = await mock.getAddress();
 
-      await expect(notifier.connect(owner).addObserver(mock)).to.emit(notifier, "ObserverAdded").withArgs(addr);
+      await expect(notifier.connect(owner).addObserver(mock, KIND_WITH_ARGS))
+        .to.emit(notifier, "ObserverAdded")
+        .withArgs(addr);
 
       expect(await notifier.observersLength()).to.equal(1n);
       const entry = await notifier.observers(0);
@@ -176,31 +197,30 @@ describe("TokenRateNotifier.sol", () => {
       expect(entry[1]).to.equal(KIND_WITH_ARGS);
     });
 
-    it("registers as WithArgs when both interfaces are claimed (priority rule)", async () => {
+    it("registers a dual-support observer under the explicitly requested kind", async () => {
+      // A contract supporting BOTH interfaces is registered with whatever kind the caller passes;
+      // the kind is taken from the argument, not guessed.
       const dual = await deployDualSupportMock();
-      const addr = await dual.getAddress();
-
-      await expect(notifier.connect(owner).addObserver(dual)).to.emit(notifier, "ObserverAdded").withArgs(addr);
+      await notifier.connect(owner).addObserver(dual, KIND_NO_ARGS);
 
       const entry = await notifier.observers(0);
-      expect(entry[1]).to.equal(KIND_WITH_ARGS);
+      expect(entry[1]).to.equal(KIND_NO_ARGS);
     });
 
-    it("reverts when registering the same observer twice (no-arg)", async () => {
+    it("reverts when registering the same observer twice", async () => {
       const mock = await deployNoArgsMock();
-      await notifier.connect(owner).addObserver(mock);
-      await expect(notifier.connect(owner).addObserver(mock)).to.be.revertedWithCustomError(
+      await notifier.connect(owner).addObserver(mock, KIND_NO_ARGS);
+      await expect(notifier.connect(owner).addObserver(mock, KIND_NO_ARGS)).to.be.revertedWithCustomError(
         notifier,
         "ErrorAddExistedObserver",
       );
     });
 
     it("reverts when registering the same address twice (cross-kind dedup)", async () => {
-      // A dual-support observer registers as WithArgs (priority). Re-registering the same address
-      // must be rejected as duplicate regardless of the kind detection path.
+      // A dual-support observer added as one kind cannot be re-added under the other kind.
       const dual = await deployDualSupportMock();
-      await notifier.connect(owner).addObserver(dual);
-      await expect(notifier.connect(owner).addObserver(dual)).to.be.revertedWithCustomError(
+      await notifier.connect(owner).addObserver(dual, KIND_WITH_ARGS);
+      await expect(notifier.connect(owner).addObserver(dual, KIND_NO_ARGS)).to.be.revertedWithCustomError(
         notifier,
         "ErrorAddExistedObserver",
       );
@@ -209,13 +229,14 @@ describe("TokenRateNotifier.sol", () => {
     it("respects the combined MAX_OBSERVERS_COUNT cap (mixed kinds)", async () => {
       // Register 32 mixed-kind observers, then assert the 33rd fails.
       for (let i = 0; i < Number(MAX_OBSERVERS_COUNT); i++) {
-        const m = i % 2 === 0 ? await deployNoArgsMock() : await deployWithArgsMock();
-        await notifier.connect(owner).addObserver(m);
+        const isNoArgs = i % 2 === 0;
+        const m = isNoArgs ? await deployNoArgsMock() : await deployWithArgsMock();
+        await notifier.connect(owner).addObserver(m, isNoArgs ? KIND_NO_ARGS : KIND_WITH_ARGS);
       }
       expect(await notifier.observersLength()).to.equal(MAX_OBSERVERS_COUNT);
 
       const extra = await deployNoArgsMock();
-      await expect(notifier.connect(owner).addObserver(extra)).to.be.revertedWithCustomError(
+      await expect(notifier.connect(owner).addObserver(extra, KIND_NO_ARGS)).to.be.revertedWithCustomError(
         notifier,
         "ErrorMaxObserversCountExceeded",
       );
@@ -227,7 +248,7 @@ describe("TokenRateNotifier.sol", () => {
   describe("removeObserver", () => {
     it("reverts when called by non-owner", async () => {
       const mock = await deployNoArgsMock();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_NO_ARGS);
       await expect(notifier.connect(stranger).removeObserver(mock)).to.be.revertedWith(
         "Ownable: caller is not the owner",
       );
@@ -244,7 +265,7 @@ describe("TokenRateNotifier.sol", () => {
     it("removes a no-arg observer", async () => {
       const mock = await deployNoArgsMock();
       const addr = await mock.getAddress();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_NO_ARGS);
 
       await expect(notifier.connect(owner).removeObserver(mock)).to.emit(notifier, "ObserverRemoved").withArgs(addr);
 
@@ -254,7 +275,7 @@ describe("TokenRateNotifier.sol", () => {
     it("removes a WithArgs observer", async () => {
       const mock = await deployWithArgsMock();
       const addr = await mock.getAddress();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_WITH_ARGS);
 
       await expect(notifier.connect(owner).removeObserver(mock)).to.emit(notifier, "ObserverRemoved").withArgs(addr);
 
@@ -267,9 +288,9 @@ describe("TokenRateNotifier.sol", () => {
       const b = await deployWithArgsMock();
       const c = await deployNoArgsMock();
 
-      await notifier.connect(owner).addObserver(a);
-      await notifier.connect(owner).addObserver(b);
-      await notifier.connect(owner).addObserver(c);
+      await notifier.connect(owner).addObserver(a, KIND_NO_ARGS);
+      await notifier.connect(owner).addObserver(b, KIND_WITH_ARGS);
+      await notifier.connect(owner).addObserver(c, KIND_NO_ARGS);
 
       await expect(notifier.connect(owner).removeObserver(b))
         .to.emit(notifier, "ObserverRemoved")
@@ -298,7 +319,7 @@ describe("TokenRateNotifier.sol", () => {
 
     it("dispatches no-arg pushTokenRate() to no-arg observers", async () => {
       const mock = await deployNoArgsMock();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_NO_ARGS);
 
       await notifier.connect(provider).handlePostTokenRebase(...reportTuple(REPORT));
 
@@ -307,7 +328,7 @@ describe("TokenRateNotifier.sol", () => {
 
     it("dispatches full payload to WithArgs observers", async () => {
       const mock = await deployWithArgsMock();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_WITH_ARGS);
 
       await notifier.connect(provider).handlePostTokenRebase(...reportTuple(REPORT));
 
@@ -325,8 +346,8 @@ describe("TokenRateNotifier.sol", () => {
     it("dispatches to a mixed set in one rebase", async () => {
       const lg = await deployNoArgsMock();
       const wa = await deployWithArgsMock();
-      await notifier.connect(owner).addObserver(lg);
-      await notifier.connect(owner).addObserver(wa);
+      await notifier.connect(owner).addObserver(lg, KIND_NO_ARGS);
+      await notifier.connect(owner).addObserver(wa, KIND_WITH_ARGS);
 
       await notifier.connect(provider).handlePostTokenRebase(...reportTuple(REPORT));
 
@@ -340,7 +361,7 @@ describe("TokenRateNotifier.sol", () => {
 
     it("forwards _sharesMintedAsFees = 0 (non-profitable rebase) verbatim", async () => {
       const wa = await deployWithArgsMock();
-      await notifier.connect(owner).addObserver(wa);
+      await notifier.connect(owner).addObserver(wa, KIND_WITH_ARGS);
 
       await notifier.connect(provider).handlePostTokenRebase(...reportTuple(ZERO_REPORT));
 
@@ -351,7 +372,7 @@ describe("TokenRateNotifier.sol", () => {
 
     it("forwards _sharesMintedAsFees at type(uint256).max (upper boundary) verbatim", async () => {
       const wa = await deployWithArgsMock();
-      await notifier.connect(owner).addObserver(wa);
+      await notifier.connect(owner).addObserver(wa, KIND_WITH_ARGS);
 
       const max = 2n ** 256n - 1n;
       await notifier.connect(provider).handlePostTokenRebase(0n, 0n, 0n, 0n, 0n, 0n, max);
@@ -362,7 +383,7 @@ describe("TokenRateNotifier.sol", () => {
 
     it("soft-fails when a no-arg observer reverts with non-empty data", async () => {
       const mock = await deployNoArgsMock();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_NO_ARGS);
       await mock.setShouldRevertWithData(true);
 
       await expect(notifier.connect(provider).handlePostTokenRebase(...reportTuple(REPORT))).to.emit(
@@ -375,7 +396,7 @@ describe("TokenRateNotifier.sol", () => {
 
     it("soft-fails when a WithArgs observer reverts with non-empty data", async () => {
       const mock = await deployWithArgsMock();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_WITH_ARGS);
       await mock.setShouldRevertWithData(true);
 
       await expect(notifier.connect(provider).handlePostTokenRebase(...reportTuple(REPORT))).to.emit(
@@ -388,7 +409,7 @@ describe("TokenRateNotifier.sol", () => {
 
     it("bubbles up empty-data revert from a no-arg observer (OOG guard)", async () => {
       const mock = await deployNoArgsMock();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_NO_ARGS);
       await mock.setShouldRevertWithoutData(true);
 
       await expect(
@@ -398,7 +419,7 @@ describe("TokenRateNotifier.sol", () => {
 
     it("bubbles up empty-data revert from a WithArgs observer (OOG guard, new path)", async () => {
       const mock = await deployWithArgsMock();
-      await notifier.connect(owner).addObserver(mock);
+      await notifier.connect(owner).addObserver(mock, KIND_WITH_ARGS);
       await mock.setShouldRevertWithoutData(true);
 
       await expect(
@@ -411,9 +432,9 @@ describe("TokenRateNotifier.sol", () => {
       const b = await deployWithArgsMock();
       const c = await deployNoArgsMock();
 
-      await notifier.connect(owner).addObserver(a);
-      await notifier.connect(owner).addObserver(b);
-      await notifier.connect(owner).addObserver(c);
+      await notifier.connect(owner).addObserver(a, KIND_NO_ARGS);
+      await notifier.connect(owner).addObserver(b, KIND_WITH_ARGS);
+      await notifier.connect(owner).addObserver(c, KIND_NO_ARGS);
       await notifier.connect(owner).removeObserver(b);
 
       await notifier.connect(provider).handlePostTokenRebase(...reportTuple(REPORT));

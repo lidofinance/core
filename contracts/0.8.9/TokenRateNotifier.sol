@@ -63,22 +63,21 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
         _transferOwnership(initialOwner_);
     }
 
-    /// @notice Register an observer. The notification flavor is auto-detected from the observer's
-    ///         `supportsInterface` declaration: if it claims `REQUIRED_INTERFACE_WITH_ARGS` it is
-    ///         registered as `WithArgs` (and notified with the full rebase payload); otherwise it
-    ///         must claim `REQUIRED_INTERFACE_NO_ARGS` and is registered as `NoArgs`.
-    /// @dev If the observer claims BOTH interfaces, `WithArgs` wins (richer payload). Observers
-    ///      that want the no-arg flavor must NOT declare support for `ITokenRatePusherWithArgs`.
+    /// @notice Register an observer with an explicit notification flavor. The observer MUST declare
+    ///         (via ERC165) support for the interface that matches `kind_`:
+    ///         `ITokenRatePusherWithArgs` for `WithArgs`, `ITokenRatePusher` for `NoArgs`.
     /// @param observer_ observer address
-    function addObserver(address observer_) external onlyOwner {
+    /// @param kind_ notification flavor: `NoArgs` (no-arg `pushTokenRate()`) or `WithArgs`
+    ///        (full per-rebase payload)
+    function addObserver(address observer_, ObserverKind kind_) external onlyOwner {
         if (observer_ == address(0)) {
             revert ErrorZeroAddressObserver();
         }
 
-        ObserverKind kind_ = ObserverKind.NoArgs;
-        if (observer_.supportsInterface(REQUIRED_INTERFACE_WITH_ARGS)) {
-            kind_ = ObserverKind.WithArgs;
-        } else if (!observer_.supportsInterface(REQUIRED_INTERFACE_NO_ARGS)) {
+        bytes4 requiredInterface = kind_ == ObserverKind.WithArgs
+            ? REQUIRED_INTERFACE_WITH_ARGS
+            : REQUIRED_INTERFACE_NO_ARGS;
+        if (!observer_.supportsInterface(requiredInterface)) {
             revert ErrorBadObserverInterface();
         }
 
@@ -129,7 +128,7 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
 
         uint256 observersLength_ = observers.length;
         for (uint256 obIndex = 0; obIndex < observersLength_; obIndex++) {
-            Observer storage entry = observers[obIndex];
+            Observer memory entry = observers[obIndex];
             address observerAddr = entry.addr;
             if (entry.kind == ObserverKind.NoArgs) {
                 // solhint-disable-next-line no-empty-blocks

@@ -52,8 +52,10 @@ export async function main(): Promise<void> {
   //    registered as NoArgs.
   //
   const newNotifier = await loadContract("TokenRateNotifier", newNotifierContract.address, agent);
+  // Pre-existing observers implement only `ITokenRatePusher`, so they are registered as NoArgs (0).
+  const OBSERVER_KIND_NO_ARGS = 0;
   for (const observerAddr of oldObservers) {
-    await makeTx(newNotifier, "addObserver", [observerAddr], { from: agentAddress });
+    await makeTx(newNotifier, "addObserver", [observerAddr, OBSERVER_KIND_NO_ARGS], { from: agentAddress });
   }
 
   //

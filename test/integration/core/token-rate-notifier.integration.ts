@@ -16,6 +16,10 @@ import { bailOnFailure, Snapshot } from "test/suite";
 // → registered observers. Unit tests drive `handlePostTokenRebase` directly with a fake provider;
 // here we assert the actual protocol payload is delivered and that a faulty observer cannot brick
 // the daily rebase.
+// ObserverKind enum in TokenRateNotifier.sol: { NoArgs, WithArgs }.
+const KIND_NO_ARGS = 0n;
+const KIND_WITH_ARGS = 1n;
+
 describe("Integration: TokenRateNotifier rebase dispatch", () => {
   let ctx: ProtocolContext;
   let testSnapshot: string;
@@ -66,7 +70,7 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
 
   it("forwards the exact rebase payload to a WithArgs observer", async () => {
     const mock = (await ethers.deployContract("TokenRatePusherWithArgs__Mock")) as TokenRatePusherWithArgs__Mock;
-    await notifier.connect(agent).addObserver(mock);
+    await notifier.connect(agent).addObserver(mock, KIND_WITH_ARGS);
 
     const { tokenRebased } = await positiveReport();
 
@@ -86,7 +90,7 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
 
   it("notifies a no-arg observer on each rebase", async () => {
     const mock = (await ethers.deployContract("TokenRatePusher__Mock")) as TokenRatePusher__Mock;
-    await notifier.connect(agent).addObserver(mock);
+    await notifier.connect(agent).addObserver(mock, KIND_NO_ARGS);
 
     await positiveReport();
     expect(await mock.pushCount()).to.equal(1n);
@@ -100,8 +104,8 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     const good = (await ethers.deployContract("TokenRatePusher__Mock")) as TokenRatePusher__Mock;
     await bad.setShouldRevertWithData(true);
 
-    await notifier.connect(agent).addObserver(bad);
-    await notifier.connect(agent).addObserver(good);
+    await notifier.connect(agent).addObserver(bad, KIND_WITH_ARGS);
+    await notifier.connect(agent).addObserver(good, KIND_NO_ARGS);
 
     const { receipt } = await positiveReport();
 
@@ -124,7 +128,7 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
 
   it("stops notifying a removed observer", async () => {
     const mock = (await ethers.deployContract("TokenRatePusher__Mock")) as TokenRatePusher__Mock;
-    await notifier.connect(agent).addObserver(mock);
+    await notifier.connect(agent).addObserver(mock, KIND_NO_ARGS);
 
     await positiveReport();
     expect(await mock.pushCount()).to.equal(1n);
