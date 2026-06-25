@@ -55,6 +55,8 @@
     "deploy:helper:run": "bash scripts/dao-deploy.sh",
     "deploy:scratch": "MODE=scratch yarn deploy:helper:run",
     "deploy:scratch:local": "NETWORK=local yarn deploy:scratch",
+    "upgrade:deploy:upd3": "STEPS_FILE=upgrade/steps-upd3-deploy.json yarn upgrade:helper:run",
+    "upgrade:deploy:upd3:voting": "STEPS_FILE=upgrade/steps-upd3-voting.json yarn upgrade:helper:run",
     "postinstall": "husky"
   },
   "lint-staged": {
