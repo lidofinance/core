@@ -125,6 +125,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION = 5;
     uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
     uint256 public constant EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION = 3;
+    uint256 public constant EXPECTED_FINAL_DSM_VERSION = 4;
 
     uint64 public constant EXPECTED_FINAL_CSM_MODULE_INITIALIZED_VERSION = 3;
     uint64 public constant EXPECTED_FINAL_CSM_PARAMETERS_REGISTRY_INITIALIZED_VERSION = 3;
@@ -340,7 +341,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             if (IConsolidationMigrator(consMigrator).getConsolidationBus() != consBus) {
                 revert InvalidConsolidationBusAddressInConsolidationMigrator();
             }
-            /// @note correctness of TARGET_MODULE_ID is checked inside the SR migration checks
+            /// @dev correctness of TARGET_MODULE_ID is checked inside the SR migration checks
 
             _assertLocatorAddress(locator.consolidationGateway(), consGw);
             _assertSingleOZRoleHolder(consGw, DEFAULT_ADMIN_ROLE, agent);
@@ -365,8 +366,34 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
 
         // TW
+        _assertSingleOZRoleHolder(g.triggerableWithdrawalsGateway, TW_EXIT_LIMIT_MANAGER_ROLE, agent);
+        // @dev We do not check PAUSE_ROLE; these roles were set during the GateSeal->CircuitBreaker upgrade.
+        // todo do we need PAUSE_ROLE for resealManager?
+
         {
-            _assertSingleOZRoleHolder(g.triggerableWithdrawalsGateway, TW_EXIT_LIMIT_MANAGER_ROLE, agent);
+            // DSM
+            IDepositSecurityModule dsm = IDepositSecurityModule(c.newDepositSecurityModule);
+            _assertLocatorAddress(locator.depositSecurityModule(), address(dsm));
+
+            if (dsm.VERSION() != EXPECTED_FINAL_DSM_VERSION) {
+                revert DSMMigrationIncorrectVersion();
+            }
+
+            if (dsm.getOwner() != agent) {
+                revert DSMMigrationIncorrectOwner();
+            }
+
+            IDepositSecurityModule oldDsm = IDepositSecurityModule(c.oldDepositSecurityModule);
+            if (dsm.getGuardianQuorum() != oldDsm.getGuardianQuorum()) {
+                revert DSMMigrationIncorrectGuardianQuorum();
+            }
+
+            address[] memory guardians = dsm.getGuardians();
+            for (uint256 i = 0; i < guardians.length; ++i) {
+                if (!oldDsm.isGuardian(guardians[i])) {
+                    revert DSMMigrationIncorrectGuardians();
+                }
+            }
         }
 
         {
@@ -576,25 +603,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
                 || depositedForCurrentReport != 0
         ) {
             revert LidoMigrationIncorrectDepositedSinceLastReport();
-        }
-    }
-
-    function _checkDSMMigration(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
-        IDepositSecurityModule dsm = IDepositSecurityModule(c.newDepositSecurityModule);
-        IDepositSecurityModule oldDsm = IDepositSecurityModule(c.oldDepositSecurityModule);
-        if (dsm.getOwner() != g.agent) {
-            revert DSMMigrationIncorrectOwner();
-        }
-
-        if (dsm.getGuardianQuorum() != oldDsm.getGuardianQuorum()) {
-            revert DSMMigrationIncorrectGuardianQuorum();
-        }
-
-        address[] memory guardians = dsm.getGuardians();
-        for (uint256 i = 0; i < guardians.length; ++i) {
-            if (!oldDsm.isGuardian(guardians[i])) {
-                revert DSMMigrationIncorrectGuardians();
-            }
         }
     }
 
@@ -813,6 +821,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error SRMigrationIncorrectWithdrawalCredentials();
     error SRMigrationIncorrectConsolidationMigratorTargetModuleId(uint256 newModuleId, uint256 targetModuleId);
 
+    error DSMMigrationIncorrectVersion();
     error DSMMigrationIncorrectOwner();
     error DSMMigrationIncorrectGuardianQuorum();
     error DSMMigrationIncorrectGuardians();
