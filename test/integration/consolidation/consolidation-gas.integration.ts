@@ -66,6 +66,36 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
 
   let originalState: string;
 
+  /**
+   * Make the next NOR deposits use keys from one operator.
+   *
+   * This gas test submits consolidation requests by exact source and target
+   * operator key indexes. These keys must be already deposited, not just added
+   * to NOR. The real deposit path only targets a staking module: DSM calls
+   * StakingRouter.deposit(moduleId, ""), and NOR ignores deposit calldata, so a
+   * test cannot pass an operator id to the protocol deposit call.
+   *
+   * To make the next module-level deposit use the test operator, every other
+   * active operator is capped at its already deposited validator count. This
+   * keeps its existing keys untouched, but removes its new deposit capacity.
+   */
+  const preventOtherNorOperatorsFromConsumingTestDeposits = async (operatorIdToKeepDepositable: bigint) => {
+    const operatorsCount = await nor.getNodeOperatorsCount();
+
+    for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {
+      if (operatorId === operatorIdToKeepDepositable) continue;
+
+      const { active, totalDepositedValidators, totalVettedValidators } = await nor.getNodeOperator(operatorId, true);
+      if (!active) continue;
+      if (totalVettedValidators === totalDepositedValidators) continue;
+
+      await norSdvtSetOperatorStakingLimit(ctx, nor, {
+        operatorId,
+        limit: totalDepositedValidators,
+      });
+    }
+  };
+
   before(async function () {
     ctx = await getProtocolContext();
 
@@ -130,6 +160,7 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
       operatorId: sourceOperatorId,
       limit: TOTAL_SOURCE_KEYS,
     });
+    await preventOtherNorOperatorsFromConsumingTestDeposits(sourceOperatorId);
 
     // Deposit source keys in batches
     const DEPOSIT_BATCH = 50n;
@@ -155,6 +186,7 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
       operatorId: targetOperatorId,
       limit: TOTAL_TARGET_KEYS,
     });
+    await preventOtherNorOperatorsFromConsumingTestDeposits(targetOperatorId);
 
     await depositAndReportValidators(ctx, NOR_MODULE_ID, TOTAL_TARGET_KEYS);
 
