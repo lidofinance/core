@@ -30,7 +30,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/oracle/AccountingOracle.sol",
-      "address": "0xfdF72d92B55555B02e89D61177D5138B144815dE",
+      "address": "0xD00dD90651f031ED3158Cf75AC6e4361B4CCcBD8",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8", 12, 1742213400]
     }
   },
@@ -1007,8 +1007,8 @@
       ["0x256c4eece96b79584A705D8dbFBf29cC876b41b6", "0xB26Fd3b50280AbC55c572EE73071778A51088408", 0, 86399]
     ],
     "voteState": {
-      "voteId": "77",
-      "voteDescription": "SRv3/CMv2 hoodi DSM/OSC upgrade (update2)"
+      "voteId": "78",
+      "voteDescription": "SRv3/CMv2 hoodi AO fix (update3)"
     }
   },
   "v3Template": {
