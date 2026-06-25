@@ -571,7 +571,8 @@ export async function main() {
   );
 
   //
-  // Deploy new TokenRateNotifier
+  // Deploy new TokenRateNotifier (non-upgradeable). Constructor takes the initial owner (agent)
+  // and the token rate provider (accounting); both are baked in at deployment.
   //
 
   await deployWithoutProxy(Sk.tokenRebaseNotifier, "TokenRateNotifier", deployer, [agentAddress, accounting.address]);

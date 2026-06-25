@@ -1,0 +1,3 @@
+{
+  "steps": ["upgrade/steps/0000-check-env", "upgrade/steps/0110-deploy-token-rate-notifier-nest"]
+}
