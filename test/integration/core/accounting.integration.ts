@@ -16,6 +16,7 @@ import {
   report,
   reportWithEffectiveClDiff,
   seedProtocolPendingBaseline,
+  waitNextAvailableReportTime,
 } from "lib/protocol";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
@@ -68,6 +69,21 @@ describe("Integration: Accounting", () => {
 
     return (maxPositiveTokeRebase * internalEther) / LIMITER_PRECISION_BASE;
   };
+
+  async function reportWithNoClActivation(params: NonNullable<Parameters<typeof report>[1]>) {
+    await waitNextAvailableReportTime(ctx);
+
+    const { clPendingBalanceAtLastReport, depositedForCurrentReport } = await ctx.contracts.lido.getBalanceStats();
+
+    // These Accounting cases check vault/buffer effects. Keep current CL
+    // pending as pending so the report does not add unrelated CL activation.
+    return report(ctx, {
+      ...params,
+      waitNextReportTime: false,
+      clDiff: depositedForCurrentReport,
+      clPendingBalanceGwei: (clPendingBalanceAtLastReport + depositedForCurrentReport) / ONE_GWEI,
+    });
+  }
 
   function getWithdrawalParamsFromEvent(tx: ContractTransactionReceipt): {
     amountOfETHLocked: bigint;
@@ -480,7 +496,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     const params = { clDiff: 0n, reportElVault: false };
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await reportWithNoClActivation(params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -510,7 +526,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     const params = { clDiff: 0n, reportElVault: true };
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await reportWithNoClActivation(params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -540,7 +556,7 @@ describe("Integration: Accounting", () => {
 
     // Report
     const params = { clDiff: 0n, reportElVault: true };
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await reportWithNoClActivation(params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -573,7 +589,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     const params = { clDiff: 0n, reportElVault: true };
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await reportWithNoClActivation(params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -599,7 +615,7 @@ describe("Integration: Accounting", () => {
 
     // Report
     const params = { clDiff: 0n, reportElVault: false };
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await reportWithNoClActivation(params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -627,7 +643,7 @@ describe("Integration: Accounting", () => {
 
     // Report
     const params = { clDiff: 0n, reportElVault: false, reportWithdrawalsVault: true };
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await reportWithNoClActivation(params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -664,7 +680,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     const params = { clDiff: 0n, reportElVault: false, reportWithdrawalsVault: true };
-    const { reportTx } = (await report(ctx, params)) as {
+    const { reportTx } = (await reportWithNoClActivation(params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -792,7 +808,7 @@ describe("Integration: Accounting", () => {
     let mintedSharesSum = 0n;
     {
       const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await report(ctx, params)) as {
+      const { reportTx } = (await reportWithNoClActivation(params)) as {
         reportTx: TransactionResponse;
         extraDataTx: TransactionResponse;
       };
@@ -819,7 +835,7 @@ describe("Integration: Accounting", () => {
     }
     {
       const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await report(ctx, params)) as {
+      const { reportTx } = (await reportWithNoClActivation(params)) as {
         reportTx: TransactionResponse;
         extraDataTx: TransactionResponse;
       };
@@ -841,7 +857,7 @@ describe("Integration: Accounting", () => {
     }
     {
       const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await report(ctx, params)) as {
+      const { reportTx } = (await reportWithNoClActivation(params)) as {
         reportTx: TransactionResponse;
         extraDataTx: TransactionResponse;
       };

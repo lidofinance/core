@@ -20,7 +20,6 @@ import {
   log,
   ONE_GWEI,
   prepareExtraData,
-  toGwei,
 } from "lib";
 
 import { ProtocolContext } from "../types";
@@ -195,11 +194,10 @@ export const report = async (
   let postCLBalance = preCLBalance + clDiff;
   // ORSC treats only WVB growth over the previous post-transfer baseline as
   // fresh CL withdrawals for this report.
-  if (freshCLWithdrawals >= postCLBalance) {
-    postCLBalance = 0n;
-  } else {
-    postCLBalance -= freshCLWithdrawals;
+  if (freshCLWithdrawals > postCLBalance) {
+    throw new Error(`Fresh WVB withdrawals ${freshCLWithdrawals} exceed generated post CL balance ${postCLBalance}`);
   }
+  postCLBalance -= freshCLWithdrawals;
 
   log.debug("Beacon", {
     "Beacon validators delta": clAppearedValidators,
@@ -256,17 +254,25 @@ export const report = async (
     log.debug("Bunker Mode", { "Is Active": isBunkerMode });
   }
 
+  const postCLBalanceGwei = postCLBalance / ONE_GWEI;
+  if (clPendingBalanceGwei > postCLBalanceGwei) {
+    throw new Error(
+      `Reported CL pending balance ${clPendingBalanceGwei} exceeds total CL balance ${postCLBalanceGwei}`,
+    );
+  }
+  const clValidatorsBalanceGwei = postCLBalanceGwei - clPendingBalanceGwei;
+
   if (stakingModuleIdsWithUpdatedBalance.length === 0) {
     ({ stakingModuleIdsWithUpdatedBalance, validatorBalancesGweiByStakingModule } = adjustReportModuleBalances(
       await buildModuleAccountingReportParams(ctx),
-      toGwei(postCLBalance),
+      clValidatorsBalanceGwei,
     ));
   }
 
   const reportData = {
     consensusVersion: await accountingOracle.getConsensusVersion(),
     refSlot,
-    clValidatorsBalanceGwei: postCLBalance / ONE_GWEI - clPendingBalanceGwei,
+    clValidatorsBalanceGwei,
     clPendingBalanceGwei,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
@@ -418,8 +424,6 @@ export async function reportWithoutExtraData(
   } = {},
 ) {
   const { accountingOracle } = ctx.contracts;
-
-  await normalizeWithdrawalVaultBaseline(ctx, 0n);
 
   const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = extraData;
 
@@ -651,34 +655,29 @@ export const handleOracleReport = async (
 
   const accountingOracleAccount = await impersonate(accountingOracle.address, ether("100"));
 
-  try {
-    log.debug("Handle oracle report", {
-      "Ref Slot": refSlot,
-      "CL Balance": formatEther(clBalance),
-      "Withdrawal Vault Balance": formatEther(withdrawalVaultBalance),
-      "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
-    });
+  log.debug("Handle oracle report", {
+    "Ref Slot": refSlot,
+    "CL Balance": formatEther(clBalance),
+    "Withdrawal Vault Balance": formatEther(withdrawalVaultBalance),
+    "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
+  });
 
-    const { timeElapsed } = await getReportTimeElapsed(ctx);
-    await accounting.connect(accountingOracleAccount).handleOracleReport({
-      timestamp: reportTimestamp,
-      timeElapsed, // 1 day
-      clValidatorsBalance: clBalance,
-      clPendingBalance: 0n,
-      withdrawalVaultBalance,
-      elRewardsVaultBalance,
-      sharesRequestedToBurn,
-      withdrawalFinalizationBatches: [],
-      simulatedShareRate: 10n ** 27n,
-    });
+  const { timeElapsed } = await getReportTimeElapsed(ctx);
+  await accounting.connect(accountingOracleAccount).handleOracleReport({
+    timestamp: reportTimestamp,
+    timeElapsed,
+    clValidatorsBalance: clBalance,
+    clPendingBalance: 0n,
+    withdrawalVaultBalance,
+    elRewardsVaultBalance,
+    sharesRequestedToBurn,
+    withdrawalFinalizationBatches: [],
+    simulatedShareRate: 10n ** 27n,
+  });
 
-    await lazyOracle
-      .connect(accountingOracleAccount)
-      .updateReportData(reportTimestamp, refSlot, vaultsDataTreeRoot, vaultsDataTreeCid);
-  } catch (error) {
-    log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
-    expect(error).to.be.undefined;
-  }
+  await lazyOracle
+    .connect(accountingOracleAccount)
+    .updateReportData(reportTimestamp, refSlot, vaultsDataTreeRoot, vaultsDataTreeCid);
 };
 
 type FinalizationBatchesParams = {

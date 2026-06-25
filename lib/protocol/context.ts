@@ -56,28 +56,6 @@ export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
   }
 };
 
-export const ensureCuratedModuleShares = async (ctx: ProtocolContext) => {
-  const { stakingRouter } = ctx.contracts;
-  const moduleId = 1n;
-  const targetShare = 10_000n;
-  const module = await stakingRouter.getStakingModule(moduleId);
-
-  if (module.stakeShareLimit === targetShare && module.priorityExitShareThreshold === targetShare) return;
-
-  const agent = await ctx.getSigner("agent");
-  const role = await stakingRouter.STAKING_MODULE_SHARE_MANAGE_ROLE();
-  if (!(await stakingRouter.hasRole(role, agent.address))) {
-    await stakingRouter.connect(agent).grantRole(role, agent.address);
-  }
-
-  await stakingRouter.connect(agent).updateModuleShares(moduleId, targetShare, targetShare);
-  log.debug("Updated curated module shares", {
-    moduleId: moduleId.toString(),
-    stakeShareLimit: targetShare.toString(),
-    priorityExitShareThreshold: targetShare.toString(),
-  });
-};
-
 export const getProtocolContext = async (skipV3Contracts: boolean = false): Promise<ProtocolContext> => {
   const isScratch = getMode() === "scratch";
 
@@ -117,7 +95,6 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
   if (isScratch) {
     await provision(context);
   } else {
-    await ensureCuratedModuleShares(context);
     await ensureVaultsShareLimit(context);
   }
 
