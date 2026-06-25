@@ -52,7 +52,7 @@ contract UpgradeVoteScript is OmnibusBase {
     using CallsScriptBuilder for CallsScriptBuilder.Context;
 
     error InvalidItemsCount(uint256 actual, uint256 expected);
-    error InvalidMerkleGateAddress();
+
     //
     // Constants
     //
@@ -843,7 +843,6 @@ contract UpgradeVoteScript is OmnibusBase {
     {
         permissions = bytes.concat(bytes20(factory), bytes4(ISetMerkleGateTree.validateInputData.selector));
         for (uint256 i = 0; i < gates.length; ++i) {
-            if (gates[i] == address(0)) revert InvalidMerkleGateAddress();
             permissions = bytes.concat(permissions, bytes20(gates[i]), bytes4(IMerkleGate.setTreeParams.selector));
         }
     }
