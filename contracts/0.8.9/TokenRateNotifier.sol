@@ -92,7 +92,8 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
         emit ObserverAdded(observer_);
     }
 
-    /// @notice Remove an observer (of any kind) by address.
+    /// @notice Remove an observer by address. An address is registered at most once
+    ///         (addObserver rejects duplicates across kinds), so the match is unique and unambiguous.
     /// @param observer_ observer address to remove
     function removeObserver(address observer_) external onlyOwner {
         uint256 indexToRemove = _observerIndex(observer_);
