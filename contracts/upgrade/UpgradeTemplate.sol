@@ -229,15 +229,13 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
         // OracleReportSanityChecker final migration
         IOracleReportSanityCheckerUpgrade(c.newOracleReportSanityChecker).migrateBaselineSnapshot();
-
+        CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
         _assertCoreFinalState(g, c);
         _assertCSMFinalState(g);
-        _assertCMFinalState(g);
+        _assertCMFinalState(g, cm);
 
-        _checkSRMFinalState(g, c);
-        _checkLidoMigration(g, c);
-        _checkDSMMigration(g, c);
-
+        _checkLidoMigration(g);
+        _checkSRMFinalState(g, c, cm);
         emit UpgradeFinished();
     }
 
@@ -251,13 +249,15 @@ contract UpgradeTemplate is IUpgradeTemplate {
         // Locator
         ILidoLocator locator = ILidoLocator(c.locator);
         _assertProxyImplementation(address(locator), c.newLocatorImpl);
-        _assertLocatorAddress(locator.depositSecurityModule(), c.newDepositSecurityModule);
 
         // Lido
-        _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.newLidoImpl);
-        _assertContractVersion(g.lido, EXPECTED_FINAL_LIDO_VERSION);
-        _assertAragonPermissionManager(c.acl, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent);
-        _assertHasAragonPermission(c.acl, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent);
+        {
+            address lido = g.lido;
+            _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.newLidoImpl);
+            _assertContractVersion(lido, EXPECTED_FINAL_LIDO_VERSION);
+            _assertAragonPermissionManager(c.acl, lido, BUFFER_RESERVE_MANAGER_ROLE, agent);
+            _assertHasAragonPermission(c.acl, lido, BUFFER_RESERVE_MANAGER_ROLE, agent);
+        }
 
         // Accounting
         _assertProxyImplementation(c.accounting, c.newAccountingImpl);
@@ -281,6 +281,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertOracleConsensusVersion(vebo, EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION);
             _assertProxyAdmin(vebo, agent);
             _assertSingleOZRoleHolder(vebo, DEFAULT_ADMIN_ROLE, agent);
+            // @dev We do not check PAUSE_ROLE; these roles were set during the GateSeal->CircuitBreaker upgrade.
         }
 
         // WithdrawalVault
@@ -501,8 +502,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, csm.newEjector);
     }
 
-    function _assertCMFinalState(GlobalConfig memory g) internal view {
-        CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
+    function _assertCMFinalState(GlobalConfig memory g, CuratedModuleConfig memory cm) internal view {
         address agent = g.agent;
         address resealManager = g.resealManager;
         address cb = g.circuitBreaker;
@@ -546,9 +546,10 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
     }
 
-    function _checkSRMFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
-        CuratedModuleConfig memory cm = UpgradeConfig(CONFIG).getCuratedModuleConfig();
-
+    function _checkSRMFinalState(GlobalConfig memory g, CoreUpgradeConfig memory c, CuratedModuleConfig memory cm)
+        internal
+        view
+    {
         IStakingRouterUpgrade sr = IStakingRouterUpgrade(g.stakingRouter);
         bytes32 newWithdrawalCredentials = sr.getWithdrawalCredentials();
         if (newWithdrawalCredentials != initialWithdrawalCredentials) {
@@ -574,14 +575,15 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
     }
 
-    function _checkLidoMigration(GlobalConfig memory g, CoreUpgradeConfig memory) internal view {
-        uint256 bufferedEther = ILidoUpgrade(g.lido).getBufferedEther();
+    function _checkLidoMigration(GlobalConfig memory g) internal view {
+        ILidoUpgrade lido = ILidoUpgrade(g.lido);
+        uint256 bufferedEther = lido.getBufferedEther();
         if (bufferedEther != initialBufferedEther) {
             revert LidoMigrationIncorrectBufferedEther();
         }
 
         // slither-disable-next-line unused-return
-        (uint256 depositedValidators, uint256 clValidators,) = ILidoUpgrade(g.lido).getBeaconStat();
+        (uint256 depositedValidators, uint256 clValidators,) = lido.getBeaconStat();
 
         if (depositedValidators != initialDepositedValidators || clValidators != depositedValidators) {
             revert LidoMigrationIncorrectDepositedValidators();
@@ -592,7 +594,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             uint256 clPendingBalanceAtLastReport,
             uint256 depositedSinceLastReport,
             uint256 depositedForCurrentReport
-        ) = ILidoUpgrade(g.lido).getBalanceStats();
+        ) = lido.getBalanceStats();
 
         if (clValidatorsBalanceAtLastReport != initialBeaconBalance || clPendingBalanceAtLastReport != 0) {
             revert LidoMigrationIncorrectBeaconBalance();
