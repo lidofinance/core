@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2026 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -65,6 +65,14 @@ contract DepositSecurityModule {
 
     /// @notice Represents the code version to help distinguish contract interfaces.
     uint256 public constant VERSION = 4;
+    
+    /// @dev Byte length of one packed node operator id (uint64) in `nodeOperatorIds`.
+    ///      Must match the packing expected by StakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator.
+    uint256 internal constant NODE_OPERATOR_ID_LENGTH = 8;
+
+    /// @dev Byte length of one packed vetted signing keys count (uint128) in `vettedSigningKeysCounts`.
+    ///      Must match the packing expected by StakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator.
+    uint256 internal constant VETTED_KEYS_COUNT_LENGTH = 16;
 
     /// @notice Prefix for the message signed by guardians to attest a deposit.
     bytes32 public immutable ATTEST_MESSAGE_PREFIX;
@@ -355,7 +363,7 @@ contract DepositSecurityModule {
      * The signature, if present, must be produced for the keccak256 hash of the following
      * message (each component taking 32 bytes):
      *
-     * | PAUSE_MESSAGE_PREFIX | contractVersion | blockNumber |
+     * | PAUSE_MESSAGE_PREFIX | blockNumber |
      */
     function pauseDeposits(uint256 blockNumber, Signature memory sig) external {
         /// @dev In case of an emergency function `pauseDeposits` is supposed to be called
@@ -368,7 +376,7 @@ contract DepositSecurityModule {
         int256 guardianIndex = _getGuardianIndex(msg.sender);
 
         if (guardianIndex == -1) {
-            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, VERSION, blockNumber));
+            bytes32 msgHash = keccak256(abi.encodePacked(PAUSE_MESSAGE_PREFIX, blockNumber));
             guardianAddr = ECDSA.recover(msgHash, sig.r, sig.vs);
             guardianIndex = _getGuardianIndex(guardianAddr);
             if (guardianIndex == -1) revert InvalidSignature();
@@ -426,7 +434,7 @@ contract DepositSecurityModule {
     }
 
     /**
-     * @notice Calls STAKING_ROUTER.deposit(stakingModuleId, depositCalldata).
+     * @notice Calls STAKING_ROUTER.deposit(stakingModuleId, "").
      * @param blockNumber The block number at which the deposit intent was created.
      * @param blockHash The block hash at which the deposit intent was created.
      * @param depositRoot The deposit root hash.
@@ -447,7 +455,7 @@ contract DepositSecurityModule {
      * Signatures must be sorted in ascending order by address of the guardian. Each signature must
      * be produced for the keccak256 hash of the following message (each component taking 32 bytes):
      *
-     * | ATTEST_MESSAGE_PREFIX | contractVersion | blockNumber | blockHash | depositRoot | stakingModuleId | nonce |
+     * | ATTEST_MESSAGE_PREFIX | blockNumber | blockHash | depositRoot | stakingModuleId | nonce |
      */
     function depositBufferedEther(
         uint256 blockNumber,
@@ -458,14 +466,15 @@ contract DepositSecurityModule {
         Signature[] calldata sortedGuardianSignatures
     ) external {
         /// @dev The first most likely reason for the signature to go stale
-        bytes32 onchainDepositRoot = IDepositContract(DEPOSIT_CONTRACT).get_deposit_root();
+        bytes32 onchainDepositRoot = DEPOSIT_CONTRACT.get_deposit_root();
         if (depositRoot != onchainDepositRoot) revert DepositRootChanged();
 
         /// @dev The second most likely reason for the signature to go stale
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
-        if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
+        uint256 _quorum = quorum;
+        if (_quorum == 0 || sortedGuardianSignatures.length < _quorum) revert DepositNoQuorum();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();
@@ -489,7 +498,6 @@ contract DepositSecurityModule {
         bytes32 msgHash = keccak256(
             abi.encodePacked(
                 ATTEST_MESSAGE_PREFIX,
-                VERSION,
                 blockNumber,
                 blockHash,
                 depositRoot,
@@ -532,7 +540,7 @@ contract DepositSecurityModule {
      *
      * The signature, if present, must be produced for the keccak256 hash of the following message:
      *
-     * | UNVET_MESSAGE_PREFIX | contractVersion | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
+     * | UNVET_MESSAGE_PREFIX | blockNumber | blockHash | stakingModuleId | nonce | nodeOperatorIds | vettedSigningKeysCounts |
      */
     function unvetSigningKeys(
         uint256 blockNumber,
@@ -547,12 +555,12 @@ contract DepositSecurityModule {
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
-        uint256 nodeOperatorsCount = nodeOperatorIds.length / 8;
+        uint256 nodeOperatorsCount = nodeOperatorIds.length / NODE_OPERATOR_ID_LENGTH;
 
         if (
-            nodeOperatorIds.length % 8 != 0 ||
-            vettedSigningKeysCounts.length % 16 != 0 ||
-            vettedSigningKeysCounts.length / 16 != nodeOperatorsCount ||
+            nodeOperatorIds.length % NODE_OPERATOR_ID_LENGTH != 0 ||
+            vettedSigningKeysCounts.length % VETTED_KEYS_COUNT_LENGTH != 0 ||
+            vettedSigningKeysCounts.length / VETTED_KEYS_COUNT_LENGTH != nodeOperatorsCount ||
             nodeOperatorsCount > maxOperatorsPerUnvetting
         ) {
             revert UnvetPayloadInvalid();
@@ -567,7 +575,6 @@ contract DepositSecurityModule {
                 // values with a dynamic type checked earlier
                 abi.encodePacked(
                     UNVET_MESSAGE_PREFIX,
-                    VERSION,
                     blockNumber,
                     blockHash,
                     stakingModuleId,

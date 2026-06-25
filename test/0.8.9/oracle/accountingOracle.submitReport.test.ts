@@ -446,15 +446,18 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const refSlotDelta = reportFields.refSlot - (await oracle.getLastProcessingRefSlot());
         const timeElapsed = refSlotDelta * SECONDS_PER_SLOT;
-        const exitedEthAmount = totalExitedValidators * limits.exitedValidatorEthAmountLimit * 10n ** 18n;
-        const exitedEthAmountPerDay =
-          timeElapsed === 0n ? exitedEthAmount * 86_400n : (exitedEthAmount * 86_400n) / timeElapsed;
-        const exitedEthAmountPerDayLimitWithConsolidation =
+        const newlyExitedValidatorsEthAmount =
+          totalExitedValidators * limits.exitedValidatorEthAmountLimit * 10n ** 18n;
+        const newlyExitedValidatorsEthAmountPerDay =
+          timeElapsed === 0n
+            ? newlyExitedValidatorsEthAmount * 86_400n
+            : (newlyExitedValidatorsEthAmount * 86_400n) / timeElapsed;
+        const exitedEthAmountPerDayLimitWithConsolidationInWei =
           (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 2n * 10n ** 18n;
 
         await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion))
           .to.be.revertedWithCustomError(sanityChecker, "ExitedEthAmountPerDayLimitExceeded")
-          .withArgs(exitedEthAmountPerDayLimitWithConsolidation, exitedEthAmountPerDay);
+          .withArgs(exitedEthAmountPerDayLimitWithConsolidationInWei, newlyExitedValidatorsEthAmountPerDay);
       });
     });
 

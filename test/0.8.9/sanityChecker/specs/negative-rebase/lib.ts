@@ -1,5 +1,6 @@
 import {
   DAY,
+  FINALIZE_UPGRADE_V4_MIGRATION_REPORT_TIMESTAMP,
   FormulaFixtureSet,
   getMigrationCLValidatorsBalance,
   migrate,
@@ -94,12 +95,25 @@ export const repeatReports = (
 export const maxDiffFor = (recreatedPostCLBalance: bigint, limits: OracleReportLimits) =>
   (recreatedPostCLBalance * limits.maxCLBalanceDecreaseBP) / MAX_BASIS_POINTS;
 
+const findWindowBaselineIndex = (storedReports: StoredReportModel[], lastIndex: number, windowStart: bigint) => {
+  let baselineIndex = lastIndex;
+  while (baselineIndex > 0) {
+    const previousIndex = baselineIndex - 1;
+    if (storedReports[previousIndex].timestamp < windowStart) {
+      return baselineIndex === lastIndex ? previousIndex : baselineIndex;
+    }
+    baselineIndex = previousIndex;
+  }
+  return baselineIndex;
+};
+
 export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => {
   let timestamp = 0n;
   const storedReports: StoredReportModel[] = [];
 
   for (const step of steps) {
     if (step.kind === "migration") {
+      timestamp = FINALIZE_UPGRADE_V4_MIGRATION_REPORT_TIMESTAMP;
       const migrationCLBalance = getMigrationCLValidatorsBalance(step);
       const migrationCLWithdrawals = step.withdrawalVaultBalance;
       storedReports.push({
@@ -134,12 +148,8 @@ export const buildStoredReportsModel = (steps: ResolvedNegativeRebaseStep[]) => 
 export const calcExpectedWindowDiff = (storedReports: StoredReportModel[], limits: OracleReportLimits) => {
   const lastIndex = storedReports.length - 1;
   const lastTimestamp = storedReports[lastIndex].timestamp;
-  const windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0n;
-
-  let baselineIndex = lastIndex;
-  while (baselineIndex > 0 && storedReports[baselineIndex - 1].timestamp >= windowStart) {
-    --baselineIndex;
-  }
+  const windowStart = lastTimestamp - CL_BALANCE_WINDOW;
+  const baselineIndex = findWindowBaselineIndex(storedReports, lastIndex, windowStart);
 
   const baselineCLBalance = storedReports[baselineIndex].postCLBalance;
   const currentPostCLBalance = storedReports[lastIndex].postCLBalance;
@@ -151,7 +161,9 @@ export const calcExpectedWindowDiff = (storedReports: StoredReportModel[], limit
     totalCLWithdrawals += storedReports[i].clWithdrawals;
   }
 
-  const recreatedPostCLBalance = baselineCLBalance + totalDeposits - totalCLWithdrawals;
+  const adjustedWindowBalance = baselineCLBalance + totalDeposits;
+  const recreatedPostCLBalance =
+    adjustedWindowBalance > totalCLWithdrawals ? adjustedWindowBalance - totalCLWithdrawals : 0n;
   const actualCLBalanceDiff =
     recreatedPostCLBalance > currentPostCLBalance ? recreatedPostCLBalance - currentPostCLBalance : 0n;
 

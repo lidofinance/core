@@ -13,51 +13,55 @@ derive_rpc_url() {
     return 0
   fi
 
-  if [[ $network == "local" ]]; then
-    # set default local rpc url if not
-    load_env_var LOCAL_RPC_URL "http://localhost:8545"
-  fi
-
   local rpc_var="${network^^}_RPC_URL"
   # rpc_var="$(printf '%s' "$network" | tr '[:lower:]' '[:upper:]' | tr '-' '_')_RPC_URL"
-  load_env_var "$rpc_var" || {
-    echo "Error: RPC_URL or ${rpc_var} must be set"
-    exit 1
-  }
+  if [[ $network == "local" ]]; then
+    # set default local rpc url if not
+    load_env_var "$rpc_var" "http://localhost:8545"
+  else
+    load_env_var "$rpc_var" || {
+      echo "Error: RPC_URL or ${rpc_var} must be set"
+      exit 1
+    }
+  fi
 
   echo "Derive RPC_URL from ${rpc_var}"
   export RPC_URL="${!rpc_var:-}"
 }
 
 prepare_migration_env() {
-   local command="${1:-migrate}"
+  local command="${1:-migrate}"
 
   # MODE env is undefined by default, this allows to identify real forking mode
   load_env_var MODE ""
-  load_env_var NETWORK "hardhat"
   echo "MODE: $MODE"
-  echo "NETWORK: $NETWORK"
+  normalize_bool_env UPGRADE "false"
+  echo "UPGRADE: $UPGRADE"
 
-  derive_rpc_url "$NETWORK"
-
+  load_env_var NETWORK "hardhat"
   load_env_var RUN_NETWORK || {
     if [[ $NETWORK != "local" && $MODE == "forking" ]]; then
       export RUN_NETWORK="hardhat"
       load_env_var FORKING_BLOCK_NUMBER ""
-      if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
-        echo "FORKING_BLOCK_NUMBER: ${FORKING_BLOCK_NUMBER}"
-      fi
     else
       export RUN_NETWORK="$NETWORK"
     fi
   }
+  echo "NETWORK: $NETWORK"
   echo "RUN_NETWORK: $RUN_NETWORK"
 
-  load_env_var NETWORK_STATE_FILE "deployed-${NETWORK}.json"
+  if [[ $RUN_NETWORK == "hardhat" ]]; then
+    derive_rpc_url "$NETWORK"
+  else
+    derive_rpc_url "$RUN_NETWORK"
+  fi
+  echo "RPC_URL: $RPC_URL"
 
-  load_env_var DEPLOYER "$DEFAULT_TEST_DEPLOYER"
-  load_env_var ALLOW_SKIP_STEPS "true"
-  load_env_var AUTO_CONFIRM "false"
+  if [[ -n ${FORKING_BLOCK_NUMBER:-} ]]; then
+    echo "FORKING_BLOCK_NUMBER: ${FORKING_BLOCK_NUMBER}"
+  fi
+
+  load_env_var NETWORK_STATE_FILE "deployed-${NETWORK}.json"
 
   if [[ $MODE == "scratch" ]]; then
     rm -f "$NETWORK_STATE_FILE"
@@ -79,7 +83,7 @@ prepare_migration_env() {
         # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
         if [[ ! -f $fork_network_state_file ]]; then
           cp "$NETWORK_STATE_FILE" "$fork_network_state_file"
-          echo "$NETWORK_STATE_FILE ==> $fork_network_state_file"
+          echo "Copy: $NETWORK_STATE_FILE -> $fork_network_state_file"
         else
           echo "Using existed: $fork_network_state_file"
         fi
@@ -89,14 +93,11 @@ prepare_migration_env() {
       load_env_var HOLDER ""
       # export ALLOW_SKIP_STEPS=1
       # export AUTO_CONFIRM=1
-      export DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+      export DEPLOYER="$DEFAULT_TEST_DEPLOYER"
       export GAS_LIMIT=16000000
       export GAS_PRIORITY_FEE=1
       export GAS_MAX_FEE=100
     fi
-
-    normalize_bool_env UPGRADE "false"
-    echo "UPGRADE: $UPGRADE"
 
     if [[ $UPGRADE == "true" ]]; then
       load_env_var UPGRADE_PARAMETERS_FILE "scripts/upgrade/upgrade-params-${NETWORK}.toml"
@@ -114,7 +115,7 @@ prepare_migration_env() {
           # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
           if [[ ! -f $fork_upgrade_parameters_file ]]; then
             cp "$UPGRADE_PARAMETERS_FILE" "$fork_upgrade_parameters_file"
-            echo "$UPGRADE_PARAMETERS_FILE ==> $fork_upgrade_parameters_file"
+            echo "Copy: $UPGRADE_PARAMETERS_FILE -> $fork_upgrade_parameters_file"
           else
             echo "Using existed: $fork_upgrade_parameters_file"
           fi
@@ -125,27 +126,32 @@ prepare_migration_env() {
     export MODE="forking"
   fi
 
-  load_env_var GAS_PRIORITY_FEE "1"
-  load_env_var GAS_MAX_FEE "100"
-  load_env_var GAS_LIMIT "16000000"
-  load_env_var GENESIS_TIME "1639659600"
-
   echo "NETWORK_STATE_FILE: $NETWORK_STATE_FILE"
-  if [[ -n ${STEPS_FILE:-} ]]; then
-    echo "STEPS_FILE: $STEPS_FILE"
-  fi
   if [[ -n ${UPGRADE_PARAMETERS_FILE:-} ]]; then
     echo "UPGRADE_PARAMETERS_FILE: $UPGRADE_PARAMETERS_FILE"
   fi
   if [[ -n ${SCRATCH_DEPLOY_CONFIG:-} ]]; then
     echo "SCRATCH_DEPLOY_CONFIG: $SCRATCH_DEPLOY_CONFIG"
   fi
+  if [[ -n ${STEPS_FILE:-} ]]; then
+    echo "STEPS_FILE: $STEPS_FILE"
+  fi
+
+  load_env_var DEPLOYER "$DEFAULT_TEST_DEPLOYER"
+  normalize_bool_env ALLOW_SKIP_STEPS "true"
+  normalize_bool_env AUTO_CONFIRM "false"
+
   echo "DEPLOYER: $DEPLOYER"
   if [[ -n ${HOLDER:-} ]]; then
     echo "HOLDER: $HOLDER"
   fi
   echo "ALLOW_SKIP_STEPS: $ALLOW_SKIP_STEPS"
   echo "AUTO_CONFIRM: $AUTO_CONFIRM"
+
+  load_env_var GAS_PRIORITY_FEE "1"
+  load_env_var GAS_MAX_FEE "100"
+  load_env_var GAS_LIMIT "16000000"
+  load_env_var GENESIS_TIME "1639659600"
 }
 
 prepare_trace_args() {

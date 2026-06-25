@@ -33,17 +33,6 @@ interface IOracleReportSanityChecker {
     ) external;
 
     //
-    function checkCLPendingBalanceIncrease(
-        uint256 _timeElapsed,
-        uint256 _preCLValidatorsBalance,
-        uint256 _preCLPendingBalance,
-        uint256 _postCLValidatorsBalance,
-        uint256 _postCLPendingBalance,
-        uint256 _withdrawalVaultBalance,
-        uint256 _deposits
-    ) external view;
-
-    //
     function checkWithdrawalQueueOracleReport(
         uint256 _lastFinalizableRequestId,
         uint256 _reportTimestamp

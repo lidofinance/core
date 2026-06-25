@@ -9,6 +9,7 @@ import {
   AccountingOracle__MockForSanityChecker,
   Lido__MockForSanityChecker,
   OracleReportSanityChecker,
+  OracleReportSanityCheckerWrapper,
 } from "typechain-types";
 
 import { ether, impersonate, randomAddress } from "lib";
@@ -27,6 +28,7 @@ import { negativeRebaseFormulaFixtureSets } from "./fixtures/index";
 import {
   buildStoredReportsModel,
   calcExpectedWindowDiff,
+  CL_BALANCE_WINDOW,
   OracleReportLimits,
   ResolvedNegativeRebaseStep,
   ResolvedOracleReportFixture,
@@ -92,12 +94,14 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
       },
     ]);
 
-    const checker = (await ethers.deployContract("OracleReportSanityChecker", [
+    const checker = (await ethers.deployContract("OracleReportSanityCheckerWrapper", [
       await locator.getAddress(),
       await accounting.getAddress(),
       deployer.address,
       limitsList,
-    ])) as OracleReportSanityChecker;
+      false,
+    ])) as OracleReportSanityCheckerWrapper;
+    await checker.harness__setLastReportTimestamp(CL_BALANCE_WINDOW);
 
     return {
       checker,
@@ -132,9 +136,13 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     }
 
     const migrationCLBalance = getMigrationCLValidatorsBalance(step);
+    const expectedMigrationTimestamp =
+      (await fixture.accountingOracle.GENESIS_TIME()) +
+      (await fixture.accountingOracle.getLastProcessingRefSlot()) * (await fixture.accountingOracle.SECONDS_PER_SLOT());
     expect(await fixture.checker.getReportDataCount(), `${step.label}: migration report data count`).to.equal(2n);
 
     const baselineData = await fixture.checker.reportData(0n);
+    expect(baselineData.timestamp, `${step.label}: migration baseline timestamp`).to.equal(expectedMigrationTimestamp);
     expect(baselineData.clBalance, `${step.label}: migration baseline ignores transient deposits`).to.equal(
       migrationCLBalance,
     );
@@ -144,6 +152,9 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     const bootstrapFlowData = await fixture.checker.reportData(1n);
     expect(bootstrapFlowData.clBalance, `${step.label}: bootstrap snapshot ignores transient deposits`).to.equal(
       migrationCLBalance - step.withdrawalVaultBalance,
+    );
+    expect(bootstrapFlowData.timestamp, `${step.label}: bootstrap snapshot timestamp`).to.equal(
+      expectedMigrationTimestamp,
     );
     expect(bootstrapFlowData.deposits, `${step.label}: bootstrap snapshot stores zero deposits`).to.equal(0n);
     expect(bootstrapFlowData.clWithdrawals, `${step.label}: bootstrap snapshot stores migration withdrawals`).to.equal(
