@@ -108,8 +108,7 @@ vettedGateImpl = "0x0000000000000000000000000000000000000000"
 identifiedDVTClusterGate = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed IDVTC curve setup before execution
 identifiedDVTClusterCurveSetup = "0x0000000000000000000000000000000000000000"
-# TODO: replace with expected IDVTC bond curve id before execution
-identifiedDVTClusterBondCurveId = 0
+identifiedDVTClusterBondCurveId = 3
 # TODO: replace with deployed Parameters Registry implementation before execution
 parametersRegistryImpl = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed Fee Oracle implementation before execution

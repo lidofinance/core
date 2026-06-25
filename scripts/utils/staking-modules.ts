@@ -52,6 +52,11 @@ export const CSM_CONTRACTS: Record<string, ContractMap> = {
   identifiedDVTClusterCurveSetup: { kind: "single", addressKey: "IdentifiedDVTClusterCurveSetup" },
 };
 
+const CSM_UPGRADE_CONTRACTS: Record<string, ContractMap> = {
+  ...CSM_CONTRACTS,
+  verifier: { kind: "single", addressKey: "VerifierV3" },
+};
+
 const CM_CONTRACTS: Record<string, ContractMap> = {
   module: { kind: "proxied", proxyKey: "CuratedModule", implKey: "CuratedModuleImpl" },
   accounting: { kind: "proxied", proxyKey: "Accounting", implKey: "AccountingImpl" },
@@ -255,14 +260,14 @@ function writeSubstateToToml(section: string, tomlMap: Record<string, TomlMap>, 
   }
 }
 
-function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact) {
+function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact, isScratch: boolean) {
   if (!artifact.CSModule) throw new Error("CSM deploy artifact does not contain CSModule address");
 
   const existing = (state[Sk.sm_CSM]?.contracts ?? {}) as Substate;
   const proxyAddress = isNonZeroAddress(existing.module?.proxy?.address)
     ? (existing.module!.proxy!.address as string)
     : artifact.CSModule;
-  const contracts = buildSubstate(artifact, CSM_CONTRACTS, existing);
+  const contracts = buildSubstate(artifact, isScratch ? CSM_CONTRACTS : CSM_UPGRADE_CONTRACTS, existing);
 
   updateObjectInState(Sk.sm_CSM, {
     proxy: {
@@ -395,7 +400,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       cmdOptions.push(`--private-key=${privateKey}`);
       run("just", cmdOptions, tmpDir, externalEnv);
       const artifact = readArtifact(path.join(tmpDir, artifactsDir, artifactsFile));
-      saveCSMArtifact(state, artifact);
+      saveCSMArtifact(state, artifact, isScratch);
       log(`Community Staking Module deployed at: ${cy(artifact.CSModule!)}`);
       log.emptyLine();
     }
