@@ -1,5 +1,6 @@
 import { ether } from "lib";
 
+import { DAY } from "../../lib";
 import { NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib";
 
 export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
@@ -173,6 +174,43 @@ export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixture
         window: {
           actualCLBalanceDiff: ether("360") + 1n,
           maxAllowedCLBalanceDiff: ether("360"),
+        },
+      },
+    },
+    {
+      title: "reverts after a reporting gap longer than the 36-day window",
+      rationale:
+        "When the current report is the only snapshot inside the nominal window, the formula falls back to the latest previous snapshot so the negative rebase baseline cannot reset.",
+      steps: [
+        report({
+          label: "baseline report before the gap",
+          preValidatorsBalance: ether("10000"),
+          postValidatorsBalance: ether("10000"),
+          postPendingBalance: 0n,
+          deposits: 0n,
+          clWithdrawals: 0n,
+        }),
+        report({
+          label: "latest report before the gap",
+          postValidatorsBalance: ether("9900"),
+          postPendingBalance: 0n,
+          deposits: 0n,
+          clWithdrawals: 0n,
+        }),
+        report({
+          label: "zero CL balance after long reporting gap",
+          timeElapsed: 40n * DAY,
+          postValidatorsBalance: 0n,
+          postPendingBalance: 0n,
+          deposits: 0n,
+          clWithdrawals: 0n,
+        }),
+      ],
+      expected: {
+        outcome: "revert",
+        window: {
+          actualCLBalanceDiff: ether("9900"),
+          maxAllowedCLBalanceDiff: ether("356.4"),
         },
       },
     },

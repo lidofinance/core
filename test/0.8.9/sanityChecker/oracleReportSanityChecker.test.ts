@@ -10,7 +10,6 @@ import {
   AccountingOracle__MockForSanityChecker,
   Burner__MockForSanityChecker,
   LidoLocator__MockForSanityChecker,
-  OracleReportSanityChecker,
   OracleReportSanityCheckerWrapper,
   StakingRouter__MockForSanityChecker,
   WithdrawalQueue__MockForSanityChecker,
@@ -24,9 +23,11 @@ import { Snapshot } from "test/suite";
 const OVER_UINT16 = 1n << 16n;
 const OVER_UINT32 = 1n << 32n;
 const OVER_UINT64 = 1n << 64n;
+const ONE_DAY = 24n * 60n * 60n;
+const CL_BALANCE_WINDOW = 36n * ONE_DAY;
 
 describe("OracleReportSanityChecker.sol", () => {
-  let checker: OracleReportSanityChecker;
+  let checker: OracleReportSanityCheckerWrapper;
 
   let locator: LidoLocator__MockForSanityChecker;
   let burner: Burner__MockForSanityChecker;
@@ -109,12 +110,14 @@ describe("OracleReportSanityChecker.sol", () => {
       },
     ]);
 
-    checker = await ethers.deployContract("OracleReportSanityChecker", [
+    checker = await ethers.deployContract("OracleReportSanityCheckerWrapper", [
       await locator.getAddress(),
       await accounting.getAddress(),
       admin.address,
       defaultLimits,
+      false,
     ]);
+    await checker.harness__setLastReportTimestamp(CL_BALANCE_WINDOW);
   });
 
   beforeEach(async () => {
@@ -964,34 +967,40 @@ describe("OracleReportSanityChecker.sol", () => {
       await expect(checker.checkExitBusOracleReport(limit - 1n)).not.to.be.reverted;
     });
 
-    it("checkExitedEthAmountPerDay uses timeElapsed (seconds)", async () => {
+    it("checkExitedValidatorsCount uses timeElapsed (seconds)", async () => {
       const limits = await checker.getOracleReportLimits();
-      const limitWithConsolidationInWei =
+      const exitedEthAmountPerDayLimitWithConsolidationInWei =
         (limits.exitedEthAmountPerDayLimit + limits.consolidationEthAmountPerDayLimit) * 2n * ether("1");
       const oneDay = 24n * 60n * 60n;
       const exitedValidatorEthAmountLimit = limits.exitedValidatorEthAmountLimit;
       const exitedValidatorEthAmountLimitInWei = exitedValidatorEthAmountLimit * ether("1");
 
-      await expect(checker.checkExitedEthAmountPerDay(0n, oneDay)).not.to.be.reverted;
+      await expect(checker.checkExitedValidatorsCount(0n, oneDay)).not.to.be.reverted;
 
       const exitedValidatorsCountForDailyExceededRevert =
-        limitWithConsolidationInWei / exitedValidatorEthAmountLimitInWei + 1n;
-      const exitedPerDayForDailyExceededRevert =
+        exitedEthAmountPerDayLimitWithConsolidationInWei / exitedValidatorEthAmountLimitInWei + 1n;
+      const newlyExitedValidatorsEthAmountPerDayForDailyExceededRevert =
         exitedValidatorsCountForDailyExceededRevert * exitedValidatorEthAmountLimitInWei;
 
-      await expect(checker.checkExitedEthAmountPerDay(exitedValidatorsCountForDailyExceededRevert, oneDay))
+      await expect(checker.checkExitedValidatorsCount(exitedValidatorsCountForDailyExceededRevert, oneDay))
         .to.be.revertedWithCustomError(checker, "ExitedEthAmountPerDayLimitExceeded")
-        .withArgs(limitWithConsolidationInWei, exitedPerDayForDailyExceededRevert);
+        .withArgs(
+          exitedEthAmountPerDayLimitWithConsolidationInWei,
+          newlyExitedValidatorsEthAmountPerDayForDailyExceededRevert,
+        );
 
-      const exitedPerDayForOneValidatorAndZeroTime = exitedValidatorEthAmountLimitInWei * 86_400n;
+      const newlyExitedValidatorEthAmountPerDayForZeroTime = exitedValidatorEthAmountLimitInWei * 86_400n;
       const exitedValidatorsCountForGuaranteedRevert =
-        limitWithConsolidationInWei / exitedPerDayForOneValidatorAndZeroTime + 1n;
-      const exitedPerDayForGuaranteedRevert =
-        exitedValidatorsCountForGuaranteedRevert * exitedPerDayForOneValidatorAndZeroTime;
+        exitedEthAmountPerDayLimitWithConsolidationInWei / newlyExitedValidatorEthAmountPerDayForZeroTime + 1n;
+      const newlyExitedValidatorsEthAmountPerDayForGuaranteedRevert =
+        exitedValidatorsCountForGuaranteedRevert * newlyExitedValidatorEthAmountPerDayForZeroTime;
 
-      await expect(checker.checkExitedEthAmountPerDay(exitedValidatorsCountForGuaranteedRevert, 0n))
+      await expect(checker.checkExitedValidatorsCount(exitedValidatorsCountForGuaranteedRevert, 0n))
         .to.be.revertedWithCustomError(checker, "ExitedEthAmountPerDayLimitExceeded")
-        .withArgs(limitWithConsolidationInWei, exitedPerDayForGuaranteedRevert);
+        .withArgs(
+          exitedEthAmountPerDayLimitWithConsolidationInWei,
+          newlyExitedValidatorsEthAmountPerDayForGuaranteedRevert,
+        );
     });
 
     it("checkNodeOperatorsPerExtraDataItemCount", async () => {
@@ -1032,7 +1041,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(newTs);
     });
 
-    context("checkCLPendingBalanceIncrease cold start", () => {
+    context("checkCLPendingAndValidatorsBalanceIncrease cold start", () => {
       const oneDay = 24n * 60n * 60n;
       const noDeposits = 0n;
       const unexpectedPendingWei = 1n;
@@ -1045,11 +1054,23 @@ describe("OracleReportSanityChecker.sol", () => {
       const pendingAfterExceededFirstDayActivationWei = coldStartDepositsWei - validatorsBeyondFirstDayLimitWei;
 
       it("allows a zero-balance first report without deposits", async () => {
-        await expect(checker.checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, 0n, 0n, noDeposits)).not.to.be.reverted;
+        await expect(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(oneDay, 0n, 0n, 0n, 0n, 0n, noDeposits),
+        ).not.to.be.reverted;
       });
 
       it("rejects a positive first report without deposits", async () => {
-        await expect(checker.checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, unexpectedPendingWei, 0n, noDeposits))
+        await expect(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
+            oneDay,
+            0n,
+            0n,
+            0n,
+            unexpectedPendingWei,
+            0n,
+            noDeposits,
+          ),
+        )
           .to.be.revertedWithCustomError(checker, "IncorrectTotalPendingBalance")
           .withArgs(0n, unexpectedPendingWei);
       });
@@ -1063,19 +1084,36 @@ describe("OracleReportSanityChecker.sol", () => {
           .grantRole(await checker.EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE(), manager.address);
         await checker.connect(manager).setExternalPendingBalanceCapEth(externalPendingBalanceCapEth);
 
-        await expect(checker.checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, reportedPendingWei, 0n, noDeposits)).not
-          .to.be.reverted;
+        await expect(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
+            oneDay,
+            0n,
+            0n,
+            0n,
+            reportedPendingWei,
+            0n,
+            noDeposits,
+          ),
+        ).not.to.be.reverted;
       });
 
       it("allows the first-report total CL increase up to deposits", async () => {
         await expect(
-          checker.checkCLPendingBalanceIncrease(oneDay, 0n, 0n, 0n, coldStartDepositsWei, 0n, coldStartDepositsWei),
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
+            oneDay,
+            0n,
+            0n,
+            0n,
+            coldStartDepositsWei,
+            0n,
+            coldStartDepositsWei,
+          ),
         ).not.to.be.reverted;
       });
 
       it("does not cap first-report deposits by annual growth allowance when they remain pending", async () => {
         await expect(
-          checker.checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             0n,
             0n,
@@ -1089,7 +1127,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       it("limits first-report validator activation by appeared ETH amount per day", async () => {
         await expect(
-          checker.checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             0n,
             0n,
@@ -1101,7 +1139,7 @@ describe("OracleReportSanityChecker.sol", () => {
         ).not.to.be.reverted;
 
         await expect(
-          checker.checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             0n,
             0n,
@@ -1116,7 +1154,7 @@ describe("OracleReportSanityChecker.sol", () => {
       });
     });
 
-    context("checkCLPendingBalanceIncrease with existing state", () => {
+    context("checkCLPendingAndValidatorsBalanceIncrease with existing state", () => {
       const oneDay = 24n * 60n * 60n;
       const previousValidatorsWei = ether("3650");
       const previousPendingWei = ether("2");
@@ -1125,7 +1163,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       it("allows a non-cold-start report within the pending corridor", async () => {
         await expect(
-          checker.checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             previousValidatorsWei,
             previousPendingWei,
@@ -1139,7 +1177,7 @@ describe("OracleReportSanityChecker.sol", () => {
 
       it("reverts with IncorrectTotalCLBalanceIncrease when validators growth exceeds the activated budget", async () => {
         await expect(
-          checker.checkCLPendingBalanceIncrease(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(
             oneDay,
             previousValidatorsWei,
             0n,
@@ -1154,32 +1192,33 @@ describe("OracleReportSanityChecker.sol", () => {
       });
 
       it("reverts with InvalidClBalancesData when CL withdrawals exceed previous validators balance", async () => {
-        await expect(checker.checkCLPendingBalanceIncrease(oneDay, ether("10"), 0n, 0n, 0n, ether("11"), 0n)).not.to.be
-          .reverted;
+        await expect(
+          checker.harness__checkCLPendingAndValidatorsBalanceIncrease(oneDay, ether("10"), 0n, 0n, 0n, ether("11"), 0n),
+        ).not.to.be.reverted;
       });
     });
   });
 
   context("checkCLBalancesConsistency", () => {
     it("reverts on array length mismatch", async () => {
-      await expect(checker.checkCLBalancesConsistency([1n], [], 10n)).to.be.revertedWithCustomError(
+      await expect(checker.harness__checkCLBalancesConsistency([1n], [], 10n)).to.be.revertedWithCustomError(
         checker,
         "InvalidClBalancesData",
       );
     });
 
     it("reverts when module sums are inconsistent", async () => {
-      await expect(checker.checkCLBalancesConsistency([1n, 2n], [10n, 20n], 40n))
+      await expect(checker.harness__checkCLBalancesConsistency([1n, 2n], [10n, 20n], 40n))
         .to.be.revertedWithCustomError(checker, "InconsistentValidatorsBalanceByModule")
         .withArgs(40n, 30n);
     });
 
     it("passes with consistent data", async () => {
-      await expect(checker.checkCLBalancesConsistency([1n, 2n], [10n, 20n], 30n)).not.to.be.reverted;
+      await expect(checker.harness__checkCLBalancesConsistency([1n, 2n], [10n, 20n], 30n)).not.to.be.reverted;
     });
 
     it("passes for empty arrays and zero totals", async () => {
-      await expect(checker.checkCLBalancesConsistency([], [], 0n)).not.to.be.reverted;
+      await expect(checker.harness__checkCLBalancesConsistency([], [], 0n)).not.to.be.reverted;
     });
   });
 
@@ -1551,6 +1590,7 @@ describe("OracleReportSanityChecker.sol", () => {
     });
 
     it("stores post-cl balance snapshots in reportData", async () => {
+      const initialReportTimestamp = await checker.lastReportTimestamp();
       await expect(
         checker
           .connect(accountingSigner)
@@ -1568,11 +1608,11 @@ describe("OracleReportSanityChecker.sol", () => {
 
       const first = await checker.reportData(0n);
       const second = await checker.reportData(1n);
-      expect(first.timestamp).to.equal(24n * 60n * 60n);
+      expect(first.timestamp).to.equal(initialReportTimestamp + 24n * 60n * 60n);
       expect(first.clBalance).to.equal(ether("100"));
       expect(first.deposits).to.equal(0n);
       expect(first.clWithdrawals).to.equal(0n);
-      expect(second.timestamp).to.equal(2n * 24n * 60n * 60n);
+      expect(second.timestamp).to.equal(initialReportTimestamp + 2n * 24n * 60n * 60n);
       expect(second.clBalance).to.equal(ether("100"));
       expect(second.deposits).to.equal(2n);
       expect(second.clWithdrawals).to.equal(0n);
@@ -1631,9 +1671,9 @@ describe("OracleReportSanityChecker.sol", () => {
     });
 
     it("uses 36-day timestamp window (not report count) and keeps left boundary report in range", async () => {
-      const ONE_DAY = 24n * 60n * 60n;
+      const initialReportTimestamp = await checker.lastReportTimestamp();
 
-      // Report timestamps become: day 1, day 10, day 46.
+      // Report timestamps become: T + day 1, T + day 10, T + day 46.
       // For the third report, windowStart = 46 - 36 = day 10.
       // So baseline must be day 10 report (left boundary is included), not day 1.
       await checker
@@ -1662,14 +1702,12 @@ describe("OracleReportSanityChecker.sol", () => {
       const first = await checker.reportData(0n);
       const second = await checker.reportData(1n);
       const third = await checker.reportData(2n);
-      expect(first.timestamp).to.equal(ONE_DAY);
-      expect(second.timestamp).to.equal(10n * ONE_DAY);
-      expect(third.timestamp).to.equal(46n * ONE_DAY);
+      expect(first.timestamp).to.equal(initialReportTimestamp + ONE_DAY);
+      expect(second.timestamp).to.equal(initialReportTimestamp + 10n * ONE_DAY);
+      expect(third.timestamp).to.equal(initialReportTimestamp + 46n * ONE_DAY);
     });
 
-    it("excludes all outdated snapshots from the window after a long gap", async () => {
-      const ONE_DAY = 24n * 60n * 60n;
-
+    it("falls back to the latest previous snapshot after a long gap", async () => {
       await checker
         .connect(accountingSigner)
         .checkAccountingOracleReport(
@@ -1678,21 +1716,20 @@ describe("OracleReportSanityChecker.sol", () => {
       await checker
         .connect(accountingSigner)
         .checkAccountingOracleReport(
-          ...report({ timeElapsed: ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("100") }),
+          ...report({ timeElapsed: ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("99") }),
         );
 
       await expect(
         checker
           .connect(accountingSigner)
           .checkAccountingOracleReport(
-            ...report({ timeElapsed: 48n * ONE_DAY, preCLBalance: ether("100"), postCLBalance: ether("90") }),
+            ...report({ timeElapsed: 48n * ONE_DAY, preCLBalance: ether("99"), postCLBalance: 0n }),
           ),
-      ).not.to.be.reverted;
+      )
+        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecrease")
+        .withArgs(ether("99"), ether("3.564"));
 
-      expect(await checker.getReportDataCount()).to.equal(3n);
-      const third = await checker.reportData(2n);
-      expect(third.timestamp).to.equal(50n * ONE_DAY);
-      expect(third.clBalance).to.equal(ether("90"));
+      expect(await checker.getReportDataCount()).to.equal(2n);
     });
 
     it("does not treat a net window increase as a CL balance decrease", async () => {
@@ -1771,7 +1808,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(ether("10"), ether("3.6"));
     });
 
-    it("reverts with IncorrectCLBalanceDecreaseWindowData on baseline/flows underflow", async () => {
+    it("passes when cumulative withdrawals cover the adjusted window balance", async () => {
       await checker.connect(accountingSigner).checkAccountingOracleReport(...report());
 
       await expect(
@@ -1783,9 +1820,7 @@ describe("OracleReportSanityChecker.sol", () => {
             deposits: 0n,
           }),
         ),
-      )
-        .to.be.revertedWithCustomError(checker, "IncorrectCLBalanceDecreaseWindowData")
-        .withArgs(ether("100"), 0n, ether("200"));
+      ).not.to.be.reverted;
     });
 
     it("reverts with NegativeRebaseFailedSecondOpinionReportIsNotReady when second opinion report is absent", async () => {
@@ -1978,6 +2013,10 @@ describe("OracleReportSanityChecker.sol", () => {
     it("seeds baseline and bootstrap report snapshots", async () => {
       const { checkerWithLidoStats: migrationChecker } = await deployCheckerWithLidoStats(4n);
       await setBalance(withdrawalVault.address, MIGRATION_WITHDRAWALS);
+      const lastProcessingRefSlot = 12345n;
+      await accountingOracle.setLastProcessingRefSlot(lastProcessingRefSlot);
+      const expectedMigrationTimestamp =
+        (await accountingOracle.GENESIS_TIME()) + lastProcessingRefSlot * (await accountingOracle.SECONDS_PER_SLOT());
 
       await expect(migrationChecker.connect(manager).migrateBaselineSnapshot())
         .to.emit(migrationChecker, "BaselineSnapshotMigrated")
@@ -1988,12 +2027,12 @@ describe("OracleReportSanityChecker.sol", () => {
       const baselineReport = await migrationChecker.reportData(0n);
       const bootstrapFlowReport = await migrationChecker.reportData(1n);
 
-      expect(baselineReport.timestamp).to.equal(0n);
+      expect(baselineReport.timestamp).to.equal(expectedMigrationTimestamp);
       expect(baselineReport.clBalance).to.equal(ether("100"));
       expect(baselineReport.deposits).to.equal(0n);
       expect(baselineReport.clWithdrawals).to.equal(0n);
 
-      expect(bootstrapFlowReport.timestamp).to.equal(0n);
+      expect(bootstrapFlowReport.timestamp).to.equal(expectedMigrationTimestamp);
       expect(bootstrapFlowReport.clBalance).to.equal(ether("100") - MIGRATION_WITHDRAWALS);
       expect(bootstrapFlowReport.deposits).to.equal(0n);
       expect(bootstrapFlowReport.clWithdrawals).to.equal(MIGRATION_WITHDRAWALS);

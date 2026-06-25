@@ -18,7 +18,7 @@ interface IReportReceiver {
 }
 
 interface IOracleReportSanityChecker {
-    function checkExitedEthAmountPerDay(
+    function checkExitedValidatorsCount(
         uint256 _newlyExitedValidatorsCount,
         uint256 _timeElapsed
     ) external view;
@@ -600,7 +600,7 @@ contract AccountingOracle is BaseOracle {
             numExitedValidatorsByStakingModule
         );
 
-        sanityChecker.checkExitedEthAmountPerDay(
+        sanityChecker.checkExitedValidatorsCount(
             newlyExitedValidatorsCount,
             timeElapsed
         );

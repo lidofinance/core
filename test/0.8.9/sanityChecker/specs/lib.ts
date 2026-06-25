@@ -9,7 +9,7 @@ import {
   AccountingOracle__MockForStakingRouter,
   Lido__HarnessForFinalizeUpgradeV4,
   LidoLocator,
-  OracleReportSanityChecker,
+  OracleReportSanityCheckerWrapper,
 } from "typechain-types";
 
 import { ether, impersonate, proxify, randomAddress } from "lib";
@@ -20,8 +20,12 @@ export const DAY = 86_400n;
 export const DEPOSIT_SIZE = ether("32");
 export const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");
 export const DEPOSITS_RESERVE_TARGET = ether("1500");
-export const FINALIZE_UPGRADE_V4_MIGRATION_REF_SLOT = 1n;
+export const ACCOUNTING_ORACLE_SECONDS_PER_SLOT = 4n;
+export const ACCOUNTING_ORACLE_GENESIS_TIME = 100n;
+export const FINALIZE_UPGRADE_V4_MIGRATION_REF_SLOT = (36n * DAY) / ACCOUNTING_ORACLE_SECONDS_PER_SLOT;
 export const FIRST_POST_MIGRATION_REF_SLOT = FINALIZE_UPGRADE_V4_MIGRATION_REF_SLOT + 1n;
+export const FINALIZE_UPGRADE_V4_MIGRATION_REPORT_TIMESTAMP =
+  ACCOUNTING_ORACLE_GENESIS_TIME + FINALIZE_UPGRADE_V4_MIGRATION_REF_SLOT * ACCOUNTING_ORACLE_SECONDS_PER_SLOT;
 
 const FINALIZE_UPGRADE_V4_INITIAL_BUFFERED_ETHER = 1n;
 const LAST_VAULT_BALANCE_AFTER_TRANSFER_SLOT = 4n;
@@ -170,7 +174,7 @@ export type LidoBalanceStats = {
 };
 
 export type FinalizeUpgradeV4CheckerFixture = {
-  checker: OracleReportSanityChecker;
+  checker: OracleReportSanityCheckerWrapper;
   accountingSigner: HardhatEthersSigner;
   accountingOracle: AccountingOracle__MockForStakingRouter;
   lido: Lido__HarnessForFinalizeUpgradeV4;
@@ -205,12 +209,13 @@ export const deployFinalizeUpgradeV4Checker = async (
     value: FINALIZE_UPGRADE_V4_INITIAL_BUFFERED_ETHER,
   });
 
-  const checker = (await ethers.deployContract("OracleReportSanityChecker", [
+  const checker = (await ethers.deployContract("OracleReportSanityCheckerWrapper", [
     await locator.getAddress(),
     await accounting.getAddress(),
     deployer.address,
     limitsList,
-  ])) as OracleReportSanityChecker;
+    false,
+  ])) as OracleReportSanityCheckerWrapper;
 
   await updateLidoLocatorImplementation(
     await locator.getAddress(),
@@ -297,7 +302,7 @@ export const moveToFirstPostMigrationReportFrame = async (
   };
 };
 
-export const setLastVaultBalanceAfterTransfer = async (checker: OracleReportSanityChecker, value: bigint) => {
+export const setLastVaultBalanceAfterTransfer = async (checker: OracleReportSanityCheckerWrapper, value: bigint) => {
   await ethers.provider.send("hardhat_setStorageAt", [
     await checker.getAddress(),
     ethers.toBeHex(LAST_VAULT_BALANCE_AFTER_TRANSFER_SLOT, 32),
