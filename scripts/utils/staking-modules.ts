@@ -389,6 +389,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       } else {
         cmdOptions.push(`deploy-csm-impl`);
         cmdOptions.push(`--broadcast`);
+        cmdOptions.push(`--slow`);
         artifactsFile = `upgrade-${chain}.json`;
       }
       cmdOptions.push(`--private-key=${privateKey}`);
