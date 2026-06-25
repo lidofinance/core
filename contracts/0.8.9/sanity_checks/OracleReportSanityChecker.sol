@@ -38,6 +38,8 @@ interface IWithdrawalQueue {
 }
 
 interface IBaseOracle {
+    function SECONDS_PER_SLOT() external view returns (uint256);
+    function GENESIS_TIME() external view returns (uint256);
     function getLastProcessingRefSlot() external view returns (uint256);
 }
 
@@ -143,7 +145,7 @@ struct OperationalLimitsPacked {
 }
 
 struct ReportData {
-    uint64 timestamp;       // Logical report timestamp in seconds
+    uint64 timestamp;       // Report-window timestamp in seconds
     uint128 clBalance;      // Total CL balance (validators + pending) in Wei
     uint128 deposits;       // Deposits for the period since the last report in Wei
     uint128 clWithdrawals;  // Actual ETH moved from CL to withdrawal vault this period
@@ -241,7 +243,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ///      Used to compute actual CL withdrawals: clWithdrawals = WVB_current - lastVaultBalanceAfterTransfer
     uint256 public lastVaultBalanceAfterTransfer;
 
-    /// @dev Logical timestamp of the latest stored report snapshot.
+    /// @dev Timestamp of the latest stored report snapshot used by the CL balance decrease window.
     ///      It is advanced by `_timeElapsed` on each accounting report.
     uint256 public lastReportTimestamp;
 
@@ -553,7 +555,13 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // Since `_calcWindowDiff` sums flows only after the baseline item, migration
         // withdrawals must be stored in a separate, next reportData entry.
         // Migrated transient deposits are not stored here; they belong to the first post-migration report.
-        uint256 migrationReportTimestamp = lastReportTimestamp;
+        // Align the migrated baseline with the latest processed oracle report so that the next
+        // `+ timeElapsed` lands on the current report's ref-slot timestamp.
+        IBaseOracle accountingOracle = IBaseOracle(LIDO_LOCATOR.accountingOracle());
+        uint256 migrationReportTimestamp = accountingOracle.GENESIS_TIME() +
+            accountingOracle.getLastProcessingRefSlot() *
+            accountingOracle.SECONDS_PER_SLOT();
+        lastReportTimestamp = migrationReportTimestamp;
         _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
         _addReportData(migrationReportTimestamp, postWithdrawalsMigrationCLBalance, 0, migrationCLWithdrawals);
 
@@ -762,14 +770,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Checks the exited ETH amount per day derived from the number of newly exited validators.
+    /// @notice Checks the newly exited validators count against the exited ETH amount per day limit.
     /// @dev The check converts newly exited validators to ETH using `exitedValidatorEthAmountLimit`,
     ///     normalizes the result by `_timeElapsed`, and compares it with the stored exited and
     ///     consolidation per-day limits. The stored limits are expressed in 16 ETH exit units and
     ///     are doubled before comparison.
     /// @param _newlyExitedValidatorsCount Number of newly exited validators since previous report.
     /// @param _timeElapsed Time elapsed in seconds since previous report.
-    function checkExitedEthAmountPerDay(
+    function checkExitedValidatorsCount(
         uint256 _newlyExitedValidatorsCount,
         uint256 _timeElapsed
     ) external view {
@@ -778,7 +786,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _newlyExitedValidatorsCount * uint256(limitsList.exitedValidatorEthAmountLimit) * 1 ether;
         uint256 newlyExitedValidatorsEthAmountPerDay =
             _normalizePerDay(newlyExitedValidatorsEthAmount, _timeElapsed);
-        _checkExitedEthAmountPerDay(limitsList, newlyExitedValidatorsEthAmountPerDay);
+        uint256 exitedEthAmountPerDayLimitWithConsolidation =
+            (uint256(limitsList.exitedEthAmountPerDayLimit) + uint256(limitsList.consolidationEthAmountPerDayLimit)) *
+            2 *
+            1 ether;
+        if (newlyExitedValidatorsEthAmountPerDay > exitedEthAmountPerDayLimitWithConsolidation) {
+            revert ExitedEthAmountPerDayLimitExceeded(
+                exitedEthAmountPerDayLimitWithConsolidation,
+                newlyExitedValidatorsEthAmountPerDay
+            );
+        }
     }
 
     /// @notice check the number of node operators reported per extra data item in the accounting oracle report.
@@ -859,22 +876,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
         if (validatorBalancesSum != _clValidatorsBalanceWei) {
             revert InconsistentValidatorsBalanceByModule(_clValidatorsBalanceWei, validatorBalancesSum);
-        }
-    }
-
-    function _checkExitedEthAmountPerDay(
-        AccountingCoreLimitsPacked memory _limitsList,
-        uint256 _exitedEthAmountPerDay
-    ) internal pure {
-        uint256 exitedEthAmountPerDayLimitWithConsolidation =
-            (uint256(_limitsList.exitedEthAmountPerDayLimit) + uint256(_limitsList.consolidationEthAmountPerDayLimit)) *
-            2 *
-            1 ether;
-        if (_exitedEthAmountPerDay > exitedEthAmountPerDayLimitWithConsolidation) {
-            revert ExitedEthAmountPerDayLimitExceeded(
-                exitedEthAmountPerDayLimitWithConsolidation,
-                _exitedEthAmountPerDay
-            );
         }
     }
 
@@ -1126,17 +1127,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // If the balance difference is less than or equal to withdrawals, no check is needed.
         if (_checkParams.preCLBalance - _checkParams.postCLBalance <= _clWithdrawals) return;
 
-        uint256 len = reportData.length;
-        // Need at least two snapshots to build a window: baseline B[X-k] and current point B[X].
-        // With migration we seed them upfront (baseline + bootstrap flow chunk), so checks work immediately.
-        // Without migration this still works, but the very first report cannot be checked and pre-deploy
-        // state is not part of the window until enough post-deploy snapshots are accumulated.
-        if (len < 2) return;
-
         (uint256 actualCLBalanceDiff, uint256 maxAllowedCLBalanceDiff) = _calcWindowDiff(
             _checkParams.maxCLBalanceDecreaseBP,
             _checkParams.postCLBalance,
-            len
+            reportData.length
         );
 
         if (actualCLBalanceDiff == 0) return;
@@ -1237,7 +1231,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @return baselineIndex Index of the snapshot whose CL balance anchors the window diff.
     function _findWindowBaselineIndex(uint256 _lastIndex) internal view returns (uint256 baselineIndex) {
         uint256 lastTimestamp = reportData[_lastIndex].timestamp;
-        uint256 windowStart = lastTimestamp > CL_BALANCE_WINDOW ? lastTimestamp - CL_BALANCE_WINDOW : 0;
+        uint256 windowStart = lastTimestamp - CL_BALANCE_WINDOW;
 
         baselineIndex = _lastIndex;
         while (baselineIndex > 0) {

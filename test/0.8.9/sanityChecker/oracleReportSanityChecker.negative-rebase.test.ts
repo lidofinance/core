@@ -11,7 +11,7 @@ import {
   AccountingOracle__MockForSanityChecker,
   Lido__MockForSanityChecker,
   LidoLocator__MockForSanityChecker,
-  OracleReportSanityChecker,
+  OracleReportSanityCheckerWrapper,
   StakingRouter__MockForSanityChecker,
 } from "typechain-types";
 
@@ -21,12 +21,13 @@ import { Snapshot } from "test/suite";
 
 const SLOTS_PER_DAY = 7200n;
 const REPORTS_WINDOW = 36;
+const CL_BALANCE_WINDOW = BigInt(REPORTS_WINDOW) * 24n * 60n * 60n;
 const MAX_BASIS_POINTS = 10_000n;
 const MAX_CL_BALANCE_DECREASE_BP = 360n; // 3.6%
 
 describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let locator: LidoLocator__MockForSanityChecker;
-  let checker: OracleReportSanityChecker;
+  let checker: OracleReportSanityCheckerWrapper;
   let accountingOracle: AccountingOracle__MockForSanityChecker;
   let accounting: Accounting__MockForSanityChecker;
   let stakingRouter: StakingRouter__MockForSanityChecker;
@@ -165,13 +166,15 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       },
     ]);
 
-    const factory = await ethers.getContractFactory("OracleReportSanityChecker");
+    const factory = await ethers.getContractFactory("OracleReportSanityCheckerWrapper");
     checker = await factory.deploy(
       await locator.getAddress(),
       await accounting.getAddress(),
       deployer.address,
       defaultLimitsList,
+      false,
     );
+    await checker.harness__setLastReportTimestamp(CL_BALANCE_WINDOW);
 
     accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
   });
@@ -1241,6 +1244,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       const depositsCur = ether("320000");
       await lido.mock__setContractVersion(4);
       await lido.mock__setBalanceStats(clActive, clPending, deposits, depositsCur);
+      await setRefSlot(baseRefSlot);
+      const expectedMigrationTimestamp = genesisTime + baseRefSlot * 12n;
 
       const expectedCLBalance = clActive;
       const migrationWithdrawals = await ethers.provider.getBalance(withdrawalVault.address);
@@ -1252,13 +1257,13 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       expect(await checker.getReportDataCount()).to.equal(2);
 
       const baselineData = await checker.reportData(0);
-      expect(baselineData.timestamp).to.equal(0n);
+      expect(baselineData.timestamp).to.equal(expectedMigrationTimestamp);
       expect(baselineData.clBalance).to.equal(expectedCLBalance);
       expect(baselineData.deposits).to.equal(0);
       expect(baselineData.clWithdrawals).to.equal(0);
 
       const bootstrapFlowData = await checker.reportData(1);
-      expect(bootstrapFlowData.timestamp).to.equal(0n);
+      expect(bootstrapFlowData.timestamp).to.equal(expectedMigrationTimestamp);
       expect(bootstrapFlowData.clBalance).to.equal(expectedCLBalance - migrationWithdrawals);
       expect(bootstrapFlowData.deposits).to.equal(0);
       expect(bootstrapFlowData.clWithdrawals).to.equal(migrationWithdrawals);
