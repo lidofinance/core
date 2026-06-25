@@ -450,7 +450,7 @@
       "usePredefinedAddressInstead": null
     },
     "contract": "contracts/0.8.9/DepositSecurityModule.sol",
-    "address": "0x7322AC86E9309403e6db6fF62153d5a31E2EE031",
+    "address": "0xf738F86009Ec704880c9Aa175fc5869F020FEe4e",
     "constructorArgs": [
       "0x00000000219ab540356cBB839Cbe05303d7705Fa",
       "0xCc820558B39ee15C7C45B59390B503b83fb499A8",
@@ -625,14 +625,14 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0xE7f021Ef7ff4fAFa94fbE2044c97A913335c18b9",
+      "address": "0x1dB06d15976954D48765f40d4bDd840C257CD4B9",
       "constructorArgs": [
         {
           "accountingOracle": "0xcb883B1bD0a41512b42D2dB267F2A2cd919FB216",
-          "depositSecurityModule": "0x7322AC86E9309403e6db6fF62153d5a31E2EE031",
+          "depositSecurityModule": "0xf738F86009Ec704880c9Aa175fc5869F020FEe4e",
           "elRewardsVault": "0x9b108015fe433F173696Af3Aa0CF7CDb3E104258",
           "lido": "0x3508A952176b3c15387C97BE809eaffB1982176a",
-          "oracleReportSanityChecker": "0x325B19293FA45B9a34aC10944e428E95d5377761",
+          "oracleReportSanityChecker": "0xD0261b0032A00a7449ee7fbE14d3f98702996441",
           "postTokenRebaseReceiver": "0x9c53d0075eA00ad77dDAd1b71E67bb97AaBC1e3D",
           "burner": "0xb2c99cd38a2636a6281a849C8de938B3eF4A7C3D",
           "stakingRouter": "0xCc820558B39ee15C7C45B59390B503b83fb499A8",
@@ -736,7 +736,7 @@
       "clBalanceOraclesErrorUpperBPLimit": 50
     },
     "contract": "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol",
-    "address": "0x325B19293FA45B9a34aC10944e428E95d5377761",
+    "address": "0xD0261b0032A00a7449ee7fbE14d3f98702996441",
     "constructorArgs": [
       "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
       "0x9b5b78D1C9A3238bF24662067e34c57c83E8c354",
@@ -1007,8 +1007,8 @@
       ["0x256c4eece96b79584A705D8dbFBf29cC876b41b6", "0xB26Fd3b50280AbC55c572EE73071778A51088408", 0, 86399]
     ],
     "voteState": {
-      "voteId": "73",
-      "voteDescription": "SRv3/CMv2 hoodi interim update"
+      "voteId": "77",
+      "voteDescription": "SRv3/CMv2 hoodi DSM/OSC upgrade (update2)"
     }
   },
   "v3Template": {
