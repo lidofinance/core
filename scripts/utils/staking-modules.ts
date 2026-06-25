@@ -2,6 +2,7 @@ import { execFileSync } from "child_process";
 import { HDNodeWallet } from "ethers";
 import fs from "fs";
 import { ethers, network as hardhatNetwork } from "hardhat";
+import { getMode } from "hardhat.helpers";
 import os from "os";
 import path from "path";
 import {
@@ -16,7 +17,7 @@ import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
-const STAKING_MODULES_CHAIN = "local-devnet";
+const STAKING_MODULES_REPO_BRANCH = "develop";
 
 type ExternalDeployArtifact = Record<string, unknown> & {
   CSModule?: string;
@@ -48,6 +49,7 @@ export const CSM_CONTRACTS: Record<string, ContractMap> = {
   permissionlessGate: { kind: "single", addressKey: "PermissionlessGate" },
   ejector: { kind: "single", addressKey: "Ejector" },
   identifiedDVTClusterGate: { kind: "single", addressKey: "IdentifiedDVTClusterGate" },
+  identifiedDVTClusterCurveSetup: { kind: "single", addressKey: "IdentifiedDVTClusterCurveSetup" },
 };
 
 const CM_CONTRACTS: Record<string, ContractMap> = {
@@ -88,6 +90,7 @@ const CSM_TOML_MAP: Record<string, TomlMap> = {
   permissionlessGate: { addressParam: "newPermissionlessGate" },
   ejector: { addressParam: "newEjector" },
   identifiedDVTClusterGate: { addressParam: "identifiedDVTClusterGate" },
+  identifiedDVTClusterCurveSetup: { addressParam: "identifiedDVTClusterCurveSetup" },
 };
 
 const CM_TOML_SECTION = "curatedModule";
@@ -104,6 +107,19 @@ type SubstateEntry = {
   addresses?: string[];
 };
 type Substate = Record<string, SubstateEntry>;
+
+const CHAINS = ["mainnet", "hoodi", "local-devnet"] as const;
+type Chain = (typeof CHAINS)[number];
+const DEFAULT_CHAIN: Chain = "local-devnet";
+
+export function getEnvParams() {
+  /// @dev Supported chains: mainnet, hoodi, local-devnet
+  const rawChain = process.env.NETWORK;
+  return {
+    chain: typeof rawChain === "string" && CHAINS.includes(rawChain as Chain) ? (rawChain as Chain) : DEFAULT_CHAIN,
+    isScratch: getMode() === "scratch",
+  };
+}
 
 function getRpcUrl() {
   const networkConfig = hardhatNetwork.config;
@@ -332,13 +348,23 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
   log(`Cloning staking modules repo to ${tmpDir}...`);
 
   try {
-    run("git", ["clone", "--depth", "1", STAKING_MODULES_REPO, tmpDir], process.cwd(), process.env);
+    run(
+      "git",
+      ["clone", "--depth", "1", "-b", STAKING_MODULES_REPO_BRANCH, "--single-branch", STAKING_MODULES_REPO, tmpDir],
+      process.cwd(),
+      process.env,
+    );
     run("just", ["deps"], tmpDir, process.env);
+
+    const { isScratch, chain } = getEnvParams();
+    const artifactsDir = "./artifacts/local/";
 
     const externalEnv = {
       ...process.env,
       ...getRpcHostPort(rpcUrl),
-      CHAIN: STAKING_MODULES_CHAIN,
+      RPC_URL: rpcUrl,
+      CHAIN: chain,
+      ARTIFACTS_DIR: artifactsDir,
       YARN_IGNORE_NODE: "1",
       DEVNET_CHAIN_ID: chainId.toString(),
       DEVNET_SLOTS_PER_EPOCH: slotsPerEpoch.toString(),
@@ -355,8 +381,19 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
 
     if (!csmDeployed) {
       log("Deploying Community Staking Module from external repo...");
-      run("just", ["deploy-csm", `--private-key=${privateKey}`], tmpDir, externalEnv);
-      const artifact = readArtifact(path.join(tmpDir, "artifacts", "local", "deploy-local-devnet.json"));
+      let artifactsFile: string;
+      const cmdOptions: string[] = [];
+      if (isScratch) {
+        cmdOptions.push(`deploy-csm`);
+        artifactsFile = `deploy-${chain}.json`;
+      } else {
+        cmdOptions.push(`deploy-csm-impl`);
+        cmdOptions.push(`--broadcast`);
+        artifactsFile = `upgrade-${chain}.json`;
+      }
+      cmdOptions.push(`--private-key=${privateKey}`);
+      run("just", cmdOptions, tmpDir, externalEnv);
+      const artifact = readArtifact(path.join(tmpDir, artifactsDir, artifactsFile));
       saveCSMArtifact(state, artifact);
       log(`Community Staking Module deployed at: ${cy(artifact.CSModule!)}`);
       log.emptyLine();
@@ -364,8 +401,14 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
 
     if (!curatedDeployed) {
       log("Deploying Curated Module v2 from external repo...");
-      run("just", ["deploy-curated", `--private-key=${privateKey}`], tmpDir, externalEnv);
-      const artifact = readArtifact(path.join(tmpDir, "artifacts", "local", "curated", "deploy-local-devnet.json"));
+      /// @dev using deploy-curated for both scratch and upgrade, since Curated doesn't exist yet
+      ///      and there's nothing to update. Reserved for future use
+      const cmdOptions: string[] = [];
+      cmdOptions.push("deploy-curated");
+      cmdOptions.push(`--private-key=${privateKey}`);
+      const artifactsFile = `deploy-${chain}.json`;
+      run("just", cmdOptions, tmpDir, externalEnv);
+      const artifact = readArtifact(path.join(tmpDir, artifactsDir, "curated", artifactsFile));
       saveCuratedArtifact(state, artifact);
       log(`Curated Module v2 deployed at: ${cy(artifact.CuratedModule!)}`);
       log.emptyLine();
