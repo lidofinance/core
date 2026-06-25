@@ -9,8 +9,10 @@ import {
   adjustReportModuleBalances,
   buildModuleAccountingReportParams,
   depositAllocatedValidatorsFromBuffer,
+  ensureFirstPostMigrationReport,
   finalizeWQViaElVault,
   getProtocolContext,
+  normalizeWithdrawalVaultBaseline,
   norSdvtEnsureOperators,
   OracleReportParams,
   ProtocolContext,
@@ -236,6 +238,9 @@ describe("Scenario: Protocol Happy Path", () => {
       "Withdrawals reserve": ethers.formatEther(withdrawalsReserve),
       "Depositable ether": ethers.formatEther(depositableEther),
     });
+
+    await ensureFirstPostMigrationReport(ctx);
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
 
     const depositResult = await depositAllocatedValidatorsFromBuffer(ctx, 1n, NOR_MODULE_ID);
     depositCount = depositResult.depositsCount;

@@ -19,6 +19,7 @@ export {
   getNextReportContext,
   getReportTimeElapsed,
   adjustReportModuleBalances,
+  ensureFirstPostMigrationReport,
   waitNextAvailableReportTime,
   handleOracleReport,
   OracleReportParams,
@@ -29,6 +30,7 @@ export {
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   getDepositedSinceLastReport,
+  normalizeWithdrawalVaultBaseline,
 } from "./accounting";
 
 export { ensureDsmGuardians } from "./dsm";

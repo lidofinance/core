@@ -8,8 +8,10 @@ import { advanceChainTime, ether, updateBalance } from "lib";
 import {
   depositAllocatedValidatorsFromBuffer,
   depositValidatorsWithoutReport,
+  ensureFirstPostMigrationReport,
   finalizeWQViaSubmit,
   getProtocolContext,
+  normalizeWithdrawalVaultBaseline,
   ProtocolContext,
   report,
   reportWithEffectiveClDiff,
@@ -32,6 +34,11 @@ describe("Integration: Deposits reserve", () => {
     reportBurner: false,
     skipWithdrawals: true,
   } as const;
+
+  const prepareNoWvbReport = async () => {
+    await ensureFirstPostMigrationReport(ctx);
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+  };
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -183,8 +190,9 @@ describe("Integration: Deposits reserve", () => {
     await lido.connect(holder).submit(ZeroAddress, { value: ether("3") });
     expect(await lido.getWithdrawalsReserve()).to.equal(0n);
 
-    const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Freeze report inputs at refSlot and evaluate finalization budget from dry-run output.
+    await prepareNoWvbReport();
+    const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     const { data } = await report(ctx, {
       refSlot,
       waitNextReportTime: false,
@@ -223,6 +231,7 @@ describe("Integration: Deposits reserve", () => {
     const elRewardsVaultAddress = await locator.elRewardsVault();
     await updateBalance(elRewardsVaultAddress, ether("3"));
 
+    await prepareNoWvbReport();
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Build dry-run report with explicit refSlot to make batches deterministic.
     const dryRunParams = {
@@ -283,6 +292,7 @@ describe("Integration: Deposits reserve", () => {
     const depositsReserveBefore = await lido.getDepositsReserve();
     expect(withdrawalsReserveBefore).to.be.gt(0n);
 
+    await prepareNoWvbReport();
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Build dry-run data at fixed refSlot, then change target and re-run with the same refSlot.
     const dryRunParams = {
@@ -373,6 +383,7 @@ describe("Integration: Deposits reserve", () => {
     const withdrawalsReserveBefore = await lido.getWithdrawalsReserve();
     expect(withdrawalsReserveBefore).to.be.gt(0n);
 
+    await prepareNoWvbReport();
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Fix refSlot first, then spend depositable ether to emulate post-refSlot CL deposits.
     const reportParams = {

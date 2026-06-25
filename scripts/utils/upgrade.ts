@@ -1,4 +1,4 @@
-import { BigNumberish, ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
+import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
 import fs from "fs";
 import { getMode } from "hardhat.helpers";
 
@@ -131,7 +131,7 @@ export const mockAragonVoting = async (state: DeploymentState) => {
   const holder = await getSignerOrImpersonate(holderAddress, ether("100"));
   log("Starting mock Aragon voting...");
 
-  let voteId: BigNumberish | undefined = VOTE_ID || undefined;
+  let voteId = VOTE_ID;
 
   if (!voteId) {
     // try to get voteId from state
@@ -147,7 +147,7 @@ export const mockAragonVoting = async (state: DeploymentState) => {
     // save voteId in deployed state
     updateObjectInState(Sk.upgradeVoteScript, {
       voteState: {
-        voteId: voteId.toString(),
+        voteId,
         voteDescription,
       },
     });
@@ -216,7 +216,7 @@ async function newAragonVoting(
   return voteId;
 }
 
-async function mockEnactAragonVoting(state: DeploymentState, voteId: BigNumberish, holder: HardhatEthersSigner) {
+async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, holder: HardhatEthersSigner) {
   const { voting } = await upgCtx(state);
 
   const vote = await voting.getVote(voteId);

@@ -14,7 +14,13 @@ import {
 
 import { ProtocolContext } from "../types";
 
-import { adjustReportModuleBalances, report, submitReportDataWithConsensusAndEmptyExtraData } from "./accounting";
+import {
+  adjustReportModuleBalances,
+  ensureFirstPostMigrationReport,
+  normalizeWithdrawalVaultBaseline,
+  report,
+  submitReportDataWithConsensusAndEmptyExtraData,
+} from "./accounting";
 import { norSdvtSetOperatorStakingLimit } from "./nor-sdvt";
 import { NOR_MODULE_ID, SDVT_MODULE_ID } from "./staking-module";
 
@@ -482,6 +488,8 @@ export const seedProtocolPendingBaseline = async (
   moduleId: bigint,
   depositsCount: bigint = 1n,
 ) => {
+  await ensureFirstPostMigrationReport(ctx);
+  await normalizeWithdrawalVaultBaseline(ctx, 0n);
   await depositValidatorsWithoutReport(ctx, depositsCount, moduleId);
   const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
 
@@ -518,6 +526,9 @@ export const seedProtocolPendingBaseline = async (
 
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
   const { lido, withdrawalQueue, stakingRouter } = ctx.contracts;
+
+  await ensureFirstPostMigrationReport(ctx);
+  await normalizeWithdrawalVaultBaseline(ctx, 0n);
 
   const ethToDeposit = depositsCount * DEPOSIT_SIZE;
   const submitValue = (await withdrawalQueue.unfinalizedStETH()) + ethToDeposit;

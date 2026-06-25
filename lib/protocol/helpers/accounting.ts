@@ -3,6 +3,7 @@ import { ContractTransactionResponse, formatEther, Result } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { AccountingOracle } from "typechain-types";
 import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.sol/Accounting";
@@ -137,7 +138,8 @@ export const report = async (
     vaultsDataTreeCid = "",
   }: OracleReportParams = {},
 ): Promise<OracleReportResults> => {
-  const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle } = ctx.contracts;
+  const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle, oracleReportSanityChecker } =
+    ctx.contracts;
 
   if (waitNextReportTime) {
     await waitNextAvailableReportTime(ctx);
@@ -171,13 +173,32 @@ export const report = async (
     reportElVault = false;
   }
 
-  withdrawalVaultBalance = reportWithdrawalsVault ? withdrawalVaultBalance : 0n;
+  const lastVaultBalanceAfterTransfer = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
+  let freshCLWithdrawals = 0n;
+  if (reportWithdrawalsVault) {
+    if (withdrawalVaultBalance < lastVaultBalanceAfterTransfer) {
+      throw new Error(
+        `Reported withdrawal vault balance ${withdrawalVaultBalance} is below ORSC baseline ${lastVaultBalanceAfterTransfer}`,
+      );
+    }
+    freshCLWithdrawals = withdrawalVaultBalance - lastVaultBalanceAfterTransfer;
+  } else {
+    if (lastVaultBalanceAfterTransfer !== 0n) {
+      throw new Error(
+        `Cannot report withdrawal vault as zero while ORSC baseline is ${lastVaultBalanceAfterTransfer}; call normalizeWithdrawalVaultBaseline(ctx, 0n) first`,
+      );
+    }
+    withdrawalVaultBalance = 0n;
+  }
   elRewardsVaultBalance = reportElVault ? elRewardsVaultBalance : 0n;
 
   let postCLBalance = preCLBalance + clDiff;
-  // adjust postCLBalance to keep correct cl balance increase
-  if (postCLBalance > withdrawalVaultBalance) {
-    postCLBalance -= withdrawalVaultBalance;
+  // ORSC treats only WVB growth over the previous post-transfer baseline as
+  // fresh CL withdrawals for this report.
+  if (freshCLWithdrawals >= postCLBalance) {
+    postCLBalance = 0n;
+  } else {
+    postCLBalance -= freshCLWithdrawals;
   }
 
   log.debug("Beacon", {
@@ -297,6 +318,81 @@ export const reportWithEffectiveClDiff = async (
   return report(ctx, { ...params, clDiff: depositedSinceLastReport + effectiveClDiff });
 };
 
+export const ensureFirstPostMigrationReport = async (ctx: ProtocolContext): Promise<void> => {
+  const { oracleReportSanityChecker } = ctx.contracts;
+  if (await oracleReportSanityChecker.isPostMigrationFirstReportDone()) return;
+
+  // This is a real AccountingOracle report: it consumes the migration-only
+  // module-balance skip and may process WVB already present on the fork.
+  await reportWithEffectiveClDiff(ctx, 0n, {
+    reportBurner: false,
+    reportElVault: false,
+    reportWithdrawalsVault: true,
+    skipWithdrawals: true,
+  });
+};
+
+export const normalizeWithdrawalVaultBaseline = async (ctx: ProtocolContext, target: bigint = 0n): Promise<void> => {
+  const { accounting, lido, oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
+
+  const lastVaultBalanceAfterTransfer = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
+  const actualWithdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
+
+  if (lastVaultBalanceAfterTransfer === target && actualWithdrawalVaultBalance === target) return;
+
+  if (!(await oracleReportSanityChecker.isPostMigrationFirstReportDone())) {
+    throw new Error("Cannot normalize WVB baseline before the first post-migration AccountingOracle report");
+  }
+
+  if (lastVaultBalanceAfterTransfer === target) {
+    await setBalance(withdrawalVault.address, target);
+  } else {
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const accountingSigner = await impersonate(accounting.address, ether("1"));
+
+    let preCLValidatorsBalance = clValidatorsBalanceAtLastReport;
+    let reportedWithdrawalVaultBalance = lastVaultBalanceAfterTransfer;
+    let withdrawalsVaultTransfer = lastVaultBalanceAfterTransfer - target;
+
+    if (lastVaultBalanceAfterTransfer < target) {
+      const freshBaseline = target - lastVaultBalanceAfterTransfer;
+      preCLValidatorsBalance += freshBaseline;
+      reportedWithdrawalVaultBalance = target;
+      withdrawalsVaultTransfer = 0n;
+    }
+
+    await setBalance(withdrawalVault.address, reportedWithdrawalVaultBalance);
+
+    // Direct ORSC setup intentionally appends reportData and finalizes the WVB
+    // baseline, but only after the first real post-migration report is done.
+    await oracleReportSanityChecker
+      .connect(accountingSigner)
+      .checkAccountingOracleReport(
+        0n,
+        preCLValidatorsBalance,
+        clPendingBalanceAtLastReport,
+        clValidatorsBalanceAtLastReport,
+        clPendingBalanceAtLastReport,
+        reportedWithdrawalVaultBalance,
+        0n,
+        0n,
+        0n,
+        withdrawalsVaultTransfer,
+      );
+
+    await setBalance(withdrawalVault.address, target);
+  }
+
+  expect(await oracleReportSanityChecker.lastVaultBalanceAfterTransfer()).to.equal(
+    target,
+    "WVB baseline normalization mismatch",
+  );
+  expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(
+    target,
+    "Withdrawal vault balance normalization mismatch",
+  );
+};
+
 export const resetCLBalanceDecreaseWindow = async (
   ctx: ProtocolContext,
   params: Omit<OracleReportParams, "clDiff"> = {},
@@ -322,6 +418,8 @@ export async function reportWithoutExtraData(
   } = {},
 ) {
   const { accountingOracle } = ctx.contracts;
+
+  await normalizeWithdrawalVaultBaseline(ctx, 0n);
 
   const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = extraData;
 

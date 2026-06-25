@@ -2,11 +2,15 @@ import { expect } from "chai";
 import { ContractTransactionReceipt, LogDescription, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+
 import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib";
 import { LIMITER_PRECISION_BASE } from "lib/constants";
 import {
+  ensureFirstPostMigrationReport,
   getProtocolContext,
   getReportTimeElapsed,
+  normalizeWithdrawalVaultBaseline,
   ProtocolContext,
   removeStakingLimit,
   report,
@@ -346,7 +350,10 @@ describe("Integration: Accounting", () => {
       .requestTimestampMargin;
     await advanceChainTime(requestTimestampMargin + 1n);
 
+    await ensureFirstPostMigrationReport(ctx);
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
+
     const dryRunParams = {
       refSlot,
       waitNextReportTime: false,
@@ -610,6 +617,78 @@ describe("Integration: Accounting", () => {
     expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
   });
 
+  it("Should account correctly with withdrawals at limits", async () => {
+    await ensureFirstPostMigrationReport(ctx);
+
+    const withdrawals = await rebaseLimitWei();
+    await normalizeWithdrawalVaultBaseline(ctx, withdrawals);
+
+    const beforeState = await readState();
+
+    // Report
+    const params = { clDiff: 0n, reportElVault: false, reportWithdrawalsVault: true };
+    const { reportTx } = (await report(ctx, params)) as {
+      reportTx: TransactionResponse;
+      extraDataTx: TransactionResponse;
+    };
+
+    const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
+
+    const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
+
+    await expectStateChanges(beforeState, {
+      internalEther: withdrawals - amountOfETHLocked,
+      internalShares: mintedSharesSum - sharesBurntAmount,
+      lidoBalance: withdrawals - amountOfETHLocked,
+      withdrawalVaultBalance: 0n - withdrawals,
+      burnerShares: sharesToBurn - sharesBurntAmount,
+    });
+
+    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
+    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore);
+
+    const withdrawalsReceivedEvent = ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")[0];
+    expect(withdrawalsReceivedEvent.args.amount).to.equal(withdrawals);
+  });
+
+  it("Should account correctly with withdrawals above limits", async () => {
+    await ensureFirstPostMigrationReport(ctx);
+
+    const expectedWithdrawals = await rebaseLimitWei();
+    const withdrawalsExcess = ether("10");
+    const withdrawals = expectedWithdrawals + withdrawalsExcess;
+
+    await normalizeWithdrawalVaultBaseline(ctx, withdrawals);
+
+    const beforeState = await readState();
+
+    const params = { clDiff: 0n, reportElVault: false, reportWithdrawalsVault: true };
+    const { reportTx } = (await report(ctx, params)) as {
+      reportTx: TransactionResponse;
+      extraDataTx: TransactionResponse;
+    };
+
+    const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+    const { amountOfETHLocked, sharesBurntAmount, sharesToBurn } = getWithdrawalParamsFromEvent(reportTxReceipt);
+
+    const mintedSharesSum = await expectTransferFeesEvents(reportTxReceipt);
+
+    await expectStateChanges(beforeState, {
+      internalEther: expectedWithdrawals - amountOfETHLocked,
+      internalShares: mintedSharesSum - sharesBurntAmount,
+      lidoBalance: expectedWithdrawals - amountOfETHLocked,
+      withdrawalVaultBalance: 0n - expectedWithdrawals,
+      burnerShares: sharesToBurn - sharesBurntAmount,
+    });
+
+    const [sharesRateBefore, sharesRateAfter] = sharesRateFromEvent(reportTxReceipt);
+    expect(sharesRateAfter).to.be.greaterThan(sharesRateBefore);
+
+    const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
+    expect(withdrawalsReceivedEvent.args.amount).to.equal(expectedWithdrawals);
+  });
+
   it("Should account correctly shares burn at limits", async () => {
     const { lido, burner, wstETH: whale, accounting } = ctx.contracts;
     await ensureWhaleHasFunds(ether("10000"));
@@ -690,6 +769,102 @@ describe("Integration: Accounting", () => {
     await expectStateChanges(stateBefore, {
       internalShares: -1n * limit,
       burnerShares: -1n * limit,
+    });
+  });
+
+  it("Should account correctly overfill both vaults", async () => {
+    const { withdrawalVault, elRewardsVault } = ctx.contracts;
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    const limit = await rebaseLimitWei();
+    const excess = limit / 2n; // 2nd report will take two halves of the excess of the limit size
+    const limitWithExcess = limit + excess;
+
+    await normalizeWithdrawalVaultBaseline(ctx, limitWithExcess);
+    await setBalance(elRewardsVault.address, limitWithExcess);
+
+    const beforeState = await readState();
+
+    let elVaultExcess = 0n;
+    let amountOfETHLocked = 0n;
+    let updatedLimit = 0n;
+    let mintedSharesSum = 0n;
+    {
+      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
+      const { reportTx } = (await report(ctx, params)) as {
+        reportTx: TransactionResponse;
+        extraDataTx: TransactionResponse;
+      };
+      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+
+      updatedLimit = await rebaseLimitWei();
+      elVaultExcess = limitWithExcess - (updatedLimit - excess);
+
+      amountOfETHLocked = getWithdrawalParamsFromEvent(reportTxReceipt).amountOfETHLocked;
+
+      expect(await ethers.provider.getBalance(withdrawalVault.address)).to.equal(
+        excess,
+        "Expected withdrawals vault to be filled with excess rewards",
+      );
+
+      const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
+      expect(withdrawalsReceivedEvent.args.amount).to.equal(limit, "WithdrawalsReceived: amount mismatch");
+
+      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
+      expect(elRewardsVaultBalance).to.equal(limitWithExcess, "Expected EL vault to be kept unchanged");
+      expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived")).to.be.empty;
+
+      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt);
+    }
+    {
+      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
+      const { reportTx } = (await report(ctx, params)) as {
+        reportTx: TransactionResponse;
+        extraDataTx: TransactionResponse;
+      };
+      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+
+      const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
+      expect(withdrawalVaultBalance).to.equal(0, "Expected withdrawals vault to be emptied");
+
+      const withdrawalsReceivedEvent = getFirstEvent(reportTxReceipt, "WithdrawalsReceived");
+      expect(withdrawalsReceivedEvent.args.amount).to.equal(excess, "WithdrawalsReceived: amount mismatch");
+
+      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
+      expect(elRewardsVaultBalance).to.equal(elVaultExcess, "Expected EL vault to be filled with excess rewards");
+
+      const elRewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
+      expect(elRewardsEvent.args.amount).to.equal(updatedLimit - excess, "ELRewardsReceived: amount mismatch");
+
+      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt);
+    }
+    {
+      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
+      const { reportTx } = (await report(ctx, params)) as {
+        reportTx: TransactionResponse;
+        extraDataTx: TransactionResponse;
+      };
+      const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+
+      expect(ctx.getEvents(reportTxReceipt, "WithdrawalsReceived")).to.be.empty;
+
+      const elRewardsVaultBalance = await ethers.provider.getBalance(elRewardsVault.address);
+      expect(elRewardsVaultBalance).to.equal(0, "Expected EL vault to be emptied");
+
+      const rewardsEvent = getFirstEvent(reportTxReceipt, "ELRewardsReceived");
+      expect(rewardsEvent.args.amount).to.equal(elVaultExcess, "ELRewardsReceived: amount mismatch");
+
+      mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt, true);
+    }
+
+    await expectStateChanges(beforeState, {
+      totalELRewardsCollected: limitWithExcess,
+      internalEther: limitWithExcess * 2n - amountOfETHLocked,
+      lidoBalance: limitWithExcess * 2n - amountOfETHLocked,
+      elRewardsVaultBalance: 0n - limitWithExcess,
+      withdrawalVaultBalance: 0n - limitWithExcess,
+      internalShares: mintedSharesSum,
     });
   });
 });
