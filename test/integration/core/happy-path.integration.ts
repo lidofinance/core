@@ -357,35 +357,40 @@ describe("Scenario: Protocol Happy Path", () => {
     const transferEvents = ctx.getEvents(reportTxReceipt, "Transfer");
     const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
 
-    let toBurnerTransfer: LogDescriptionExtended | undefined;
-    let transferIdx = 0;
+    let toBurnerTransfer, toNorTransfer, toSdvtTransfer: LogDescriptionExtended | undefined;
+    let numExpectedTransferEvents = Number(await stakingRouter.getStakingModulesCount()) + 2; // +1 initial mint, +1 for the treasury
     if (wereWithdrawalsFinalized) {
-      toBurnerTransfer = transferEvents[transferIdx++];
+      numExpectedTransferEvents += 1; // +1 for the burner transfer
+      [toBurnerTransfer, , toNorTransfer, toSdvtTransfer] = transferEvents;
+    } else {
+      [, toNorTransfer, toSdvtTransfer] = transferEvents;
     }
-
-    transferIdx++; // initial mint
-    const toNorTransfer = transferEvents[transferIdx++];
-    const toSdvtTransfer = transferEvents[transferIdx++];
-
-    let numExpectedTransferEvents = transferIdx + 1; // +1 for the treasury
-
-    const skipExternalModuleTransfers = async (moduleId: bigint) => {
-      if ((await stakingRouter.getModuleValidatorsBalance(moduleId)) === 0n) {
-        return;
-      }
-
-      transferIdx += 2; // reward transfer to the module + module internal transfer
-      numExpectedTransferEvents += 2;
-    };
 
     if (csm !== undefined) {
-      await skipExternalModuleTransfers(ctx.modules.csm!.id);
+      if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
+        // +1 for the CSM internal transfer
+        numExpectedTransferEvents += 1;
+      } else {
+        // no reward transfer to modules with 0 validators balance
+        numExpectedTransferEvents -= 1;
+      }
     }
     if (cmv2 !== undefined) {
-      await skipExternalModuleTransfers(ctx.modules.cmv2!.id);
+      if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
+        // +1 for the CSM internal transfer
+        numExpectedTransferEvents += 1;
+      } else {
+        // no reward transfer to modules with 0 validators balance
+        numExpectedTransferEvents -= 1;
+      }
     }
-    const toTreasuryTransfer = transferEvents[transferIdx];
-    const toTreasuryTransferShares = transferSharesEvents[transferIdx];
+    const findTransferFromAccountingTo = (events: LogDescriptionExtended[], to: string) =>
+      events.find((event) => {
+        const args = event.args.toObject();
+        return args.from === accounting.address && args.to === to;
+      });
+    const toTreasuryTransfer = findTransferFromAccountingTo(transferEvents, treasuryAddress);
+    const toTreasuryTransferShares = findTransferFromAccountingTo(transferSharesEvents, treasuryAddress);
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
     if (toTreasuryTransfer === undefined) {
