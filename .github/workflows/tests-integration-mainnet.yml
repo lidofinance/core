@@ -26,7 +26,8 @@ jobs:
         uses: ./.github/workflows/setup
 
       - name: Run integration tests
-        run: yarn test:integration:upgrade:local
+        run: yarn test:integration:upgrade
         env:
           NETWORK: "mainnet"
+          RUN_NETWORK: "local"
           RPC_URL: "${{ secrets.ETH_RPC_URL }}"
