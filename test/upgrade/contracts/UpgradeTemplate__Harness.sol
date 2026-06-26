@@ -3,7 +3,7 @@ pragma solidity >=0.8.25;
 
 import {UpgradeTemplate} from "contracts/upgrade/UpgradeTemplate.sol";
 
-contract UpgradeTemplate_Harness {
+contract UpgradeTemplate__Harness {
     UpgradeTemplate public immutable TEMPLATE;
 
     constructor(address _template) {
