@@ -70,13 +70,19 @@ describe("Integration: Accounting", () => {
     return (maxPositiveTokeRebase * internalEther) / LIMITER_PRECISION_BASE;
   };
 
+  /**
+   * Submit a report without moving current CL pending into active validators.
+   *
+   * These Accounting cases check vault and buffer effects, not CL activation.
+   * The raw `clDiff` still includes deposits up to the current report ref slot,
+   * but the same `depositedForCurrentReport` amount is reported as pending.
+   * This keeps the CL rebase neutral for the scenario under test.
+   */
   async function reportWithNoClActivation(params: NonNullable<Parameters<typeof report>[1]>) {
     await waitNextAvailableReportTime(ctx);
 
     const { clPendingBalanceAtLastReport, depositedForCurrentReport } = await ctx.contracts.lido.getBalanceStats();
 
-    // These Accounting cases check vault/buffer effects. Keep current CL
-    // pending as pending so the report does not add unrelated CL activation.
     return report(ctx, {
       ...params,
       waitNextReportTime: false,
@@ -637,6 +643,9 @@ describe("Integration: Accounting", () => {
     await ensureFirstPostMigrationReport(ctx);
 
     const withdrawals = await rebaseLimitWei();
+    // Seed WVB as already known to ORSC, not as fresh CL withdrawals. The
+    // target report still passes full WVB, so only Accounting's smoothing cap
+    // decides how much can be collected.
     await normalizeWithdrawalVaultBaseline(ctx, withdrawals);
 
     const beforeState = await readState();
@@ -675,6 +684,9 @@ describe("Integration: Accounting", () => {
     const withdrawalsExcess = ether("10");
     const withdrawals = expectedWithdrawals + withdrawalsExcess;
 
+    // Seed WVB as already known to ORSC, not as fresh CL withdrawals. The
+    // target report still passes full WVB, so only Accounting's smoothing cap
+    // decides how much can be collected.
     await normalizeWithdrawalVaultBaseline(ctx, withdrawals);
 
     const beforeState = await readState();
@@ -797,6 +809,9 @@ describe("Integration: Accounting", () => {
     const excess = limit / 2n; // 2nd report will take two halves of the excess of the limit size
     const limitWithExcess = limit + excess;
 
+    // Seed WVB as already known to ORSC, not as fresh CL withdrawals. The
+    // target report still passes full WVB, so only Accounting's smoothing cap
+    // decides how much can be collected.
     await normalizeWithdrawalVaultBaseline(ctx, limitWithExcess);
     await setBalance(elRewardsVault.address, limitWithExcess);
 

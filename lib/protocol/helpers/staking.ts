@@ -165,6 +165,14 @@ export const setStakingLimit = async (
   await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
 };
 
+/**
+ * Run one real module-level StakingRouter deposit from DSM.
+ *
+ * The protocol deposit path accepts a staking module id, not an operator id.
+ * This helper only impersonates DSM and calls the real router. The caller must
+ * prepare module allocation before the call and verify the resulting deposit
+ * delta after it.
+ */
 const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint) => {
   const { depositSecurityModule, stakingRouter } = ctx.contracts;
 
@@ -172,11 +180,29 @@ const depositValidatorsViaRouter = async (ctx: ProtocolContext, moduleId: bigint
   await stakingRouter.connect(dsmSigner).deposit(moduleId, "0x");
 };
 
+/**
+ * Read total deposited validators over all staking modules.
+ *
+ * Router deposits can use less data than requested if the module returns fewer
+ * keys. Tests compare this value before and after `StakingRouter.deposit()` to
+ * prove the exact number of validators was really deposited.
+ */
 const getTotalDepositedValidators = async (ctx: ProtocolContext) => {
   const moduleDigests = await ctx.contracts.stakingRouter.getAllStakingModuleDigests();
   return moduleDigests.reduce((sum, digest) => sum + digest.summary.totalDepositedValidators, 0n);
 };
 
+/**
+ * Prepare one staking module for a deterministic module-level deposit.
+ *
+ * On forks the router can allocate buffered ETH to another module. This helper
+ * makes the target module active, pauses other modules, gives the target module
+ * full deposit share for this test setup, and checks that router allocation can
+ * cover the requested deposit count.
+ *
+ * It does not choose a concrete node operator inside NOR/SDVT. Those modules
+ * decide operator allocation themselves.
+ */
 const prepareStakingModuleForTestDeposit = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
   const { lido, stakingRouter } = ctx.contracts;
   const managerSigner = await getStakingModuleManagerSigner(ctx);
@@ -239,6 +265,13 @@ const prepareStakingModuleForTestDeposit = async (ctx: ProtocolContext, moduleId
   }
 };
 
+/**
+ * Return NOR as the default module for tests that do not pass a module id.
+ *
+ * Many older tests were written against NOR fixtures. Without an explicit
+ * module id, this helper keeps that default visible and fails clearly if NOR is
+ * not available in the current protocol state.
+ */
 const getDefaultDepositModuleId = async (ctx: ProtocolContext) => {
   const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
   if (!moduleIds.includes(NOR_MODULE_ID)) {
@@ -248,6 +281,14 @@ const getDefaultDepositModuleId = async (ctx: ProtocolContext) => {
   return NOR_MODULE_ID;
 };
 
+/**
+ * Deposit buffered ETH into a prepared module and return exact deltas.
+ *
+ * The helper spends already-depositable ETH through the real router path. It
+ * checks buffer usage, Lido's deposited-since-last-report value, and total
+ * deposited validators, so later report setup can use measured deltas instead
+ * of guessed values.
+ */
 const depositPreparedValidatorsFromBuffer = async (
   ctx: ProtocolContext,
   depositsCount: bigint,
@@ -285,12 +326,27 @@ const depositPreparedValidatorsFromBuffer = async (
   };
 };
 
+/**
+ * Return a known key-based staking module by id.
+ *
+ * Only NOR and SDVT expose the operator/key helper methods used by this file.
+ * Other staking modules may have different deposit data rules, so this helper
+ * refuses to prepare their keys implicitly.
+ */
 const getNorSdvtModule = (ctx: ProtocolContext, moduleId: bigint) => {
   if (moduleId === NOR_MODULE_ID) return ctx.contracts.nor;
   if (moduleId === SDVT_MODULE_ID) return ctx.contracts.sdvt;
   return undefined;
 };
 
+/**
+ * Make sure selected NOR/SDVT modules have enough vetted keys.
+ *
+ * Module-level deposits can fail if the selected module has too few vetted
+ * keys. If the module is already depositable for the requested count, this is a
+ * no-op. Otherwise it raises staking limits for active operators to their added
+ * key count, which makes the module able to return enough deposit data.
+ */
 const ensureOperatorsHaveAvailableKeys = async (
   ctx: ProtocolContext,
   moduleIdsToCheck: bigint[],
@@ -329,6 +385,14 @@ const ensureOperatorsHaveAvailableKeys = async (
   }
 };
 
+/**
+ * Spend already-buffered ETH through the real router deposit path.
+ *
+ * Use this when a test wants to consume current depositable ETH without adding
+ * a new oracle report. The optional module id keeps the deposit in a known
+ * staking module, but it does not pin a concrete node operator inside that
+ * module.
+ */
 export const depositAllocatedValidatorsFromBuffer = async (
   ctx: ProtocolContext,
   depositsCount: bigint = 1n,
@@ -338,6 +402,16 @@ export const depositAllocatedValidatorsFromBuffer = async (
   return depositPreparedValidatorsFromBuffer(ctx, depositsCount, moduleId);
 };
 
+/**
+ * Add enough ETH if needed, then deposit validators without a report.
+ *
+ * Tests that stage pending validators need the report to account those pending
+ * deposits in the module where the router really deposited them. If current
+ * depositable ether is not enough, the helper submits enough ETH to cover both
+ * the requested deposit and any reserve blocked by unfinalized withdrawals.
+ * Then it performs a real module-level router deposit and returns the pending
+ * CL balance delta per module.
+ */
 export const depositValidatorsWithoutReport = async (
   ctx: ProtocolContext,
   depositsCount: bigint,
@@ -380,13 +454,20 @@ export const depositValidatorsWithoutReport = async (
   return validatorsDeltaGweiByModule;
 };
 
+/**
+ * Create a report where new deposits stay in CL pending balance.
+ *
+ * Some tests need pending validators to exist before the target report, but
+ * must not activate them yet. This helper first moves the protocol past the
+ * migration-only report and clears WVB history to zero. Then it deposits
+ * validators and submits a report where those validators stay in
+ * `clPendingBalanceGwei`.
+ */
 export const seedProtocolPendingBaseline = async (
   ctx: ProtocolContext,
   moduleId: bigint,
   depositsCount: bigint = 1n,
 ) => {
-  // This helper snapshots new deposits as CL pending and intentionally reports
-  // no vault rewards, so WVB history must be zeroed before the report.
   await ensureFirstPostMigrationReport(ctx);
   await normalizeWithdrawalVaultBaseline(ctx, 0n);
   await depositValidatorsWithoutReport(ctx, depositsCount, moduleId);
@@ -423,6 +504,16 @@ export const seedProtocolPendingBaseline = async (
   });
 };
 
+/**
+ * Deposit validators into a module and report them as active on CL.
+ *
+ * This helper provisions validators for tests that only care about having more
+ * active CL validators. It removes unrelated WVB/EL rewards from the report
+ * setup, deposits through the real module-level router path, and submits a
+ * report that activates only those deposited validators.
+ *
+ * It does not choose a concrete node operator inside the module.
+ */
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
   const { lido, withdrawalQueue } = ctx.contracts;
 

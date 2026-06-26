@@ -172,6 +172,18 @@ export const report = async (
     reportElVault = false;
   }
 
+  // Keep report() honest about WVB history.
+  //
+  // ORSC stores the WithdrawalVault balance left after the previous report in
+  // `lastVaultBalanceAfterTransfer`. When this report includes WVB, only the
+  // growth over that baseline is a fresh CL withdrawal and must be subtracted
+  // from generated CL balance. Reporting a lower WVB would describe an
+  // impossible negative withdrawal delta, so fail the test setup explicitly.
+  //
+  // When a test opts out of WVB reporting, report() must not hide an existing
+  // ORSC baseline by silently reporting zero. The caller must first normalize
+  // WVB history to zero, otherwise this report would skip real WVB state by
+  // accident.
   const lastVaultBalanceAfterTransfer = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
   let freshCLWithdrawals = 0n;
   if (reportWithdrawalsVault) {
@@ -309,11 +321,12 @@ export const getDepositedSinceLastReport = async (ctx: ProtocolContext): Promise
 };
 
 /**
- * Submit report with an effective CL delta between reports.
+ * Submit a report with an exact effective CL change.
  *
- * `report()` expects `clDiff` as raw `postCLBalance - preCLBalance`.
- * Since `preCLBalance` is based on last report snapshot, deposits made after that
- * snapshot must be added to preserve the intended effective delta.
+ * `report()` uses `clDiff` to build generated CL balance before fresh WVB
+ * withdrawals are subtracted. Deposits made after the previous report snapshot
+ * are part of that generated balance too. This helper adds those deposits, so
+ * the caller controls the intended CL rebase part: `effectiveClDiff`.
  */
 export const reportWithEffectiveClDiff = async (
   ctx: ProtocolContext,
@@ -324,6 +337,17 @@ export const reportWithEffectiveClDiff = async (
   return report(ctx, { ...params, clDiff: depositedSinceLastReport + effectiveClDiff });
 };
 
+/**
+ * Finish the one-time post-migration Accounting report, if needed.
+ *
+ * ORSC treats the first report after migration as a special baseline report.
+ * WVB baseline setup must run after that point, because it edits the normal
+ * ORSC report history. This helper sends a real Accounting report with zero
+ * effective CL rebase when the migration report is still pending. It is not
+ * vault-neutral: WVB already present in the current state is reported through
+ * the normal Accounting path. If the first report was already done, this is a
+ * no-op.
+ */
 export const ensureFirstPostMigrationReport = async (ctx: ProtocolContext): Promise<void> => {
   const { oracleReportSanityChecker } = ctx.contracts;
   if (await oracleReportSanityChecker.isPostMigrationFirstReportDone()) return;
@@ -338,6 +362,16 @@ export const ensureFirstPostMigrationReport = async (ctx: ProtocolContext): Prom
   });
 };
 
+/**
+ * Align actual WVB and ORSC WVB history to the same value.
+ *
+ * ORSC compares the reported WithdrawalVault balance with
+ * `lastVaultBalanceAfterTransfer`. Any positive difference is treated as fresh
+ * CL withdrawals. Accounting cap tests need the next report to see no fresh
+ * withdrawal delta and then cap the full WVB inside `smoothenTokenRebase()`.
+ *
+ * Use this only as explicit test setup after the first post-migration report.
+ */
 export const normalizeWithdrawalVaultBaseline = async (ctx: ProtocolContext, target: bigint = 0n): Promise<void> => {
   const { accounting, lido, oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
 
@@ -412,6 +446,18 @@ export const resetCLBalanceDecreaseWindow = async (
   });
 };
 
+/**
+ * Submit main report data without submitting extra data yet.
+ *
+ * Extra-data tests need the oracle to stop after the main report phase. This
+ * helper builds the main report hash, reaches consensus, submits only the main
+ * report, and returns the values needed for the later extra-data submit.
+ *
+ * It reports EL and WVB as zero because vault balances are not part of these
+ * scenarios. That zero must still match a valid ORSC WVB history. Callers must
+ * reach that state through explicit setup, such as a prior report or documented
+ * baseline normalization, not by passing an unexplained vault number.
+ */
 export async function reportWithoutExtraData(
   ctx: ProtocolContext,
   numExitedValidatorsByStakingModule: bigint[],

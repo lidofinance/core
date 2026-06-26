@@ -35,6 +35,14 @@ describe("Integration: Deposits reserve", () => {
     skipWithdrawals: true,
   } as const;
 
+  /**
+   * Prepare a report that must not include WVB rewards.
+   *
+   * Deposits-reserve cases check buffer and reserve math. On a fork, ORSC can
+   * already remember a non-zero WithdrawalVault balance from history. This setup
+   * moves past the migration-only report if needed and aligns WVB history to
+   * zero, so the next report cannot collect unrelated WVB rewards.
+   */
   const prepareNoWvbReport = async () => {
     await ensureFirstPostMigrationReport(ctx);
     await normalizeWithdrawalVaultBaseline(ctx, 0n);
