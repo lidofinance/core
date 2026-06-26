@@ -16,6 +16,8 @@ jobs:
     services:
       hardhat-node:
         image: ghcr.io/lidofinance/hardhat-node:2.28.0
+        env:
+          ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
         ports:
           - 8545:8545
 
