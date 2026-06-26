@@ -27,12 +27,12 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      # # https://github.com/foundry-rs/foundry-toolchain
-      # - name: Install foundry
-      #   uses: foundry-rs/foundry-toolchain@v1
+      # https://github.com/foundry-rs/foundry-toolchain
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@v1
 
-      # - name: Install just
-      #   run: cargo install just
+      - name: Install just
+        run: cargo install just
 
       - name: Run integration tests
         run: yarn test:integration:upgrade
