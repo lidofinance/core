@@ -154,7 +154,7 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
      *    (`RootPrecedesLastTopUp`);
      *  - the module's withdrawal credentials are not of type 0x02 (`WrongWithdrawalCredentials`);
      *  - any validator pubkey has a length different from 48 bytes (`WrongPubkeyLength`);
-     *  - any validator has activationEpoch >= current epoch (derived from beacon root slot) (`ValidatorIsNotActivated`);
+     *  - any validator has activationEpoch > current epoch (derived from beacon root slot) (`ValidatorIsNotActivated`);
      *  - any validator Merkle proof fails verification in CLValidatorVerifier.
      */
     function topUp(TopUpData calldata _topUps) external onlyRole(TOP_UP_ROLE) whenResumed {
