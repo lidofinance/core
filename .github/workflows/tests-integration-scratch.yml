@@ -39,4 +39,5 @@ jobs:
         run: yarn test:integration:scratch
         env:
           NETWORK: "local"
+          RPC_URL: "http://localhost:8545"
           INTEGRATION_WITH_CSM: "off"
