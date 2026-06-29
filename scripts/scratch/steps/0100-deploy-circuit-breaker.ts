@@ -16,7 +16,7 @@ export async function main() {
   const state = readNetworkState({ deployer });
 
   // Check if CircuitBreaker address is already specified
-  if (state[Sk.circuitBreaker].address) {
+  if (state[Sk.circuitBreaker]?.address) {
     log(`Using the specified CircuitBreaker address: ${cy(state[Sk.circuitBreaker].address)}`);
     log.emptyLine();
     return;
