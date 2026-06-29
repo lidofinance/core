@@ -399,7 +399,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       }
       cmdOptions.push(`--private-key=${privateKey}`);
       run("just", cmdOptions, tmpDir, externalEnv);
-      const artifact = readArtifact(path.join(tmpDir, artifactsDir, artifactsFile));
+      const artifact = readArtifact(path.join(tmpDir, artifactsDir, "csm", artifactsFile));
       saveCSMArtifact(state, artifact, isScratch);
       log(`Community Staking Module deployed at: ${cy(artifact.CSModule!)}`);
       log.emptyLine();
