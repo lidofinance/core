@@ -180,8 +180,8 @@ contract AccountingOracle is BaseOracle {
         /// the stakingModuleIdsWithNewlyExitedValidators array as observed at the
         /// reference slot.
         uint256[] numExitedValidatorsByStakingModule;
-        /// @dev Ids of staking modules that have effective balances changed compared to the number
-        /// stored in the respective staking module contract as observed at the reference slot.
+        /// @dev Ids of all staking modules. 
+        /// The order matches `validatorBalancesGweiByStakingModule`.
         uint256[] stakingModuleIdsWithUpdatedBalance;
         /// @dev Sum of consensus-layer validator balances (`validator.balance`)
         /// for each staking module in `stakingModuleIdsWithUpdatedBalance`,

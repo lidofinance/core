@@ -757,7 +757,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         depositedSinceLastReport = _getDepositedPostReport();
         (depositedForCurrentReport,) = _getDepositedNextReportAdjusted();
-        /// @dev depositedNextReport is always less than depositedPostReport, so we can safely subtract
+        /// @dev depositedNextReport is always less than or equal to depositedPostReport, so we can safely subtract
         depositedForCurrentReport = depositedSinceLastReport - depositedForCurrentReport;
     }
 

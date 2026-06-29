@@ -241,7 +241,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         }
 
         // Calculate total balance of validators being exited in ETH (uint256)
-        // Module 1 (curated) uses 32 ETH, other modules use 2048 ETH per validator
         uint256 totalExitBalanceEth = _calculateTotalExitBalanceEth(data.data, data.dataFormat);
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(
             totalExitBalanceEth
