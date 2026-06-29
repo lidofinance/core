@@ -10,8 +10,8 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
-  reportWithoutClActivation,
   reportVaultDataWithProof,
+  reportWithoutClActivation,
   setupLidoForVaults,
 } from "lib/protocol";
 import { advanceChainTime, days } from "lib/time";

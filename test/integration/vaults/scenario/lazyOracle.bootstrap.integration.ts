@@ -7,8 +7,8 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
-  reportWithoutClActivation,
   reportVaultDataWithProof,
+  reportWithoutClActivation,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";

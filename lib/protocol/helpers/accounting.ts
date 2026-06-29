@@ -107,19 +107,10 @@ export function adjustReportModuleBalances(
 /**
  * Prepare and push oracle report.
  */
-export const report = async (
-  ctx: ProtocolContext,
-  params: OracleReportParams = {},
-): Promise<OracleReportResults> => {
-  let {
-    clDiff,
+export const report = async (ctx: ProtocolContext, params: OracleReportParams = {}): Promise<OracleReportResults> => {
+  const {
     clAppearedValidators = 0n,
     clPendingBalanceGwei = 0n,
-    elRewardsVaultBalance = null,
-    withdrawalVaultBalance = null,
-    sharesRequestedToBurn = null,
-    withdrawalFinalizationBatches = [],
-    refSlot = null,
     dryRun = false,
     excludeVaultsBalances = false,
     skipWithdrawals = false,
@@ -130,13 +121,21 @@ export const report = async (
     extraDataList = new Uint8Array(),
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
+    reportBurner = true,
+    vaultsDataTreeRoot = ZERO_BYTES32,
+    vaultsDataTreeCid = "",
+  } = params;
+  let {
+    clDiff,
+    elRewardsVaultBalance = null,
+    withdrawalVaultBalance = null,
+    sharesRequestedToBurn = null,
+    withdrawalFinalizationBatches = [],
+    refSlot = null,
     stakingModuleIdsWithUpdatedBalance = [],
     validatorBalancesGweiByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
-    reportBurner = true,
-    vaultsDataTreeRoot = ZERO_BYTES32,
-    vaultsDataTreeCid = "",
   } = params;
   const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle, oracleReportSanityChecker } =
     ctx.contracts;

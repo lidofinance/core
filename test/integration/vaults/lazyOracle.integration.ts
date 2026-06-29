@@ -10,8 +10,8 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
-  reportWithoutClActivation,
   reportVaultDataWithProof,
+  reportWithoutClActivation,
   setupLidoForVaults,
 } from "lib/protocol";
 import { calculateLockedValue, createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";

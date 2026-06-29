@@ -41,7 +41,6 @@ import { LoadedContract, ProtocolContext } from "../types";
 import {
   ensureFirstPostMigrationReport,
   normalizeWithdrawalVaultBaseline,
-  report,
   waitNextAvailableReportTime,
 } from "./accounting";
 
