@@ -183,36 +183,36 @@ contract UpgradeConfig is IUpgradeConfig {
         CoreUpgradeParams memory coreUpgradeParams = params.coreUpgrade;
 
         // Save passed parameters
-        AGENT = _nonZeroAddress(params.agent);
-        KERNEL = _nonZeroAddress(IAragonApp(AGENT).kernel());
-        ACL = _nonZeroAddress(IAragonKernel(KERNEL).acl());
+        AGENT = params.agent;
+        KERNEL = IAragonApp(AGENT).kernel();
+        ACL = IAragonKernel(KERNEL).acl();
 
-        VOTING = _nonZeroAddress(params.voting);
-        DUAL_GOVERNANCE = _nonZeroAddress(params.dualGovernance);
-        RESEAL_MANAGER = _nonZeroAddress(IDualGovernance(DUAL_GOVERNANCE).getResealManager());
-        CIRCUIT_BREAKER = _nonZeroAddress(params.circuitBreaker);
-        CIRCUIT_BREAKER_COMMITTEE = _nonZeroAddress(params.circuitBreakerCommittee);
+        VOTING = params.voting;
+        DUAL_GOVERNANCE = params.dualGovernance;
+        RESEAL_MANAGER = IDualGovernance(DUAL_GOVERNANCE).getResealManager();
+        CIRCUIT_BREAKER = params.circuitBreaker;
+        CIRCUIT_BREAKER_COMMITTEE = params.circuitBreakerCommittee;
 
-        EASY_TRACK = _nonZeroAddress(params.easyTrack);
-        EASY_TRACK_EVM_SCRIPT_EXECUTOR = _nonZeroAddress(IEasyTrack(params.easyTrack).evmScriptExecutor());
+        EASY_TRACK = params.easyTrack;
+        EASY_TRACK_EVM_SCRIPT_EXECUTOR = IEasyTrack(params.easyTrack).evmScriptExecutor();
 
-        NEW_LOCATOR_IMPL = _nonZeroAddress(coreUpgradeParams.newLocatorImpl);
-        NEW_LIDO_IMPL = _nonZeroAddress(coreUpgradeParams.newLidoImpl);
-        NEW_ACCOUNTING_ORACLE_IMPL = _nonZeroAddress(coreUpgradeParams.newAccountingOracleImpl);
-        NEW_STAKING_ROUTER_IMPL = _nonZeroAddress(coreUpgradeParams.newStakingRouterImpl);
-        NEW_ACCOUNTING_IMPL = _nonZeroAddress(coreUpgradeParams.newAccountingImpl);
-        NEW_WITHDRAWAL_VAULT_IMPL = _nonZeroAddress(coreUpgradeParams.newWithdrawalVaultImpl);
-        NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL = _nonZeroAddress(coreUpgradeParams.newValidatorsExitBusOracleImpl);
-        CONSOLIDATION_BUS_IMPL = _nonZeroAddress(coreUpgradeParams.consolidationBusImpl);
-        CONSOLIDATION_MIGRATOR_IMPL = _nonZeroAddress(coreUpgradeParams.consolidationMigratorImpl);
-        TOP_UP_GATEWAY_IMPL = _nonZeroAddress(coreUpgradeParams.topUpGatewayImpl);
+        NEW_LOCATOR_IMPL = coreUpgradeParams.newLocatorImpl;
+        NEW_LIDO_IMPL = coreUpgradeParams.newLidoImpl;
+        NEW_ACCOUNTING_ORACLE_IMPL = coreUpgradeParams.newAccountingOracleImpl;
+        NEW_STAKING_ROUTER_IMPL = coreUpgradeParams.newStakingRouterImpl;
+        NEW_ACCOUNTING_IMPL = coreUpgradeParams.newAccountingImpl;
+        NEW_WITHDRAWAL_VAULT_IMPL = coreUpgradeParams.newWithdrawalVaultImpl;
+        NEW_VALIDATORS_EXIT_BUS_ORACLE_IMPL = coreUpgradeParams.newValidatorsExitBusOracleImpl;
+        CONSOLIDATION_BUS_IMPL = coreUpgradeParams.consolidationBusImpl;
+        CONSOLIDATION_MIGRATOR_IMPL = coreUpgradeParams.consolidationMigratorImpl;
+        TOP_UP_GATEWAY_IMPL = coreUpgradeParams.topUpGatewayImpl;
 
-        CONSOLIDATION_BUS = _nonZeroAddress(coreUpgradeParams.consolidationBus);
-        CONSOLIDATION_MIGRATOR = _nonZeroAddress(coreUpgradeParams.consolidationMigrator);
+        CONSOLIDATION_BUS = coreUpgradeParams.consolidationBus;
+        CONSOLIDATION_MIGRATOR = coreUpgradeParams.consolidationMigrator;
 
         LIDO_DEPOSITS_RESERVE_TARGET = coreUpgradeParams.lidoDepositsReserveTarget;
-        CONSOLIDATION_COMMITTEE = _nonZeroAddress(coreUpgradeParams.consolidationCommittee);
-        TOP_UP_GATEWAY_DEPOSITOR = _nonZeroAddress(coreUpgradeParams.topUpGatewayDepositor);
+        CONSOLIDATION_COMMITTEE = coreUpgradeParams.consolidationCommittee;
+        TOP_UP_GATEWAY_DEPOSITOR = coreUpgradeParams.topUpGatewayDepositor;
         TW_MAX_EXIT_REQUESTS_LIMIT = coreUpgradeParams.twMaxExitRequestsLimit;
         TW_EXITS_PER_FRAME = coreUpgradeParams.twExitsPerFrame;
         TW_FRAME_DURATION_IN_SEC = coreUpgradeParams.twFrameDurationInSec;
@@ -227,83 +227,83 @@ contract UpgradeConfig is IUpgradeConfig {
 
         // EasyTrack new factories
         EasyTrackNewFactories memory newFactories = params.newFactories;
-        ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS = _nonZeroAddress(newFactories.UpdateStakingModuleShareLimits);
-        ETF_NEW_ALLOW_CONSOLIDATION_PAIR = _nonZeroAddress(newFactories.AllowConsolidationPair);
-        ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CSM = _nonZeroAddress(newFactories.SetMerkleGateTreeForCSM);
+        ETF_NEW_UPDATE_STAKING_MODULE_SHARE_LIMITS = newFactories.UpdateStakingModuleShareLimits;
+        ETF_NEW_ALLOW_CONSOLIDATION_PAIR = newFactories.AllowConsolidationPair;
+        ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CSM = newFactories.SetMerkleGateTreeForCSM;
         ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CSM =
-            _nonZeroAddress(newFactories.ReportWithdrawalsForSlashedValidatorsForCSM);
-        ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CSM = _nonZeroAddress(newFactories.SettleGeneralDelayedPenaltyForCSM);
-        ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM = _nonZeroAddress(newFactories.SetMerkleGateTreeForCM);
+        newFactories.ReportWithdrawalsForSlashedValidatorsForCSM;
+        ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CSM = newFactories.SettleGeneralDelayedPenaltyForCSM;
+        ETF_NEW_SET_MERKLE_GATE_TREE_FOR_CM = newFactories.SetMerkleGateTreeForCM;
         ETF_NEW_REPORT_WITHDRAWALS_FOR_SLASHED_VALIDATORS_FOR_CM =
-            _nonZeroAddress(newFactories.ReportWithdrawalsForSlashedValidatorsForCM);
-        ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM = _nonZeroAddress(newFactories.SettleGeneralDelayedPenaltyForCM);
-        ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP = _nonZeroAddress(newFactories.CreateOrUpdateOperatorGroupForCM);
+        newFactories.ReportWithdrawalsForSlashedValidatorsForCM;
+        ETF_NEW_SETTLE_GENERAL_DELAYED_PENALTY_FOR_CM = newFactories.SettleGeneralDelayedPenaltyForCM;
+        ETF_NEW_CREATE_OR_UPDATE_OPERATOR_GROUP = newFactories.CreateOrUpdateOperatorGroupForCM;
 
         // EasyTrack old factories
         EasyTrackOldFactories memory oldFactories = params.oldFactories;
-        ETF_OLD_SETTLE_EL_STEALING_PENALTY = _nonZeroAddress(oldFactories.CSMSettleElStealingPenalty);
-        ETF_OLD_CSM_SET_VETTED_GATE_TREE = _nonZeroAddress(oldFactories.CSMSetVettedGateTree);
+        ETF_OLD_SETTLE_EL_STEALING_PENALTY = oldFactories.CSMSettleElStealingPenalty;
+        ETF_OLD_CSM_SET_VETTED_GATE_TREE = oldFactories.CSMSetVettedGateTree;
 
         // Discover via locator
-        LOCATOR = _nonZeroAddress(params.locator);
+        LOCATOR = params.locator;
         ILidoLocator oldLocator = ILidoLocator(params.locator);
-        OLD_DEPOSIT_SECURITY_MODULE = _nonZeroAddress(oldLocator.depositSecurityModule());
+        OLD_DEPOSIT_SECURITY_MODULE = oldLocator.depositSecurityModule();
 
         ILidoLocator locator = ILidoLocator(coreUpgradeParams.newLocatorImpl);
-        LIDO = _nonZeroAddress(locator.lido());
+        LIDO = locator.lido();
         LIDO_APP_ID = IAragonApp(LIDO).appId();
 
-        ACCOUNTING_ORACLE = _nonZeroAddress(locator.accountingOracle());
-        ACCOUNTING = _nonZeroAddress(locator.accounting());
-        STAKING_ROUTER = _nonZeroAddress(locator.stakingRouter());
-        VALIDATORS_EXIT_BUS_ORACLE = _nonZeroAddress(locator.validatorsExitBusOracle());
-        WITHDRAWAL_VAULT = _nonZeroAddress(locator.withdrawalVault());
-        TOP_UP_GATEWAY = _nonZeroAddress(locator.topUpGateway());
-        BURNER = _nonZeroAddress(locator.burner());
-        TRIGGERABLE_WITHDRAWALS_GATEWAY = _nonZeroAddress(locator.triggerableWithdrawalsGateway());
-        CONSOLIDATION_GATEWAY = _nonZeroAddress(locator.consolidationGateway());
-        NEW_ORACLE_REPORT_SANITY_CHECKER = _nonZeroAddress(locator.oracleReportSanityChecker());
-        NEW_DEPOSIT_SECURITY_MODULE = _nonZeroAddress(locator.depositSecurityModule());
+        ACCOUNTING_ORACLE = locator.accountingOracle();
+        ACCOUNTING = locator.accounting();
+        STAKING_ROUTER = locator.stakingRouter();
+        VALIDATORS_EXIT_BUS_ORACLE = locator.validatorsExitBusOracle();
+        WITHDRAWAL_VAULT = locator.withdrawalVault();
+        TOP_UP_GATEWAY = locator.topUpGateway();
+        BURNER = locator.burner();
+        TRIGGERABLE_WITHDRAWALS_GATEWAY = locator.triggerableWithdrawalsGateway();
+        CONSOLIDATION_GATEWAY = locator.consolidationGateway();
+        NEW_ORACLE_REPORT_SANITY_CHECKER = locator.oracleReportSanityChecker();
+        NEW_DEPOSIT_SECURITY_MODULE = locator.depositSecurityModule();
 
         /// CSMv3
         CSMUpgradeParams memory csmUpgradeParams = params.csmUpgrade;
 
-        CSM = _nonZeroAddress(csmUpgradeParams.csmProxy);
-        CSM_IMPL = _nonZeroAddress(csmUpgradeParams.csmImpl);
-        CSM_PARAMETERS_REGISTRY_IMPL = _nonZeroAddress(csmUpgradeParams.parametersRegistryImpl);
-        CSM_FEE_ORACLE_IMPL = _nonZeroAddress(csmUpgradeParams.feeOracleImpl);
+        CSM = csmUpgradeParams.csmProxy;
+        CSM_IMPL = csmUpgradeParams.csmImpl;
+        CSM_PARAMETERS_REGISTRY_IMPL = csmUpgradeParams.parametersRegistryImpl;
+        CSM_FEE_ORACLE_IMPL = csmUpgradeParams.feeOracleImpl;
         CSM_FEE_ORACLE_CONSENSUS_VERSION = csmUpgradeParams.feeOracleConsensusVersion;
-        CSM_VETTED_GATE = _nonZeroAddress(csmUpgradeParams.vettedGateProxy);
-        CSM_IDENTIFIED_DVT_CLUSTER_GATE = _nonZeroAddress(csmUpgradeParams.identifiedDVTClusterGate);
-        CSM_IDENTIFIED_DVT_CLUSTER_CURVE_SETUP = _nonZeroAddress(csmUpgradeParams.identifiedDVTClusterCurveSetup);
+        CSM_VETTED_GATE = csmUpgradeParams.vettedGateProxy;
+        CSM_IDENTIFIED_DVT_CLUSTER_GATE = csmUpgradeParams.identifiedDVTClusterGate;
+        CSM_IDENTIFIED_DVT_CLUSTER_CURVE_SETUP = csmUpgradeParams.identifiedDVTClusterCurveSetup;
         CSM_IDENTIFIED_DVT_CLUSTER_BOND_CURVE_ID = csmUpgradeParams.identifiedDVTClusterBondCurveId;
-        CSM_VETTED_GATE_IMPL = _nonZeroAddress(csmUpgradeParams.vettedGateImpl);
-        CSM_ACCOUNTING_IMPL = _nonZeroAddress(csmUpgradeParams.accountingImpl);
-        CSM_FEE_DISTRIBUTOR_IMPL = _nonZeroAddress(csmUpgradeParams.feeDistributorImpl);
-        CSM_EXIT_PENALTIES_IMPL = _nonZeroAddress(csmUpgradeParams.exitPenaltiesImpl);
-        CSM_STRIKES_IMPL = _nonZeroAddress(csmUpgradeParams.strikesImpl);
-        CSM_OLD_PERMISSIONLESS_GATE = _nonZeroAddress(csmUpgradeParams.oldPermissionlessGate);
-        CSM_OLD_VERIFIER = _nonZeroAddress(csmUpgradeParams.oldVerifier);
-        CSM_NEW_VERIFIER = _nonZeroAddress(csmUpgradeParams.newVerifier);
-        CSM_NEW_PERMISSIONLESS_GATE = _nonZeroAddress(csmUpgradeParams.newPermissionlessGate);
-        CSM_EJECTOR = _nonZeroAddress(csmUpgradeParams.newEjector);
-        CSM_COMMITTEE = _nonZeroAddress(csmUpgradeParams.csmCommittee);
+        CSM_VETTED_GATE_IMPL = csmUpgradeParams.vettedGateImpl;
+        CSM_ACCOUNTING_IMPL = csmUpgradeParams.accountingImpl;
+        CSM_FEE_DISTRIBUTOR_IMPL = csmUpgradeParams.feeDistributorImpl;
+        CSM_EXIT_PENALTIES_IMPL = csmUpgradeParams.exitPenaltiesImpl;
+        CSM_STRIKES_IMPL = csmUpgradeParams.strikesImpl;
+        CSM_OLD_PERMISSIONLESS_GATE = csmUpgradeParams.oldPermissionlessGate;
+        CSM_OLD_VERIFIER = csmUpgradeParams.oldVerifier;
+        CSM_NEW_VERIFIER = csmUpgradeParams.newVerifier;
+        CSM_NEW_PERMISSIONLESS_GATE = csmUpgradeParams.newPermissionlessGate;
+        CSM_EJECTOR = csmUpgradeParams.newEjector;
+        CSM_COMMITTEE = csmUpgradeParams.csmCommittee;
 
         IBaseModuleV3 csm = IBaseModuleV3(CSM);
-        CSM_PARAMETERS_REGISTRY = _nonZeroAddress(csm.PARAMETERS_REGISTRY());
-        CSM_ACCOUNTING = _nonZeroAddress(csm.ACCOUNTING());
-        CSM_EXIT_PENALTIES = _nonZeroAddress(csm.EXIT_PENALTIES());
-        CSM_FEE_DISTRIBUTOR = _nonZeroAddress(csm.FEE_DISTRIBUTOR());
-        CSM_FEE_ORACLE = _nonZeroAddress(IFeeDistributorV3(CSM_FEE_DISTRIBUTOR).ORACLE());
-        CSM_STRIKES = _nonZeroAddress(IFeeOracleV3(CSM_FEE_ORACLE).STRIKES());
-        CSM_OLD_EJECTOR = _nonZeroAddress(IValidatorStrikesV3(CSM_STRIKES).ejector());
+        CSM_PARAMETERS_REGISTRY = csm.PARAMETERS_REGISTRY();
+        CSM_ACCOUNTING = csm.ACCOUNTING();
+        CSM_EXIT_PENALTIES = csm.EXIT_PENALTIES();
+        CSM_FEE_DISTRIBUTOR = csm.FEE_DISTRIBUTOR();
+        CSM_FEE_ORACLE = IFeeDistributorV3(CSM_FEE_DISTRIBUTOR).ORACLE();
+        CSM_STRIKES = IFeeOracleV3(CSM_FEE_ORACLE).STRIKES();
+        CSM_OLD_EJECTOR = IValidatorStrikesV3(CSM_STRIKES).ejector();
 
         // CMv2
         CuratedModuleParams memory curatedModuleParams = params.curatedModule;
 
-        CURATED_MODULE = _nonZeroAddress(curatedModuleParams.module);
+        CURATED_MODULE = curatedModuleParams.module;
         for (uint256 i = 0; i < curatedModuleParams.curatedGates.length; ++i) {
-            CURATED_GATES.push(_nonZeroAddress(curatedModuleParams.curatedGates[i]));
+            CURATED_GATES.push(curatedModuleParams.curatedGates[i]);
         }
         CURATED_MODULE_NAME = Bytes32String.toBytes32(curatedModuleParams.moduleName);
         CURATED_STAKE_SHARE_LIMIT = curatedModuleParams.stakeShareLimit;
@@ -314,27 +314,18 @@ contract UpgradeConfig is IUpgradeConfig {
         CURATED_MIN_DEPOSIT_BLOCK_DISTANCE = curatedModuleParams.minDepositBlockDistance;
         CURATED_FEE_ORACLE_CONSENSUS_VERSION = curatedModuleParams.feeOracleConsensusVersion;
         CURATED_HASH_CONSENSUS_INITIAL_EPOCH = curatedModuleParams.hashConsensusInitialEpoch;
-        CURATED_VERIFIER = _nonZeroAddress(curatedModuleParams.verifier);
-        CURATED_CIRCUIT_BREAKER_PAUSER = _nonZeroAddress(curatedModuleParams.circuitBreakerPauser);
+        CURATED_VERIFIER = curatedModuleParams.verifier;
+        CURATED_CIRCUIT_BREAKER_PAUSER = curatedModuleParams.circuitBreakerPauser;
 
         ICuratedModule curatedModule = ICuratedModule(CURATED_MODULE);
-        CURATED_META_REGISTRY = _nonZeroAddress(curatedModule.META_REGISTRY());
-        CURATED_PARAMETERS_REGISTRY = _nonZeroAddress(curatedModule.PARAMETERS_REGISTRY());
-        CURATED_ACCOUNTING = _nonZeroAddress(curatedModule.ACCOUNTING());
-        CURATED_FEE_DISTRIBUTOR = _nonZeroAddress(curatedModule.FEE_DISTRIBUTOR());
-        CURATED_FEE_ORACLE = _nonZeroAddress(IFeeDistributorV3(CURATED_FEE_DISTRIBUTOR).ORACLE());
-        CURATED_HASH_CONSENSUS = _nonZeroAddress(IFeeOracleV3(CURATED_FEE_ORACLE).getConsensusContract());
-        CURATED_STRIKES = _nonZeroAddress(IFeeOracleV3(CURATED_FEE_ORACLE).STRIKES());
-        CURATED_EJECTOR = _nonZeroAddress(IValidatorStrikesV3(CURATED_STRIKES).ejector());
-    }
-
-    /**
-     * @notice Reverts with {ZeroAddress} if `addr` is the zero address, otherwise returns it unchanged.
-     * @dev Helper used to validate every address assigned in the constructor.
-     */
-    function _nonZeroAddress(address addr) internal pure returns (address) {
-        if (addr == address(0)) revert ZeroAddress();
-        return addr;
+        CURATED_META_REGISTRY = curatedModule.META_REGISTRY();
+        CURATED_PARAMETERS_REGISTRY = curatedModule.PARAMETERS_REGISTRY();
+        CURATED_ACCOUNTING = curatedModule.ACCOUNTING();
+        CURATED_FEE_DISTRIBUTOR = curatedModule.FEE_DISTRIBUTOR();
+        CURATED_FEE_ORACLE = IFeeDistributorV3(CURATED_FEE_DISTRIBUTOR).ORACLE();
+        CURATED_HASH_CONSENSUS = IFeeOracleV3(CURATED_FEE_ORACLE).getConsensusContract();
+        CURATED_STRIKES = IFeeOracleV3(CURATED_FEE_ORACLE).STRIKES();
+        CURATED_EJECTOR = IValidatorStrikesV3(CURATED_STRIKES).ejector();
     }
 
     function getGlobalConfig() external view returns (GlobalConfig memory) {
@@ -477,6 +468,4 @@ contract UpgradeConfig is IUpgradeConfig {
             metaRegistry: CURATED_META_REGISTRY
         });
     }
-
-    error ZeroAddress();
 }
