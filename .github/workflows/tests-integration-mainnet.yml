@@ -39,5 +39,3 @@ jobs:
         env:
           NETWORK: "mainnet"
           RUN_NETWORK: "local"
-          RPC_URL: "http://localhost:8545"
-          # RPC_URL: "${{ secrets.ETH_RPC_URL }}"
