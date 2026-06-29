@@ -86,14 +86,8 @@ function getLineEnding(content: string): string {
   return content.includes("\r\n") ? "\r\n" : "\n";
 }
 
-/**
- * Updates a single key in TOML section while preserving the rest of the file as-is.
- * If the key doesn't exist in the section, appends it at the end of the section.
- */
-export function writeUpgradeEasyTrackFactoryAddress(sectionName: string, paramKey: string, address: string): void {
-  const filePath = getUpgradeParametersFilePath();
-  const content = fs.readFileSync(filePath, "utf8");
-
+// Locate the [section] body within the TOML file and split the file around it.
+function _sliceTomlSection(content: string, sectionName: string, filePath: string) {
   const sectionHeaderRegex = new RegExp(`^\\s*\\[${escapeRegExp(sectionName)}\\]\\s*$`, "m");
   const sectionHeaderMatch = sectionHeaderRegex.exec(content);
   if (!sectionHeaderMatch) {
@@ -105,19 +99,65 @@ export function writeUpgradeEasyTrackFactoryAddress(sectionName: string, paramKe
   const nextSectionMatch = /^\s*\[[^\]]+\]\s*$/m.exec(contentAfterSectionHeader);
   const sectionEnd = nextSectionMatch ? sectionStart + nextSectionMatch.index : content.length;
 
-  const beforeSection = content.slice(0, sectionStart);
-  const sectionContent = content.slice(sectionStart, sectionEnd);
-  const afterSection = content.slice(sectionEnd);
+  return {
+    beforeSection: content.slice(0, sectionStart),
+    sectionContent: content.slice(sectionStart, sectionEnd),
+    afterSection: content.slice(sectionEnd),
+  };
+}
 
-  const keyLineRegex = new RegExp(`^(\\s*${escapeRegExp(paramKey)}\\s*=\\s*")([^"]*)(".*)$`, "m");
-  let updatedSectionContent: string;
+// Replace (or append) a `paramKey = <rendered>` line within the given section content.
+function _setTomlKeyLine(content: string, sectionContent: string, paramKey: string, rendered: string): string {
+  const keyLineRegex = new RegExp(`^(\\s*${escapeRegExp(paramKey)}\\s*=\\s*).*$`, "m");
 
   if (keyLineRegex.test(sectionContent)) {
-    updatedSectionContent = sectionContent.replace(keyLineRegex, `$1${address}$3`);
+    return sectionContent.replace(keyLineRegex, `$1${rendered}`);
+  }
+  const lineEnding = getLineEnding(content);
+  const separator = sectionContent.endsWith("\n") || sectionContent.endsWith("\r\n") ? "" : lineEnding;
+  return `${sectionContent}${separator}${paramKey} = ${rendered}${lineEnding}`;
+}
+
+/**
+ * Updates a single address key in a TOML section while preserving the rest of the file as-is.
+ * If the key doesn't exist in the section, appends it at the end of the section.
+ */
+export function writeUpgradeParameterAddress(sectionName: string, paramKey: string, address: string): void {
+  const filePath = getUpgradeParametersFilePath();
+  const content = fs.readFileSync(filePath, "utf8");
+
+  const { beforeSection, sectionContent, afterSection } = _sliceTomlSection(content, sectionName, filePath);
+  const updatedSectionContent = _setTomlKeyLine(content, sectionContent, paramKey, `"${address}"`);
+
+  const updatedContent = `${beforeSection}${updatedSectionContent}${afterSection}`;
+  if (updatedContent !== content) {
+    fs.writeFileSync(filePath, updatedContent, "utf8");
+  }
+}
+
+/**
+ * Updates an array-of-addresses key in a TOML section while preserving the rest of the file as-is.
+ * Renders a multi-line TOML array. Appends the key if missing.
+ */
+export function writeUpgradeParameterAddresses(sectionName: string, paramKey: string, addresses: string[]): void {
+  const filePath = getUpgradeParametersFilePath();
+  const content = fs.readFileSync(filePath, "utf8");
+  const lineEnding = getLineEnding(content);
+
+  const rendered =
+    addresses.length === 0
+      ? "[]"
+      : `[${lineEnding}${addresses.map((a) => `    "${a}",`).join(lineEnding)}${lineEnding}]`;
+
+  const { beforeSection, sectionContent, afterSection } = _sliceTomlSection(content, sectionName, filePath);
+
+  // Match the key and any existing multi-line array value so we replace the whole array.
+  const arrayKeyRegex = new RegExp(`^(\\s*${escapeRegExp(paramKey)}\\s*=\\s*)\\[[^\\]]*\\]`, "m");
+  let updatedSectionContent: string;
+  if (arrayKeyRegex.test(sectionContent)) {
+    updatedSectionContent = sectionContent.replace(arrayKeyRegex, `$1${rendered}`);
   } else {
-    const lineEnding = getLineEnding(content);
-    const separator = sectionContent.endsWith("\n") || sectionContent.endsWith("\r\n") ? "" : lineEnding;
-    updatedSectionContent = `${sectionContent}${separator}${paramKey} = "${address}"${lineEnding}`;
+    updatedSectionContent = _setTomlKeyLine(content, sectionContent, paramKey, rendered);
   }
 
   const updatedContent = `${beforeSection}${updatedSectionContent}${afterSection}`;

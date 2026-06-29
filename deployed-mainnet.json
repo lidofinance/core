@@ -581,6 +581,57 @@
     "address": "0x7914b5a1539b97Bd0bbd155757F25FD79A522d24"
   },
   "scratchDeployGasUsed": "65129226",
+  "sm:CSM": {
+    "proxy": {
+      "address": "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F",
+      "contract": "external:staking-modules/src/CSModule.sol:CSModule",
+      "constructorArgs": []
+    },
+    "contracts": {
+      "module": {
+        "proxy": { "address": "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F" },
+        "implementation": { "address": "0x1eB6d4da13ca9566c17F526aE0715325d7a07665" }
+      },
+      "accounting": {
+        "proxy": { "address": "0x4d72BFF1BeaC69925F8Bd12526a39BAAb069e5Da" },
+        "implementation": { "address": "0x6f09d2426c7405C5546413e6059F884D2D03f449" }
+      },
+      "parametersRegistry": {
+        "proxy": { "address": "0x9D28ad303C90DF524BA960d7a2DAC56DcC31e428" },
+        "implementation": { "address": "0x25fdC3BE9977CD4da679dF72A64C8B6Bd5216A78" }
+      },
+      "feeOracle": {
+        "proxy": { "address": "0x4D4074628678Bd302921c20573EEa1ed38DdF7FB" },
+        "implementation": { "address": "0xe0B234f99E413E27D9Bc31aBba9A49A3e570Da97" }
+      },
+      "feeDistributor": {
+        "proxy": { "address": "0xD99CC66fEC647E68294C6477B40fC7E0F6F618D0" },
+        "implementation": { "address": "0x5DCF7cF7c6645E9E822a379dF046a8b0390251A1" }
+      },
+      "exitPenalties": {
+        "proxy": { "address": "0x06cd61045f958A209a0f8D746e103eCc625f4193" },
+        "implementation": { "address": "0xDa22fA1CEa40d05Fe4CD536967afdD839586D546" }
+      },
+      "strikes": {
+        "proxy": { "address": "0xaa328816027F2D32B9F56d190BC9Fa4A5C07637f" },
+        "implementation": { "address": "0x3E5021424c9e13FC853e523Cd68ebBec848956a0" }
+      },
+      "vettedGate": {
+        "proxy": { "address": "0xB314D4A76C457c93150d308787939063F4Cc67E0" },
+        "implementation": { "address": "0x65D4D92Cd0EabAa05cD5A46269C24b71C21cfdc4" }
+      },
+      "verifier": { "address": "0xdC5FE1782B6943f318E05230d688713a560063DC" },
+      "permissionlessGate": { "address": "0xcF33a38111d0B1246A3F38a838fb41D626B454f0" },
+      "ejector": { "address": "0xc72b58aa02E0e98cF8A4a0E9Dce75e763800802C" }
+    },
+    "gateSeal": {
+      "address": "0xE1686C2E90eb41a48356c1cC7FaA17629af3ADB3",
+      "factoryAddress": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24",
+      "sealDuration": 950400,
+      "expiryTimestamp": 1789648283,
+      "sealingCommittee": "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
+    }
+  },
   "stakingRouter": {
     "proxy": {
       "address": "0xFdDf38947aFB03C621C71b06C9C70bce73f12999",

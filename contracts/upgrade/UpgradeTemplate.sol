@@ -125,6 +125,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION = 5;
     uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
     uint256 public constant EXPECTED_FINAL_COMMUNITY_FEE_ORACLE_VERSION = 3;
+    uint256 public constant EXPECTED_FINAL_DSM_VERSION = 4;
 
     uint64 public constant EXPECTED_FINAL_CSM_MODULE_INITIALIZED_VERSION = 3;
     uint64 public constant EXPECTED_FINAL_CSM_PARAMETERS_REGISTRY_INITIALIZED_VERSION = 3;
@@ -582,6 +583,11 @@ contract UpgradeTemplate is IUpgradeTemplate {
     function _checkDSMMigration(GlobalConfig memory g, CoreUpgradeConfig memory c) internal view {
         IDepositSecurityModule dsm = IDepositSecurityModule(c.newDepositSecurityModule);
         IDepositSecurityModule oldDsm = IDepositSecurityModule(c.oldDepositSecurityModule);
+
+        if (dsm.VERSION() != EXPECTED_FINAL_DSM_VERSION) {
+            revert DSMMigrationIncorrectVersion();
+        }
+
         if (dsm.getOwner() != g.agent) {
             revert DSMMigrationIncorrectOwner();
         }
@@ -813,6 +819,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error SRMigrationIncorrectWithdrawalCredentials();
     error SRMigrationIncorrectConsolidationMigratorTargetModuleId(uint256 newModuleId, uint256 targetModuleId);
 
+    error DSMMigrationIncorrectVersion();
     error DSMMigrationIncorrectOwner();
     error DSMMigrationIncorrectGuardianQuorum();
     error DSMMigrationIncorrectGuardians();

@@ -90,8 +90,7 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000005600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 # Pivot slot for fork-aware gIndex selection
 pivotSlot = 0
-#TODO  update upon deployment
-depositor = "0x0000000000000000000000000000000000000000"
+depositor = "0xF82aC5937A20dC862F9bc0668779031E06000f17"
 
 [stakingRouter]
 maxEBType1 = "32000000000000000000"
@@ -101,35 +100,34 @@ maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-
 [csmUpgrade]
 csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"
 # TODO: replace with deployed CSM implementation before execution
-csmImpl = "0x1eB6d4da13ca9566c17F526aE0715325d7a07665"
+csmImpl = "0x0000000000000000000000000000000000000000"
 vettedGateProxy = "0xB314D4A76C457c93150d308787939063F4Cc67E0"
 # TODO: replace with deployed Vetted Gate implementation before execution
-vettedGateImpl = "0x65D4D92Cd0EabAa05cD5A46269C24b71C21cfdc4"
+vettedGateImpl = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed IDVTC gate before execution
 identifiedDVTClusterGate = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed IDVTC curve setup before execution
 identifiedDVTClusterCurveSetup = "0x0000000000000000000000000000000000000000"
-# TODO: replace with expected IDVTC bond curve id before execution
-identifiedDVTClusterBondCurveId = 0
+identifiedDVTClusterBondCurveId = 3
 # TODO: replace with deployed Parameters Registry implementation before execution
-parametersRegistryImpl = "0x25fdC3BE9977CD4da679dF72A64C8B6Bd5216A78"
+parametersRegistryImpl = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed Fee Oracle implementation before execution
-feeOracleImpl = "0xe0B234f99E413E27D9Bc31aBba9A49A3e570Da97"
+feeOracleImpl = "0x0000000000000000000000000000000000000000"
 feeOracleConsensusVersion = 4
 # TODO: replace with deployed Accounting implementation before execution
-accountingImpl = "0x6f09d2426c7405C5546413e6059F884D2D03f449"
+accountingImpl = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed Fee Distributor implementation before execution
-feeDistributorImpl = "0x5DCF7cF7c6645E9E822a379dF046a8b0390251A1"
+feeDistributorImpl = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed Penalties implementation before execution
-exitPenaltiesImpl = "0xDa22fA1CEa40d05Fe4CD536967afdD839586D546"
+exitPenaltiesImpl = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed Strikes implementation before execution
-strikesImpl = "0x3E5021424c9e13FC853e523Cd68ebBec848956a0"
+strikesImpl = "0x0000000000000000000000000000000000000000"
 oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 oldVerifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
 # TODO: replace with deployed new verifier
 newVerifier = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed new permissionless gate before execution
-newPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
+newPermissionlessGate = "0x0000000000000000000000000000000000000000"
 # TODO: replace with new deployed ejector
 newEjector = "0x0000000000000000000000000000000000000000"
 csmCommittee = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"

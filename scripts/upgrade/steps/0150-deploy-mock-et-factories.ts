@@ -1,5 +1,5 @@
 import { artifacts, ethers } from "hardhat";
-import { readUpgradeParameters, writeUpgradeEasyTrackFactoryAddress } from "scripts/utils/upgrade";
+import { readUpgradeParameters, writeUpgradeParameterAddress } from "scripts/utils/upgrade";
 
 import {
   bl,
@@ -19,8 +19,8 @@ const EASY_TRACK_NEW_FACTORIES_SECTION = "easyTrack.newFactories";
 export const easyTrackFactoriesStateMap = {
   [Sk.stakingRouter]: ["UpdateStakingModuleShareLimits"],
   [Sk.consolidationMigrator]: ["AllowConsolidationPair"],
-  [Sk.csm_CSM]: ["SetMerkleGateTree", "ReportWithdrawalsForSlashedValidators", "SettleGeneralDelayedPenalty"],
-  [Sk.csm_CM]: [
+  [Sk.sm_CSM]: ["SetMerkleGateTree", "ReportWithdrawalsForSlashedValidators", "SettleGeneralDelayedPenalty"],
+  [Sk.sm_CM]: [
     "SetMerkleGateTree",
     "ReportWithdrawalsForSlashedValidators",
     "SettleGeneralDelayedPenalty",
@@ -29,11 +29,11 @@ export const easyTrackFactoriesStateMap = {
 } satisfies EasyTrackFactoriesStateMap;
 
 function getFactoryParamName(contractKey: Sk, etName: string): string {
-  if (contractKey === Sk.csm_CSM) {
+  if (contractKey === Sk.sm_CSM) {
     return `${etName}ForCSM`;
   }
 
-  if (contractKey === Sk.csm_CM) {
+  if (contractKey === Sk.sm_CM) {
     return `${etName}ForCM`;
   }
 
@@ -70,7 +70,7 @@ export async function main() {
 
       if (isStateDeployed) {
         log.success(`Skip ${yl(paramName)}[${bl(stateAddress)}] - found in state`);
-        writeUpgradeEasyTrackFactoryAddress(EASY_TRACK_NEW_FACTORIES_SECTION, paramName, stateAddress);
+        writeUpgradeParameterAddress(EASY_TRACK_NEW_FACTORIES_SECTION, paramName, stateAddress);
         continue;
       }
 
@@ -86,7 +86,7 @@ export async function main() {
       log.success(`Deployed ${or(artifactName)} aa ${yl(paramName)}[${bl(deployedContract.address)}]`);
       deployedFactories[etName] = deployedContract.address;
       state = updateObjectInState(contractKey, { easyTrackFactories: deployedFactories });
-      writeUpgradeEasyTrackFactoryAddress(EASY_TRACK_NEW_FACTORIES_SECTION, paramName, deployedContract.address);
+      writeUpgradeParameterAddress(EASY_TRACK_NEW_FACTORIES_SECTION, paramName, deployedContract.address);
     }
   }
 }

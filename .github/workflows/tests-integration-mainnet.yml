@@ -13,15 +13,29 @@ jobs:
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
 
+    services:
+      hardhat-node:
+        image: ghcr.io/lidofinance/hardhat-node:2.28.0
+        env:
+          ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+        ports:
+          - 8545:8545
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Common setup
         uses: ./.github/workflows/setup
 
+      # https://github.com/foundry-rs/foundry-toolchain
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install just
+        run: cargo install just
+
       - name: Run integration tests
         run: yarn test:integration:upgrade
         env:
           NETWORK: "mainnet"
-          RPC_URL: "${{ secrets.ETH_RPC_URL }}"
-          NETWORK_STATE_FILE: deployed-mainnet.json
+          RUN_NETWORK: "local"

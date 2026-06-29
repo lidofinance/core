@@ -4,11 +4,14 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, ether, impersonate, updateBalance } from "lib";
+import { advanceChainTime, ether, updateBalance } from "lib";
 import {
+  depositAllocatedValidatorsFromBuffer,
   depositValidatorsWithoutReport,
+  ensureFirstPostMigrationReport,
   finalizeWQViaSubmit,
   getProtocolContext,
+  normalizeWithdrawalVaultBaseline,
   ProtocolContext,
   report,
   reportWithEffectiveClDiff,
@@ -31,6 +34,19 @@ describe("Integration: Deposits reserve", () => {
     reportBurner: false,
     skipWithdrawals: true,
   } as const;
+
+  /**
+   * Prepare a report that must not include WVB rewards.
+   *
+   * Deposits-reserve cases check buffer and reserve math. On a fork, ORSC can
+   * already remember a non-zero WithdrawalVault balance from history. This setup
+   * moves past the migration-only report if needed and aligns WVB history to
+   * zero, so the next report cannot collect unrelated WVB rewards.
+   */
+  const prepareNoWvbReport = async () => {
+    await ensureFirstPostMigrationReport(ctx);
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+  };
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -182,8 +198,9 @@ describe("Integration: Deposits reserve", () => {
     await lido.connect(holder).submit(ZeroAddress, { value: ether("3") });
     expect(await lido.getWithdrawalsReserve()).to.equal(0n);
 
-    const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Freeze report inputs at refSlot and evaluate finalization budget from dry-run output.
+    await prepareNoWvbReport();
+    const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     const { data } = await report(ctx, {
       refSlot,
       waitNextReportTime: false,
@@ -222,6 +239,7 @@ describe("Integration: Deposits reserve", () => {
     const elRewardsVaultAddress = await locator.elRewardsVault();
     await updateBalance(elRewardsVaultAddress, ether("3"));
 
+    await prepareNoWvbReport();
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Build dry-run report with explicit refSlot to make batches deterministic.
     const dryRunParams = {
@@ -282,6 +300,7 @@ describe("Integration: Deposits reserve", () => {
     const depositsReserveBefore = await lido.getDepositsReserve();
     expect(withdrawalsReserveBefore).to.be.gt(0n);
 
+    await prepareNoWvbReport();
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Build dry-run data at fixed refSlot, then change target and re-run with the same refSlot.
     const dryRunParams = {
@@ -326,7 +345,7 @@ describe("Integration: Deposits reserve", () => {
   });
 
   it("Does not reduce withdrawals reserve when CL deposits consume depositable ether", async () => {
-    const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
+    const { lido, withdrawalQueue } = ctx.contracts;
 
     const requestAmount = ether("10");
     await lido.connect(reserveManager).submit(ZeroAddress, { value: ether("3200") });
@@ -340,16 +359,13 @@ describe("Integration: Deposits reserve", () => {
     expect(withdrawalsReserveBefore).to.be.gt(0n);
     expect(depositableBefore).to.equal(bufferedBefore - withdrawalsReserveBefore);
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
     // Spend depositable ether through CL deposit path.
-    const depositTx = await stakingRouter.connect(dsmSigner).deposit(1n, "0x");
-    await depositTx.wait();
+    const { consumed } = await depositAllocatedValidatorsFromBuffer(ctx);
 
     const bufferedAfter = await lido.getBufferedEther();
     const depositsReserveAfter = await lido.getDepositsReserve();
     const withdrawalsReserveAfter = await lido.getWithdrawalsReserve();
     const depositableAfter = await lido.getDepositableEther();
-    const consumed = bufferedBefore - bufferedAfter;
 
     expect(consumed).to.be.gt(0n, "Expected non-zero buffered ether consumption during CL deposit");
     // CL deposit consumes only depositable ether; withdrawals reserve must remain unchanged.
@@ -375,6 +391,7 @@ describe("Integration: Deposits reserve", () => {
     const withdrawalsReserveBefore = await lido.getWithdrawalsReserve();
     expect(withdrawalsReserveBefore).to.be.gt(0n);
 
+    await prepareNoWvbReport();
     const refSlot = (await ctx.contracts.hashConsensus.getCurrentFrame()).refSlot;
     // Fix refSlot first, then spend depositable ether to emulate post-refSlot CL deposits.
     const reportParams = {

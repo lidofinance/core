@@ -76,6 +76,7 @@ interface IOracleReportSanityCheckerUpgrade {
 }
 
 interface IDepositSecurityModule {
+    function VERSION() external view returns (uint256);
     function getOwner() external view returns (address);
     function setOwner(address newValue) external;
     function isGuardian(address addr) external view returns (bool);
