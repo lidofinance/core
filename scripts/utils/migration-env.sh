@@ -85,7 +85,7 @@ prepare_migration_env() {
           cp "$NETWORK_STATE_FILE" "$fork_network_state_file"
           echo "Copy: $NETWORK_STATE_FILE -> $fork_network_state_file"
         else
-          echo "Using existed: $fork_network_state_file"
+          echo "Using existing: $fork_network_state_file"
         fi
       fi
       export NETWORK_STATE_FILE="${fork_network_state_file}"
@@ -117,7 +117,7 @@ prepare_migration_env() {
             cp "$UPGRADE_PARAMETERS_FILE" "$fork_upgrade_parameters_file"
             echo "Copy: $UPGRADE_PARAMETERS_FILE -> $fork_upgrade_parameters_file"
           else
-            echo "Using existed: $fork_upgrade_parameters_file"
+            echo "Using existing: $fork_upgrade_parameters_file"
           fi
         fi
         export UPGRADE_PARAMETERS_FILE="${fork_upgrade_parameters_file}"

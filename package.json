@@ -32,6 +32,7 @@
     "test:integration:trace": "TRACE=trace yarn test:integration",
     "test:integration:fulltrace": "TRACE=fulltrace yarn test:integration",
     "test:integration:upgrade": "MODE=forking UPGRADE=true STEPS_FILE=upgrade/steps-mock-upgrade.json yarn test:integration",
+    "test:integration:upgrade:local": "RUN_NETWORK=local yarn test:integration:upgrade",
     "test:integration:upgrade-template": "TEMPLATE_TEST=true yarn test:integration:upgrade",
     "test:integration:scratch": "MODE=scratch yarn test:integration",
     "test:integration:scratch:trace": "MODE=scratch yarn test:integration:trace",
