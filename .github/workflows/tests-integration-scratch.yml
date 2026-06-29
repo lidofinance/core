@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
+      NODE_OPTIONS: --max_old_space_size=10240
       SKIP_GAS_REPORT: true
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
@@ -16,7 +17,7 @@ jobs:
       hardhat-node:
         image: ghcr.io/lidofinance/hardhat-node:2.28.0-scratch
         ports:
-          - 8555:8545
+          - 8545:8545
 
     steps:
       - uses: actions/checkout@v4
@@ -38,5 +39,4 @@ jobs:
         run: yarn test:integration:scratch
         env:
           NETWORK: "local"
-          RPC_URL: "http://localhost:8555"
           INTEGRATION_WITH_CSM: "off"
