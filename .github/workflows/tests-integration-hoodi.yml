@@ -19,7 +19,7 @@ jobs:
         env:
           ETH_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
         ports:
-          - 8545:8545
+          - 8565:8545
 
     steps:
       - uses: actions/checkout@v4
@@ -40,4 +40,5 @@ jobs:
         run: yarn test:integration
         env:
           NETWORK: "hoodi"
+          RPC_URL: "http://localhost:8565"
           RUN_NETWORK: "local"
