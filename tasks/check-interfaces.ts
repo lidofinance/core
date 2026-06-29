@@ -12,11 +12,6 @@ const PAIRS_TO_SKIP: {
   skipInterfaceSignatures?: string[];
 }[] = [
   {
-    interfaceFqn: "contracts/0.4.24/Lido.sol:IOracleReportSanityChecker",
-    contractFqn: "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol:OracleReportSanityChecker",
-    reason: "Fixing requires Lido redeploy",
-  },
-  {
     interfaceFqn: "contracts/0.4.24/Lido.sol:IWithdrawalQueue",
     contractFqn: "contracts/0.8.9/WithdrawalQueue.sol:WithdrawalQueue",
     reason: "Fixing requires Lido redeploy",
@@ -56,12 +51,7 @@ const PAIRS_TO_SKIP: {
   {
     interfaceFqn: "contracts/0.4.24/Lido.sol:IAccountingOracle",
     contractFqn: "contracts/0.8.9/oracle/AccountingOracle.sol:AccountingOracle",
-    reason: "Fixing requires Lido redeploy",
-  },
-  {
-    interfaceFqn: "contracts/0.4.24/Lido.sol:IStakingRouter",
-    contractFqn: "contracts/0.8.25/sr/StakingRouter.sol:StakingRouter",
-    reason: "only var names/state modifiers are diff., can be safely ignored",
+    reason: "Optimization to avoid memory struct allocation on each deposit.",
   },
   {
     interfaceFqn: "contracts/0.8.25/sr/SRTypes.sol:IAccountingOracle",
