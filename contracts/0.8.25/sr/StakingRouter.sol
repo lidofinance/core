@@ -663,7 +663,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
     }
 
     /// @notice Method performs top-up calls to the official Deposit contract. Determines how much Lido buffered ether can be deposited
-    /// to the staking module, obtains keys from the staking module with exact allocation for each key, pulls ether from Lido,
+    /// to the staking module, asks the staking module to compute the exact allocation for each of the provided keys, pulls ether from Lido,
     /// and performs the top-up call.
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @param _keyIndices List of keys' indices
