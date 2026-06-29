@@ -14,9 +14,8 @@ import {
   ProtocolContext,
   removeStakingLimit,
   report,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   seedProtocolPendingBaseline,
-  waitNextAvailableReportTime,
 } from "lib/protocol";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
@@ -33,7 +32,7 @@ describe("Integration: Accounting", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, skipWithdrawals: true });
+    await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -69,27 +68,6 @@ describe("Integration: Accounting", () => {
 
     return (maxPositiveTokeRebase * internalEther) / LIMITER_PRECISION_BASE;
   };
-
-  /**
-   * Submit a report without moving current CL pending into active validators.
-   *
-   * These Accounting cases check vault and buffer effects, not CL activation.
-   * The raw `clDiff` still includes deposits up to the current report ref slot,
-   * but the same `depositedForCurrentReport` amount is reported as pending.
-   * This keeps the CL rebase neutral for the scenario under test.
-   */
-  async function reportWithNoClActivation(params: NonNullable<Parameters<typeof report>[1]>) {
-    await waitNextAvailableReportTime(ctx);
-
-    const { clPendingBalanceAtLastReport, depositedForCurrentReport } = await ctx.contracts.lido.getBalanceStats();
-
-    return report(ctx, {
-      ...params,
-      waitNextReportTime: false,
-      clDiff: depositedForCurrentReport,
-      clPendingBalanceGwei: (clPendingBalanceAtLastReport + depositedForCurrentReport) / ONE_GWEI,
-    });
-  }
 
   function getWithdrawalParamsFromEvent(tx: ContractTransactionReceipt): {
     amountOfETHLocked: bigint;
@@ -304,8 +282,8 @@ describe("Integration: Accounting", () => {
     const maxCLRebaseViaLimiter = (await rebaseLimitWei()) + 1n;
 
     await expect(
-      report(ctx, {
-        clDiff: maxCLRebaseViaLimiter,
+      reportWithoutClActivation(ctx, {
+        effectiveClDiff: maxCLRebaseViaLimiter,
         reportElVault: false,
         reportBurner: false,
         skipWithdrawals: true,
@@ -317,7 +295,7 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const { reportTx } = await report(ctx, { clDiff: 0n, reportElVault: false });
+    const { reportTx } = await reportWithoutClActivation(ctx, { reportElVault: false });
 
     const reportTxReceipt = (await reportTx!.wait())!;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
@@ -342,7 +320,7 @@ describe("Integration: Accounting", () => {
     await lido.connect(agent).submit(ZeroAddress, { value: ether("90") });
     await lido.connect(agent).approve(withdrawalQueue, ether("5"));
     await withdrawalQueue.connect(agent).requestWithdrawals([ether("5")], agent.address);
-    await reportWithEffectiveClDiff(ctx, 0n, {
+    await reportWithoutClActivation(ctx, {
       reportElVault: false,
       reportBurner: false,
       skipWithdrawals: true,
@@ -380,14 +358,13 @@ describe("Integration: Accounting", () => {
       refSlot,
       waitNextReportTime: false,
       dryRun: true,
-      clDiff: 0n,
       reportElVault: false,
       reportWithdrawalsVault: false,
       reportBurner: false,
       excludeVaultsBalances: true,
     } as const;
 
-    const dryRunBefore = await report(ctx, dryRunParams);
+    const dryRunBefore = await reportWithoutClActivation(ctx, dryRunParams);
     expect(dryRunBefore.data.withdrawalFinalizationBatches.length).to.be.gt(
       0,
       "Expected non-empty withdrawal finalization batches in dry-run report",
@@ -398,7 +375,7 @@ describe("Integration: Accounting", () => {
     );
     expect(lockBefore).to.be.lte(beforeStateAfterTargetUpdate.withdrawalsReserve);
 
-    const { reportTx } = await report(ctx, { clDiff: 0n, reportElVault: false, reportBurner: false });
+    const { reportTx } = await reportWithoutClActivation(ctx, { reportElVault: false, reportBurner: false });
     const reportTxReceipt = (await reportTx!.wait())!;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
@@ -427,8 +404,11 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: CL_REBASE_AMOUNT, reportElVault: false, skipWithdrawals: true };
-    const { reportTx } = await report(ctx, params);
+    const { reportTx } = await reportWithoutClActivation(ctx, {
+      effectiveClDiff: CL_REBASE_AMOUNT,
+      reportElVault: false,
+      skipWithdrawals: true,
+    });
     const reportTxReceipt = (await reportTx!.wait())!;
     const { amountOfETHLocked, sharesBurntAmount } = getWithdrawalParamsFromEvent(reportTxReceipt);
 
@@ -452,18 +432,21 @@ describe("Integration: Accounting", () => {
   it("Should account correctly with positive CL rebase close to the limits", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
 
+    const { clPendingBalanceAtLastReport: carriedPendingBeforeSeed } = await lido.getBalanceStats();
     await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
     const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
+    const activatedPendingBalance = clPendingBalanceAtLastReport - carriedPendingBeforeSeed;
 
     // `report()` submits the raw post-vs-pre CL delta. In this seeded scenario the
-    // pending baseline is activated inside the same report, so the raw boundary is
-    // the safety-cap component computed from the post-activation validators base.
+    // seeded pending baseline is activated inside the same report, while migrated
+    // pending remains pending. The raw boundary is the safety-cap component
+    // computed from the post-activation validators base.
     let rebaseAmount =
-      ((clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport) * annualBalanceIncreaseBPLimit * timeElapsed) /
+      ((clValidatorsBalanceAtLastReport + activatedPendingBalance) * annualBalanceIncreaseBPLimit * timeElapsed) /
       (365n * ONE_DAY) /
       MAX_BASIS_POINTS;
     rebaseAmount = roundToGwei(rebaseAmount);
@@ -471,7 +454,11 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const { reportTx } = (await report(ctx, { clDiff: rebaseAmount, reportElVault: false })) as {
+    const { reportTx } = (await report(ctx, {
+      clDiff: rebaseAmount,
+      clPendingBalanceGwei: carriedPendingBeforeSeed / ONE_GWEI,
+      reportElVault: false,
+    })) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -501,8 +488,8 @@ describe("Integration: Accounting", () => {
   it("Should account correctly if no EL rewards", async () => {
     const beforeState = await readState();
 
-    const params = { clDiff: 0n, reportElVault: false };
-    const { reportTx } = (await reportWithNoClActivation(params)) as {
+    const params = { reportElVault: false };
+    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -531,8 +518,8 @@ describe("Integration: Accounting", () => {
 
     const beforeState = await readState();
 
-    const params = { clDiff: 0n, reportElVault: true };
-    const { reportTx } = (await reportWithNoClActivation(params)) as {
+    const params = { reportElVault: true };
+    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -561,8 +548,8 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: 0n, reportElVault: true };
-    const { reportTx } = (await reportWithNoClActivation(params)) as {
+    const params = { reportElVault: true };
+    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -594,8 +581,8 @@ describe("Integration: Accounting", () => {
 
     const beforeState = await readState();
 
-    const params = { clDiff: 0n, reportElVault: true };
-    const { reportTx } = (await reportWithNoClActivation(params)) as {
+    const params = { reportElVault: true };
+    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -620,8 +607,8 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: 0n, reportElVault: false };
-    const { reportTx } = (await reportWithNoClActivation(params)) as {
+    const params = { reportElVault: false };
+    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -651,8 +638,8 @@ describe("Integration: Accounting", () => {
     const beforeState = await readState();
 
     // Report
-    const params = { clDiff: 0n, reportElVault: false, reportWithdrawalsVault: true };
-    const { reportTx } = (await reportWithNoClActivation(params)) as {
+    const params = { reportElVault: false, reportWithdrawalsVault: true };
+    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -691,8 +678,8 @@ describe("Integration: Accounting", () => {
 
     const beforeState = await readState();
 
-    const params = { clDiff: 0n, reportElVault: false, reportWithdrawalsVault: true };
-    const { reportTx } = (await reportWithNoClActivation(params)) as {
+    const params = { reportElVault: false, reportWithdrawalsVault: true };
+    const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
     };
@@ -744,7 +731,7 @@ describe("Integration: Accounting", () => {
     const stateBefore = await readState();
 
     // Report
-    const { reportTx } = await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, skipWithdrawals: true });
+    const { reportTx } = await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
     const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
     const { sharesBurntAmount, sharesToBurn, amountOfETHLocked } = getWithdrawalParamsFromEvent(reportTxReceipt);
@@ -792,7 +779,7 @@ describe("Integration: Accounting", () => {
     expect(limit2).to.equal(limit);
 
     // Report
-    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, skipWithdrawals: true });
+    await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
 
     await expectStateChanges(stateBefore, {
       internalShares: -1n * limit,
@@ -822,8 +809,8 @@ describe("Integration: Accounting", () => {
     let updatedLimit = 0n;
     let mintedSharesSum = 0n;
     {
-      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await reportWithNoClActivation(params)) as {
+      const params = { reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
+      const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
         reportTx: TransactionResponse;
         extraDataTx: TransactionResponse;
       };
@@ -849,8 +836,8 @@ describe("Integration: Accounting", () => {
       mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt);
     }
     {
-      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await reportWithNoClActivation(params)) as {
+      const params = { reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
+      const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
         reportTx: TransactionResponse;
         extraDataTx: TransactionResponse;
       };
@@ -871,8 +858,8 @@ describe("Integration: Accounting", () => {
       mintedSharesSum += await expectTransferFeesEvents(reportTxReceipt);
     }
     {
-      const params = { clDiff: 0n, reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
-      const { reportTx } = (await reportWithNoClActivation(params)) as {
+      const params = { reportElVault: true, reportWithdrawalsVault: true, skipWithdrawals: true };
+      const { reportTx } = (await reportWithoutClActivation(ctx, params)) as {
         reportTx: TransactionResponse;
         extraDataTx: TransactionResponse;
       };

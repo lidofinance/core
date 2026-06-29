@@ -10,7 +10,7 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
-  report,
+  reportWithoutClActivation,
   reportVaultDataWithProof,
   setupLidoForVaults,
 } from "lib/protocol";
@@ -36,7 +36,7 @@ describe("Integration: OperatorGrid", () => {
 
     await setupLidoForVaults(ctx);
 
-    await report(ctx);
+    await reportWithoutClActivation(ctx);
 
     ({ vaultHub, operatorGrid } = ctx.contracts);
 

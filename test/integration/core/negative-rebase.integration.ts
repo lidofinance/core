@@ -9,7 +9,7 @@ import {
   getDepositedSinceLastReport,
   getProtocolContext,
   ProtocolContext,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
 } from "lib/protocol";
 
@@ -64,7 +64,7 @@ describe("Integration: Negative rebase", () => {
   const ensureAtLeastOneStoredReport = async () => {
     const reportDataCount = await ctx.contracts.oracleReportSanityChecker.getReportDataCount();
     if (reportDataCount === 0n) {
-      await reportWithEffectiveClDiff(ctx, 0n, {
+      await reportWithoutClActivation(ctx, {
         skipWithdrawals: true,
         reportElVault: false,
       });
@@ -85,7 +85,7 @@ describe("Integration: Negative rebase", () => {
     // `report(ctx, { clDiff: 0 })` means raw postCL - preCL = 0, which looks
     // to the sanity checker like a CL decrease by the amount of those deposits.
     // This report must be effective-neutral relative to principal CL balance.
-    await reportWithEffectiveClDiff(ctx, 0n, {
+    await reportWithoutClActivation(ctx, {
       skipWithdrawals: true,
       clAppearedValidators: 0n,
       reportElVault: false,
@@ -128,7 +128,8 @@ describe("Integration: Negative rebase", () => {
     for (let i = 0; i < REPORTS_REPEATED; i++) {
       const depositedSinceLastReport = await getDepositedSinceLastReport(ctx);
 
-      await reportWithEffectiveClDiff(ctx, CL_DIFF_PER_REPORT, {
+      await reportWithoutClActivation(ctx, {
+        effectiveClDiff: CL_DIFF_PER_REPORT,
         skipWithdrawals: true,
         reportElVault: false,
       });

@@ -7,7 +7,7 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
-  report,
+  reportWithoutClActivation,
   reportVaultDataWithProof,
 } from "lib/protocol";
 
@@ -47,7 +47,7 @@ describe("Scenario: Lazy Oracle after mainnet upgrade before the first report", 
     );
 
     expect(await vaultHub.isReportFresh(stakingVault)).to.be.false;
-    await report(ctx);
+    await reportWithoutClActivation(ctx);
     expect(await vaultHub.isReportFresh(stakingVault)).to.be.false;
     await reportVaultDataWithProof(ctx, stakingVault);
     expect(await vaultHub.isReportFresh(stakingVault)).to.be.true;

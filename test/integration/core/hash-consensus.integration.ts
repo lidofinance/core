@@ -12,7 +12,7 @@ import {
   getProtocolContext,
   getReportDataItems,
   ProtocolContext,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   waitNextAvailableReportTime,
 } from "lib/protocol";
 
@@ -185,7 +185,7 @@ describe("Hash consensus negative scenarios", () => {
       return { fastLaneMembers, nonFastLaneMembers };
     }
 
-    const { data: reportData } = await reportWithEffectiveClDiff(ctx, 1234567n, { dryRun: true });
+    const { data: reportData } = await reportWithoutClActivation(ctx, { effectiveClDiff: 1234567n, dryRun: true });
 
     const items = getReportDataItems(reportData);
     const reportHash = calcReportDataHash(items);

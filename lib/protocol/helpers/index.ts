@@ -26,6 +26,7 @@ export {
   OracleReportSubmitParams,
   report,
   reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,

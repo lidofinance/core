@@ -5,7 +5,13 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ether, impersonate, log } from "lib";
-import { getProtocolContext, handleOracleReport, ProtocolContext } from "lib/protocol";
+import {
+  ensureFirstPostMigrationReport,
+  getProtocolContext,
+  normalizeWithdrawalVaultBaseline,
+  ProtocolContext,
+  reportWithoutClActivation,
+} from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -34,6 +40,9 @@ describe("Scenario: Burn Shares", () => {
 
   it("Should allow stranger to submit ETH", async () => {
     const { lido } = ctx.contracts;
+
+    await ensureFirstPostMigrationReport(ctx);
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
 
     await lido.connect(stranger).submit(ZeroAddress, { value: amount });
 
@@ -66,16 +75,11 @@ describe("Scenario: Burn Shares", () => {
     const accountingSigner = await impersonate(accounting.address, ether("1"));
     await burner.connect(accountingSigner).requestBurnSharesForCover(stranger, sharesToBurn);
 
-    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
-    const clBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
-
-    await handleOracleReport(ctx, {
-      clBalance,
+    await reportWithoutClActivation(ctx, {
       sharesRequestedToBurn: sharesToBurn,
-      withdrawalVaultBalance: 0n,
-      elRewardsVaultBalance: 0n,
-      vaultsDataTreeRoot: ethers.ZeroHash,
-      vaultsDataTreeCid: "",
+      reportElVault: false,
+      reportWithdrawalsVault: false,
+      skipWithdrawals: true,
     });
 
     const sharesToBurnAfter = await lido.sharesOf(stranger.address);

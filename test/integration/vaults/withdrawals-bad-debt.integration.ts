@@ -12,7 +12,7 @@ import {
   ProtocolContext,
   queueBadDebtInternalization,
   removeStakingLimit,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
@@ -205,7 +205,7 @@ describe("Integration: Withdrawals finalization with bad debt internalization", 
     // reportElVault: false — keep the report neutral to fork EL rewards, but do not
     //   zero WithdrawalVault. The migrated checker baseline must still see the actual
     //   WVB, otherwise sanity checks fail before this threshold scenario is exercised.
-    const { reportTx } = await reportWithEffectiveClDiff(ctx, 0n, {
+    const { reportTx } = await reportWithoutClActivation(ctx, {
       reportElVault: false,
       skipWithdrawals: false,
       reportBurner: false,

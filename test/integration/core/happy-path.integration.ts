@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, batch, ether, log, updateBalance } from "lib";
+import { advanceChainTime, batch, ether, log, ONE_GWEI, updateBalance } from "lib";
 import {
   adjustReportModuleBalances,
   buildModuleAccountingReportParams,
@@ -18,7 +18,7 @@ import {
   ProtocolContext,
   removeStakingLimit,
   report,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   setStakingLimit,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
@@ -215,7 +215,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
     await lido.connect(agent).setDepositsReserveTarget(ether("128"));
-    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, reportBurner: false, skipWithdrawals: true });
+    await reportWithoutClActivation(ctx, { reportElVault: false, reportBurner: false, skipWithdrawals: true });
 
     const withdrawalsUnfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositsReserveTarget = await lido.getDepositsReserveTarget();
@@ -305,20 +305,20 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
 
-    const { depositedSinceLastReport } = await lido.getBalanceStats();
+    const { clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const carriedPendingGwei = clPendingBalanceAtLastReport / ONE_GWEI;
 
     // Deposit() moved ETH into protocol pending, but the new sanity path takes its
     // baseline from the previous Lido report snapshot rather than router-only state.
     // Submit a neutral report first so the next reward-bearing report stays on the
     // original "deposits activated + tiny positive CL reward" happy path.
-    const { data: pendingBaselineData } = await report(ctx, {
-      clDiff: depositedSinceLastReport,
+    const { data: pendingBaselineData } = await reportWithoutClActivation(ctx, {
       dryRun: true,
       reportElVault: false,
       reportWithdrawalsVault: false,
       skipWithdrawals: true,
     });
-    const clValidatorsBalanceGwei = BigInt(pendingBaselineData.clValidatorsBalanceGwei) - norPendingDepositsGwei;
+    const clValidatorsBalanceGwei = BigInt(pendingBaselineData.clValidatorsBalanceGwei);
     const moduleBalanceParams = adjustReportModuleBalances(
       await buildModuleAccountingReportParams(ctx),
       clValidatorsBalanceGwei,
@@ -326,13 +326,14 @@ describe("Scenario: Protocol Happy Path", () => {
     await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
       ...pendingBaselineData,
       clValidatorsBalanceGwei,
-      clPendingBalanceGwei: norPendingDepositsGwei,
+      clPendingBalanceGwei: carriedPendingGwei + norPendingDepositsGwei,
       ...moduleBalanceParams,
     });
 
     const reportData: Partial<OracleReportParams> = {
       clDiff: ether("0.001"),
       clAppearedValidators: depositCount,
+      clPendingBalanceGwei: carriedPendingGwei,
     };
 
     await advanceChainTime(12n * 60n * 60n);
@@ -608,8 +609,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const lockedEtherAmountBeforeFinalization = await withdrawalQueue.getLockedEtherAmount();
 
-    const reportParams = { clDiff: 0n };
-    const { reportTx } = (await report(ctx, reportParams)) as { reportTx: TransactionResponse };
+    const { reportTx } = (await reportWithoutClActivation(ctx)) as { reportTx: TransactionResponse };
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
 

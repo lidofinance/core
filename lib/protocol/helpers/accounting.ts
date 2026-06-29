@@ -109,7 +109,9 @@ export function adjustReportModuleBalances(
  */
 export const report = async (
   ctx: ProtocolContext,
-  {
+  params: OracleReportParams = {},
+): Promise<OracleReportResults> => {
+  let {
     clDiff,
     clAppearedValidators = 0n,
     clPendingBalanceGwei = 0n,
@@ -135,8 +137,7 @@ export const report = async (
     reportBurner = true,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
-  }: OracleReportParams = {},
-): Promise<OracleReportResults> => {
+  } = params;
   const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle, oracleReportSanityChecker } =
     ctx.contracts;
 
@@ -229,10 +230,20 @@ export const report = async (
 
   let isBunkerMode = false;
 
+  const postCLBalanceGwei = postCLBalance / ONE_GWEI;
+  if (clPendingBalanceGwei > postCLBalanceGwei) {
+    throw new Error(
+      `Reported CL pending balance ${clPendingBalanceGwei} exceeds total CL balance ${postCLBalanceGwei}`,
+    );
+  }
+  const clValidatorsBalanceGwei = postCLBalanceGwei - clPendingBalanceGwei;
+  const clPendingBalance = clPendingBalanceGwei * ONE_GWEI;
+  const clValidatorsBalance = postCLBalance - clPendingBalance;
+
   const simulatedReport = await simulateReport(ctx, {
     refSlot,
-    clValidatorsBalance: postCLBalance,
-    clPendingBalance: 0n,
+    clValidatorsBalance,
+    clPendingBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
   });
@@ -265,14 +276,6 @@ export const report = async (
     isBunkerMode = (await lido.getTotalPooledEther()) > postTotalPooledEther;
     log.debug("Bunker Mode", { "Is Active": isBunkerMode });
   }
-
-  const postCLBalanceGwei = postCLBalance / ONE_GWEI;
-  if (clPendingBalanceGwei > postCLBalanceGwei) {
-    throw new Error(
-      `Reported CL pending balance ${clPendingBalanceGwei} exceeds total CL balance ${postCLBalanceGwei}`,
-    );
-  }
-  const clValidatorsBalanceGwei = postCLBalanceGwei - clPendingBalanceGwei;
 
   if (stakingModuleIdsWithUpdatedBalance.length === 0) {
     ({ stakingModuleIdsWithUpdatedBalance, validatorBalancesGweiByStakingModule } = adjustReportModuleBalances(
@@ -338,6 +341,39 @@ export const reportWithEffectiveClDiff = async (
 };
 
 /**
+ * Submit a report that carries current deposits forward as CL pending balance.
+ *
+ * Use this for setup reports that must not assert validator activation. The
+ * raw CL diff still includes deposits up to the report ref slot, but the same
+ * amount is reported as pending, so ORSC does not treat migrated or freshly
+ * staged deposits as activated validators.
+ */
+export const reportWithoutClActivation = async (
+  ctx: ProtocolContext,
+  {
+    effectiveClDiff = 0n,
+    waitNextReportTime = true,
+    ...params
+  }: Omit<OracleReportParams, "clDiff" | "clPendingBalanceGwei"> & {
+    effectiveClDiff?: bigint;
+  } = {},
+): Promise<OracleReportResults> => {
+  if (waitNextReportTime) {
+    await waitNextAvailableReportTime(ctx);
+  }
+
+  const { clPendingBalanceAtLastReport, depositedForCurrentReport, depositedSinceLastReport } =
+    await ctx.contracts.lido.getBalanceStats();
+  const deposited = waitNextReportTime ? depositedForCurrentReport : depositedSinceLastReport;
+  return report(ctx, {
+    ...params,
+    waitNextReportTime: false,
+    clDiff: deposited + effectiveClDiff,
+    clPendingBalanceGwei: (clPendingBalanceAtLastReport + deposited) / ONE_GWEI,
+  });
+};
+
+/**
  * Finish the one-time post-migration Accounting report, if needed.
  *
  * ORSC treats the first report after migration as a special baseline report.
@@ -354,7 +390,7 @@ export const ensureFirstPostMigrationReport = async (ctx: ProtocolContext): Prom
 
   // This is a real AccountingOracle report: it consumes the migration-only
   // module-balance skip and may process WVB already present on the fork.
-  await reportWithEffectiveClDiff(ctx, 0n, {
+  await reportWithoutClActivation(ctx, {
     reportBurner: false,
     reportElVault: false,
     reportWithdrawalsVault: true,
@@ -435,11 +471,11 @@ export const normalizeWithdrawalVaultBaseline = async (ctx: ProtocolContext, tar
 
 export const resetCLBalanceDecreaseWindow = async (
   ctx: ProtocolContext,
-  params: Omit<OracleReportParams, "clDiff"> = {},
+  params: Omit<OracleReportParams, "clDiff" | "clPendingBalanceGwei"> = {},
 ): Promise<OracleReportResults> => {
   // Move report timestamp beyond the 36-day window and submit an effective neutral report.
   await advanceChainTime(CL_BALANCE_DECREASE_WINDOW_RESET_SECONDS);
-  return reportWithEffectiveClDiff(ctx, 0n, {
+  return reportWithoutClActivation(ctx, {
     reportElVault: false,
     skipWithdrawals: true,
     ...params,

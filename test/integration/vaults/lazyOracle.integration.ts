@@ -10,7 +10,7 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
-  report,
+  reportWithoutClActivation,
   reportVaultDataWithProof,
   setupLidoForVaults,
 } from "lib/protocol";
@@ -38,7 +38,7 @@ describe("Integration: LazyOracle", () => {
 
     await setupLidoForVaults(ctx);
 
-    await report(ctx);
+    await reportWithoutClActivation(ctx);
 
     ({ vaultHub, lazyOracle } = ctx.contracts);
 
@@ -66,7 +66,7 @@ describe("Integration: LazyOracle", () => {
 
   describe("Reporting", () => {
     it("bringing new AO report makes vault report unfresh", async () => {
-      await report(ctx);
+      await reportWithoutClActivation(ctx);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
     });
 

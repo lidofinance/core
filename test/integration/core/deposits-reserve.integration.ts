@@ -14,7 +14,7 @@ import {
   normalizeWithdrawalVaultBaseline,
   ProtocolContext,
   report,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   setStakingLimit,
 } from "lib/protocol";
 
@@ -94,7 +94,7 @@ describe("Integration: Deposits reserve", () => {
 
     await lido.connect(holder).submit(ZeroAddress, { value: ether("100") });
     await lido.connect(reserveManager).setDepositsReserveTarget(ether("40"));
-    await reportWithEffectiveClDiff(ctx, 0n, neutralReportParams);
+    await reportWithoutClActivation(ctx, neutralReportParams);
 
     const targetBefore = await lido.getDepositsReserveTarget();
     const reserveBeforeIncrease = await lido.getDepositsReserve();
@@ -107,7 +107,7 @@ describe("Integration: Deposits reserve", () => {
     expect(await lido.getDepositsReserveTarget()).to.equal(increasedTarget);
 
     expect(await lido.getDepositsReserve()).to.equal(reserveBeforeIncrease);
-    await reportWithEffectiveClDiff(ctx, 0n, neutralReportParams);
+    await reportWithoutClActivation(ctx, neutralReportParams);
     expect(await lido.getDepositsReserve()).to.equal(increasedTarget);
 
     const increasedAgain = increasedTarget + ether("10");
@@ -131,7 +131,7 @@ describe("Integration: Deposits reserve", () => {
 
     await lido.connect(reserveManager).setDepositsReserveTarget(ether("40"));
     // First set a non-zero effective deposits reserve, then verify explicit reset to zero.
-    await reportWithEffectiveClDiff(ctx, 0n, neutralReportParams);
+    await reportWithoutClActivation(ctx, neutralReportParams);
     expect(await lido.getDepositsReserve()).to.equal(ether("40"));
 
     await lido.connect(reserveManager).setDepositsReserveTarget(0n);
@@ -153,7 +153,7 @@ describe("Integration: Deposits reserve", () => {
     await lido.connect(holder).submit(ZeroAddress, { value: ether("100") });
     await lido.connect(reserveManager).setDepositsReserveTarget(ether("40"));
     // First report materializes initial target in effective reserve.
-    await reportWithEffectiveClDiff(ctx, 0n, neutralReportParams);
+    await reportWithoutClActivation(ctx, neutralReportParams);
     expect(await lido.getDepositsReserve()).to.equal(ether("40"));
 
     await lido.connect(reserveManager).setDepositsReserveTarget(ether("20"));
@@ -163,7 +163,7 @@ describe("Integration: Deposits reserve", () => {
     expect(await lido.getDepositsReserve()).to.equal(ether("20"));
 
     // Second report applies deferred increase back to the new target.
-    await reportWithEffectiveClDiff(ctx, 0n, neutralReportParams);
+    await reportWithoutClActivation(ctx, neutralReportParams);
 
     expect(await lido.getDepositsReserveTarget()).to.equal(ether("40"));
     expect(await lido.getDepositsReserve()).to.equal(ether("40"));
@@ -187,7 +187,7 @@ describe("Integration: Deposits reserve", () => {
     const withdrawalVaultBalance = await ethers.provider.getBalance(await locator.withdrawalVault());
     // Set target above buffered ether including possible WVB transfer on arbitrary fork blocks.
     await lido.connect(reserveManager).setDepositsReserveTarget(buffered + withdrawalVaultBalance + ether("1000"));
-    await reportWithEffectiveClDiff(ctx, 0n, neutralReportParams);
+    await reportWithoutClActivation(ctx, neutralReportParams);
     expect(await lido.getWithdrawalsReserve()).to.equal(0n);
 
     const elRewardsVaultAddress = await locator.elRewardsVault();
