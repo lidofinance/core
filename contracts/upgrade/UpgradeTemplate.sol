@@ -28,8 +28,8 @@ import {
     IAragonACL,
     IVersioned,
     IStakingRouterUpgrade,
+    IBaseModuleV3,
     IDepositSecurityModule,
-    IConsolidationMigrator,
     IInitializedVersionView,
     IMerkleGate,
     IOneShotCurveSetup,
@@ -483,6 +483,15 @@ contract UpgradeTemplate is IUpgradeTemplate {
         address cModule = cm.module;
         address cbPauser = cm.circuitBreakerPauser;
 
+        _assertProxyAdmin(cModule, agent);
+        _assertProxyAdmin(cm.parametersRegistry, agent);
+        _assertProxyAdmin(cm.accounting, agent);
+        _assertProxyAdmin(cm.feeDistributor, agent);
+        _assertProxyAdmin(cm.feeOracle, agent);
+        _assertProxyAdmin(IBaseModuleV3(cModule).EXIT_PENALTIES(), agent);
+        _assertProxyAdmin(cm.strikes, agent);
+        _assertProxyAdmin(cm.metaRegistry, agent);
+
         _assertInitializedContractVersion(cModule, EXPECTED_FINAL_CM_MODULE_INITIALIZED_VERSION);
         _assertInitializedContractVersion(
             cm.parametersRegistry, EXPECTED_FINAL_CM_PARAMETERS_REGISTRY_INITIALIZED_VERSION
@@ -496,6 +505,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         _assertHasOZRole(g.burner, REQUEST_BURN_MY_STETH_ROLE, cm.accounting);
         _assertHasOZRole(g.triggerableWithdrawalsGateway, ADD_FULL_WITHDRAWAL_REQUEST_ROLE, cm.ejector);
 
+        _assertSingleOZRoleHolder(cModule, DEFAULT_ADMIN_ROLE, agent);
         _assertTwoOZRoleHolders(cModule, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(cm.accounting, PAUSE_ROLE, cb, resealManager);
         _assertTwoOZRoleHolders(cm.feeOracle, PAUSE_ROLE, cb, resealManager);
