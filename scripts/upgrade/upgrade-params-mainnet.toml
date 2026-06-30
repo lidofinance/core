@@ -22,23 +22,16 @@ CSMSetVettedGateTree = "0xBc5642bDD6F2a54b01A75605aAe9143525D97308"
 [oracleReportSanityChecker]
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
-annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
-simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
 maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
 maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
 maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
-maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
-maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
-requestTimestampMargin = 128                           # Request timestamp margin
-maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
 maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
-clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
 [lido]
-lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
+depositsReserveTarget = "1500000000000000000000" # 1500 eth
 
 [withdrawalVault]
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification
@@ -58,7 +51,7 @@ consensusVersion = 6
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
 maxValidatorsPerReport = 600
-maxExitBalanceEth = 416000
+maxExitBalanceEth = 358400
 balancePerFrameEth = 32
 frameDurationInSec = 48
 consensusVersion = 5
@@ -75,64 +68,68 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
-pauser = "0xFFe21561251c49AdccFad065C94Fb4931dF49081" # DG reseal committee
-
 [consolidationBus]
-initialBatchSize = 350                # Max number of requests in a batch
+initialBatchSize = 200                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 86400         # Delay before pending batch execution
 
 [consolidationMigrator]
-sourceModuleId = 1                    # Source staking module ID
-targetModuleId = 4                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-#TODO  update upon deployment
-committee = "0x0000000000000000000000000000000000000000"
+sourceModuleId = 1                                                    # Source staking module ID
+targetModuleId = 4                                                    # Target staking module ID
+consolidationCommittee = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address https://research.lido.fi/t/proposal-transition-the-lnosg-into-the-cmc/11341/27
 
-       # Frame duration in seconds
+# Frame duration in seconds
 [topUpGateway]
-maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process _minBlockDistance 1 Minimum block distance between topUp calls
-minBlockDistance = 1
+maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process
+minBlockDistance = 75 # Minimum block distance between topUp calls
 maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove validator state
 targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
 minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
 # Generalized indices for validator/balance/pending state verification
-# TODO: replace with mainnet values
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000056000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 # Pivot slot for fork-aware gIndex selection
 pivotSlot = 0
-#TODO  update upon deployment
-depositor = "0x0000000000000000000000000000000000000000"
+depositor = "0xF82aC5937A20dC862F9bc0668779031E06000f17"
 
 [stakingRouter]
 maxEBType1 = "32000000000000000000"
 maxEBType2 = "2048000000000000000000"
+maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-up cap
 
 [csmUpgrade]
 csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"
-csmImpl = "0x1eB6d4da13ca9566c17F526aE0715325d7a07665"
+# TODO: replace with deployed CSM implementation before execution
+csmImpl = "0x0000000000000000000000000000000000000000"
 vettedGateProxy = "0xB314D4A76C457c93150d308787939063F4Cc67E0"
+# TODO: replace with deployed Vetted Gate implementation before execution
+vettedGateImpl = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed IDVTC gate before execution
 identifiedDVTClusterGate = "0x0000000000000000000000000000000000000000"
 # TODO: replace with deployed IDVTC curve setup before execution
 identifiedDVTClusterCurveSetup = "0x0000000000000000000000000000000000000000"
-# TODO: replace with expected IDVTC bond curve id before execution
-identifiedDVTClusterBondCurveId = 0
-parametersRegistryImpl = "0x25fdC3BE9977CD4da679dF72A64C8B6Bd5216A78"
-feeOracleImpl = "0xe0B234f99E413E27D9Bc31aBba9A49A3e570Da97"
+identifiedDVTClusterBondCurveId = 3
+# TODO: replace with deployed Parameters Registry implementation before execution
+parametersRegistryImpl = "0x0000000000000000000000000000000000000000"
+# TODO: replace with deployed Fee Oracle implementation before execution
+feeOracleImpl = "0x0000000000000000000000000000000000000000"
 feeOracleConsensusVersion = 4
-vettedGateImpl = "0x65D4D92Cd0EabAa05cD5A46269C24b71C21cfdc4"
-accountingImpl = "0x6f09d2426c7405C5546413e6059F884D2D03f449"
-feeDistributorImpl = "0x5DCF7cF7c6645E9E822a379dF046a8b0390251A1"
-exitPenaltiesImpl = "0xDa22fA1CEa40d05Fe4CD536967afdD839586D546"
-strikesImpl = "0x3E5021424c9e13FC853e523Cd68ebBec848956a0"
+# TODO: replace with deployed Accounting implementation before execution
+accountingImpl = "0x0000000000000000000000000000000000000000"
+# TODO: replace with deployed Fee Distributor implementation before execution
+feeDistributorImpl = "0x0000000000000000000000000000000000000000"
+# TODO: replace with deployed Penalties implementation before execution
+exitPenaltiesImpl = "0x0000000000000000000000000000000000000000"
+# TODO: replace with deployed Strikes implementation before execution
+strikesImpl = "0x0000000000000000000000000000000000000000"
 oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 oldVerifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
 # TODO: replace with deployed new verifier
 newVerifier = "0x0000000000000000000000000000000000000000"
-newPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
+# TODO: replace with deployed new permissionless gate before execution
+newPermissionlessGate = "0x0000000000000000000000000000000000000000"
 # TODO: replace with new deployed ejector
-ejector = "0x0000000000000000000000000000000000000000"
+newEjector = "0x0000000000000000000000000000000000000000"
 csmCommittee = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 
 [curatedModule]
@@ -150,15 +147,16 @@ curatedGates = [
 ]
 # TODO: replace with deployed curated verifier before execution
 verifier = "0x0000000000000000000000000000000000000000"
-circuitBreakerPauser = "0x0000000000000000000000000000000000000000"
+circuitBreakerPauser = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address https://research.lido.fi/t/proposal-transition-the-lnosg-into-the-cmc/11341/27
 moduleName = "curated-onchain-v2"
-stakeShareLimit = 2000
-priorityExitShareThreshold = 2500
-stakingModuleFee = 800
-treasuryFee = 200
-maxDepositsPerBlock = 30
-minDepositBlockDistance = 25
+stakeShareLimit = 10000 # 100% (unlimited)
+priorityExitShareThreshold = 10000 # 100% (unlimited)
+stakingModuleFee = 400
+treasuryFee = 600
+maxDepositsPerBlock = 100
+minDepositBlockDistance = 75 # (15 minutes)
 feeOracleConsensusVersion = 4
+# TODO: Update with actual initial epoch before the vote contracts deployment
 hashConsensusInitialEpoch = 47480
 
 [upgradeVoteScript]
@@ -166,10 +164,4 @@ hashConsensusInitialEpoch = 47480
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
 # TODO set actual
-expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
-timeConstraintsContract = "0x2a30F5aC03187674553024296bed35Aa49749DDa"
-enabledDaySpanStart = 50400 # 14:00 UTC
-enabledDaySpanEnd = 82800 # 23:00 UTC
-# Vault hub configuration
-[vaultHub]
-maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)
+expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC

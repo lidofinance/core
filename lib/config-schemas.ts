@@ -104,7 +104,7 @@ const ConsolidationBusSchema = z.object({
 const ConsolidationMigratorSchema = z.object({
   sourceModuleId: PositiveIntSchema,
   targetModuleId: PositiveIntSchema,
-  committee: EthereumAddressSchema.optional(),
+  consolidationCommittee: EthereumAddressSchema.optional(),
 });
 
 // Top-up gateway schema
@@ -123,6 +123,7 @@ const TopUpGatewaySchema = z.object({
 const StakingRouterSchema = z.object({
   maxEBType1: BigIntStringSchema,
   maxEBType2: BigIntStringSchema,
+  maxTopUpPerBlockGwei: PositiveIntSchema,
 });
 
 // Easy track schema
@@ -194,7 +195,7 @@ const CSMUpgradeConfigSchema = z.object({
   oldVerifier: EthereumAddressSchema,
   newVerifier: EthereumAddressSchema,
   newPermissionlessGate: EthereumAddressSchema,
-  ejector: EthereumAddressSchema,
+  newEjector: EthereumAddressSchema,
   csmCommittee: EthereumAddressSchema,
 });
 
@@ -216,9 +217,9 @@ const CuratedModuleConfigSchema = z.object({
 
 const UpgradeVoteScriptSchema = z.object({
   expiryTimestamp: NonNegativeIntSchema,
-  timeConstraintsContract: EthereumAddressSchema,
-  enabledDaySpanStart: NonNegativeIntSchema,
-  enabledDaySpanEnd: NonNegativeIntSchema,
+  timeConstraintsContract: EthereumAddressSchema.optional(),
+  enabledDaySpanStart: NonNegativeIntSchema.optional(),
+  enabledDaySpanEnd: NonNegativeIntSchema.optional(),
 });
 
 // CircuitBreaker schema (for scratch deployment)
@@ -290,23 +291,31 @@ const DepositSecurityModuleSchema = z.object({
 });
 
 // Oracle report sanity checker schema
-const OracleReportSanityCheckerSchema = z.object({
-  exitedEthAmountPerDayLimit: PositiveIntSchema,
-  appearedEthAmountPerDayLimit: PositiveIntSchema,
+export const OracleReportSanityCheckerBaseScheme = z.object({
   annualBalanceIncreaseBPLimit: BasisPointsSchema,
   simulatedShareRateDeviationBPLimit: BasisPointsSchema,
-  maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
-  maxEffectiveBalanceWeightWCType01: PositiveIntSchema,
-  maxEffectiveBalanceWeightWCType02: PositiveIntSchema,
   maxItemsPerExtraDataTransaction: PositiveIntSchema,
   maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
   requestTimestampMargin: PositiveIntSchema,
   maxPositiveTokenRebase: PositiveIntSchema,
-  maxCLBalanceDecreaseBP: BasisPointsSchema,
   clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
+});
+
+export const OracleReportSanityCheckerUpgradeScheme = z.object({
+  exitedEthAmountPerDayLimit: PositiveIntSchema,
+  appearedEthAmountPerDayLimit: PositiveIntSchema,
+  maxEffectiveBalanceWeightWCType01: PositiveIntSchema,
+  maxEffectiveBalanceWeightWCType02: PositiveIntSchema,
+  maxBalanceExitRequestedPerReportInEth: PositiveIntSchema,
+  externalPendingBalanceCapEth: NonNegativeIntSchema,
   consolidationEthAmountPerDayLimit: NonNegativeIntSchema,
   exitedValidatorEthAmountLimit: PositiveIntSchema,
-  externalPendingBalanceCapEth: NonNegativeIntSchema,
+  maxCLBalanceDecreaseBP: BasisPointsSchema,
+});
+
+export const OracleReportSanityCheckerSchema = z.object({
+  ...OracleReportSanityCheckerBaseScheme.shape,
+  ...OracleReportSanityCheckerUpgradeScheme.shape,
 });
 
 // Oracle daemon config schema
@@ -343,7 +352,7 @@ const LidoApmSchema = z.object({
 });
 
 const LidoSchema = z.object({
-  lidoDepositsReserveTarget: BigIntStringSchema,
+  depositsReserveTarget: BigIntStringSchema,
 });
 
 // Scratch parameters schema
@@ -388,7 +397,7 @@ export const UpgradeParametersSchema = z.object({
   lido: LidoSchema,
   easyTrack: EasyTrackSchema,
   depositSecurityModule: DepositSecurityModuleSchema,
-  oracleReportSanityChecker: OracleReportSanityCheckerSchema,
+  oracleReportSanityChecker: OracleReportSanityCheckerUpgradeScheme,
   consolidationGateway: ConsolidationGatewaySchema,
   consolidationBus: ConsolidationBusSchema,
   consolidationMigrator: ConsolidationMigratorSchema,

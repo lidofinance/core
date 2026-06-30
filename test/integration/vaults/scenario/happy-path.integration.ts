@@ -324,7 +324,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultValue = await addRewards(elapsedVaultReward);
 
     await reportWithEffectiveClDiff(ctx, elapsedProtocolReward, {
-      excludeVaultsBalances: true,
+      reportElVault: false,
     });
 
     expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.be.equal(stakingVaultMaxMintingShares);
@@ -380,7 +380,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value after validator exit
 
     const params = {
-      excludeVaultsBalances: true,
+      reportElVault: false,
     } as OracleReportParams;
 
     // This test is about burn -> zero liability shares on the next vault report, not

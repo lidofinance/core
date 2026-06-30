@@ -13,16 +13,32 @@ jobs:
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
 
+    services:
+      hardhat-node:
+        image: ghcr.io/lidofinance/hardhat-node:2.28.0-hoodi
+        env:
+          ETH_RPC_URL: ${{ secrets.HOODI_RPC_URL }}
+        ports:
+          - 8565:8545
+
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Common setup
         uses: ./.github/workflows/setup
 
+      # https://github.com/foundry-rs/foundry-toolchain
+      - name: Install foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install just
+        run: cargo install just
+
       - name: Run integration tests
-        run: yarn test:integration:upgrade
+        # Use the following command if there are upgrade steps
+        # run: yarn test:integration:upgrade
+        run: yarn test:integration
         env:
           NETWORK: "hoodi"
-          RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
-          FORKING_BLOCK_NUMBER: "2722012"
-          NETWORK_STATE_FILE: deployed-hoodi.json
+          RPC_URL: "http://localhost:8565"
+          RUN_NETWORK: "local"

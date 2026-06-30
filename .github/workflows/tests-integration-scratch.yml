@@ -8,13 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
+      NODE_OPTIONS: --max_old_space_size=10240
       SKIP_GAS_REPORT: true
       SKIP_CONTRACT_SIZE: true
       SKIP_INTERFACES_CHECK: true
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.26.0-scratch
+        image: ghcr.io/lidofinance/hardhat-node:2.28.0-scratch
         ports:
           - 8555:8545
 
@@ -28,25 +29,15 @@ jobs:
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
 
+      - name: Install just
+        run: cargo install just
+
       - name: Set env
         run: cp .env.example .env
 
       - name: Run scratch deployment
-        run: ./scripts/dao-deploy.sh
+        run: yarn test:integration:scratch
         env:
           NETWORK: "local"
           RPC_URL: "http://localhost:8555"
-          GENESIS_TIME: 1639659600 # just a random time
-          DEPLOYER: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" # first acc of default mnemonic "test test ..."
-          GAS_PRIORITY_FEE: 1
-          GAS_MAX_FEE: 100
-          NETWORK_STATE_FILE: "deployed-local.json"
-          NETWORK_STATE_DEFAULTS_FILE: "scripts/defaults/testnet-defaults.json"
-
-      - name: Finalize scratch deployment
-        run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
-
-      - name: Run integration tests
-        run: yarn test:integration:fork:local
-        env:
           INTEGRATION_WITH_CSM: "off"

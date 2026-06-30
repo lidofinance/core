@@ -77,7 +77,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     }
 
     /**
-     * @notice A function to finalize upgrade to v3 (from v1). Can be called only once
+     * @notice A function to finalize upgrade to v3. Can be called only once
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      */
@@ -93,6 +93,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
         _setMaxValidatorsPerReport(maxValidatorsPerReport);
         _setExitRequestLimit(maxExitBalanceEth, balancePerFrameEth, frameDurationInSec);
+        _clearDeprecatedExitRequestLimit();
     }
 
     ///
@@ -240,7 +241,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         }
 
         // Calculate total balance of validators being exited in ETH (uint256)
-        // Module 1 (curated) uses 32 ETH, other modules use 2048 ETH per validator
         uint256 totalExitBalanceEth = _calculateTotalExitBalanceEth(data.data, data.dataFormat);
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(
             totalExitBalanceEth

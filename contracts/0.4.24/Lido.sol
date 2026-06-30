@@ -137,9 +137,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     bytes32 internal constant DEPOSITED_NEXT_REPORT_AND_LAST_DEPOSIT_NONCE_POSITION =
         0x8d3ed945c7718edcdb639b1235f2bbe3fa81f4a6cec7a436d8ea13fbc502d957;
 
-    /// @dev CL validators balance and CL pending deposit balance
-    /// |----- 128 bit ------------|------ 128 bit -------|
-    /// | CL validators balance    |  CL pending balance  |
+    /// @dev CL validators and pending balances packed into one slot
+    /// |----- 128 bit ------|------ 128 bit --------|
+    /// | CL pending balance | CL validators balance |
     /// keccak256("lido.Lido.clValidatorsBalanceAndClPendingBalance");
     bytes32 internal constant CL_VALIDATORS_BALANCE_AND_CL_PENDING_BALANCE_POSITION =
         0x096e465397f38e659238ccd5d5a2c434ced54a63fd8d694045bfb058ab9d8112;
@@ -187,7 +187,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // Emitted when CL balances are updated by the oracle
     event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
-    // Emitted when CL pending balance is updated during deposits to CL
+    // Emitted when depositedPostReport is updated
     event DepositedPostReportUpdated(uint256 depositedPostReport);
 
     // Emitted when depositedValidators value is changed
@@ -273,7 +273,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev NB: by default, staking and the whole Lido pool are in paused state
      * @dev The contract's balance must be non-zero to mint initial shares of stETH
      */
-    function initialize(address _lidoLocator, address _eip712StETH) public payable onlyInit {
+    function initialize(address _lidoLocator, address _eip712StETH, uint256 _depositsReserveTarget) public payable onlyInit {
         _bootstrapInitialHolder(); // stone in the elevator
 
         _setLidoLocator(_lidoLocator);
@@ -285,25 +285,27 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         ILidoLocator locator = ILidoLocator(_lidoLocator);
 
         _approve(_withdrawalQueue(locator), _burner(locator), INFINITE_ALLOWANCE);
+        _setDepositsReserveTarget(_depositsReserveTarget);
         initialized();
     }
 
     /**
      * @notice A function to finalize upgrade to v4 (from v3). Can be called only once
+     * @param _depositsReserveTarget initial value for deposits reserve target (in wei)
      */
-    function finalizeUpgrade_v4() external {
+    function finalizeUpgrade_v4(uint256 _depositsReserveTarget) external {
         require(hasInitialized(), "NOT_INITIALIZED");
 
         /// @dev prevent migration if the last oracle report wasn't submitted, otherwise deposits
         ///      made after refSlot and before migration (i.e. report's tx) will be lost
         IAccountingOracle oracle = _accountingOracle();
         (,,, bool mainDataSubmitted,,,,,) = oracle.getProcessingState();
-        /// @dev pass in case of initial deploy
-        require(mainDataSubmitted || oracle.getLastProcessingRefSlot() == 0, "NO_REPORT");
+        require(mainDataSubmitted, "NO_REPORT");
 
         _checkContractVersion(3);
         _setContractVersion(4);
         _migrateStorage_v3_to_v4();
+        _setDepositsReserveTarget(_depositsReserveTarget);
     }
 
     function _migrateStorage_v3_to_v4() internal {
@@ -649,15 +651,23 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Sets deposits reserve target
+     * @param _newDepositsReserveTarget New target value in wei
+     */
+    function setDepositsReserveTarget(uint256 _newDepositsReserveTarget) external {
+        _auth(BUFFER_RESERVE_MANAGER_ROLE);
+
+        _setDepositsReserveTarget(_newDepositsReserveTarget);
+    }
+
+    /**
+     * @notice Store deposits reserve target
      * @dev Always updates target and emits DepositsReserveTargetSet
      *      If target is lowered below current reserve, reserve is reduced immediately
      *      If target is increased, reserve is not increased here and is synced on report processing via
      *      `_updateBufferedEtherAllocation()`
      * @param _newDepositsReserveTarget New target value in wei
      */
-    function setDepositsReserveTarget(uint256 _newDepositsReserveTarget) external {
-        _auth(BUFFER_RESERVE_MANAGER_ROLE);
-
+    function _setDepositsReserveTarget(uint256 _newDepositsReserveTarget) internal {
         DEPOSITS_RESERVE_TARGET_POSITION.setStorageUint256(_newDepositsReserveTarget);
         emit DepositsReserveTargetSet(_newDepositsReserveTarget);
 
@@ -727,10 +737,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return (depositedValidators, depositedValidators, clValidatorsBalance.add(clPendingBalance));
     }
 
-    /// @notice Returns current balance statistics
+    /// @notice Returns current (i.e. from last report) CL balances and deposit sums since the last report
     /// @return clValidatorsBalanceAtLastReport Sum of validator's active balances in wei
     /// @return clPendingBalanceAtLastReport Sum of validator's pending deposits in wei
-    /// @return depositedSinceLastReport Deposits made since last oracle report
+    /// @return depositedSinceLastReport Deposits made since last oracle report in wei
+    /// @return depositedForCurrentReport Deposits made since last oracle report and up to
+    ///         the most recent refSlot in wei
     function getBalanceStats()
         external
         view
@@ -745,7 +757,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         depositedSinceLastReport = _getDepositedPostReport();
         (depositedForCurrentReport,) = _getDepositedNextReportAdjusted();
-        /// @dev depositedNextReport is always less than depositedPostReport, so we can safely subtract
+        /// @dev depositedNextReport is always less than or equal to depositedPostReport, so we can safely subtract
         depositedForCurrentReport = depositedSinceLastReport - depositedForCurrentReport;
     }
 
@@ -833,6 +845,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         ///      depositedPostReport counter to keep _getInternalEther value correct
         uint256 depositedPostReport = _getDepositedPostReport().add(_depositAmount);
         _setBufferedEtherAndDepositedPostReport(allocation.total.sub(_depositAmount), depositedPostReport);
+        emit DepositedPostReportUpdated(depositedPostReport);
         emit Unbuffered(_depositAmount);
 
         (uint256 depositedNextReport, uint256 curNonce) = _getDepositedNextReportAdjusted();
@@ -1009,6 +1022,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         ///      after `refSlot` but before the report, we must retain only the amount not
         ///      reflected in the report
         _setDepositedPostReport(depositedNextReport);
+        emit DepositedPostReportUpdated(depositedNextReport);
 
         /// @dev new values of clValidatorsBalance and clPendingBalance should reflect all
         ///      deposits during the report frame
@@ -1112,7 +1126,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 depositsReserveTarget = getDepositsReserveTarget();
         uint256 depositsReserve = DEPOSITS_RESERVE_POSITION.getStorageUint256();
 
-        if (depositsReserve != depositsReserveTarget) {
+        if (depositsReserve < depositsReserveTarget) {
             _setDepositsReserve(depositsReserveTarget);
         }
     }

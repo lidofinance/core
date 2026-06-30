@@ -35,10 +35,6 @@ contract StakingRouter__MockForTopUpGateway {
         return moduleExists[moduleId];
     }
 
-    function canDeposit(uint256 _stakingModuleId) external view returns (bool) {
-        return hasStakingModule(_stakingModuleId) && getStakingModuleIsActive(_stakingModuleId);
-    }
-
     function getStakingModuleIsActive(uint256 moduleId) public view returns (bool) {
         return moduleIsActive[moduleId];
     }

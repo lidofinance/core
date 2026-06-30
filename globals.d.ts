@@ -11,7 +11,7 @@ declare namespace NodeJS {
     MODE?: "scratch" | "forking"; // default: "scratch"
 
     /* Extends MODE=forking, if set, the tests will run in upgrade mode */
-    UPGRADE?: boolean;
+    UPGRADE?: "true" | "false" | "1" | "0";
 
     /* Block number to fork from. If not set, the fork will start from the latest block. */
     FORKING_BLOCK_NUMBER?: number; // default: undefined

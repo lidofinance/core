@@ -10,7 +10,7 @@ import {
   getProtocolContext,
   OracleReportParams,
   ProtocolContext,
-  report,
+  reportWithEffectiveClDiff,
   seedProtocolPendingBaseline,
 } from "lib/protocol";
 import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting";
@@ -157,19 +157,18 @@ describe("Integration: AccountingOracle extra data", () => {
     expect(extraDataChunkHashes.length).to.equal(1);
 
     const reportData: Partial<OracleReportParams> = {
-      clDiff: 0n,
-      excludeVaultsBalances: true,
       extraDataFormat: EXTRA_DATA_FORMAT_LIST,
       extraDataHash: extraDataChunkHashes[0],
       extraDataItemsCount: BigInt(extraDataItemsCount),
       extraDataList: hexToBytes(extraDataChunks[0]),
       numExitedValidatorsByStakingModule: [totalExitedValidators + NUM_NEWLY_EXITED_VALIDATORS + 1n], // Both operators
+      reportElVault: false,
       stakingModuleIdsWithNewlyExitedValidators: [NOR_MODULE_ID],
     };
 
     const numExitedBefore = (await nor.getStakingModuleSummary()).totalExitedValidators;
 
-    const { reportTx, extraDataTx } = await report(ctx, reportData);
+    const { reportTx, extraDataTx } = await reportWithEffectiveClDiff(ctx, 0n, reportData);
     const reportReceipt = await reportTx?.wait();
     const extraDataReceipt = await extraDataTx?.wait();
 

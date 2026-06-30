@@ -3,6 +3,7 @@
 .vscode/
 .cursor/
 .claude/
+.codex/
 
 node_modules/
 coverage/
@@ -35,6 +36,7 @@ deployed-local-devnet.json
 deployed-hardhat.json
 deployed-*-upgrade.json
 **/upgrade-params-local.toml
+**/upgrade-params-hardhat.toml
 **/upgrade-params-*-upgrade.toml
 
 # MacOS

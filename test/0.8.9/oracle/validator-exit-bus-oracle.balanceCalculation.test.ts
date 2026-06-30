@@ -152,6 +152,16 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
 
         expect(totalBalance).to.equal(0n);
       });
+
+      it("should revert when module id is zero", async () => {
+        const requests: ExitRequest[] = [{ moduleId: 0, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] }];
+        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST);
+
+        await expect(oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST)).to.be.revertedWithCustomError(
+          oracle,
+          "InvalidModuleId",
+        );
+      });
     });
 
     describe("Format 2 (DATA_FORMAT_LIST_WITH_KEY_INDEX)", () => {
@@ -226,6 +236,17 @@ describe("ValidatorsExitBusOracle.sol:balanceCalculation", () => {
         const totalBalance = await oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX);
 
         expect(totalBalance).to.equal(0n);
+      });
+
+      it("should revert when module id is zero", async () => {
+        const requests: ExitRequest[] = [
+          { moduleId: 0, nodeOpId: 1, valIndex: 10, keyIndex: 1, valPubkey: PUBKEYS[0] },
+        ];
+        const data = encodeExitRequestsDataList(requests, DATA_FORMAT_LIST_WITH_KEY_INDEX);
+
+        await expect(
+          oracle.calculateTotalExitBalanceEth(data, DATA_FORMAT_LIST_WITH_KEY_INDEX),
+        ).to.be.revertedWithCustomError(oracle, "InvalidModuleId");
       });
 
       it("should ignore keyIndex when calculating balance", async () => {

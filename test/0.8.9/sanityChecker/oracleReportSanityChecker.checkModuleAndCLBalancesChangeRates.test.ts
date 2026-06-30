@@ -15,12 +15,13 @@ import {
   WithdrawalQueue__MockForSanityChecker,
 } from "typechain-types";
 
-import { ether, impersonate, ONE_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib";
+import { ether, impersonate, MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib";
 
 import { deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const ONE_DAY = 24n * 60n * 60n;
+const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");
 
 describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", () => {
   type ModuleBalance = {
@@ -125,7 +126,9 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
     };
     const moduleIds: bigint[] = [];
 
-    await routerHarness.stakingRouter.connect(admin).initialize(admin.address, randomWCType1());
+    await routerHarness.stakingRouter
+      .connect(admin)
+      .initialize(admin.address, randomWCType1(), MAX_TOP_UP_PER_BLOCK_GWEI);
     await routerHarness.stakingRouter
       .connect(admin)
       .grantRole(await routerHarness.stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin.address);
@@ -751,7 +754,7 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
 
   it("reverts with IncorrectTotalActivatedBalance when consumed pending exceeds the global appeared limit", async () => {
     const appearedLimitPerPeriodWei = limits.appearedEthAmountPerDayLimit * ether("1");
-    const totalConsumedPendingWei = ether("120");
+    const totalConsumedPendingWei = appearedLimitPerPeriodWei + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n;
 
     await seedPreviousBalances([
       { id: 1n, validatorsBalanceWei: 0n },
@@ -894,8 +897,8 @@ describe("OracleReportSanityChecker.sol:checkModuleAndCLBalancesChangeRates", ()
   });
 
   it("uses timeElapsed in per-day normalization (timeElapsed = 0 path)", async () => {
-    const activatedWei = ether("5");
     const appearedLimitForZeroElapsedWei = (limits.appearedEthAmountPerDayLimit * ether("1")) / 24n;
+    const activatedWei = appearedLimitForZeroElapsedWei + MAX_VALIDATOR_EFFECTIVE_BALANCE + 1n;
 
     await seedPreviousBalances([{ id: 1n, validatorsBalanceWei: 0n }]);
 

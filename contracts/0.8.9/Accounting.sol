@@ -53,7 +53,6 @@ contract Accounting {
         uint256 depositedBalance;
         uint256 totalPooledEther;
         uint256 totalShares;
-        uint256 depositedValidators;
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
@@ -146,18 +145,33 @@ contract Accounting {
 
     /// @dev reads the current state of the protocol to the memory
     function _snapshotPreReportState(Contracts memory _contracts, bool isSimulation) internal view returns (PreReportState memory pre) {
-        (pre.clValidatorsBalance, pre.clPendingBalance,, pre.depositedBalance) = LIDO.getBalanceStats();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
 
+        uint256 depositedSinceLastReport;
+        uint256 depositedForCurrentReport;
+        (pre.clValidatorsBalance, pre.clPendingBalance, depositedSinceLastReport, depositedForCurrentReport) = LIDO.getBalanceStats();
+
         if (isSimulation) {
             // for simulation we specifically fetch the current value, because during the refSlot `LastRefSlot` method
             // will return the previous refSlot value, but Oracle use simulation to gather the current refSlot info
             pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalize();
+
+            /// @dev Since the oracle report simulation is called directly on the refSlot itself, Lido's internal logic
+            ///      will not account for the refSlot switch — therefore, to get the correct deposits sum, we simply
+            ///      take the current value of all deposits without any adjustment.
+            /// @notice Note that calling simulateOracleReport on any slot other than the refSlot may produce incorrect
+            ///      values if deposits were made between the refSlot and the moment simulateOracleReport is called.
+            pre.depositedBalance = depositedSinceLastReport;
         } else {
             pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
+
+            /// @dev At the moment `handleOracleReport` is called, the refSlot switch has already occurred — therefore
+            ///      we use the adjusted deposits sum as of the reporting refSlot (i.e. excluding deposits made
+            ///      after the refSlot).
+            pre.depositedBalance = depositedForCurrentReport;
         }
     }
 
@@ -221,6 +235,11 @@ contract Accounting {
             postInternalSharesBeforeFees +
             update.sharesToMintAsFees +
             _pre.badDebtToInternalize;
+
+        // Oracle should consider this limitation:
+        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
+        if (update.postInternalShares == 0) revert InternalSharesCantBeZero();
+
         uint256 postExternalShares = _pre.externalShares - _pre.badDebtToInternalize; // can't underflow by design
 
         update.postTotalShares = update.postInternalShares + postExternalShares;
@@ -419,9 +438,6 @@ contract Accounting {
         if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
         // Validator count validation removed for MaxEB support - now using balance-based accounting
 
-        // Oracle should consider this limitation:
-        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
-        if (_update.postInternalShares == 0) revert InternalSharesCantBeZero();
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
@@ -451,7 +467,7 @@ contract Accounting {
         }
     }
 
-    /// @dev mints protocol fees to the treasury and node operators and calls back to stakingRouter
+    /// @dev transfers pre-minted fee shares to the treasury and node operator recipients
     function _distributeFee(FeeDistribution memory _feeDistribution) internal {
         address[] memory recipients = _feeDistribution.moduleFeeRecipients;
         uint256[] memory sharesToMint = _feeDistribution.moduleSharesToMint;
