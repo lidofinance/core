@@ -53,6 +53,10 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
     /**
      * @param _lido the Lido token (stETH) address
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
+     * @param _triggerableWithdrawalsGateway the TriggerableWithdrawalsGateway address, the only caller allowed to submit EIP-7002 withdrawal requests
+     * @param _consolidationGateway the ConsolidationGateway address, the only caller allowed to submit EIP-7251 consolidation requests
+     * @param _withdrawalRequest the EIP-7002 withdrawal request predeploy address
+     * @param _consolidationRequest the EIP-7251 consolidation request predeploy address
      */
     constructor(
         address _lido,
@@ -186,7 +190,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
      * @param targetPubkeys An array of 48-byte public keys corresponding to validators receiving the consolidation.
      *
      * @notice Reverts if:
-     *         - The caller is not ConsolidationsGateway.
+     *         - The caller is not ConsolidationGateway.
      *         - The provided public key array is empty.
      *         - The provided public key array malformed.
      *         - The provided source public key and target public key arrays are not of equal length.

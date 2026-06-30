@@ -148,8 +148,8 @@ library SRLib {
             delete oldStakingModuleIndices[_moduleId];
         }
 
-        /// @dev use the same value for both CL balance and active balance at migration moment,
-        /// next Oracle report will update the both values
+        /// @dev set the total validators balance at the migration moment;
+        /// next Oracle report will update the value
         SRStorage.getRouterState().accounting =
             RouterStateAccounting({validatorsBalanceGwei: totalValidatorsBalanceGwei});
     }
@@ -180,7 +180,6 @@ library SRLib {
     /// @param _moduleAddress Address of staking module.
     /// @param _moduleName Name of staking module.
     /// @param _moduleConfig Staking module config
-    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
     function _addModule(address _moduleAddress, string calldata _moduleName, StakingModuleConfig calldata _moduleConfig)
         public
         returns (uint256 newModuleId)
@@ -543,7 +542,7 @@ library SRLib {
             if (cache[i].status == StakingModuleStatus.Active) {
                 if (_isTopUp && WithdrawalCredentials.isType2(cache[i].wcType)) {
                     // max eth capacity of active validators = n * maxEB,
-                    // so capacity in validators equivalent = n * maxEBType2 / msxEBType1
+                    // so capacity in validators equivalent = n * maxEBType2 / maxEBType1
                     validatorsCapacity = cache[i].activeCount * maxEBType2 / maxEBType1;
                 } else {
                     validatorsCapacity = _allocations[i] + cache[i].depositableCount;
@@ -729,7 +728,7 @@ library SRLib {
     /// 3. At the end of the second data submission phase, it's expected for the aggregate exited validators count
     ///    across all module's node operators (stored in the module) to match the total count for this module
     ///    (stored in the staking router). However, it might happen that the second phase of data submission doesn't
-    ///    finish until the new oracle reporting frame is started, in which case staking router will emit ISRBase.a warning
+    ///    finish until the new oracle reporting frame is started, in which case staking router will emit a warning
     ///    event `StakingModuleExitedValidatorsIncompleteReporting` when the first data submission phase is performed
     ///    for a new reporting frame. This condition will result in the staking module having an incomplete data about
     ///    the exited validator counts during the whole reporting frame. Handling this condition is
