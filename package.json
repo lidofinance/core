@@ -44,6 +44,7 @@
     "typecheck": "tsc --noEmit",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
+    "upgrade:fork-node-docker": "bash scripts/run-fork-node-docker.sh",
     "upgrade:fork-node": "bash scripts/run-fork-node.sh",
     "upgrade:mock:voting": "MODE=forking STEPS_FILE=upgrade/steps-mock-voting.json yarn deploy:upgrade",
     "upgrade:mock:upgrade": "MODE=forking RUN_NETWORK=local STEPS_FILE=upgrade/steps-mock-upgrade.json yarn deploy:upgrade",
