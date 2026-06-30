@@ -86,7 +86,7 @@ maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove valida
 targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
 minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
 # Generalized indices for validator/balance/pending state verification
-gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000056000000000028"
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
 # Pivot slot for fork-aware gIndex selection
 pivotSlot = 0
