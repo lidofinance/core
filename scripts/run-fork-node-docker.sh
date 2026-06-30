@@ -4,32 +4,6 @@ set -o pipefail
 
 . scripts/utils/migration-env.sh
 
-prepare_local_fork_files() {
-  load_env_var NETWORK_STATE_FILE "deployed-${NETWORK}.json"
-  load_env_var UPGRADE_PARAMETERS_FILE "scripts/upgrade/upgrade-params-${NETWORK}.toml"
-
-  local temp_network_state_file="deployed-local.json"
-  local temp_upgrade_parameters_file="scripts/upgrade/upgrade-params-local.toml"
-
-  rm -f "$temp_network_state_file"
-  rm -f "$temp_upgrade_parameters_file"
-
-  if [[ -f $NETWORK_STATE_FILE ]]; then
-    cp "$NETWORK_STATE_FILE" "$temp_network_state_file"
-    echo "$NETWORK_STATE_FILE ==> $temp_network_state_file"
-    export NETWORK_STATE_FILE=$temp_network_state_file
-  fi
-
-  if [[ -f $UPGRADE_PARAMETERS_FILE ]]; then
-    cp "$UPGRADE_PARAMETERS_FILE" "$temp_upgrade_parameters_file"
-    echo "$UPGRADE_PARAMETERS_FILE ==> $temp_upgrade_parameters_file"
-    export UPGRADE_PARAMETERS_FILE=$temp_upgrade_parameters_file
-  fi
-
-  echo "NETWORK_STATE_FILE: $NETWORK_STATE_FILE"
-  echo "UPGRADE_PARAMETERS_FILE: $UPGRADE_PARAMETERS_FILE"
-}
-
 load_env_var MODE "forking"
 load_env_var HARDHAT_NODE_DOCKER_IMAGE_REPOSITORY "ghcr.io/lidofinance/hardhat-node"
 load_env_var HARDHAT_NODE_DOCKER_IMAGE_VERSION "2.28.0"
@@ -74,7 +48,10 @@ case "$MODE" in
       DOCKER_ENV_ARGS+=(-e "FORKING_BLOCK_NUMBER=$FORKING_BLOCK_NUMBER")
     fi
 
-    prepare_local_fork_files
+    copy_network_state_file "$NETWORK" local true
+    copy_upgrade_parameters_file "$NETWORK" local true
+    echo "NETWORK_STATE_FILE: $NETWORK_STATE_FILE"
+    echo "UPGRADE_PARAMETERS_FILE: $UPGRADE_PARAMETERS_FILE"
     ;;
   *)
     echo "Error: MODE must be either 'forking' or 'scratch'"

@@ -29,6 +29,54 @@ derive_rpc_url() {
   export RPC_URL="${!rpc_var:-}"
 }
 
+copy_network_state_file() {
+  local src_network="$1"
+  local dst_network="$2"
+  local remove_dst_file="$3"
+
+  load_env_var NETWORK_STATE_FILE "deployed-${src_network}.json"
+  local dst_network_state_file="deployed-${dst_network}.json"
+
+  if is_true "$remove_dst_file"; then
+    rm -f "$dst_network_state_file"
+  fi
+
+  if [[ -f $NETWORK_STATE_FILE ]]; then
+    # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
+    if [[ ! -f $dst_network_state_file ]]; then
+      cp "$NETWORK_STATE_FILE" "$dst_network_state_file"
+      echo "Copy: $NETWORK_STATE_FILE -> $dst_network_state_file"
+    else
+      echo "Using existing: $dst_network_state_file"
+    fi
+  fi
+  export NETWORK_STATE_FILE="$dst_network_state_file"
+}
+
+copy_upgrade_parameters_file() {
+  local src_network="$1"
+  local dst_network="$2"
+  local remove_dst_file="$3"
+
+  load_env_var UPGRADE_PARAMETERS_FILE "scripts/upgrade/upgrade-params-${src_network}.toml"
+  local dst_upgrade_parameters_file="scripts/upgrade/upgrade-params-${dst_network}.toml"
+
+  if is_true "$remove_dst_file"; then
+    rm -f "$dst_upgrade_parameters_file"
+  fi
+
+  if [[ -f $UPGRADE_PARAMETERS_FILE ]]; then
+    # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
+    if [[ ! -f $dst_upgrade_parameters_file ]]; then
+      cp "$UPGRADE_PARAMETERS_FILE" "$dst_upgrade_parameters_file"
+      echo "Copy: $UPGRADE_PARAMETERS_FILE -> $dst_upgrade_parameters_file"
+    else
+      echo "Using existing: $dst_upgrade_parameters_file"
+    fi
+  fi
+  export UPGRADE_PARAMETERS_FILE="$dst_upgrade_parameters_file"
+}
+
 prepare_migration_env() {
   local command="${1:-migrate}"
 
@@ -73,22 +121,13 @@ prepare_migration_env() {
   else
     # if MODE env is undefined, it means run migration on external node directly
     if [[ $NETWORK != $RUN_NETWORK ]]; then
-      local fork_network_state_file="deployed-${RUN_NETWORK}.json"
+      local remove_dst_file="false"
       # always delete any files from previous runs of HardHat in-process node
       if [[ $RUN_NETWORK == "hardhat" || $command == "test" ]]; then
-        rm -f $fork_network_state_file
+        remove_dst_file="true"
       fi
 
-      if [[ -f $NETWORK_STATE_FILE ]]; then
-        # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
-        if [[ ! -f $fork_network_state_file ]]; then
-          cp "$NETWORK_STATE_FILE" "$fork_network_state_file"
-          echo "Copy: $NETWORK_STATE_FILE -> $fork_network_state_file"
-        else
-          echo "Using existing: $fork_network_state_file"
-        fi
-      fi
-      export NETWORK_STATE_FILE="${fork_network_state_file}"
+      copy_network_state_file "$NETWORK" "$RUN_NETWORK" "$remove_dst_file"
 
       load_env_var HOLDER ""
       # export ALLOW_SKIP_STEPS=1
@@ -105,22 +144,13 @@ prepare_migration_env() {
 
       # if MODE env is undefined, it means run migration on external node directly
       if [[ $NETWORK != $RUN_NETWORK ]]; then
-        local fork_upgrade_parameters_file="scripts/upgrade/upgrade-params-${RUN_NETWORK}.toml"
+        local remove_dst_file="false"
         # always delete any files from previous runs of HardHat in-process node
         if [[ $RUN_NETWORK == "hardhat" || $command == "test" ]]; then
-          rm -f $fork_upgrade_parameters_file
+          remove_dst_file="true"
         fi
 
-        if [[ -f $UPGRADE_PARAMETERS_FILE ]]; then
-          # do not overwrite existing file (allow keep state between runs on external nodes, e.g. when RUN_NETWORK=local)
-          if [[ ! -f $fork_upgrade_parameters_file ]]; then
-            cp "$UPGRADE_PARAMETERS_FILE" "$fork_upgrade_parameters_file"
-            echo "Copy: $UPGRADE_PARAMETERS_FILE -> $fork_upgrade_parameters_file"
-          else
-            echo "Using existing: $fork_upgrade_parameters_file"
-          fi
-        fi
-        export UPGRADE_PARAMETERS_FILE="${fork_upgrade_parameters_file}"
+        copy_upgrade_parameters_file "$NETWORK" "$RUN_NETWORK" "$remove_dst_file"
       fi
     fi
     export MODE="forking"
