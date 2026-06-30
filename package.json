@@ -57,8 +57,8 @@
     "deploy:upgrade": "UPGRADE=true yarn deploy:helper:run",
     "deploy:upgrade:base": "STEPS_FILE=upgrade/steps-deploy-base.json yarn deploy:upgrade",
     "deploy:upgrade:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn deploy:upgrade",
-    "deploy:upgrade:base:local": "NETWORK=local yarn upgrade:deploy:base",
-    "deploy:upgrade:template:local": "NETWORK=local yarn upgrade:deploy:template",
+    "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
+    "deploy:upgrade:template:local": "NETWORK=local yarn deploy:upgrade:template",
     "deploy:upgrade:upd3": "STEPS_FILE=upgrade/steps-upd3-deploy.json yarn deploy:upgrade",
     "deploy:upgrade:upd3:voting": "STEPS_FILE=upgrade/steps-upd3-voting.json yarn deploy:upgrade",
     "postinstall": "husky"
