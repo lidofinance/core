@@ -9,10 +9,10 @@ packages = [{ include = "core_protocol", from = "contracts" }]
 
 [tool.poetry.dependencies]
 python = "^3.12.1"
-setuptools = "^78.1.1"
+setuptools = ">=78.1.1,<83.0.0"
 
 [tool.poetry.group.dev.dependencies]
-slither-analyzer = "^0.10.4"
+slither-analyzer = ">=0.10.4,<0.12.0"
 slitherin = "^0.7.2"
 
 [build-system]
