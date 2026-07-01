@@ -48,6 +48,32 @@ describe("Integration: Deposits reserve", () => {
     await normalizeWithdrawalVaultBaseline(ctx, 0n);
   };
 
+  const requestWithdrawalWithAvailableBuffer = async (requestAmount: bigint) => {
+    const { lido, withdrawalQueue } = ctx.contracts;
+
+    const bufferedBefore = await lido.getBufferedEther();
+    const minBufferedAfter = (await lido.getDepositsReserveTarget()) + requestAmount;
+    const requiredTopUp = minBufferedAfter > bufferedBefore ? minBufferedAfter - bufferedBefore : 0n;
+    const submitValue = requiredTopUp > requestAmount ? requiredTopUp : requestAmount;
+
+    await lido.connect(holder).submit(ZeroAddress, { value: submitValue });
+    await lido.connect(holder).approve(withdrawalQueue, requestAmount);
+    await withdrawalQueue.connect(holder).requestWithdrawals([requestAmount], holder.address);
+
+    const buffered = await lido.getBufferedEther();
+    const depositsReserve = await lido.getDepositsReserve();
+    const withdrawalsReserve = await lido.getWithdrawalsReserve();
+    const unfinalized = await withdrawalQueue.unfinalizedStETH();
+    const withdrawalAvailableBuffer = buffered - depositsReserve;
+    const expectedWithdrawalsReserve =
+      withdrawalAvailableBuffer < unfinalized ? withdrawalAvailableBuffer : unfinalized;
+
+    expect(withdrawalsReserve).to.equal(expectedWithdrawalsReserve);
+    expect(withdrawalsReserve).to.be.gt(0n);
+
+    return withdrawalsReserve;
+  };
+
   before(async () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
@@ -173,11 +199,7 @@ describe("Integration: Deposits reserve", () => {
     const { lido, withdrawalQueue, locator } = ctx.contracts;
 
     const requestAmount = ether("1");
-    await lido.connect(holder).submit(ZeroAddress, { value: ether("200") });
-    await lido.connect(holder).approve(withdrawalQueue, requestAmount);
-    await withdrawalQueue.connect(holder).requestWithdrawals([requestAmount], holder.address);
-    const withdrawalsReserveBeforeProtection = await lido.getWithdrawalsReserve();
-    expect(withdrawalsReserveBeforeProtection).to.be.gt(0n);
+    await requestWithdrawalWithAvailableBuffer(requestAmount);
 
     const requestTimestampMargin = (await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits())
       .requestTimestampMargin;
@@ -287,9 +309,7 @@ describe("Integration: Deposits reserve", () => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
     const requestAmount = ether("20");
-    await lido.connect(holder).submit(ZeroAddress, { value: ether("200") });
-    await lido.connect(holder).approve(withdrawalQueue, requestAmount);
-    await withdrawalQueue.connect(holder).requestWithdrawals([requestAmount], holder.address);
+    await requestWithdrawalWithAvailableBuffer(requestAmount);
 
     const requestTimestampMargin = (await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits())
       .requestTimestampMargin;
@@ -379,9 +399,7 @@ describe("Integration: Deposits reserve", () => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
     const requestAmount = ether("20");
-    await lido.connect(holder).submit(ZeroAddress, { value: ether("200") });
-    await lido.connect(holder).approve(withdrawalQueue, requestAmount);
-    await withdrawalQueue.connect(holder).requestWithdrawals([requestAmount], holder.address);
+    await requestWithdrawalWithAvailableBuffer(requestAmount);
 
     const requestTimestampMargin = (await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits())
       .requestTimestampMargin;

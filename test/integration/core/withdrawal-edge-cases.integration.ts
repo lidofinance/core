@@ -20,7 +20,6 @@ import {
   waitNextAvailableReportTime,
 } from "lib/protocol";
 import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 
@@ -50,6 +49,19 @@ describe("Integration: Withdrawal edge cases", () => {
     expect(withdrawalsReserve).to.be.lte(buffered, "Reserve should not exceed buffered ether");
   };
 
+  const getFreshCLWithdrawals = async () => {
+    const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
+    const lastVaultBalanceAfterTransfer = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
+    const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault.address);
+
+    expect(withdrawalVaultBalance).to.be.gte(
+      lastVaultBalanceAfterTransfer,
+      "WithdrawalVault balance should not be below ORSC baseline",
+    );
+
+    return withdrawalVaultBalance - lastVaultBalanceAfterTransfer;
+  };
+
   const reportWithoutClActivationUsingCurrentModuleBalances = async (
     effectiveClDiff: bigint,
     skipWithdrawals = false,
@@ -61,7 +73,7 @@ describe("Integration: Withdrawal edge cases", () => {
     const postCLBalanceWei =
       clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport + effectiveClDiff;
     const postCLPendingBalanceWei = clPendingBalanceAtLastReport + depositedSinceLastReport;
-    const postCLValidatorsBalanceWei = postCLBalanceWei - postCLPendingBalanceWei;
+    const postCLValidatorsBalanceWei = postCLBalanceWei - postCLPendingBalanceWei - (await getFreshCLWithdrawals());
 
     await reportWithoutClActivation(ctx, {
       effectiveClDiff,
@@ -73,15 +85,15 @@ describe("Integration: Withdrawal edge cases", () => {
   };
 
   const activateDepositedValidators = async (depositsCount: bigint) => {
-    await depositValidatorsWithoutReport(ctx, depositsCount);
+    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, depositsCount);
 
     const { lido: lidoContract } = ctx.contracts;
     const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedSinceLastReport } =
       await lidoContract.getBalanceStats();
 
-    const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[NOR_MODULE_ID, toGwei(depositedSinceLastReport)]]);
     const postCLBalanceWei = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedSinceLastReport;
-    const postCLValidatorsBalanceWei = postCLBalanceWei - clPendingBalanceAtLastReport;
+    const postCLValidatorsBalanceWei =
+      postCLBalanceWei - clPendingBalanceAtLastReport - (await getFreshCLWithdrawals());
 
     await report(ctx, {
       clDiff: depositedSinceLastReport,
