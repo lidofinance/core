@@ -151,9 +151,9 @@ contract UpgradeVoteScript is OmnibusBase {
         // Delete old EasyTrack Factories
         //
         items[i++] = _delETFactoryItem(
-            "Remove CSMSettleElStealingPenalty ET factory", easyTrack, eto.CSMSettleElStealingPenalty
+            "Remove CSMSettleElStealingPenalty factory from Easy Track", easyTrack, eto.CSMSettleElStealingPenalty
         );
-        items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree ET factory", easyTrack, eto.CSMSetVettedGateTree);
+        items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree factory from Easy Track", easyTrack, eto.CSMSetVettedGateTree);
 
         //
         // Add new EasyTrack Factories
@@ -162,7 +162,7 @@ contract UpgradeVoteScript is OmnibusBase {
             CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
 
             items[i++] = _addETFactoryItem(
-                "Add UpdateStakingModuleShareLimits ET factory",
+                "Add UpdateStakingModuleShareLimits (for CSM) factory to Easy Track",
                 easyTrack,
                 etn.UpdateStakingModuleShareLimits,
                 bytes.concat(
@@ -174,7 +174,7 @@ contract UpgradeVoteScript is OmnibusBase {
             );
 
             items[i++] = _addETFactoryItem(
-                "Add AllowConsolidationPair ET factory",
+                "Add AllowConsolidationPair factory to Easy Track",
                 easyTrack,
                 etn.AllowConsolidationPair,
                 bytes.concat(bytes20(c.consolidationMigrator), bytes4(IConsolidationMigrator.allowPair.selector))
@@ -189,21 +189,21 @@ contract UpgradeVoteScript is OmnibusBase {
             csmGates[1] = c.identifiedDVTClusterGate;
 
             items[i++] = _addETFactoryItem(
-                "Add SetMerkleGateTree CSM ET factory",
+                "Add SetMerkleGateTree CSM factory to Easy Track",
                 easyTrack,
                 etn.SetMerkleGateTreeForCSM,
                 _setMerkleGateTreePermissions(etn.SetMerkleGateTreeForCSM, csmGates)
             );
 
             items[i++] = _addETFactoryItem(
-                "Add ReportWithdrawalsForSlashedValidators CSM ET factory",
+                "Add ReportWithdrawalsForSlashedValidators CSM factory to Easy Track",
                 easyTrack,
                 etn.ReportWithdrawalsForSlashedValidatorsForCSM,
                 bytes.concat(bytes20(c.csm), bytes4(IBaseModuleV3.reportSlashedWithdrawnValidators.selector))
             );
 
             items[i++] = _addETFactoryItem(
-                "Add SettleGeneralDelayedPenalty CSM ET factory",
+                "Add SettleGeneralDelayedPenalty CSM factory to Easy Track",
                 easyTrack,
                 etn.SettleGeneralDelayedPenaltyForCSM,
                 bytes.concat(bytes20(c.csm), bytes4(IBaseModuleV3.settleGeneralDelayedPenalty.selector))
@@ -214,28 +214,28 @@ contract UpgradeVoteScript is OmnibusBase {
             CuratedModuleConfig memory c = config.getCuratedModuleConfig();
 
             items[i++] = _addETFactoryItem(
-                "Add SetMerkleGateTree CM ET factory",
+                "Add SetMerkleGateTree CM factory to Easy Track",
                 easyTrack,
                 etn.SetMerkleGateTreeForCM,
                 _setMerkleGateTreePermissions(etn.SetMerkleGateTreeForCM, c.curatedGates)
             );
 
             items[i++] = _addETFactoryItem(
-                "Add ReportWithdrawalsForSlashedValidators CM ET factory",
+                "Add ReportWithdrawalsForSlashedValidators CM factory to Easy Track",
                 easyTrack,
                 etn.ReportWithdrawalsForSlashedValidatorsForCM,
                 bytes.concat(bytes20(c.module), bytes4(IBaseModuleV3.reportSlashedWithdrawnValidators.selector))
             );
 
             items[i++] = _addETFactoryItem(
-                "Add SettleGeneralDelayedPenalty CM ET factory",
+                "Add SettleGeneralDelayedPenalty CM factory to Easy Track",
                 easyTrack,
                 etn.SettleGeneralDelayedPenaltyForCM,
                 bytes.concat(bytes20(c.module), bytes4(IBaseModuleV3.settleGeneralDelayedPenalty.selector))
             );
 
             items[i++] = _addETFactoryItem(
-                "Add CreateOrUpdateOperatorGroup CM ET factory",
+                "Add CreateOrUpdateOperatorGroup CM factory to Easy Track",
                 easyTrack,
                 etn.CreateOrUpdateOperatorGroupForCM,
                 bytes.concat(
@@ -277,7 +277,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             /// @notice updating StakingRouter implementation and call finalizeUpgrade_v4
             items[i++] = _proxyUpgradeToAndCallItem({
-                description: "Upgrade StakingRouter implementation",
+                description: "Upgrade StakingRouter implementation and call finalizeUpgrade_v4",
                 to: stakingRouter,
                 impl: c.newStakingRouterImpl,
                 data: abi.encodeCall(IStakingRouterUpgrade.finalizeUpgrade_v4, (c.maxTopUpPerBlockGwei))
@@ -285,7 +285,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             /// @notice updating AccountingOracle implementation and call finalizeUpgrade_v5
             items[i++] = _proxyUpgradeToAndCallItem({
-                description: "Upgrade AccountingOracle implementation",
+                description: "Upgrade AccountingOracle implementation and call finalizeUpgrade_v5",
                 to: c.accountingOracle,
                 impl: c.newAccountingOracleImpl,
                 data: abi.encodeCall(IAccountingOracleUpgrade.finalizeUpgrade_v5, (c.aoConsensusVersion))
@@ -293,7 +293,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             /// @notice updating ValidatorsExitBusOracle implementation and call finalizeUpgrade_v3
             items[i++] = _proxyUpgradeToAndCallItem({
-                description: "Upgrade ValidatorsExitBusOracle implementation",
+                description: "Upgrade ValidatorsExitBusOracle implementation and call finalizeUpgrade_v3",
                 to: c.validatorsExitBusOracle,
                 impl: c.newValidatorsExitBusOracleImpl,
                 data: abi.encodeCall(
@@ -315,7 +315,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             /// @notice updating WithdrawalVault implementation and call finalizeUpgrade_v3
             items[i++] = _item({
-                description: "Upgrade WithdrawalVault implementation",
+                description: "Upgrade WithdrawalVault implementation and call finalizeUpgrade_v3",
                 to: c.withdrawalVault,
                 data: abi.encodeCall(
                     IWithdrawalsManagerProxy.proxy_upgradeTo,
@@ -355,7 +355,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             /// @notice grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor
             items[i++] = _ozGrantRoleItem({
-                description: "Grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor",
+                description: "Grant STAKING_MODULE_SHARE_MANAGE_ROLE on Staking Router to EasyTrack executor",
                 to: stakingRouter,
                 role: STAKING_MODULE_SHARE_MANAGE_ROLE,
                 account: evmScriptExecutor
@@ -363,7 +363,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             /// @notice revoke STAKING_MODULE_UNVETTING_ROLE from old DSM
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke STAKING_MODULE_UNVETTING_ROLE from old DSM",
+                description: "Revoke Staking Router STAKING_MODULE_UNVETTING_ROLE from old DSM",
                 to: stakingRouter,
                 role: STAKING_MODULE_UNVETTING_ROLE,
                 account: c.oldDepositSecurityModule
@@ -371,14 +371,14 @@ contract UpgradeVoteScript is OmnibusBase {
 
             /// @notice grant STAKING_MODULE_UNVETTING_ROLE to new DSM
             items[i++] = _ozGrantRoleItem({
-                description: "Grant STAKING_MODULE_UNVETTING_ROLE to new DSM",
+                description: "Grant Staking Router STAKING_MODULE_UNVETTING_ROLE to new DSM",
                 to: stakingRouter,
                 role: STAKING_MODULE_UNVETTING_ROLE,
                 account: c.newDepositSecurityModule
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant TW_EXIT_LIMIT_MANAGER_ROLE to Agent on TWGateway",
+                description: "Grant TWGateway TW_EXIT_LIMIT_MANAGER_ROLE to AGENT on TWGateway",
                 to: g.triggerableWithdrawalsGateway,
                 role: TW_EXIT_LIMIT_MANAGER_ROLE,
                 account: agent
@@ -412,146 +412,146 @@ contract UpgradeVoteScript is OmnibusBase {
             // --- Proxy upgrades ---
 
             items[i++] = _proxyUpgradeToAndCallV2Item({
-                description: "Upgrade and finalize CSM v3",
+                description: "Upgrade CSM to v3 and call finalizeUpgradeV3",
                 to: csm,
                 impl: c.csmImpl,
                 data: abi.encodeCall(ICSModuleV3.finalizeUpgradeV3, ())
             });
 
             items[i++] = _proxyUpgradeToAndCallV2Item({
-                description: "Upgrade and finalize ParametersRegistry v3",
+                description: "Upgrade CSM ParametersRegistry to v3 and call finalizeUpgradeV3",
                 to: c.parametersRegistry,
                 impl: c.parametersRegistryImpl,
                 data: abi.encodeCall(IParametersRegistryV3.finalizeUpgradeV3, ())
             });
 
             items[i++] = _proxyUpgradeToAndCallV2Item({
-                description: "Upgrade and finalize FeeOracle v3",
+                description: "Upgrade CSM FeeOracle to v3 and call finalizeUpgradeV3",
                 to: c.feeOracle,
                 impl: c.feeOracleImpl,
                 data: abi.encodeCall(IFeeOracleV3.finalizeUpgradeV3, (c.feeOracleConsensusVersion))
             });
 
             items[i++] = _proxyUpgradeToItem({
-                description: "Upgrade VettedGate implementation", to: vettedGate, impl: c.vettedGateImpl
+                description: "Upgrade CSM VettedGate implementation", to: vettedGate, impl: c.vettedGateImpl
             });
 
             items[i++] = _proxyUpgradeToAndCallV2Item({
-                description: "Upgrade and finalize Accounting v3",
+                description: "Upgrade CSM Accounting to v3 and call finalizeUpgradeV3",
                 to: c.accounting,
                 impl: c.accountingImpl,
                 data: abi.encodeCall(IAccountingV3.finalizeUpgradeV3, ())
             });
 
             items[i++] = _proxyUpgradeToAndCallV2Item({
-                description: "Upgrade and finalize FeeDistributor v3",
+                description: "Upgrade CSM FeeDistributor to v3 and call finalizeUpgradeV3",
                 to: c.feeDistributor,
                 impl: c.feeDistributorImpl,
                 data: abi.encodeCall(IFeeDistributorV3.finalizeUpgradeV3, ())
             });
 
             items[i++] = _proxyUpgradeToItem({
-                description: "Upgrade ExitPenalties implementation", to: c.exitPenalties, impl: c.exitPenaltiesImpl
+                description: "Upgrade CSM ExitPenalties implementation", to: c.exitPenalties, impl: c.exitPenaltiesImpl
             });
 
             items[i++] = _proxyUpgradeToItem({
-                description: "Upgrade ValidatorStrikes implementation", to: c.strikes, impl: c.strikesImpl
+                description: "Upgrade CSM ValidatorStrikes implementation", to: c.strikes, impl: c.strikesImpl
             });
 
             // --- Role & permission updates ---
 
             items[i++] = _item({
-                description: "Point ValidatorStrikes to the New Ejector",
+                description: "Point CSM ValidatorStrikes to the New CSM Ejector",
                 to: c.strikes,
                 data: abi.encodeCall(IValidatorStrikesV3.setEjector, (c.newEjector))
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke REPORT_EL_REWARDS_STEALING_PENALTY_ROLE (due to role removal)",
+                description: "Revoke CSM REPORT_EL_REWARDS_STEALING_PENALTY_ROLE from CSM Committee",
                 to: csm,
                 role: REPORT_EL_REWARDS_STEALING_PENALTY_ROLE,
                 account: c.csmCommittee
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant REPORT_GENERAL_DELAYED_PENALTY_ROLE",
+                description: "Grant CSM REPORT_GENERAL_DELAYED_PENALTY_ROLE to CSM Committee",
                 to: csm,
                 role: REPORT_GENERAL_DELAYED_PENALTY_ROLE,
                 account: c.csmCommittee
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE (due to role removal)",
+                description: "Revoke CSM SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE from Easy Track executor",
                 to: csm,
                 role: SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE,
                 account: evmScriptExecutor
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant SETTLE_GENERAL_DELAYED_PENALTY_ROLE",
+                description: "Grant CSM SETTLE_GENERAL_DELAYED_PENALTY_ROLE to Easy Track executor",
                 to: csm,
                 role: SETTLE_GENERAL_DELAYED_PENALTY_ROLE,
                 account: evmScriptExecutor
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke VERIFIER_ROLE from the Old Verifier",
+                description: "Revoke CSM VERIFIER_ROLE from the Old CSM Verifier",
                 to: csm,
                 role: VERIFIER_ROLE,
                 account: c.oldVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant VERIFIER_ROLE to the New Verifier",
+                description: "Grant CSM VERIFIER_ROLE to the New CSM Verifier",
                 to: csm,
                 role: VERIFIER_ROLE,
                 account: c.newVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE to the New Verifier",
+                description: "Grant CSM REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE to the New CSM Verifier",
                 to: csm,
                 role: REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE,
                 account: c.newVerifier
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track",
+                description: "Grant CSM REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track executor",
                 to: csm,
                 role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
                 account: evmScriptExecutor
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke CREATE_NODE_OPERATOR_ROLE from the Old PermissionlessGate",
+                description: "Revoke CSM CREATE_NODE_OPERATOR_ROLE from the Old CSM PermissionlessGate",
                 to: csm,
                 role: CREATE_NODE_OPERATOR_ROLE,
                 account: c.oldPermissionlessGate
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant CREATE_NODE_OPERATOR_ROLE to the New PermissionlessGate",
+                description: "Grant CSM CREATE_NODE_OPERATOR_ROLE to the New CSM PermissionlessGate",
                 to: csm,
                 role: CREATE_NODE_OPERATOR_ROLE,
                 account: c.newPermissionlessGate
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke START_REFERRAL_SEASON_ROLE (due to role removal)",
+                description: "Revoke VettedGate START_REFERRAL_SEASON_ROLE from AGENT",
                 to: vettedGate,
                 role: START_REFERRAL_SEASON_ROLE,
                 account: agent
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke END_REFERRAL_SEASON_ROLE (due to role removal)",
+                description: "Revoke VettedGate END_REFERRAL_SEASON_ROLE from CSM Committee",
                 to: vettedGate,
                 role: END_REFERRAL_SEASON_ROLE,
                 account: c.csmCommittee
             });
 
             items[i++] = _item({
-                description: "Set name for Identified Community Stakers gate",
+                description: "Set name Identified Community Stakers for CSM VettedGate gate",
                 to: vettedGate,
                 data: abi.encodeCall(IMerkleGate.setName, (IDENTIFIED_COMMUNITY_STAKERS_GATE_NAME))
             });
@@ -564,33 +564,33 @@ contract UpgradeVoteScript is OmnibusBase {
             items[i++] =
                 _registerCircuitBreakerPauserItem("New CSM Ejector", g.circuitBreaker, c.newEjector, c.csmCommittee);
             items[i++] = _registerCircuitBreakerPauserItem(
-                "CSM Identified DVT cluster gate", g.circuitBreaker, c.identifiedDVTClusterGate, c.csmCommittee
+                "CSM Identified DVT Cluster gate", g.circuitBreaker, c.identifiedDVTClusterGate, c.csmCommittee
             );
 
             // --- New IDVTC type ---
             items[i++] = _ozGrantRoleItem({
-                description: "Grant CREATE_NODE_OPERATOR_ROLE to Identified DVT cluster gate",
+                description: "Grant CSM CREATE_NODE_OPERATOR_ROLE to Identified DVT Cluster gate",
                 to: csm,
                 role: CREATE_NODE_OPERATOR_ROLE,
                 account: c.identifiedDVTClusterGate
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant SET_BOND_CURVE_ROLE to Identified DVT cluster gate",
+                description: "Grant CSM Accounting SET_BOND_CURVE_ROLE to Identified DVT Cluster gate",
                 to: c.accounting,
                 role: SET_BOND_CURVE_ROLE,
                 account: c.identifiedDVTClusterGate
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant MANAGE_BOND_CURVES_ROLE to Identified DVT cluster curve setup",
+                description: "Grant CSM Accounting MANAGE_BOND_CURVES_ROLE to Identified DVT Cluster curve setup",
                 to: c.accounting,
                 role: MANAGE_BOND_CURVES_ROLE,
                 account: c.identifiedDVTClusterCurveSetup
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant MANAGE_CURVE_PARAMETERS_ROLE to Identified DVT cluster curve setup",
+                description: "Grant CSM ParametersRegistry MANAGE_CURVE_PARAMETERS_ROLE to Identified DVT Cluster curve setup",
                 to: c.parametersRegistry,
                 role: MANAGE_CURVE_PARAMETERS_ROLE,
                 account: c.identifiedDVTClusterCurveSetup
@@ -598,13 +598,13 @@ contract UpgradeVoteScript is OmnibusBase {
 
             // The setup contract renounces its temporary Accounting/ParametersRegistry roles during execute().
             items[i++] = _item({
-                description: "Execute Identified DVT cluster curve setup",
+                description: "Execute Identified DVT Cluster curve setup",
                 to: c.identifiedDVTClusterCurveSetup,
                 data: abi.encodeCall(IOneShotCurveSetup.execute, ())
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE to CSM Committee",
+                description: "Grant CSM ParametersRegistry MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE to CSM Committee",
                 to: c.parametersRegistry,
                 role: MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE,
                 account: c.csmCommittee
@@ -613,14 +613,14 @@ contract UpgradeVoteScript is OmnibusBase {
             // --- Burner role migration ---
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke REQUEST_BURN_SHARES_ROLE from CSM Accounting",
+                description: "Revoke Burner REQUEST_BURN_SHARES_ROLE from CSM Accounting",
                 to: g.burner,
                 role: REQUEST_BURN_SHARES_ROLE,
                 account: c.accounting
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant REQUEST_BURN_MY_STETH_ROLE to CSM Accounting",
+                description: "Grant Burner REQUEST_BURN_MY_STETH_ROLE to CSM Accounting",
                 to: g.burner,
                 role: REQUEST_BURN_MY_STETH_ROLE,
                 account: c.accounting
@@ -629,14 +629,14 @@ contract UpgradeVoteScript is OmnibusBase {
             // --- TWG role migration ---
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke TWG full-withdrawal role from the Old Ejector",
+                description: "Revoke TWG ADD_FULL_WITHDRAWAL_REQUEST_ROLE from the Old CSM Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
                 account: c.oldEjector
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant TWG full-withdrawal role to the New Ejector",
+                description: "Grant TWG ADD_FULL_WITHDRAWAL_REQUEST_ROLE to the New CSM Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
                 account: c.newEjector
@@ -671,21 +671,21 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant REQUEST_BURN_MY_STETH_ROLE to Curated Accounting",
+                description: "Grant Burner REQUEST_BURN_MY_STETH_ROLE to Curated Accounting",
                 to: g.burner,
                 role: REQUEST_BURN_MY_STETH_ROLE,
                 account: c.accounting
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant TWG full-withdrawal role to Curated Ejector",
+                description: "Grant TWG ADD_FULL_WITHDRAWAL_REQUEST_ROLE to Curated Ejector",
                 to: g.triggerableWithdrawalsGateway,
                 role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
                 account: c.ejector
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant RESUME_ROLE to agent on Curated Module v2",
+                description: "Grant CM RESUME_ROLE to AGENT",
                 to: c.module,
                 role: RESUME_ROLE,
                 account: agent
@@ -696,7 +696,7 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozRevokeRoleItem({
-                description: "Revoke RESUME_ROLE from agent on Curated Module v2",
+                description: "Revoke CM RESUME_ROLE from AGENT",
                 to: c.module,
                 role: RESUME_ROLE,
                 account: agent
