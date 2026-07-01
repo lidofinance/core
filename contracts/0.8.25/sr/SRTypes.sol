@@ -112,7 +112,7 @@ struct StakingModule {
     uint8 withdrawalCredentialsType;
     /// @notice total actual balance of validators for module in Gwei.
     uint64 validatorsBalanceGwei;
- }
+}
 
 /// @dev 1 storage slot
 struct ModuleStateConfig {
