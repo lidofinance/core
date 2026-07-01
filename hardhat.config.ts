@@ -22,6 +22,7 @@ import "./tasks";
 import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers";
 
 const RPC_URL: string = process.env.RPC_URL || "";
+const HARDHAT_CHAIN_ID = process.env.HARDHAT_CHAIN_ID ? parseInt(process.env.HARDHAT_CHAIN_ID, 10) : undefined;
 
 export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -38,6 +39,7 @@ const config: HardhatUserConfig = {
       // minimal base fee is 1 for EIP-1559
       // gasPrice: 0,
       // initialBaseFeePerGas: 0,
+      ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
       blockGasLimit: 30000000,
       allowUnlimitedContractSize: true,
       accounts: {

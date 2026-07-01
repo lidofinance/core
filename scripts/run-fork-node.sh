@@ -59,6 +59,10 @@ if [[ ${FORK_NODE:-} == "anvil" ]]; then
     anvil -f $RPC_URL "${BLOCK_ARG[@]}" --timeout 90000 --auto-impersonate
   fi
 else
+
+  export HARDHAT_CHAIN_ID="$(cast chain-id --rpc-url "$RPC_URL")"
+  echo "HARDHAT_CHAIN_ID: $HARDHAT_CHAIN_ID"
+
   if [[ -n ${TRACE:-} ]]; then
     yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile --trace --gascost --vvv
   else
