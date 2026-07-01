@@ -110,7 +110,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
     /// @notice Initializes the contract.
     /// @param _admin Lido DAO Aragon agent contract address.
-    /// @param _withdrawalCredentials 0x01 credentials to withdraw ETH on Consensus Layer side.
+    /// @param _withdrawalCredentials credentials to withdraw ETH on Consensus Layer side.
+    /// @param _maxTopUpPerBlockGwei  Initial value for the global per-block top-up cap (in Gwei).
     /// @dev Proxy initialization method.
     function initialize(address _admin, bytes32 _withdrawalCredentials, uint256 _maxTopUpPerBlockGwei) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddress();
@@ -190,7 +191,12 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
 
     /// @notice Updates staking module params.
     /// @param _stakingModuleId Staking module id.
-    // @param _stakingModuleConfig Staking module config
+    /// @param _stakeShareLimit Maximum stake share that can be allocated to a module, in BP.
+    /// @param _priorityExitShareThreshold Module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP.
+    /// @param _stakingModuleFee Part of the fee taken from staking rewards that goes to the staking module, in BP.
+    /// @param _treasuryFee Part of the fee taken from staking rewards that goes to the treasury, in BP.
+    /// @param _maxDepositsPerBlock The maximum number of validators that can be deposited in a single block.
+    /// @param _minDepositBlockDistance The minimum distance between deposits in blocks.
     /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
     function updateStakingModule(
         uint256 _stakingModuleId,
@@ -990,8 +996,8 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         assert(etherBalanceBeforeDeposits == etherBalanceAfterDeposits);
     }
 
-    /// @notice Set 0x01 credentials to withdraw ETH on Consensus Layer side.
-    /// @param _withdrawalCredentials 0x01 withdrawal credentials field as defined in the Consensus Layer specs.
+    /// @notice Set credentials to withdraw ETH on Consensus Layer side.
+    /// @param _withdrawalCredentials withdrawal credentials field as defined in the Consensus Layer specs.
     /// @dev Note that setWithdrawalCredentials discards all unused deposits data as the signatures are invalidated.
     /// @dev The function is restricted to the `MANAGE_WITHDRAWAL_CREDENTIALS_ROLE` role.
     function setWithdrawalCredentials(bytes32 _withdrawalCredentials)
@@ -1106,7 +1112,7 @@ contract StakingRouter is ISRBase, AccessControlEnumerableUpgradeable {
         ModuleState storage state = _moduleId.getModuleState();
         moduleState.name = state.name;
 
-        /// @dev use multiply SLOAD as this data readonly by offchain tools, so minimize bytecode size
+        /// @dev use multiple SLOAD as this data is read only by offchain tools, so minimize bytecode size
 
         ModuleStateConfig storage stateConfig = state.config;
         moduleState.stakingModuleAddress = stateConfig.moduleAddress;
