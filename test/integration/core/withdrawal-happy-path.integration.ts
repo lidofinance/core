@@ -5,13 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, findEvents, findEventsWithInterfaces } from "lib";
-import {
-  finalizeWQViaElVault,
-  getProtocolContext,
-  ProtocolContext,
-  report,
-  reportWithEffectiveClDiff,
-} from "lib/protocol";
+import { finalizeWQViaElVault, getProtocolContext, ProtocolContext, reportWithoutClActivation } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -49,7 +43,7 @@ describe("Integration: Withdrawal happy path", () => {
     await lido.connect(agentSigner).removeStakingLimit();
     await lido.connect(holder).submit(ethers.ZeroAddress, { value: ether("10000") });
     await lido.connect(agentSigner).setDepositsReserveTarget(ether("100"));
-    await reportWithEffectiveClDiff(ctx, 0n, { reportElVault: false, reportBurner: false, skipWithdrawals: true });
+    await reportWithoutClActivation(ctx, { reportElVault: false, reportBurner: false, skipWithdrawals: true });
     expect(await lido.getDepositsReserveTarget()).to.equal(ether("100"));
     expect(await lido.getDepositsReserve()).to.equal(ether("100"));
     expect(await lido.balanceOf(holder.address)).to.be.gte(REQUESTS_SUM);
@@ -129,12 +123,12 @@ describe("Integration: Withdrawal happy path", () => {
     });
 
     // First oracle report
-    let reportTx = (await report(ctx, { clDiff: ether("0.00000000000001") })).reportTx;
+    let reportTx = (await reportWithoutClActivation(ctx, { effectiveClDiff: ether("0.00000000000001") })).reportTx;
     const reportReceipt = await reportTx!.wait();
 
     // second report requests will get finalized for sure
     if (findEvents(reportReceipt!, "WithdrawalsFinalized").length !== 1) {
-      reportTx = (await report(ctx, { clDiff: ether("0.00000000000001") })).reportTx;
+      reportTx = (await reportWithoutClActivation(ctx, { effectiveClDiff: ether("0.00000000000001") })).reportTx;
     }
 
     const bufferedEtherAfterReport = await lido.getBufferedEther();

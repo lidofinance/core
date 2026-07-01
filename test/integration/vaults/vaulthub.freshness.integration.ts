@@ -8,11 +8,10 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
-  report,
+  reportWithoutClActivation,
   setupLidoForVaults,
   waitNextAvailableReportTime,
 } from "lib/protocol";
-import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
 
@@ -82,7 +81,7 @@ describe("Integration: VaultHub ", () => {
 
       expect(await vaultHub.isReportFresh(stakingVault)).to.be.true;
 
-      await report(ctx, { clDiff: ether("0"), waitNextReportTime: true });
+      await reportWithoutClActivation(ctx, { waitNextReportTime: true });
 
       expect(await vaultHub.isReportFresh(stakingVault)).to.be.false;
     });
@@ -102,7 +101,7 @@ describe("Integration: VaultHub ", () => {
 
       expect(await vaultHub.isReportFresh(stakingVault)).to.be.true;
 
-      await report(ctx, { clDiff: ether("0"), waitNextReportTime: false });
+      await reportWithoutClActivation(ctx, { waitNextReportTime: false });
 
       expect(await vaultHub.isReportFresh(stakingVault)).to.be.true;
     });

@@ -25,13 +25,13 @@ export const norSdvtEnsureOperators = async (
   minOperatorKeysCount = MIN_OP_KEYS_COUNT,
   numKeysPerNodeOperatorToDeposit = 1n,
 ) => {
-  const { numBefore, numAdded } = await norSdvtEnsureOperatorsHaveMinKeys(
+  const { numBefore, numAdded, operatorIds } = await norSdvtEnsureOperatorsHaveMinKeys(
     ctx,
     module,
     minOperatorsCount,
     minOperatorKeysCount,
   );
-  for (let operatorId = 0n; operatorId < minOperatorsCount; operatorId++) {
+  for (const operatorId of operatorIds) {
     const nodeOperatorBefore = await module.getNodeOperator(operatorId, false);
 
     // cannot set staking limit for a deactivated operator
@@ -69,10 +69,10 @@ const norSdvtEnsureOperatorsHaveMinKeys = async (
   module: LoadedContract<NodeOperatorsRegistry>,
   minOperatorsCount = MIN_OPS_COUNT,
   minKeysCount = MIN_OP_KEYS_COUNT,
-): Promise<{ numBefore: bigint; numAdded: bigint }> => {
-  const { numBefore, numAdded } = await norSdvtEnsureMinOperators(ctx, module, minOperatorsCount);
+): Promise<{ numBefore: bigint; numAdded: bigint; operatorIds: bigint[] }> => {
+  const { numBefore, numAdded, operatorIds } = await norSdvtEnsureMinActiveOperators(ctx, module, minOperatorsCount);
 
-  for (let operatorId = 0n; operatorId < minOperatorsCount; operatorId++) {
+  for (const operatorId of operatorIds) {
     const keysCount = await module.getTotalSigningKeyCount(operatorId);
 
     if (keysCount < minKeysCount) {
@@ -87,21 +87,29 @@ const norSdvtEnsureOperatorsHaveMinKeys = async (
     expect(keysCountAfter).to.be.gte(minKeysCount);
   }
 
-  return { numBefore, numAdded };
+  return { numBefore, numAdded, operatorIds };
 };
 
 /**
- * Fills the NOR with some operators in case there are not enough of them.
+ * Fills the NOR with active operators in case there are not enough of them.
  */
-const norSdvtEnsureMinOperators = async (
+const norSdvtEnsureMinActiveOperators = async (
   ctx: ProtocolContext,
   module: LoadedContract<NodeOperatorsRegistry>,
   minOperatorsCount = MIN_OPS_COUNT,
-): Promise<{ numBefore: bigint; numAdded: bigint }> => {
+): Promise<{ numBefore: bigint; numAdded: bigint; operatorIds: bigint[] }> => {
   const numBefore = await module.getNodeOperatorsCount();
   let numAdded = 0n;
+  const operatorIds: bigint[] = [];
 
-  while (numBefore + numAdded < minOperatorsCount) {
+  for (let operatorId = 0n; operatorId < numBefore && BigInt(operatorIds.length) < minOperatorsCount; operatorId++) {
+    const { active } = await module.getNodeOperator(operatorId, false);
+    if (active) {
+      operatorIds.push(operatorId);
+    }
+  }
+
+  while (BigInt(operatorIds.length) < minOperatorsCount) {
     const operatorId = numBefore + numAdded;
 
     const operator = {
@@ -110,15 +118,19 @@ const norSdvtEnsureMinOperators = async (
     };
 
     await norSdvtAddNodeOperator(ctx, module, operator);
+    const nodeOperator = await module.getNodeOperator(operatorId, false);
+    expect(nodeOperator.active).to.equal(true);
+
+    operatorIds.push(operatorId);
     numAdded++;
   }
 
   const after = await module.getNodeOperatorsCount();
 
   expect(after).to.equal(numBefore + numAdded);
-  expect(after).to.be.gte(minOperatorsCount);
+  expect(BigInt(operatorIds.length)).to.be.gte(minOperatorsCount);
 
-  return { numBefore, numAdded };
+  return { numBefore, numAdded, operatorIds };
 };
 
 /**

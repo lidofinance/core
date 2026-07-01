@@ -10,6 +10,7 @@ import {
   norSdvtEnsureOperators,
   ProtocolContext,
   report,
+  reportWithoutClActivation,
   seedProtocolPendingBaseline,
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
@@ -33,6 +34,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
   let snapshot: string;
   let originalState: string;
+  let carriedPendingBalanceGwei: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -91,9 +93,10 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     validatorBalancesGweiByStakingModule: bigint[];
     clPendingBalanceGwei: bigint;
   }) => {
+    const postPendingBalanceGwei = carriedPendingBalanceGwei + clPendingBalanceGwei;
     const { data } = await report(ctx, {
-      clDiff: clDiff + clPendingBalanceGwei * ONE_GWEI, //simulate full total increase
-      clPendingBalanceGwei: 0n,
+      clDiff,
+      clPendingBalanceGwei: postPendingBalanceGwei,
       dryRun: true,
       reportElVault: false,
       skipWithdrawals: true,
@@ -103,20 +106,19 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     });
     return {
       ...data,
-      // extract pending balance from simulated total clBalance
-      clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - clPendingBalanceGwei,
-      clPendingBalanceGwei,
+      clPendingBalanceGwei: postPendingBalanceGwei,
     };
   };
 
   const submitModuleBalancesSanityBaseline = async () => {
-    const { data } = await report(ctx, {
+    const { data } = await reportWithoutClActivation(ctx, {
       dryRun: true,
       reportElVault: false,
       skipWithdrawals: true,
     });
 
     await submitReportDataWithConsensusAndEmptyExtraData(ctx, data);
+    carriedPendingBalanceGwei = BigInt(data.clPendingBalanceGwei);
   };
 
   it("should accept a report that moves one module's pending balance into validators", async () => {
@@ -219,7 +221,8 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       (balanceStatsBeforeReport.clValidatorsBalanceAtLastReport +
         balanceStatsBeforeReport.clPendingBalanceAtLastReport +
         balanceStatsBeforeReport.depositedSinceLastReport) /
-      ONE_GWEI;
+        ONE_GWEI -
+      carriedPendingBalanceGwei;
 
     const data = await buildReportData({
       clDiff: balanceStatsBeforeReport.depositedSinceLastReport,
@@ -350,7 +353,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     expect(validatorsBalanceAfterGwei).to.equal(totalValidatorsBalanceBeforeGwei + excessiveValidatorsGrowthGwei);
 
     const data = await buildReportData({
-      clDiff: excessiveValidatorsGrowthWei,
+      clDiff: excessiveValidatorsGrowthWei + balanceStatsBeforeReport.depositedSinceLastReport,
       stakingModuleIdsWithUpdatedBalance: moduleReportState.stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule: reportedValidatorsBalancesGwei,
       clPendingBalanceGwei: totalPendingBalanceBeforeGwei,

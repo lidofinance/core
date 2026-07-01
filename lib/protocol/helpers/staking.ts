@@ -19,6 +19,7 @@ import {
   ensureFirstPostMigrationReport,
   normalizeWithdrawalVaultBaseline,
   report,
+  reportWithoutClActivation,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "./accounting";
 import { norSdvtSetOperatorStakingLimit } from "./nor-sdvt";
@@ -471,19 +472,16 @@ export const seedProtocolPendingBaseline = async (
   await ensureFirstPostMigrationReport(ctx);
   await normalizeWithdrawalVaultBaseline(ctx, 0n);
   await depositValidatorsWithoutReport(ctx, depositsCount, moduleId);
-  const { depositedSinceLastReport } = await ctx.contracts.lido.getBalanceStats();
 
-  const { data } = await report(ctx, {
-    clDiff: depositedSinceLastReport,
+  const { data } = await reportWithoutClActivation(ctx, {
     dryRun: true,
     reportElVault: false,
     reportWithdrawalsVault: false,
     skipWithdrawals: true,
-    waitNextReportTime: true,
   });
 
-  const pendingBaselineGwei = toGwei(depositedSinceLastReport);
-  const clValidatorsBalanceGwei = BigInt(data.clValidatorsBalanceGwei) - pendingBaselineGwei;
+  const clValidatorsBalanceGwei = BigInt(data.clValidatorsBalanceGwei);
+  const clPendingBalanceGwei = BigInt(data.clPendingBalanceGwei);
   const moduleBalanceParams = adjustReportModuleBalances(
     await buildModuleAccountingReportParams(ctx),
     clValidatorsBalanceGwei,
@@ -499,7 +497,7 @@ export const seedProtocolPendingBaseline = async (
   return submitReportDataWithConsensusAndEmptyExtraData(ctx, {
     ...data,
     clValidatorsBalanceGwei,
-    clPendingBalanceGwei: pendingBaselineGwei,
+    clPendingBalanceGwei,
     ...moduleBalanceParams,
   });
 };
@@ -559,16 +557,19 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   const validatorsDeltaGweiByModule = new Map<bigint, bigint>([[moduleId, toGwei(ethToDeposit)]]);
   const rawClDiff = before.depositedSinceLastReport;
   const postCLBalanceWei = before.clValidatorsBalanceAtLastReport + before.clPendingBalanceAtLastReport + rawClDiff;
+  const clPendingBalanceGwei = toGwei(before.clPendingBalanceAtLastReport);
+  const clValidatorsBalanceGwei = toGwei(postCLBalanceWei - before.clPendingBalanceAtLastReport);
 
   await report(ctx, {
     clDiff: rawClDiff,
     clAppearedValidators: depositsCount,
+    clPendingBalanceGwei,
     reportElVault: false,
     reportWithdrawalsVault: false,
     skipWithdrawals: true,
     ...adjustReportModuleBalances(
       await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule }),
-      toGwei(postCLBalanceWei),
+      clValidatorsBalanceGwei,
     ),
   });
 
