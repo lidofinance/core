@@ -48,14 +48,17 @@ describe("Integration: Deposits reserve", () => {
     await normalizeWithdrawalVaultBaseline(ctx, 0n);
   };
 
-  const requestWithdrawalWithAvailableBuffer = async (requestAmount: bigint) => {
+  /**
+   * Submit enough ETH to fill deposits reserve, then request withdrawal.
+   *
+   * Deposits reserve is filled before withdrawals reserve. These cases need a
+   * positive withdrawals reserve, so the submit covers the current reserve target
+   * plus the requested withdrawal before asserting the finalization-budget formula.
+   */
+  const submitToCoverDepositsReserveAndRequestWithdrawal = async (requestAmount: bigint) => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
-    const bufferedBefore = await lido.getBufferedEther();
-    const minBufferedAfter = (await lido.getDepositsReserveTarget()) + requestAmount;
-    const requiredTopUp = minBufferedAfter > bufferedBefore ? minBufferedAfter - bufferedBefore : 0n;
-    const submitValue = requiredTopUp > requestAmount ? requiredTopUp : requestAmount;
-
+    const submitValue = (await lido.getDepositsReserveTarget()) + requestAmount;
     await lido.connect(holder).submit(ZeroAddress, { value: submitValue });
     await lido.connect(holder).approve(withdrawalQueue, requestAmount);
     await withdrawalQueue.connect(holder).requestWithdrawals([requestAmount], holder.address);
@@ -199,7 +202,7 @@ describe("Integration: Deposits reserve", () => {
     const { lido, withdrawalQueue, locator } = ctx.contracts;
 
     const requestAmount = ether("1");
-    await requestWithdrawalWithAvailableBuffer(requestAmount);
+    await submitToCoverDepositsReserveAndRequestWithdrawal(requestAmount);
 
     const requestTimestampMargin = (await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits())
       .requestTimestampMargin;
@@ -309,7 +312,7 @@ describe("Integration: Deposits reserve", () => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
     const requestAmount = ether("20");
-    await requestWithdrawalWithAvailableBuffer(requestAmount);
+    await submitToCoverDepositsReserveAndRequestWithdrawal(requestAmount);
 
     const requestTimestampMargin = (await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits())
       .requestTimestampMargin;
@@ -399,7 +402,7 @@ describe("Integration: Deposits reserve", () => {
     const { lido, withdrawalQueue } = ctx.contracts;
 
     const requestAmount = ether("20");
-    await requestWithdrawalWithAvailableBuffer(requestAmount);
+    await submitToCoverDepositsReserveAndRequestWithdrawal(requestAmount);
 
     const requestTimestampMargin = (await ctx.contracts.oracleReportSanityChecker.getOracleReportLimits())
       .requestTimestampMargin;
