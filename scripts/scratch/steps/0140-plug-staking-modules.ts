@@ -25,6 +25,11 @@ const EXTERNAL_HASH_CONSENSUS_ABI = [
   "function updateInitialEpoch(uint256 initialEpoch)",
 ];
 
+const EXTERNAL_CIRCUIT_BREAKER_ABI = [
+  "function getPauser(address _pausable) external view returns (address)",
+  "function registerPauser(address _pausable, address _newPauser)",
+];
+
 const NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP = 10000; // 100%
 const NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
 const NOR_STAKING_MODULE_MODULE_FEE_BP = 500; // 5%
@@ -200,9 +205,22 @@ async function enableExternalModule(
 
   const circuitBreakerAddress = state[Sk.circuitBreaker]?.address;
   if (circuitBreakerAddress) {
+    const circuitBreakerPauser = ethers.getAddress(agent);
+    const circuitBreaker = externalContract(
+      "CircuitBreaker",
+      circuitBreakerAddress,
+      EXTERNAL_CIRCUIT_BREAKER_ABI,
+      agentSigner,
+    );
+
     for (const pausable of setup.pausableContracts) {
       const contract = externalContract(pausable.label, pausable.address, EXTERNAL_ACCESS_CONTROL_ABI, agentSigner);
       await makeTx(contract, "grantRole", [await contract.PAUSE_ROLE(), circuitBreakerAddress], { from: agent });
+
+      const currentPauser = ethers.getAddress(await circuitBreaker.getPauser(pausable.address));
+      if (currentPauser !== circuitBreakerPauser) {
+        await makeTx(circuitBreaker, "registerPauser", [pausable.address, circuitBreakerPauser], { from: agent });
+      }
     }
   }
 }

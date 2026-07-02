@@ -380,6 +380,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       CSM_LOCATOR_ADDRESS: state[Sk.lidoLocator].proxy.address,
       CSM_ARAGON_AGENT_ADDRESS: state[Sk.appAgent].proxy.address,
       CSM_FIRST_ADMIN_ADDRESS: state[Sk.appAgent].proxy.address,
+      CSM_CIRCUIT_BREAKER_ADDRESS: state[Sk.circuitBreaker]?.address,
       CSM_RESEAL_MANAGER_ADDRESS: state[Sk.resealManager]?.address || state[Sk.appAgent].proxy.address,
       EVM_SCRIPT_EXECUTOR_ADDRESS: state[Sk.appVoting].proxy.address,
     } as unknown as NodeJS.ProcessEnv;
