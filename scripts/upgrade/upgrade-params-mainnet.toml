@@ -163,5 +163,4 @@ hashConsensusInitialEpoch = 47480
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-# TODO set actual
-expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC
+expiryTimestamp = 1786147199 # August 7, 2026 at 23:59:59 UTC (approx. 3 weeks after voting start)

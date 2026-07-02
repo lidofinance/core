@@ -1,7 +1,12 @@
 import { ethers } from "hardhat";
 import { deployStakingModules } from "scripts/utils/staking-modules";
+import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade";
 
-import { logScriptHeader, readNetworkState } from "lib";
+import { logScriptHeader, readNetworkState, Sk } from "lib";
+
+export async function skip(): Promise<boolean> {
+  return (await checkArtifactDeployedAndLog(Sk.sm_CM)) && (await checkArtifactDeployedAndLog(Sk.sm_CSM));
+}
 
 export async function main() {
   const state = readNetworkState();

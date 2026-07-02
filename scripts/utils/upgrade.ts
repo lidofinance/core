@@ -502,7 +502,7 @@ export async function checkArtifactDeployedAndLog(artifactName: Sk): Promise<boo
   const isDeployed = !!(address && (await isContractDeployed(address)));
   if (isDeployed) {
     log.splitter();
-    log(yl(`Artifact <${or(Sk.upgradeTemplate)}> exists and deployed at [${bl(address)}], skipping step...`));
+    log(yl(`Artifact <${or(artifactName)}> exists and deployed at [${bl(address)}], skipping step...`));
   }
   return isDeployed;
 }
