@@ -59,8 +59,8 @@
     "deploy:upgrade:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn deploy:upgrade",
     "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
     "deploy:upgrade:template:local": "NETWORK=local yarn deploy:upgrade:template",
-    "deploy:upgrade:upd3": "STEPS_FILE=upgrade/steps-upd3-deploy.json yarn deploy:upgrade",
-    "deploy:upgrade:upd3:voting": "STEPS_FILE=upgrade/steps-upd3-voting.json yarn deploy:upgrade",
+    "deploy:upgrade:upd4": "STEPS_FILE=upgrade/steps-upd4-deploy.json yarn deploy:upgrade",
+    "deploy:upgrade:upd4:voting": "STEPS_FILE=upgrade/steps-upd4-voting.json yarn deploy:upgrade",
     "postinstall": "husky"
   },
   "lint-staged": {
