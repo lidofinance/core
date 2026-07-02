@@ -355,7 +355,7 @@ contract UpgradeVoteScript is OmnibusBase {
 
             /// @notice grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor
             items[i++] = _ozGrantRoleItem({
-                description: "Grant STAKING_MODULE_SHARE_MANAGE_ROLE on Staking Router to EasyTrack executor",
+                description: "Grant Staking Router STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor",
                 to: stakingRouter,
                 role: STAKING_MODULE_SHARE_MANAGE_ROLE,
                 account: evmScriptExecutor
@@ -378,14 +378,14 @@ contract UpgradeVoteScript is OmnibusBase {
             });
 
             items[i++] = _ozGrantRoleItem({
-                description: "Grant TWGateway TW_EXIT_LIMIT_MANAGER_ROLE to AGENT on TWGateway",
+                description: "Grant TWG TW_EXIT_LIMIT_MANAGER_ROLE to AGENT",
                 to: g.triggerableWithdrawalsGateway,
                 role: TW_EXIT_LIMIT_MANAGER_ROLE,
                 account: agent
             });
 
             items[i++] = _item({
-                description: "Set TWGateway exit request limits",
+                description: "Set TWG exit request limits",
                 to: g.triggerableWithdrawalsGateway,
                 data: abi.encodeCall(
                     ITriggerableWithdrawalsGatewayUpgrade.setExitRequestLimit,
