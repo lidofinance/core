@@ -29,6 +29,7 @@
     "test:fulltrace": "hardhat test test/**/*.test.ts --fulltrace --disabletracer",
     "test:watch": "SKIP_GAS_REPORT=true SKIP_CONTRACT_SIZE=true hardhat watch test",
     "test:integration": "bash scripts/run-test-integration.sh",
+    "test:integration:local": "RUN_NETWORK=local yarn test:integration",
     "test:integration:trace": "TRACE=trace yarn test:integration",
     "test:integration:fulltrace": "TRACE=fulltrace yarn test:integration",
     "test:integration:upgrade": "MODE=forking UPGRADE=true STEPS_FILE=upgrade/steps-mock-upgrade.json yarn test:integration",
