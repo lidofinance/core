@@ -99,54 +99,38 @@ maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-
 
 [csmUpgrade]
 csmProxy = "0xdA7dE2ECdDfccC6c3AF10108Db212ACBBf9EA83F"
-# TODO: replace with deployed CSM implementation before execution
-csmImpl = "0x0000000000000000000000000000000000000000"
+csmImpl = "0x63992a86f009fcC796a8369feEfB68880aef4e3a"
 vettedGateProxy = "0xB314D4A76C457c93150d308787939063F4Cc67E0"
-# TODO: replace with deployed Vetted Gate implementation before execution
-vettedGateImpl = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed IDVTC gate before execution
-identifiedDVTClusterGate = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed IDVTC curve setup before execution
-identifiedDVTClusterCurveSetup = "0x0000000000000000000000000000000000000000"
+vettedGateImpl = "0x66ADb8b3F58d3DFdF6bAdB595E41f19e947E5c14"
+identifiedDVTClusterGate = "0xa12760721A72A7199aB38059DA6690b9Cd4ed7B8"
+identifiedDVTClusterCurveSetup = "0x711985E069f4d702e0457C0dACAde3D3894Ce4E3"
 identifiedDVTClusterBondCurveId = 3
-# TODO: replace with deployed Parameters Registry implementation before execution
-parametersRegistryImpl = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed Fee Oracle implementation before execution
-feeOracleImpl = "0x0000000000000000000000000000000000000000"
+parametersRegistryImpl = "0x107d287F178cD54792614d7D63C47D8242240BeD"
+feeOracleImpl = "0xecE6e0Cde61078F76b66Ef0C338a6875E5D01F79"
 feeOracleConsensusVersion = 4
-# TODO: replace with deployed Accounting implementation before execution
-accountingImpl = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed Fee Distributor implementation before execution
-feeDistributorImpl = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed Penalties implementation before execution
-exitPenaltiesImpl = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed Strikes implementation before execution
-strikesImpl = "0x0000000000000000000000000000000000000000"
+accountingImpl = "0xe768572cc5aE5C698345C59288d871a949Ea8bd3"
+feeDistributorImpl = "0x936da7cDB7eed1084d294E23eA1d7Ad72DCcfE0E"
+exitPenaltiesImpl = "0xA5b9e96E951089E629Ab0834AEaF242a81394EA0"
+strikesImpl = "0xd25E7C3923d2e68c325980b0e15eD20d62B2691F"
 oldPermissionlessGate = "0xcF33a38111d0B1246A3F38a838fb41D626B454f0"
 oldVerifier = "0xdC5FE1782B6943f318E05230d688713a560063DC"
-# TODO: replace with deployed new verifier
-newVerifier = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed new permissionless gate before execution
-newPermissionlessGate = "0x0000000000000000000000000000000000000000"
-# TODO: replace with new deployed ejector
-newEjector = "0x0000000000000000000000000000000000000000"
+newVerifier = "0xfce7aB839e55de77730716D05b3553e45ab3A5Ba"
+newPermissionlessGate = "0xb8cd8F059Ad7a5dB8CAfDe34aAb007317F7156C8"
+newEjector = "0x610B517D380f287c239C93F8eF6FfBd567AA4bA5"
 csmCommittee = "0xC52fC3081123073078698F1EAc2f1Dc7Bd71880f"
 
 [curatedModule]
-# TODO: replace with deployed curated module addresses
-module = "0x0000000000000000000000000000000000000000"
-# TODO: replace with deployed curated gates before execution
+module = "0xDa5F930cE326EB5205085D66c72A4E79d60cB8C1"
 curatedGates = [
-    "0x0000000000000000000000000000000000000000",
-    "0x0000000000000000000000000000000000000000",
-    "0x0000000000000000000000000000000000000000",
-    "0x0000000000000000000000000000000000000000",
-    "0x0000000000000000000000000000000000000000",
-    "0x0000000000000000000000000000000000000000",
-    "0x0000000000000000000000000000000000000000",
+    "0x6093EFA6B5E2FF3be54d1c895c9deA932805c49F",
+    "0x8c002c6eE10cf8adb78D1F9EB2e134FdaF8A7C1a",
+    "0x207798e6fD1aa7Ee8a63782A64c959cD6727b78C",
+    "0xeF273Ca4A21Ba7B414Ae3C9f9b443038cb133F72",
+    "0x3BbBb175f7F07954DE00052b20E1c5572223F24D",
+    "0x86A8d4E0db5938D21d98047544668FCCB1A9ADc8",
+    "0x773933F9db8964A17d62fb808f2EC7A2de4247CC"
 ]
-# TODO: replace with deployed curated verifier before execution
-verifier = "0x0000000000000000000000000000000000000000"
+verifier = "0xC392F457960f1B13Ebaf1aa6C065479dD507E1E3"
 circuitBreakerPauser = "0x2570e0b22AD904501dfB0d49575991ACB801dD91" # Curated Module Committee (CMC) multisig address https://research.lido.fi/t/proposal-transition-the-lnosg-into-the-cmc/11341/27
 moduleName = "curated-onchain-v2"
 stakeShareLimit = 10000 # 100% (unlimited)
@@ -163,5 +147,4 @@ hashConsensusInitialEpoch = 47480
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-# TODO set actual
-expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC
+expiryTimestamp = 1786147199 # August 7, 2026 at 23:59:59 UTC (approx. 3 weeks after voting start)

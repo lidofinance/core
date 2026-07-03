@@ -60,6 +60,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     // -------- Constants --------
     //
 
+    bytes32 internal constant APP_MANAGER_ROLE = keccak256("APP_MANAGER_ROLE");
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
     bytes32 internal constant ALLOW_PAIR_ROLE = keccak256("ALLOW_PAIR_ROLE");
@@ -256,6 +257,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
         // Lido
         _assertAragonKernelImplementation(IAragonKernel(c.kernel), c.lidoAppId, c.newLidoImpl);
         _assertContractVersion(g.lido, EXPECTED_FINAL_LIDO_VERSION);
+        _assertHasNotAragonPermission(c.acl, c.kernel, APP_MANAGER_ROLE, agent);
         _assertAragonPermissionManager(c.acl, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent);
         _assertHasAragonPermission(c.acl, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent);
 
@@ -305,8 +307,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
             _assertProxyAdmin(sr, agent);
             _assertContractVersion(sr, EXPECTED_FINAL_STAKING_ROUTER_VERSION);
             _assertSingleOZRoleHolder(sr, DEFAULT_ADMIN_ROLE, agent);
-            /// @dev _assertSingleOZRoleHolder not works on hoodi!
-            _assertHasOZRole(sr, STAKING_MODULE_MANAGE_ROLE, agent);
+            _assertSingleOZRoleHolder(sr, STAKING_MODULE_MANAGE_ROLE, agent);
             _assertSingleOZRoleHolder(sr, STAKING_MODULE_UNVETTING_ROLE, c.newDepositSecurityModule);
             _assertSingleOZRoleHolder(sr, STAKING_MODULE_SHARE_MANAGE_ROLE, g.easyTrackEVMScriptExecutor);
             _assertZeroOZRoleHolders(sr, MANAGE_WITHDRAWAL_CREDENTIALS_ROLE);
@@ -607,7 +608,11 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
 
         address[] memory guardians = dsm.getGuardians();
-        for (uint256 i = 0; i < guardians.length; ++i) {
+        uint256 guardiansCount = guardians.length;
+        if (guardiansCount != oldDsm.getGuardians().length) {
+            revert DSMMigrationIncorrectGuardians();
+        }
+        for (uint256 i = 0; i < guardiansCount; ++i) {
             if (!oldDsm.isGuardian(guardians[i])) {
                 revert DSMMigrationIncorrectGuardians();
             }
@@ -649,8 +654,17 @@ contract UpgradeTemplate is IUpgradeTemplate {
         internal
         view
     {
-        if (!IAragonACL(_acl).hasPermission(_holder, _accessControlled, _role)) {
+        if (!_hasPermission(_acl, _accessControlled, _role, _holder)) {
             revert MissingAragonPermissionHolder(_accessControlled, _role, _holder);
+        }
+    }
+
+    function _assertHasNotAragonPermission(address _acl, address _accessControlled, bytes32 _role, address _holder)
+        internal
+        view
+    {
+        if (_hasPermission(_acl, _accessControlled, _role, _holder)) {
+            revert UnexpectedAragonPermissionHolder(_accessControlled, _role, _holder);
         }
     }
 
@@ -768,6 +782,15 @@ contract UpgradeTemplate is IUpgradeTemplate {
         }
     }
 
+    // Aragon ACL wrappers
+    function _hasPermission(address _acl, address _accessControlled, bytes32 _role, address _holder)
+        internal
+        view
+        returns (bool)
+    {
+        return IAragonACL(_acl).hasPermission(_holder, _accessControlled, _role);
+    }
+
     // OZ IAccessControlEnumerable wrappers
     function _hasRole(address _accessControlled, bytes32 _role, address _account) internal view returns (bool) {
         return IAccessControl(_accessControlled).hasRole(_role, _account);
@@ -800,6 +823,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error InvalidOracleConsensusVersion(address oracle, uint256 actualVersion);
     error InvalidLocatorAppAddress(address locatorAddress, address appAddress);
     error MissingAragonPermissionHolder(address contractAddress, bytes32 role, address holder);
+    error UnexpectedAragonPermissionHolder(address contractAddress, bytes32 role, address holder);
     error UnexpectedAragonPermissionManager(
         address contractAddress, bytes32 role, address actualManager, address expectedManager
     );
