@@ -1,18 +1,17 @@
 # Lido Protocol Upgrade Parameters - Mainnet Configuration
 
 [easyTrack.newFactories]
-# TODO: fill with deployed Easy Track factory address before execution
-UpdateStakingModuleShareLimits = "0x0000000000000000000000000000000000000000"
-AllowConsolidationPair = "0x0000000000000000000000000000000000000000"
+UpdateStakingModuleShareLimits = "0x0C6703F1d8D9DdfB6c6e5F57b4f7432a6500D6D8"
+AllowConsolidationPair = "0x29e23B1EF0c9fffAc8330F9abaCebDDD827E4b5C"
 
-SetMerkleGateTreeForCSM = "0x0000000000000000000000000000000000000000"
-ReportWithdrawalsForSlashedValidatorsForCSM = "0x0000000000000000000000000000000000000000"
-SettleGeneralDelayedPenaltyForCSM = "0x0000000000000000000000000000000000000000"
+SetMerkleGateTreeForCSM = "0xf3ec30B86c3dC1b8a1C754D885F9bE3160e15B4c"
+ReportWithdrawalsForSlashedValidatorsForCSM = "0xE330516a03bDdEBA4209b5591112f1aa3dd90F0A"
+SettleGeneralDelayedPenaltyForCSM = "0xB71755bE764abB4Ce26cb4dADf056Be57fB8880F"
 
-SetMerkleGateTreeForCM = "0x0000000000000000000000000000000000000000"
-ReportWithdrawalsForSlashedValidatorsForCM = "0x0000000000000000000000000000000000000000"
-SettleGeneralDelayedPenaltyForCM = "0x0000000000000000000000000000000000000000"
-CreateOrUpdateOperatorGroupForCM = "0x0000000000000000000000000000000000000000"
+SetMerkleGateTreeForCM = "0xa121667D1780a1D54EAEd67AE17ee13d0f872D60"
+ReportWithdrawalsForSlashedValidatorsForCM = "0x71862Abd99819597670007bb992A7a7562fE50f2"
+SettleGeneralDelayedPenaltyForCM = "0xfffEFC16231eDC6Dc9C93e364ff4D4E3f787f416"
+CreateOrUpdateOperatorGroupForCM = "0x2fC78638b77381e9D040163Bd6EB1cac967bDBdF"
 
 [easyTrack.oldFactories]
 CSMSettleElStealingPenalty = "0xF6B6E7997338C48Ea3a8BCfa4BB64a315fDa76f4"
