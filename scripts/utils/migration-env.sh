@@ -130,12 +130,6 @@ prepare_migration_env() {
       copy_network_state_file "$NETWORK" "$RUN_NETWORK" "$remove_dst_file"
 
       load_env_var HOLDER ""
-      # export ALLOW_SKIP_STEPS=1
-      # export AUTO_CONFIRM=1
-      export DEPLOYER="$DEFAULT_TEST_DEPLOYER"
-      export GAS_LIMIT=16000000
-      export GAS_PRIORITY_FEE=1
-      export GAS_MAX_FEE=100
     fi
 
     if [[ $UPGRADE == "true" ]]; then
@@ -179,7 +173,7 @@ prepare_migration_env() {
   echo "AUTO_CONFIRM: $AUTO_CONFIRM"
 
   load_env_var GAS_PRIORITY_FEE "1"
-  load_env_var GAS_MAX_FEE "100"
+  load_env_var GAS_MAX_FEE "10"
   load_env_var GAS_LIMIT "16000000"
   load_env_var GENESIS_TIME "1639659600"
 }
