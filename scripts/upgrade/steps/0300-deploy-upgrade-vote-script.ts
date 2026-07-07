@@ -1,4 +1,3 @@
-import { ethers } from "hardhat";
 import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade";
 
 import { UpgradeVoteScript__factory } from "typechain-types";
@@ -7,6 +6,7 @@ import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVote
 import {
   ConstructorArgs,
   deployWithoutProxy,
+  getDeployerSigner,
   logArgs,
   logConfirmReview,
   logScriptHeader,
@@ -21,7 +21,7 @@ export async function skip(): Promise<boolean> {
 
 export async function main() {
   const state = readNetworkState();
-  const deployer = (await ethers.provider.getSigner()).address;
+  const deployer = (await getDeployerSigner()).address;
 
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeVotingScript contract", deployer);
 

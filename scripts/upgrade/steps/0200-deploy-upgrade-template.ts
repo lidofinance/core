@@ -8,6 +8,7 @@ import {
   ConstructorArgs,
   deployWithoutProxy,
   getAddress,
+  getDeployerSigner,
   logArgs,
   logConfirmReview,
   logScriptHeader,
@@ -34,7 +35,7 @@ export async function skip(): Promise<boolean> {
 export async function main() {
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
-  const deployer = await ethers.provider.getSigner();
+  const deployer = await getDeployerSigner();
 
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeTemplate contract", deployer.address);
 

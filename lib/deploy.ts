@@ -8,6 +8,7 @@ import { addContractHelperFields, DeployedContract, getContractPath, loadContrac
 import { ConvertibleToString, cy, log, yl } from "lib/log";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
+import { getDeployerSigner } from "./account";
 import { keysOf } from "./protocol/types";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
@@ -21,12 +22,38 @@ type TxParams = {
   value?: bigint | string;
 };
 
+type DeployTxParams = {
+  type: 2;
+  maxPriorityFeePerGas: bigint;
+  maxFeePerGas: bigint;
+  gasLimit: string | null;
+};
+
 function logWithConstructorArgs(message: string, constructorArgs: ConvertibleToString[] = []) {
   if (constructorArgs.length > 0) {
     log.withArguments(`${message} with constructor args `, constructorArgs);
   } else {
     log(message);
   }
+}
+
+function isFactoryOptions(signerOrOptions: Signer | FactoryOptions): signerOrOptions is FactoryOptions {
+  return "libraries" in signerOrOptions || "signer" in signerOrOptions;
+}
+
+function withDefaultSigner(
+  signerOrOptions: Signer | FactoryOptions | undefined,
+  signer: Signer,
+): Signer | FactoryOptions {
+  if (!signerOrOptions) {
+    return signer;
+  }
+
+  if (isFactoryOptions(signerOrOptions)) {
+    return { ...signerOrOptions, signer: signerOrOptions.signer ?? signer };
+  }
+
+  return signerOrOptions;
 }
 
 export async function makeTx(
@@ -48,12 +75,16 @@ export async function makeTx(
   return receipt;
 }
 
-async function getDeployTxParams(deployer: string) {
-  const deployerSigner = await ethers.provider.getSigner();
-  if (deployer !== deployerSigner.address) {
-    throw new Error("DEPLOYER set in ENV must correspond to the first signer of hardhat");
+async function getDeploySigner(deployer: string): Promise<Signer> {
+  const deployerSigner = await getDeployerSigner();
+  if (ethers.getAddress(deployer) !== ethers.getAddress(deployerSigner.address)) {
+    throw new Error(`Deployer address mismatch: env DEPLOYER=${deployerSigner.address}, deployer=${deployer}`);
   }
 
+  return deployerSigner;
+}
+
+function getDeployTxParams(): DeployTxParams {
   if (GAS_PRIORITY_FEE !== null && GAS_MAX_FEE !== null) {
     return {
       type: 2,
@@ -66,15 +97,19 @@ async function getDeployTxParams(deployer: string) {
   }
 }
 
-async function deployContractType2(
+export async function deployContract(
   artifactName: string,
   constructorArgs: unknown[],
   deployer: string,
   withStateFile = true,
   signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
-  const txParams = await getDeployTxParams(deployer);
-  const factory = (await ethers.getContractFactory(artifactName, signerOrOptions)) as ContractFactory;
+  const txParams = getDeployTxParams();
+  const deployerSigner = await getDeploySigner(deployer);
+  const factory = (await ethers.getContractFactory(
+    artifactName,
+    withDefaultSigner(signerOrOptions, deployerSigner),
+  )) as ContractFactory;
   const contract = await factory.deploy(...constructorArgs, txParams);
   const tx = contract.deploymentTransaction();
   if (!tx) {
@@ -96,21 +131,6 @@ async function deployContractType2(
   await addContractHelperFields(contract, artifactName);
 
   return contract as DeployedContract;
-}
-
-export async function deployContract(
-  artifactName: string,
-  constructorArgs: unknown[],
-  deployer: string,
-  withStateFile = true,
-  signerOrOptions?: Signer | FactoryOptions,
-): Promise<DeployedContract> {
-  const txParams = await getDeployTxParams(deployer);
-  if (txParams.type !== 2) {
-    throw new Error("Only EIP-1559 transactions (type 2) are supported");
-  }
-
-  return await deployContractType2(artifactName, constructorArgs, deployer, withStateFile, signerOrOptions);
 }
 
 export async function deployWithoutProxy(
