@@ -139,8 +139,7 @@ treasuryFee = 600
 maxDepositsPerBlock = 100
 minDepositBlockDistance = 75 # (15 minutes)
 feeOracleConsensusVersion = 4
-# TODO: Update with actual initial epoch before the vote contracts deployment
-hashConsensusInitialEpoch = 47480
+hashConsensusInitialEpoch = 467564
 
 [upgradeVoteScript]
 # Expiry timestamp after which the upgrade transaction will revert
