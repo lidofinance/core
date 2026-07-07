@@ -1,11 +1,20 @@
 import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
 import fs from "fs";
+import { ethers } from "hardhat";
 import { getMode } from "hardhat.helpers";
 
 import * as toml from "@iarna/toml";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { IDualGovernance, ITimelock, TokenManager, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types";
+import {
+  AccountingOracle,
+  IDualGovernance,
+  ITimelock,
+  TokenManager,
+  UpgradeTemplate,
+  UpgradeVoteScript,
+  Voting,
+} from "typechain-types";
 
 import {
   advanceChainTime,
@@ -14,6 +23,7 @@ import {
   ether,
   findEventsWithInterfaces,
   getCurrentBlockTimestamp,
+  getNetworkName,
   getSignerOrImpersonate,
   impersonate,
   isContractDeployed,
@@ -285,6 +295,13 @@ async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, hol
     }
   }
 
+  // On a fork the vote enactment calls Lido.finalizeUpgrade_v4, which reverts with "NO_REPORT"
+  // unless the AccountingOracle has a fresh report for the current frame. Advancing chain time to
+  // reach the vote end moved the frame past the last real report, so mock the report as submitted.
+  if (getMode() === "forking") {
+    await mockOracleMainDataSubmitted(state);
+  }
+
   if (await voting.canExecute(voteId)) {
     log("Try to execute...");
     const execTx = await voting.connect(holder).executeVote(voteId);
@@ -299,6 +316,58 @@ async function mockEnactAragonVoting(state: DeploymentState, voteId: bigint, hol
   } else {
     throw new Error(`VoteId ${voteId} is not ready for execution`);
   }
+}
+
+// keccak256("lido.BaseOracle.consensusReport"), stores ConsensusReport { bytes32 hash; uint64 refSlot; uint64 deadline }
+const CONSENSUS_REPORT_POSITION = ethers.id("lido.BaseOracle.consensusReport");
+// keccak256("lido.BaseOracle.lastProcessingRefSlot")
+const LAST_PROCESSING_REF_SLOT_POSITION = ethers.id("lido.BaseOracle.lastProcessingRefSlot");
+const UINT64_MASK = (1n << 64n) - 1n;
+
+/**
+ * Fork-only helper: forge the AccountingOracle consensus report so that
+ * `getProcessingState().mainDataSubmitted == true` for the current frame.
+ *
+ * `Lido.finalizeUpgrade_v4` guards migration with `require(mainDataSubmitted, "NO_REPORT")`.
+ * On a fork the last real report belongs to a past frame (chain time was advanced to enact the
+ * vote), so we point the stored report's `refSlot` and `lastProcessingRefSlot` at the current
+ * frame ref slot. The guard only reads the flag, so no report payload is consumed.
+ */
+async function mockOracleMainDataSubmitted(state: DeploymentState) {
+  const oracleAddress = getAddress(Sk.accountingOracle, state);
+  const oracle = await loadContract<AccountingOracle>("AccountingOracle", oracleAddress);
+
+  const before = await oracle.getProcessingState();
+  if (before.mainDataSubmitted) {
+    return;
+  }
+
+  const refSlot = before.currentFrameRefSlot & UINT64_MASK;
+
+  // ConsensusReport: slot 0 = hash, slot 1 = (deadline << 64) | refSlot
+  const reportPackedSlot = ethers.toBeHex(BigInt(CONSENSUS_REPORT_POSITION) + 1n, 32);
+  const currentPacked = BigInt(await ethers.provider.getStorage(oracleAddress, reportPackedSlot));
+  const deadline = (currentPacked >> 64n) & UINT64_MASK;
+  const newPacked = (deadline << 64n) | refSlot;
+
+  const networkName = await getNetworkName();
+  const setStorage = (slot: string, value: bigint) =>
+    ethers.provider.send(`${networkName}_setStorageAt`, [oracleAddress, slot, ethers.toBeHex(value, 32)]);
+
+  await setStorage(reportPackedSlot, newPacked);
+  await setStorage(LAST_PROCESSING_REF_SLOT_POSITION, refSlot);
+
+  // ensure the report hash is non-zero (getProcessingState bails out on a zero hash)
+  const reportHash = await ethers.provider.getStorage(oracleAddress, CONSENSUS_REPORT_POSITION);
+  if (BigInt(reportHash) === 0n) {
+    await setStorage(CONSENSUS_REPORT_POSITION, 1n);
+  }
+
+  const after = await oracle.getProcessingState();
+  if (!after.mainDataSubmitted) {
+    throw new Error("Failed to mock AccountingOracle mainDataSubmitted");
+  }
+  log.warning(`Mocked AccountingOracle report as submitted for refSlot ${refSlot} (NO_REPORT bypass)`);
 }
 
 async function mockEnactDGProposal(state: DeploymentState, proposalId: bigint, executor: HardhatEthersSigner) {
@@ -348,6 +417,11 @@ async function mockEnactDGProposal(state: DeploymentState, proposalId: bigint, e
 
     while (revertedDueToTimeConstraints && attempts < 24) {
       try {
+        // Re-mock right before each attempt: the delays/retries above advance chain time and move
+        // the oracle frame forward, which would otherwise re-trigger "NO_REPORT" in finalizeUpgrade_v4.
+        if (getMode() === "forking") {
+          await mockOracleMainDataSubmitted(state);
+        }
         execTx = await timelock.connect(executor).execute(proposalId);
         revertedDueToTimeConstraints = false;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
