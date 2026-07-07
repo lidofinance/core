@@ -9,6 +9,7 @@ load_env_var HARDHAT_NODE_DOCKER_IMAGE_REPOSITORY "ghcr.io/lidofinance/hardhat-n
 load_env_var HARDHAT_NODE_DOCKER_IMAGE_VERSION "2.28.0"
 load_env_var HARDHAT_NODE_DOCKER_NAME "hardhat-node"
 load_env_var HARDHAT_NODE_DOCKER_PORT "8545"
+load_env_var HARDHAT_NODE_DOCKER_NETWORK "lido"
 
 echo "MODE: $MODE"
 echo "HARDHAT_NODE_DOCKER_IMAGE_VERSION: $HARDHAT_NODE_DOCKER_IMAGE_VERSION"
@@ -61,6 +62,16 @@ esac
 
 echo "IMAGE: $IMAGE"
 echo "PORT: $HARDHAT_NODE_DOCKER_PORT"
+echo "DOCKER_NETWORK: $HARDHAT_NODE_DOCKER_NETWORK"
+
+ensure_docker_network() {
+  if docker network inspect "$HARDHAT_NODE_DOCKER_NETWORK" >/dev/null 2>&1; then
+    echo "Docker network exists: $HARDHAT_NODE_DOCKER_NETWORK"
+  else
+    echo "Creating Docker network: $HARDHAT_NODE_DOCKER_NETWORK"
+    docker network create "$HARDHAT_NODE_DOCKER_NETWORK" >/dev/null
+  fi
+}
 
 cleanup() {
   echo "Cleaning up $HARDHAT_NODE_DOCKER_NAME..."
@@ -69,11 +80,13 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
+ensure_docker_network
 cleanup
 
 docker run \
   -it --rm \
   --name "$HARDHAT_NODE_DOCKER_NAME" \
+  --network "$HARDHAT_NODE_DOCKER_NETWORK" \
   -p "$HARDHAT_NODE_DOCKER_PORT:8545" \
   "${DOCKER_ENV_ARGS[@]}" \
   "$IMAGE"
