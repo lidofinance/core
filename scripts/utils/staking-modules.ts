@@ -167,7 +167,7 @@ function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEn
   });
 }
 
-function readArtifact(artifactPath: string): ExternalDeployArtifact {
+export function readArtifact(artifactPath: string): ExternalDeployArtifact {
   if (!fs.existsSync(artifactPath)) {
     throw new Error(`External staking module deploy artifact not found at ${artifactPath}`);
   }
@@ -260,7 +260,7 @@ function writeSubstateToToml(section: string, tomlMap: Record<string, TomlMap>, 
   }
 }
 
-function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact, isScratch: boolean) {
+export function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact, isScratch: boolean) {
   if (!artifact.CSModule) throw new Error("CSM deploy artifact does not contain CSModule address");
 
   const existing = (state[Sk.sm_CSM]?.contracts ?? {}) as Substate;
@@ -282,7 +282,7 @@ function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifac
   writeSubstateToToml(CSM_TOML_SECTION, CSM_TOML_MAP, contracts);
 }
 
-function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDeployArtifact) {
+export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDeployArtifact) {
   const moduleAddress = artifact.CuratedModule;
   if (!moduleAddress) throw new Error("Curated deploy artifact does not contain CuratedModule address");
 

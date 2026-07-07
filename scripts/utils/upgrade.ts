@@ -501,8 +501,7 @@ export async function checkArtifactDeployedAndLog(artifactName: Sk): Promise<boo
   // check if contract not deployed yet
   const isDeployed = !!(address && (await isContractDeployed(address)));
   if (isDeployed) {
-    log.splitter();
-    log(yl(`Artifact <${or(artifactName)}> exists and deployed at [${bl(address)}], skipping step...`));
+    log(yl(`Artifact <${or(artifactName)}> exists and deployed at [${bl(address)}], skipping...`));
   }
   return isDeployed;
 }

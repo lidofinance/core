@@ -5,7 +5,7 @@ import { FactoryOptions } from "hardhat/types";
 import { LidoLocator } from "typechain-types";
 
 import { addContractHelperFields, DeployedContract, getContractPath, loadContract, LoadedContract } from "lib/contract";
-import { ConvertibleToString, cy, log, yl } from "lib/log";
+import { bl, ConvertibleToString, cy, log, yl } from "lib/log";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
 import { getDeployerSigner } from "./account";
@@ -122,6 +122,7 @@ export async function deployContract(
   if (!receipt) {
     throw new Error(`Failed to wait till the transaction ${tx.hash} execution!`);
   }
+  log.success(`Deployed: ${yl(artifactName)} at ${bl(receipt.contractAddress)}`);
 
   const gasUsed = receipt.gasUsed;
   incrementGasUsed(gasUsed, withStateFile);
