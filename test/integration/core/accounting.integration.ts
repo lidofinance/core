@@ -8,6 +8,7 @@ import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "l
 import { LIMITER_PRECISION_BASE } from "lib/constants";
 import {
   ensureFirstPostMigrationReport,
+  finalizeWQViaElVault,
   getProtocolContext,
   getReportTimeElapsed,
   normalizeWithdrawalVaultBaseline,
@@ -315,6 +316,12 @@ describe("Integration: Accounting", () => {
   it("Should account correctly with non-zero deposits and withdrawals reserves", async () => {
     const { lido, withdrawalQueue } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
+
+    // WQ finalization is FIFO. Forks can start with live unfinalized requests,
+    // so clear pre-existing queue items before creating the request under test.
+    if ((await withdrawalQueue.getLastFinalizedRequestId()) !== (await withdrawalQueue.getLastRequestId())) {
+      await finalizeWQViaElVault(ctx);
+    }
 
     await lido.connect(agent).setDepositsReserveTarget(ether("10"));
     await lido.connect(agent).submit(ZeroAddress, { value: ether("90") });
