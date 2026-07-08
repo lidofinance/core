@@ -1,4 +1,3 @@
-import { ethers } from "hardhat";
 import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
@@ -32,6 +31,7 @@ import {
   deployWithoutProxy,
   encodeFunctionCall,
   getAddress,
+  getDeployerSigner,
   InitializeArgs,
   loadContract,
   logArgs,
@@ -52,7 +52,7 @@ export async function skip(): Promise<boolean> {
 export async function main() {
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
-  const deployer = (await ethers.provider.getSigner()).address;
+  const deployer = (await getDeployerSigner()).address;
 
   await logScriptHeader("SRv3/CMv2 — Deploy & setup Base Contracts", deployer);
 

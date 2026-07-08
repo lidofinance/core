@@ -7,12 +7,12 @@
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "baseUrl": ".",
     "paths": {
       "lib": ["./lib"],
       "test": ["./test"],
       "scripts": ["./scripts"],
-      "typechain-types": ["./typechain-types"]
+      "typechain-types": ["./typechain-types"],
+      "*": ["./*"]
     }
   },
   "include": ["./test", "./typechain-types", "./lib", "./scripts", "./tasks", "./deployed-*.json"],

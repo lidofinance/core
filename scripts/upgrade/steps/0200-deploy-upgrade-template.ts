@@ -8,12 +8,15 @@ import {
   ConstructorArgs,
   deployWithoutProxy,
   getAddress,
+  getContractPath,
+  getDeployerSigner,
   logArgs,
   logConfirmReview,
   logScriptHeader,
   logStartReview,
   readNetworkState,
   Sk,
+  updateObjectInState,
 } from "lib";
 
 /**
@@ -34,7 +37,7 @@ export async function skip(): Promise<boolean> {
 export async function main() {
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
-  const deployer = await ethers.provider.getSigner();
+  const deployer = await getDeployerSigner();
 
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeTemplate contract", deployer.address);
 
@@ -211,5 +214,17 @@ export async function main() {
   await logArgs("UpgradeTemplate", upgradeTemplateConstructorArgs);
   await logConfirmReview();
 
-  await deployWithoutProxy(Sk.upgradeTemplate, "UpgradeTemplate", deployer.address, upgradeTemplateConstructorArgs);
+  const template = await deployWithoutProxy(
+    Sk.upgradeTemplate,
+    "UpgradeTemplate",
+    deployer.address,
+    upgradeTemplateConstructorArgs,
+  );
+
+  const configAddress = await template.getFunction("CONFIG")();
+  updateObjectInState(Sk.upgradeConfig, {
+    contract: await getContractPath("UpgradeConfig"),
+    address: configAddress,
+    constructorArgs: [upgradeParams],
+  });
 }

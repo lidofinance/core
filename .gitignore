@@ -41,3 +41,8 @@ deployed-*-upgrade.json
 
 # MacOS
 .DS_Store
+
+# Dev dirs
+.local/
+.tmp/
+.dev/
