@@ -5,33 +5,38 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
 
-import { addressToWC, certainAddress } from "lib";
+import { addressToWC, log } from "lib";
 import { LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
-  depositAndReportValidators,
-  norSdvtAddNodeOperator,
-  norSdvtAddOperatorKeys,
-  norSdvtSetOperatorStakingLimit,
+  calcConsolidationBatchHash,
+  cmv2EnsureDepositedOperatorKeys,
+  CMv2OperatorKeys,
+  norEnsureDepositedOperatorKeys,
+  NorOperatorKeys,
+  waitUntilBatchExecutable,
 } from "lib/protocol/helpers";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 import { LoadedContract } from "lib/protocol/types";
 
 import { Snapshot } from "test/suite";
 
 /**
- * Gas measurement integration test for consolidation (full stack, no mocks).
- * Uses: ConsolidationMigrator → ConsolidationBus → ConsolidationGateway → WithdrawalVault
+ * Gas measurement integration test for consolidation (full stack, no mocks) over the
+ * real production topology: 315 source keys in NOR, 5 target keys in CMv2.
+ * Uses: ConsolidationMigrator -> ConsolidationBus -> ConsolidationGateway -> WithdrawalVault
  *
- * Results for batch of 5 x 63 requests:
- * ┌──────────────────────────┬─────────────┐
- * │ Operation                │ Gas         │
- * ├──────────────────────────┼─────────────┤
- * │ submitConsolidationBatch │ 7,941,893   │
- * │ executeConsolidation     │ 6,463,147   │
- * │ Total                    │ 14,405,040  │
- * │ Per request              │ 45,730      │
- * └──────────────────────────┴─────────────┘
+ * Measured for a batch of 5 x 63 requests (NOR -> CMv2); reading target keys from CMv2
+ * changes the submit cost compared to the old NOR -> NOR fixture:
+ * ┌──────────────────────────┬─────────────┬─────────────┬───────────────────────┐
+ * │ Operation                │ Scratch     │ Hoodi fork  │ Mainnet fork+upgrade  │
+ * ├──────────────────────────┼─────────────┼─────────────┼───────────────────────┤
+ * │ submitConsolidationBatch │ 7,988,430   │ 7,994,431   │ 7,948,602             │
+ * │ executeConsolidation     │ 6,568,750   │ 11,524,913  │ 12,353,797            │
+ * │ Total                    │ 14,557,180  │ 19,519,344  │ 20,302,399            │
+ * │ Per request              │ 46,213      │ 61,966      │ 64,452                │
+ * └──────────────────────────┴─────────────┴─────────────┴───────────────────────┘
+ * (execute on a fork costs more mainly due to the EIP-7251 system contract fee/queue
+ * state at the forked block)
  */
 describe("Integration: Consolidation gas measurement (full stack via Migrator)", () => {
   let ctx: ProtocolContext;
@@ -52,10 +57,10 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
 
   const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
 
-  let sourceOperatorId: bigint;
-  let targetOperatorId: bigint;
+  let source: NorOperatorKeys;
+  let target: CMv2OperatorKeys;
 
-  // Source pubkeys grouped: 5 groups × 63 pubkeys
+  // Source pubkeys grouped: 5 groups x 63 pubkeys
   let sourcePubkeysGroups: string[][];
   // Target pubkeys: 5
   let targetPubkeys: string[];
@@ -65,47 +70,22 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
 
   let originalState: string;
 
-  /**
-   * Make the next NOR deposits use keys from one operator.
-   *
-   * This gas test submits consolidation requests by exact source and target
-   * operator key indexes. These keys must be already deposited, not just added
-   * to NOR. The real deposit path only targets a staking module: DSM calls
-   * StakingRouter.deposit(moduleId, ""), and NOR ignores deposit calldata, so a
-   * test cannot pass an operator id to the protocol deposit call.
-   *
-   * To make the next module-level deposit use the test operator, every other
-   * active operator is capped at its already deposited validator count. This
-   * keeps its existing keys untouched, but removes its new deposit capacity.
-   */
-  const preventOtherNorOperatorsFromConsumingTestDeposits = async (operatorIdToKeepDepositable: bigint) => {
-    const operatorsCount = await nor.getNodeOperatorsCount();
-
-    for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {
-      if (operatorId === operatorIdToKeepDepositable) continue;
-
-      const { active, totalDepositedValidators, totalVettedValidators } = await nor.getNodeOperator(operatorId, true);
-      if (!active) continue;
-      if (totalVettedValidators === totalDepositedValidators) continue;
-
-      await norSdvtSetOperatorStakingLimit(ctx, nor, {
-        operatorId,
-        limit: totalDepositedValidators,
-      });
-    }
-  };
-
   before(async function () {
     ctx = await getProtocolContext();
 
     originalState = await Snapshot.take();
 
-    // ToDo: adapt tests for non-scratch contexts (forking/upgrade).
-    // This suite assumes both source and target modules resolve to NOR (module 1),
-    // which is only true on scratch deploys. In forking/upgrade mode the migrator's
-    // targetModuleId points at CMv2, so the NOR-based fixtures here would mismatch.
-    if (!ctx.isScratch) {
+    // Explicit runner contract: CMv2 is required unless deliberately opted out
+    if (!ctx.flags.withCMv2) {
+      log.warning("Skipping consolidation gas suite: INTEGRATION_WITH_CMv2=off");
       this.skip();
+    }
+    if (!ctx.modules.cmv2) {
+      throw new Error(
+        "CMv2 (curated-onchain-v2) module is not registered in StakingRouter. " +
+          "The consolidation suites require the real NOR -> CMv2 topology; " +
+          "set INTEGRATION_WITH_CMv2=off to skip them explicitly.",
+      );
     }
 
     [, submitter, executor] = await ethers.getSigners();
@@ -115,78 +95,34 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
     consolidationGateway = ctx.contracts.consolidationGateway;
     consolidationMigrator = ctx.contracts.consolidationMigrator;
 
+    // Pin the migration topology before measuring anything, so the gas figures
+    // can never silently come from a NOR -> NOR setup
+    const sourceModuleId = await consolidationMigrator.sourceModuleId();
+    const targetModuleId = await consolidationMigrator.targetModuleId();
+    expect(sourceModuleId).to.equal(ctx.modules.nor.id, "migrator source module must be NOR");
+    expect(targetModuleId).to.equal(ctx.modules.cmv2.id, "migrator target module must be CMv2");
+    expect((await ctx.contracts.stakingRouter.getStakingModule(targetModuleId)).stakingModuleAddress).to.equal(
+      ctx.modules.cmv2.stakingModuleAddress,
+      "router target module address must match CMv2",
+    );
+
     const agentSigner = await ctx.getSigner("agent");
 
     // =========================================
-    // Deposit all existing depositable validators first to clear them
+    // Source: NOR operator with 315 deposited keys
     // =========================================
-    const { stakingRouter } = ctx.contracts;
-    const existingDepositable = await stakingRouter.getStakingModuleMaxDepositsCount(
-      NOR_MODULE_ID,
-      await ctx.contracts.lido.getDepositableEther(),
-    );
-    if (existingDepositable > 0n) {
-      const DEPOSIT_BATCH = 50n;
-      for (let deposited = 0n; deposited < existingDepositable; deposited += DEPOSIT_BATCH) {
-        const batch = deposited + DEPOSIT_BATCH > existingDepositable ? existingDepositable - deposited : DEPOSIT_BATCH;
-        await depositAndReportValidators(ctx, NOR_MODULE_ID, batch);
-      }
-    }
-
-    // =========================================
-    // Setup source operator with deposited keys
-    // =========================================
-    sourceOperatorId = await norSdvtAddNodeOperator(ctx, nor, {
+    source = await norEnsureDepositedOperatorKeys(ctx, nor, sourceModuleId, TOTAL_SOURCE_KEYS, {
       name: "gas_test_source_operator",
-      rewardAddress: certainAddress("gas:source:reward"),
     });
-
-    // Add keys in batches to avoid exceeding block gas limit
-    const KEYS_BATCH = 100n;
-    for (let added = 0n; added < TOTAL_SOURCE_KEYS; added += KEYS_BATCH) {
-      const batch = added + KEYS_BATCH > TOTAL_SOURCE_KEYS ? TOTAL_SOURCE_KEYS - added : KEYS_BATCH;
-      await norSdvtAddOperatorKeys(ctx, nor, {
-        operatorId: sourceOperatorId,
-        keysToAdd: batch,
-      });
-    }
-
-    await norSdvtSetOperatorStakingLimit(ctx, nor, {
-      operatorId: sourceOperatorId,
-      limit: TOTAL_SOURCE_KEYS,
-    });
-    await preventOtherNorOperatorsFromConsumingTestDeposits(sourceOperatorId);
-
-    // Deposit source keys in batches
-    const DEPOSIT_BATCH = 50n;
-    for (let deposited = 0n; deposited < TOTAL_SOURCE_KEYS; deposited += DEPOSIT_BATCH) {
-      const batch = deposited + DEPOSIT_BATCH > TOTAL_SOURCE_KEYS ? TOTAL_SOURCE_KEYS - deposited : DEPOSIT_BATCH;
-      await depositAndReportValidators(ctx, NOR_MODULE_ID, batch);
-    }
 
     // =========================================
-    // Setup target operator with deposited keys
+    // Target: CMv2 operator with 5 deposited keys
     // =========================================
-    targetOperatorId = await norSdvtAddNodeOperator(ctx, nor, {
-      name: "gas_test_target_operator",
-      rewardAddress: certainAddress("gas:target:reward"),
-    });
-
-    await norSdvtAddOperatorKeys(ctx, nor, {
-      operatorId: targetOperatorId,
-      keysToAdd: TOTAL_TARGET_KEYS,
-    });
-
-    await norSdvtSetOperatorStakingLimit(ctx, nor, {
-      operatorId: targetOperatorId,
-      limit: TOTAL_TARGET_KEYS,
-    });
-    await preventOtherNorOperatorsFromConsumingTestDeposits(targetOperatorId);
-
-    await depositAndReportValidators(ctx, NOR_MODULE_ID, TOTAL_TARGET_KEYS);
+    target = await cmv2EnsureDepositedOperatorKeys(ctx, TOTAL_TARGET_KEYS, { name: "gas_test_target_operator" });
+    targetPubkeys = target.pubkeys;
 
     // =========================================
-    // Retrieve pubkeys from NOR
+    // Group source keys: 5 groups x 63 keys
     // =========================================
     sourcePubkeysGroups = [];
     consolidationIndexGroups = [];
@@ -194,21 +130,12 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
       const group: string[] = [];
       const indices: bigint[] = [];
       for (let r = 0; r < REQUESTS_PER_GROUP; r++) {
-        const keyIndex = g * REQUESTS_PER_GROUP + r;
-        const key = await nor.getSigningKey(sourceOperatorId, keyIndex);
-        expect(key.used).to.be.true;
-        group.push(key.key);
-        indices.push(BigInt(keyIndex));
+        const position = g * REQUESTS_PER_GROUP + r;
+        group.push(source.pubkeys[position]);
+        indices.push(source.keyIndices[position]);
       }
       sourcePubkeysGroups.push(group);
-      consolidationIndexGroups.push({ sourceKeyIndices: indices, targetKeyIndex: BigInt(g) });
-    }
-
-    targetPubkeys = [];
-    for (let t = 0; t < NUM_GROUPS; t++) {
-      const key = await nor.getSigningKey(targetOperatorId, t);
-      expect(key.used).to.be.true;
-      targetPubkeys.push(key.key);
+      consolidationIndexGroups.push({ sourceKeyIndices: indices, targetKeyIndex: target.keyIndices[g] });
     }
 
     // =========================================
@@ -220,12 +147,14 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
     const DISALLOW_PAIR_ROLE = await consolidationMigrator.DISALLOW_PAIR_ROLE();
     await consolidationMigrator.connect(agentSigner).grantRole(ALLOW_PAIR_ROLE, agentSigner.address);
     await consolidationMigrator.connect(agentSigner).grantRole(DISALLOW_PAIR_ROLE, agentSigner.address);
-    await consolidationMigrator.connect(agentSigner).allowPair(sourceOperatorId, targetOperatorId, submitter.address);
+    await consolidationMigrator.connect(agentSigner).allowPair(source.operatorId, target.operatorId, submitter.address);
 
     // Increase ConsolidationBus batch size to accommodate 315 requests in 5 groups
     const MANAGE_ROLE = await consolidationBus.MANAGE_ROLE();
     await consolidationBus.connect(agentSigner).grantRole(MANAGE_ROLE, agentSigner.address);
-    await consolidationBus.connect(agentSigner).setBatchSize(TOTAL_REQUESTS);
+    if ((await consolidationBus.batchSize()) < TOTAL_REQUESTS) {
+      await consolidationBus.connect(agentSigner).setBatchSize(TOTAL_REQUESTS);
+    }
 
     // Set rate limit high enough for all requests
     const EXIT_LIMIT_MANAGER_ROLE = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
@@ -276,11 +205,17 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
       })),
     );
 
-    // Submit batch via ConsolidationMigrator → ConsolidationBus
+    // Submit batch via ConsolidationMigrator -> ConsolidationBus
     const submitTx = await consolidationMigrator
       .connect(submitter)
-      .submitConsolidationBatch(sourceOperatorId, targetOperatorId, consolidationIndexGroups);
+      .submitConsolidationBatch(source.operatorId, target.operatorId, consolidationIndexGroups);
     const submitReceipt = await submitTx.wait();
+
+    // Respect the real execution delay before executing the batch
+    const batchHash = calcConsolidationBatchHash(
+      sourcePubkeysGroups.map((sourcePubkeys, i) => ({ sourcePubkeys, targetPubkey: targetPubkeys[i] })),
+    );
+    await waitUntilBatchExecutable(consolidationBus, batchHash);
 
     // Get fee from real WithdrawalVault
     const { withdrawalVault } = ctx.contracts;
@@ -308,7 +243,7 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
     const totalGas = submitGas + execGas;
     const perRequest = totalGas / BigInt(TOTAL_REQUESTS);
 
-    console.log(`\n  Gas usage for ${NUM_GROUPS} x ${REQUESTS_PER_GROUP} (${TOTAL_REQUESTS}) requests:`);
+    console.log(`\n  Gas usage for ${NUM_GROUPS} x ${REQUESTS_PER_GROUP} (${TOTAL_REQUESTS}) requests (NOR -> CMv2):`);
     console.log(`    submitConsolidationBatch: ${Number(submitGas).toLocaleString()}`);
     console.log(`    executeConsolidation:     ${Number(execGas).toLocaleString()}`);
     console.log(`    Total:                    ${Number(totalGas).toLocaleString()}`);
