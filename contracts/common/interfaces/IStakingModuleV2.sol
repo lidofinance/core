@@ -15,7 +15,7 @@ interface IStakingModuleV2 {
     /// @param topUpLimits Maximum amount that can be deposited per key based on Consensus Layer data and  SR internal logic.
     /// @return allocations Amount to deposit to each corresponding key
     /// @dev allocations list can contain zero values
-    /// @dev sum of allocations can be less or equal to maxDepositAmount
+    /// @dev sum of allocations can be less or equal to depositAmount
     /// @dev Values depositAmount, topUpLimits, allocations are denominated in wei
     function allocateDeposits(
         uint256 depositAmount,

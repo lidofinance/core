@@ -7,12 +7,17 @@ import {
   depositValidatorsWithoutReport,
   getNextReportContext,
   getProtocolContext,
+  norSdvtEnsureOperators,
   ProtocolContext,
   report,
+  reportWithoutClActivation,
+  seedProtocolPendingBaseline,
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   updateOracleReportLimits,
 } from "lib/protocol";
+import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 
@@ -29,6 +34,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
   let snapshot: string;
   let originalState: string;
+  let carriedPendingBalanceGwei: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -87,11 +93,12 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     validatorBalancesGweiByStakingModule: bigint[];
     clPendingBalanceGwei: bigint;
   }) => {
+    const postPendingBalanceGwei = carriedPendingBalanceGwei + clPendingBalanceGwei;
     const { data } = await report(ctx, {
-      clDiff: clDiff + clPendingBalanceGwei * ONE_GWEI, //simulate full total increase
-      clPendingBalanceGwei: 0n,
+      clDiff,
+      clPendingBalanceGwei: postPendingBalanceGwei,
       dryRun: true,
-      excludeVaultsBalances: true,
+      reportElVault: false,
       skipWithdrawals: true,
       stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule,
@@ -99,20 +106,19 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     });
     return {
       ...data,
-      // extract pending balance from simulated total clBalance
-      clValidatorsBalanceGwei: BigInt(data.clValidatorsBalanceGwei) - clPendingBalanceGwei,
-      clPendingBalanceGwei,
+      clPendingBalanceGwei: postPendingBalanceGwei,
     };
   };
 
   const submitModuleBalancesSanityBaseline = async () => {
-    const { data } = await report(ctx, {
+    const { data } = await reportWithoutClActivation(ctx, {
       dryRun: true,
-      excludeVaultsBalances: true,
+      reportElVault: false,
       skipWithdrawals: true,
     });
 
     await submitReportDataWithConsensusAndEmptyExtraData(ctx, data);
+    carriedPendingBalanceGwei = BigInt(data.clPendingBalanceGwei);
   };
 
   it("should accept a report that moves one module's pending balance into validators", async () => {
@@ -188,6 +194,18 @@ describe("Integration: AccountingOracle module balances sanity", () => {
 
   it("should reject a report that consumes more pending across modules than the global appeared limit allows", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
+
+    // The checker allows one Electra max-effective validator above the prorated appeared limit.
+    const validatorsToExceedActivationBoundary = 2_048n / ONE_VALIDATOR_BALANCE_ETH + 2n;
+    const pendingBaselineValidators = validatorsToExceedActivationBoundary / 2n;
+    const currentReportValidators = validatorsToExceedActivationBoundary - pendingBaselineValidators;
+
+    await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 10n, validatorsToExceedActivationBoundary);
+    await norSdvtEnsureOperators(ctx, ctx.contracts.sdvt, 2n, validatorsToExceedActivationBoundary);
+
+    // Seed part of the activation as pending in the previous report so the final deposit batch stays small.
+    await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID, pendingBaselineValidators);
+
     const { reportTimeElapsed } = await getNextReportContext(ctx);
     const perModuleAppearedLimitEthPerDay =
       (ONE_VALIDATOR_BALANCE_ETH * ONE_DAY + reportTimeElapsed - 1n) / reportTimeElapsed;
@@ -197,22 +215,20 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       consolidationEthAmountPerDayLimit: 0n,
     });
 
-    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, 2n);
+    const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, currentReportValidators);
     const balanceStatsBeforeReport = await ctx.contracts.lido.getBalanceStats();
-    const moduleReportState = await getCurrentModuleReportState();
+    const postCLValidatorsBalanceGwei =
+      (balanceStatsBeforeReport.clValidatorsBalanceAtLastReport +
+        balanceStatsBeforeReport.clPendingBalanceAtLastReport +
+        balanceStatsBeforeReport.depositedSinceLastReport) /
+        ONE_GWEI -
+      carriedPendingBalanceGwei;
 
     const data = await buildReportData({
       clDiff: balanceStatsBeforeReport.depositedSinceLastReport,
-      stakingModuleIdsWithUpdatedBalance: moduleReportState.stakingModuleIdsWithUpdatedBalance,
-      validatorBalancesGweiByStakingModule: withUpdatedModuleBalances(
-        moduleReportState.validatorBalancesGweiByStakingModule,
-        moduleReportState.moduleIndexById,
-        [...validatorsDeltaGweiByModule].reduce<Array<[bigint, bigint]>>((acc, [moduleId, delta]) => {
-          if (delta > 0n) {
-            acc.push([moduleId, delta]);
-          }
-          return acc;
-        }, []),
+      ...adjustReportModuleBalances(
+        await buildModuleAccountingReportParams(ctx, { validatorsDeltaGweiByModule }),
+        postCLValidatorsBalanceGwei,
       ),
       clPendingBalanceGwei: 0n,
     });
@@ -337,7 +353,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     expect(validatorsBalanceAfterGwei).to.equal(totalValidatorsBalanceBeforeGwei + excessiveValidatorsGrowthGwei);
 
     const data = await buildReportData({
-      clDiff: excessiveValidatorsGrowthWei,
+      clDiff: excessiveValidatorsGrowthWei + balanceStatsBeforeReport.depositedSinceLastReport,
       stakingModuleIdsWithUpdatedBalance: moduleReportState.stakingModuleIdsWithUpdatedBalance,
       validatorBalancesGweiByStakingModule: reportedValidatorsBalancesGwei,
       clPendingBalanceGwei: totalPendingBalanceBeforeGwei,

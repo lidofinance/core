@@ -13,7 +13,6 @@ import {
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
-  report,
 } from "lib/protocol/helpers";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 import { LoadedContract } from "lib/protocol/types";
@@ -80,10 +79,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR)", () => {
     // which is only true on scratch deploys. In forking/upgrade mode the migrator's
     // targetModuleId points at CMv2, so the NOR-based fixtures here would mismatch.
     if (!ctx.isScratch) {
-      // Post-migration alignment: report() with no explicit per-module balances
-      // produces a self-consistent first report.
-      await report(ctx);
-
       this.skip();
     }
 

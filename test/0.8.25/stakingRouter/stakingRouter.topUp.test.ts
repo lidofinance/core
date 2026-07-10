@@ -13,7 +13,7 @@ import {
 } from "typechain-types";
 
 import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib";
-import { ONE_GWEI, WithdrawalCredentialsType } from "lib/constants";
+import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "lib/constants";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -65,7 +65,7 @@ describe("StakingRouter.sol:topUp", () => {
     await lidoMock.setStakingRouter(await stakingRouter.getAddress());
 
     // initialize staking router with the mock lido and topUpGateway as a signer
-    await stakingRouter.initialize(admin, withdrawalCredentials);
+    await stakingRouter.initialize(admin, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
 
     // grant roles
     await Promise.all([stakingRouter.grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), admin)]);
@@ -88,13 +88,13 @@ describe("StakingRouter.sol:topUp", () => {
   context("topUp", () => {
     const KEY_INDEX = 0n;
     const OPERATOR_ID = 1n;
-    const TOP_UP_LIMIT_GWEI = 10n * ONE_GWEI; // 10 ETH in ONE_GWEI
+    const TOP_UP_GWEI = 10n * ONE_GWEI; // 10 ETH in ONE_GWEI, top up value for validator based on cl data and TopUpGateway logic
 
     function makeValidTopUpData() {
       const keyIndices = [KEY_INDEX];
       const operatorIds = [OPERATOR_ID];
       // topUpLimits are now in wei (TOP_UP_LIMIT_GWEI is already 10 ETH in gwei, convert to wei)
-      const topUpLimits = [TOP_UP_LIMIT_GWEI * WEI_PER_GWEI];
+      const topUpLimits = [TOP_UP_GWEI * WEI_PER_GWEI];
       const pubkeys = [randomString(48)];
 
       return { keyIndices, operatorIds, topUpLimits, pubkeys };
@@ -167,39 +167,11 @@ describe("StakingRouter.sol:topUp", () => {
       ).to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch");
     });
 
-    it("Does not perform deposits when module allocation is 0", async () => {
-      const [stakingModule, id] = await setupModule(ctx, {
-        ...DEFAULT_CONFIG,
-        depositable: 0n,
-        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-      });
-
-      // Set depositable ether to 0 (no ETH available)
-      await lidoMock.setDepositableEther(0n);
-
-      const pubkeys = [randomString(48)];
-      // Mock module returns 0 allocations
-      await stakingModule.mock__setTopUpDepositData([0n]);
-
-      const keyIndices = [0n];
-      const operatorIds = [0n];
-      const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI]; // in wei
-
-      const tx = await stakingRouter
-        .connect(topUpGatewaySigner)
-        .topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits);
-
-      const receipt = await tx.wait();
-      const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
-
-      expect(depositEvents.length).to.equal(0);
-    });
-
-    it("Performs top-up for a New module for all keys", async () => {
+    it("happy path", async () => {
       const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         deposited: 100n,
-        validatorsBalanceGwei: 100n * 32n * 10n ** 9n, //100 x 32 eth / 1 gwei
+        totalModuleStake: 100n * 32n * 10n ** 18n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       });
 
@@ -213,7 +185,7 @@ describe("StakingRouter.sol:topUp", () => {
       const pubkeys = [randomString(48), randomString(48), randomString(48)];
 
       // Mock module to return these allocations (in wei)
-      await stakingModule.mock__setTopUpDepositData(topUpWei);
+      await stakingModule.mock__allocateDeposits(topUpWei);
 
       const totalTopUpWei = topUpWei.reduce((acc, v) => acc + v, 0n);
 
@@ -225,90 +197,84 @@ describe("StakingRouter.sol:topUp", () => {
       const keyIndices = [0n, 1n, 2n];
       const operatorIds = [0n, 0n, 0n];
 
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(102n * 10n ** 9n * 2048n);
+
       const tx = await stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei);
 
       const receipt = await tx.wait();
       const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
-
       expect(depositEvents.length).to.equal(topUpWei.length);
+
+      // maxTopUpPerBlockGwei is higher than 100 * 2048 - 100 * 32
+      // 100 * 32 - stake before topUp transaction
+      const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
+      expect(topUpEvents[0].args._amount).to.equal(2016n * 100n * 10n ** 18n);
+
+      // StakingRouter emits StakingRouterETHTopUp with the sum of module-returned allocations
+      // (i.e. what is actually pulled from Lido and deposited), not the budget passed to allocateDeposits.
+      await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, totalTopUpWei);
     });
 
-    it("Reverts when allocation exceeds module's target", async () => {
-      const [stakingModule, id] = (await setupModule(ctx, {
-        ...DEFAULT_CONFIG,
-        stakeShareLimit: 50_00n, // 50%
-        priorityExitShareThreshold: 50_00n,
-        depositable: 2n,
-        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-      })) as [StakingModuleV2__MockForStakingRouter, bigint];
-
-      // Add second module to split allocation
-      await setupModule(ctx, {
-        ...DEFAULT_CONFIG,
-        stakeShareLimit: 50_00n,
-        priorityExitShareThreshold: 50_00n,
-        depositable: 2n,
-        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-      });
-
-      const depositableEth = 2n * NEW_MEB;
-
-      // Mock module returns allocations that exceed target (in wei)
-      const pubkeys = [randomString(48), randomString(48)];
-      // These allocations will exceed 50% of depositableEth
-      const topUpWei = [1500n * ONE_GWEI * WEI_PER_GWEI, 1500n * ONE_GWEI * WEI_PER_GWEI]; // 3000 ETH total, but module only gets 50% = 2048 ETH
-      await stakingModule.mock__setTopUpDepositData(topUpWei);
-
-      await lidoMock.setDepositableEther(depositableEth);
-
-      const keyIndices = [0n, 1n];
-      const operatorIds = [0n, 0n];
-
-      await expect(
-        stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
-      ).to.be.revertedWithCustomError(stakingRouter, "ModuleReturnExceedTarget");
-    });
-
-    it("Reverts when top up amount for key is below 1 ETH", async () => {
-      const reducedBalanceGwei = (100n * NEW_MEB - 64n * 10n ** 18n) / 10n ** 9n;
-
+    it("top up value limit by maxTopUpPerBlockGwei", async () => {
       const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
         deposited: 100n,
-        depositable: 100n,
+        totalModuleStake: 100n * 32n * 10n ** 18n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-        validatorsBalanceGwei: reducedBalanceGwei,
       });
 
-      const pubkeys = [randomString(48)];
-      const topUpWei = [500_000_000n * WEI_PER_GWEI]; // 0.5 ETH in wei
-      await stakingModule.mock__setTopUpDepositData(topUpWei);
+      // topUpLimits are now in wei
+      const topUpWei = [
+        10n * 10n ** 18n, // 10 ETH in wei
+        20n * 10n ** 18n, // 20 ETH in wei
+        30n * 10n ** 18n, // 30 ETH in wei
+      ];
 
-      const depositableEth = 100n * NEW_MEB;
-      await lidoMock.setDepositableEther(depositableEth);
-      await lidoMock.fund({ value: depositableEth });
+      const pubkeys = [randomString(48), randomString(48), randomString(48)];
 
-      const keyIndices = [0n];
-      const operatorIds = [0n];
+      // Mock module to return these allocations (in wei)
+      await stakingModule.mock__allocateDeposits(topUpWei);
 
-      const beaconChainDepositor = await ethers.getContractFactory("BeaconChainDepositor");
-      await expect(
-        stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
-      ).to.be.revertedWithCustomError(beaconChainDepositor, "DepositAmountTooLow");
+      const totalTopUpWei = topUpWei.reduce((acc, v) => acc + v, 0n);
+
+      // Set depositable ether in lido mock
+      await lidoMock.setDepositableEther(100n * NEW_MEB);
+      // Fund lido mock with ETH
+      await lidoMock.fund({ value: totalTopUpWei });
+
+      const keyIndices = [0n, 1n, 2n];
+      const operatorIds = [0n, 0n, 0n];
+
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(500n * 10n ** 9n);
+
+      const tx = await stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei);
+
+      const receipt = await tx.wait();
+      const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
+      expect(depositEvents.length).to.equal(topUpWei.length);
+
+      // Cap is applied to the allocator OUTPUT (StakingRouter.sol:696-700):
+      // raw module allocation = 201_600 ETH; min(201_600, 500) = 500 ETH passes through
+      // to allocateDeposits unchanged (already aligned to 1 gwei).
+      const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
+      expect(topUpEvents[0].args._amount).to.equal(500n * 10n ** 18n);
     });
 
-    it("Zero allocations from module result in no deposits", async () => {
+    it("if sum of top up is 0 execute allocateDeposits but no top up happen", async () => {
       const [stakingModule, id] = await setupModule(ctx, {
         ...DEFAULT_CONFIG,
-        depositable: 100n,
+        deposited: 100n,
+        totalModuleStake: 100n * 2048n * 10n ** 18n,
         withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
       });
 
-      const pubkeys = [randomString(48)];
-      // Mock module returns 0 allocation
-      await stakingModule.mock__setTopUpDepositData([0n]);
+      // Set depositable ether to 0 (no ETH available)
+      await lidoMock.setDepositableEther(0n);
 
-      await lidoMock.setDepositableEther(100n * NEW_MEB);
+      const pubkeys = [randomString(48)];
+
+      // Mock module returns 0 allocations
+      await stakingModule.mock__allocateDeposits([0n]);
 
       const keyIndices = [0n];
       const operatorIds = [0n];
@@ -322,6 +288,209 @@ describe("StakingRouter.sol:topUp", () => {
       const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
 
       expect(depositEvents.length).to.equal(0);
+
+      // allocateDeposits MUST be called even when the budget is 0 (so CSM queue cursor can advance).
+      const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
+      expect(topUpEvents.length).to.equal(1);
+      expect(topUpEvents[0].args._amount).to.equal(0n);
+
+      // StakingRouterETHTopUp is emitted unconditionally for off-chain observability,
+      // mirroring StakingRouterETHDeposited behavior in deposit().
+      await expect(tx).to.emit(stakingRouter, "StakingRouterETHTopUp").withArgs(id, 0n);
+    });
+
+    it("reverts with LidoDepositsPaused when budget is 0 and Lido cannot deposit", async () => {
+      const [, id] = await setupModule(ctx, {
+        ...DEFAULT_CONFIG,
+        deposited: 100n,
+        totalModuleStake: 100n * 2048n * 10n ** 18n,
+        withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+      });
+
+      // smDepositableEthAmountRounded ends up at 0:
+      await lidoMock.setDepositableEther(0n);
+      // and Lido is paused
+      await lidoMock.setCanDeposit(false);
+
+      const pubkeys = [randomString(48)];
+      const keyIndices = [0n];
+      const operatorIds = [0n];
+      const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI];
+
+      await expect(
+        stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+      ).to.be.revertedWithCustomError(stakingRouter, "LidoDepositsPaused");
+    });
+
+    // tests group below - topUp execution depends on module result
+    describe("processing staking module allocateDeposits method  result ", async () => {
+      it("Reverts when allocation exceeds module's target", async () => {
+        const [stakingModule, id] = (await setupModule(ctx, {
+          ...DEFAULT_CONFIG,
+          stakeShareLimit: 50_00n, // 50%
+          priorityExitShareThreshold: 50_00n,
+          depositable: 2n,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        })) as [StakingModuleV2__MockForStakingRouter, bigint];
+
+        // Add second module to split allocation
+        await setupModule(ctx, {
+          ...DEFAULT_CONFIG,
+          stakeShareLimit: 50_00n,
+          priorityExitShareThreshold: 50_00n,
+          depositable: 2n,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        });
+
+        // Mock module returns allocations that exceed target (in wei)
+        const pubkeys = [randomString(48), randomString(48)];
+        // These allocations will exceed 50% of depositableEth
+        const topUpWei = [1500n * ONE_GWEI * WEI_PER_GWEI, 1500n * ONE_GWEI * WEI_PER_GWEI]; // 3000 ETH total, but module only gets 50% = 2048 ETH
+        await stakingModule.mock__allocateDeposits(topUpWei);
+
+        const depositableEth = 2n * NEW_MEB;
+        await lidoMock.setDepositableEther(depositableEth);
+
+        const keyIndices = [0n, 1n];
+        const operatorIds = [0n, 0n];
+
+        await expect(
+          stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
+        ).to.be.revertedWithCustomError(stakingRouter, "ModuleReturnExceedTarget");
+      });
+
+      it("Reverts when allocation for a key exceeds its top-up limit", async () => {
+        const [stakingModule, id] = await setupModule(ctx, {
+          ...DEFAULT_CONFIG,
+          deposited: 100n,
+          totalModuleStake: 100n * 32n * 10n ** 18n,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        });
+
+        const pubkeys = [randomString(48)];
+        const topUpLimits = [10n * 10n ** 18n]; // per-key limit: 10 ETH
+        // Module returns 11 ETH for the key, above its 10 ETH limit but well below
+        // smDepositableEthAmountRounded, so AllocationExceedsLimit fires first.
+        const allocations = [11n * 10n ** 18n];
+        await stakingModule.mock__allocateDeposits(allocations);
+
+        await lidoMock.setDepositableEther(100n * NEW_MEB);
+        await lidoMock.fund({ value: 11n * 10n ** 18n });
+
+        await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(102n * 10n ** 9n * 2048n);
+
+        const keyIndices = [0n];
+        const operatorIds = [0n];
+
+        await expect(
+          stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits),
+        ).to.be.revertedWithCustomError(stakingRouter, "AllocationExceedsLimit");
+      });
+
+      it("Reverts when top up amount for key is below 1 ETH", async () => {
+        const reducedBalanceGwei = (100n * NEW_MEB - 64n * 10n ** 18n) / 10n ** 9n;
+
+        const [stakingModule, id] = await setupModule(ctx, {
+          ...DEFAULT_CONFIG,
+          deposited: 100n,
+          depositable: 100n,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+          validatorsBalanceGwei: reducedBalanceGwei,
+        });
+
+        const pubkeys = [randomString(48)];
+        const topUpWei = [500_000_000n * WEI_PER_GWEI]; // 0.5 ETH in wei
+        await stakingModule.mock__allocateDeposits(topUpWei);
+
+        const depositableEth = 100n * NEW_MEB;
+        await lidoMock.setDepositableEther(depositableEth);
+        await lidoMock.fund({ value: depositableEth });
+
+        const keyIndices = [0n];
+        const operatorIds = [0n];
+
+        const beaconChainDepositor = await ethers.getContractFactory("BeaconChainDepositor");
+        await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(1600n * 10n ** 9n);
+
+        await expect(
+          stakingRouter.connect(topUpGatewaySigner).topUp(id, keyIndices, operatorIds, pubkeys, topUpWei),
+        ).to.be.revertedWithCustomError(beaconChainDepositor, "DepositAmountTooLow");
+      });
+
+      it("Zero from module result in no deposits", async () => {
+        const [stakingModule, id] = await setupModule(ctx, {
+          ...DEFAULT_CONFIG,
+          depositable: 100n,
+          withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
+        });
+
+        const pubkeys = [randomString(48)];
+        // Mock module returns 0 allocation
+        await stakingModule.mock__allocateDeposits([0n]);
+
+        await lidoMock.setDepositableEther(100n * NEW_MEB);
+
+        const keyIndices = [0n];
+        const operatorIds = [0n];
+        const topUpLimits = [10n * ONE_GWEI * WEI_PER_GWEI]; // in wei
+
+        const tx = await stakingRouter
+          .connect(topUpGatewaySigner)
+          .topUp(id, keyIndices, operatorIds, pubkeys, topUpLimits);
+
+        const receipt = await tx.wait();
+        const depositEvents = findEventsWithInterfaces(receipt!, "Deposited__MockEvent", [depositContract.interface]);
+
+        expect(depositEvents.length).to.equal(0);
+
+        // Cap is not set in this test (defaults to 0), so budget passed to module is 0
+        // regardless of LIDO depositable. Module is still called.
+        const topUpEvents = findEventsWithInterfaces(receipt!, "TopUpData", [stakingModule.interface]);
+        expect(topUpEvents.length).to.equal(1);
+        expect(topUpEvents[0].args._amount).to.equal(0n);
+      });
+    });
+  });
+
+  context("setMaxTopUpPerBlockGwei", () => {
+    it("updates storage and emits event", async () => {
+      const newValue = 1000n * ONE_GWEI; // 1000 ETH in gwei
+
+      await expect(stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(newValue))
+        .to.emit(stakingRouter, "MaxTopUpPerBlockGweiSet")
+        .withArgs(newValue, admin.address);
+
+      expect(await stakingRouter.getMaxTopUpPerBlockGwei()).to.equal(newValue);
+    });
+
+    it("accepts the uint64 max value and stores it unchanged", async () => {
+      const maxUint64 = 2n ** 64n - 1n;
+
+      await stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(maxUint64);
+
+      // storage is uint64 — full uint64 value must survive the downcast
+      expect(await stakingRouter.getMaxTopUpPerBlockGwei()).to.equal(maxUint64);
+    });
+
+    it("reverts when value is zero", async () => {
+      await expect(stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(0n)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "InvalidMaxTopUpPerBlockGwei",
+      );
+    });
+
+    it("reverts when value exceeds uint64", async () => {
+      await expect(stakingRouter.connect(admin).setMaxTopUpPerBlockGwei(2n ** 64n)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "InvalidMaxTopUpPerBlockGwei",
+      );
+    });
+
+    it("reverts when caller lacks STAKING_MODULE_MANAGE_ROLE", async () => {
+      const role = await stakingRouter.STAKING_MODULE_MANAGE_ROLE();
+      await expect(stakingRouter.connect(stranger).setMaxTopUpPerBlockGwei(1n))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger.address, role);
     });
   });
 });

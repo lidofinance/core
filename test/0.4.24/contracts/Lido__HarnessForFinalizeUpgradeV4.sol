@@ -38,4 +38,17 @@ contract Lido__HarnessForFinalizeUpgradeV4 is Lido {
     function harness_setContractVersion(uint256 _version) external {
         _setContractVersion(_version);
     }
+
+    function harness_setV3BalanceState(
+        uint256 _bufferedEther,
+        uint256 _depositedValidators,
+        uint256 _clBalance,
+        uint256 _clValidators
+    ) external {
+        BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.setLowUint128(_bufferedEther);
+        BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION.setHighUint128(_depositedValidators);
+
+        CL_BALANCE_AND_CL_VALIDATORS_POSITION.setLowUint128(_clBalance);
+        CL_BALANCE_AND_CL_VALIDATORS_POSITION.setHighUint128(_clValidators);
+    }
 }

@@ -74,6 +74,7 @@ library BeaconChainDepositor {
         if (len != _amount.length) revert ArrayLengthMismatch();
 
         bytes memory dummySignature = new bytes(SIGNATURE_LENGTH);
+        bytes32 dummySignatureRoot = _computeSignatureRoot(dummySignature);
 
         for (uint256 i; i < len; ++i) {
             bytes memory pk = _publicKeys[i];
@@ -84,7 +85,7 @@ library BeaconChainDepositor {
 
             uint256 amount = _amount[i];
 
-            // obtainDepositData can return 0 amount for some keys
+            // skip zero amounts
             if (amount == 0) continue;
 
             // Amounts below minimum deposit (1 ETH) would fail at deposit contract
@@ -100,7 +101,7 @@ library BeaconChainDepositor {
 
             // full DepositData root with custom amount
             bytes32 depositDataRoot =
-                _computeDepositDataRootWithAmount(_withdrawalCredentials, pk, dummySignature, amountGwei64);
+                _computeDepositDataRootWithAmount(_withdrawalCredentials, pk, dummySignatureRoot, amountGwei64);
 
             _depositContract.deposit{value: amount}(pk, _withdrawalCredentials, dummySignature, depositDataRoot);
         }
@@ -112,14 +113,23 @@ library BeaconChainDepositor {
         bytes memory _signature,
         uint64 _amountGwei
     ) private pure returns (bytes32) {
-        bytes32 publicKeyRoot = sha256(abi.encodePacked(_publicKey, bytes16(0)));
         bytes32 signatureRoot = _computeSignatureRoot(_signature);
+        return _computeDepositDataRootWithAmount(_withdrawalCredentials, _publicKey, signatureRoot, _amountGwei);
+    }
+
+    function _computeDepositDataRootWithAmount(
+        bytes memory _withdrawalCredentials,
+        bytes memory _publicKey,
+        bytes32 _signatureRoot,
+        uint64 _amountGwei
+    ) private pure returns (bytes32) {
+        bytes32 publicKeyRoot = sha256(abi.encodePacked(_publicKey, bytes16(0)));
         bytes8 amountLE = _toLittleEndian64(_amountGwei);
 
         return sha256(
             abi.encodePacked(
                 sha256(abi.encodePacked(publicKeyRoot, _withdrawalCredentials)),
-                sha256(abi.encodePacked(amountLE, bytes24(0), signatureRoot))
+                sha256(abi.encodePacked(amountLE, bytes24(0), _signatureRoot))
             )
         );
     }

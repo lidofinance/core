@@ -9,6 +9,7 @@ import {
   ether,
   getAddress,
   getAddressValidated,
+  getDeployerSigner,
   impersonate,
   isContractDeployed,
   loadContract,
@@ -38,7 +39,7 @@ export async function skip(): Promise<boolean> {
 }
 
 export async function main() {
-  const deployer = await ethers.provider.getSigner();
+  const deployer = await getDeployerSigner();
   const state = readNetworkState();
 
   const voteScript = await loadContract<UpgradeVoteScript>(

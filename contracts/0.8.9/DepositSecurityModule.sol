@@ -1,14 +1,10 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2026 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
 
 import {ECDSA} from "../common/lib/ECDSA.sol";
-
-interface ILido {
-    function canDeposit() external view returns (bool);
-}
 
 interface IDepositContract {
     function get_deposit_root() external view returns (bytes32 rootHash);
@@ -18,7 +14,6 @@ interface IStakingRouter {
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
     function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
-    function canDeposit(uint256 _stakingModuleId) external view returns (bool);
     function decreaseStakingModuleVettedKeysCountByNodeOperator(
         uint256 _stakingModuleId,
         bytes calldata _nodeOperatorIds,
@@ -57,7 +52,6 @@ contract DepositSecurityModule {
     error SignaturesNotSorted();
     error DepositNoQuorum();
     error DepositRootChanged();
-    error DepositInactiveModule();
     error DepositTooFrequent();
     error DepositUnexpectedBlockHash();
     error DepositsArePaused();
@@ -70,7 +64,15 @@ contract DepositSecurityModule {
     error ZeroParameter(string parameter);
 
     /// @notice Represents the code version to help distinguish contract interfaces.
-    uint256 public constant VERSION = 3;
+    uint256 public constant VERSION = 4;
+    
+    /// @dev Byte length of one packed node operator id (uint64) in `nodeOperatorIds`.
+    ///      Must match the packing expected by StakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator.
+    uint256 internal constant NODE_OPERATOR_ID_LENGTH = 8;
+
+    /// @dev Byte length of one packed vetted signing keys count (uint128) in `vettedSigningKeysCounts`.
+    ///      Must match the packing expected by StakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator.
+    uint256 internal constant VETTED_KEYS_COUNT_LENGTH = 16;
 
     /// @notice Prefix for the message signed by guardians to attest a deposit.
     bytes32 public immutable ATTEST_MESSAGE_PREFIX;
@@ -79,7 +81,6 @@ contract DepositSecurityModule {
     /// @notice Prefix for the message signed by guardians to unvet signing keys.
     bytes32 public immutable UNVET_MESSAGE_PREFIX;
 
-    ILido public immutable LIDO;
     IStakingRouter public immutable STAKING_ROUTER;
     IDepositContract public immutable DEPOSIT_CONTRACT;
 
@@ -104,17 +105,14 @@ contract DepositSecurityModule {
      * Sets the last deposit block to the current block number.
      */
     constructor(
-        address _lido,
         address _depositContract,
         address _stakingRouter,
         uint256 _pauseIntentValidityPeriodBlocks,
         uint256 _maxOperatorsPerUnvetting
     ) {
-        if (_lido == address(0)) revert ZeroAddress("_lido");
         if (_depositContract == address(0)) revert ZeroAddress("_depositContract");
         if (_stakingRouter == address(0)) revert ZeroAddress("_stakingRouter");
 
-        LIDO = ILido(_lido);
         STAKING_ROUTER = IStakingRouter(_stakingRouter);
         DEPOSIT_CONTRACT = IDepositContract(_depositContract);
 
@@ -402,30 +400,6 @@ contract DepositSecurityModule {
     }
 
     /**
-     * @notice Returns whether LIDO.deposit() can be called, given that the caller
-     * will provide guardian attestations of non-stale deposit root and nonce,
-     * and the number of such attestations will be enough to reach the quorum.
-     *
-     * @param stakingModuleId The ID of the staking module.
-     * @return canDeposit Whether a deposit can be made.
-     * @dev Returns true if all of the following conditions are met:
-     *   - deposits are not paused;
-     *   - the staking module is active;
-     *   - the guardian quorum is not set to zero;
-     *   - the deposit distance is greater than the minimum required;
-     *   - LIDO.canDeposit() returns true;
-     *   - STAKING_ROUTER.canDeposit returns true.
-     */
-    function canDeposit(uint256 stakingModuleId) external view returns (bool) {
-        if (!STAKING_ROUTER.canDeposit(stakingModuleId)) return false;
-
-        bool isDepositDistancePassed = _isMinDepositDistancePassed(stakingModuleId);
-        bool isLidoCanDeposit = LIDO.canDeposit();
-
-        return (!isDepositsPaused && quorum > 0 && isDepositDistancePassed && isLidoCanDeposit);
-    }
-
-    /**
      * @notice Returns the block number of the last deposit.
      * @return lastDepositBlock The block number of the last deposit.
      */
@@ -460,13 +434,12 @@ contract DepositSecurityModule {
     }
 
     /**
-     * @notice Calls STAKING_ROUTER.deposit(stakingModuleId, depositCalldata).
+     * @notice Calls STAKING_ROUTER.deposit(stakingModuleId, "").
      * @param blockNumber The block number at which the deposit intent was created.
      * @param blockHash The block hash at which the deposit intent was created.
      * @param depositRoot The deposit root hash.
      * @param stakingModuleId The ID of the staking module.
      * @param nonce The nonce of the staking module.
-     * @param depositCalldata The calldata for the deposit.
      * @param sortedGuardianSignatures The list of guardian signatures ascendingly sorted by address.
      * @dev Reverts if any of the following is true:
      *   - onchain deposit root is different from the provided one;
@@ -490,19 +463,18 @@ contract DepositSecurityModule {
         bytes32 depositRoot,
         uint256 stakingModuleId,
         uint256 nonce,
-        bytes calldata depositCalldata,
         Signature[] calldata sortedGuardianSignatures
     ) external {
         /// @dev The first most likely reason for the signature to go stale
-        bytes32 onchainDepositRoot = IDepositContract(DEPOSIT_CONTRACT).get_deposit_root();
+        bytes32 onchainDepositRoot = DEPOSIT_CONTRACT.get_deposit_root();
         if (depositRoot != onchainDepositRoot) revert DepositRootChanged();
 
         /// @dev The second most likely reason for the signature to go stale
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
-        if (quorum == 0 || sortedGuardianSignatures.length < quorum) revert DepositNoQuorum();
-        if (!STAKING_ROUTER.canDeposit(stakingModuleId)) revert DepositInactiveModule();
+        uint256 _quorum = quorum;
+        if (_quorum == 0 || sortedGuardianSignatures.length < _quorum) revert DepositNoQuorum();
         if (!_isMinDepositDistancePassed(stakingModuleId)) revert DepositTooFrequent();
         if (blockHash == bytes32(0) || blockhash(blockNumber) != blockHash) revert DepositUnexpectedBlockHash();
         if (isDepositsPaused) revert DepositsArePaused();
@@ -510,7 +482,7 @@ contract DepositSecurityModule {
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
         // Call StakingRouter instead of Lido - SR will pull ETH from Lido
-        STAKING_ROUTER.deposit(stakingModuleId, depositCalldata);
+        STAKING_ROUTER.deposit(stakingModuleId, "");
 
         _setLastDepositBlock(block.number);
     }
@@ -524,7 +496,14 @@ contract DepositSecurityModule {
         Signature[] memory sigs
     ) internal view {
         bytes32 msgHash = keccak256(
-            abi.encodePacked(ATTEST_MESSAGE_PREFIX, blockNumber, blockHash, depositRoot, stakingModuleId, nonce)
+            abi.encodePacked(
+                ATTEST_MESSAGE_PREFIX,
+                blockNumber,
+                blockHash,
+                depositRoot,
+                stakingModuleId,
+                nonce
+            )
         );
 
         address prevSignerAddr;
@@ -576,12 +555,12 @@ contract DepositSecurityModule {
         uint256 onchainNonce = STAKING_ROUTER.getStakingModuleNonce(stakingModuleId);
         if (nonce != onchainNonce) revert ModuleNonceChanged();
 
-        uint256 nodeOperatorsCount = nodeOperatorIds.length / 8;
+        uint256 nodeOperatorsCount = nodeOperatorIds.length / NODE_OPERATOR_ID_LENGTH;
 
         if (
-            nodeOperatorIds.length % 8 != 0 ||
-            vettedSigningKeysCounts.length % 16 != 0 ||
-            vettedSigningKeysCounts.length / 16 != nodeOperatorsCount ||
+            nodeOperatorIds.length % NODE_OPERATOR_ID_LENGTH != 0 ||
+            vettedSigningKeysCounts.length % VETTED_KEYS_COUNT_LENGTH != 0 ||
+            vettedSigningKeysCounts.length / VETTED_KEYS_COUNT_LENGTH != nodeOperatorsCount ||
             nodeOperatorsCount > maxOperatorsPerUnvetting
         ) {
             revert UnvetPayloadInvalid();

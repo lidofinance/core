@@ -9,7 +9,7 @@ import {
   getDepositedSinceLastReport,
   getProtocolContext,
   ProtocolContext,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
 } from "lib/protocol";
 
@@ -64,9 +64,9 @@ describe("Integration: Negative rebase", () => {
   const ensureAtLeastOneStoredReport = async () => {
     const reportDataCount = await ctx.contracts.oracleReportSanityChecker.getReportDataCount();
     if (reportDataCount === 0n) {
-      await reportWithEffectiveClDiff(ctx, 0n, {
+      await reportWithoutClActivation(ctx, {
         skipWithdrawals: true,
-        excludeVaultsBalances: true,
+        reportElVault: false,
       });
     }
   };
@@ -85,7 +85,7 @@ describe("Integration: Negative rebase", () => {
     // `report(ctx, { clDiff: 0 })` means raw postCL - preCL = 0, which looks
     // to the sanity checker like a CL decrease by the amount of those deposits.
     // This report must be effective-neutral relative to principal CL balance.
-    await reportWithEffectiveClDiff(ctx, 0n, {
+    await reportWithoutClActivation(ctx, {
       skipWithdrawals: true,
       clAppearedValidators: 0n,
       reportElVault: false,
@@ -128,7 +128,8 @@ describe("Integration: Negative rebase", () => {
     for (let i = 0; i < REPORTS_REPEATED; i++) {
       const depositedSinceLastReport = await getDepositedSinceLastReport(ctx);
 
-      await reportWithEffectiveClDiff(ctx, CL_DIFF_PER_REPORT, {
+      await reportWithoutClActivation(ctx, {
+        effectiveClDiff: CL_DIFF_PER_REPORT,
         skipWithdrawals: true,
         reportElVault: false,
       });
@@ -152,7 +153,9 @@ describe("Integration: Negative rebase", () => {
     const { oracleReportSanityChecker, accounting, withdrawalVault } = ctx.contracts;
 
     const accountingSigner = await impersonate(await accounting.getAddress(), ether("1"));
-    const withdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault);
+    const actualWithdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault);
+    const reportedWithdrawalVaultBalance = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
+    expect(reportedWithdrawalVaultBalance).to.be.lte(actualWithdrawalVaultBalance);
 
     const reportDataCount = await oracleReportSanityChecker.getReportDataCount();
     let currentBalance =
@@ -160,9 +163,8 @@ describe("Integration: Negative rebase", () => {
         ? ether("1000000")
         : (await oracleReportSanityChecker.reportData(reportDataCount - 1n)).clBalance;
 
-    // This direct call bypasses helper report(), so it must pass the reported withdrawal vault balance itself.
-    // On Hoodi after migration, the sanity checker baseline is non-zero; passing 0 here masks
-    // the intended IncorrectCLBalanceDecrease check with a withdrawal vault balance error.
+    // This direct call bypasses helper report(), so pass the stored WVB baseline.
+    // That keeps `_getCLWithdrawals` at zero and lets the test reach IncorrectCLBalanceDecrease.
     const reportFromAccounting = (preBalance: bigint, postBalance: bigint) =>
       oracleReportSanityChecker
         .connect(accountingSigner)
@@ -172,7 +174,7 @@ describe("Integration: Negative rebase", () => {
           0n,
           postBalance,
           0n,
-          withdrawalVaultBalance,
+          reportedWithdrawalVaultBalance,
           0n,
           0n,
           0n,

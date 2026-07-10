@@ -18,16 +18,20 @@ export {
   getReportDataItems,
   getNextReportContext,
   getReportTimeElapsed,
+  adjustReportModuleBalances,
+  ensureFirstPostMigrationReport,
   waitNextAvailableReportTime,
   handleOracleReport,
   OracleReportParams,
   OracleReportSubmitParams,
   report,
   reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   getDepositedSinceLastReport,
+  normalizeWithdrawalVaultBaseline,
 } from "./accounting";
 
 export { ensureDsmGuardians } from "./dsm";

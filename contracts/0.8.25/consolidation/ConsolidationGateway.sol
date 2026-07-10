@@ -47,7 +47,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     error AdminCannotBeZero();
 
     /**
-     * @notice Thrown when a consolidation fee insufficient
+     * @notice Thrown when a consolidation fee is insufficient
      * @param feeRequired Amount of fee required to cover consolidation request
      * @param passedValue Amount of fee sent to cover consolidation request
      */
@@ -61,7 +61,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
     /**
      * @notice Thrown when remaining consolidation requests limit is not enough to cover sender requests
      * @param requestsCount Amount of requests that were sent for processing
-     * @param remainingLimit Amount of requests that still can be processed at current day
+     * @param remainingLimit Amount of requests that still can be processed at current frame
      */
     error ConsolidationRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
@@ -141,7 +141,7 @@ contract ConsolidationGateway is AccessControlEnumerable, PausableUntil, CLProof
 
     /**
      * @notice Resume the contract
-     * @dev Reverts if contracts is not paused
+     * @dev Reverts if contract is not paused
      * @dev Reverts if sender has no `RESUME_ROLE`
      */
     function resume() external onlyRole(RESUME_ROLE) {

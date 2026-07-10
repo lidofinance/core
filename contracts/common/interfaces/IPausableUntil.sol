@@ -5,8 +5,8 @@
 // solhint-disable-next-line
 pragma solidity >=0.4.24 <0.9.0;
 
-/// @title  IPausable
-/// @notice Interface pausable contracts must implement for CircuitBreaker compatibility.
+/// @title  IPausableUntil
+/// @notice Interface that pausable contracts must implement for CircuitBreaker compatibility.
 interface IPausableUntil {
     /// @notice Whether the contract is currently paused.
     function isPaused() external view returns (bool);

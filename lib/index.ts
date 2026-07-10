@@ -19,6 +19,7 @@ export * from "./nor";
 export * from "./oracle";
 export * from "./pdg";
 export * from "./promise";
+export * from "./provider";
 export * from "./proxy";
 export * from "./scratch";
 export * from "./signing-keys";

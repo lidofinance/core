@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { getStorageAt, setStorageAt } from "@nomicfoundation/hardhat-network-helpers";
 
 import { LidoLocator, ValidatorsExitBus__Harness } from "typechain-types";
 
@@ -73,6 +74,11 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
     const balancePerFrameEth = 32n; // 32 ETH (1 legacy validator)
     const maxValidatorsPerReport = 15;
     const frameDuration = 48;
+    const deprecatedExitRequestLimitSlot = ethers.keccak256(
+      ethers.toUtf8Bytes("lido.ValidatorsExitBus.maxExitRequestLimit"),
+    );
+
+    await setStorageAt(await oracle.getAddress(), deprecatedExitRequestLimitSlot, ethers.toBeHex(12, 32));
 
     await oracle.finalizeUpgrade_v3(
       maxValidatorsPerReport,
@@ -91,6 +97,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
     expect(exitRequestLimitData.frameDurationInSec).to.equal(frameDuration);
 
     expect(await oracle.getMaxValidatorsPerReport()).to.equal(maxValidatorsPerReport);
+    expect(await getStorageAt(await oracle.getAddress(), deprecatedExitRequestLimitSlot)).to.equal(ethers.ZeroHash);
 
     // should not allow finalizeUpgrade_v3 to run again
     await expect(oracle.finalizeUpgrade_v3(10, 100, 1, 48, NEW_CONSENSUS_VERSION + 1n)).to.be.revertedWithCustomError(

@@ -93,7 +93,9 @@ describe("Lido:accounting", () => {
           }),
         ),
       )
-        .to.emit(lido, "CLBalancesUpdated")
+        .to.emit(lido, "DepositedPostReportUpdated")
+        .withArgs(0n)
+        .and.to.emit(lido, "CLBalancesUpdated")
         .withArgs(0n, 100n, 50n);
     });
 

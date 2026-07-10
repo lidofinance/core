@@ -7,6 +7,7 @@ pragma solidity 0.8.9;
 import {
     OracleReportSanityChecker,
     LimitsList,
+    CLBalanceChangeCheckParams,
     AccountingCoreLimitsPacked,
     OperationalLimitsPacked,
     LimitsListPacker,
@@ -35,6 +36,46 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
 
     function addReportData(uint256 _timestamp, uint256 _clBalance, uint256 _deposits, uint256 _clWithdrawals) public {
         _addReportData(_timestamp, _clBalance, _deposits, _clWithdrawals);
+    }
+
+    function harness__setLastReportTimestamp(uint256 _timestamp) external {
+        lastReportTimestamp = _timestamp;
+    }
+
+    function harness__checkCLPendingAndValidatorsBalanceIncrease(
+        uint256 _timeElapsed,
+        uint256 _preCLValidatorsBalance,
+        uint256 _preCLPendingBalance,
+        uint256 _postCLValidatorsBalance,
+        uint256 _postCLPendingBalance,
+        uint256 _withdrawalVaultBalance,
+        uint256 _deposits
+    ) external view {
+        CLBalanceChangeCheckParams memory checkParams = CLBalanceChangeCheckParams({
+            timeElapsed: _timeElapsed,
+            preCLValidatorsBalance: _preCLValidatorsBalance,
+            preCLPendingBalance: _preCLPendingBalance,
+            postCLValidatorsBalance: _postCLValidatorsBalance,
+            postCLPendingBalance: _postCLPendingBalance,
+            deposits: _deposits
+        });
+        _checkCLPendingAndValidatorsBalanceIncrease(
+            getOracleReportLimits().packAccountingCore(),
+            checkParams,
+            _getCLWithdrawals(_withdrawalVaultBalance)
+        );
+    }
+
+    function harness__checkCLBalancesConsistency(
+        uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
+        uint256[] calldata _validatorBalancesWeiByStakingModule,
+        uint256 _clValidatorsBalanceWei
+    ) external pure {
+        _checkCLBalancesConsistency(
+            _stakingModuleIdsWithUpdatedBalance,
+            _validatorBalancesWeiByStakingModule,
+            _clValidatorsBalanceWei
+        );
     }
 
     function exposeAccountingCorePackedLimits() public view returns (AccountingCoreLimitsPacked memory) {

@@ -13,7 +13,7 @@ import {
   queueBadDebtInternalization,
   removeStakingLimit,
   report,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
   seedProtocolPendingBaseline,
   setupLidoForVaults,
@@ -99,9 +99,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       await queueBadDebtInternalization(ctx, stakingVault, badDebtShares);
 
       // Report with zero CL diff, skip withdrawals, don't report burner
-      const { reportTx } = await report(ctx, {
-        clDiff: 0n,
-        excludeVaultsBalances: true,
+      const { reportTx } = await reportWithoutClActivation(ctx, {
+        reportElVault: false,
         skipWithdrawals: true,
         reportBurner: false,
         waitNextReportTime: true,
@@ -143,8 +142,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
         const largeRewards = ether("10000");
         await setBalance(await elRewardsVault.getAddress(), largeRewards);
 
-        const { reportTx } = await report(ctx, {
-          clDiff: 0n,
+        const { reportTx } = await reportWithoutClActivation(ctx, {
           excludeVaultsBalances: false, // Include vault balances to collect rewards
           skipWithdrawals: true,
           waitNextReportTime: true,
@@ -220,9 +218,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
         // Verify burner has shares to burn
         expect(stateBefore.burnerShares).to.be.gte(sharesToRequest, "Burner should have shares to burn");
 
-        const { reportTx } = await report(ctx, {
-          clDiff: 0n,
-          excludeVaultsBalances: true,
+        const { reportTx } = await reportWithoutClActivation(ctx, {
+          reportElVault: false,
           skipWithdrawals: true,
           waitNextReportTime: true,
         });
@@ -282,8 +279,9 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Small negative CL diff (within allowed limits)
       const smallDecrease = ether("-1");
 
-      await reportWithEffectiveClDiff(ctx, smallDecrease, {
-        excludeVaultsBalances: true,
+      await reportWithoutClActivation(ctx, {
+        effectiveClDiff: smallDecrease,
+        reportElVault: false,
         skipWithdrawals: true,
         // Burner state on the fork can hold pending cover/non-cover shares; burning them
         // produces a positive rebase that masks the share-rate drop we want to observe here.
@@ -303,8 +301,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
       const { oracleReportSanityChecker, lido } = ctx.contracts;
 
-      // Submit a neutral report to establish the current CL balance baseline
-      await report(ctx);
+      // Move past the migrated checker bootstrap entries so this test exercises the per-window max decrease.
+      await resetCLBalanceDecreaseWindow(ctx);
 
       // Get current protocol state to calculate dynamic slashing limit
       const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
@@ -321,9 +319,9 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       const stateBefore = await captureState();
       expect(stateBefore.badDebtToInternalize).to.equal(badDebtShares, "Bad debt should be queued");
 
-      const { reportTx } = await report(ctx, {
-        clDiff: clSlashing,
-        excludeVaultsBalances: true,
+      const { reportTx } = await reportWithoutClActivation(ctx, {
+        effectiveClDiff: clSlashing,
+        reportElVault: false,
         skipWithdrawals: true,
         waitNextReportTime: true,
       });
@@ -349,6 +347,7 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
 
       const { oracleReportSanityChecker, lido } = ctx.contracts;
 
+      const { clPendingBalanceAtLastReport: carriedPendingBeforeSeed } = await lido.getBalanceStats();
       await seedProtocolPendingBaseline(ctx, NOR_MODULE_ID);
 
       const { stakingVault, badDebtShares } = await setupVaultWithBadDebt(ctx, owner, nodeOperator);
@@ -376,10 +375,12 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // post-activation validators base.
       // Bad debt still must not compensate an over-limit report.
       expect(clPendingBalanceAtLastReport).to.be.gt(0n, "test precondition failed: pending baseline must be non-zero");
+      const carriedPendingBalanceGwei = carriedPendingBeforeSeed / ONE_GWEI;
       await expect(
         report(ctx, {
           clDiff: maxBalanceIncrease + ONE_GWEI,
-          excludeVaultsBalances: true,
+          clPendingBalanceGwei: carriedPendingBalanceGwei,
+          reportElVault: false,
           skipWithdrawals: true,
         }),
       ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
@@ -387,7 +388,8 @@ describe("Integration: Sanity checker with bad debt internalization", () => {
       // Report exactly at the limit should pass despite bad debt internalization
       await report(ctx, {
         clDiff: maxBalanceIncrease,
-        excludeVaultsBalances: true,
+        clPendingBalanceGwei: carriedPendingBalanceGwei,
+        reportElVault: false,
         skipWithdrawals: true,
       });
 

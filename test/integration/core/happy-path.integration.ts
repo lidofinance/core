@@ -4,21 +4,27 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime, batch, ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
+import { advanceChainTime, batch, ether, log, ONE_GWEI, updateBalance } from "lib";
 import {
+  adjustReportModuleBalances,
   buildModuleAccountingReportParams,
+  depositAllocatedValidatorsFromBuffer,
+  ensureFirstPostMigrationReport,
   finalizeWQViaElVault,
   getProtocolContext,
+  normalizeWithdrawalVaultBaseline,
   norSdvtEnsureOperators,
   OracleReportParams,
   ProtocolContext,
   removeStakingLimit,
   report,
+  reportWithoutClActivation,
   setStakingLimit,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
-import { bailOnFailure, Snapshot, ZERO_HASH } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite";
 
 import { LogDescriptionExtended } from "../../../lib/protocol/types";
 
@@ -204,12 +210,12 @@ describe("Scenario: Protocol Happy Path", () => {
   });
 
   it("Should deposit to staking modules", async () => {
-    const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
+    const { lido, withdrawalQueue } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
 
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
     await lido.connect(agent).setDepositsReserveTarget(ether("128"));
-    await report(ctx, { clDiff: 0n, excludeVaultsBalances: true, reportBurner: false, skipWithdrawals: true });
+    await reportWithoutClActivation(ctx, { reportElVault: false, reportBurner: false, skipWithdrawals: true });
 
     const withdrawalsUnfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositsReserveTarget = await lido.getDepositsReserveTarget();
@@ -233,36 +239,24 @@ describe("Scenario: Protocol Happy Path", () => {
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
-    const stakingModules = (await stakingRouter.getStakingModules()).filter((m) => m.id === 1n);
-    depositCount = 0n;
-    norPendingDepositsGwei = 0n;
-    let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
-    for (const module of stakingModules) {
-      const depositTx = await stakingRouter.connect(dsmSigner).deposit(module.id, ZERO_HASH);
-      const depositReceipt = (await depositTx.wait()) as ContractTransactionReceipt;
-      const unbufferedEvent = ctx.getEvents(depositReceipt, "Unbuffered")[0];
-      const unbufferedAmount = unbufferedEvent?.args[0] || 0n;
-      const deposits = unbufferedAmount / ether("32");
+    await ensureFirstPostMigrationReport(ctx);
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
 
-      log.debug("Staking module", {
-        "Module": module.name,
-        "Deposits": deposits,
-        "Unbuffered amount": ethers.formatEther(unbufferedAmount),
-      });
-
-      depositCount += deposits;
-      norPendingDepositsGwei += unbufferedAmount / ONE_GWEI;
-      expectedBufferedEtherAfterDeposit -= unbufferedAmount;
-    }
+    const depositResult = await depositAllocatedValidatorsFromBuffer(ctx, 1n, NOR_MODULE_ID);
+    depositCount = depositResult.depositsCount;
+    norPendingDepositsGwei = depositResult.pendingGweiDelta;
 
     expect(depositCount).to.be.gt(0n, "No deposits applied");
 
     const bufferedEtherAfterDeposit = await lido.getBufferedEther();
-    expect(bufferedEtherAfterDeposit).to.equal(expectedBufferedEtherAfterDeposit, "Buffered ether after deposit");
+    expect(bufferedEtherAfterDeposit).to.equal(
+      bufferedEtherBeforeDeposit - depositResult.consumed,
+      "Buffered ether after deposit",
+    );
 
     log.debug("After deposit", {
       "Deposits": depositCount,
+      "Module ID": depositResult.moduleId,
       "Buffered ether": ethers.formatEther(bufferedEtherAfterDeposit),
     });
   });
@@ -311,28 +305,35 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const treasuryBalanceBeforeRebase = await lido.sharesOf(treasuryAddress);
 
-    const { depositedSinceLastReport } = await lido.getBalanceStats();
+    const { clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+    const carriedPendingGwei = clPendingBalanceAtLastReport / ONE_GWEI;
 
     // Deposit() moved ETH into protocol pending, but the new sanity path takes its
     // baseline from the previous Lido report snapshot rather than router-only state.
     // Submit a neutral report first so the next reward-bearing report stays on the
     // original "deposits activated + tiny positive CL reward" happy path.
-    const { data: pendingBaselineData } = await report(ctx, {
-      clDiff: depositedSinceLastReport,
+    const { data: pendingBaselineData } = await reportWithoutClActivation(ctx, {
       dryRun: true,
-      excludeVaultsBalances: true,
+      reportElVault: false,
+      reportWithdrawalsVault: false,
       skipWithdrawals: true,
-      ...(await buildModuleAccountingReportParams(ctx)),
     });
+    const clValidatorsBalanceGwei = BigInt(pendingBaselineData.clValidatorsBalanceGwei);
+    const moduleBalanceParams = adjustReportModuleBalances(
+      await buildModuleAccountingReportParams(ctx),
+      clValidatorsBalanceGwei,
+    );
     await submitReportDataWithConsensusAndEmptyExtraData(ctx, {
       ...pendingBaselineData,
-      clValidatorsBalanceGwei: BigInt(pendingBaselineData.clValidatorsBalanceGwei) - norPendingDepositsGwei,
-      clPendingBalanceGwei: norPendingDepositsGwei,
+      clValidatorsBalanceGwei,
+      clPendingBalanceGwei: carriedPendingGwei + norPendingDepositsGwei,
+      ...moduleBalanceParams,
     });
 
     const reportData: Partial<OracleReportParams> = {
       clDiff: ether("0.001"),
       clAppearedValidators: depositCount,
+      clPendingBalanceGwei: carriedPendingGwei,
     };
 
     await advanceChainTime(12n * 60n * 60n);
@@ -365,13 +366,10 @@ describe("Scenario: Protocol Happy Path", () => {
       [, toNorTransfer, toSdvtTransfer] = transferEvents;
     }
 
-    let toTreasuryTransferIdx = numExpectedTransferEvents - 1;
-
     if (csm !== undefined) {
       if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.csm!.id)) > 0) {
         // +1 for the CSM internal transfer
         numExpectedTransferEvents += 1;
-        toTreasuryTransferIdx -= 1;
       } else {
         // no reward transfer to modules with 0 validators balance
         numExpectedTransferEvents -= 1;
@@ -381,16 +379,26 @@ describe("Scenario: Protocol Happy Path", () => {
       if ((await stakingRouter.getModuleValidatorsBalance(ctx.modules.cmv2!.id)) > 0) {
         // +1 for the CSM internal transfer
         numExpectedTransferEvents += 1;
-        toTreasuryTransferIdx -= 1;
       } else {
         // no reward transfer to modules with 0 validators balance
         numExpectedTransferEvents -= 1;
       }
     }
-    const toTreasuryTransfer = transferEvents[toTreasuryTransferIdx];
-    const toTreasuryTransferShares = transferSharesEvents[toTreasuryTransferIdx];
+    const findTransferFromAccountingTo = (events: LogDescriptionExtended[], to: string) =>
+      events.find((event) => {
+        const args = event.args.toObject();
+        return args.from === accounting.address && args.to === to;
+      });
+    const toTreasuryTransfer = findTransferFromAccountingTo(transferEvents, treasuryAddress);
+    const toTreasuryTransferShares = findTransferFromAccountingTo(transferSharesEvents, treasuryAddress);
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
+    if (toTreasuryTransfer === undefined) {
+      throw new Error("Transfer to Treasury event not found");
+    }
+    if (toTreasuryTransferShares === undefined) {
+      throw new Error("Transfer shares to Treasury event not found");
+    }
 
     if (toBurnerTransfer) {
       expect(toBurnerTransfer?.args.toObject()).to.include(
@@ -418,14 +426,14 @@ describe("Scenario: Protocol Happy Path", () => {
       "Transfer to SDVT",
     );
 
-    expect(toTreasuryTransfer?.args.toObject()).to.include(
+    expect(toTreasuryTransfer.args.toObject()).to.include(
       {
         from: accounting.address,
         to: treasuryAddress,
       },
       "Transfer to Treasury",
     );
-    expect(toTreasuryTransferShares?.args.toObject()).to.include(
+    expect(toTreasuryTransferShares.args.toObject()).to.include(
       {
         from: accounting.address,
         to: treasuryAddress,
@@ -601,8 +609,7 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const lockedEtherAmountBeforeFinalization = await withdrawalQueue.getLockedEtherAmount();
 
-    const reportParams = { clDiff: 0n };
-    const { reportTx } = (await report(ctx, reportParams)) as { reportTx: TransactionResponse };
+    const { reportTx } = (await reportWithoutClActivation(ctx)) as { reportTx: TransactionResponse };
 
     const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
 

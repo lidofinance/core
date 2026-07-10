@@ -53,6 +53,10 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
     /**
      * @param _lido the Lido token (stETH) address
      * @param _treasury the Lido treasury address (see ERC20/ERC721-recovery interfaces)
+     * @param _triggerableWithdrawalsGateway the TriggerableWithdrawalsGateway address, the only caller allowed to submit EIP-7002 withdrawal requests
+     * @param _consolidationGateway the ConsolidationGateway address, the only caller allowed to submit EIP-7251 consolidation requests
+     * @param _withdrawalRequest the EIP-7002 withdrawal request predeploy address
+     * @param _consolidationRequest the EIP-7251 consolidation request predeploy address
      */
     constructor(
         address _lido,
@@ -83,7 +87,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
     /// @notice Initializes the contract. Can be called only once.
     /// @dev Proxy initialization method.
     function initialize() external {
-        // Initializations for v0 --> v2
+        // Initializations for v0 --> v3
         _checkContractVersion(0);
         _initializeContractVersionTo(3);
     }
@@ -118,7 +122,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
 
     /**
      * Transfers a given `_amount` of an ERC20-token (defined by the `_token` contract address)
-     * currently belonging to the burner contract address to the Lido treasury address.
+     * currently belonging to this contract address to the Lido treasury address.
      *
      * @param _token an ERC20-compatible token
      * @param _amount token amount
@@ -135,7 +139,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
 
     /**
      * Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
-     * currently belonging to the burner contract address to the Lido treasury address.
+     * currently belonging to this contract address to the Lido treasury address.
      *
      * @param _token an ERC721-compatible token
      * @param _tokenId minted token id
@@ -186,11 +190,11 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
      * @param targetPubkeys An array of 48-byte public keys corresponding to validators receiving the consolidation.
      *
      * @notice Reverts if:
-     *         - The caller is not ConsolidationsGateway.
+     *         - The caller is not ConsolidationGateway.
      *         - The provided public key array is empty.
      *         - The provided public key array malformed.
      *         - The provided source public key and target public key arrays are not of equal length.
-     *         - The provided total withdrawal fee value is invalid.
+     *         - The provided total consolidation fee value is invalid.
      */
     function addConsolidationRequests(
         bytes[] calldata sourcePubkeys,

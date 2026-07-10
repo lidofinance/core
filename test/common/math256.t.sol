@@ -31,7 +31,6 @@ contract Math256Test is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_max_WorksWithUint256(uint256 a, uint256 b) public pure {
@@ -76,7 +75,6 @@ contract Math256Test is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_min_WorksWithUint256(uint256 a, uint256 b) public pure {
@@ -153,7 +151,6 @@ contract Math256Test is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_max_WorksWithInt256(int256 a, int256 b) public pure {
@@ -195,7 +192,6 @@ contract Math256Test is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_min_WorksWithInt256(int256 a, int256 b) public pure {
@@ -256,7 +252,6 @@ contract Math256Test is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_ceilDiv(uint256 a, uint256 b) public pure {
@@ -299,7 +294,6 @@ contract Math256Test is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-fuzz-configs
-     * forge-config: default.fuzz.runs = 2048
      * forge-config: default.fuzz.max-test-rejects = 0
      */
     function testFuzz_absDiff(uint256 a, uint256 b) public pure {

@@ -134,9 +134,9 @@ export enum Sk {
   upgradeTemplate = "upgradeTemplate",
   upgradeVoteScript = "upgradeVoteScript",
   upgradeTemporaryAdmin = "upgradeTemporaryAdmin",
-  // csm & cm
-  csm_CSM = "csm:CSM",
-  csm_CM = "csm:CM",
+  // Staking modules
+  sm_CSM = "sm:CSM",
+  sm_CM = "sm:CM",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -172,6 +172,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.consolidationBus:
     case Sk.consolidationMigrator:
     case Sk.topUpGateway:
+    case Sk.sm_CSM:
+    case Sk.sm_CM:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
@@ -231,6 +233,53 @@ export function getAddressValidated(contractKey: Sk, state: DeploymentState): st
   } catch {
     return null;
   }
+}
+
+//
+// Substate helpers
+//
+// Some state entries (e.g. the staking modules `sm:CSM` / `sm:CM`) bundle several contracts that each
+// have a proxy and/or an implementation. They are stored as a nested "substate": a `contracts` map whose
+// entries mirror a normal contract entry (`{ proxy: { address }, implementation: { address } }` or a flat
+// `{ address }`), addressed by the parent key plus a sub-key.
+//
+export function getSubAddress(contractKey: Sk, subKey: string, state: DeploymentState): string {
+  const entry = state[contractKey]?.contracts?.[subKey];
+  if (!entry) {
+    throw new Error(`Unknown substate entry ${contractKey}.${subKey}`);
+  }
+  return entry.proxy?.address ?? entry.address;
+}
+
+export function getSubAddressValidated(contractKey: Sk, subKey: string, state: DeploymentState): string | null {
+  if (!state[contractKey]?.contracts?.[subKey]) return null;
+  let address = getSubAddress(contractKey, subKey, state);
+  try {
+    address = ethers.getAddress(address);
+    return address !== "0x0000000000000000000000000000000000000000" ? address : null;
+  } catch {
+    return null;
+  }
+}
+
+// Deep-merge `supplement` into `state[key].contracts[subKey]`, preserving sibling sub-entries and the
+// existing fields of the targeted sub-entry, then persist.
+export function updateSubObjectInState(contractKey: Sk, subKey: string, supplement: object): DeploymentState {
+  const state = readNetworkState();
+  const parent = state[contractKey] ?? {};
+  const contracts = parent.contracts ?? {};
+  state[contractKey] = {
+    ...parent,
+    contracts: {
+      ...contracts,
+      [subKey]: {
+        ...contracts[subKey],
+        ...supplement,
+      },
+    },
+  };
+  persistNetworkState(state);
+  return state as unknown as DeploymentState;
 }
 
 export function readNetworkState({

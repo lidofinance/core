@@ -92,7 +92,6 @@ const _header = (minLength = 20, ...args: ConvertibleToString[]) => {
 };
 
 const _title = (title: string) => {
-  if (!shouldLog("debug")) return;
   log(br(title));
 };
 
@@ -209,7 +208,7 @@ log.scriptStart = (filename: string) => {
   if (!shouldLog("info")) return;
 
   log.splitter();
-  log(`Started script: ${bl(path.basename(filename))}`);
+  log(`Started script: ${cy(path.basename(filename))}`);
   log.splitter();
   log.emptyLine();
 };
@@ -217,7 +216,7 @@ log.scriptStart = (filename: string) => {
 log.scriptFinish = (filename: string) => {
   if (!shouldLog("info")) return;
 
-  log.success(`Finished script: ${bl(path.basename(filename))}`);
+  log.success(`Finished script: ${cy(path.basename(filename))}`);
   log.emptyLine();
 };
 
@@ -225,7 +224,7 @@ log.scriptSkip = (filename: string) => {
   if (!shouldLog("info")) return;
 
   log.splitter();
-  log.warning(`Skipped script: ${bl(path.basename(filename))}`);
+  log.warning(`Skipped script: ${cy(path.basename(filename))}`);
   log.emptyLine();
 };
 

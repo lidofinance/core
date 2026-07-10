@@ -614,7 +614,8 @@ contract LidoTemplate is IsContract {
         perms[1] = _state.lido.RESUME_ROLE();
         perms[2] = _state.lido.STAKING_PAUSE_ROLE();
         perms[3] = _state.lido.STAKING_CONTROL_ROLE();
-        for (i = 0; i < 4; ++i) {
+        perms[4] = _state.lido.BUFFER_RESERVE_MANAGER_ROLE();
+        for (i = 0; i < 5; ++i) {
             _createPermissionForAgent(acl, _state.lido, perms[i], agent);
         }
     }

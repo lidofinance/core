@@ -100,7 +100,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     locator: config[Sk.lidoLocator].proxy.address,
     agentAddress: config[Sk.appAgent].proxy.address,
     votingAddress: config[Sk.appVoting].proxy.address,
-    easyTrackAddress: config[Sk.appVoting].proxy.address,
+    easyTrackAddress: config[Sk.easyTrackEVMScriptExecutor]?.address,
     stakingVaultFactory: config[Sk.stakingVaultFactory].address,
     stakingVaultBeacon: config[Sk.stakingVaultBeacon].address,
     operatorGrid: config[Sk.operatorGrid].proxy.address,

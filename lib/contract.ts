@@ -5,6 +5,8 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { NonPayableOverrides } from "typechain-types/common";
 
+import { getDeployerSigner } from "./account";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type MethodArgs<C, M extends keyof C> = C[M] extends (...args: any[]) => any ? Parameters<C[M]> : never;
 
@@ -68,7 +70,7 @@ export async function loadContract<ContractType extends BaseContract>(
   signer?: HardhatEthersSigner,
 ) {
   if (!signer) {
-    signer = await ethers.provider.getSigner();
+    signer = await getDeployerSigner();
   }
   const result = await ethers.getContractAt(name, address, signer);
   return (await addContractHelperFields(result, name)) as unknown as LoadedContract<ContractType>;

@@ -46,14 +46,21 @@ contract UpgradeTemporaryAdmin {
         address _resealManager,
         address _circuitBreaker,
         address _consolidationMigrator,
-        address _consolidationMigratorCommittee,
+        address _consolidationCommittee,
         address _consolidationBus,
         address _topUpGatewayDepositor,
         address _oldDepositSecurityModule
     ) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
-        if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
-        if (_easyTrack == address(0)) revert ZeroEasyTrack();
+        if (_lidoLocatorImpl == address(0)) revert ZeroAddress();
+        if (_easyTrack == address(0)) revert ZeroAddress();
+        if (_resealManager == address(0)) revert ZeroAddress();
+        if (_circuitBreaker == address(0)) revert ZeroAddress();
+        if (_consolidationMigrator == address(0)) revert ZeroAddress();
+        if (_consolidationCommittee == address(0)) revert ZeroAddress();
+        if (_consolidationBus == address(0)) revert ZeroAddress();
+        if (_topUpGatewayDepositor == address(0)) revert ZeroAddress();
+        if (_oldDepositSecurityModule == address(0)) revert ZeroAddress();
 
         isSetupComplete = true;
 
@@ -64,12 +71,12 @@ contract UpgradeTemporaryAdmin {
         address depositSecurityModule = locator.depositSecurityModule();
 
         _setupDSM(depositSecurityModule, _oldDepositSecurityModule);
-        _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationMigratorCommittee);
-        _setupConsolidationBus(_consolidationBus, _consolidationMigrator);
+        _setupConsolidationMigrator(_consolidationMigrator, evmScriptExecutor, _consolidationCommittee);
+        _setupConsolidationBus(_consolidationBus, _consolidationMigrator, _consolidationCommittee);
         _setupConsolidationGateway(consolidationGateway, _consolidationBus, _circuitBreaker, _resealManager);
-        _setupTopUpGateway(topUpGateway, _topUpGatewayDepositor);
+        _setupTopUpGateway(topUpGateway, _topUpGatewayDepositor, _circuitBreaker, _resealManager);
 
-        emit SetupCompleted(_consolidationMigrator, _consolidationBus, consolidationGateway, topUpGateway);
+        emit SetupCompleted();
     }
 
     function _setupDSM(address _dsm, address _oldDsm) private {
@@ -87,10 +94,9 @@ contract UpgradeTemporaryAdmin {
         _transferAdminToAgent(_migrator);
     }
 
-    function _setupConsolidationBus(address _bus, address _migrator) private {
+    function _setupConsolidationBus(address _bus, address _migrator, address _committee) private {
         IAccessControl(_bus).grantRole(PUBLISH_ROLE, _migrator);
-        IAccessControl(_bus).renounceRole(MANAGE_ROLE, address(this));
-        IAccessControl(_bus).renounceRole(REMOVE_ROLE, address(this));
+        IAccessControl(_bus).grantRole(REMOVE_ROLE, _committee);
 
         _transferAdminToAgent(_bus);
     }
@@ -104,7 +110,10 @@ contract UpgradeTemporaryAdmin {
         _transferAdminToAgent(_gateway);
     }
 
-    function _setupTopUpGateway(address _gateway, address _depositor) private {
+    function _setupTopUpGateway(address _gateway, address _depositor, address _cb, address _resealManager) private {
+        IAccessControl(_gateway).grantRole(PAUSE_ROLE, _cb);
+        IAccessControl(_gateway).grantRole(PAUSE_ROLE, _resealManager);
+        IAccessControl(_gateway).grantRole(RESUME_ROLE, _resealManager);
         IAccessControl(_gateway).grantRole(TOP_UP_ROLE, _depositor);
 
         _transferAdminToAgent(_gateway);
@@ -116,11 +125,7 @@ contract UpgradeTemporaryAdmin {
     }
 
     error ZeroAddress();
-    error ZeroLidoLocator();
-    error ZeroEasyTrack();
     error SetupAlreadyCompleted();
 
-    event SetupCompleted(
-        address consolidationMigrator, address consolidationBus, address consolidationGateway, address topUpGateway
-    );
+    event SetupCompleted();
 }

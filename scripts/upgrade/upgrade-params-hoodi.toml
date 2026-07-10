@@ -21,23 +21,16 @@ CSMSetVettedGateTree = "0xa890fc73e1b771Ee6073e2402E631c312FF92Cd9"
 [oracleReportSanityChecker]
 exitedEthAmountPerDayLimit = 57600                     # Exited ETH amount per day limit
 appearedEthAmountPerDayLimit = 57600                   # Appeared ETH amount per day limit
-annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
-simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
 maxBalanceExitRequestedPerReportInEth = 19200          # Maximum exit ETH per report (600*32)
 maxEffectiveBalanceWeightWCType01 = 32                 # maxEB equivalent weight for WC type 1
 maxEffectiveBalanceWeightWCType02 = 2048               # maxEB equivalent weight for WC type 2
-maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
-maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
-requestTimestampMargin = 128                           # Request timestamp margin
-maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
 maxCLBalanceDecreaseBP = 360                           # Max CL balance decrease over sliding window (BP, 360 = 3.6%)
-clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
 consolidationEthAmountPerDayLimit = 93375              # Consolidation ETH amount per day limit
 exitedValidatorEthAmountLimit = 32                     # Exited validator ETH amount limit in ETH units
 externalPendingBalanceCapEth = 300                     # Extra external pending balance cap for bounded side deposits / top-ups
 
 [lido]
-lidoDepositsReserveTarget = "1000000000000000000000" # 1000 eth
+depositsReserveTarget = "1500000000000000000000" # 1500 eth
 
 [withdrawalVault]
 # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#specification
@@ -75,23 +68,20 @@ gIFirstValidatorPrev = "0x000000000000000000000000000000000000000000000000009600
 gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for first validator (after fork)
 pivotSlot = 0                         # Pivot slot for fork-aware gIndex selection
 
-pauser = "0x83BCE68B4e8b7071b2a664a26e6D3Bc17eEe3102" # DG reseal committee
-
 [consolidationBus]
-initialBatchSize = 350                # Max number of requests in a batch
+initialBatchSize = 200                # Max number of requests in a batch
 initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 86400         # Delay before pending batch execution
 
 [consolidationMigrator]
 sourceModuleId = 1                    # Source staking module ID
 targetModuleId = 5                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
-
-committee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" #m-sig
+consolidationCommittee = "0x84DffcfB232594975C608DE92544Ff239a24c9E9" # Curated Module Committee (CMC) multisig address
 
 # Top-up gateway configuration for validator top-ups via Merkle proofs
 [topUpGateway]
-maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process _minBlockDistance 1 Minimum block distance between topUp calls
-minBlockDistance = 1
+maxValidatorsPerTopUp = 32 # Maximum number of validators a single topUp can process
+minBlockDistance = 75 # Minimum block distance between topUp calls
 maxRootAge = 600 # Maximum age (seconds) of the beacon root used to prove validator state
 targetBalanceGwei = 2046750000000 # (2046.75 ETH) Validator target balance ceiling after top-up (leaves 1.25 ETH safety margin below MaxEB)
 minTopUpGwei = 2000000000 # (2 ETH) Minimum top-up amount; smaller calculated top-ups are skipped
@@ -106,6 +96,7 @@ depositor = "0x9b186cE78Ddd6fF098b4a533Dd17a139e1FFeD76" # depositor bot
 [stakingRouter]
 maxEBType1 = "32000000000000000000"   # Max EB value for WC type 1
 maxEBType2 = "2048000000000000000000" # Max EB value for WC type 2
+maxTopUpPerBlockGwei = 3200000000000  # 3200 ETH (LIP-35): global per-block top-up cap
 
 [csmUpgrade]
 csmProxy = "0x79CEf36D84743222f37765204Bec41E92a93E59d"
@@ -132,7 +123,7 @@ oldPermissionlessGate = "0x5553077102322689876A6AdFd48D75014c28acfb"
 oldVerifier = "0x1773b2Ff99A030F6000554Cb8A5Ec93145650cbA"
 newVerifier = "0xC96406b0eADdAC5708aFCa04DcCA67BAdC9642Fd"
 newPermissionlessGate = "0xd7bD8D2A9888D1414c770B35ACF55890B15de26a"
-ejector = "0xCAe028378d69D54dc8bF809e6C44CF751F997b80"
+newEjector = "0xCAe028378d69D54dc8bF809e6C44CF751F997b80"
 csmCommittee = "0x4AF43Ee34a6fcD1fEcA1e1F832124C763561dA53"
 
 [curatedModule]
@@ -153,8 +144,8 @@ stakeShareLimit = 10000
 priorityExitShareThreshold = 10000
 stakingModuleFee = 400
 treasuryFee = 600
-maxDepositsPerBlock = 150
-minDepositBlockDistance = 25
+maxDepositsPerBlock = 100
+minDepositBlockDistance = 75
 feeOracleConsensusVersion = 4
 hashConsensusInitialEpoch = 93833
 
@@ -162,11 +153,4 @@ hashConsensusInitialEpoch = 93833
 # Expiry timestamp after which the upgrade transaction will revert
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
-# TODO set actual
-expiryTimestamp = 1780272000            # June 1, 2026 at 00:00:00 UTC
-timeConstraintsContract = "0xB26Fd3b50280AbC55c572EE73071778A51088408"
-enabledDaySpanStart = 0 # 00:00:000 UTC
-enabledDaySpanEnd = 86399 # 23:59:59 UTC
-# Vault hub configuration
-[vaultHub]
-maxRelativeShareLimitBP = 1000  # 10%, absolute max shareLimit of a vault relative to Lido TVL (in basis points)
+expiryTimestamp = 1785542399            # July 31, 2026 at 23:59:59 UTC

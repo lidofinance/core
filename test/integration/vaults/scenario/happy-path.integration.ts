@@ -26,9 +26,8 @@ import {
   getReportTimeElapsed,
   OracleReportParams,
   ProtocolContext,
-  report,
   reportVaultDataWithProof,
-  reportWithEffectiveClDiff,
+  reportWithoutClActivation,
   setupLidoForVaults,
 } from "lib/protocol";
 
@@ -323,8 +322,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
     const vaultValue = await addRewards(elapsedVaultReward);
 
-    await reportWithEffectiveClDiff(ctx, elapsedProtocolReward, {
-      excludeVaultsBalances: true,
+    await reportWithoutClActivation(ctx, {
+      effectiveClDiff: elapsedProtocolReward,
+      reportElVault: false,
     });
 
     expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.be.equal(stakingVaultMaxMintingShares);
@@ -380,13 +380,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultValue = await addRewards(elapsedVaultReward / 2n); // Half the vault rewards value after validator exit
 
     const params = {
-      excludeVaultsBalances: true,
+      reportElVault: false,
     } as OracleReportParams;
 
     // This test is about burn -> zero liability shares on the next vault report, not
     // about a protocol CL reward. Keep the follow-up report neutral so we don't add
     // an unrelated pending-backed APR setup to a burn-flow assertion.
-    await report(ctx, params);
+    await reportWithoutClActivation(ctx, params);
 
     await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });
 

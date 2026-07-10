@@ -5,7 +5,14 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { LidoLocator, StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, randomString, randomWCType1, WithdrawalCredentialsType } from "lib";
+import {
+  certainAddress,
+  ether,
+  MAX_TOP_UP_PER_BLOCK_GWEI,
+  randomString,
+  randomWCType1,
+  WithdrawalCredentialsType,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -51,7 +58,7 @@ describe("StakingRouter.sol:exit", () => {
     ({ stakingRouter } = await deployStakingRouter({ deployer, admin }, { lidoLocator: locator }));
 
     // Initialize StakingRouter
-    await stakingRouter.initialize(stakingRouterAdmin.address, withdrawalCredentials);
+    await stakingRouter.initialize(stakingRouterAdmin.address, withdrawalCredentials, MAX_TOP_UP_PER_BLOCK_GWEI);
 
     // Deploy mock staking module
     stakingModule = await ethers.deployContract("StakingModule__MockForTriggerableWithdrawals", deployer);

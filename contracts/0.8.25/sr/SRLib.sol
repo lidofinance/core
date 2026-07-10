@@ -51,10 +51,9 @@ library SRLib {
     /// @notice One-time migration from old storage layout to new RouterState struct.
     /// @dev Storage slot positions are computed inline for migration-only use.
     ///      After migration, this function can be removed.
-    function _migrateStorage(uint256 maxEBType1) public {
-        // skip migration if data already exists
+    function _migrateStorage(uint256 maxEBType1, uint256 expectedVersion) public {
         if (SRStorage.getModulesCount() > 0) {
-            return;
+            revert ISRBase.AlreadyMigrated();
         }
 
         // Old storage slot positions (computed inline for migration-only use)
@@ -65,6 +64,11 @@ library SRLib {
         bytes32 CONTRACT_VERSION_POS = keccak256("lido.Versioned.contractVersion");
         bytes32 STAKING_MODULES_MAPPING_POS = keccak256("lido.StakingRouter.stakingModules");
         bytes32 STAKING_MODULE_INDICES_POS = keccak256("lido.StakingRouter.stakingModuleIndicesOneBased");
+
+        uint256 actualVersion = CONTRACT_VERSION_POS.getUint256Slot().value;
+        if (actualVersion != expectedVersion) {
+            revert ISRBase.UnexpectedContractVersion(expectedVersion, actualVersion);
+        }
 
         // cleanup old storage slots
         delete LIDO_POS.getBytes32Slot().value;
@@ -144,12 +148,8 @@ library SRLib {
             delete oldStakingModuleIndices[_moduleId];
         }
 
-        // cleanup old mapping storage slots
-        delete STAKING_MODULES_MAPPING_POS.getBytes32Slot().value;
-        delete STAKING_MODULE_INDICES_POS.getBytes32Slot().value;
-
-        /// @dev use the same value for both CL balance and active balance at migration moment,
-        /// next Oracle report will update the both values
+        /// @dev set the total validators balance at the migration moment;
+        /// next Oracle report will update the value
         SRStorage.getRouterState().accounting =
             RouterStateAccounting({validatorsBalanceGwei: totalValidatorsBalanceGwei});
     }
@@ -180,7 +180,6 @@ library SRLib {
     /// @param _moduleAddress Address of staking module.
     /// @param _moduleName Name of staking module.
     /// @param _moduleConfig Staking module config
-    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
     function _addModule(address _moduleAddress, string calldata _moduleName, StakingModuleConfig calldata _moduleConfig)
         public
         returns (uint256 newModuleId)
@@ -190,7 +189,8 @@ library SRLib {
         if (bytes(_moduleName).length == 0 || bytes(_moduleName).length > SRUtils.MAX_STAKING_MODULE_NAME_LENGTH) {
             revert ISRBase.StakingModuleWrongName();
         }
-        if (SRStorage.getModulesCount() >= SRUtils.MAX_STAKING_MODULES_COUNT) {
+        uint256 modulesCount = SRStorage.getModulesCount();
+        if (modulesCount >= SRUtils.MAX_STAKING_MODULES_COUNT) {
             revert ISRBase.StakingModulesLimitExceeded();
         }
 
@@ -198,7 +198,6 @@ library SRLib {
 
         // Check for duplicate module address
         /// @dev due to small number of modules, we can afford to do this check on add
-        uint256 modulesCount = SRStorage.getModulesCount();
         for (uint256 i; i < modulesCount; ++i) {
             uint256 moduleId = SRStorage.getModuleIdAt(i);
             if (_moduleAddress == moduleId.getModuleState().config.moduleAddress) {
@@ -261,7 +260,9 @@ library SRLib {
         if (_minDepositBlockDistance == 0 || _minDepositBlockDistance > type(uint64).max) {
             revert ISRBase.InvalidMinDepositBlockDistance();
         }
-        if (_maxDepositsPerBlock > type(uint64).max) revert ISRBase.InvalidMaxDepositPerBlockValue();
+        if (_maxDepositsPerBlock == 0 || _maxDepositsPerBlock > type(uint64).max) {
+            revert ISRBase.InvalidMaxDepositPerBlockValue();
+        }
 
         // 1 SLOAD
         ModuleStateConfig memory stateConfig = _moduleId.getModuleState().config;
@@ -359,13 +360,13 @@ library SRLib {
 
     /// @dev module state helpers
 
-    function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public returns (bool isChanged) {
+    function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public {
         ModuleStateConfig storage stateConfig = _moduleId.getModuleState().config;
-        isChanged = stateConfig.status != _status;
-        if (isChanged) {
-            stateConfig.status = _status;
-            emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
+        if (stateConfig.status == _status) {
+            revert ISRBase.StakingModuleStatusTheSame();
         }
+        stateConfig.status = _status;
+        emit ISRBase.StakingModuleStatusSet(_moduleId, _status, msg.sender);
     }
 
     /// @dev Optimizes contract deployment size by wrapping the 'stakingModule.getStakingModuleSummary' function.
@@ -501,7 +502,8 @@ library SRLib {
         ModuleState storage moduleState;
         ModuleStateConfig memory stateConfig;
 
-        uint256 totalValidators;
+        // new total validators count after allocation
+        uint256 totalValidators = depositsToAllocate;
         uint256 maxEBType1 = _cfg.maxEBType1;
         for (uint256 i = 0; i < modulesCount; ++i) {
             uint256 moduleId = SRStorage.getModuleIdAt(i);
@@ -529,8 +531,6 @@ library SRLib {
             _allocations[i] = validatorsCount;
             totalValidators += validatorsCount;
         }
-        // new total validators count after allocation
-        totalValidators += depositsToAllocate;
         _capacities = new uint256[](modulesCount);
 
         // put calldata msxEBType2 to stack
@@ -542,7 +542,7 @@ library SRLib {
             if (cache[i].status == StakingModuleStatus.Active) {
                 if (_isTopUp && WithdrawalCredentials.isType2(cache[i].wcType)) {
                     // max eth capacity of active validators = n * maxEB,
-                    // so capacity in validators equivalent = n * maxEBType2 / msxEBType1
+                    // so capacity in validators equivalent = n * maxEBType2 / maxEBType1
                     validatorsCapacity = cache[i].activeCount * maxEBType2 / maxEBType1;
                 } else {
                     validatorsCapacity = _allocations[i] + cache[i].depositableCount;
@@ -728,7 +728,7 @@ library SRLib {
     /// 3. At the end of the second data submission phase, it's expected for the aggregate exited validators count
     ///    across all module's node operators (stored in the module) to match the total count for this module
     ///    (stored in the staking router). However, it might happen that the second phase of data submission doesn't
-    ///    finish until the new oracle reporting frame is started, in which case staking router will emit ISRBase.a warning
+    ///    finish until the new oracle reporting frame is started, in which case staking router will emit a warning
     ///    event `StakingModuleExitedValidatorsIncompleteReporting` when the first data submission phase is performed
     ///    for a new reporting frame. This condition will result in the staking module having an incomplete data about
     ///    the exited validator counts during the whole reporting frame. Handling this condition is

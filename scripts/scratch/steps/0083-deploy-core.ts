@@ -9,6 +9,7 @@ import {
   TriggerableWithdrawalsGateway,
 } from "typechain-types";
 
+import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib";
 import { encodeFunctionCall, getContractPath, InitializeArgs, loadContract } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
@@ -174,6 +175,7 @@ export async function main() {
 
   const stakingRouterParams = state[Sk.stakingRouter].deployParameters;
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
+  const maxTopUpPerBlockGwei = stakingRouterParams.maxTopUpPerBlockGwei || MAX_TOP_UP_PER_BLOCK_GWEI;
 
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
@@ -192,6 +194,7 @@ export async function main() {
     await encodeFunctionCall<InitializeArgs<StakingRouter>>("StakingRouter", "initialize", [
       admin,
       withdrawalCredentials,
+      maxTopUpPerBlockGwei,
     ]),
   );
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
@@ -204,7 +207,6 @@ export async function main() {
   if (depositSecurityModuleAddress === null) {
     depositSecurityModuleAddress = (
       await deployWithoutProxy(Sk.depositSecurityModule, "DepositSecurityModule", deployer, [
-        lidoAddress,
         depositContract,
         stakingRouter_.address,
         depositSecurityModuleParams.pauseIntentValidityPeriodBlocks,

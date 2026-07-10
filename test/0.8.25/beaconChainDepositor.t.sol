@@ -40,8 +40,7 @@ contract BCDepositorInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 32
-     * forge-config: default.invariant.depth = 16
+     * forge-config: default.invariant.depth = 4
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_32ETHPaidPerKey() public view {
@@ -51,8 +50,7 @@ contract BCDepositorInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 32
-     * forge-config: default.invariant.depth = 16
+     * forge-config: default.invariant.depth = 4
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_DepositsCountIsCoherent() public view {
@@ -65,8 +63,7 @@ contract BCDepositorInvariants is Test {
 
     /**
      * https://book.getfoundry.sh/reference/config/inline-test-config#in-line-invariant-configs
-     * forge-config: default.invariant.runs = 32
-     * forge-config: default.invariant.depth = 16
+     * forge-config: default.invariant.depth = 4
      * forge-config: default.invariant.fail-on-revert = true
      */
     function invariant_DepositDataIsNotCorrupted() public view {

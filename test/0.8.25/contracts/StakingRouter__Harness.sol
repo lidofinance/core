@@ -86,6 +86,10 @@ contract StakingRouter__Harness is StakingRouter {
         return SRStorage.getRouterState().lastModuleId;
     }
 
+    function testing_addModuleId(uint256 moduleId) public {
+        SRStorage.addModuleId(moduleId);
+    }
+
     function testing_setVersion(uint256 version) public {
         _getInitializableStorage_Mock()._initialized = uint64(version);
     }
