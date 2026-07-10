@@ -175,7 +175,7 @@ describe("TokenRateNotifier.sol", () => {
 
       await expect(notifier.connect(owner).addObserver(mock, KIND_NO_ARGS))
         .to.emit(notifier, "ObserverAdded")
-        .withArgs(addr);
+        .withArgs(addr, KIND_NO_ARGS);
 
       expect(await notifier.observersLength()).to.equal(1n);
       const entry = await notifier.observers(0);
@@ -189,7 +189,7 @@ describe("TokenRateNotifier.sol", () => {
 
       await expect(notifier.connect(owner).addObserver(mock, KIND_WITH_ARGS))
         .to.emit(notifier, "ObserverAdded")
-        .withArgs(addr);
+        .withArgs(addr, KIND_WITH_ARGS);
 
       expect(await notifier.observersLength()).to.equal(1n);
       const entry = await notifier.observers(0);
@@ -267,7 +267,9 @@ describe("TokenRateNotifier.sol", () => {
       const addr = await mock.getAddress();
       await notifier.connect(owner).addObserver(mock, KIND_NO_ARGS);
 
-      await expect(notifier.connect(owner).removeObserver(mock)).to.emit(notifier, "ObserverRemoved").withArgs(addr);
+      await expect(notifier.connect(owner).removeObserver(mock))
+        .to.emit(notifier, "ObserverRemoved")
+        .withArgs(addr, KIND_NO_ARGS);
 
       expect(await notifier.observersLength()).to.equal(0n);
     });
@@ -277,7 +279,9 @@ describe("TokenRateNotifier.sol", () => {
       const addr = await mock.getAddress();
       await notifier.connect(owner).addObserver(mock, KIND_WITH_ARGS);
 
-      await expect(notifier.connect(owner).removeObserver(mock)).to.emit(notifier, "ObserverRemoved").withArgs(addr);
+      await expect(notifier.connect(owner).removeObserver(mock))
+        .to.emit(notifier, "ObserverRemoved")
+        .withArgs(addr, KIND_WITH_ARGS);
 
       expect(await notifier.observersLength()).to.equal(0n);
     });
@@ -294,7 +298,7 @@ describe("TokenRateNotifier.sol", () => {
 
       await expect(notifier.connect(owner).removeObserver(b))
         .to.emit(notifier, "ObserverRemoved")
-        .withArgs(await b.getAddress());
+        .withArgs(await b.getAddress(), KIND_WITH_ARGS);
 
       expect(await notifier.observersLength()).to.equal(2n);
 

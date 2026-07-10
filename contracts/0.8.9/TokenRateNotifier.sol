@@ -89,7 +89,7 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
         }
 
         observers.push(Observer({addr: observer_, kind: kind_}));
-        emit ObserverAdded(observer_);
+        emit ObserverAdded(observer_, kind_);
     }
 
     /// @notice Remove an observer by address. An address is registered at most once
@@ -100,12 +100,13 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
         if (indexToRemove == INDEX_NOT_FOUND) {
             revert ErrorNoObserverToRemove();
         }
+        ObserverKind kind_ = observers[indexToRemove].kind;
         uint256 lastIndex = observers.length - 1;
         if (indexToRemove != lastIndex) {
             observers[indexToRemove] = observers[lastIndex];
         }
         observers.pop();
-        emit ObserverRemoved(observer_);
+        emit ObserverRemoved(observer_, kind_);
     }
 
     /// @inheritdoc IPostTokenRebaseReceiver
@@ -186,8 +187,8 @@ contract TokenRateNotifier is Ownable, IPostTokenRebaseReceiver {
     }
 
     event PushTokenRateFailed(address indexed observer, bytes lowLevelRevertData);
-    event ObserverAdded(address indexed observer);
-    event ObserverRemoved(address indexed observer);
+    event ObserverAdded(address indexed observer, ObserverKind indexed kind);
+    event ObserverRemoved(address indexed observer, ObserverKind indexed kind);
 
     error ErrorTokenRateNotifierRevertedWithNoData();
     error ErrorZeroAddressObserver();
