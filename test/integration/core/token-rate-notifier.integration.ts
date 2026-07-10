@@ -7,7 +7,14 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { TokenRateNotifier, TokenRatePusher__Mock, TokenRatePusherWithArgs__Mock } from "typechain-types";
 
 import { ether } from "lib";
-import { getProtocolContext, ProtocolContext, report, resetCLBalanceDecreaseWindow } from "lib/protocol";
+import {
+  ensureFirstPostMigrationReport,
+  getProtocolContext,
+  normalizeWithdrawalVaultBaseline,
+  ProtocolContext,
+  reportWithoutClActivation,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
@@ -22,6 +29,7 @@ const KIND_WITH_ARGS = 1n;
 
 describe("Integration: TokenRateNotifier rebase dispatch", () => {
   let ctx: ProtocolContext;
+  let suiteSnapshot: string;
   let testSnapshot: string;
 
   let notifier: TokenRateNotifier;
@@ -36,11 +44,26 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     notifier = await ethers.getContractAt("TokenRateNotifier", notifierAddress);
     agent = await ctx.getSigner("agent");
 
+    // Snapshot the post-migration baseline BEFORE the warm-up so `after` can roll back everything
+    // this suite does to the fork (the +37d time jump in resetCLBalanceDecreaseWindow, warm-up
+    // reports, etc.) instead of leaving it advanced on a persistent node.
+    suiteSnapshot = await Snapshot.take();
+
+    // On mainnet forks the ORSC carries a non-zero withdrawal-vault baseline, which makes the
+    // vault-excluding reports below trip the WVB guard. Normalize it to 0 first (both helpers are
+    // no-ops where already satisfied, e.g. scratch/hoodi; the first post-migration report must
+    // precede the normalize call).
+    await ensureFirstPostMigrationReport(ctx);
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
+
     // Land on a steady reporting baseline. On forks the last on-chain report can be stale, so a
     // naive clDiff=0 report trips IncorrectCLBalanceDecrease; this advances past the 36-day window
     // and submits a neutral report to reset it. Harmless on scratch.
     await resetCLBalanceDecreaseWindow(ctx);
   });
+
+  // Roll back all fork mutations made by this suite (warm-up + time jump) once it finishes.
+  after(async () => await Snapshot.restore(suiteSnapshot));
 
   // Per-test isolation: each scenario registers observers / pushes reports, so restore to the
   // warmed-up baseline after every test.
@@ -48,12 +71,17 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
   beforeEach(async () => (testSnapshot = await Snapshot.take()));
   afterEach(async () => await Snapshot.restore(testSnapshot));
 
-  // Trigger a positive rebase and return both the receipt and the Lido `TokenRebased` event, whose
-  // 7 fields mirror the `ITokenRatePusherWithArgs.pushTokenRate(...)` payload 1:1.
-  async function positiveReport() {
-    // Small positive CL diff: stays well under the sanity-checker's per-report increase limit while
-    // still producing a positive rebase (and non-zero `sharesMintedAsFees`).
-    const { reportTx } = await report(ctx, { clDiff: ether("0.01"), excludeVaultsBalances: true });
+  // Trigger an oracle report (a rebase) and return both the receipt and the Lido `TokenRebased`
+  // event, whose 7 fields mirror the `ITokenRatePusherWithArgs.pushTokenRate(...)` payload 1:1.
+  async function triggerReport() {
+    // Small effective CL reward on top of the deposited amount. `reportWithoutClActivation` reports
+    // staged deposits as pending (not activated) balance, so mainnet's large pending queue doesn't
+    // trip the `IncorrectTotalActivatedBalance` sanity check. The rebase may end up slightly negative
+    // on a live fork; that's fine — the tests assert exact payload pass-through, not the sign.
+    const { reportTx } = await reportWithoutClActivation(ctx, {
+      effectiveClDiff: ether("0.01"),
+      excludeVaultsBalances: true,
+    });
     const receipt = (await reportTx!.wait())! as ContractTransactionReceipt;
     const tokenRebased = ctx.getEvents(receipt, "TokenRebased")[0];
     return { receipt, tokenRebased };
@@ -72,12 +100,12 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     const mock = (await ethers.deployContract("TokenRatePusherWithArgs__Mock")) as TokenRatePusherWithArgs__Mock;
     await notifier.connect(agent).addObserver(mock, KIND_WITH_ARGS);
 
-    const { tokenRebased } = await positiveReport();
+    const { tokenRebased } = await triggerReport();
 
     expect(await mock.pushCount()).to.equal(1n);
-    // sanity: it was indeed a positive rebase
-    expect(tokenRebased.args.postTotalEther).to.be.greaterThan(tokenRebased.args.preTotalEther);
 
+    // The full forwarding check: every field the observer received must equal the `TokenRebased`
+    // event of the same report (rebase sign is irrelevant — we assert exact pass-through).
     const received = await mock.lastReceived();
     expect(received.reportTimestamp).to.equal(tokenRebased.args.reportTimestamp);
     expect(received.timeElapsed).to.equal(tokenRebased.args.timeElapsed);
@@ -92,10 +120,10 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     const mock = (await ethers.deployContract("TokenRatePusher__Mock")) as TokenRatePusher__Mock;
     await notifier.connect(agent).addObserver(mock, KIND_NO_ARGS);
 
-    await positiveReport();
+    await triggerReport();
     expect(await mock.pushCount()).to.equal(1n);
 
-    await positiveReport();
+    await triggerReport();
     expect(await mock.pushCount()).to.equal(2n);
   });
 
@@ -107,7 +135,7 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     await notifier.connect(agent).addObserver(bad, KIND_WITH_ARGS);
     await notifier.connect(agent).addObserver(good, KIND_NO_ARGS);
 
-    const { receipt } = await positiveReport();
+    const { receipt } = await triggerReport();
 
     // The oracle report itself must succeed despite the faulty observer.
     expect(receipt.status).to.equal(1);
@@ -130,12 +158,12 @@ describe("Integration: TokenRateNotifier rebase dispatch", () => {
     const mock = (await ethers.deployContract("TokenRatePusher__Mock")) as TokenRatePusher__Mock;
     await notifier.connect(agent).addObserver(mock, KIND_NO_ARGS);
 
-    await positiveReport();
+    await triggerReport();
     expect(await mock.pushCount()).to.equal(1n);
 
     await notifier.connect(agent).removeObserver(mock);
 
-    await positiveReport();
+    await triggerReport();
     expect(await mock.pushCount()).to.equal(1n); // unchanged after removal
   });
 });
