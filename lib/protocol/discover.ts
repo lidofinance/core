@@ -130,6 +130,7 @@ const getCoreContracts = async (
           ),
           consolidationBus: loadContract("ConsolidationBus", config.get("consolidationBus")),
           consolidationMigrator: loadContract("ConsolidationMigrator", config.get("consolidationMigrator")),
+          topUpGateway: loadContract("TopUpGateway", config.get("topUpGateway") || (await locator.topUpGateway())),
           accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
         }),
   })) as CoreContracts;

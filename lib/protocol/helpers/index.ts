@@ -49,11 +49,24 @@ export type { ConsolidationPubkeyGroup } from "./consolidation";
 export {
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
+  cmv2NormalizeTopUpAllocationBaseline,
+  cmv2RefreshDepositInfo,
   getCMv2ModuleId,
   getCMv2SigningKeys,
 } from "./cmv2";
 export type { CMv2OperatorKeys } from "./cmv2";
 export { ensurePredepositGuaranteeUnpaused } from "./pdg";
+export {
+  buildTopUpData,
+  depositEventAmountWei,
+  depositEventInterface,
+  expectedTopUpLimitWei,
+  getTopUpRoleSigner,
+  prepareTopUpWitnesses,
+  topUpEnsureDepositableEther,
+  topUpEnsureModuleAllocation,
+} from "./topup";
+export type { TopUpValidatorState, TopUpWitnessBundle } from "./topup";
 export { calcNodeOperatorRewards } from "./staking-module";
 
 export * from "./vaults";
