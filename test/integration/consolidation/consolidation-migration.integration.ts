@@ -5,19 +5,24 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
 
-import { addressToWC, certainAddress, findEventsWithInterfaces, log } from "lib";
-import { LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg";
+import { certainAddress, findEventsWithInterfaces } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
+  assertConsolidationTopology,
   calcConsolidationBatchHash,
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
   CMv2OperatorKeys,
+  cmv2SuiteEnabled,
+  ConsolidationWitnessSet,
+  decodeConsolidationRequest,
+  ensureBatchNotPending,
   norEnsureDepositedOperatorKeys,
   NorOperatorKeys,
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
+  prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
 } from "lib/protocol/helpers";
 import { LoadedContract } from "lib/protocol/types";
@@ -74,44 +79,24 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
   let TARGET_PUBKEY_1: string;
   let TARGET_PUBKEY_2: string;
 
-  let merkleTree: LocalMerkleTree;
+  let witnessSet: ConsolidationWitnessSet;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let targetWitness1: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let targetWitness2: any;
 
+  let agentSigner: HardhatEthersSigner;
+
   let globalSnapshot: string;
   let testSnapshot: string;
-
-  const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
-
-  const makeValidatorContainer = (pubkey: string, withdrawalCredentials: string) => ({
-    pubkey,
-    withdrawalCredentials,
-    effectiveBalance: 32_000_000_000n,
-    slashed: false,
-    activationEligibilityEpoch: 0,
-    activationEpoch: 0,
-    exitEpoch: FAR_FUTURE_EPOCH,
-    withdrawableEpoch: FAR_FUTURE_EPOCH,
-  });
 
   before(async function () {
     ctx = await getProtocolContext();
 
     globalSnapshot = await Snapshot.take();
 
-    // Explicit runner contract: CMv2 is required unless deliberately opted out
-    if (!ctx.flags.withCMv2) {
-      log.warning("Skipping consolidation migration suite: INTEGRATION_WITH_CMv2=off");
-      this.skip();
-    }
-    if (!ctx.modules.cmv2) {
-      throw new Error(
-        "CMv2 (curated-onchain-v2) module is not registered in StakingRouter. " +
-          "The consolidation suites require the real NOR -> CMv2 topology; " +
-          "set INTEGRATION_WITH_CMv2=off to skip them explicitly.",
-      );
+    if (!cmv2SuiteEnabled(ctx, "the consolidation migration suite")) {
+      return this.skip();
     }
 
     [, executor, submitter, stranger] = await ethers.getSigners();
@@ -122,23 +107,9 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
     consolidationBus = ctx.contracts.consolidationBus;
     consolidationMigrator = ctx.contracts.consolidationMigrator;
 
-    // =========================================
-    // Pin the migration topology: NOR (source) -> CMv2 (target)
-    // =========================================
+    ({ sourceModuleId, targetModuleId } = await assertConsolidationTopology(ctx));
 
-    sourceModuleId = await consolidationMigrator.sourceModuleId();
-    targetModuleId = await consolidationMigrator.targetModuleId();
-
-    expect(sourceModuleId).to.equal(ctx.modules.nor.id, "migrator source module must be NOR");
-    expect(targetModuleId).to.equal(ctx.modules.cmv2.id, "migrator target module must be CMv2");
-
-    const routerTargetModule = await ctx.contracts.stakingRouter.getStakingModule(targetModuleId);
-    expect(routerTargetModule.stakingModuleAddress).to.equal(
-      ctx.modules.cmv2.stakingModuleAddress,
-      "router target module address must match CMv2",
-    );
-
-    const agentSigner = await ctx.getSigner("agent");
+    agentSigner = await ctx.getSigner("agent");
 
     // =========================================
     // Source: NOR operator with deposited keys
@@ -161,32 +132,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
     [TARGET_PUBKEY_1, TARGET_PUBKEY_2] = target.pubkeys;
 
     // =========================================
-    // Setup CL proof merkle tree for target witnesses
+    // CL proof witnesses for the target keys (tree parameters come from the deployed
+    // ConsolidationGateway verifier)
     // =========================================
-    merkleTree = await prepareLocalMerkleTree();
-
-    const withdrawalVaultAddress = await ctx.contracts.withdrawalVault.getAddress();
-    const withdrawalCredentials = addressToWC(withdrawalVaultAddress, 2);
-
-    const { validatorIndex: vi1 } = await merkleTree.addValidator(
-      makeValidatorContainer(TARGET_PUBKEY_1, withdrawalCredentials),
-    );
-    const { validatorIndex: vi2 } = await merkleTree.addValidator(
-      makeValidatorContainer(TARGET_PUBKEY_2, withdrawalCredentials),
-    );
-    const { childBlockTimestamp, beaconBlockHeader } = await merkleTree.commitChangesToBeaconRoot();
-
-    const buildWitness = async (pubkey: string, validatorIndex: number) => ({
-      proof: await merkleTree.buildProof(validatorIndex, beaconBlockHeader),
-      pubkey,
-      validatorIndex,
-      childBlockTimestamp,
-      slot: beaconBlockHeader.slot,
-      proposerIndex: beaconBlockHeader.proposerIndex,
-    });
-
-    targetWitness1 = await buildWitness(TARGET_PUBKEY_1, vi1);
-    targetWitness2 = await buildWitness(TARGET_PUBKEY_2, vi2);
+    witnessSet = await prepareConsolidationTargetWitnesses(ctx, [TARGET_PUBKEY_1, TARGET_PUBKEY_2]);
+    [targetWitness1, targetWitness2] = witnessSet.witnesses;
 
     // =========================================
     // Setup roles
@@ -216,9 +166,26 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
 
   afterEach(async () => await Snapshot.restore(testSnapshot));
 
-  /** Submit a batch of source/target key-index groups through the migrator. */
-  const submitBatch = (groups: { sourceKeyIndices: bigint[]; targetKeyIndex: bigint }[]) =>
-    consolidationMigrator.connect(submitter).submitConsolidationBatch(sourceOperatorId, targetOperatorId, groups);
+  /** Map key-index groups back to the pubkey groups the bus hashes. */
+  const pubkeysForGroups = (groups: { sourceKeyIndices: bigint[]; targetKeyIndex: bigint }[]) =>
+    groups.map((g) => ({
+      sourcePubkeys: g.sourceKeyIndices.map((ki) => source.pubkeys[source.keyIndices.indexOf(ki)]),
+      targetPubkey: target.pubkeys[target.keyIndices.indexOf(g.targetKeyIndex)],
+    }));
+
+  /**
+   * Submit a batch of source/target key-index groups through the migrator.
+   * The key-reuse helpers return real on-chain pubkeys, so an identical batch may
+   * already be pending on a live fork block; remove it first.
+   */
+  const submitBatch = async (groups: { sourceKeyIndices: bigint[]; targetKeyIndex: bigint }[]) => {
+    if (groups.length > 0 && groups.every((g) => g.sourceKeyIndices.length > 0)) {
+      await ensureBatchNotPending(consolidationBus, agentSigner, calcConsolidationBatchHash(pubkeysForGroups(groups)));
+    }
+    return consolidationMigrator
+      .connect(submitter)
+      .submitConsolidationBatch(sourceOperatorId, targetOperatorId, groups);
+  };
 
   /** Map local 0-based key positions to real module key indices/pubkeys. */
   const sourceGroup = (sourcePositions: number[], targetPosition: number) => ({
@@ -251,7 +218,12 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
       const consolidationEvents = findEventsWithInterfaces(receipt!, "ConsolidationRequestAdded", [
         withdrawalVault.interface,
       ]);
-      expect(consolidationEvents?.length).to.equal(1);
+
+      // The request payload is packed (sourcePubkey, targetPubkey): verify the exact
+      // pair reached the WithdrawalVault, not just that some request was added
+      expect(consolidationEvents.map((e) => decodeConsolidationRequest(e.args.request))).to.deep.equal([
+        { sourcePubkey: SOURCE_PUBKEY_1.toLowerCase(), targetPubkey: TARGET_PUBKEY_1.toLowerCase() },
+      ]);
     });
 
     it("Should successfully complete the full consolidation flow with multiple validators", async () => {
@@ -280,8 +252,15 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
       const fee = await withdrawalVault.getConsolidationRequestFee();
       const totalFee = fee * BigInt(groups.length);
 
+      // Normalize the live rate-limit state: the exact-delta assertion below only
+      // holds when the limit is at max, so per-frame replenishment cannot interfere
+      const EXIT_LIMIT_MANAGER_ROLE = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
+      await consolidationGateway.connect(agentSigner).grantRole(EXIT_LIMIT_MANAGER_ROLE, agentSigner.address);
+      await consolidationGateway.connect(agentSigner).setConsolidationRequestLimit(100, 100, 86400);
+
       const initialLimit = (await consolidationGateway.getConsolidationRequestLimitFullInfo())
         .currentConsolidationRequestsLimit;
+      expect(initialLimit).to.equal(100n);
 
       const tx = await consolidationBus.connect(executor).executeConsolidation(
         [
@@ -301,14 +280,17 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
         .currentConsolidationRequestsLimit;
       expect(finalLimit).to.equal(initialLimit - BigInt(groups.length));
 
-      // Step 6: Verify consolidation requests reached WithdrawalVault
+      // Step 6: Verify the exact source/target pairs reached WithdrawalVault
       const receipt = await tx.wait();
       expect(receipt).not.to.be.null;
 
       const consolidationEvents = findEventsWithInterfaces(receipt!, "ConsolidationRequestAdded", [
         withdrawalVault.interface,
       ]);
-      expect(consolidationEvents?.length).to.equal(groups.length);
+      expect(consolidationEvents.map((e) => decodeConsolidationRequest(e.args.request))).to.deep.equal([
+        { sourcePubkey: SOURCE_PUBKEY_1.toLowerCase(), targetPubkey: TARGET_PUBKEY_1.toLowerCase() },
+        { sourcePubkey: SOURCE_PUBKEY_2.toLowerCase(), targetPubkey: TARGET_PUBKEY_2.toLowerCase() },
+      ]);
     });
 
     it("Should revert submitConsolidationBatch if caller is not the designated submitter", async () => {
@@ -415,10 +397,11 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
       ).to.be.revertedWithCustomError(consolidationBus, "BatchNotFound");
     });
 
-    it("Should revert executeConsolidation before the execution delay passes", async function () {
-      const executionDelay = await consolidationBus.executionDelay();
-      if (executionDelay === 0n) {
-        this.skip(); // Scratch deploys use a zero delay
+    it("Should revert executeConsolidation before the execution delay passes", async () => {
+      // Scratch deploys use a zero delay; normalize to the production value so the
+      // delay path is exercised on every setup instead of being skipped
+      if ((await consolidationBus.executionDelay()) === 0n) {
+        await consolidationBus.connect(agentSigner).setExecutionDelay(86400);
       }
 
       const { withdrawalVault } = ctx.contracts;
@@ -439,8 +422,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
 
   context("Batch management", () => {
     it("Should allow manager to remove a pending batch", async () => {
-      const agentSigner = await ctx.getSigner("agent");
-
       // Submit batch
       await submitBatch([sourceGroup([0], 0)]);
 
@@ -457,8 +438,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
 
   context("Allowlist management", () => {
     it("Should allow disallowing a pair after submission", async () => {
-      const agentSigner = await ctx.getSigner("agent");
-
       // Submit a batch
       await submitBatch([sourceGroup([0], 0)]);
 
@@ -487,8 +466,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
 
     it("Should allow one source operator to consolidate to multiple targets", async () => {
       const { withdrawalVault } = ctx.contracts;
-      const agentSigner = await ctx.getSigner("agent");
-
       // Set up a second CMv2 target operator with deposited validators
       const target2 = await cmv2EnsureDepositedOperatorKeys(ctx, 1n, {
         name: "consolidation_target_operator_2",
@@ -496,19 +473,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
       });
       const TARGET_PUBKEY_3 = target2.pubkeys[0];
 
-      // Build valid CL proof witness for TARGET_PUBKEY_3
-      const { validatorIndex: vi3 } = await merkleTree.addValidator(
-        makeValidatorContainer(TARGET_PUBKEY_3, addressToWC(await ctx.contracts.withdrawalVault.getAddress(), 2)),
-      );
-      const { childBlockTimestamp: cbt3, beaconBlockHeader: bbh3 } = await merkleTree.commitChangesToBeaconRoot();
-      const targetWitness3 = {
-        proof: await merkleTree.buildProof(vi3, bbh3),
-        pubkey: TARGET_PUBKEY_3,
-        validatorIndex: vi3,
-        childBlockTimestamp: cbt3,
-        slot: bbh3.slot,
-        proposerIndex: bbh3.proposerIndex,
-      };
+      const targetWitness3 = await witnessSet.addTargetWitness(TARGET_PUBKEY_3);
 
       // Allow second pair with the same submitter
       await consolidationMigrator
@@ -550,8 +515,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
 
   context("Key validation (NOR source, CMv2 target)", () => {
     it("Should revert submitConsolidationBatch if source key is NOT deposited", async () => {
-      const agentSigner = await ctx.getSigner("agent");
-
       // Create a new NOR source operator with keys that are NOT deposited
       const unusedSourceOperatorId = await norSdvtAddNodeOperator(ctx, nor, {
         name: "consolidation_unused_source",
@@ -587,8 +550,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
     });
 
     it("Should revert submitConsolidationBatch if target key is NOT deposited", async () => {
-      const agentSigner = await ctx.getSigner("agent");
-
       // Create a new CMv2 target operator with bonded keys that are NOT deposited
       const undepositedTarget = await cmv2CreateOperatorWithKeys(ctx, {
         name: "consolidation_undeposited_target",
@@ -624,7 +585,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
       await waitUntilBatchExecutable(consolidationBus, calcConsolidationBatchHash([pubkeyGroup([0], 0)]));
 
       // Grant PAUSE_ROLE to agent and pause the gateway
-      const agentSigner = await ctx.getSigner("agent");
       const PAUSE_ROLE = await consolidationGateway.PAUSE_ROLE();
       await consolidationGateway.connect(agentSigner).grantRole(PAUSE_ROLE, agentSigner.address);
       await consolidationGateway.connect(agentSigner).pauseFor(3600); // 1 hour
@@ -648,7 +608,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
       const { withdrawalVault } = ctx.contracts;
 
       // Grant EXIT_LIMIT_MANAGER_ROLE to agent and set a small limit
-      const agentSigner = await ctx.getSigner("agent");
       const EXIT_LIMIT_MANAGER_ROLE = await consolidationGateway.EXIT_LIMIT_MANAGER_ROLE();
       await consolidationGateway.connect(agentSigner).grantRole(EXIT_LIMIT_MANAGER_ROLE, agentSigner.address);
 
@@ -748,8 +707,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
 
     it("Should revert executeConsolidation if batch was removed", async () => {
       const { withdrawalVault } = ctx.contracts;
-      const agentSigner = await ctx.getSigner("agent");
-
       // Submit batch
       await submitBatch([sourceGroup([0], 0)]);
 
@@ -774,40 +731,19 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
       ).to.be.revertedWithCustomError(consolidationBus, "BatchNotFound");
     });
 
-    it("Should revert addConsolidationRequests if too many groups", async () => {
-      const agentSigner = await ctx.getSigner("agent");
-
-      // Set maxGroupsInBatch to 1
-      await consolidationBus.connect(agentSigner).setMaxGroupsInBatch(1);
-
-      // Try to submit batch with 2 groups (exceeds maxGroupsInBatch of 1)
-      await expect(submitBatch([sourceGroup([0], 0), sourceGroup([1], 1)]))
-        .to.be.revertedWithCustomError(consolidationBus, "TooManyGroups")
-        .withArgs(2, 1);
-    });
-
-    it("Should revert addConsolidationRequests if batch size exceeds limit", async () => {
-      const agentSigner = await ctx.getSigner("agent");
-
-      // Set batchSize to 1 (single group with 2 sources will exceed it)
-      // Must reduce maxGroupsInBatch first, since batchSize must be >= maxGroupsInBatch
-      await consolidationBus.connect(agentSigner).setMaxGroupsInBatch(1);
-      await consolidationBus.connect(agentSigner).setBatchSize(1);
-
-      // Try to submit 1 group with 2 source keys (total count 2 exceeds batchSize of 1)
-      await expect(submitBatch([sourceGroup([0, 1], 0)]))
-        .to.be.revertedWithCustomError(consolidationBus, "BatchTooLarge")
-        .withArgs(2, 1);
-    });
-
     it("Should revert addConsolidationRequests if batch already pending (duplicate submission)", async () => {
       // Submit batch first time
       await submitBatch([sourceGroup([0], 0)]);
 
       const batchHash = calcConsolidationBatchHash([pubkeyGroup([0], 0)]);
 
-      // Try to submit the same batch again
-      await expect(submitBatch([sourceGroup([0], 0)]))
+      // Re-submit the same batch directly (the submitBatch helper would clean up the
+      // pending batch first, which is exactly what this test must not do)
+      await expect(
+        consolidationMigrator
+          .connect(submitter)
+          .submitConsolidationBatch(sourceOperatorId, targetOperatorId, [sourceGroup([0], 0)]),
+      )
         .to.be.revertedWithCustomError(consolidationBus, "BatchAlreadyPending")
         .withArgs(batchHash);
     });
@@ -826,8 +762,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
     });
 
     it("Should revert submitConsolidationBatch with TooManyGroups if groups exceed maxGroupsInBatch", async () => {
-      const agentSigner = await ctx.getSigner("agent");
-
       await consolidationBus.connect(agentSigner).setMaxGroupsInBatch(1);
 
       await expect(submitBatch([sourceGroup([0], 0), sourceGroup([1], 1)]))
@@ -836,8 +770,6 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
     });
 
     it("Should revert submitConsolidationBatch with BatchTooLarge if total keys exceed batchSize", async () => {
-      const agentSigner = await ctx.getSigner("agent");
-
       // Reduce limits so a single group with 2 source keys exceeds the batch size
       await consolidationBus.connect(agentSigner).setMaxGroupsInBatch(1);
       await consolidationBus.connect(agentSigner).setBatchSize(1);

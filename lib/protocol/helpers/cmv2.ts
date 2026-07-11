@@ -34,7 +34,6 @@ const CMV2_MODULE_ABI = [
   "function getNodeOperatorSummary(uint256 nodeOperatorId) view returns (uint256 targetLimitMode, uint256 targetValidatorsCount, uint256 stuckValidatorsCount, uint256 refundedValidatorsCount, uint256 stuckPenaltyEndTimestamp, uint256 totalExitedValidators, uint256 totalDepositedValidators, uint256 depositableValidatorsCount)",
   "function addValidatorKeysETH(address from, uint256 nodeOperatorId, uint256 keysCount, bytes publicKeys, bytes signatures) payable",
   "function batchDepositInfoUpdate(uint256 maxCount) returns (uint256 operatorsLeft)",
-  "function isPaused() view returns (bool)",
 ];
 
 const CURATED_GATE_ABI = [
@@ -88,6 +87,26 @@ export interface CMv2OperatorKeys {
   keyIndices: bigint[];
   pubkeys: string[];
 }
+
+/**
+ * Runner contract shared by every CMv2-dependent suite: returns false (caller should
+ * this.skip()) only on the explicit INTEGRATION_WITH_CMv2=off opt-out; a missing CMv2
+ * module with the flag on is a loud failure, never a silent skip.
+ */
+export const cmv2SuiteEnabled = (ctx: ProtocolContext, suiteName: string): boolean => {
+  if (!ctx.flags.withCMv2) {
+    log.warning(`Skipping ${suiteName}: INTEGRATION_WITH_CMv2=off`);
+    return false;
+  }
+  if (!ctx.modules.cmv2) {
+    throw new Error(
+      "CMv2 (curated-onchain-v2) module is not registered in StakingRouter. " +
+        `${suiteName} requires the real CMv2 topology; ` +
+        "set INTEGRATION_WITH_CMv2=off to skip it explicitly.",
+    );
+  }
+  return true;
+};
 
 export const getCMv2ModuleId = (ctx: ProtocolContext): bigint => {
   const cmv2 = ctx.modules.cmv2;
@@ -414,9 +433,14 @@ export const cmv2EnsureDepositedOperatorKeys = async (
   }
 
   const created = await cmv2CreateOperatorWithKeys(ctx, {
-    name: opts.name ?? `cmv2-consolidation-target-${memberSalt}`,
+    name: opts.name ?? `cmv2-test-operator-${memberSalt}`,
     keysCount,
   });
+
+  // The module's deposit allocator routes by MetaRegistry weights, so on an arbitrary
+  // fork block the deposit could go to another operator. Normalize the baseline first:
+  // the fresh operator becomes the only one with allocation weight.
+  await cmv2NormalizeTopUpAllocationBaseline(ctx, created.operatorId);
 
   const before = await module.getNodeOperatorSummary(created.operatorId);
   await depositAndReportValidators(ctx, moduleId, keysCount);

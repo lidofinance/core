@@ -3,13 +3,13 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ether, findEventsWithInterfaces, log } from "lib";
+import { ether, findEventsWithInterfaces } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   buildTopUpData,
   cmv2EnsureDepositedOperatorKeys,
-  cmv2NormalizeTopUpAllocationBaseline,
   CMv2OperatorKeys,
+  cmv2SuiteEnabled,
   depositEventInterface,
   expectedTopUpLimitWei,
   getCMv2ModuleId,
@@ -55,16 +55,8 @@ describe("Integration: TopUpGateway full-path gas measurement (real CMv2)", () =
     ctx = await getProtocolContext();
     originalState = await Snapshot.take();
 
-    if (!ctx.flags.withCMv2) {
-      log.warning("Skipping top-up gas suite: INTEGRATION_WITH_CMv2=off");
-      this.skip();
-    }
-    if (!ctx.modules.cmv2) {
-      throw new Error(
-        "CMv2 (curated-onchain-v2) module is not registered in StakingRouter. " +
-          "The top-up suites require the real CMv2 topology; " +
-          "set INTEGRATION_WITH_CMv2=off to skip them explicitly.",
-      );
+    if (!cmv2SuiteEnabled(ctx, "the top-up gas suite")) {
+      return this.skip();
     }
 
     const { topUpGateway } = ctx.contracts;
@@ -82,12 +74,12 @@ describe("Integration: TopUpGateway full-path gas measurement (real CMv2)", () =
       await topUpGateway.connect(agentSigner).setMaxValidatorsPerTopUp(numValidators);
     }
 
-    // Normalized baseline: every key receives its full expected top-up
+    // forceCreate: fresh operator with a known key-balance baseline and (via the
+    // create path) 100% of the allocation weight, so every key gets its full top-up
     target = await cmv2EnsureDepositedOperatorKeys(ctx, BigInt(numValidators), {
       name: "topup_gas_operator",
       forceCreate: true,
     });
-    await cmv2NormalizeTopUpAllocationBaseline(ctx, target.operatorId);
 
     const totalTopUp = BigInt(numValidators) * TOP_UP_PER_KEY;
     await topUpEnsureDepositableEther(ctx, totalTopUp + ether("32"));

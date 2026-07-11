@@ -44,13 +44,21 @@ export {
   norSdvtSetOperatorStakingLimit,
 } from "./nor-sdvt";
 export type { NorOperatorKeys } from "./nor-sdvt";
-export { calcConsolidationBatchHash, waitUntilBatchExecutable } from "./consolidation";
-export type { ConsolidationPubkeyGroup } from "./consolidation";
+export {
+  assertConsolidationTopology,
+  calcConsolidationBatchHash,
+  decodeConsolidationRequest,
+  ensureBatchNotPending,
+  prepareConsolidationTargetWitnesses,
+  waitUntilBatchExecutable,
+} from "./consolidation";
+export type { ConsolidationPubkeyGroup, ConsolidationTargetWitness, ConsolidationWitnessSet } from "./consolidation";
 export {
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
   cmv2NormalizeTopUpAllocationBaseline,
   cmv2RefreshDepositInfo,
+  cmv2SuiteEnabled,
   getCMv2ModuleId,
   getCMv2SigningKeys,
 } from "./cmv2";

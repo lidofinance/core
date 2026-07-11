@@ -9,6 +9,8 @@ import { prepareLocalMerkleTree } from "lib/top-ups";
 
 import { ProtocolContext } from "../types";
 
+import { ensureSubmitFitsStakeLimit, setModuleStakeShareLimit } from "./staking";
+
 /**
  * Helpers for driving the real top-up path in integration tests:
  * TopUpGateway.topUp -> StakingRouter.topUp -> module.allocateDeposits -> DepositContract.
@@ -48,7 +50,6 @@ export interface TopUpWitnessBundle {
     slot: number;
     proposerIndex: number;
   };
-  epoch: bigint;
 }
 
 /**
@@ -74,7 +75,6 @@ export const prepareTopUpWitnesses = async (
 
   // Any slot at/after the pivot resolves to GI_FIRST_VALIDATOR_CURR in the verifier
   const slot = pivotSlot + slotsPerEpoch * 100n;
-  const epoch = slot / slotsPerEpoch;
 
   const { stateTree, firstValidatorLeafIndex } = await prepareLocalMerkleTree(gIFirstValidator);
 
@@ -127,7 +127,6 @@ export const prepareTopUpWitnesses = async (
       slot: beaconBlockHeader.slot,
       proposerIndex: beaconBlockHeader.proposerIndex,
     },
-    epoch,
   };
 };
 
@@ -189,6 +188,7 @@ export const topUpEnsureDepositableEther = async (ctx: ProtocolContext, minWei: 
   const reserve = unfinalized > buffered ? unfinalized - buffered : 0n;
   const submitValue = minWei - depositable + reserve + ether("1");
 
+  await ensureSubmitFitsStakeLimit(ctx, submitValue);
   const whale = await impersonate(certainAddress("topup:eth:whale"), submitValue + ether("10"));
   await lido.connect(whale).submit(ZeroAddress, { value: submitValue });
 
@@ -220,24 +220,7 @@ export const topUpEnsureModuleAllocation = async (ctx: ProtocolContext, moduleId
 
   if ((await allocationOf()) >= minWei) return;
 
-  const role = await stakingRouter.STAKING_MODULE_MANAGE_ROLE();
-  if ((await stakingRouter.getRoleMemberCount(role)) === 0n) {
-    throw new Error("no STAKING_MODULE_MANAGE_ROLE holder to raise the module share limit");
-  }
-  const manager = await impersonate(await stakingRouter.getRoleMember(role, 0n), ether("100"));
-
-  const moduleConfig = await stakingRouter.getStakingModule(moduleId);
-  await stakingRouter
-    .connect(manager)
-    .updateStakingModule(
-      moduleId,
-      TOTAL_BASIS_POINTS,
-      TOTAL_BASIS_POINTS,
-      moduleConfig.stakingModuleFee,
-      moduleConfig.treasuryFee,
-      moduleConfig.maxDepositsPerBlock,
-      moduleConfig.minDepositBlockDistance,
-    );
+  await setModuleStakeShareLimit(ctx, moduleId, TOTAL_BASIS_POINTS);
 
   const allocation = await allocationOf();
   if (allocation < minWei) {
