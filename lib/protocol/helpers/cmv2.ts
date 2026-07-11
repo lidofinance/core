@@ -28,12 +28,12 @@ const CMV2_MODULE_ABI = [
   "function getRoleMember(bytes32 role, uint256 index) view returns (address)",
   "function META_REGISTRY() view returns (address)",
   "function ACCOUNTING() view returns (address)",
+  "function PARAMETERS_REGISTRY() view returns (address)",
   "function getNodeOperatorsCount() view returns (uint256)",
   "function getSigningKeys(uint256 nodeOperatorId, uint256 startIndex, uint256 keysCount) view returns (bytes)",
   "function getNodeOperatorSummary(uint256 nodeOperatorId) view returns (uint256 targetLimitMode, uint256 targetValidatorsCount, uint256 stuckValidatorsCount, uint256 refundedValidatorsCount, uint256 stuckPenaltyEndTimestamp, uint256 totalExitedValidators, uint256 totalDepositedValidators, uint256 depositableValidatorsCount)",
   "function addValidatorKeysETH(address from, uint256 nodeOperatorId, uint256 keysCount, bytes publicKeys, bytes signatures) payable",
   "function batchDepositInfoUpdate(uint256 maxCount) returns (uint256 operatorsLeft)",
-  "function isPaused() view returns (bool)",
 ];
 
 const CURATED_GATE_ABI = [
@@ -61,12 +61,20 @@ const META_REGISTRY_ABI = [
   "function grantRole(bytes32 role, address account)",
   "function NO_GROUP_ID() view returns (uint256)",
   "function getNodeOperatorGroupId(uint256 nodeOperatorId) view returns (uint256)",
+  "function getNodeOperatorWeightAndExternalStake(uint256 nodeOperatorId) view returns (uint256 weight, uint256 externalStake)",
   "function createOrUpdateOperatorGroup(uint256 groupId, (string name, (uint64 nodeOperatorId, uint16 share)[] subNodeOperators, (bytes data)[] externalOperators) groupInfo)",
   "function getBondCurveWeight(uint256 curveId) view returns (uint256)",
   "function setBondCurveWeight(uint256 curveId, uint256 weight)",
 ];
 
 const CMV2_ACCOUNTING_ABI = ["function getBondAmountByKeysCount(uint256 keys, uint256 curveId) view returns (uint256)"];
+
+const PARAMETERS_REGISTRY_ABI = [
+  "function DEFAULT_ADMIN_ROLE() view returns (bytes32)",
+  "function getRoleMember(bytes32 role, uint256 index) view returns (address)",
+  "function getKeysLimit(uint256 curveId) view returns (uint256)",
+  "function setKeysLimit(uint256 curveId, uint256 limit)",
+];
 
 const OPERATOR_GROUP_FULL_SHARE = 10_000n; // MetaRegistry shares/weights are in basis points
 
@@ -79,6 +87,26 @@ export interface CMv2OperatorKeys {
   keyIndices: bigint[];
   pubkeys: string[];
 }
+
+/**
+ * Runner contract shared by every CMv2-dependent suite: returns false (caller should
+ * this.skip()) only on the explicit INTEGRATION_WITH_CMv2=off opt-out; a missing CMv2
+ * module with the flag on is a loud failure, never a silent skip.
+ */
+export const cmv2SuiteEnabled = (ctx: ProtocolContext, suiteName: string): boolean => {
+  if (!ctx.flags.withCMv2) {
+    log.warning(`Skipping ${suiteName}: INTEGRATION_WITH_CMv2=off`);
+    return false;
+  }
+  if (!ctx.modules.cmv2) {
+    throw new Error(
+      "CMv2 (curated-onchain-v2) module is not registered in StakingRouter. " +
+        `${suiteName} requires the real CMv2 topology; ` +
+        "set INTEGRATION_WITH_CMv2=off to skip it explicitly.",
+    );
+  }
+  return true;
+};
 
 export const getCMv2ModuleId = (ctx: ProtocolContext): bigint => {
   const cmv2 = ctx.modules.cmv2;
@@ -210,6 +238,21 @@ export const cmv2CreateOperatorWithKeys = async (
   }
   expect(await metaRegistry.getBondCurveWeight(curveId)).to.be.gt(0n);
 
+  // The per-operator keys limit is a bond-curve parameter; raise it when the requested
+  // key count does not fit
+  const parametersRegistry = new ethers.Contract(
+    await module.PARAMETERS_REGISTRY(),
+    PARAMETERS_REGISTRY_ABI,
+    ethers.provider,
+  );
+  if ((await parametersRegistry.getKeysLimit(curveId)) < keysCount) {
+    const parametersAdmin = await impersonate(
+      await parametersRegistry.getRoleMember(await parametersRegistry.DEFAULT_ADMIN_ROLE(), 0),
+      ether("100"),
+    );
+    await connectSigner(parametersRegistry, parametersAdmin).setKeysLimit(curveId, keysCount);
+  }
+
   // Pay the bond and add the keys
   const accounting = new ethers.Contract(await module.ACCOUNTING(), CMV2_ACCOUNTING_ABI, ethers.provider);
   const bond = await accounting.getBondAmountByKeysCount(keysCount, curveId);
@@ -246,6 +289,94 @@ export const cmv2CreateOperatorWithKeys = async (
 };
 
 /**
+ * Normalize the CMv2 top-up allocation baseline so `keepOperatorId` is the only
+ * operator with a non-zero allocation weight.
+ *
+ * On a fork the operators' MetaRegistry weights and tracked stakes are arbitrary, and
+ * the greedy allocator caps every operator at `target - current` of its weight share,
+ * so top-up amounts are not predictable. This helper clears every other operator
+ * group in the MetaRegistry (the same real path the registry admin would use), which
+ * zeroes those operators' effective weights. The kept operator then holds 100% of the
+ * weight, its allocation target covers the entire requested amount, and expected
+ * top-up amounts become exact on any fork state.
+ *
+ * Use this only as explicit test setup.
+ */
+export const cmv2NormalizeTopUpAllocationBaseline = async (ctx: ProtocolContext, keepOperatorId: bigint) => {
+  const module = getCMv2Module(ctx);
+  const metaRegistry = new ethers.Contract(await module.META_REGISTRY(), META_REGISTRY_ABI, ethers.provider);
+
+  const registryAdmin = await impersonate(
+    await metaRegistry.getRoleMember(await metaRegistry.DEFAULT_ADMIN_ROLE(), 0),
+    ether("100"),
+  );
+  const manageGroupsRole = await metaRegistry.MANAGE_OPERATOR_GROUPS_ROLE();
+  if (!(await metaRegistry.hasRole(manageGroupsRole, registryAdmin.address))) {
+    await connectSigner(metaRegistry, registryAdmin).grantRole(manageGroupsRole, registryAdmin.address);
+  }
+
+  const noGroupId = await metaRegistry.NO_GROUP_ID();
+  const keepGroupId = await metaRegistry.getNodeOperatorGroupId(keepOperatorId);
+  if (keepGroupId === noGroupId) {
+    throw new Error(`Operator ${keepOperatorId} has no MetaRegistry group; create it via cmv2CreateOperatorWithKeys`);
+  }
+
+  // Collect the groups of all other operators and clear them (a cleared group zeroes
+  // the effective weight of its operators)
+  const operatorsCount = await module.getNodeOperatorsCount();
+  const groupsToClear = new Set<bigint>();
+  for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {
+    if (operatorId === keepOperatorId) continue;
+    const groupId = await metaRegistry.getNodeOperatorGroupId(operatorId);
+    if (groupId !== noGroupId && groupId !== keepGroupId) {
+      groupsToClear.add(groupId);
+    }
+  }
+
+  for (const groupId of groupsToClear) {
+    await connectSigner(metaRegistry, registryAdmin).createOrUpdateOperatorGroup(groupId, {
+      name: "",
+      subNodeOperators: [],
+      externalOperators: [],
+    });
+  }
+
+  // Weight changes invalidate the deposit info snapshot; refresh it (permissionless)
+  await cmv2RefreshDepositInfo(ctx);
+
+  // The baseline is normalized only if the kept operator now holds all the weight
+  const [keepWeight] = await metaRegistry.getNodeOperatorWeightAndExternalStake(keepOperatorId);
+  if (keepWeight === 0n) {
+    throw new Error(`Kept operator ${keepOperatorId} has zero effective weight after normalization`);
+  }
+  for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {
+    if (operatorId === keepOperatorId) continue;
+    const [weight] = await metaRegistry.getNodeOperatorWeightAndExternalStake(operatorId);
+    if (weight !== 0n) {
+      throw new Error(`Operator ${operatorId} still has non-zero weight ${weight} after normalization`);
+    }
+  }
+
+  log.debug("Normalized CMv2 top-up allocation baseline", {
+    "Kept operator": keepOperatorId,
+    "Groups cleared": groupsToClear.size,
+  });
+};
+
+/**
+ * Refresh the CMv2 module deposit info snapshot (permissionless).
+ *
+ * `allocateDeposits` reverts with `DepositInfoIsNotUpToDate` while any operator's
+ * deposit info is stale, which is a live possibility on populated forks. A call when
+ * the snapshot is already fresh is a cheap no-op.
+ */
+export const cmv2RefreshDepositInfo = async (ctx: ProtocolContext) => {
+  const module = getCMv2Module(ctx);
+  const caller = await impersonate(certainAddress("cmv2:deposit-info:refresher"), ether("10"));
+  await connectSigner(module, caller).batchDepositInfoUpdate(await module.getNodeOperatorsCount());
+};
+
+/**
  * Read individual signing keys of a CMv2 operator.
  */
 export const getCMv2SigningKeys = async (
@@ -270,13 +401,15 @@ export const getCMv2SigningKeys = async (
 export const cmv2EnsureDepositedOperatorKeys = async (
   ctx: ProtocolContext,
   keysCount: bigint,
-  opts: { excludeOperatorIds?: bigint[]; name?: string } = {},
+  opts: { excludeOperatorIds?: bigint[]; name?: string; forceCreate?: boolean } = {},
 ): Promise<CMv2OperatorKeys> => {
   const moduleId = getCMv2ModuleId(ctx);
   const module = getCMv2Module(ctx);
   const excluded = new Set((opts.excludeOperatorIds ?? []).map(String));
 
-  const operatorsCount = await module.getNodeOperatorsCount();
+  // forceCreate skips the reuse scan: on populated forks an existing operator is
+  // usually above its allocation target and would receive zero top-up allocation
+  const operatorsCount = opts.forceCreate ? 0n : await module.getNodeOperatorsCount();
   for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {
     if (excluded.has(operatorId.toString())) continue;
 
@@ -300,9 +433,14 @@ export const cmv2EnsureDepositedOperatorKeys = async (
   }
 
   const created = await cmv2CreateOperatorWithKeys(ctx, {
-    name: opts.name ?? `cmv2-consolidation-target-${memberSalt}`,
+    name: opts.name ?? `cmv2-test-operator-${memberSalt}`,
     keysCount,
   });
+
+  // The module's deposit allocator routes by MetaRegistry weights, so on an arbitrary
+  // fork block the deposit could go to another operator. Normalize the baseline first:
+  // the fresh operator becomes the only one with allocation weight.
+  await cmv2NormalizeTopUpAllocationBaseline(ctx, created.operatorId);
 
   const before = await module.getNodeOperatorSummary(created.operatorId);
   await depositAndReportValidators(ctx, moduleId, keysCount);

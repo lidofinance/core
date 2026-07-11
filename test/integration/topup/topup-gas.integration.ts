@@ -3,195 +3,133 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { SSZValidatorsMerkleTree, StakingModuleV2__MockForStakingRouter, TopUpGateway } from "typechain-types";
-
-import { WithdrawalCredentialsType } from "lib";
-import { addressToWC, generateBeaconHeader, generateValidator, setBeaconBlockRoot, Validator } from "lib/pdg";
+import { ether, findEventsWithInterfaces } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { prepareLocalMerkleTree } from "lib/top-ups";
+import {
+  buildTopUpData,
+  cmv2EnsureDepositedOperatorKeys,
+  CMv2OperatorKeys,
+  cmv2SuiteEnabled,
+  depositEventInterface,
+  expectedTopUpLimitWei,
+  getCMv2ModuleId,
+  getTopUpRoleSigner,
+  prepareTopUpWitnesses,
+  topUpEnsureDepositableEther,
+  topUpEnsureModuleAllocation,
+} from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
 
-/**
- * Gas measurement integration test for TopUpGateway.topUp().
- *
- * Uses a mock V2 staking module (WC 0x02) added to the real StakingRouter.
- * Merkle proofs are built locally via SSZValidatorsMerkleTree.
- * Validators effectiveBalance = targetBalanceGwei → topUpLimits = 0, no depositable ether needed.
- *
- * To find the maximum batch size, change NUM_VALIDATORS and rerun.
- */
-describe("Integration: TopUpGateway gas measurement", () => {
-  let ctx: ProtocolContext;
-  let topUpGateway: TopUpGateway;
-  let mockModuleV2: StakingModuleV2__MockForStakingRouter;
-  let moduleId: bigint;
+const GWEI = 10n ** 9n;
 
-  let caller: HardhatEthersSigner;
+/**
+ * Gas measurement for the full TopUpGateway.topUp() path: CL proof verification,
+ * CMv2.allocateDeposits and real DepositContract top-up deposits.
+ *
+ * The batch size defaults to the gateway's maxValidatorsPerTopUp; set
+ * NUM_VALIDATORS_OVERRIDE to measure other batch sizes.
+ */
+describe("Integration: TopUpGateway full-path gas measurement (real CMv2)", () => {
+  let ctx: ProtocolContext;
+
+  let topUpCaller: HardhatEthersSigner;
+
+  let moduleId: bigint;
+  let target: CMv2OperatorKeys;
+
+  let numValidators: number;
+
+  // null = the gateway's maxValidatorsPerTopUp
+  const NUM_VALIDATORS_OVERRIDE: number | null = null;
+
+  // Multiple of the allocator's 2 ETH step, >= minTopUpGwei, and small enough that
+  // large batches stay under the maxTopUpPerBlockGwei cap
+  const TOP_UP_PER_KEY = ether("4");
 
   const MAX_BLOCK_GAS = 16_000_000n;
-  const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
-  const SLOT = 3200; // epoch = 100
-
-  // *** Change this value to find the maximum batch size ***
-  const NUM_VALIDATORS = 100;
-
-  let targetBalanceGwei: bigint;
-
-  // Tree state
-  let sszMerkleTree: SSZValidatorsMerkleTree;
-  let firstValidatorLeafIndex: bigint;
-
-  // Pre-built data
-  let validators: Validator[];
-  let allValidatorIndices: number[];
-  let allProofValidators: string[][];
-  let childBlockTimestamp: number;
-  let beaconBlockHeader: ReturnType<typeof generateBeaconHeader>;
 
   let originalState: string;
 
-  before(async () => {
+  before(async function () {
     ctx = await getProtocolContext();
     originalState = await Snapshot.take();
 
-    [, caller] = await ethers.getSigners();
-    const [deployer] = await ethers.getSigners();
-
-    const { stakingRouter } = ctx.contracts;
-
-    // =========================================
-    // Get TopUpGateway from LidoLocator
-    // =========================================
-    const topUpGatewayAddress = await ctx.contracts.locator.topUpGateway();
-    topUpGateway = await ethers.getContractAt("TopUpGateway", topUpGatewayAddress);
-
-    targetBalanceGwei = BigInt(await topUpGateway.getTargetBalanceGwei());
-
-    // =========================================
-    // Deploy mock V2 module and add to StakingRouter
-    // =========================================
-    mockModuleV2 = await ethers.deployContract("StakingModuleV2__MockForStakingRouter");
-
-    const agentSigner = await ctx.getSigner("agent");
-
-    const STAKING_MODULE_MANAGE_ROLE = await stakingRouter.STAKING_MODULE_MANAGE_ROLE();
-    await stakingRouter.connect(agentSigner).grantRole(STAKING_MODULE_MANAGE_ROLE, agentSigner.address);
-
-    const modulesCountBefore = await stakingRouter.getStakingModulesCount();
-    moduleId = modulesCountBefore + 1n;
-
-    await stakingRouter.connect(agentSigner).addStakingModule("MockV2TopUp", await mockModuleV2.getAddress(), {
-      stakeShareLimit: 10000,
-      priorityExitShareThreshold: 10000,
-      stakingModuleFee: 500,
-      treasuryFee: 500,
-      maxDepositsPerBlock: 150,
-      minDepositBlockDistance: 25,
-      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x02,
-    });
-
-    expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCountBefore + 1n);
-
-    // =========================================
-    // Grant roles on TopUpGateway
-    // =========================================
-    const TOP_UP_ROLE = await topUpGateway.TOP_UP_ROLE();
-    const MANAGE_LIMITS_ROLE = await topUpGateway.MANAGE_LIMITS_ROLE();
-
-    await topUpGateway.connect(agentSigner).grantRole(TOP_UP_ROLE, caller.address);
-    await topUpGateway.connect(agentSigner).grantRole(MANAGE_LIMITS_ROLE, deployer.address);
-    await topUpGateway.connect(deployer).setMaxValidatorsPerTopUp(NUM_VALIDATORS);
-
-    // =========================================
-    // Build SSZValidatorsMerkleTree with NUM_VALIDATORS
-    // =========================================
-    const localTree = await prepareLocalMerkleTree();
-    sszMerkleTree = localTree.stateTree;
-    firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;
-
-    const withdrawalCredentials = addressToWC(await ctx.contracts.withdrawalVault.getAddress(), 2);
-
-    validators = [];
-    allValidatorIndices = [];
-
-    for (let i = 0; i < NUM_VALIDATORS; i++) {
-      const v = generateValidator(withdrawalCredentials);
-
-      v.container.effectiveBalance = targetBalanceGwei; // → topUpLimit = 0
-      v.container.slashed = false;
-      v.container.activationEligibilityEpoch = 1n;
-      v.container.activationEpoch = 2n; // < epoch(SLOT=3200) = 100
-      v.container.exitEpoch = FAR_FUTURE_EPOCH;
-      v.container.withdrawableEpoch = FAR_FUTURE_EPOCH;
-
-      await sszMerkleTree.addValidatorsLeaf(v.container);
-      validators.push(v);
-
-      const leafCount = await sszMerkleTree.leafCount();
-      const validatorIndex = Number(leafCount - 1n - firstValidatorLeafIndex);
-      allValidatorIndices.push(validatorIndex);
+    if (!cmv2SuiteEnabled(ctx, "the top-up gas suite")) {
+      return this.skip();
     }
 
-    // Commit state root to EIP-4788
-    const stateRoot = await sszMerkleTree.getStateRoot();
-    beaconBlockHeader = generateBeaconHeader(stateRoot, SLOT);
-    const headerHash = await sszMerkleTree.beaconBlockHeaderHashTreeRoot(beaconBlockHeader);
-    childBlockTimestamp = await setBeaconBlockRoot(headerHash);
+    const { topUpGateway } = ctx.contracts;
 
-    // Build all proofs: validator[i] → state_root → beacon_block_root
-    allProofValidators = await Promise.all(
-      allValidatorIndices.map(async (vi) => {
-        const validatorProof = await sszMerkleTree.getValidatorProof(firstValidatorLeafIndex + BigInt(vi));
-        const headerMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(beaconBlockHeader);
-        return [...validatorProof, ...headerMerkle.proof];
-      }),
-    );
+    moduleId = getCMv2ModuleId(ctx);
+    topUpCaller = await getTopUpRoleSigner(ctx);
+
+    const maxValidatorsPerTopUp = await topUpGateway.getMaxValidatorsPerTopUp();
+    numValidators = NUM_VALIDATORS_OVERRIDE ?? Number(maxValidatorsPerTopUp);
+
+    if (BigInt(numValidators) > maxValidatorsPerTopUp) {
+      const agentSigner = await ctx.getSigner("agent");
+      const MANAGE_LIMITS_ROLE = await topUpGateway.MANAGE_LIMITS_ROLE();
+      await topUpGateway.connect(agentSigner).grantRole(MANAGE_LIMITS_ROLE, agentSigner.address);
+      await topUpGateway.connect(agentSigner).setMaxValidatorsPerTopUp(numValidators);
+    }
+
+    // forceCreate: fresh operator with a known key-balance baseline and (via the
+    // create path) 100% of the allocation weight, so every key gets its full top-up
+    target = await cmv2EnsureDepositedOperatorKeys(ctx, BigInt(numValidators), {
+      name: "topup_gas_operator",
+      forceCreate: true,
+    });
+
+    const totalTopUp = BigInt(numValidators) * TOP_UP_PER_KEY;
+    await topUpEnsureDepositableEther(ctx, totalTopUp + ether("32"));
+    await topUpEnsureModuleAllocation(ctx, moduleId, totalTopUp);
   });
 
   after(async () => await Snapshot.restore(originalState));
 
-  it(`should measure gas for topUp with ${NUM_VALIDATORS} validators`, async () => {
-    await ethers.provider.send("evm_increaseTime", [1]);
-    await ethers.provider.send("evm_mine", []);
+  it("should measure gas for a full-path topUp at the configured batch size", async () => {
+    const { topUpGateway } = ctx.contracts;
 
-    const topUpData = {
-      moduleId,
-      keyIndices: allValidatorIndices.map((_, i) => BigInt(i)),
-      operatorIds: allValidatorIndices.map(() => 0n),
-      validatorIndices: allValidatorIndices.map((vi) => BigInt(vi)),
-      beaconRootData: {
-        childBlockTimestamp,
-        slot: beaconBlockHeader.slot,
-        proposerIndex: beaconBlockHeader.proposerIndex,
-      },
-      validatorWitness: validators.map((v, i) => ({
-        proofValidator: allProofValidators[i],
-        pubkey: v.container.pubkey,
-        effectiveBalance: v.container.effectiveBalance,
-        slashed: v.container.slashed,
-        activationEligibilityEpoch: v.container.activationEligibilityEpoch,
-        activationEpoch: v.container.activationEpoch,
-        exitEpoch: v.container.exitEpoch,
-        withdrawableEpoch: v.container.withdrawableEpoch,
-      })),
-      pendingBalanceGwei: allValidatorIndices.map(() => 0n),
-    };
+    const targetBalanceGwei = await topUpGateway.getTargetBalanceGwei();
+    const ebGwei = targetBalanceGwei - TOP_UP_PER_KEY / GWEI;
+    expect(await expectedTopUpLimitWei(ctx, ebGwei)).to.equal(TOP_UP_PER_KEY);
 
-    const tx = await topUpGateway.connect(caller).topUp(topUpData);
-    const receipt = await tx.wait();
-
-    const gasUsed = receipt!.gasUsed;
-    const fitsInBlock = gasUsed < MAX_BLOCK_GAS;
-    const perValidator = gasUsed / BigInt(NUM_VALIDATORS);
-
-    console.log(`\n  TopUpGateway.topUp() with ${NUM_VALIDATORS} validators:`);
-    console.log(`    Gas used:         ${Number(gasUsed).toLocaleString()}`);
-    console.log(`    Per validator:    ${Number(perValidator).toLocaleString()}`);
-    console.log(
-      `    Fits in block:    ${fitsInBlock ? "YES" : "NO"} (limit: ${Number(MAX_BLOCK_GAS).toLocaleString()})`,
+    const bundle = await prepareTopUpWitnesses(
+      ctx,
+      target.pubkeys.map((pubkey) => ({ pubkey, effectiveBalanceGwei: ebGwei })),
     );
 
-    expect(gasUsed).to.be.greaterThan(0n);
+    const tx = await topUpGateway.connect(topUpCaller).topUp(
+      buildTopUpData(
+        moduleId,
+        {
+          keyIndices: target.keyIndices,
+          operatorIds: target.keyIndices.map(() => target.operatorId),
+        },
+        bundle,
+      ),
+    );
+    const receipt = await tx.wait();
+
+    // The measurement only counts if the full path really executed for every key
+    const expectedTotal = BigInt(numValidators) * TOP_UP_PER_KEY;
+    const topUpEvents = ctx.getEvents(receipt!, "StakingRouterETHTopUp");
+    expect(topUpEvents[0].args.amount).to.equal(expectedTotal);
+    const depositEvents = findEventsWithInterfaces(receipt!, "DepositEvent", [depositEventInterface]);
+    expect(depositEvents.length).to.equal(numValidators);
+
+    const gasUsed = receipt!.gasUsed;
+    const perValidator = gasUsed / BigInt(numValidators);
+
+    console.log(`\n  Full-path TopUpGateway.topUp() with ${numValidators} validators (real CMv2 + DepositContract):`);
+    console.log(`    Gas used:         ${Number(gasUsed).toLocaleString()}`);
+    console.log(`    Per validator:    ${Number(perValidator).toLocaleString()}`);
+    console.log(`    Topped up:        ${ethers.formatEther(expectedTotal)} ETH`);
+    console.log(
+      `    Fits in block:    ${gasUsed < MAX_BLOCK_GAS ? "YES" : "NO"} (limit: ${Number(MAX_BLOCK_GAS).toLocaleString()})`,
+    );
+
+    expect(gasUsed).to.be.lt(MAX_BLOCK_GAS);
   });
 });

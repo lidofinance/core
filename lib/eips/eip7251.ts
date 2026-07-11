@@ -22,6 +22,16 @@ export const deployEIP7251MaxEffectiveBalanceRequestContract = async (
   return contract;
 };
 
+/**
+ * Normalize the EIP-7251 system contract fee state on a fork.
+ *
+ * The excess counter (storage slot 0) frozen at the fork block sets an arbitrary
+ * exponential consolidation fee. Zeroing it makes the fee deterministic (1 wei).
+ */
+export const normalizeEIP7251Excess = async (): Promise<void> => {
+  await ethers.provider.send("hardhat_setStorageAt", [EIP7251_ADDRESS, ethers.toBeHex(0, 32), ethers.ZeroHash]);
+};
+
 export const ensureEIP7251MaxEffectiveBalanceRequestContractPresent = async (): Promise<void> => {
   const code = await ethers.provider.getCode(EIP7251_ADDRESS);
 

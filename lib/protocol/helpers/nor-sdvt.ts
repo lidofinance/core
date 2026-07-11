@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { ethers } from "ethers";
 
 import { NodeOperatorsRegistry } from "typechain-types";
 
@@ -250,14 +249,11 @@ export const norSdvtSetOperatorStakingLimit = async (
 
   log.debug(`Setting NOR operator ${operatorId} staking limit`, {
     "Operator ID": operatorId,
-    "Limit": ethers.formatEther(limit),
+    "Limit": limit,
   });
 
-  const managerSigner = await impersonate(
-    await acl.getPermissionManager(module.address, await module.MANAGE_SIGNING_KEYS()),
-    ether("100"),
-  );
   const role = await module.SET_NODE_OPERATOR_LIMIT_ROLE();
+  const managerSigner = await impersonate(await acl.getPermissionManager(module.address, role), ether("100"));
   const hasPermission = await acl["hasPermission(address,address,bytes32)"](managerSigner, module.address, role);
   if (!hasPermission) {
     await acl.connect(managerSigner).grantPermission(managerSigner, module.address, role);
@@ -391,6 +387,3 @@ export const getOperatorName = (module: StakingModuleName, id: bigint, group: bi
 
 export const getOperatorRewardAddress = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>
   certainAddress(`${module}:op:ra-${group}-${id}`);
-
-export const getOperatorManagerAddress = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>
-  certainAddress(`${module}:op:ma-${group}-${id}`);
