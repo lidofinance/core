@@ -36,6 +36,7 @@ describe("Integration: Accounting", () => {
     snapshot = await Snapshot.take();
 
     await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
