@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { Burner, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
+import { Burner, ConsolidationMigrator, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
 
 import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "lib";
 import { loadContract } from "lib/contract";
@@ -322,6 +322,27 @@ export async function main() {
       { from: deployer },
     );
     await enableExternalModule(setup, state, deployer);
+
+    // ConsolidationMigrator is deployed earlier (0083) with an immutable target module id
+    // predicted from deploy params. Verify the id actually assigned to CMv2 matches it.
+    const consolidationMigrator = await loadContract<ConsolidationMigrator>(
+      "ConsolidationMigrator",
+      state[Sk.consolidationMigrator].proxy.address,
+    );
+    const expectedTargetModuleId = await consolidationMigrator.targetModuleId();
+    const cmv2ModuleId = (await stakingRouter.getStakingModuleIds()).at(-1)!;
+    const cmv2Module = await stakingRouter.getStakingModule(cmv2ModuleId);
+    if (
+      cmv2ModuleId !== expectedTargetModuleId ||
+      cmv2Module.stakingModuleAddress !== state[Sk.sm_CM].proxy.address ||
+      cmv2Module.name !== CMV2_STAKING_MODULE_NAME
+    ) {
+      throw new Error(
+        `CMv2 module id mismatch: assigned id ${cmv2ModuleId} (${cmv2Module.name} at ${cmv2Module.stakingModuleAddress}), ` +
+          `but ConsolidationMigrator.targetModuleId() is ${expectedTargetModuleId}. ` +
+          `Update [consolidationMigrator].targetModuleId in the scratch deploy params.`,
+      );
+    }
   }
 
   // Set global per-block top-up ETH cap (LIP-35), required for TopUpGateway-driven top-ups.

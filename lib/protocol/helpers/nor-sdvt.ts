@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { ethers } from "ethers";
 
 import { NodeOperatorsRegistry } from "typechain-types";
 
@@ -250,14 +249,11 @@ export const norSdvtSetOperatorStakingLimit = async (
 
   log.debug(`Setting NOR operator ${operatorId} staking limit`, {
     "Operator ID": operatorId,
-    "Limit": ethers.formatEther(limit),
+    "Limit": limit,
   });
 
-  const managerSigner = await impersonate(
-    await acl.getPermissionManager(module.address, await module.MANAGE_SIGNING_KEYS()),
-    ether("100"),
-  );
   const role = await module.SET_NODE_OPERATOR_LIMIT_ROLE();
+  const managerSigner = await impersonate(await acl.getPermissionManager(module.address, role), ether("100"));
   const hasPermission = await acl["hasPermission(address,address,bytes32)"](managerSigner, module.address, role);
   if (!hasPermission) {
     await acl.connect(managerSigner).grantPermission(managerSigner, module.address, role);
@@ -270,11 +266,124 @@ export const norSdvtSetOperatorStakingLimit = async (
   }
 };
 
+export interface NorOperatorKeys {
+  moduleId: bigint;
+  operatorId: bigint;
+  keyIndices: bigint[];
+  pubkeys: string[];
+}
+
+/**
+ * Cap every other active operator's staking limit at its deposited count so the next
+ * module-level deposits can only consume keys of the given operator.
+ *
+ * The real deposit path only targets a staking module (DSM calls
+ * `StakingRouter.deposit(moduleId, "")` and NOR ignores deposit calldata), so a test
+ * cannot route a deposit to a specific operator directly. Existing keys of other
+ * operators stay untouched; only their new deposit capacity is removed.
+ */
+export const norSdvtCapOtherOperatorsToDeposited = async (
+  ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
+  operatorIdToKeepDepositable: bigint,
+) => {
+  const operatorsCount = await module.getNodeOperatorsCount();
+
+  for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {
+    if (operatorId === operatorIdToKeepDepositable) continue;
+
+    const { active, totalDepositedValidators, totalVettedValidators } = await module.getNodeOperator(operatorId, true);
+    if (!active) continue;
+    if (totalVettedValidators === totalDepositedValidators) continue;
+
+    await norSdvtSetOperatorStakingLimit(ctx, module, {
+      operatorId,
+      limit: totalDepositedValidators,
+    });
+  }
+};
+
+/**
+ * Provide a NOR/SDVT operator with `keysCount` deposited keys for consolidation sources.
+ *
+ * On populated forks existing operators already have plenty of deposited keys, so first
+ * reuse one (taking its last deposited, non-exited key indices). Only when none fits,
+ * create a fresh operator and push real module-level deposits through, capping other
+ * operators so the allocation deterministically lands on the new one.
+ */
+export const norEnsureDepositedOperatorKeys = async (
+  ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
+  moduleId: bigint,
+  keysCount: bigint,
+  opts: { excludeOperatorIds?: bigint[]; name?: string } = {},
+): Promise<NorOperatorKeys> => {
+  const excluded = new Set((opts.excludeOperatorIds ?? []).map(String));
+  const operatorsCount = await module.getNodeOperatorsCount();
+
+  const collectKeys = async (operatorId: bigint, firstKeyIndex: bigint) => {
+    const keyIndices = Array.from({ length: Number(keysCount) }, (_, i) => firstKeyIndex + BigInt(i));
+    const pubkeys: string[] = [];
+    for (const keyIndex of keyIndices) {
+      const signingKey = await module.getSigningKey(operatorId, keyIndex);
+      expect(signingKey.used).to.be.true;
+      pubkeys.push(signingKey.key);
+    }
+    return { moduleId, operatorId, keyIndices, pubkeys };
+  };
+
+  for (let operatorId = 0n; operatorId < operatorsCount; operatorId++) {
+    if (excluded.has(operatorId.toString())) continue;
+
+    const { active, totalDepositedValidators, totalExitedValidators } = await module.getNodeOperator(operatorId, true);
+    if (!active) continue;
+    // Take the last deposited key indices: exit requests target the oldest keys first
+    if (totalDepositedValidators - totalExitedValidators >= keysCount) {
+      log.debug("Reusing existing NOR operator with deposited keys", {
+        "Module ID": moduleId,
+        "Operator ID": operatorId,
+      });
+      return collectKeys(operatorId, totalDepositedValidators - keysCount);
+    }
+  }
+
+  const operatorId = await norSdvtAddNodeOperator(ctx, module, {
+    name: opts.name ?? getOperatorName("nor", operatorsCount, 999n),
+    rewardAddress: getOperatorRewardAddress("nor", operatorsCount, 999n),
+  });
+
+  // Add keys and deposit in batches to stay within the block gas limit
+  const KEYS_BATCH = 100n;
+  for (let added = 0n; added < keysCount; added += KEYS_BATCH) {
+    const batch = added + KEYS_BATCH > keysCount ? keysCount - added : KEYS_BATCH;
+    await norSdvtAddOperatorKeys(ctx, module, { operatorId, keysToAdd: batch });
+  }
+
+  await norSdvtSetOperatorStakingLimit(ctx, module, { operatorId, limit: keysCount });
+  await norSdvtCapOtherOperatorsToDeposited(ctx, module, operatorId);
+
+  const { totalDepositedValidators: depositedBefore } = await module.getNodeOperator(operatorId, true);
+
+  const DEPOSIT_BATCH = 50n;
+  for (let deposited = 0n; deposited < keysCount; deposited += DEPOSIT_BATCH) {
+    const batch = deposited + DEPOSIT_BATCH > keysCount ? keysCount - deposited : DEPOSIT_BATCH;
+    await depositAndReportValidators(ctx, moduleId, batch);
+  }
+
+  const { totalDepositedValidators: depositedAfter } = await module.getNodeOperator(operatorId, true);
+
+  if (depositedAfter - depositedBefore !== keysCount) {
+    throw new Error(
+      `NOR deposit was not allocated to operator ${operatorId}: ` +
+        `expected +${keysCount} deposited validators, got +${depositedAfter - depositedBefore}`,
+    );
+  }
+
+  return collectKeys(operatorId, depositedBefore);
+};
+
 export const getOperatorName = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>
   `${module}:op-${group}-${id}`;
 
 export const getOperatorRewardAddress = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>
   certainAddress(`${module}:op:ra-${group}-${id}`);
-
-export const getOperatorManagerAddress = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>
-  certainAddress(`${module}:op:ma-${group}-${id}`);

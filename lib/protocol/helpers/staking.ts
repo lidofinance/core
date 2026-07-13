@@ -152,6 +152,23 @@ export const removeStakingLimit = async (ctx: ProtocolContext) => {
   await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
 };
 
+/**
+ * Make sure a lido.submit of `submitValue` fits the current staking rate limit.
+ *
+ * On a fork the remaining allowance depends on recent live submissions, so a large
+ * test provisioning submit can exceed it. Removes the limit when it is too small.
+ */
+export const ensureSubmitFitsStakeLimit = async (ctx: ProtocolContext, submitValue: bigint) => {
+  const { lido } = ctx.contracts;
+
+  const stakeLimitInfo = await lido.getStakeLimitFullInfo();
+  if (!stakeLimitInfo.isStakingLimitSet) return;
+
+  if ((await lido.getCurrentStakeLimit()) < submitValue) {
+    await removeStakingLimit(ctx);
+  }
+};
+
 export const setStakingLimit = async (
   ctx: ProtocolContext,
   maxStakeLimit: bigint,
@@ -524,6 +541,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   const submitValue = (await withdrawalQueue.unfinalizedStETH()) + ethToDeposit;
   const ethHolder = await impersonate(certainAddress("provision:eth:whale"), submitValue + ether("1"));
 
+  await ensureSubmitFitsStakeLimit(ctx, submitValue);
   await lido.connect(ethHolder).submit(ZeroAddress, { value: submitValue });
 
   const depositableEther = await lido.getDepositableEther();

@@ -17,6 +17,8 @@ import {
   report,
   reportWithoutClActivation,
   seedProtocolPendingBaseline,
+  updateOracleReportLimits,
+  waitNextAvailableReportTime,
 } from "lib/protocol";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
@@ -34,6 +36,7 @@ describe("Integration: Accounting", () => {
     snapshot = await Snapshot.take();
 
     await reportWithoutClActivation(ctx, { reportElVault: false, skipWithdrawals: true });
+    await normalizeWithdrawalVaultBaseline(ctx, 0n);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -290,6 +293,148 @@ describe("Integration: Accounting", () => {
         skipWithdrawals: true,
       }),
     ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalCLBalanceIncrease");
+  });
+
+  it("Should revert with IncorrectTotalPendingBalance when reported pending exceeds funded pending + external cap", async () => {
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    // Zero the external cap so pendingBalanceCap == fundedPendingBalance exactly.
+    await updateOracleReportLimits(ctx, { externalPendingBalanceCapEth: 0n });
+
+    // Align to the next frame before reading `depositedForCurrentReport`. This matches
+    // the value Accounting.sol picks up for `_pre.depositedBalance` on real submission.
+    await waitNextAvailableReportTime(ctx);
+
+    const { clPendingBalanceAtLastReport, depositedForCurrentReport } = await lido.getBalanceStats();
+    const fundedPendingWei = clPendingBalanceAtLastReport + depositedForCurrentReport;
+
+    // Grow total CL by exactly 1 gwei, allocated entirely to pending. Validators stay flat:
+    //   postCLBalance = preCLBalance + clDiff = preValidators + prePending + deposits + 1 gwei
+    //   postCLPending = fundedPending + 1 gwei                             (from clPendingBalanceGwei)
+    //   postCLValidators = postCLBalance - postCLPending = preValidators   (unchanged)
+    // fundedPending + 1 gwei > pendingBalanceCap (== fundedPending), so the check reverts.
+    const overshootWei = ONE_GWEI;
+    const clDiffWei = depositedForCurrentReport + overshootWei;
+    const postCLPendingGwei = (fundedPendingWei + overshootWei) / ONE_GWEI;
+
+    await expect(
+      report(ctx, {
+        clDiff: clDiffWei,
+        clPendingBalanceGwei: postCLPendingGwei,
+        reportElVault: false,
+        skipWithdrawals: true,
+        waitNextReportTime: false,
+      }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectTotalPendingBalance");
+  });
+
+  it("Should revert with IncorrectCLBalanceIncrease when total CL balance annual APR exceeds the limit", async () => {
+    const { lido, hashConsensus, oracleReportSanityChecker } = ctx.contracts;
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    // With `annualBalanceIncreaseBPLimit == 0` any positive rebase must revert. The same limit
+    // also drives IncorrectTotalCLBalanceIncrease in `_checkCLPendingAndValidatorsBalanceIncrease`,
+    // which runs earlier and fires whenever the validators balance grows. To reach
+    // `_checkAnnualBalancesIncrease` (the annual APR check), the report below keeps
+    // postCLValidators == preCLValidators and grows the pending balance instead, while the
+    // remaining limits are raised out of the way.
+    await updateOracleReportLimits(ctx, {
+      annualBalanceIncreaseBPLimit: 0n,
+      // Max the external pending cap so postPending can carry the whole delta without
+      // tripping IncorrectTotalPendingBalance. `externalPendingBalanceCapEth` is uint16,
+      // so 65535 is the max on-chain value (65535 ETH headroom above fundedPending).
+      externalPendingBalanceCapEth: 65535n,
+      // Give the exit/consolidation per-day check plenty of headroom.
+      consolidationEthAmountPerDayLimit: 100_000n,
+      exitedEthAmountPerDayLimit: 100_000n,
+      // Relax the CL balance decrease check so it cannot fire before the annual APR check.
+      maxCLBalanceDecreaseBP: BigInt(MAX_BASIS_POINTS),
+    });
+
+    // Read the exact frame length AccountingOracle will pass to the sanity checker as
+    // `timeElapsed` (refSlot delta * secondsPerSlot). `getReportTimeElapsed` returns
+    // time-to-next-frame, not the frame length itself — use the raw consensus config.
+    const { slotsPerEpoch, secondsPerSlot } = await hashConsensus.getChainConfig();
+    const { epochsPerFrame } = await hashConsensus.getFrameConfig();
+    const frameTimeElapsed = BigInt(epochsPerFrame) * BigInt(slotsPerEpoch) * BigInt(secondsPerSlot);
+
+    await waitNextAvailableReportTime(ctx);
+
+    const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport, depositedForCurrentReport } =
+      await lido.getBalanceStats();
+    const preCLBalanceWei = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport + depositedForCurrentReport;
+    const fundedPendingWei = clPendingBalanceAtLastReport + depositedForCurrentReport;
+
+    // Minimum delta that survives integer truncation in
+    //   annualBalanceIncrease = (365 days * 10_000 * delta) / preCL / timeElapsed
+    // is `preCL * timeElapsed / (365 days * 10_000)`. +1 ETH is safety margin against
+    // any rounding on the current frame boundary.
+    const ANNUAL_BALANCE_INCREASE_DENOMINATOR = 365n * 24n * 60n * 60n * BigInt(MAX_BASIS_POINTS);
+    const minDeltaWei = (preCLBalanceWei * frameTimeElapsed) / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
+    const deltaWei = minDeltaWei + ether("1");
+
+    // Must fit under the maxed external pending cap so IncorrectTotalPendingBalance is not
+    // shadowing this test on any environment.
+    const externalPendingCapWei = 65535n * ether("1");
+    expect(deltaWei).to.be.lessThan(
+      externalPendingCapWei,
+      "delta must fit under maxed externalPendingBalanceCapEth to avoid shadowing this check",
+    );
+
+    // Same arithmetic as the IncorrectTotalPendingBalance test above: the reported pending
+    // absorbs the whole delta, so the validators balance stays flat.
+    const clDiffWei = depositedForCurrentReport + deltaWei;
+    const postCLPendingGwei = (fundedPendingWei + deltaWei) / ONE_GWEI;
+
+    await expect(
+      report(ctx, {
+        clDiff: clDiffWei,
+        clPendingBalanceGwei: postCLPendingGwei,
+        reportElVault: false,
+        skipWithdrawals: true,
+        waitNextReportTime: false,
+      }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceIncrease");
+  });
+
+  it("Should revert with ExitedEthAmountPerDayLimitExceeded when newly exited validators exceed the exit + consolidation per-day limit", async () => {
+    const { oracleReportSanityChecker, stakingRouter } = ctx.contracts;
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    // The combined limit is `(exitedEthAmountPerDayLimit + consolidationEthAmountPerDayLimit) * 2 * 1e18`.
+    // Setting both to zero makes the limit == 0, so any newly exited validator with a positive
+    // exitedValidatorEthAmountLimit trips the check.
+    await updateOracleReportLimits(ctx, {
+      exitedEthAmountPerDayLimit: 0n,
+      consolidationEthAmountPerDayLimit: 0n,
+    });
+
+    // Precondition: NOR must have at least one deposited-but-not-exited validator, otherwise
+    // `stakingRouter.updateExitedValidatorsCountByStakingModule` reverts earlier and the test
+    // fails with an unrelated error. On hoodi/mainnet forks this always holds; on scratch it
+    // depends on whether operators have been seeded before this test runs.
+    const norSummary = await stakingRouter.getStakingModuleSummary(NOR_MODULE_ID);
+    expect(norSummary.totalDepositedValidators).to.be.greaterThan(
+      norSummary.totalExitedValidators,
+      "test requires NOR to have at least one non-exited deposited validator",
+    );
+
+    // `reportWithoutClActivation` reports pending unchanged (postPending == fundedPending) and
+    // no validators balance growth, so `checkModuleAndCLBalancesChangeRates` passes. The exited
+    // validators update is then validated by `checkExitedValidatorsCount`: one newly exited
+    // validator against the zeroed combined per-day limit reverts.
+    await expect(
+      reportWithoutClActivation(ctx, {
+        stakingModuleIdsWithNewlyExitedValidators: [NOR_MODULE_ID],
+        numExitedValidatorsByStakingModule: [norSummary.totalExitedValidators + 1n],
+        reportElVault: false,
+        skipWithdrawals: true,
+      }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "ExitedEthAmountPerDayLimitExceeded");
   });
 
   it("Should account correctly with no CL rebase", async () => {
