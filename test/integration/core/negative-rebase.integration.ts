@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -11,6 +12,7 @@ import {
   ProtocolContext,
   reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
+  updateOracleReportLimits,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -213,5 +215,37 @@ describe("Integration: Negative rebase", () => {
       oracleReportSanityChecker,
       "IncorrectCLBalanceDecrease",
     );
+  });
+
+  // Tests the CL decrease check through the full oracle path
+  // (HashConsensus -> AccountingOracle.submitReportData -> Accounting -> sanity checker),
+  // with no direct sanity checker calls.
+  it("Should revert with IncorrectCLBalanceDecrease via the full oracle report flow", async () => {
+    const { oracleReportSanityChecker } = ctx.contracts;
+
+    // Seed the window with a baseline report and align the WVB baseline, so the
+    // reported decrease is not absorbed by `_getCLWithdrawals`.
+    await resetCLBalanceDecreaseWindow(ctx, {
+      excludeVaultsBalances: false,
+      reportElVault: false,
+    });
+    await ensureAtLeastOneStoredReport();
+
+    // With a zeroed decrease limit any effective CL decrease above zero must revert.
+    await updateOracleReportLimits(ctx, { maxCLBalanceDecreaseBP: 0n });
+
+    // The direct-revert branch requires no second opinion oracle to be configured
+    expect(await oracleReportSanityChecker.secondOpinionOracle()).to.equal(
+      ZeroAddress,
+      "test requires no second opinion oracle so the checker reverts directly",
+    );
+
+    await expect(
+      reportWithoutClActivation(ctx, {
+        effectiveClDiff: -ether("1"),
+        skipWithdrawals: true,
+        reportElVault: false,
+      }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectCLBalanceDecrease");
   });
 });

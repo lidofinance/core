@@ -17,6 +17,7 @@ import {
   report,
   reportWithoutClActivation,
   seedProtocolPendingBaseline,
+  submitReportDataWithConsensus,
   updateOracleReportLimits,
   waitNextAvailableReportTime,
 } from "lib/protocol";
@@ -435,6 +436,160 @@ describe("Integration: Accounting", () => {
         skipWithdrawals: true,
       }),
     ).to.be.revertedWithCustomError(oracleReportSanityChecker, "ExitedEthAmountPerDayLimitExceeded");
+  });
+
+  it("Should revert with IncorrectWithdrawalsVaultBalance when reported withdrawal vault balance exceeds the actual one", async () => {
+    const { oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    // The reported-vs-actual comparison is the first check in `checkAccountingOracleReport`,
+    // so a neutral report with the balance overstated by 1 wei is enough on any environment.
+    const actualBalance = await ethers.provider.getBalance(withdrawalVault.address);
+
+    await expect(
+      reportWithoutClActivation(ctx, {
+        withdrawalVaultBalance: actualBalance + 1n,
+        reportElVault: false,
+        reportBurner: false,
+        skipWithdrawals: true,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectWithdrawalsVaultBalance")
+      .withArgs(actualBalance);
+  });
+
+  it("Should revert with IncorrectELRewardsVaultBalance when reported EL rewards vault balance exceeds the actual one", async () => {
+    const { oracleReportSanityChecker, elRewardsVault } = ctx.contracts;
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    const actualBalance = await ethers.provider.getBalance(elRewardsVault.address);
+
+    await expect(
+      reportWithoutClActivation(ctx, {
+        elRewardsVaultBalance: actualBalance + 1n,
+        reportBurner: false,
+        skipWithdrawals: true,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectELRewardsVaultBalance")
+      .withArgs(actualBalance);
+  });
+
+  it("Should revert with IncorrectSharesRequestedToBurn when reported shares exceed the burner's actual request", async () => {
+    const { oracleReportSanityChecker, burner } = ctx.contracts;
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    const [coverShares, nonCoverShares] = await burner.getSharesRequestedToBurn();
+    const actualSharesToBurn = coverShares + nonCoverShares;
+
+    await expect(
+      reportWithoutClActivation(ctx, {
+        sharesRequestedToBurn: actualSharesToBurn + 1n,
+        reportElVault: false,
+        skipWithdrawals: true,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSharesRequestedToBurn")
+      .withArgs(actualSharesToBurn);
+  });
+
+  it("Should revert with IncorrectRequestFinalization when a finalized request is younger than requestTimestampMargin", async () => {
+    const { lido, oracleReportSanityChecker, withdrawalQueue } = ctx.contracts;
+    const agent = await ctx.getSigner("agent");
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    // Align to the next frame BEFORE creating the request: the report timestamp equals the
+    // frame's ref slot time, so a request created after frame start is always younger than
+    // the report timestamp and trips `reportTimestamp < requestTimestamp + margin`.
+    await waitNextAvailableReportTime(ctx);
+
+    await lido.connect(agent).submit(ZeroAddress, { value: ether("2") });
+    await lido.connect(agent).approve(withdrawalQueue, ether("1"));
+    await withdrawalQueue.connect(agent).requestWithdrawals([ether("1")], agent.address);
+
+    const requestId = await withdrawalQueue.getLastRequestId();
+    const [{ timestamp: requestTimestamp }] = await withdrawalQueue.getWithdrawalStatus([requestId]);
+
+    // The fresh request is passed as the last finalization batch explicitly; the simulated
+    // share rate is computed by the helper, so the earlier share-rate check passes and the
+    // report reaches `checkWithdrawalQueueOracleReport`.
+    await expect(
+      reportWithoutClActivation(ctx, {
+        waitNextReportTime: false,
+        withdrawalFinalizationBatches: [requestId],
+        reportElVault: false,
+        reportBurner: false,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectRequestFinalization")
+      .withArgs(requestTimestamp);
+  });
+
+  // Prepare a finalizable withdrawal request and build a dry-run report with non-empty
+  // finalization batches, so `checkSimulatedShareRate` is reached on submission.
+  async function prepareReportWithFinalization() {
+    const { lido, oracleReportSanityChecker, withdrawalQueue } = ctx.contracts;
+    const agent = await ctx.getSigner("agent");
+
+    await ensureFirstPostMigrationReport(ctx);
+
+    // WQ finalization is FIFO. Forks can start with live unfinalized requests,
+    // so clear pre-existing queue items before creating the request under test.
+    if ((await withdrawalQueue.getLastFinalizedRequestId()) !== (await withdrawalQueue.getLastRequestId())) {
+      await finalizeWQViaElVault(ctx);
+    }
+
+    await lido.connect(agent).submit(ZeroAddress, { value: ether("10") });
+    await lido.connect(agent).approve(withdrawalQueue, ether("1"));
+    await withdrawalQueue.connect(agent).requestWithdrawals([ether("1")], agent.address);
+
+    // Age the request past the margin so it is eligible for finalization batches
+    const { requestTimestampMargin, simulatedShareRateDeviationBPLimit } =
+      await oracleReportSanityChecker.getOracleReportLimits();
+    await advanceChainTime(requestTimestampMargin + 1n);
+
+    const { data } = await reportWithoutClActivation(ctx, {
+      dryRun: true,
+      reportElVault: false,
+      reportBurner: false,
+    });
+    expect(data.withdrawalFinalizationBatches.length).to.be.gt(
+      0,
+      "Expected non-empty withdrawal finalization batches in dry-run report",
+    );
+
+    // The dry-run simulated share rate matches the actual rate the checker reconstructs
+    // (up to rounding and the finalization feedback of a 1 ETH request), so a deviation of
+    // limit + 2 BP is guaranteed to land strictly above the limit.
+    const simulatedShareRate = BigInt(data.simulatedShareRate);
+    const deviationDelta = (simulatedShareRate * (simulatedShareRateDeviationBPLimit + 2n)) / 10_000n + 1n;
+
+    return { data, simulatedShareRate, deviationDelta };
+  }
+
+  it("Should revert with IncorrectSimulatedShareRate when the reported rate is above the deviation limit", async () => {
+    const { oracleReportSanityChecker } = ctx.contracts;
+
+    const { data, simulatedShareRate, deviationDelta } = await prepareReportWithFinalization();
+
+    await expect(
+      submitReportDataWithConsensus(ctx, { ...data, simulatedShareRate: simulatedShareRate + deviationDelta }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSimulatedShareRate");
+  });
+
+  it("Should revert with IncorrectSimulatedShareRate when the reported rate is below the deviation limit", async () => {
+    const { oracleReportSanityChecker } = ctx.contracts;
+
+    const { data, simulatedShareRate, deviationDelta } = await prepareReportWithFinalization();
+    expect(simulatedShareRate).to.be.gt(deviationDelta, "share rate must stay positive after the deviation");
+
+    await expect(
+      submitReportDataWithConsensus(ctx, { ...data, simulatedShareRate: simulatedShareRate - deviationDelta }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "IncorrectSimulatedShareRate");
   });
 
   it("Should account correctly with no CL rebase", async () => {
