@@ -218,23 +218,25 @@ describe("Integration: Negative rebase", () => {
   });
 
   // Tests the CL decrease check through the full oracle path
-  // (HashConsensus -> AccountingOracle.submitReportData -> Accounting -> sanity checker),
-  // with no direct sanity checker calls.
+  // (HashConsensus -> AccountingOracle.submitReportData -> Accounting -> sanity checker).
+  // The tests above call `checkAccountingOracleReport` directly instead.
   it("Should revert with IncorrectCLBalanceDecrease via the full oracle report flow", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
 
-    // Seed the window with a baseline report and align the WVB baseline, so the
-    // reported decrease is not absorbed by `_getCLWithdrawals`.
+    // Put a baseline report into the check window and align the withdrawal vault
+    // baseline. Without this, `_getCLWithdrawals` would explain the reported decrease
+    // as withdrawals and the check would not fire.
     await resetCLBalanceDecreaseWindow(ctx, {
       excludeVaultsBalances: false,
       reportElVault: false,
     });
     await ensureAtLeastOneStoredReport();
 
-    // With a zeroed decrease limit any effective CL decrease above zero must revert.
+    // With the limit set to zero, any real CL decrease must revert.
     await updateOracleReportLimits(ctx, { maxCLBalanceDecreaseBP: 0n });
 
-    // The direct-revert branch requires no second opinion oracle to be configured
+    // The checker reverts directly only when no second opinion oracle is set.
+    // With one set, it would call `_askSecondOpinion` instead.
     expect(await oracleReportSanityChecker.secondOpinionOracle()).to.equal(
       ZeroAddress,
       "test requires no second opinion oracle so the checker reverts directly",

@@ -443,8 +443,8 @@ describe("Integration: Accounting", () => {
 
     await ensureFirstPostMigrationReport(ctx);
 
-    // The reported-vs-actual comparison is the first check in `checkAccountingOracleReport`,
-    // so a neutral report with the balance overstated by 1 wei is enough on any environment.
+    // This is the first check in `checkAccountingOracleReport`. So a neutral report
+    // with the balance increased by 1 wei is enough on any network.
     const actualBalance = await ethers.provider.getBalance(withdrawalVault.address);
 
     await expect(
@@ -459,6 +459,10 @@ describe("Integration: Accounting", () => {
       .withArgs(actualBalance);
   });
 
+  // The EL rewards vault check is the second one in `checkAccountingOracleReport`.
+  // The first check (withdrawal vault) passes because the helper reports the real
+  // balance by default. `reportElVault` must stay enabled here: if it is false,
+  // the helper sets the reported value to zero.
   it("Should revert with IncorrectELRewardsVaultBalance when reported EL rewards vault balance exceeds the actual one", async () => {
     const { oracleReportSanityChecker, elRewardsVault } = ctx.contracts;
 
@@ -477,6 +481,9 @@ describe("Integration: Accounting", () => {
       .withArgs(actualBalance);
   });
 
+  // The helper uses the passed `sharesRequestedToBurn` as is and does not read it from
+  // the burner again. So the too-big value reaches the checker without changes. If the
+  // burner is empty, the actual value is 0 and one extra share is enough to fail the check.
   it("Should revert with IncorrectSharesRequestedToBurn when reported shares exceed the burner's actual request", async () => {
     const { oracleReportSanityChecker, burner } = ctx.contracts;
 
@@ -502,9 +509,11 @@ describe("Integration: Accounting", () => {
 
     await ensureFirstPostMigrationReport(ctx);
 
-    // Align to the next frame BEFORE creating the request: the report timestamp equals the
-    // frame's ref slot time, so a request created after frame start is always younger than
-    // the report timestamp and trips `reportTimestamp < requestTimestamp + margin`.
+    // Move to the next frame BEFORE creating the request. The report timestamp equals
+    // the time of the frame's ref slot. So a request created after the frame start is
+    // always younger than the report timestamp. The condition
+    // `reportTimestamp < requestTimestamp + margin` is then true for any
+    // `requestTimestampMargin >= 0`, on any network.
     await waitNextAvailableReportTime(ctx);
 
     await lido.connect(agent).submit(ZeroAddress, { value: ether("2") });
@@ -514,9 +523,10 @@ describe("Integration: Accounting", () => {
     const requestId = await withdrawalQueue.getLastRequestId();
     const [{ timestamp: requestTimestamp }] = await withdrawalQueue.getWithdrawalStatus([requestId]);
 
-    // The fresh request is passed as the last finalization batch explicitly; the simulated
-    // share rate is computed by the helper, so the earlier share-rate check passes and the
-    // report reaches `checkWithdrawalQueueOracleReport`.
+    // The new request is passed as the last finalization batch. The helper computes the
+    // simulated share rate itself, so the share-rate check (which runs first) passes and
+    // the report reaches `checkWithdrawalQueueOracleReport`. That check reads only the
+    // timestamp of the last batch id.
     await expect(
       reportWithoutClActivation(ctx, {
         waitNextReportTime: false,
@@ -529,16 +539,19 @@ describe("Integration: Accounting", () => {
       .withArgs(requestTimestamp);
   });
 
-  // Prepare a finalizable withdrawal request and build a dry-run report with non-empty
-  // finalization batches, so `checkSimulatedShareRate` is reached on submission.
+  // Prepare a withdrawal request that can be finalized, and build a dry-run report with
+  // non-empty finalization batches. `checkSimulatedShareRate` runs only when the batches
+  // are non-empty. Callers change only `simulatedShareRate` in the returned data and
+  // submit it with `submitReportDataWithConsensus`. `report()` is not used because it
+  // would compute the rate again and overwrite the change.
   async function prepareReportWithFinalization() {
     const { lido, oracleReportSanityChecker, withdrawalQueue } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
 
     await ensureFirstPostMigrationReport(ctx);
 
-    // WQ finalization is FIFO. Forks can start with live unfinalized requests,
-    // so clear pre-existing queue items before creating the request under test.
+    // WQ finalization is FIFO. A fork can already have unfinalized requests,
+    // so finalize them before creating the request for this test.
     if ((await withdrawalQueue.getLastFinalizedRequestId()) !== (await withdrawalQueue.getLastRequestId())) {
       await finalizeWQViaElVault(ctx);
     }
@@ -547,7 +560,7 @@ describe("Integration: Accounting", () => {
     await lido.connect(agent).approve(withdrawalQueue, ether("1"));
     await withdrawalQueue.connect(agent).requestWithdrawals([ether("1")], agent.address);
 
-    // Age the request past the margin so it is eligible for finalization batches
+    // Make the request older than the margin, so it can go into finalization batches
     const { requestTimestampMargin, simulatedShareRateDeviationBPLimit } =
       await oracleReportSanityChecker.getOracleReportLimits();
     await advanceChainTime(requestTimestampMargin + 1n);
@@ -562,9 +575,9 @@ describe("Integration: Accounting", () => {
       "Expected non-empty withdrawal finalization batches in dry-run report",
     );
 
-    // The dry-run simulated share rate matches the actual rate the checker reconstructs
-    // (up to rounding and the finalization feedback of a 1 ETH request), so a deviation of
-    // limit + 2 BP is guaranteed to land strictly above the limit.
+    // The dry-run share rate is almost equal to the rate the checker computes on-chain.
+    // The difference is only rounding and the small effect of the 1 ETH request.
+    // So a deviation of limit + 2 BP is always strictly above the limit.
     const simulatedShareRate = BigInt(data.simulatedShareRate);
     const deviationDelta = (simulatedShareRate * (simulatedShareRateDeviationBPLimit + 2n)) / 10_000n + 1n;
 
@@ -617,8 +630,8 @@ describe("Integration: Accounting", () => {
     const { lido, withdrawalQueue } = ctx.contracts;
     const agent = await ctx.getSigner("agent");
 
-    // WQ finalization is FIFO. Forks can start with live unfinalized requests,
-    // so clear pre-existing queue items before creating the request under test.
+    // WQ finalization is FIFO. A fork can already have unfinalized requests,
+    // so finalize them before creating the request for this test.
     if ((await withdrawalQueue.getLastFinalizedRequestId()) !== (await withdrawalQueue.getLastRequestId())) {
       await finalizeWQViaElVault(ctx);
     }

@@ -12,12 +12,14 @@ import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 import { Snapshot } from "test/suite";
 
 /**
- * Integration test for the exit-balance limit of the sanity checker, exercised through
+ * Integration test for the exit-balance limit of the sanity checker. It goes through
  * the real ValidatorsExitBusOracle consensus path:
  * HashConsensus -> ValidatorsExitBusOracle.submitReportData -> sanity checker.
+ * This is the only path that reaches `checkExitBusOracleReport`: the hash-based
+ * `submitExitRequestsData` flow checks its own per-frame limit instead.
  *
- * `checkExitBusOracleReport` runs before the per-request key verification, so the report
- * only needs a real module id: each request contributes the module's max effective
+ * `checkExitBusOracleReport` runs before the keys of the requests are verified. So the
+ * report only needs a real module id. Each request adds the module's max effective
  * balance weight (32 ETH for WC 0x01 modules like NOR) to the checked sum.
  */
 describe("Integration: ValidatorsExitBusOracle report limits", () => {
@@ -40,7 +42,7 @@ describe("Integration: ValidatorsExitBusOracle report limits", () => {
   it("Should revert with IncorrectSumOfExitBalancePerReport when the exit balance sum exceeds the limit", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
 
-    // With a zeroed limit a single NOR exit request (32 ETH weight) trips the check
+    // With the limit set to zero, one NOR exit request (32 ETH weight) fails the check
     await updateOracleReportLimits(ctx, { maxBalanceExitRequestedPerReportInEth: 0n });
 
     const expectedBalanceSumEth = (await oracleReportSanityChecker.getOracleReportLimits())

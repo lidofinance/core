@@ -16,12 +16,12 @@ import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 import { Snapshot } from "test/suite";
 
 /**
- * Integration tests for the extra-data transaction limits of the sanity checker,
- * exercised through the real AccountingOracle.submitReportExtraDataList path.
+ * Integration tests for the extra-data transaction limits of the sanity checker.
+ * They go through the real AccountingOracle.submitReportExtraDataList path.
  *
- * The extra-data items reference real NOR operators with deposited validators, so the
- * items are fully processable: the limits are checked after the items loop, and the
- * whole transaction reverts on the sanity check.
+ * The extra-data items use real NOR operators with deposited validators, so the oracle
+ * can process every item. The limits are checked after the items loop, and the whole
+ * transaction reverts on the sanity check.
  */
 describe("Integration: AccountingOracle extra data limits", () => {
   let ctx: ProtocolContext;
@@ -36,8 +36,8 @@ describe("Integration: AccountingOracle extra data limits", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    // reportWithoutExtraData reports the withdrawal vault as zero, so the ORSC
-    // baseline must be normalized to zero first
+    // reportWithoutExtraData reports the withdrawal vault balance as zero, so the
+    // sanity checker baseline must be set to zero first
     await ensureFirstPostMigrationReport(ctx);
     await normalizeWithdrawalVaultBaseline(ctx, 0n);
 
@@ -55,7 +55,7 @@ describe("Integration: AccountingOracle extra data limits", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
-  /** One exited-validators extra-data entry (current exited + 1) per operator. */
+  /** Build one exited-validators extra-data entry (current exited + 1) per operator. */
   const buildExitedEntries = async () => {
     const { nor } = ctx.contracts;
 
@@ -76,9 +76,11 @@ describe("Integration: AccountingOracle extra data limits", () => {
   };
 
   /**
-   * Submit the main report committing to the extra data, carrying the deposits accumulated
-   * on the fork forward as CL pending balance (same arithmetic as reportWithoutClActivation),
-   * so the sanity checker does not treat them as activated validators.
+   * Submit the main report that commits to the extra data. The deposits collected on
+   * the fork are reported as CL pending balance (the same math as in
+   * reportWithoutClActivation), so the sanity checker does not count them as activated
+   * validators. Without this, on a mainnet fork the main report would revert with
+   * IncorrectTotalActivatedBalance before any extra data is submitted.
    */
   const submitMainReport = async (
     numExitedValidatorsByStakingModule: bigint[],
@@ -111,7 +113,7 @@ describe("Integration: AccountingOracle extra data limits", () => {
     const { entries, numExitedValidatorsByStakingModule, stakingModuleIdsWithNewlyExitedValidators } =
       await buildExitedEntries();
 
-    // Two single-operator items packed into one transaction (chunk) against the limit of 1
+    // Two items with one operator each go into one transaction (chunk), while the limit is 1
     const items: ItemType[] = entries.map(({ operatorId, exitedCount }) => ({
       moduleId: Number(NOR_MODULE_ID),
       nodeOpIds: [Number(operatorId)],
@@ -140,7 +142,8 @@ describe("Integration: AccountingOracle extra data limits", () => {
     const { entries, numExitedValidatorsByStakingModule, stakingModuleIdsWithNewlyExitedValidators } =
       await buildExitedEntries();
 
-    // A single item carrying two node operators against the limit of 1
+    // One item with two node operators, while the limit is 1. The checker reports
+    // the index of the bad item and its node-operator count.
     const items: ItemType[] = [
       {
         moduleId: Number(NOR_MODULE_ID),

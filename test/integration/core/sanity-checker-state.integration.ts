@@ -7,9 +7,9 @@ import { readNetworkState, Sk } from "lib/state-file";
 import { Snapshot } from "test/suite";
 
 /**
- * Integration state checks for the deployed OracleReportSanityChecker: wiring and
- * configuration must match the recorded deploy state of the current network
- * (scratch deploy or fork after upgrade).
+ * State checks for the deployed OracleReportSanityChecker. Its wiring and configuration
+ * must match the recorded deploy state of the current network (scratch deploy or fork
+ * after upgrade).
  */
 describe("Integration: OracleReportSanityChecker state", () => {
   let ctx: ProtocolContext;
@@ -32,8 +32,11 @@ describe("Integration: OracleReportSanityChecker state", () => {
   it("Should expose the oracle report limits the checker was deployed with", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
 
-    // The network state file records the limits list the checker was constructed with:
-    // constructorArgs = [lidoLocator, accounting, admin, limitsList]
+    // The network state file stores the limits list the checker was deployed with
+    // (constructorArgs = [lidoLocator, accounting, admin, limitsList]). It is correct
+    // for both environments: a scratch deploy writes it, and a fork upgrade re-deploys
+    // the checker and writes the limits again. If the DAO later changes a limit on a
+    // live network, this test fails on purpose: it is a signal that the config drifted.
     const state = readNetworkState();
     const expectedLimits: Record<string, number> = state[Sk.oracleReportSanityChecker].constructorArgs[3];
     expect(Object.keys(expectedLimits).length).to.equal(16, "expected the full limits list in the deploy state");
@@ -48,6 +51,9 @@ describe("Integration: OracleReportSanityChecker state", () => {
     }
   });
 
+  // The second opinion oracle is not set in the constructor and must stay unset after
+  // deploy/upgrade. The negative-rebase tests depend on this: with no second opinion
+  // oracle the checker reverts directly.
   it("Should have no second opinion oracle configured", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
 
