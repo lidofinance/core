@@ -546,7 +546,6 @@ describe("Integration: Accounting", () => {
   // would compute the rate again and overwrite the change.
   async function prepareReportWithFinalization() {
     const { lido, oracleReportSanityChecker, withdrawalQueue } = ctx.contracts;
-    const agent = await ctx.getSigner("agent");
 
     await ensureFirstPostMigrationReport(ctx);
 
@@ -556,7 +555,13 @@ describe("Integration: Accounting", () => {
       await finalizeWQViaElVault(ctx);
     }
 
-    await lido.connect(agent).submit(ZeroAddress, { value: ether("10") });
+    // The dry-run batches are funded from the withdrawals reserve (the reported vault
+    // balances stay neutral in this test). The deposits reserve is filled from the
+    // buffer first, so the submit covers the full reserve target plus the request,
+    // same as in the deposits-reserve tests.
+    const submitValue = (await lido.getDepositsReserveTarget()) + ether("1");
+    const agent = await ctx.getSigner("agent", submitValue + ether("10"));
+    await lido.connect(agent).submit(ZeroAddress, { value: submitValue });
     await lido.connect(agent).approve(withdrawalQueue, ether("1"));
     await withdrawalQueue.connect(agent).requestWithdrawals([ether("1")], agent.address);
 
