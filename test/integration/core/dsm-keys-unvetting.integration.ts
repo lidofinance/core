@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ZeroHash } from "ethers";
+import { BigNumberish, Contract, Wallet } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -10,6 +10,7 @@ import { DepositSecurityModule } from "typechain-types";
 import { BigIntMath, certainAddress, DSMUnvetMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { setSingleGuardian } from "lib/protocol/helpers/dsm";
+import { deployDelegationContract } from "lib/protocol/helpers/edf";
 import {
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
@@ -18,24 +19,24 @@ import {
 
 import { Snapshot } from "test/suite";
 
-// Just an arbitrary account for using in tests
-const GUARDIAN_PRIVATE_KEY = "0x516b8a7d9290502f5661da81f0cf43893e3d19cb9aea3c426cfb36e8186e9c09";
-
 describe("Integration: DSM keys unvetting", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
+  let delegationOwner: HardhatEthersSigner;
+  let delegate: HardhatEthersSigner;
   let dsm: DepositSecurityModule;
 
   let snapshot: string;
   let originalState: string;
 
-  before(async () => {
+  before(async function () {
     ctx = await getProtocolContext();
-    dsm = ctx.contracts.depositSecurityModule;
-
     snapshot = await Snapshot.take();
 
-    [stranger] = await ethers.getSigners();
+    if (!ctx.isScratch) this.skip();
+    dsm = ctx.contracts.depositSecurityModule;
+
+    [stranger, delegationOwner, delegate] = await ethers.getSigners();
 
     DSMUnvetMessage.setMessagePrefix(await dsm.UNVET_MESSAGE_PREFIX());
   });
@@ -45,6 +46,22 @@ describe("Integration: DSM keys unvetting", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   after(async () => await Snapshot.restore(snapshot));
+
+  async function deployGuardian(delegateAddress: string) {
+    const guardian = await deployDelegationContract(delegationOwner, delegateAddress);
+    await setSingleGuardian(ctx, guardian.address);
+    return guardian;
+  }
+
+  type UnvetCallArgs = readonly [BigNumberish, string, BigNumberish, BigNumberish, string, string];
+
+  async function executeUnvet(guardian: Contract, caller: HardhatEthersSigner, args: UnvetCallArgs) {
+    const data = dsm.interface.encodeFunctionData("unvetSigningKeys", [
+      ...args,
+      { guardian: ethers.ZeroAddress, signature: "0x" },
+    ]);
+    return await (guardian.connect(caller) as Contract).execute(await dsm.getAddress(), data);
+  }
 
   it("Should allow owner to set max operators per unvetting", async () => {
     const owner = await dsm.getOwner();
@@ -78,8 +95,9 @@ describe("Integration: DSM keys unvetting", () => {
     const vettedSigningKeysCounts = ethers.solidityPacked(["uint128"], [1]);
 
     // Create signature with non-guardian private key
-    const nonGuardianPrivateKey = "0x" + "1".repeat(64);
+    const nonGuardian = Wallet.createRandom();
     const unvetMessage = new DSMUnvetMessage(
+      stranger.address,
       blockNumber,
       blockHash,
       stakingModuleId,
@@ -87,7 +105,7 @@ describe("Integration: DSM keys unvetting", () => {
       nodeOperatorIds,
       vettedSigningKeysCounts,
     );
-    const sig = await unvetMessage.sign(nonGuardianPrivateKey);
+    const sig = await unvetMessage.sign(nonGuardian.privateKey);
 
     await expect(
       dsm
@@ -107,11 +125,10 @@ describe("Integration: DSM keys unvetting", () => {
   it("Should allow stranger to unvet keys with valid guardian signature", async () => {
     const { nor, stakingRouter } = ctx.contracts;
 
-    // Create new guardian with known (arbitrary) private key
-    const guardian = new ethers.Wallet(GUARDIAN_PRIVATE_KEY).address;
+    const guardianDelegate = Wallet.createRandom();
 
     // Set single guardian
-    await setSingleGuardian(ctx, guardian);
+    const guardian = await deployGuardian(guardianDelegate.address);
 
     // Prepare unvet parameters
     const stakingModuleId = 1;
@@ -148,6 +165,7 @@ describe("Integration: DSM keys unvetting", () => {
     const nonce = await stakingRouter.getStakingModuleNonce(stakingModuleId);
     // Generate valid guardian signature
     const unvetMessage = new DSMUnvetMessage(
+      guardian.address,
       blockNumber,
       blockHash,
       stakingModuleId,
@@ -156,7 +174,7 @@ describe("Integration: DSM keys unvetting", () => {
       vettedSigningKeysCounts,
     );
     // Stranger should be able to unvet with valid guardian signature
-    const sig = await unvetMessage.sign(GUARDIAN_PRIVATE_KEY);
+    const sig = await unvetMessage.sign(guardianDelegate.privateKey);
 
     // Get node operator state before unvetting
     expect(totalVettedValidators).to.be.not.equal(vettedSigningKeysCount);
@@ -183,11 +201,9 @@ describe("Integration: DSM keys unvetting", () => {
     const { nor, stakingRouter } = ctx.contracts;
 
     // Create new guardian with known (arbitrary)private key
-    const guardian = new ethers.Wallet(GUARDIAN_PRIVATE_KEY).address;
-    const guardianSigner = await impersonate(guardian, ether("1"));
+    const guardian = await deployGuardian(delegate.address);
 
     // Set single guardian
-    await setSingleGuardian(ctx, guardian);
     const operatorId = 0n;
 
     // Get node operator state before unvetting
@@ -227,12 +243,14 @@ describe("Integration: DSM keys unvetting", () => {
 
     // Guardian should be able to unvet directly without signature
     await expect(
-      dsm
-        .connect(guardianSigner)
-        .unvetSigningKeys(blockNumber, blockHash, stakingModuleId, nonce, nodeOperatorIds, vettedSigningKeysCounts, {
-          r: ZeroHash,
-          vs: ZeroHash,
-        }),
+      executeUnvet(guardian.contract, delegate, [
+        blockNumber,
+        blockHash,
+        stakingModuleId,
+        nonce,
+        nodeOperatorIds,
+        vettedSigningKeysCounts,
+      ]),
     )
       .to.emit(nor, "VettedSigningKeysCountChanged")
       .withArgs(operatorId, totalVettedValidatorsAfter);
@@ -278,15 +296,17 @@ describe("Integration: DSM keys unvetting", () => {
     const vettedSigningKeysCounts = ethers.solidityPacked(["uint128"], [vettedSigningKeysCountsAfterUnvet]);
 
     // Set single guardian
-    await setSingleGuardian(ctx, stranger.address);
+    const guardian = await deployGuardian(stranger.address);
 
     // Guardian should be able to unvet directly without signature
-    const tx = await dsm
-      .connect(stranger)
-      .unvetSigningKeys(blockNumber, blockHash, stakingModuleId, nonce, nodeOperatorIds, vettedSigningKeysCounts, {
-        r: ZeroHash,
-        vs: ZeroHash,
-      });
+    const tx = await executeUnvet(guardian.contract, stranger, [
+      blockNumber,
+      blockHash,
+      stakingModuleId,
+      nonce,
+      nodeOperatorIds,
+      vettedSigningKeysCounts,
+    ]);
 
     // Check events
     const receipt = await tx.wait();
