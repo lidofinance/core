@@ -39,6 +39,8 @@ export type DelegationDeploymentPlanItem = {
   owner?: string;
   delegate?: string;
   cooldown?: number;
+  runtimeCodeHash?: string;
+  deploymentTx?: string;
 };
 
 function mergeConfiguredAddress(manifestAddress: string | undefined, stateAddress: string | undefined, label: string) {
@@ -75,8 +77,18 @@ export function buildDelegationDeploymentPlan(
       `Delegation contract ${entry.id} delegate`,
     );
     const cooldown = mergeConfiguredValue(entry.cooldown, saved?.cooldown, `Delegation contract ${entry.id} cooldown`);
+    const runtimeCodeHash = mergeConfiguredValue(
+      entry.runtimeCodeHash?.toLowerCase(),
+      saved?.runtimeCodeHash?.toLowerCase(),
+      `Delegation contract ${entry.id} runtime code hash`,
+    );
+    const deploymentTx = mergeConfiguredValue(
+      entry.deploymentTx?.toLowerCase(),
+      saved?.deploymentTx?.toLowerCase(),
+      `Delegation contract ${entry.id} deployment transaction`,
+    );
 
-    if (address && (!owner || !delegate || cooldown === undefined)) {
+    if (address && (!owner || !delegate || cooldown === undefined || !runtimeCodeHash || !deploymentTx)) {
       throw new Error(`Delegation contract ${entry.id} has an address but no complete on-chain configuration`);
     }
 
@@ -87,6 +99,8 @@ export function buildDelegationDeploymentPlan(
       owner,
       delegate,
       cooldown,
+      runtimeCodeHash,
+      deploymentTx,
     };
   });
 }
@@ -154,6 +168,7 @@ async function validateDelegationContract(
   expectedOwner: string,
   expectedDelegate: string,
   expectedCooldown: number,
+  expectedRuntimeCodeHash?: string,
 ): Promise<string> {
   const normalizedAddress = ethers.getAddress(address);
   const code = await ethers.provider.getCode(normalizedAddress);
@@ -178,7 +193,14 @@ async function validateDelegationContract(
     throw new Error(`Delegation contract ${id} does not support ERC-1271`);
   }
 
-  return ethers.keccak256(code);
+  const runtimeCodeHash = ethers.keccak256(code);
+  if (expectedRuntimeCodeHash && runtimeCodeHash.toLowerCase() !== expectedRuntimeCodeHash.toLowerCase()) {
+    throw new Error(
+      `Delegation contract ${id} runtime code hash mismatch: expected ${expectedRuntimeCodeHash}, got ${runtimeCodeHash}`,
+    );
+  }
+
+  return runtimeCodeHash;
 }
 
 async function deployDelegationContract(
@@ -218,6 +240,41 @@ async function deployDelegationContract(
   };
 }
 
+async function validateDeploymentProvenance(
+  factory: Contract,
+  id: string,
+  deploymentTx: string,
+  instance: string,
+  owner: string,
+  delegate: string,
+  cooldown: number,
+) {
+  const receipt = await ethers.provider.getTransactionReceipt(deploymentTx);
+  if (!receipt || receipt.status !== 1) {
+    throw new Error(`Delegation contract ${id} deployment transaction is missing or failed`);
+  }
+
+  const event = receipt.logs
+    .filter((entry: Log) => ethers.getAddress(entry.address) === ethers.getAddress(factory.target.toString()))
+    .map((entry: Log) => {
+      try {
+        return factory.interface.parseLog(entry);
+      } catch {
+        return null;
+      }
+    })
+    .find((entry: LogDescription | null) => entry?.name === "DelegationContractDeployed");
+  if (!event) throw new Error(`Delegation contract ${id} has no deployment event from the configured factory`);
+  if (
+    ethers.getAddress(event.args.instance) !== ethers.getAddress(instance) ||
+    ethers.getAddress(event.args.owner) !== ethers.getAddress(owner) ||
+    ethers.getAddress(event.args.delegate) !== ethers.getAddress(delegate) ||
+    event.args.cooldown !== BigInt(cooldown)
+  ) {
+    throw new Error(`Delegation contract ${id} deployment event configuration mismatch`);
+  }
+}
+
 function persistDelegationContract(
   factoryAddress: string,
   contracts: Record<string, StoredDelegationContract>,
@@ -248,11 +305,12 @@ export async function deployOrReuseEDFDelegationContracts(
       throw new Error("DelegationFactory address and runtime code hash are required outside the local Hoodi fork");
     }
     const incompleteContract = framework.delegationContracts.find(
-      ({ address, owner, delegate, cooldown }) => !address || !owner || !delegate || cooldown === undefined,
+      ({ address, owner, delegate, cooldown, runtimeCodeHash, deploymentTx }) =>
+        !address || !owner || !delegate || cooldown === undefined || !runtimeCodeHash || !deploymentTx,
     );
     if (incompleteContract) {
       throw new Error(
-        `Delegation contract ${incompleteContract.id} requires address, owner, delegate and cooldown outside the local Hoodi fork`,
+        `Delegation contract ${incompleteContract.id} requires address, owner, delegate, cooldown, runtimeCodeHash and deploymentTx outside the local Hoodi fork`,
       );
     }
   }
@@ -285,7 +343,7 @@ export async function deployOrReuseEDFDelegationContracts(
     let delegate = item.delegate;
     let cooldown = item.cooldown;
     let address = item.address;
-    let deploymentTx = stored[item.id]?.deploymentTx;
+    let deploymentTx = item.deploymentTx;
 
     if (!owner || !delegate) {
       owner = await deployer.getAddress();
@@ -306,7 +364,16 @@ export async function deployOrReuseEDFDelegationContracts(
       log(`Using ${item.id}: ${cy(address!)}`);
     }
 
-    const runtimeCodeHash = await validateDelegationContract(item.id, address!, owner, delegate, cooldown);
+    await validateDeploymentProvenance(factory, item.id, deploymentTx!, address!, owner, delegate, cooldown);
+
+    const runtimeCodeHash = await validateDelegationContract(
+      item.id,
+      address!,
+      owner,
+      delegate,
+      cooldown,
+      item.runtimeCodeHash,
+    );
     persistDelegationContract(factoryAddress, stored, item.id, {
       address: address!,
       owner: ethers.getAddress(owner),

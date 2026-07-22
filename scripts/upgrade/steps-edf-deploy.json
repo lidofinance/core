@@ -2,6 +2,8 @@
   "steps": [
     "upgrade/steps/0000-check-env",
     "upgrade/steps/0910-edf-deploy-delegation-contracts",
-    "upgrade/steps/0911-edf-deploy"
+    "upgrade/steps/0911-edf-deploy",
+    "upgrade/steps/0912-edf-deploy-upgrade-template",
+    "upgrade/steps/0913-edf-deploy-upgrade-vote-script"
   ]
 }

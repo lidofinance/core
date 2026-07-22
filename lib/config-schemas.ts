@@ -436,15 +436,22 @@ export const EDFDelegationContractSchema = z
     owner: EthereumAddressSchema.optional(),
     delegate: EthereumAddressSchema.optional(),
     cooldown: NonNegativeIntSchema.optional(),
+    runtimeCodeHash: Bytes32Schema.optional(),
+    deploymentTx: Bytes32Schema.optional(),
   })
   .superRefine((contract, ctx) => {
-    const configuredFields = [contract.address, contract.owner, contract.delegate, contract.cooldown].filter(
-      (value) => value !== undefined,
-    ).length;
-    if (configuredFields !== 0 && configuredFields !== 4) {
+    const configuredFields = [
+      contract.address,
+      contract.owner,
+      contract.delegate,
+      contract.cooldown,
+      contract.runtimeCodeHash,
+      contract.deploymentTx,
+    ].filter((value) => value !== undefined).length;
+    if (configuredFields !== 0 && configuredFields !== 6) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "address, owner, delegate and cooldown must be configured together",
+        message: "address, owner, delegate, cooldown, runtimeCodeHash and deploymentTx must be configured together",
       });
     }
     if (contract.owner && contract.delegate && contract.owner.toLowerCase() === contract.delegate.toLowerCase()) {
@@ -492,6 +499,11 @@ export const EDFUpgradeParametersSchema = z
       guardianMappings: z.array(EDFMemberMappingSchema).min(1),
     }),
     oracleCommittees: z.array(EDFOracleCommitteeSchema).length(4),
+    upgradeVoteScript: z
+      .object({
+        expiryTimestamp: PositiveIntSchema.optional(),
+      })
+      .default({}),
   })
   .superRefine((parameters, ctx) => {
     const delegationContracts = parameters.executionDelegationFramework.delegationContracts;
