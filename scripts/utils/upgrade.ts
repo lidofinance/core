@@ -23,7 +23,12 @@ import {
   or,
   yl,
 } from "lib";
-import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
+import {
+  EDFUpgradeParameters,
+  UpgradeParameters,
+  validateEDFUpgradeParameters,
+  validateUpgradeParameters,
+} from "lib/config-schemas";
 import { getTxLink } from "lib/explorer";
 import {
   DeploymentState,
@@ -45,7 +50,7 @@ const VOTE_ID = BigInt(process.env.VOTE_ID || "0");
 const VOTE_DESCRIPTION = process.env.VOTE_DESCRIPTION || "vote-description";
 const VOTE_MODE = process.env.VOTE_MODE || "dg"; // DG mode by default
 
-export { UpgradeParameters };
+export { EDFUpgradeParameters, UpgradeParameters };
 
 ///
 /// ---- Upgrade helpers ----
@@ -63,6 +68,18 @@ export function readUpgradeParameters(skipValidation: boolean = false): UpgradeP
     return validateUpgradeParameters(parsedData);
   } catch (error) {
     throw new Error(`Invalid upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
+  }
+}
+
+export function readEDFUpgradeParameters(): EDFUpgradeParameters {
+  const filePath = getUpgradeParametersFilePath();
+  const rawData = fs.readFileSync(filePath, "utf8");
+  const parsedData = toml.parse(rawData);
+
+  try {
+    return validateEDFUpgradeParameters(parsedData);
+  } catch (error) {
+    throw new Error(`Invalid EDF upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
   }
 }
 

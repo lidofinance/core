@@ -55,8 +55,10 @@
     "deploy:scratch:local": "NETWORK=local yarn deploy:scratch",
     "deploy:upgrade": "UPGRADE=true yarn deploy:helper:run",
     "deploy:upgrade:base": "STEPS_FILE=upgrade/steps-deploy-base.json yarn deploy:upgrade",
+    "deploy:upgrade:edf": "STEPS_FILE=upgrade/steps-edf-deploy.json yarn deploy:upgrade",
     "deploy:upgrade:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn deploy:upgrade",
     "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
+    "deploy:upgrade:edf:local": "NETWORK=hoodi RUN_NETWORK=local yarn deploy:upgrade:edf",
     "deploy:upgrade:template:local": "NETWORK=local yarn deploy:upgrade:template",
     "postinstall": "husky"
   },

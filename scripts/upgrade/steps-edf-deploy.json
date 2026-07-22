@@ -1,0 +1,7 @@
+{
+  "steps": [
+    "upgrade/steps/0000-check-env",
+    "upgrade/steps/0910-edf-deploy-delegation-contracts",
+    "upgrade/steps/0911-edf-deploy"
+  ]
+}

@@ -8,8 +8,8 @@ import path from "path";
 import { cy, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
-const EDF_REPO = "https://github.com/lidofinance/execution-delegation-framework.git";
-const EDF_REPO_BRANCH = "feat/local-devnet";
+export const EDF_REPO = "https://github.com/lidofinance/execution-delegation-framework.git";
+export const EDF_REPO_BRANCH = "feat/local-devnet";
 
 type ExternalDeployArtifact = {
   "ChainId"?: number | string;
@@ -58,6 +58,10 @@ function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEn
   });
 }
 
+function runAndRead(command: string, args: string[], cwd: string): string {
+  return execFileSync(command, args, { cwd, encoding: "utf8" }).trim();
+}
+
 function readArtifact(artifactPath: string): ExternalDeployArtifact {
   if (!fs.existsSync(artifactPath)) {
     throw new Error(`External EDF deploy artifact not found at ${artifactPath}`);
@@ -65,13 +69,54 @@ function readArtifact(artifactPath: string): ExternalDeployArtifact {
   return JSON.parse(fs.readFileSync(artifactPath, "utf8")) as ExternalDeployArtifact;
 }
 
-export async function deployExecutionDelegationFramework(state: DeploymentState): Promise<void> {
+type EDFDeploymentOptions = {
+  expectedAddress?: string;
+  expectedRuntimeCodeHash?: string;
+  allowDeploy?: boolean;
+};
+
+async function validateFactory(address: string, expectedRuntimeCodeHash?: string): Promise<string> {
+  const normalizedAddress = ethers.getAddress(address);
+  const code = await ethers.provider.getCode(normalizedAddress);
+  if (code === "0x") {
+    throw new Error(`DelegationFactory at ${normalizedAddress} has no bytecode`);
+  }
+  const runtimeCodeHash = ethers.keccak256(code);
+  if (expectedRuntimeCodeHash && runtimeCodeHash.toLowerCase() !== expectedRuntimeCodeHash.toLowerCase()) {
+    throw new Error(
+      `DelegationFactory runtime code hash mismatch: expected ${expectedRuntimeCodeHash}, got ${runtimeCodeHash}`,
+    );
+  }
+  return runtimeCodeHash;
+}
+
+export async function deployExecutionDelegationFramework(
+  state: DeploymentState,
+  options: EDFDeploymentOptions = {},
+): Promise<string> {
   const existingAddress = state[Sk.delegationFactory]?.address;
-  const existingArtifact = state[Sk.delegationFactory]?.deployArtifact;
-  if (existingAddress && existingArtifact) {
-    log(`Using the deployed DelegationFactory address: ${cy(existingAddress)}`);
+  const expectedAddress = options.expectedAddress ? ethers.getAddress(options.expectedAddress) : undefined;
+  if (existingAddress && expectedAddress && ethers.getAddress(existingAddress) !== expectedAddress) {
+    throw new Error(`DelegationFactory address mismatch: state ${existingAddress}, manifest ${expectedAddress}`);
+  }
+
+  const reusableAddress = existingAddress ?? expectedAddress;
+  if (reusableAddress) {
+    const normalizedAddress = ethers.getAddress(reusableAddress);
+    const runtimeCodeHash = await validateFactory(normalizedAddress, options.expectedRuntimeCodeHash);
+    updateObjectInState(Sk.delegationFactory, {
+      address: normalizedAddress,
+      runtimeCodeHash,
+      repository: EDF_REPO,
+      ref: state[Sk.delegationFactory]?.ref ?? EDF_REPO_BRANCH,
+    });
+    log(`Using the deployed DelegationFactory address: ${cy(normalizedAddress)}`);
     log.emptyLine();
-    return;
+    return normalizedAddress;
+  }
+
+  if (options.allowDeploy === false) {
+    throw new Error("DelegationFactory is missing and deployment is disabled for this network");
   }
 
   if (hardhatNetwork.name === "hardhat") {
@@ -111,6 +156,10 @@ export async function deployExecutionDelegationFramework(state: DeploymentState)
 
     const artifactPath = path.join(tmpDir, artifactsDir, "deploy-local-devnet.json");
     const artifact = readArtifact(artifactPath);
+    const clonedRef = runAndRead("git", ["rev-parse", "HEAD"], tmpDir);
+    if (!artifact["git-ref"] || artifact["git-ref"].toLowerCase() !== clonedRef.toLowerCase()) {
+      throw new Error(`EDF deploy artifact git ref ${artifact["git-ref"]} does not match cloned ref ${clonedRef}`);
+    }
     if (artifact.ChainId === undefined || BigInt(artifact.ChainId) !== chainId) {
       throw new Error(`EDF deploy artifact chain id ${artifact.ChainId} does not match RPC chain id ${chainId}`);
     }
@@ -121,19 +170,21 @@ export async function deployExecutionDelegationFramework(state: DeploymentState)
     }
 
     const normalizedFactoryAddress = ethers.getAddress(factoryAddress);
-    if ((await ethers.provider.getCode(normalizedFactoryAddress)) === "0x") {
-      throw new Error(`DelegationFactory at ${normalizedFactoryAddress} has no bytecode`);
-    }
+    const runtimeCodeHash = await validateFactory(normalizedFactoryAddress, options.expectedRuntimeCodeHash);
 
     updateObjectInState(Sk.delegationFactory, {
       address: normalizedFactoryAddress,
       contract: "external:execution-delegation-framework/src/DelegationFactory.sol:DelegationFactory",
       constructorArgs: [],
       deployArtifact: artifact,
+      runtimeCodeHash,
+      repository: EDF_REPO,
+      ref: clonedRef,
     });
 
     log(`Execution Delegation Framework deployed at: ${cy(normalizedFactoryAddress)}`);
     log.emptyLine();
+    return normalizedFactoryAddress;
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

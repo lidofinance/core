@@ -426,9 +426,186 @@ export const UpgradeParametersSchema = z.object({
   aragonAppVersions: AragonAppVersionsSchema.optional(),
 });
 
+const EDFDelegationContractIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "Invalid delegation contract id");
+const Bytes32Schema = z.string().regex(/^0x[a-fA-F0-9]{64}$/, "Invalid bytes32 value");
+
+export const EDFDelegationContractSchema = z
+  .object({
+    id: EDFDelegationContractIdSchema,
+    address: EthereumAddressSchema.optional(),
+    owner: EthereumAddressSchema.optional(),
+    delegate: EthereumAddressSchema.optional(),
+    cooldown: NonNegativeIntSchema.optional(),
+  })
+  .superRefine((contract, ctx) => {
+    const configuredFields = [contract.address, contract.owner, contract.delegate, contract.cooldown].filter(
+      (value) => value !== undefined,
+    ).length;
+    if (configuredFields !== 0 && configuredFields !== 4) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "address, owner, delegate and cooldown must be configured together",
+      });
+    }
+    if (contract.owner && contract.delegate && contract.owner.toLowerCase() === contract.delegate.toLowerCase()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "owner and delegate must differ" });
+    }
+  });
+
+const EDFMemberMappingSchema = z.object({
+  oldMember: EthereumAddressSchema,
+  delegationContractId: EDFDelegationContractIdSchema,
+});
+
+const EDFOracleCommitteeIdSchema = z.enum([
+  "accounting-oracle",
+  "validators-exit-bus-oracle",
+  "csm-fee-oracle",
+  "curated-module-fee-oracle",
+]);
+
+const EDFOracleCommitteeSchema = z.object({
+  id: EDFOracleCommitteeIdSchema,
+  consensusContract: EthereumAddressSchema,
+  quorum: PositiveIntSchema,
+  memberMappings: z.array(EDFMemberMappingSchema).min(1),
+});
+
+export const EDFUpgradeParametersSchema = z
+  .object({
+    chainId: z.literal(560048),
+    executionDelegationFramework: z.object({
+      repository: z.string().url(),
+      ref: z.string().min(1),
+      factory: z
+        .object({
+          address: EthereumAddressSchema.optional(),
+          runtimeCodeHash: Bytes32Schema.optional(),
+        })
+        .default({}),
+      delegationContracts: z.array(EDFDelegationContractSchema).min(1),
+    }),
+    depositSecurityModule: z.object({
+      maxOperatorsPerUnvetting: PositiveIntSchema,
+      pauseIntentValidityPeriodBlocks: PositiveIntSchema,
+      quorum: PositiveIntSchema,
+      guardianMappings: z.array(EDFMemberMappingSchema).min(1),
+    }),
+    oracleCommittees: z.array(EDFOracleCommitteeSchema).length(4),
+  })
+  .superRefine((parameters, ctx) => {
+    const delegationContracts = parameters.executionDelegationFramework.delegationContracts;
+    const ids = new Set<string>();
+    const addresses = new Set<string>();
+
+    delegationContracts.forEach((contract, index) => {
+      if (ids.has(contract.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["executionDelegationFramework", "delegationContracts", index, "id"],
+          message: `Duplicate delegation contract id ${contract.id}`,
+        });
+      }
+      ids.add(contract.id);
+
+      if (contract.address) {
+        const address = contract.address.toLowerCase();
+        if (addresses.has(address)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["executionDelegationFramework", "delegationContracts", index, "address"],
+            message: `Duplicate delegation contract address ${contract.address}`,
+          });
+        }
+        addresses.add(address);
+      }
+    });
+
+    const validateMappings = (mappings: z.infer<typeof EDFMemberMappingSchema>[], path: (string | number)[]) => {
+      const oldMembers = new Set<string>();
+      const contractIds = new Set<string>();
+      mappings.forEach((mapping, index) => {
+        const oldMember = mapping.oldMember.toLowerCase();
+        if (oldMembers.has(oldMember)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [...path, index, "oldMember"],
+            message: `Duplicate old member ${mapping.oldMember}`,
+          });
+        }
+        oldMembers.add(oldMember);
+
+        if (contractIds.has(mapping.delegationContractId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [...path, index, "delegationContractId"],
+            message: `Duplicate delegation contract ${mapping.delegationContractId} in one committee`,
+          });
+        }
+        contractIds.add(mapping.delegationContractId);
+
+        if (!ids.has(mapping.delegationContractId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [...path, index, "delegationContractId"],
+            message: `Unknown delegation contract id ${mapping.delegationContractId}`,
+          });
+        }
+      });
+    };
+
+    const guardianMappings = parameters.depositSecurityModule.guardianMappings;
+    validateMappings(guardianMappings, ["depositSecurityModule", "guardianMappings"]);
+    if (parameters.depositSecurityModule.quorum > guardianMappings.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["depositSecurityModule", "quorum"],
+        message: "DSM quorum exceeds guardian count",
+      });
+    }
+
+    const committeeIds = new Set<string>();
+    parameters.oracleCommittees.forEach((committee, index) => {
+      committeeIds.add(committee.id);
+      validateMappings(committee.memberMappings, ["oracleCommittees", index, "memberMappings"]);
+      if (committee.quorum > committee.memberMappings.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["oracleCommittees", index, "quorum"],
+          message: `Committee ${committee.id} quorum exceeds member count`,
+        });
+      }
+    });
+    if (committeeIds.size !== EDFOracleCommitteeIdSchema.options.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["oracleCommittees"],
+        message: "Every EDF oracle committee must be configured exactly once",
+      });
+    }
+
+    const referencedIds = new Set([
+      ...guardianMappings.map(({ delegationContractId }) => delegationContractId),
+      ...parameters.oracleCommittees.flatMap(({ memberMappings }) =>
+        memberMappings.map(({ delegationContractId }) => delegationContractId),
+      ),
+    ]);
+    delegationContracts.forEach((contract, index) => {
+      if (!referencedIds.has(contract.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["executionDelegationFramework", "delegationContracts", index, "id"],
+          message: `Delegation contract ${contract.id} is not used by DSM or an oracle committee`,
+        });
+      }
+    });
+  });
+
 // Inferred types from zod schemas
 export type UpgradeParameters = z.infer<typeof UpgradeParametersSchema>;
 export type ScratchParameters = z.infer<typeof ScratchParametersSchema>;
+export type EDFUpgradeParameters = z.infer<typeof EDFUpgradeParametersSchema>;
+export type EDFDelegationContract = z.infer<typeof EDFDelegationContractSchema>;
 
 // Configuration validation functions
 export function validateUpgradeParameters(data: unknown): UpgradeParameters {
@@ -439,6 +616,10 @@ export function validateScratchParameters(data: unknown): ScratchParameters {
   return ScratchParametersSchema.parse(data);
 }
 
+export function validateEDFUpgradeParameters(data: unknown): EDFUpgradeParameters {
+  return EDFUpgradeParametersSchema.parse(data);
+}
+
 // Safe parsing functions that return either success or error
 export function safeValidateUpgradeParameters(data: unknown) {
   return UpgradeParametersSchema.safeParse(data);
@@ -446,4 +627,8 @@ export function safeValidateUpgradeParameters(data: unknown) {
 
 export function safeValidateScratchParameters(data: unknown) {
   return ScratchParametersSchema.safeParse(data);
+}
+
+export function safeValidateEDFUpgradeParameters(data: unknown) {
+  return EDFUpgradeParametersSchema.safeParse(data);
 }
