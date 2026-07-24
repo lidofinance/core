@@ -29,6 +29,10 @@ jobs:
 
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
+        # Use a specific version of Foundry in case nightly is broken
+        # https://github.com/foundry-rs/foundry/releases
+        # with:
+        #   version: nightly-54d8510c0f2b0f791f4c5ef99866c6af99b7606a
 
       - name: Print forge version
         run: forge --version
