@@ -7,9 +7,13 @@ contract Lido__MockForAccounting {
     uint256 public depositedValidatorsValue;
     uint256 public reportClValidators;
     uint256 public reportClBalance;
+    uint256 public reportClValidatorsBalance;
+    uint256 public reportClPendingBalance;
+    uint256 public depositedLastReport;
+    uint256 public depositedCurrentReport;
 
-    // Emitted when validators number delivered by the oracle
-    event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
+    // Emitted when CL balances are updated by the oracle
+    event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clValidatorsBalance, uint256 clPendingBalance);
     event Mock__CollectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _reportClBalance,
@@ -31,14 +35,46 @@ contract Lido__MockForAccounting {
         depositedValidatorsValue = _amount;
     }
 
+    function mock__setClValidatorsBalance(uint256 _amount) external {
+        reportClValidatorsBalance = _amount;
+    }
+
+    function mock__setClPendingBalance(uint256 _amount) external {
+        reportClPendingBalance = _amount;
+    }
+
+    function mock__setDepositedLastReportBalance(uint256 _amount) external {
+        depositedLastReport = _amount;
+    }
+
+    function mock__setDepositedCurrentReportBalance(uint256 _amount) external {
+        depositedCurrentReport = _amount;
+    }
+
     function getBeaconStat()
         external
         view
         returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance)
     {
         depositedValidators = depositedValidatorsValue;
-        beaconValidators = reportClValidators;
-        beaconBalance = 0;
+        beaconValidators = depositedValidators;
+        beaconBalance = reportClValidatorsBalance + reportClPendingBalance;
+    }
+
+    function getBalanceStats()
+        external
+        view
+        returns (
+            uint256 clValidatorsBalanceAtLastReport,
+            uint256 clPendingBalanceAtLastReport,
+            uint256 depositedSinceLastReport,
+            uint256 depositedForCurrentReport
+        )
+    {
+        clValidatorsBalanceAtLastReport = reportClValidatorsBalance;
+        clPendingBalanceAtLastReport = reportClPendingBalance;
+        depositedSinceLastReport = depositedLastReport;
+        depositedForCurrentReport = depositedCurrentReport;
     }
 
     function getTotalPooledEther() external pure returns (uint256) {
@@ -91,24 +127,15 @@ contract Lido__MockForAccounting {
         uint256 _sharesMintedAsFees
     ) external {}
 
-    /**
-     * @notice Process CL related state changes as a part of the report processing
-     * @dev All data validation was done by Accounting and OracleReportSanityChecker
-     * @param _reportTimestamp timestamp of the report
-     * @param _preClValidators number of validators in the previous CL state (for event compatibility)
-     * @param _reportClValidators number of validators in the current CL state
-     * @param _reportClBalance total balance of the current CL state
-     */
     function processClStateUpdate(
         uint256 _reportTimestamp,
-        uint256 _preClValidators,
-        uint256 _reportClValidators,
-        uint256 _reportClBalance
+        uint256 _clValidatorsBalance,
+        uint256 _clPendingBalance
     ) external {
-        reportClValidators = _reportClValidators;
-        reportClBalance = _reportClBalance;
+        reportClValidatorsBalance = _clValidatorsBalance;
+        reportClPendingBalance = _clPendingBalance;
 
-        emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
+        emit CLBalancesUpdated(_reportTimestamp, _clValidatorsBalance, _clPendingBalance);
     }
 
     function mintShares(address _recipient, uint256 _sharesAmount) external {

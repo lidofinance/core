@@ -1,3 +1,5 @@
+import { ZeroAddress } from "ethers";
+
 import { certainAddress, ether, impersonate, log } from "lib";
 import {
   ensureEIP4788BeaconBlockRootContractPresent,
@@ -19,6 +21,30 @@ import {
 import { ProtocolContext } from "./types";
 
 let alreadyProvisioned = false;
+
+const ensureNonZeroDepositsReserveTarget = async (ctx: ProtocolContext, target: bigint = ether("8")) => {
+  const { acl, lido } = ctx.contracts;
+  if ((await lido.getDepositsReserveTarget()) > 0n) return;
+
+  const role = await lido.BUFFER_RESERVE_MANAGER_ROLE();
+  const agent = await ctx.getSigner("agent");
+  const hasRole = await acl["hasPermission(address,address,bytes32)"](agent.address, lido.address, role);
+  if (!hasRole) {
+    const permissionManager = await acl.getPermissionManager(lido.address, role);
+    if (permissionManager === ZeroAddress) {
+      const voting = await ctx.getSigner("voting");
+      await acl.connect(voting).createPermission(agent.address, lido.address, role, agent.address);
+    } else {
+      if (permissionManager.toLowerCase() !== agent.address.toLowerCase()) {
+        throw new Error(`BUFFER_RESERVE_MANAGER_ROLE manager must be agent, got: ${permissionManager}`);
+      }
+      await acl.connect(agent).grantPermission(agent.address, lido.address, role);
+    }
+  }
+
+  await lido.connect(agent).setDepositsReserveTarget(target);
+  log.debug("Set non-zero deposits reserve target", { target: target.toString() });
+};
 
 /**
  * In order to make the protocol fully operational from scratch deploy, the additional steps are required:
@@ -56,6 +82,7 @@ export const provision = async (ctx: ProtocolContext) => {
   // await ethHolder.sendTransaction({ to: ctx.contracts.lido.address, value: ether("100000") });
 
   await ensureStakeLimit(ctx);
+  await ensureNonZeroDepositsReserveTarget(ctx);
 
   await ensureDsmGuardians(ctx, 3n, 2n);
 

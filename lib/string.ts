@@ -29,3 +29,8 @@ export function hexToBytes(hex: string): Uint8Array {
   const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
   return new Uint8Array(Buffer.from(cleanHex, "hex"));
 }
+
+export function toBool(value: string | undefined): boolean {
+  const trimmedValue = value?.trim().toLowerCase();
+  return trimmedValue === "true" || trimmedValue === "1";
+}

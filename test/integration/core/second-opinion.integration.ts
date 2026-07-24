@@ -3,21 +3,32 @@ import { ethers } from "hardhat";
 
 import { SecondOpinionOracle__Mock } from "typechain-types";
 
-import { ether, impersonate, log, ONE_GWEI } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { ether, log, ONE_GWEI } from "lib";
+import {
+  depositValidatorsWithoutReport,
+  getProtocolContext,
+  ProtocolContext,
+  report,
+  reportWithoutClActivation,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
 const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
-const CURATED_MODULE_ID = 1n;
 const INITIAL_REPORTED_BALANCE = ether("32") * 3n; // 32 ETH * 3 validators
-
-const ZERO_HASH = new Uint8Array(32).fill(0);
 
 // Diff amount is 10% of total supply
 function getDiffAmount(totalSupply: bigint): bigint {
   return (totalSupply / 10n / ONE_GWEI) * ONE_GWEI;
+}
+
+function getExpectedSecondOpinionBalance(validatorsBalance: bigint, reportedDiff: bigint): bigint {
+  return (validatorsBalance - reportedDiff) / ONE_GWEI;
+}
+
+async function getWithdrawalVaultBalance(ctx: ProtocolContext): Promise<bigint> {
+  return ethers.provider.getBalance(ctx.contracts.withdrawalVault);
 }
 
 describe("Integration: Second opinion", () => {
@@ -28,13 +39,14 @@ describe("Integration: Second opinion", () => {
 
   let secondOpinion: SecondOpinionOracle__Mock;
   let totalSupply: bigint;
+  let validatorsBalance: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
 
     snapshot = await Snapshot.take();
 
-    const { lido, depositSecurityModule, oracleReportSanityChecker } = ctx.contracts;
+    const { lido, oracleReportSanityChecker } = ctx.contracts;
 
     const { chainId } = await ethers.provider.getNetwork();
     // Sepolia-specific initialization
@@ -51,8 +63,9 @@ describe("Integration: Second opinion", () => {
       await bepoliaToken.connect(bepiloaSigner).transfer(adapterAddr, BEPOLIA_TO_TRANSFER);
     }
 
-    const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    // On Hoodi after SRv3 allocation, a raw router deposit into NOR can return `ZeroDeposits()`
+    // unless the test first prepares Lido buffered ETH and module deposit limits.
+    await depositValidatorsWithoutReport(ctx, 1n);
 
     secondOpinion = await ethers.deployContract("SecondOpinionOracle__Mock", []);
     const soAddress = await secondOpinion.getAddress();
@@ -62,19 +75,26 @@ describe("Integration: Second opinion", () => {
       .connect(agentSigner)
       .grantRole(await oracleReportSanityChecker.SECOND_OPINION_MANAGER_ROLE(), agentSigner.address);
 
-    let { beaconBalance } = await lido.getBeaconStat();
+    let balanceStats = await lido.getBalanceStats();
+    let clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     // Report initial balances if TVL is zero
-    if (beaconBalance === 0n) {
+    if (clBalance === 0n) {
       await report(ctx, {
         clDiff: INITIAL_REPORTED_BALANCE,
         clAppearedValidators: 3n,
-        excludeVaultsBalances: true,
+        reportElVault: false,
       });
-      beaconBalance = (await lido.getBeaconStat()).beaconBalance;
+      balanceStats = await lido.getBalanceStats();
+      clBalance = balanceStats.clValidatorsBalanceAtLastReport + balanceStats.clPendingBalanceAtLastReport;
     }
-    totalSupply = beaconBalance;
-
     await oracleReportSanityChecker.connect(agentSigner).setSecondOpinionOracleAndCLBalanceUpperMargin(soAddress, 74n);
+
+    // Normalize CL decrease window while carrying pending deposits forward.
+    await resetCLBalanceDecreaseWindow(ctx);
+
+    balanceStats = await lido.getBalanceStats();
+    validatorsBalance = balanceStats.clValidatorsBalanceAtLastReport;
+    totalSupply = validatorsBalance + balanceStats.clPendingBalanceAtLastReport;
   });
 
   beforeEach(bailOnFailure);
@@ -90,10 +110,9 @@ describe("Integration: Second opinion", () => {
 
     const reportedDiff = getDiffAmount(totalSupply);
 
-    await expect(report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true })).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "NegativeRebaseFailedSecondOpinionReportIsNotReady",
-    );
+    await expect(
+      reportWithoutClActivation(ctx, { effectiveClDiff: -reportedDiff, reportElVault: false }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "NegativeRebaseFailedSecondOpinionReportIsNotReady");
   });
 
   it("Should correctly report negative rebase with second opinion", async () => {
@@ -103,11 +122,15 @@ describe("Integration: Second opinion", () => {
 
     // Provide a second opinion
     const curFrame = await hashConsensus.getCurrentFrame();
-    const expectedBalance = (totalSupply - reportedDiff) / ONE_GWEI;
-    await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance, 0n);
+    const expectedBalance = getExpectedSecondOpinionBalance(validatorsBalance, reportedDiff);
+    await secondOpinion.addPlainReport(
+      curFrame.reportProcessingDeadlineSlot,
+      expectedBalance,
+      await getWithdrawalVaultBalance(ctx),
+    );
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
-    await report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true });
+    await reportWithoutClActivation(ctx, { effectiveClDiff: -reportedDiff, reportElVault: false });
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(
       lastProcessingRefSlotAfter,
@@ -121,13 +144,16 @@ describe("Integration: Second opinion", () => {
     const reportedDiff = getDiffAmount(totalSupply);
 
     const curFrame = await hashConsensus.getCurrentFrame();
-    const expectedBalance = (totalSupply - reportedDiff) / ONE_GWEI - 1n;
-    await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance, 0n);
-
-    await expect(report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true })).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "NegativeRebaseFailedCLBalanceMismatch",
+    const expectedBalance = getExpectedSecondOpinionBalance(validatorsBalance, reportedDiff) - 1n;
+    await secondOpinion.addPlainReport(
+      curFrame.reportProcessingDeadlineSlot,
+      expectedBalance,
+      await getWithdrawalVaultBalance(ctx),
     );
+
+    await expect(
+      reportWithoutClActivation(ctx, { effectiveClDiff: -reportedDiff, reportElVault: false }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "NegativeRebaseFailedCLBalanceMismatch");
   });
 
   it("Should tolerate report with slightly bigger second opinion cl balance", async () => {
@@ -136,20 +162,25 @@ describe("Integration: Second opinion", () => {
     const reportedDiff = getDiffAmount(totalSupply);
 
     const curFrame = await hashConsensus.getCurrentFrame();
-    const expectedBalance = (totalSupply - reportedDiff) / ONE_GWEI;
+    const expectedBalance = getExpectedSecondOpinionBalance(validatorsBalance, reportedDiff);
     // Less than 0.5% diff in balances
     const correction = (expectedBalance * 4n) / 1000n;
-    await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance + correction, 0n);
+    await secondOpinion.addPlainReport(
+      curFrame.reportProcessingDeadlineSlot,
+      expectedBalance + correction,
+      await getWithdrawalVaultBalance(ctx),
+    );
     log.debug("Reporting parameters", {
       totalSupply,
+      validatorsBalance,
       reportedDiff,
       expectedBalance,
       correction,
-      reportedBalance: totalSupply - reportedDiff,
+      reportedBalance: validatorsBalance - reportedDiff,
     });
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
-    await report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true });
+    await reportWithoutClActivation(ctx, { effectiveClDiff: -reportedDiff, reportElVault: false });
     const lastProcessingRefSlotAfter = await accountingOracle.getLastProcessingRefSlot();
     expect(lastProcessingRefSlotBefore).to.be.lessThan(
       lastProcessingRefSlotAfter,
@@ -163,21 +194,25 @@ describe("Integration: Second opinion", () => {
     const reportedDiff = getDiffAmount(totalSupply);
 
     const curFrame = await hashConsensus.getCurrentFrame();
-    const expectedBalance = (totalSupply - reportedDiff) / ONE_GWEI;
+    const expectedBalance = getExpectedSecondOpinionBalance(validatorsBalance, reportedDiff);
     // More than 0.5% diff in balances
     const correction = (expectedBalance * 9n) / 1000n;
-    await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance + correction, 0n);
+    await secondOpinion.addPlainReport(
+      curFrame.reportProcessingDeadlineSlot,
+      expectedBalance + correction,
+      await getWithdrawalVaultBalance(ctx),
+    );
     log.debug("Reporting parameters", {
       totalSupply,
+      validatorsBalance,
       reportedDiff,
       expectedBalance,
       correction,
       "expected + correction": expectedBalance + correction,
     });
 
-    await expect(report(ctx, { clDiff: -reportedDiff, excludeVaultsBalances: true })).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "NegativeRebaseFailedCLBalanceMismatch",
-    );
+    await expect(
+      reportWithoutClActivation(ctx, { effectiveClDiff: -reportedDiff, reportElVault: false }),
+    ).to.be.revertedWithCustomError(oracleReportSanityChecker, "NegativeRebaseFailedCLBalanceMismatch");
   });
 });

@@ -15,13 +15,14 @@ function getEnvVariable(name: string, defaultValue?: string): string {
 export async function main() {
   // Retrieve environment variables
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
-  const gateSealFactoryAddress = getEnvVariable("GATE_SEAL_FACTORY", "");
   const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
   const slotsPerEpoch = parseInt(getEnvVariable("SLOTS_PER_EPOCH", "32"));
   const depositContractAddress = getEnvVariable("DEPOSIT_CONTRACT", "");
   const withdrawalQueueBaseUri = getEnvVariable("WITHDRAWAL_QUEUE_BASE_URI", "");
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
   const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", "0x00000000");
+  const consolidationMigratorSourceModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_SOURCE_MODULE_ID", "");
+  const consolidationMigratorTargetModuleId = getEnvVariable("CONSOLIDATION_MIGRATOR_TARGET_MODULE_ID", "");
 
   await resetStateFileFromDeployParams();
   const state = readNetworkState();
@@ -43,13 +44,6 @@ export async function main() {
     state.chainSpec.depositContract = ethers.getAddress(depositContractAddress);
   }
 
-  if (gateSealFactoryAddress) {
-    state.gateSeal = {
-      ...state.gateSeal,
-      factoryAddress: gateSealFactoryAddress,
-    };
-  }
-
   if (withdrawalQueueBaseUri) {
     state.withdrawalQueueERC721.deployParameters = {
       ...state.withdrawalQueueERC721.deployParameters,
@@ -64,6 +58,12 @@ export async function main() {
       usePredefinedAddressInstead: ethers.getAddress(dsmPredefinedAddress),
     };
   }
+
+  state.consolidationMigrator.deployParameters = {
+    ...state.consolidationMigrator.deployParameters,
+    ...(consolidationMigratorSourceModuleId && { sourceModuleId: parseInt(consolidationMigratorSourceModuleId) }),
+    ...(consolidationMigratorTargetModuleId && { targetModuleId: parseInt(consolidationMigratorTargetModuleId) }),
+  };
 
   // Initialize gas usage tracking
   state[Sk.scratchDeployGasUsed] = 0n.toString();

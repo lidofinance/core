@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
-import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
+import {StakingModule} from "contracts/0.8.25/sr/SRTypes.sol";
 
 contract StakingRouter__MockForSanityChecker {
-    mapping(uint256 => StakingRouter.StakingModule) private modules;
+    mapping(uint256 => StakingModule) private modules;
+    mapping(uint256 => bool) private moduleExistsById;
 
     uint256[] private moduleIds;
 
     constructor() {}
 
     function mock__addStakingModuleExitedValidators(uint24 moduleId, uint256 exitedValidators) external {
-        StakingRouter.StakingModule memory module = StakingRouter.StakingModule(
+        StakingModule memory module = StakingModule(
             moduleId,
             address(0),
             0,
@@ -26,9 +27,12 @@ contract StakingRouter__MockForSanityChecker {
             exitedValidators,
             0,
             0,
+            0,
+            1, // wcType
             0
         );
         modules[moduleId] = module;
+        moduleExistsById[moduleId] = true;
         moduleIds.push(moduleId);
     }
 
@@ -42,13 +46,25 @@ contract StakingRouter__MockForSanityChecker {
                 break;
             }
         }
+        delete modules[moduleId];
+        delete moduleExistsById[moduleId];
     }
 
     function getStakingModuleIds() external view returns (uint256[] memory) {
         return moduleIds;
     }
 
-    function getStakingModule(uint256 stakingModuleId) public view returns (StakingRouter.StakingModule memory module) {
+    function getStakingModule(uint256 stakingModuleId) public view returns (StakingModule memory module) {
         return modules[stakingModuleId];
+    }
+
+    function hasStakingModule(uint256 stakingModuleId) external view returns (bool) {
+        return moduleExistsById[stakingModuleId];
+    }
+
+    function getStakingModuleStateAccounting(
+        uint256 stakingModuleId
+    ) external view returns (uint64 validatorsBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount) {
+        return (0, 0, uint64(modules[stakingModuleId].exitedValidatorsCount));
     }
 }

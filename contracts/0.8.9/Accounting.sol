@@ -14,8 +14,21 @@ import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 
 import {WithdrawalQueue} from "./WithdrawalQueue.sol";
-import {StakingRouter} from "./StakingRouter.sol";
 
+interface IStakingRouter {
+    function getStakingRewardsDistribution()
+        external
+        view
+        returns (
+            address[] memory recipients,
+            uint256[] memory stakingModuleIds,
+            uint96[] memory stakingModuleFees,
+            uint96 totalFee,
+            uint256 precisionPoints
+        );
+
+    function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) external;
+}
 
 /// @title Lido Accounting contract
 /// @author folkyatina
@@ -29,17 +42,17 @@ contract Accounting {
         IBurner burner;
         WithdrawalQueue withdrawalQueue;
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
-        StakingRouter stakingRouter;
+        IStakingRouter stakingRouter;
         IVaultHub vaultHub;
     }
 
     /// @notice snapshot of the protocol state that may be changed during the report
     struct PreReportState {
-        uint256 clValidators;
-        uint256 clBalance;
+        uint256 clValidatorsBalance;
+        uint256 clPendingBalance;
+        uint256 depositedBalance;
         uint256 totalPooledEther;
         uint256 totalShares;
-        uint256 depositedValidators;
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
@@ -89,9 +102,6 @@ contract Accounting {
         uint256 treasurySharesToMint;
     }
 
-    /// @notice deposit size in wei (for pre-maxEB accounting)
-    uint256 private constant DEPOSIT_SIZE = 32 ether;
-
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 
@@ -135,18 +145,33 @@ contract Accounting {
 
     /// @dev reads the current state of the protocol to the memory
     function _snapshotPreReportState(Contracts memory _contracts, bool isSimulation) internal view returns (PreReportState memory pre) {
-        (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
 
+        uint256 depositedSinceLastReport;
+        uint256 depositedForCurrentReport;
+        (pre.clValidatorsBalance, pre.clPendingBalance, depositedSinceLastReport, depositedForCurrentReport) = LIDO.getBalanceStats();
+
         if (isSimulation) {
             // for simulation we specifically fetch the current value, because during the refSlot `LastRefSlot` method
             // will return the previous refSlot value, but Oracle use simulation to gather the current refSlot info
             pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalize();
+
+            /// @dev Since the oracle report simulation is called directly on the refSlot itself, Lido's internal logic
+            ///      will not account for the refSlot switch — therefore, to get the correct deposits sum, we simply
+            ///      take the current value of all deposits without any adjustment.
+            /// @notice Note that calling simulateOracleReport on any slot other than the refSlot may produce incorrect
+            ///      values if deposits were made between the refSlot and the moment simulateOracleReport is called.
+            pre.depositedBalance = depositedSinceLastReport;
         } else {
             pre.badDebtToInternalize =  _contracts.vaultHub.badDebtToInternalizeForLastRefSlot();
+
+            /// @dev At the moment `handleOracleReport` is called, the refSlot switch has already occurred — therefore
+            ///      we use the adjusted deposits sum as of the reporting refSlot (i.e. excluding deposits made
+            ///      after the refSlot).
+            pre.depositedBalance = depositedForCurrentReport;
         }
     }
 
@@ -165,10 +190,8 @@ contract Accounting {
             _report
         );
 
-        // Principal CL balance is the sum of the current CL balance and
-        // validator deposits during this report
-        // TODO: to support maxEB we need to get rid of validator counting
-        update.principalClBalance = _pre.clBalance + (_report.clValidators - _pre.clValidators) * DEPOSIT_SIZE;
+        // Principal CL balance is sum of previous balances and new deposits
+        update.principalClBalance = _pre.clValidatorsBalance + _pre.clPendingBalance + _pre.depositedBalance;
 
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
@@ -182,7 +205,7 @@ contract Accounting {
             _pre.totalPooledEther - _pre.externalEther, // we need to change the base as shareRate is now calculated on
             _pre.totalShares - _pre.externalShares,     // internal ether and shares, but inside it's still total
             update.principalClBalance,
-            _report.clBalance,
+            _report.clValidatorsBalance + _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
@@ -190,13 +213,13 @@ contract Accounting {
             update.sharesToFinalizeWQ
         );
 
-        uint256 postInternalSharesBeforeFees =
-            _pre.totalShares - _pre.externalShares // internal shares before
-            - update.totalSharesToBurn; // shares to be burned for withdrawals and cover
+        uint256 postInternalSharesBeforeFees = _pre.totalShares -
+            _pre.externalShares - // internal shares before
+            update.totalSharesToBurn; // shares to be burned for withdrawals and cover
 
         update.postInternalEther =
             _pre.totalPooledEther - _pre.externalEther // internal ether before
-            + _report.clBalance + update.withdrawalsVaultTransfer - update.principalClBalance
+            + _report.clValidatorsBalance + _report.clPendingBalance + update.withdrawalsVaultTransfer - update.principalClBalance
             + update.elRewardsVaultTransfer
             - update.etherToFinalizeWQ;
 
@@ -208,7 +231,15 @@ contract Accounting {
             postInternalSharesBeforeFees
         );
 
-        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees + _pre.badDebtToInternalize;
+        update.postInternalShares =
+            postInternalSharesBeforeFees +
+            update.sharesToMintAsFees +
+            _pre.badDebtToInternalize;
+
+        // Oracle should consider this limitation:
+        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
+        if (update.postInternalShares == 0) revert InternalSharesCantBeZero();
+
         uint256 postExternalShares = _pre.externalShares - _pre.badDebtToInternalize; // can't underflow by design
 
         update.postTotalShares = update.postInternalShares + postExternalShares;
@@ -232,7 +263,7 @@ contract Accounting {
     /// @return sharesToMintAsFees total number of shares to be minted as Lido Core fee
     /// @return feeDistribution the number of shares that is minted to each module or treasury
     function _calculateProtocolFees(
-        StakingRouter _stakingRouter,
+        IStakingRouter _stakingRouter,
         ReportValues calldata _report,
         CalculatedValues memory _update,
         uint256 _internalSharesBeforeFees
@@ -283,7 +314,7 @@ contract Accounting {
         // but with fees taken as ether deduction instead of minting shares
         // to learn the amount of shares we need to mint to compensate for this fee
 
-        uint256 unifiedClBalance = _report.clBalance + _update.withdrawalsVaultTransfer;
+        uint256 unifiedClBalance = _report.clValidatorsBalance + _report.clPendingBalance + _update.withdrawalsVaultTransfer;
         // Don't mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
@@ -313,7 +344,7 @@ contract Accounting {
 
         uint256 totalModuleFeeShares = 0;
 
-        for (uint256 i; i < stakingModuleFees.length; ++i) {
+        for (uint256 i; i < length; ++i) {
             uint256 moduleFee = stakingModuleFees[i];
             if (moduleFee > 0) {
                 uint256 moduleFeeShares = (_totalSharesToMintAsFees * moduleFee) / _totalFee;
@@ -343,7 +374,11 @@ contract Accounting {
             ];
         }
 
-        LIDO.processClStateUpdate(_report.timestamp, _pre.clValidators, _report.clValidators, _report.clBalance);
+        LIDO.processClStateUpdate(
+            _report.timestamp,
+            _report.clValidatorsBalance,
+            _report.clPendingBalance
+        );
 
         if (_pre.badDebtToInternalize > 0) {
             _contracts.vaultHub.decreaseInternalizedBadDebt(_pre.badDebtToInternalize);
@@ -356,7 +391,7 @@ contract Accounting {
 
         LIDO.collectRewardsAndProcessWithdrawals(
             _report.timestamp,
-            _report.clBalance,
+            _report.clValidatorsBalance + _report.clPendingBalance,
             _update.principalClBalance,
             _update.withdrawalsVaultTransfer,
             _update.elRewardsVaultTransfer,
@@ -401,23 +436,20 @@ contract Accounting {
         CalculatedValues memory _update
     ) internal {
         if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
-        if (_report.clValidators < _pre.clValidators || _report.clValidators > _pre.depositedValidators) {
-            revert IncorrectReportValidators(_report.clValidators, _pre.clValidators, _pre.depositedValidators);
-        }
+        // Validator count validation removed for MaxEB support - now using balance-based accounting
 
-        // Oracle should consider this limitation:
-        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
-        if (_update.postInternalShares == 0) revert InternalSharesCantBeZero();
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
-            _update.principalClBalance,
-            _report.clBalance,
+            _pre.clValidatorsBalance,
+            _pre.clPendingBalance,
+            _report.clValidatorsBalance,
+            _report.clPendingBalance,
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            _pre.clValidators,
-            _report.clValidators
+            _pre.depositedBalance,
+            _update.withdrawalsVaultTransfer
         );
 
         if (_report.withdrawalFinalizationBatches.length > 0) {
@@ -435,7 +467,7 @@ contract Accounting {
         }
     }
 
-    /// @dev mints protocol fees to the treasury and node operators and calls back to stakingRouter
+    /// @dev transfers pre-minted fee shares to the treasury and node operator recipients
     function _distributeFee(FeeDistribution memory _feeDistribution) internal {
         address[] memory recipients = _feeDistribution.moduleFeeRecipients;
         uint256[] memory sharesToMint = _feeDistribution.moduleSharesToMint;
@@ -493,13 +525,12 @@ contract Accounting {
                 IBurner(burner),
                 WithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
-                StakingRouter(payable(stakingRouter)),
+                IStakingRouter(stakingRouter),
                 IVaultHub(vaultHub)
             );
     }
 
     error NotAuthorized(string operation, address addr);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
-    error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
     error InternalSharesCantBeZero();
 }

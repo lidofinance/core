@@ -6,7 +6,7 @@ import { SHARE_RATE_PRECISION } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
-import { report } from "./accounting";
+import { reportWithEffectiveClDiff } from "./accounting";
 
 const DEPOSIT = 10000;
 const MIN_BURN = 1;
@@ -28,16 +28,14 @@ async function changeInternalEther(ctx: ProtocolContext, internalEtherDelta: big
 
   const accountingSigner = await impersonate(accounting, ether("1"));
 
-  const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
+  const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
+  const beaconBalance = clValidatorsBalanceAtLastReport + clPendingBalanceAtLastReport;
 
-  await lido
-    .connect(accountingSigner)
-    .processClStateUpdate(
-      await getCurrentBlockTimestamp(),
-      beaconValidators,
-      beaconValidators,
-      beaconBalance + internalEtherDelta,
-    );
+  await lido.connect(accountingSigner).processClStateUpdate(
+    await getCurrentBlockTimestamp(),
+    beaconBalance + internalEtherDelta, // new clValidatorsBalance
+    0n, // new clPendingBalance
+  );
 }
 
 export const ensureExactShareRate = async (ctx: ProtocolContext, targetShareRate: bigint) => {
@@ -95,7 +93,7 @@ export const ensureSomeOddShareRate = async (ctx: ProtocolContext) => {
   await lido.connect(burner).burnShares(sharesToBurn);
 
   // Report accounting
-  await report(ctx, { clDiff: 0n });
+  await reportWithEffectiveClDiff(ctx, 0n);
 
   // Get new share rate
   const [totalPooledEtherAfter, totalSharesAfter] = await Promise.all([

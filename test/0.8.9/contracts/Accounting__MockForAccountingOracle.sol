@@ -13,8 +13,13 @@ contract Accounting__MockForAccountingOracle is IReportReceiver {
     }
 
     HandleOracleReportCallData public lastCall__handleOracleReport;
+    uint256 public totalDepositsRecorded;
 
     function handleOracleReport(ReportValues memory values) external override {
         lastCall__handleOracleReport = HandleOracleReportCallData(values, ++lastCall__handleOracleReport.callCount);
+    }
+
+    function recordDeposit(uint256 amount) external {
+        totalDepositsRecorded += amount;
     }
 }

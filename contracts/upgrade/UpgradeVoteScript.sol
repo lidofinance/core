@@ -1,0 +1,908 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity 0.8.25;
+
+import {Strings} from "@openzeppelin/contracts-v5.2/utils/Strings.sol";
+import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
+import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {ICircuitBreaker} from "contracts/common/interfaces/ICircuitBreaker.sol";
+import {StakingModuleConfig} from "contracts/0.8.25/sr/SRTypes.sol";
+import {OmnibusBase} from "./utils/OmnibusBase.sol";
+import {UpgradeTemplate, UpgradeConfig} from "./UpgradeTemplate.sol";
+import {CallsScriptBuilder} from "./utils/CallScriptBuilder.sol";
+import {IForwarder} from "./interfaces/IForwarder.sol";
+import {
+    GlobalConfig,
+    EasyTrackNewFactories,
+    EasyTrackOldFactories,
+    CoreUpgradeConfig,
+    CSMUpgradeConfig,
+    CuratedModuleConfig,
+    IAragonKernel,
+    IAragonACL,
+    ILidoUpgrade,
+    IEasyTrack,
+    IStakingRouterUpgrade,
+    IAccountingOracleUpgrade,
+    IValidatorsExitBusOracleUpgrade,
+    IWithdrawalVaultUpgrade,
+    IConsolidationMigrator,
+    IWithdrawalsManagerProxy,
+    IOssifiableProxyV2,
+    ICSModuleV3,
+    IHashConsensusV3,
+    IParametersRegistryV3,
+    IFeeOracleV3,
+    IAccountingV3,
+    IFeeDistributorV3,
+    IValidatorStrikesV3,
+    ISetMerkleGateTree,
+    IUpdateStakingModuleShareLimits,
+    ICreateOrUpdateOperatorGroup,
+    IBaseModuleV3,
+    IMerkleGate,
+    IOneShotCurveSetup,
+    IMetaRegistry,
+    ITriggerableWithdrawalsGatewayUpgrade
+} from "./UpgradeTypes.sol";
+
+/// @title UpgradeVoteScript
+/// @notice Script for upgrading Lido protocol components
+contract UpgradeVoteScript is OmnibusBase {
+    using Strings for uint256;
+    using CallsScriptBuilder for CallsScriptBuilder.Context;
+
+    error InvalidItemsCount(uint256 actual, uint256 expected);
+    error InvalidMerkleGateAddress();
+    //
+    // Constants
+    //
+    uint256 public constant DG_ITEMS_COUNT = 69;
+    uint256 public constant VOTING_ITEMS_COUNT = 11;
+
+    // Aragon Kernel APP_BASES_NAMESPACE
+    bytes32 internal constant KERNEL_APP_BASES_NAMESPACE = keccak256("base");
+    bytes32 internal constant APP_MANAGER_ROLE = keccak256("APP_MANAGER_ROLE");
+    bytes32 internal constant BUFFER_RESERVE_MANAGER_ROLE = keccak256("BUFFER_RESERVE_MANAGER_ROLE");
+    bytes32 internal constant STAKING_MODULE_SHARE_MANAGE_ROLE = keccak256("STAKING_MODULE_SHARE_MANAGE_ROLE");
+    bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+
+    bytes32 internal constant REPORT_EL_REWARDS_STEALING_PENALTY_ROLE =
+        keccak256("REPORT_EL_REWARDS_STEALING_PENALTY_ROLE");
+    bytes32 internal constant SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE =
+        keccak256("SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE");
+    bytes32 internal constant REPORT_GENERAL_DELAYED_PENALTY_ROLE = keccak256("REPORT_GENERAL_DELAYED_PENALTY_ROLE");
+    bytes32 internal constant SETTLE_GENERAL_DELAYED_PENALTY_ROLE = keccak256("SETTLE_GENERAL_DELAYED_PENALTY_ROLE");
+    bytes32 internal constant REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE =
+        keccak256("REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE");
+    bytes32 internal constant REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE =
+        keccak256("REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE");
+    bytes32 internal constant START_REFERRAL_SEASON_ROLE = keccak256("START_REFERRAL_SEASON_ROLE");
+    bytes32 internal constant END_REFERRAL_SEASON_ROLE = keccak256("END_REFERRAL_SEASON_ROLE");
+    bytes32 internal constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
+    bytes32 internal constant CREATE_NODE_OPERATOR_ROLE = keccak256("CREATE_NODE_OPERATOR_ROLE");
+    bytes32 internal constant SET_BOND_CURVE_ROLE = keccak256("SET_BOND_CURVE_ROLE");
+    bytes32 internal constant MANAGE_BOND_CURVES_ROLE = keccak256("MANAGE_BOND_CURVES_ROLE");
+    bytes32 internal constant MANAGE_CURVE_PARAMETERS_ROLE = keccak256("MANAGE_CURVE_PARAMETERS_ROLE");
+    bytes32 internal constant MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE =
+        keccak256("MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE");
+    bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
+    bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
+    bytes32 internal constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
+    bytes32 internal constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
+    bytes32 internal constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
+
+    string internal constant IDENTIFIED_COMMUNITY_STAKERS_GATE_NAME = "Identified Community Stakers Gate";
+    //
+    // Immutables
+    //
+    address public immutable TEMPLATE;
+    address public immutable CONFIG;
+    address internal immutable AGENT;
+
+    struct ScriptParams {
+        address upgradeTemplate;
+    }
+
+    constructor(ScriptParams memory _params)
+        OmnibusBase(
+            UpgradeConfig(UpgradeTemplate(_params.upgradeTemplate).CONFIG()).VOTING(),
+            UpgradeConfig(UpgradeTemplate(_params.upgradeTemplate).CONFIG()).DUAL_GOVERNANCE()
+        )
+    {
+        UpgradeTemplate template = UpgradeTemplate(_params.upgradeTemplate);
+        UpgradeConfig config = UpgradeConfig(template.CONFIG());
+        TEMPLATE = address(template);
+        CONFIG = address(config);
+        AGENT = config.AGENT();
+    }
+
+    /// @dev Non DG voting items
+    function getVotingVoteItems() public view override returns (VoteItem[] memory) {
+        //  start from `2` as `1` is reserved for DG submission item
+        return _wrapItemsNumber(_getVotingVoteItems(), 2);
+    }
+
+    /// @dev DG voting items
+    function getVoteItemsRaw() external view returns (VoteItem[] memory) {
+        // set prefix to `1`, so all item's description will transform to `1.N. Description...`
+        return _wrapItemsPrefixNumber(_getVoteItems(), 1, 1);
+    }
+
+    function getVoteItems() public view override returns (VoteItem[] memory) {
+        string memory description = "1. Submit a Dual Governance proposal";
+        return _wrapItemsForwardPacked(_getVoteItems(), AGENT, description);
+
+        /// @dev kept for future use
+        // set prefix to `1`, so all item's description will transform to `1.N. Description...`
+        // return _wrapItemsPrefixNumberForward(_getVoteItems(), AGENT, 1, 1);
+    }
+
+    function _getVotingVoteItems() internal view returns (VoteItem[] memory items) {
+        items = new VoteItem[](VOTING_ITEMS_COUNT);
+        uint256 i = 0;
+
+        UpgradeConfig config = UpgradeConfig(CONFIG);
+        GlobalConfig memory g = config.getGlobalConfig();
+        address easyTrack = g.easyTrack;
+
+        (EasyTrackNewFactories memory etn, EasyTrackOldFactories memory eto) = config.getEasyTrackConfig();
+
+        //
+        // Delete old EasyTrack Factories
+        //
+        items[i++] = _delETFactoryItem(
+            "Remove CSMSettleElStealingPenalty factory from Easy Track", easyTrack, eto.CSMSettleElStealingPenalty
+        );
+        items[i++] = _delETFactoryItem("Remove CSMSetVettedGateTree factory from Easy Track", easyTrack, eto.CSMSetVettedGateTree);
+
+        //
+        // Add new EasyTrack Factories
+        //
+        {
+            CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
+
+            items[i++] = _addETFactoryItem(
+                "Add UpdateStakingModuleShareLimits (for CSM) factory to Easy Track",
+                easyTrack,
+                etn.UpdateStakingModuleShareLimits,
+                bytes.concat(
+                    bytes20(etn.UpdateStakingModuleShareLimits),
+                    bytes4(IUpdateStakingModuleShareLimits.validateParams.selector),
+                    bytes20(g.stakingRouter),
+                    bytes4(IStakingRouterUpgrade.updateModuleShares.selector)
+                )
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add AllowConsolidationPair factory to Easy Track",
+                easyTrack,
+                etn.AllowConsolidationPair,
+                bytes.concat(bytes20(c.consolidationMigrator), bytes4(IConsolidationMigrator.allowPair.selector))
+            );
+        }
+
+        {
+            CSMUpgradeConfig memory c = config.getCSMUpgradeConfig();
+
+            address[] memory csmGates = new address[](2);
+            csmGates[0] = c.vettedGate;
+            csmGates[1] = c.identifiedDVTClusterGate;
+
+            items[i++] = _addETFactoryItem(
+                "Add SetMerkleGateTree CSM factory to Easy Track",
+                easyTrack,
+                etn.SetMerkleGateTreeForCSM,
+                _setMerkleGateTreePermissions(etn.SetMerkleGateTreeForCSM, csmGates)
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add ReportWithdrawalsForSlashedValidators CSM factory to Easy Track",
+                easyTrack,
+                etn.ReportWithdrawalsForSlashedValidatorsForCSM,
+                bytes.concat(bytes20(c.csm), bytes4(IBaseModuleV3.reportSlashedWithdrawnValidators.selector))
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add SettleGeneralDelayedPenalty CSM factory to Easy Track",
+                easyTrack,
+                etn.SettleGeneralDelayedPenaltyForCSM,
+                bytes.concat(bytes20(c.csm), bytes4(IBaseModuleV3.settleGeneralDelayedPenalty.selector))
+            );
+        }
+
+        {
+            CuratedModuleConfig memory c = config.getCuratedModuleConfig();
+
+            items[i++] = _addETFactoryItem(
+                "Add SetMerkleGateTree CM factory to Easy Track",
+                easyTrack,
+                etn.SetMerkleGateTreeForCM,
+                _setMerkleGateTreePermissions(etn.SetMerkleGateTreeForCM, c.curatedGates)
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add ReportWithdrawalsForSlashedValidators CM factory to Easy Track",
+                easyTrack,
+                etn.ReportWithdrawalsForSlashedValidatorsForCM,
+                bytes.concat(bytes20(c.module), bytes4(IBaseModuleV3.reportSlashedWithdrawnValidators.selector))
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add SettleGeneralDelayedPenalty CM factory to Easy Track",
+                easyTrack,
+                etn.SettleGeneralDelayedPenaltyForCM,
+                bytes.concat(bytes20(c.module), bytes4(IBaseModuleV3.settleGeneralDelayedPenalty.selector))
+            );
+
+            items[i++] = _addETFactoryItem(
+                "Add CreateOrUpdateOperatorGroup CM factory to Easy Track",
+                easyTrack,
+                etn.CreateOrUpdateOperatorGroupForCM,
+                bytes.concat(
+                    bytes20(etn.CreateOrUpdateOperatorGroupForCM),
+                    bytes4(ICreateOrUpdateOperatorGroup.validateInputData.selector),
+                    bytes20(c.metaRegistry),
+                    bytes4(IMetaRegistry.createOrUpdateOperatorGroup.selector)
+                )
+            );
+        }
+        if (i != VOTING_ITEMS_COUNT) revert InvalidItemsCount(i, VOTING_ITEMS_COUNT);
+    }
+
+    function _getVoteItems() internal view returns (VoteItem[] memory items) {
+        items = new VoteItem[](DG_ITEMS_COUNT);
+        uint256 i = 0;
+
+        UpgradeConfig config = UpgradeConfig(CONFIG);
+        GlobalConfig memory g = config.getGlobalConfig();
+        address agent = g.agent;
+        address evmScriptExecutor = g.easyTrackEVMScriptExecutor;
+        address stakingRouter = g.stakingRouter;
+
+        items[i++] = _item({
+            description: "Call UpgradeTemplate.startUpgrade",
+            to: TEMPLATE,
+            data: abi.encodeCall(UpgradeTemplate.startUpgrade, ())
+        });
+
+        //
+        // Core upgrade
+        //
+        {
+            CoreUpgradeConfig memory c = config.getCoreUpgradeConfig();
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade LidoLocator implementation", to: c.locator, impl: c.newLocatorImpl
+            });
+
+            /// @notice updating StakingRouter implementation and call finalizeUpgrade_v4
+            items[i++] = _proxyUpgradeToAndCallItem({
+                description: "Upgrade StakingRouter implementation and call finalizeUpgrade_v4",
+                to: stakingRouter,
+                impl: c.newStakingRouterImpl,
+                data: abi.encodeCall(IStakingRouterUpgrade.finalizeUpgrade_v4, (c.maxTopUpPerBlockGwei))
+            });
+
+            /// @notice updating AccountingOracle implementation and call finalizeUpgrade_v5
+            items[i++] = _proxyUpgradeToAndCallItem({
+                description: "Upgrade AccountingOracle implementation and call finalizeUpgrade_v5",
+                to: c.accountingOracle,
+                impl: c.newAccountingOracleImpl,
+                data: abi.encodeCall(IAccountingOracleUpgrade.finalizeUpgrade_v5, (c.aoConsensusVersion))
+            });
+
+            /// @notice updating ValidatorsExitBusOracle implementation and call finalizeUpgrade_v3
+            items[i++] = _proxyUpgradeToAndCallItem({
+                description: "Upgrade ValidatorsExitBusOracle implementation and call finalizeUpgrade_v3",
+                to: c.validatorsExitBusOracle,
+                impl: c.newValidatorsExitBusOracleImpl,
+                data: abi.encodeCall(
+                    IValidatorsExitBusOracleUpgrade.finalizeUpgrade_v3,
+                    (
+                        c.veboMaxValidatorsPerReport,
+                        c.veboMaxExitBalanceEth,
+                        c.veboBalancePerFrameEth,
+                        c.veboFrameDurationInSec,
+                        c.veboConsensusVersion
+                    )
+                )
+            });
+
+            /// @notice updating Accounting implementation (no finalizeUpgrade)
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade Accounting implementation", to: c.accounting, impl: c.newAccountingImpl
+            });
+
+            /// @notice updating WithdrawalVault implementation and call finalizeUpgrade_v3
+            items[i++] = _item({
+                description: "Upgrade WithdrawalVault implementation and call finalizeUpgrade_v3",
+                to: c.withdrawalVault,
+                data: abi.encodeCall(
+                    IWithdrawalsManagerProxy.proxy_upgradeTo,
+                    (c.newWithdrawalVaultImpl, abi.encodeCall(IWithdrawalVaultUpgrade.finalizeUpgrade_v3, ()))
+                )
+            });
+
+            items[i++] = _item({
+                description: "Grant Aragon APP_MANAGER_ROLE to the AGENT",
+                to: c.acl,
+                data: abi.encodeCall(IAragonACL.grantPermission, (agent, c.kernel, APP_MANAGER_ROLE))
+            });
+
+            items[i++] = _item({
+                description: "Set Lido implementation in Kernel",
+                to: c.kernel,
+                data: abi.encodeCall(IAragonKernel.setApp, (KERNEL_APP_BASES_NAMESPACE, c.lidoAppId, c.newLidoImpl))
+            });
+
+            items[i++] = _item({
+                description: "Revoke Aragon APP_MANAGER_ROLE from the AGENT",
+                to: c.acl,
+                data: abi.encodeCall(IAragonACL.revokePermission, (agent, c.kernel, APP_MANAGER_ROLE))
+            });
+
+            items[i++] = _item({
+                description: "Create Aragon BUFFER_RESERVE_MANAGER_ROLE and grant role manager to the AGENT",
+                to: c.acl,
+                data: abi.encodeCall(IAragonACL.createPermission, (agent, g.lido, BUFFER_RESERVE_MANAGER_ROLE, agent))
+            });
+
+            items[i++] = _item({
+                description: "Call finalizeUpgrade_v4 on Lido",
+                to: g.lido,
+                data: abi.encodeCall(ILidoUpgrade.finalizeUpgrade_v4, (c.lidoDepositsReserveTarget))
+            });
+
+            /// @notice grant STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant Staking Router STAKING_MODULE_SHARE_MANAGE_ROLE to EasyTrack executor",
+                to: stakingRouter,
+                role: STAKING_MODULE_SHARE_MANAGE_ROLE,
+                account: evmScriptExecutor
+            });
+
+            /// @notice revoke STAKING_MODULE_UNVETTING_ROLE from old DSM
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke Staking Router STAKING_MODULE_UNVETTING_ROLE from old DSM",
+                to: stakingRouter,
+                role: STAKING_MODULE_UNVETTING_ROLE,
+                account: c.oldDepositSecurityModule
+            });
+
+            /// @notice grant STAKING_MODULE_UNVETTING_ROLE to new DSM
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant Staking Router STAKING_MODULE_UNVETTING_ROLE to new DSM",
+                to: stakingRouter,
+                role: STAKING_MODULE_UNVETTING_ROLE,
+                account: c.newDepositSecurityModule
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant TWG TW_EXIT_LIMIT_MANAGER_ROLE to AGENT",
+                to: g.triggerableWithdrawalsGateway,
+                role: TW_EXIT_LIMIT_MANAGER_ROLE,
+                account: agent
+            });
+
+            items[i++] = _item({
+                description: "Set TWG exit request limits",
+                to: g.triggerableWithdrawalsGateway,
+                data: abi.encodeCall(
+                    ITriggerableWithdrawalsGatewayUpgrade.setExitRequestLimit,
+                    (c.twMaxExitRequestsLimit, c.twExitsPerFrame, c.twFrameDurationInSec)
+                )
+            });
+
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "ConsolidationGateway", g.circuitBreaker, c.consolidationGateway, g.circuitBreakerCommittee
+            );
+
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "TopUpGateway", g.circuitBreaker, c.topUpGateway, g.circuitBreakerCommittee
+            );
+        }
+
+        //
+        // CSM Upgrade items
+        //
+        {
+            CSMUpgradeConfig memory c = config.getCSMUpgradeConfig();
+            address csm = c.csm;
+            address vettedGate = c.vettedGate;
+            // --- Proxy upgrades ---
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade CSM to v3 and call finalizeUpgradeV3",
+                to: csm,
+                impl: c.csmImpl,
+                data: abi.encodeCall(ICSModuleV3.finalizeUpgradeV3, ())
+            });
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade CSM ParametersRegistry to v3 and call finalizeUpgradeV3",
+                to: c.parametersRegistry,
+                impl: c.parametersRegistryImpl,
+                data: abi.encodeCall(IParametersRegistryV3.finalizeUpgradeV3, ())
+            });
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade CSM FeeOracle to v3 and call finalizeUpgradeV3",
+                to: c.feeOracle,
+                impl: c.feeOracleImpl,
+                data: abi.encodeCall(IFeeOracleV3.finalizeUpgradeV3, (c.feeOracleConsensusVersion))
+            });
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade CSM VettedGate implementation", to: vettedGate, impl: c.vettedGateImpl
+            });
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade CSM Accounting to v3 and call finalizeUpgradeV3",
+                to: c.accounting,
+                impl: c.accountingImpl,
+                data: abi.encodeCall(IAccountingV3.finalizeUpgradeV3, ())
+            });
+
+            items[i++] = _proxyUpgradeToAndCallV2Item({
+                description: "Upgrade CSM FeeDistributor to v3 and call finalizeUpgradeV3",
+                to: c.feeDistributor,
+                impl: c.feeDistributorImpl,
+                data: abi.encodeCall(IFeeDistributorV3.finalizeUpgradeV3, ())
+            });
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade CSM ExitPenalties implementation", to: c.exitPenalties, impl: c.exitPenaltiesImpl
+            });
+
+            items[i++] = _proxyUpgradeToItem({
+                description: "Upgrade CSM ValidatorStrikes implementation", to: c.strikes, impl: c.strikesImpl
+            });
+
+            // --- Role & permission updates ---
+
+            items[i++] = _item({
+                description: "Point CSM ValidatorStrikes to the New CSM Ejector",
+                to: c.strikes,
+                data: abi.encodeCall(IValidatorStrikesV3.setEjector, (c.newEjector))
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke CSM REPORT_EL_REWARDS_STEALING_PENALTY_ROLE from CSM Committee",
+                to: csm,
+                role: REPORT_EL_REWARDS_STEALING_PENALTY_ROLE,
+                account: c.csmCommittee
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM REPORT_GENERAL_DELAYED_PENALTY_ROLE to CSM Committee",
+                to: csm,
+                role: REPORT_GENERAL_DELAYED_PENALTY_ROLE,
+                account: c.csmCommittee
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke CSM SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE from Easy Track executor",
+                to: csm,
+                role: SETTLE_EL_REWARDS_STEALING_PENALTY_ROLE,
+                account: evmScriptExecutor
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM SETTLE_GENERAL_DELAYED_PENALTY_ROLE to Easy Track executor",
+                to: csm,
+                role: SETTLE_GENERAL_DELAYED_PENALTY_ROLE,
+                account: evmScriptExecutor
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke CSM VERIFIER_ROLE from the Old CSM Verifier",
+                to: csm,
+                role: VERIFIER_ROLE,
+                account: c.oldVerifier
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM VERIFIER_ROLE to the New CSM Verifier",
+                to: csm,
+                role: VERIFIER_ROLE,
+                account: c.newVerifier
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE to the New CSM Verifier",
+                to: csm,
+                role: REPORT_REGULAR_WITHDRAWN_VALIDATORS_ROLE,
+                account: c.newVerifier
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE to Easy Track executor",
+                to: csm,
+                role: REPORT_SLASHED_WITHDRAWN_VALIDATORS_ROLE,
+                account: evmScriptExecutor
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke CSM CREATE_NODE_OPERATOR_ROLE from the Old CSM PermissionlessGate",
+                to: csm,
+                role: CREATE_NODE_OPERATOR_ROLE,
+                account: c.oldPermissionlessGate
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM CREATE_NODE_OPERATOR_ROLE to the New CSM PermissionlessGate",
+                to: csm,
+                role: CREATE_NODE_OPERATOR_ROLE,
+                account: c.newPermissionlessGate
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke VettedGate START_REFERRAL_SEASON_ROLE from AGENT",
+                to: vettedGate,
+                role: START_REFERRAL_SEASON_ROLE,
+                account: agent
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke VettedGate END_REFERRAL_SEASON_ROLE from CSM Committee",
+                to: vettedGate,
+                role: END_REFERRAL_SEASON_ROLE,
+                account: c.csmCommittee
+            });
+
+            items[i++] = _item({
+                description: "Set name Identified Community Stakers for CSM VettedGate gate",
+                to: vettedGate,
+                data: abi.encodeCall(IMerkleGate.setName, (IDENTIFIED_COMMUNITY_STAKERS_GATE_NAME))
+            });
+
+            items[i++] = _unregisterCircuitBreakerPauserItem("Old CSM Verifier", g.circuitBreaker, c.oldVerifier);
+            items[i++] = _unregisterCircuitBreakerPauserItem("Old CSM Ejector", g.circuitBreaker, c.oldEjector);
+
+            items[i++] =
+                _registerCircuitBreakerPauserItem("New CSM Verifier", g.circuitBreaker, c.newVerifier, c.csmCommittee);
+            items[i++] =
+                _registerCircuitBreakerPauserItem("New CSM Ejector", g.circuitBreaker, c.newEjector, c.csmCommittee);
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "CSM Identified DVT Cluster gate", g.circuitBreaker, c.identifiedDVTClusterGate, c.csmCommittee
+            );
+
+            // --- New IDVTC type ---
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM CREATE_NODE_OPERATOR_ROLE to Identified DVT Cluster gate",
+                to: csm,
+                role: CREATE_NODE_OPERATOR_ROLE,
+                account: c.identifiedDVTClusterGate
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM Accounting SET_BOND_CURVE_ROLE to Identified DVT Cluster gate",
+                to: c.accounting,
+                role: SET_BOND_CURVE_ROLE,
+                account: c.identifiedDVTClusterGate
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM Accounting MANAGE_BOND_CURVES_ROLE to Identified DVT Cluster curve setup",
+                to: c.accounting,
+                role: MANAGE_BOND_CURVES_ROLE,
+                account: c.identifiedDVTClusterCurveSetup
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM ParametersRegistry MANAGE_CURVE_PARAMETERS_ROLE to Identified DVT Cluster curve setup",
+                to: c.parametersRegistry,
+                role: MANAGE_CURVE_PARAMETERS_ROLE,
+                account: c.identifiedDVTClusterCurveSetup
+            });
+
+            // The setup contract renounces its temporary Accounting/ParametersRegistry roles during execute().
+            items[i++] = _item({
+                description: "Execute Identified DVT Cluster curve setup",
+                to: c.identifiedDVTClusterCurveSetup,
+                data: abi.encodeCall(IOneShotCurveSetup.execute, ())
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CSM ParametersRegistry MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE to CSM Committee",
+                to: c.parametersRegistry,
+                role: MANAGE_GENERAL_PENALTIES_AND_CHARGES_ROLE,
+                account: c.csmCommittee
+            });
+
+            // --- Burner role migration ---
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke Burner REQUEST_BURN_SHARES_ROLE from CSM Accounting",
+                to: g.burner,
+                role: REQUEST_BURN_SHARES_ROLE,
+                account: c.accounting
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant Burner REQUEST_BURN_MY_STETH_ROLE to CSM Accounting",
+                to: g.burner,
+                role: REQUEST_BURN_MY_STETH_ROLE,
+                account: c.accounting
+            });
+
+            // --- TWG role migration ---
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke TWG ADD_FULL_WITHDRAWAL_REQUEST_ROLE from the Old CSM Ejector",
+                to: g.triggerableWithdrawalsGateway,
+                role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
+                account: c.oldEjector
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant TWG ADD_FULL_WITHDRAWAL_REQUEST_ROLE to the New CSM Ejector",
+                to: g.triggerableWithdrawalsGateway,
+                role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
+                account: c.newEjector
+            });
+        }
+
+        //
+        // Curated Module items
+        //
+        {
+            CuratedModuleConfig memory c = config.getCuratedModuleConfig();
+
+            items[i++] = _item({
+                description: "Add Curated Module v2 to StakingRouter",
+                to: stakingRouter,
+                data: abi.encodeCall(
+                    IStakingRouterUpgrade.addStakingModule,
+                    (
+                        c.moduleName,
+                        c.module,
+                        StakingModuleConfig({
+                            stakeShareLimit: c.stakeShareLimit,
+                            priorityExitShareThreshold: c.priorityExitShareThreshold,
+                            stakingModuleFee: c.stakingModuleFee,
+                            treasuryFee: c.treasuryFee,
+                            maxDepositsPerBlock: c.maxDepositsPerBlock,
+                            minDepositBlockDistance: c.minDepositBlockDistance,
+                            withdrawalCredentialsType: 0x02
+                        })
+                    )
+                )
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant Burner REQUEST_BURN_MY_STETH_ROLE to Curated Accounting",
+                to: g.burner,
+                role: REQUEST_BURN_MY_STETH_ROLE,
+                account: c.accounting
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant TWG ADD_FULL_WITHDRAWAL_REQUEST_ROLE to Curated Ejector",
+                to: g.triggerableWithdrawalsGateway,
+                role: ADD_FULL_WITHDRAWAL_REQUEST_ROLE,
+                account: c.ejector
+            });
+
+            items[i++] = _ozGrantRoleItem({
+                description: "Grant CM RESUME_ROLE to AGENT",
+                to: c.module,
+                role: RESUME_ROLE,
+                account: agent
+            });
+
+            items[i++] = _item({
+                description: "Resume Curated Module v2", to: c.module, data: abi.encodeCall(ICSModuleV3.resume, ())
+            });
+
+            items[i++] = _ozRevokeRoleItem({
+                description: "Revoke CM RESUME_ROLE from AGENT",
+                to: c.module,
+                role: RESUME_ROLE,
+                account: agent
+            });
+
+            items[i++] = _item({
+                description: "Update Curated HashConsensus initial epoch",
+                to: c.hashConsensus,
+                data: abi.encodeCall(IHashConsensusV3.updateInitialEpoch, (c.hashConsensusInitialEpoch))
+            });
+
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated Module v2", g.circuitBreaker, c.module, c.circuitBreakerPauser
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated Accounting", g.circuitBreaker, c.accounting, c.circuitBreakerPauser
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated FeeOracle", g.circuitBreaker, c.feeOracle, c.circuitBreakerPauser
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated Verifier", g.circuitBreaker, c.verifier, c.circuitBreakerPauser
+            );
+            items[i++] = _registerCircuitBreakerPauserItem(
+                "Curated Ejector", g.circuitBreaker, c.ejector, c.circuitBreakerPauser
+            );
+        }
+
+        //
+        // Template: finish upgrade
+        //
+
+        items[i++] = _item({
+            description: "Call UpgradeTemplate.finishUpgrade",
+            to: TEMPLATE,
+            data: abi.encodeCall(UpgradeTemplate.finishUpgrade, ())
+        });
+
+        if (i != DG_ITEMS_COUNT) revert InvalidItemsCount(i, DG_ITEMS_COUNT);
+    }
+
+    //
+    // Helpers
+    //
+
+    function _addNumber(string memory s, uint256 n) internal pure returns (string memory) {
+        return string.concat(n.toString(), ". ", s);
+    }
+
+    function _addPrefixedNumber(string memory s, string memory p, uint256 n) internal pure returns (string memory) {
+        return string.concat(p, n.toString(), ". ", s);
+    }
+
+    function _wrapItemsNumber(VoteItem[] memory items, uint256 startNum) internal pure returns (VoteItem[] memory) {
+        for (uint256 i = 0; i < items.length; ++i) {
+            uint256 num = i + startNum;
+            items[i].description = _addNumber(items[i].description, num);
+        }
+        return items;
+    }
+
+    function _wrapItemsPrefixNumber(VoteItem[] memory items, uint256 prefixNum, uint256 startNum)
+        internal
+        pure
+        returns (VoteItem[] memory)
+    {
+        string memory prefix = string.concat(prefixNum.toString(), ".");
+        for (uint256 i = 0; i < items.length; ++i) {
+            uint256 num = i + startNum;
+            items[i].description = _addPrefixedNumber(items[i].description, prefix, num);
+        }
+
+        return items;
+    }
+
+    /// @dev Wrap item with prefix, add number and forwarded `forwarder`
+    function _wrapItemsPrefixNumberForward(
+        VoteItem[] memory items,
+        address forwarder,
+        uint256 prefixNum,
+        uint256 startNum
+    ) internal pure returns (VoteItem[] memory) {
+        string memory prefix = string.concat(prefixNum.toString(), ".");
+        for (uint256 i = 0; i < items.length; ++i) {
+            uint256 num = i + startNum;
+            items[i].description = _addPrefixedNumber(items[i].description, prefix, num);
+            items[i].call = _forwardCall(forwarder, items[i].call.to, items[i].call.data);
+        }
+
+        return items;
+    }
+
+    function _wrapItemsForwardPacked(VoteItem[] memory items, address forwarder, string memory description)
+        internal
+        pure
+        returns (VoteItem[] memory)
+    {
+        VoteItem[] memory itemsPacked = new VoteItem[](1);
+        CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
+        for (uint256 i = 0; i < items.length; ++i) {
+            // slither-disable-next-line unused-return
+            scriptBuilder.addCall(items[i].call.to, items[i].call.data);
+        }
+
+        itemsPacked[0].description = description;
+        itemsPacked[0].call = _votingCall(forwarder, abi.encodeCall(IForwarder.forward, scriptBuilder.getResult()));
+
+        return itemsPacked;
+    }
+
+    function _item(string memory description, address to, bytes memory data) internal pure returns (VoteItem memory) {
+        return VoteItem({description: description, call: _votingCall(to, data)});
+    }
+
+    function _registerCircuitBreakerPauserItem(
+        string memory label,
+        address circuitBreaker,
+        address pausable,
+        address pauser
+    ) private pure returns (VoteItem memory) {
+        return _item({
+            description: string.concat("Register CircuitBreaker pauser for ", label),
+            to: circuitBreaker,
+            data: abi.encodeCall(ICircuitBreaker.registerPauser, (pausable, pauser))
+        });
+    }
+
+    function _unregisterCircuitBreakerPauserItem(string memory label, address circuitBreaker, address pausable)
+        private
+        pure
+        returns (VoteItem memory)
+    {
+        return _item({
+            description: string.concat("Unregister CircuitBreaker pauser for ", label),
+            to: circuitBreaker,
+            data: abi.encodeCall(ICircuitBreaker.registerPauser, (pausable, address(0)))
+        });
+    }
+
+    function _setMerkleGateTreePermissions(address factory, address[] memory gates)
+        private
+        pure
+        returns (bytes memory permissions)
+    {
+        permissions = bytes.concat(bytes20(factory), bytes4(ISetMerkleGateTree.validateInputData.selector));
+        for (uint256 i = 0; i < gates.length; ++i) {
+            if (gates[i] == address(0)) revert InvalidMerkleGateAddress();
+            permissions = bytes.concat(permissions, bytes20(gates[i]), bytes4(IMerkleGate.setTreeParams.selector));
+        }
+    }
+
+    function _addETFactoryItem(string memory description, address easyTrack, address factory, bytes memory permissions)
+        private
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, easyTrack, abi.encodeCall(IEasyTrack.addEVMScriptFactory, (factory, permissions)));
+    }
+
+    function _delETFactoryItem(string memory description, address easyTrack, address factory)
+        private
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, easyTrack, abi.encodeCall(IEasyTrack.removeEVMScriptFactory, (factory)));
+    }
+
+    function _ozGrantRoleItem(string memory description, address to, bytes32 role, address account)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IAccessControl.grantRole, (role, account)));
+    }
+
+    function _ozRevokeRoleItem(string memory description, address to, bytes32 role, address account)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IAccessControl.revokeRole, (role, account)));
+    }
+
+    function _proxyUpgradeToItem(string memory description, address to, address impl)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (impl)));
+    }
+
+    /// @dev wraps call to the IOssifiableProxy.proxy__upgradeToAndCall
+    function _proxyUpgradeToAndCallItem(string memory description, address to, address impl, bytes memory data)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IOssifiableProxy.proxy__upgradeToAndCall, (impl, data, false)));
+    }
+
+    /// @dev wraps call to the modified IOssifiableProxyV2.proxy__upgradeToAndCall (used in CSM/CM)
+    function _proxyUpgradeToAndCallV2Item(string memory description, address to, address impl, bytes memory data)
+        internal
+        pure
+        returns (VoteItem memory)
+    {
+        return _item(description, to, abi.encodeCall(IOssifiableProxyV2.proxy__upgradeToAndCall, (impl, data)));
+    }
+}

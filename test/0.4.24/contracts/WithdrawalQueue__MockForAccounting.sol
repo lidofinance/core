@@ -13,6 +13,8 @@ contract WithdrawalQueue__MockForAccounting {
     );
 
     bool public isPaused;
+    bool public isBunkerModeActive;
+    uint256 public unfinalizedStETH;
 
     uint256 private ethToLock_;
     uint256 private sharesToBurn_;
@@ -31,6 +33,12 @@ contract WithdrawalQueue__MockForAccounting {
 
     function finalize(uint256 _lastRequestIdToBeFinalized, uint256 _maxShareRate) external payable {
         _maxShareRate;
+
+        if (unfinalizedStETH > msg.value) {
+            unfinalizedStETH -= msg.value;
+        } else {
+            unfinalizedStETH = 0;
+        }
 
         // some random fake event values
         uint256 firstRequestIdToFinalize = 0;
@@ -52,5 +60,9 @@ contract WithdrawalQueue__MockForAccounting {
     function mock__prefinalizeReturn(uint256 _ethToLock, uint256 _sharesToBurn) external {
         ethToLock_ = _ethToLock;
         sharesToBurn_ = _sharesToBurn;
+    }
+
+    function mock__unfinalizedStETH(uint256 _unfinalizedStETH) external {
+        unfinalizedStETH = _unfinalizedStETH;
     }
 }

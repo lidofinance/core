@@ -1,13 +1,12 @@
-import { ethers } from "hardhat";
-
-import { log } from "lib/log";
+import { advanceChainTime, log } from "lib";
 
 async function main() {
   log.scriptStart(__filename);
 
-  // 0x01 is too little, 0x80 works, although less might be enough
-  await ethers.provider.send("hardhat_mine", ["0x80"]);
-  log.success(`Sent "hardhat_mine"`);
+  // // 0x01 is too little, 0x80 works, although less might be enough
+  // await ethers.provider.send("hardhat_mine", ["0x80"]);
+  await advanceChainTime(10n);
+  log.success(`Sent "advanceChainTime +10s"`);
 
   log.scriptFinish(__filename);
 }

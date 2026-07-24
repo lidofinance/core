@@ -1,0 +1,3 @@
+{
+  "steps": ["upgrade/steps/0000-check-env", "upgrade/steps/1000-voting-wv-impl"]
+}

@@ -24,6 +24,10 @@ async function getBlockExplorer(): Promise<ExplorerConfig | null> {
 }
 
 export async function getTxLink(txHash: string): Promise<string | null> {
-  const explorer = await getBlockExplorer();
-  return explorer ? `${explorer.baseUrl}/tx/${txHash}` : null;
+  let baseUrl = process.env.BLOCK_EXPLORER_BASE_URL || null;
+  if (!baseUrl) {
+    const explorer = await getBlockExplorer();
+    baseUrl = explorer?.baseUrl || null;
+  }
+  return baseUrl ? `${baseUrl}/tx/${txHash}` : null;
 }

@@ -88,7 +88,7 @@
   },
   "accountingOracle": {
     "deployParameters": {
-      "consensusVersion": 4
+      "consensusVersion": 6
     }
   },
   "hashConsensusForValidatorsExitBusOracle": {
@@ -99,7 +99,11 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 4
+      "maxValidatorsPerReport": 600,
+      "maxExitBalanceEth": 416000,
+      "balancePerFrameEth": 32,
+      "frameDurationInSec": 48,
+      "consensusVersion": 5
     }
   },
   "depositSecurityModule": {
@@ -111,19 +115,20 @@
   },
   "oracleReportSanityChecker": {
     "deployParameters": {
-      "exitedValidatorsPerDayLimit": 1500,
-      "appearedValidatorsPerDayLimit": 1500,
-      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
+      "exitedEthAmountPerDayLimit": 57600,
+      "appearedEthAmountPerDayLimit": 57600,
       "annualBalanceIncreaseBPLimit": 1000,
       "simulatedShareRateDeviationBPLimit": 250,
-      "maxValidatorExitRequestsPerReport": 2000,
+      "maxBalanceExitRequestedPerReportInEth": 19200,
       "maxItemsPerExtraDataTransaction": 8,
       "maxNodeOperatorsPerExtraDataItem": 24,
       "requestTimestampMargin": 128,
       "maxPositiveTokenRebase": 5000000,
-      "initialSlashingAmountPWei": 1000,
-      "inactivityPenaltiesAmountPWei": 101,
-      "clBalanceOraclesErrorUpperBPLimit": 50
+      "maxCLBalanceDecreaseBP": 360,
+      "clBalanceOraclesErrorUpperBPLimit": 50,
+      "consolidationEthAmountPerDayLimit": 93375,
+      "exitedValidatorEthAmountLimit": 32,
+      "externalPendingBalanceCapEth": 500
     }
   },
   "oracleDaemonConfig": {
@@ -139,7 +144,7 @@
   },
   "nodeOperatorsRegistry": {
     "deployParameters": {
-      "stakingModuleName": "Curated",
+      "stakingModuleName": "curated-onchain-v1",
       "stakingModuleTypeId": "curated-onchain-v1",
       "exitDeadlineThresholdInSeconds": 86400
     }

@@ -3,12 +3,14 @@
 .vscode/
 .cursor/
 .claude/
+.codex/
 
 node_modules/
 coverage/
 state-mate/
 
 coverage.json
+localhost.json
 
 typechain/
 typechain-types/
@@ -25,12 +27,22 @@ foundry/out/
 lib/abi/*.json
 
 .env
+.env.*
+!.env.example
+!.env.*.example
 accounts.json
 deployed-local.json
 deployed-local-devnet.json
 deployed-hardhat.json
-deployed-local-devnet.json
-deployed-mainnet-upgrade.json
+deployed-*-upgrade.json
+**/upgrade-params-local.toml
+**/upgrade-params-hardhat.toml
+**/upgrade-params-*-upgrade.toml
 
 # MacOS
 .DS_Store
+
+# Dev dirs
+.local/
+.tmp/
+.dev/
