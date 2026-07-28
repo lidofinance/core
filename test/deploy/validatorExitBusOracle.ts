@@ -1,7 +1,13 @@
 import { expect } from "chai";
+import { AbiCoder, keccak256 } from "ethers";
 import hre from "hardhat";
 
-import type { HashConsensus__Harness, ReportProcessor__Mock, type StakingModule__MockForKeyVerification, ValidatorsExitBusOracle } from "typechain-types/index.js";
+import type {
+  HashConsensus__Harness,
+  ReportProcessor__Mock,
+  StakingModule__MockForKeyVerification,
+  ValidatorsExitBusOracle,
+} from "typechain-types/index.js";
 
 import {
   EPOCHS_PER_FRAME,
@@ -33,12 +39,7 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForExitBus(
-  lidoLocator: string,
-  accountingOracle: string,
-  accounting: string,
-  admin: string,
-) {
+async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, accounting: string, admin: string) {
   const { ethers } = await hre.network.getOrCreate();
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
     f.deploy(lidoLocator, accounting, admin, {
@@ -181,11 +182,9 @@ export async function deployVEBO(
 // Derive the same 48-byte pubkey as StakingModule__MockForKeyVerification fallback:
 // pubkey = keccak(nodeOpId, keyIndex) || first 16 bytes of keccak(nodeOpId, keyIndex, 1)
 export function makeMockPubkey(nodeOpId: number | bigint, keyIndex: number | bigint): string {
-  const hash1 = ethers.keccak256(
-    ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [nodeOpId, keyIndex]),
-  );
-  const hash2 = ethers.keccak256(
-    ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "uint256"], [nodeOpId, keyIndex, 1]),
+  const hash1 = keccak256(AbiCoder.defaultAbiCoder().encode(["uint256", "uint256"], [nodeOpId, keyIndex]));
+  const hash2 = keccak256(
+    AbiCoder.defaultAbiCoder().encode(["uint256", "uint256", "uint256"], [nodeOpId, keyIndex, 1]),
   );
   return ("0x" + hash1.slice(2) + hash2.slice(2)).slice(0, 2 + 96);
 }

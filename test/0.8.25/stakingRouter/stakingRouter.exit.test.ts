@@ -1,9 +1,13 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { LidoLocator, StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types/index.js";
+import {
+  type LidoLocator,
+  type StakingModule__MockForTriggerableWithdrawals,
+  type StakingRouter__Harness,
+} from "typechain-types/index.js";
 
 import {
   certainAddress,
@@ -20,6 +24,8 @@ import { Snapshot } from "test/suite/index.js";
 import { deployStakingRouter } from "../../deploy/stakingRouter.js";
 
 describe("StakingRouter.sol:exit", () => {
+  let ethers: HardhatEthers;
+
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let stakingRouterAdmin: HardhatEthersSigner;
@@ -46,6 +52,8 @@ describe("StakingRouter.sol:exit", () => {
   const NODE_OPERATOR_ID = 1n;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [deployer, admin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
 
     locator = await deployLidoLocator({
@@ -121,7 +129,7 @@ describe("StakingRouter.sol:exit", () => {
     it("calls reportValidatorExitDelay on the staking module", async () => {
       await expect(
         stakingModule.reportValidatorExitDelay(NODE_OPERATOR_ID, proofSlotTimestamp, publicKey, eligibleToExitInSec),
-      ).to.not.be.reverted;
+      ).to.not.be.revert(ethers);
 
       await expect(
         stakingRouter
@@ -133,7 +141,7 @@ describe("StakingRouter.sol:exit", () => {
             publicKey,
             eligibleToExitInSec,
           ),
-      ).to.not.be.reverted;
+      ).to.not.be.revert(ethers);
     });
 
     it("reverts when called by unauthorized user", async () => {
@@ -169,7 +177,7 @@ describe("StakingRouter.sol:exit", () => {
 
       await expect(
         stakingRouter.connect(reporter).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
-      ).to.not.be.reverted;
+      ).to.not.be.revert(ethers);
     });
 
     it("emits StakingModuleExitNotificationFailed when staking module reverts", async () => {

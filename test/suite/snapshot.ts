@@ -1,6 +1,6 @@
 import hre from "hardhat";
 
-import { HardhatEthersProvider } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersProvider } from "@nomicfoundation/hardhat-ethers/types";
 
 export class Snapshot {
   private static async provider(): Promise<HardhatEthersProvider> {

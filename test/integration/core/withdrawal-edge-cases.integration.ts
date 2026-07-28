@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import hre from "hardhat";
 
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
@@ -6,12 +7,21 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Lido, WithdrawalQueueERC721 } from "typechain-types/index.js";
 
-import { ether, findEventsWithInterfaces } from "lib/index.js";
-import { finalizeWQViaSubmit, getProtocolContext, type ProtocolContext, report } from "lib/protocol/index.js";
+import { certainAddress, ether, findEventsWithInterfaces, impersonate, toGwei } from "lib/index.js";
+import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
+import {
+  buildModuleAccountingReportParams,
+  depositValidatorsWithoutReport,
+  finalizeWQViaSubmit,
+  getProtocolContext,
+  type ProtocolContext,
+  report,
+  reportWithoutClActivation,
+  resetCLBalanceDecreaseWindow,
+  waitNextAvailableReportTime,
+} from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
-import { ZeroAddress } from "ethers";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
 
 describe("Integration: Withdrawal edge cases", () => {
   let ethers: HardhatEthers;

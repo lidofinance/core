@@ -1,10 +1,11 @@
-import { type ContractFactory, type ContractTransactionReceipt, type Signer } from "ethers";
+import { type ContractFactory, type ContractTransactionReceipt, getAddress, parseUnits, type Signer } from "ethers";
 import hre from "hardhat";
 
 import type { FactoryOptions } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { LidoLocator } from "typechain-types/index.js";
 
+import { getDeployerSigner } from "./account.js";
 import {
   addContractHelperFields,
   type DeployedContract,
@@ -12,11 +13,9 @@ import {
   loadContract,
   type LoadedContract,
 } from "./contract.js";
-import { type ConvertibleToString, cy, log, yl } from "./log.js";
+import { bl, type ConvertibleToString, cy, log, yl } from "./log.js";
 import { keysOf } from "./protocol/types.js";
 import { incrementGasUsed, Sk, updateObjectInState } from "./state-file.js";
-import { bl } from "lib/log.js";
-import { getDeployerSigner } from "./account.js";
 
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
 const GAS_MAX_FEE = process.env.GAS_MAX_FEE || null;
@@ -82,11 +81,10 @@ export async function makeTx(
   return receipt;
 }
 
-async function getDeployTxParams(deployer: string) {
-  const { ethers } = await hre.network.getOrCreate();
-  const deployerSigner = await ethers.provider.getSigner();
-  if (deployer !== deployerSigner.address) {
-    throw new Error("DEPLOYER set in ENV must correspond to the first signer of hardhat");
+async function getDeploySigner(deployer: string): Promise<Signer> {
+  const deployerSigner = await getDeployerSigner();
+  if (getAddress(deployer) !== getAddress(deployerSigner.address)) {
+    throw new Error(`Deployer address mismatch: env DEPLOYER=${deployerSigner.address}, deployer=${deployer}`);
   }
 
   return deployerSigner;
@@ -96,8 +94,8 @@ function getDeployTxParams(): DeployTxParams {
   if (GAS_PRIORITY_FEE !== null && GAS_MAX_FEE !== null) {
     return {
       type: 2,
-      maxPriorityFeePerGas: ethers.parseUnits(String(GAS_PRIORITY_FEE), "gwei"),
-      maxFeePerGas: ethers.parseUnits(String(GAS_MAX_FEE), "gwei"),
+      maxPriorityFeePerGas: parseUnits(String(GAS_PRIORITY_FEE), "gwei"),
+      maxFeePerGas: parseUnits(String(GAS_MAX_FEE), "gwei"),
       gasLimit: GAS_LIMIT,
     };
   } else {
@@ -113,8 +111,12 @@ export async function deployContract(
   signerOrOptions?: Signer | FactoryOptions,
 ): Promise<DeployedContract> {
   const { ethers } = await hre.network.getOrCreate();
-  const txParams = await getDeployTxParams(deployer);
-  const factory = (await ethers.getContractFactory(artifactName, signerOrOptions)) as ContractFactory;
+  const txParams = getDeployTxParams();
+  const deployerSigner = await getDeploySigner(deployer);
+  const factory = (await ethers.getContractFactory(
+    artifactName,
+    withDefaultSigner(signerOrOptions, deployerSigner),
+  )) as ContractFactory;
   const contract = await factory.deploy(...constructorArgs, txParams);
   const tx = contract.deploymentTransaction();
   if (!tx) {

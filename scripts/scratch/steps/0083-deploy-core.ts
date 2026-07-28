@@ -1,8 +1,16 @@
 import hre from "hardhat";
 
-import type { StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types/index.js";
+import type {
+  ConsolidationBus,
+  ConsolidationGateway,
+  ConsolidationMigrator,
+  StakingRouter,
+  TopUpGateway,
+  TriggerableWithdrawalsGateway,
+} from "typechain-types/index.js";
 
-import { encodeFunctionCall, getContractPath, loadContract, InitializeArgs } from "lib/contract.js";
+import type { InitializeArgs } from "lib/contract.js";
+import { encodeFunctionCall, getContractPath, loadContract } from "lib/contract.js";
 import {
   deployBehindOssifiableProxy,
   deployContract,
@@ -10,14 +18,14 @@ import {
   deployWithoutProxy,
   makeTx,
 } from "lib/deploy.js";
+import { EIP7002_ADDRESS } from "lib/eips/eip7002.js";
+import { EIP7251_ADDRESS } from "lib/eips/eip7251.js";
+import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib/index.js";
 import { log } from "lib/log.js";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 import { en0x } from "lib/string.js";
 
 import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState.js";
-import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib/index.js";
-import { EIP7002_ADDRESS } from "lib/eips/eip7002.js";
-import { EIP7251_ADDRESS } from "lib/eips/eip7251.js";
 
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
 

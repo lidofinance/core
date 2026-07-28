@@ -1,13 +1,13 @@
 import {
   DAY,
   FINALIZE_UPGRADE_V4_MIGRATION_REPORT_TIMESTAMP,
-  FormulaFixtureSet,
+  type FormulaFixtureSet,
   getMigrationCLValidatorsBalance,
   migrate,
-  MigrationStep,
-  OracleReportLimits,
-  ReportStep,
-  ReportStepInput,
+  type MigrationStep,
+  type OracleReportLimits,
+  type ReportStep,
+  type ReportStepInput,
 } from "../lib.js";
 
 export const MAX_BASIS_POINTS = 10_000n;

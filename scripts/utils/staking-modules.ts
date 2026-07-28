@@ -1,8 +1,9 @@
 import { execFileSync } from "child_process";
-import { HDNodeWallet } from "ethers";
+import { HDNodeWallet, Mnemonic, ZeroAddress } from "ethers";
 import fs from "fs";
-import { ethers, network as hardhatNetwork } from "hardhat";
-import { getMode } from "hardhat.helpers";
+import hre from "hardhat";
+import { getMode } from "hardhat.helpers.js";
+import type { ResolvedConfigurationVariable } from "hardhat/types/config";
 import os from "os";
 import path from "path";
 import {
@@ -11,10 +12,10 @@ import {
   writeUpgradeParameterAddresses,
 } from "scripts/utils/upgrade.js";
 
-import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types/index.js";
+import { type HashConsensus, type ValidatorExitDelayVerifier } from "typechain-types/index.js";
 
 import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib/index.js";
-import { DeploymentState, Sk, updateObjectInState } from "lib/state-file.js";
+import { type DeploymentState, Sk, updateObjectInState } from "lib/state-file.js";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
 const STAKING_MODULES_REPO_BRANCH = "develop";
@@ -126,26 +127,27 @@ export function getEnvParams() {
   };
 }
 
-function getRpcUrl() {
-  const networkConfig = hardhatNetwork.config;
-  const rpcUrl = "url" in networkConfig ? networkConfig.url : process.env.RPC_URL;
+async function getRpcUrl() {
+  const { networkConfig } = await hre.network.getOrCreate();
+  const rpcUrl = "url" in networkConfig ? await networkConfig.url.get() : process.env.RPC_URL;
   if (!rpcUrl) throw new Error("RPC URL is not available");
   return rpcUrl;
 }
 
-function getPrivateKey() {
-  const accounts = hardhatNetwork.config.accounts;
+async function getPrivateKey() {
+  const { networkConfig } = await hre.network.getOrCreate();
+  const accounts = networkConfig.accounts;
   if (Array.isArray(accounts) && accounts.length > 0) {
-    return accounts[0] as string;
+    return await (accounts[0] as ResolvedConfigurationVariable).get();
   }
 
   if (typeof accounts === "object" && "mnemonic" in accounts) {
-    const wallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(accounts.mnemonic), `m/44'/60'/0'/0/0`);
+    const wallet = HDNodeWallet.fromMnemonic(Mnemonic.fromPhrase(await accounts.mnemonic.get()), `m/44'/60'/0'/0/0`);
     return wallet.privateKey;
   }
 
   const wallet = HDNodeWallet.fromMnemonic(
-    ethers.Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
+    Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
     `m/44'/60'/0'/0/0`,
   );
   return wallet.privateKey;
@@ -175,7 +177,7 @@ export function readArtifact(artifactPath: string): ExternalDeployArtifact {
 }
 
 function isNonZeroAddress(value: unknown): value is string {
-  return typeof value === "string" && value !== "" && value !== ethers.ZeroAddress;
+  return typeof value === "string" && value !== "" && value !== ZeroAddress;
 }
 
 function artifactAddress(artifact: ExternalDeployArtifact, key: string): string | undefined {
@@ -260,7 +262,7 @@ function writeSubstateToToml(section: string, tomlMap: Record<string, TomlMap>, 
   }
 }
 
-export function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact, isScratch: boolean) {
+export async function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeployArtifact, isScratch: boolean) {
   if (!artifact.CSModule) throw new Error("CSM deploy artifact does not contain CSModule address");
 
   const existing = (state[Sk.sm_CSM]?.contracts ?? {}) as Substate;
@@ -269,7 +271,7 @@ export function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeploy
     : artifact.CSModule;
   const contracts = buildSubstate(artifact, isScratch ? CSM_CONTRACTS : CSM_UPGRADE_CONTRACTS, existing);
 
-  updateObjectInState(Sk.sm_CSM, {
+  await updateObjectInState(Sk.sm_CSM, {
     proxy: {
       address: proxyAddress,
       contract: "external:staking-modules/src/CSModule.sol:CSModule",
@@ -282,7 +284,7 @@ export function saveCSMArtifact(state: DeploymentState, artifact: ExternalDeploy
   writeSubstateToToml(CSM_TOML_SECTION, CSM_TOML_MAP, contracts);
 }
 
-export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDeployArtifact) {
+export async function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDeployArtifact) {
   const moduleAddress = artifact.CuratedModule;
   if (!moduleAddress) throw new Error("Curated deploy artifact does not contain CuratedModule address");
 
@@ -292,7 +294,7 @@ export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDe
     : moduleAddress;
   const contracts = buildSubstate(artifact, CM_CONTRACTS, existing);
 
-  updateObjectInState(Sk.sm_CM, {
+  await updateObjectInState(Sk.sm_CM, {
     proxy: {
       address: proxyAddress,
       contract: "external:staking-modules/src/CuratedModule.sol:CuratedModule",
@@ -312,6 +314,8 @@ export function saveCuratedArtifact(state: DeploymentState, artifact: ExternalDe
  * Shared between the scratch deploy step and the protocol upgrade step.
  */
 export async function deployStakingModules(state: DeploymentState): Promise<void> {
+  const { ethers, networkName } = await hre.network.getOrCreate();
+
   // A module counts as deployed only once BOTH its proxy address and its deploy artifact are recorded.
   // During an upgrade the proxies are pre-written into the state file before the new implementations are
   // deployed, so the proxy address alone must not suppress the deploy.
@@ -325,14 +329,14 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
     return;
   }
 
-  if (hardhatNetwork.name === "hardhat") {
+  if (networkName === "default") {
     log("In-memory 'hardhat' network detected: skipping external CSM/CMv2 deployment (no RPC URL for Foundry).");
     log.emptyLine();
     return;
   }
 
-  const rpcUrl = getRpcUrl();
-  const privateKey = getPrivateKey();
+  const rpcUrl = await getRpcUrl();
+  const privateKey = await getPrivateKey();
   const { chainId } = await ethers.provider.getNetwork();
   const chainSpec = state[Sk.chainSpec];
   const slotsPerEpoch = Number(chainSpec.slotsPerEpoch);
@@ -401,7 +405,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       cmdOptions.push(`--private-key=${privateKey}`);
       run("just", cmdOptions, tmpDir, externalEnv);
       const artifact = readArtifact(path.join(tmpDir, artifactsDir, "csm", artifactsFile));
-      saveCSMArtifact(state, artifact, isScratch);
+      await saveCSMArtifact(state, artifact, isScratch);
       log(`Community Staking Module deployed at: ${cy(artifact.CSModule!)}`);
       log.emptyLine();
     }
@@ -416,7 +420,7 @@ export async function deployStakingModules(state: DeploymentState): Promise<void
       const artifactsFile = `deploy-${chain}.json`;
       run("just", cmdOptions, tmpDir, externalEnv);
       const artifact = readArtifact(path.join(tmpDir, artifactsDir, "curated", artifactsFile));
-      saveCuratedArtifact(state, artifact);
+      await saveCuratedArtifact(state, artifact);
       log(`Curated Module v2 deployed at: ${cy(artifact.CuratedModule!)}`);
       log.emptyLine();
     }

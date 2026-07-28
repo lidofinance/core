@@ -1,13 +1,13 @@
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  BeaconChainDepositor,
-  DepositContract__MockForBeaconChainDepositor,
-  Lido__MockForStakingRouter,
-  LidoLocator,
-  StakingRouter__Harness,
+  type BeaconChainDepositor,
+  type DepositContract__MockForBeaconChainDepositor,
+  type Lido__MockForStakingRouter,
+  type LidoLocator,
+  type StakingRouter__Harness,
 } from "typechain-types/index.js";
 
 import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02, proxify } from "lib/index.js";
@@ -43,6 +43,8 @@ export async function deployStakingRouter(
   impl: StakingRouter__Harness;
   beaconChainDepositor: BeaconChainDepositor;
 }> {
+  const { ethers } = await hre.network.getOrCreate();
+
   if (!depositContract) {
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor");
   }
@@ -60,14 +62,16 @@ export async function deployStakingRouter(
   const srLib = await ethers.deployContract("SRLib", {
     signer: deployer,
     libraries: {
-      ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+      ["project/contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]:
+        await allocLib.getAddress(),
     },
   });
   const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
     signer: deployer,
     libraries: {
-      ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-      ["contracts/0.8.25/sr/SRLib.sol:SRLib"]: await srLib.getAddress(),
+      ["project/contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]:
+        await beaconChainDepositor.getAddress(),
+      ["project/contracts/0.8.25/sr/SRLib.sol:SRLib"]: await srLib.getAddress(),
     },
   });
 

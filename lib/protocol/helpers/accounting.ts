@@ -4,7 +4,7 @@ import hre from "hardhat";
 
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import type { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.js";
+import type { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.sol/Accounting.js";
 import type { AccountingOracle } from "typechain-types/index.js";
 
 import { impersonate } from "../../account.js";
@@ -16,7 +16,6 @@ import { advanceChainTime, getCurrentBlockTimestamp } from "../../time.js";
 import { ether } from "../../units.js";
 import type { ProtocolContext } from "../types.js";
 
-import { buildModuleAccountingReportParams } from "./staking.js";
 import { buildModuleAccountingReportParams } from "./staking.js";
 
 export type OracleReportParams = {
@@ -117,10 +116,22 @@ export const report = async (ctx: ProtocolContext, params: OracleReportParams = 
     reportBurner = true,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
-  }: OracleReportParams = {},
-): Promise<OracleReportResults> => {
+  } = params;
+  let {
+    clDiff,
+    elRewardsVaultBalance = null,
+    withdrawalVaultBalance = null,
+    sharesRequestedToBurn = null,
+    withdrawalFinalizationBatches = [],
+    refSlot = null,
+    stakingModuleIdsWithUpdatedBalance = [],
+    validatorBalancesGweiByStakingModule = [],
+    reportElVault = true,
+    reportWithdrawalsVault = true,
+  } = params;
   const { ethers } = await hre.network.getOrCreate();
-  const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle } = ctx.contracts;
+  const { hashConsensus, lido, elRewardsVault, withdrawalVault, burner, accountingOracle, oracleReportSanityChecker } =
+    ctx.contracts;
 
   if (waitNextReportTime) {
     await waitNextAvailableReportTime(ctx);
@@ -390,6 +401,7 @@ export const ensureFirstPostMigrationReport = async (ctx: ProtocolContext): Prom
  * Use this only as explicit test setup after the first post-migration report.
  */
 export const normalizeWithdrawalVaultBaseline = async (ctx: ProtocolContext, target: bigint = 0n): Promise<void> => {
+  const { ethers, networkHelpers } = await hre.network.getOrCreate();
   const { accounting, lido, oracleReportSanityChecker, withdrawalVault } = ctx.contracts;
 
   const lastVaultBalanceAfterTransfer = await oracleReportSanityChecker.lastVaultBalanceAfterTransfer();
@@ -402,7 +414,7 @@ export const normalizeWithdrawalVaultBaseline = async (ctx: ProtocolContext, tar
   }
 
   if (lastVaultBalanceAfterTransfer === target) {
-    await setBalance(withdrawalVault.address, target);
+    await networkHelpers.setBalance(withdrawalVault.address, target);
   } else {
     const { clValidatorsBalanceAtLastReport, clPendingBalanceAtLastReport } = await lido.getBalanceStats();
     const accountingSigner = await impersonate(accounting.address, ether("1"));
@@ -418,7 +430,7 @@ export const normalizeWithdrawalVaultBaseline = async (ctx: ProtocolContext, tar
       withdrawalsVaultTransfer = 0n;
     }
 
-    await setBalance(withdrawalVault.address, reportedWithdrawalVaultBalance);
+    await networkHelpers.setBalance(withdrawalVault.address, reportedWithdrawalVaultBalance);
 
     // Direct ORSC setup intentionally appends reportData and finalizes the WVB
     // baseline, but only after the first real post-migration report is done.
@@ -437,7 +449,7 @@ export const normalizeWithdrawalVaultBaseline = async (ctx: ProtocolContext, tar
         withdrawalsVaultTransfer,
       );
 
-    await setBalance(withdrawalVault.address, target);
+    await networkHelpers.setBalance(withdrawalVault.address, target);
   }
 
   expect(await oracleReportSanityChecker.lastVaultBalanceAfterTransfer()).to.equal(

@@ -1,8 +1,8 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { advanceChainTime, ether, updateBalance } from "lib/index.js";
 import {
@@ -12,7 +12,7 @@ import {
   finalizeWQViaSubmit,
   getProtocolContext,
   normalizeWithdrawalVaultBaseline,
-  ProtocolContext,
+  type ProtocolContext,
   report,
   reportWithoutClActivation,
   setStakingLimit,
@@ -21,6 +21,8 @@ import {
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Deposits reserve", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let testSnapshot: string;
@@ -78,6 +80,8 @@ describe("Integration: Deposits reserve", () => {
   };
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

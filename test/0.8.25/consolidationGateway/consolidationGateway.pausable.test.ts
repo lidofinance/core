@@ -1,13 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  ConsolidationGateway,
-  DepositSecurityModule__MockForConsolidationGateway,
-  Lido__MockForConsolidationGateway,
-  WithdrawalVault__MockForConsolidationGateway,
+  type ConsolidationGateway,
+  type DepositSecurityModule__MockForConsolidationGateway,
+  type Lido__MockForConsolidationGateway,
+  type WithdrawalVault__MockForConsolidationGateway,
 } from "typechain-types/index.js";
 
 import {
@@ -32,9 +33,11 @@ const dummyWitness = (pubkey: string) => ({
   proposerIndex: 0,
 });
 
-const ZERO_ADDRESS = ethers.ZeroAddress;
+const ZERO_ADDRESS = ZeroAddress;
 
 describe("ConsolidationGateway.sol: pausable", () => {
+  let ethers: HardhatEthers;
+
   let consolidationGateway: ConsolidationGateway;
   let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
   let dsm: DepositSecurityModule__MockForConsolidationGateway;
@@ -58,6 +61,8 @@ describe("ConsolidationGateway.sol: pausable", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [admin, authorizedEntity, stranger] = await ethers.getSigners();
 
     const locator = await deployLidoLocator();

@@ -1,7 +1,8 @@
 import { execSync } from "child_process";
-import { HDNodeWallet } from "ethers";
+import { HDNodeWallet, Mnemonic } from "ethers";
 import fs from "fs";
-import { ethers, network as hardhatNetwork } from "hardhat";
+import hre from "hardhat";
+import type { ResolvedConfigurationVariable } from "hardhat/types/config";
 import os from "os";
 import path from "path";
 
@@ -12,8 +13,9 @@ const CIRCUIT_BREAKER_REPO = "https://github.com/lidofinance/circuit-breaker.git
 const CIRCUIT_BREAKER_BRANCH = "deploy-script";
 
 export async function main() {
+  const { ethers, networkName, networkConfig } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   // Check if CircuitBreaker address is already specified
   if (state[Sk.circuitBreaker]?.address) {
@@ -23,7 +25,7 @@ export async function main() {
   }
 
   // deploy mock in case the network="hardhat" (there is no rpcUrl for in-memory node instance)
-  if (hardhatNetwork.name == "hardhat") {
+  if (networkName === "default") {
     log("In-memory 'hardhat' network detected, deploy CircuitBreakerMock contract...");
     const cb = await deployWithoutProxy(Sk.circuitBreaker, "CircuitBreakerMock", deployer, [60]);
     log(`CircuitBreakerMock deployed at: ${cy(cb.address)}`);
@@ -50,21 +52,20 @@ export async function main() {
     execSync("forge install", { cwd: tmpDir, stdio: "inherit" });
 
     // Extract RPC URL and private key from Hardhat's network config
-    const networkConfig = hardhatNetwork.config;
-    const rpcUrl = "url" in networkConfig ? networkConfig.url : process.env.RPC_URL;
+    const rpcUrl = "url" in networkConfig ? await networkConfig.url.get() : process.env.RPC_URL;
     if (!rpcUrl) throw new Error("RPC URL is not available");
 
     const accounts = networkConfig.accounts;
     let privateKey: string;
     if (Array.isArray(accounts) && accounts.length > 0) {
-      privateKey = accounts[0] as string;
+      privateKey = await (accounts[0] as ResolvedConfigurationVariable).get();
     } else if (typeof accounts === "object" && "mnemonic" in accounts) {
-      const wallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(accounts.mnemonic), `m/44'/60'/0'/0/0`);
+      const wallet = HDNodeWallet.fromMnemonic(Mnemonic.fromPhrase(await accounts.mnemonic.get()), `m/44'/60'/0'/0/0`);
       privateKey = wallet.privateKey;
     } else {
       // Fallback: derive from the default Hardhat mnemonic (used by "local" network with `npx hardhat node`)
       const wallet = HDNodeWallet.fromMnemonic(
-        ethers.Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
+        Mnemonic.fromPhrase("test test test test test test test test test test test junk"),
         `m/44'/60'/0'/0/0`,
       );
       privateKey = wallet.privateKey;
@@ -112,7 +113,7 @@ export async function main() {
     log(`CircuitBreaker deployed at: ${cy(circuitBreakerAddress)}`);
     log.emptyLine();
 
-    updateObjectInState(Sk.circuitBreaker, {
+    await updateObjectInState(Sk.circuitBreaker, {
       address: circuitBreakerAddress,
     });
   } finally {

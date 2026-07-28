@@ -1,9 +1,9 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
+import { type ConsolidationBus, type ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
 
 import { proxify } from "lib/proxy.js";
 
@@ -12,6 +12,8 @@ import { Snapshot } from "test/suite/index.js";
 import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers.js";
 
 describe("ConsolidationBus.sol: publisher", () => {
+  let ethers: HardhatEthers;
+
   let consolidationBus: ConsolidationBus;
   let consolidationGateway: ConsolidationGateway__MockForConsolidationBus;
   let admin: HardhatEthersSigner;
@@ -25,6 +27,8 @@ describe("ConsolidationBus.sol: publisher", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [admin, manager, publisher, stranger] = await ethers.getSigners();
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway__MockForConsolidationBus");
@@ -138,7 +142,7 @@ describe("ConsolidationBus.sol: publisher", () => {
     it("should allow batch at exact limit", async () => {
       const groups = Array(10).fill({ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] });
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.reverted;
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.revert(ethers);
     });
 
     it("should revert if groups count exceeds max groups in batch", async () => {
@@ -159,7 +163,7 @@ describe("ConsolidationBus.sol: publisher", () => {
 
       const groups = Array(3).fill({ sourcePubkeys: [PUBKEYS[0]], targetPubkey: PUBKEYS[1] });
 
-      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.reverted;
+      await expect(consolidationBus.connect(publisher).addConsolidationRequests(groups)).to.not.be.revert(ethers);
     });
 
     it("should check both batch size and max groups limits independently", async () => {

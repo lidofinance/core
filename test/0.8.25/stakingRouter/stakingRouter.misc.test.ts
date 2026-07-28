@@ -1,17 +1,30 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { AccountingOracle__MockForStakingRouter, LidoLocator, StakingRouter__Harness } from "typechain-types/index.js";
+import {
+  type AccountingOracle__MockForStakingRouter,
+  type LidoLocator,
+  type StakingRouter__Harness,
+} from "typechain-types/index.js";
 
-import { certainAddress, ether, MAX_TOP_UP_PER_BLOCK_GWEI, randomAddress, randomBytes32, randomWCType1 } from "lib/index.js";
+import {
+  certainAddress,
+  ether,
+  MAX_TOP_UP_PER_BLOCK_GWEI,
+  randomAddress,
+  randomBytes32,
+  randomWCType1,
+} from "lib/index.js";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy/index.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("StakingRouter.sol:misc", () => {
+  let ethers: HardhatEthers;
+
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let stakingRouterAdmin: HardhatEthersSigner;
@@ -30,6 +43,8 @@ describe("StakingRouter.sol:misc", () => {
   const withdrawalCredentials = randomWCType1();
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [deployer, admin, stakingRouterAdmin, user] = await ethers.getSigners();
 
     accountingOracle = await ethers.deployContract("AccountingOracle__MockForStakingRouter", deployer);

@@ -1,12 +1,17 @@
 import { expect } from "chai";
 import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { ether } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext, report } from "lib/protocol/index.js";
+import { ether, impersonate } from "lib/index.js";
+import {
+  getDepositedSinceLastReport,
+  getProtocolContext,
+  type ProtocolContext,
+  reportWithoutClActivation,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 

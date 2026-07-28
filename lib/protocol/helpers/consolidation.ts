@@ -1,14 +1,13 @@
-import { BigNumberish } from "ethers";
-import { ethers } from "hardhat";
+import { type BigNumberish, ethers } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus } from "typechain-types/index.js";
+import { type ConsolidationBus } from "typechain-types/index.js";
 
 import { advanceChainTime, getCurrentBlockTimestamp } from "lib/index.js";
-import { addressToWC, LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg.js";
+import { addressToWC, type LocalMerkleTree, prepareLocalMerkleTree } from "lib/pdg.js";
 
-import { ProtocolContext } from "../types.js";
+import { type ProtocolContext } from "../types.js";
 
 const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
 

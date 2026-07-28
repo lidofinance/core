@@ -22,8 +22,6 @@ export {
   ensureFirstPostMigrationReport,
   waitNextAvailableReportTime,
   handleOracleReport,
-  OracleReportParams,
-  OracleReportSubmitParams,
   report,
   reportWithEffectiveClDiff,
   reportWithoutClActivation,
@@ -33,6 +31,7 @@ export {
   getDepositedSinceLastReport,
   normalizeWithdrawalVaultBaseline,
 } from "./accounting.js";
+export type { OracleReportParams, OracleReportSubmitParams } from "./accounting.js";
 
 export { ensureDsmGuardians } from "./dsm.js";
 export {

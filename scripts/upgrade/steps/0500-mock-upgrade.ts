@@ -1,12 +1,18 @@
-import { ethers } from "hardhat";
-import { VoteItem } from "scripts/utils/omnibus.js";
+import hre from "hardhat";
+import { type VoteItem } from "scripts/utils/omnibus.js";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-
-import { IDualGovernance, ITimelock, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types/index.js";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  DeploymentState,
+  type IDualGovernance,
+  type ITimelock,
+  type UpgradeTemplate,
+  type UpgradeVoteScript,
+  type Voting,
+} from "typechain-types/index.js";
+
+import {
+  type DeploymentState,
   ether,
   getAddress,
   getAddressValidated,
@@ -27,7 +33,7 @@ const VOTE_ID = BigInt(process.env.VOTE_ID || "0");
 const PROPOSAL_STATUS_EXECUTED = 3n;
 
 export async function skip(): Promise<boolean> {
-  const state = readNetworkState();
+  const state = await readNetworkState();
   // NOT skip if contract object exists in deployed state but address set as empty string or zero address
   const address = getAddressValidated(Sk.upgradeTemplate, state);
   // NOT skip if contract not deployed yet
@@ -47,7 +53,7 @@ export async function skip(): Promise<boolean> {
 
 export async function main() {
   const deployer = await getDeployerSigner();
-  const state = readNetworkState();
+  const state = await readNetworkState();
 
   const voteScript = await loadContract<UpgradeVoteScript>(
     "UpgradeVoteScript",
@@ -101,6 +107,8 @@ async function isProposalEnacted(state: DeploymentState, proposalId: bigint): Pr
 }
 
 async function execVoteItems(voteItems: VoteItem[], executor: HardhatEthersSigner) {
+  const { ethers } = await hre.network.getOrCreate();
+
   for (const item of voteItems) {
     log(`Execute vote item: ${or(item.description)}`);
     const tx = await executor.sendTransaction({

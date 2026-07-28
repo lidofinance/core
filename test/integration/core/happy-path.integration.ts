@@ -2,25 +2,31 @@ import { expect } from "chai";
 import { ContractTransactionReceipt, Result, TransactionResponse, ZeroAddress } from "ethers";
 import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, batch, ether, impersonate, log, updateBalance } from "lib/index.js";
+import { advanceChainTime, batch, ether, log, ONE_GWEI, updateBalance } from "lib/index.js";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 import {
+  adjustReportModuleBalances,
+  buildModuleAccountingReportParams,
+  depositAllocatedValidatorsFromBuffer,
+  ensureFirstPostMigrationReport,
   finalizeWQViaElVault,
   getProtocolContext,
+  normalizeWithdrawalVaultBaseline,
   norSdvtEnsureOperators,
   type OracleReportParams,
   type ProtocolContext,
   removeStakingLimit,
   report,
+  reportWithoutClActivation,
   setStakingLimit,
+  submitReportDataWithConsensusAndEmptyExtraData,
 } from "lib/protocol/index.js";
 
 import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 import { type LogDescriptionExtended } from "../../../lib/protocol/types.js";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 
 const AMOUNT = ether("100");
 

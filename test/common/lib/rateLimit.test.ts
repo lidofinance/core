@@ -1,5 +1,7 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 interface LimitData {
   maxLimit: bigint;
@@ -10,12 +12,16 @@ interface LimitData {
 }
 
 describe("RateLimit.sol", () => {
+  let ethers: HardhatEthers;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rateLimitStorage: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rateLimit: any;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     rateLimitStorage = await ethers.deployContract("RateLimitStorage__Harness");
     rateLimit = await ethers.deployContract("RateLimit__Harness");
   });

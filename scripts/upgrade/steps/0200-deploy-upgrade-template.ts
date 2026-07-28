@@ -1,11 +1,11 @@
-import { ethers } from "hardhat";
+import { isAddress, ZeroAddress } from "ethers";
 import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade.js";
 
+import { type UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig.js";
 import { UpgradeTemplate__factory } from "typechain-types/index.js";
-import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig.js";
 
 import {
-  ConstructorArgs,
+  type ConstructorArgs,
   deployWithoutProxy,
   getAddress,
   getContractPath,
@@ -24,7 +24,7 @@ import {
  * Mirrors `UpgradeConfig._nonZeroAddress` so misconfigured params fail fast before deployment.
  */
 function nonZeroAddress(value: unknown, name = "address"): string {
-  if (typeof value !== "string" || !ethers.isAddress(value) || value === ethers.ZeroAddress) {
+  if (typeof value !== "string" || !isAddress(value) || value === ZeroAddress) {
     throw new Error(`Expected non-zero ${name} but got: ${value}`);
   }
   return value;
@@ -35,7 +35,7 @@ export async function skip(): Promise<boolean> {
 }
 
 export async function main() {
-  const state = readNetworkState();
+  const state = await readNetworkState();
   const parameters = readUpgradeParameters();
   const deployer = await getDeployerSigner();
 
@@ -222,7 +222,7 @@ export async function main() {
   );
 
   const configAddress = await template.getFunction("CONFIG")();
-  updateObjectInState(Sk.upgradeConfig, {
+  await updateObjectInState(Sk.upgradeConfig, {
     contract: await getContractPath("UpgradeConfig"),
     address: configAddress,
     constructorArgs: [upgradeParams],

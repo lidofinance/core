@@ -1,26 +1,26 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import {
-  Accounting__MockForSanityChecker,
-  AccountingOracle__MockForSanityChecker,
-  Lido__MockForSanityChecker,
-  OracleReportSanityChecker,
-  OracleReportSanityCheckerWrapper,
+  type Accounting__MockForSanityChecker,
+  type AccountingOracle__MockForSanityChecker,
+  type Lido__MockForSanityChecker,
+  type OracleReportSanityChecker,
+  type OracleReportSanityCheckerWrapper,
 } from "typechain-types/index.js";
 
 import { ether, impersonate, randomAddress } from "lib/index.js";
 
 import {
   deployFinalizeUpgradeV4Checker,
-  FinalizeUpgradeV4CheckerFixture,
+  type FinalizeUpgradeV4CheckerFixture,
   getMigrationCLValidatorsBalance,
   hasFinalizeUpgradeV4State,
   migrateFinalizeUpgradeV4State,
-  MigrationStep,
+  type MigrationStep,
   resolveScenarioSteps,
 } from "../lib.js";
 
@@ -29,12 +29,19 @@ import {
   buildStoredReportsModel,
   calcExpectedWindowDiff,
   CL_BALANCE_WINDOW,
-  OracleReportLimits,
-  ResolvedNegativeRebaseStep,
-  ResolvedOracleReportFixture,
+  type OracleReportLimits,
+  type ResolvedNegativeRebaseStep,
+  type ResolvedOracleReportFixture,
 } from "./lib.js";
 
 describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
+  before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+  });
+
   type MockCheckerFixture = {
     checker: OracleReportSanityChecker;
     accountingSigner: HardhatEthersSigner;
@@ -50,7 +57,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
   const deployMockChecker = async (limitsList: OracleReportLimits): Promise<MockCheckerFixture> => {
     const [deployer] = await ethers.getSigners();
     const withdrawalVaultAddress = randomAddress();
-    await setBalance(withdrawalVaultAddress, ether("10000"));
+    await networkHelpers.setBalance(withdrawalVaultAddress, ether("10000"));
 
     const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
     const accounting = (await ethers.deployContract(
@@ -128,11 +135,11 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     if (fixture.kind === "finalizeUpgradeV4") {
       await migrateFinalizeUpgradeV4State(fixture, step);
     } else {
-      await setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
+      await networkHelpers.setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
       await fixture.lido.mock__setContractVersion(4n);
       await fixture.lido.mock__setBalanceStats(getMigrationCLValidatorsBalance(step), 0n, 0n, 0n);
 
-      await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
+      await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.revert(ethers);
     }
 
     const migrationCLBalance = getMigrationCLValidatorsBalance(step);
@@ -199,10 +206,12 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
     title: string,
   ) => {
     const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + report.movements.clWithdrawals;
-    await setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
+    await networkHelpers.setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
 
-    await expect(callCheck(checker, accountingSigner, state, report), `${title}: setup report '${report.label}'`).not.to
-      .be.reverted;
+    await expect(
+      callCheck(checker, accountingSigner, state, report),
+      `${title}: setup report '${report.label}'`,
+    ).not.to.be.revert(ethers);
     state.lastVaultBalanceAfterTransfer =
       withdrawalVaultBalance - (report.movements.withdrawalsVaultTransfer ?? report.movements.clWithdrawals);
   };
@@ -250,7 +259,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
           }
 
           const withdrawalVaultBalance = state.lastVaultBalanceAfterTransfer + checkedReport.movements.clWithdrawals;
-          await setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
+          await networkHelpers.setBalance(withdrawalVaultAddress, withdrawalVaultBalance);
 
           if (testCase.expected.outcome === "revert") {
             await expect(callCheck(checker, accountingSigner, state, checkedReport))
@@ -267,7 +276,7 @@ describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
                 expected.maxAllowedCLBalanceDiff,
               );
           } else {
-            await expect(callCheck(checker, accountingSigner, state, checkedReport)).not.to.be.reverted;
+            await expect(callCheck(checker, accountingSigner, state, checkedReport)).not.to.be.revert(ethers);
           }
 
           if (testCase.expected.lastReportCLWithdrawals !== undefined) {

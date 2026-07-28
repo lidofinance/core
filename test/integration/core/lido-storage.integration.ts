@@ -1,8 +1,7 @@
 import { expect } from "chai";
 import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { ether, streccak, updateBalance } from "lib/index.js";
 import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
@@ -52,6 +51,8 @@ describe("Integration: Lido storage slots after V3", () => {
 });
 
 describe("Integration: Lido storage slots after V4 (SRv3)", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -59,6 +60,8 @@ describe("Integration: Lido storage slots after V4 (SRv3)", () => {
   let stranger: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     [stEthHolder, stranger] = await ethers.getSigners();

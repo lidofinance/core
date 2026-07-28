@@ -1,11 +1,12 @@
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
 import { cy, deployWithoutProxy, log, updateObjectInState } from "lib/index.js";
 import { readNetworkState, Sk } from "lib/state-file.js";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   // Check if EasyTrackEVMScriptExecutor address is already specified
   if (state[Sk.easyTrackEVMScriptExecutor]?.address) {
@@ -17,7 +18,7 @@ export async function main() {
   // deploy temporary stub
   const ese = await deployWithoutProxy(Sk.easyTrackEVMScriptExecutor, "EasyTrackEVMScriptExecutorStub", deployer);
 
-  updateObjectInState(Sk.easyTrackEVMScriptExecutor, {
+  await updateObjectInState(Sk.easyTrackEVMScriptExecutor, {
     note: "It is a temporary stub for EasyTrack deployment",
   });
   log(`EasyTrackEVMScriptExecutor deployed at: ${cy(ese.address)}`);

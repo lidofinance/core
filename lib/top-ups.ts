@@ -1,12 +1,14 @@
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { SSZValidatorsMerkleTree } from "typechain-types/index.js";
+import { type SSZValidatorsMerkleTree } from "typechain-types/index.js";
 
 import { generateValidator } from "lib/index.js";
 
 const DEFAULT_GI_VALIDATOR_0 = "0x0000000000000000000000000000000000000000000000000096000000000028";
 
 export const prepareLocalMerkleTree = async (giValidator0: string = DEFAULT_GI_VALIDATOR_0) => {
+  const { ethers } = await hre.network.getOrCreate();
+
   const stateTree: SSZValidatorsMerkleTree = await ethers.deployContract("SSZValidatorsMerkleTree", [giValidator0], {});
 
   // leafCount before adding = offset to validators field (22*2^40 for mainnet GI)

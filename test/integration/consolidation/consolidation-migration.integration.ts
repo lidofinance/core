@@ -1,31 +1,36 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types/index.js";
+import {
+  type ConsolidationBus,
+  type ConsolidationGateway,
+  type ConsolidationMigrator,
+  type NodeOperatorsRegistry,
+} from "typechain-types/index.js";
 
 import { certainAddress, findEventsWithInterfaces } from "lib/index.js";
-import { getProtocolContext, ProtocolContext } from "lib/protocol/index.js";
 import {
   assertConsolidationTopology,
   calcConsolidationBatchHash,
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
-  CMv2OperatorKeys,
+  type CMv2OperatorKeys,
   cmv2SuiteEnabled,
-  ConsolidationWitnessSet,
+  type ConsolidationWitnessSet,
   decodeConsolidationRequest,
   ensureBatchNotPending,
   norEnsureDepositedOperatorKeys,
-  NorOperatorKeys,
+  type NorOperatorKeys,
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
 } from "lib/protocol/helpers/index.js";
-import { LoadedContract } from "lib/protocol/types.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { type LoadedContract } from "lib/protocol/types.js";
 
 import { Snapshot } from "test/suite/index.js";
 
@@ -55,6 +60,8 @@ const fakeWitnessForTarget = (pubkey: string) => ({
  * is allowed only via the explicit INTEGRATION_WITH_CMv2=off opt-out.
  */
 describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let nor: LoadedContract<NodeOperatorsRegistry>;
   let consolidationGateway: ConsolidationGateway;
@@ -91,6 +98,8 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
   let testSnapshot: string;
 
   before(async function () {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     globalSnapshot = await Snapshot.take();
@@ -461,7 +470,7 @@ describe("Integration: Consolidation Migration Flow (Real NOR -> Real CMv2)", ()
           .executeConsolidation([{ sourcePubkeys: [SOURCE_PUBKEY_1], targetWitness: targetWitness1 }], {
             value: fee,
           }),
-      ).to.not.be.reverted;
+      ).to.not.be.revert(ethers);
     });
 
     it("Should allow one source operator to consolidate to multiple targets", async () => {

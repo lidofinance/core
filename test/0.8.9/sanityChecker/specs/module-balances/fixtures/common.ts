@@ -1,7 +1,7 @@
 import { ether } from "lib/index.js";
 
 import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib.js";
-import { migrate, ModuleBalanceFixtureSet, moduleReport } from "../lib.js";
+import { migrate, type ModuleBalanceFixtureSet, moduleReport } from "../lib.js";
 
 export const commonModuleBalanceFixtureSet: ModuleBalanceFixtureSet = {
   title: "common",

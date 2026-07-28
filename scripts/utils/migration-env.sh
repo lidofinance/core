@@ -179,18 +179,17 @@ prepare_migration_env() {
 }
 
 prepare_trace_args() {
+  # Hardhat 3 exposes tracing through the global verbosity option (-v...),
+  # so there is no separate tracer to enable/disable: 'all' behaves like 'fulltrace'.
   case "${TRACE:-}" in
     "")
-      TRACE_ARGS=(--disabletracer)
+      TRACE_ARGS=()
       ;;
     trace)
-      TRACE_ARGS=(--trace --disabletracer)
+      TRACE_ARGS=(-vvv)
       ;;
-    fulltrace)
-      TRACE_ARGS=(--fulltrace --disabletracer)
-      ;;
-    all)
-      TRACE_ARGS=(--fulltrace)
+    fulltrace | all)
+      TRACE_ARGS=(-vvvvv)
       ;;
     *)
       echo "Error: TRACE must be empty, 'trace', 'fulltrace', or 'all'"

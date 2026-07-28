@@ -20,13 +20,24 @@ import {
   setAnnualBalanceIncreaseLimit,
 } from "lib/index.js";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting.js";
-import { getOperatorName, getOperatorRewardAddress, norSdvtAddNodeOperator, norSdvtAddOperatorKeys, norSdvtEnsureOperators, norSdvtSetOperatorStakingLimit } from "lib/protocol/helpers/nor-sdvt.js";
-import { depositAndReportValidators, removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking.js";
+import {
+  getOperatorName,
+  getOperatorRewardAddress,
+  norSdvtAddNodeOperator,
+  norSdvtAddOperatorKeys,
+  norSdvtEnsureOperators,
+  norSdvtSetOperatorStakingLimit,
+} from "lib/protocol/helpers/nor-sdvt.js";
+import {
+  depositAndReportValidators,
+  removeStakingLimit,
+  setModuleStakeShareLimit,
+} from "lib/protocol/helpers/staking.js";
 import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
-import { getProtocolContext, seedProtocolPendingBaseline, withCSM, type ProtocolContext } from "lib/protocol/index.js";
+import { getProtocolContext, type ProtocolContext, seedProtocolPendingBaseline, withCSM } from "lib/protocol/index.js";
+import type { LoadedContract as ProtocolLoadedContract, StakingModuleName } from "lib/protocol/types.js";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite/index.js";
-import { type ProtocolLoadedContract, type StakingModuleName } from "lib/protocol/types.js";
 
 const MIN_KEYS_PER_OPERATOR = 5n;
 const MIN_OPERATORS_COUNT = 30n;

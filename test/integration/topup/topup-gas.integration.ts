@@ -1,14 +1,13 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { ether, findEventsWithInterfaces } from "lib/index.js";
-import { getProtocolContext, ProtocolContext } from "lib/protocol/index.js";
 import {
   buildTopUpData,
   cmv2EnsureDepositedOperatorKeys,
-  CMv2OperatorKeys,
+  type CMv2OperatorKeys,
   cmv2SuiteEnabled,
   depositEventInterface,
   expectedTopUpLimitWei,
@@ -18,6 +17,7 @@ import {
   topUpEnsureDepositableEther,
   topUpEnsureModuleAllocation,
 } from "lib/protocol/helpers/index.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 
@@ -31,6 +31,8 @@ const GWEI = 10n ** 9n;
  * NUM_VALIDATORS_OVERRIDE to measure other batch sizes.
  */
 describe("Integration: TopUpGateway full-path gas measurement (real CMv2)", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
 
   let topUpCaller: HardhatEthersSigner;
@@ -52,6 +54,8 @@ describe("Integration: TopUpGateway full-path gas measurement (real CMv2)", () =
   let originalState: string;
 
   before(async function () {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     originalState = await Snapshot.take();
 

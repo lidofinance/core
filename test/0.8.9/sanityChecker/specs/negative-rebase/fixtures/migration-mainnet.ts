@@ -1,6 +1,6 @@
 import { ether } from "lib/index.js";
 
-import { migrate, NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib.js";
+import { migrate, type NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib.js";
 
 const mainnetCLValidators = 281_250n;
 // const mainnetCLBalance = ether("9000000");

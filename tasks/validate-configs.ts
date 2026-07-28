@@ -6,8 +6,8 @@ import * as toml from "@iarna/toml";
 import {
   safeValidateScratchParameters,
   safeValidateUpgradeParameters,
-  ScratchParameters,
-  UpgradeParameters,
+  type ScratchParameters,
+  type UpgradeParameters,
 } from "lib/config-schemas.js";
 
 // Re-implement parameter reading without hardhat dependencies

@@ -5,8 +5,15 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { SecondOpinionOracle__Mock } from "typechain-types/index.js";
 
-import { ether, impersonate, log, ONE_GWEI } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext, report } from "lib/protocol/index.js";
+import { ether, log, ONE_GWEI } from "lib/index.js";
+import {
+  depositValidatorsWithoutReport,
+  getProtocolContext,
+  type ProtocolContext,
+  report,
+  reportWithoutClActivation,
+  resetCLBalanceDecreaseWindow,
+} from "lib/protocol/index.js";
 
 import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
@@ -23,6 +30,7 @@ function getExpectedSecondOpinionBalance(validatorsBalance: bigint, reportedDiff
 }
 
 async function getWithdrawalVaultBalance(ctx: ProtocolContext): Promise<bigint> {
+  const { ethers } = await hre.network.getOrCreate();
   return ethers.provider.getBalance(ctx.contracts.withdrawalVault);
 }
 

@@ -1,13 +1,12 @@
-import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { ethers, ZeroAddress } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { certainAddress, ether, impersonate, log } from "lib/index.js";
 import { addressToWC, generateBeaconHeader, setBeaconBlockRoot } from "lib/pdg.js";
 import { prepareLocalMerkleTree } from "lib/top-ups.js";
 
-import { ProtocolContext } from "../types.js";
+import { type ProtocolContext } from "../types.js";
 
 import { ensureSubmitFitsStakeLimit, setModuleStakeShareLimit } from "./staking.js";
 

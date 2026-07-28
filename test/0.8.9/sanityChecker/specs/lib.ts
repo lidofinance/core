@@ -1,15 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  Accounting__MockForSanityChecker,
-  AccountingOracle__MockForStakingRouter,
-  Lido__HarnessForFinalizeUpgradeV4,
-  LidoLocator,
-  OracleReportSanityCheckerWrapper,
+  type Accounting__MockForSanityChecker,
+  type AccountingOracle__MockForStakingRouter,
+  type Lido__HarnessForFinalizeUpgradeV4,
+  type LidoLocator,
+  type OracleReportSanityCheckerWrapper,
 } from "typechain-types/index.js";
 
 import { ether, impersonate, proxify, randomAddress } from "lib/index.js";
@@ -187,6 +186,8 @@ export const hasFinalizeUpgradeV4State = (step: MigrationStep): step is Finalize
 export const deployFinalizeUpgradeV4Checker = async (
   limitsList: OracleReportLimits,
 ): Promise<FinalizeUpgradeV4CheckerFixture> => {
+  const { ethers } = await hre.network.getOrCreate();
+
   const [deployer] = await ethers.getSigners();
   const withdrawalVaultAddress = randomAddress();
   const elRewardsVaultAddress = randomAddress();
@@ -243,6 +244,8 @@ export const migrateFinalizeUpgradeV4State = async (
   fixture: FinalizeUpgradeV4CheckerFixture,
   step: MigrationStep,
 ): Promise<LidoBalanceStats> => {
+  const { ethers, networkHelpers } = await hre.network.getOrCreate();
+
   if (step.transientDeposits % DEPOSIT_SIZE !== 0n) {
     throw new Error(`Migration step '${step.label}' has transientDeposits that are not divisible by 32 ETH`);
   }
@@ -264,8 +267,10 @@ export const migrateFinalizeUpgradeV4State = async (
     clValidators,
   );
 
-  await expect(fixture.lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET), `finalizeUpgrade_v4 for '${step.label}'`).not
-    .to.be.reverted;
+  await expect(
+    fixture.lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET),
+    `finalizeUpgrade_v4 for '${step.label}'`,
+  ).not.to.be.revert(ethers);
 
   const balanceStats = await fixture.lido.getBalanceStats();
   expect(balanceStats.clValidatorsBalanceAtLastReport, `${step.label}: migrated validators balance`).to.equal(
@@ -277,8 +282,8 @@ export const migrateFinalizeUpgradeV4State = async (
   );
   expect(balanceStats.depositedForCurrentReport, `${step.label}: migrated deposits for current report`).to.equal(0n);
 
-  await setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
-  await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.reverted;
+  await networkHelpers.setBalance(fixture.withdrawalVaultAddress, step.withdrawalVaultBalance);
+  await expect(fixture.checker.migrateBaselineSnapshot(), `migration '${step.label}'`).not.to.be.revert(ethers);
 
   return {
     clValidatorsBalanceAtLastReport: balanceStats.clValidatorsBalanceAtLastReport,
@@ -303,6 +308,8 @@ export const moveToFirstPostMigrationReportFrame = async (
 };
 
 export const setLastVaultBalanceAfterTransfer = async (checker: OracleReportSanityCheckerWrapper, value: bigint) => {
+  const { ethers } = await hre.network.getOrCreate();
+
   await ethers.provider.send("hardhat_setStorageAt", [
     await checker.getAddress(),
     ethers.toBeHex(LAST_VAULT_BALANCE_AFTER_TRANSFER_SLOT, 32),

@@ -1,14 +1,13 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  Accounting__MockForSanityChecker,
-  AccountingOracle__MockForSanityChecker,
-  Lido__MockForSanityChecker,
-  OracleReportSanityChecker,
+  type Accounting__MockForSanityChecker,
+  type AccountingOracle__MockForSanityChecker,
+  type Lido__MockForSanityChecker,
+  type OracleReportSanityChecker,
 } from "typechain-types/index.js";
 
 import { ether, impersonate, randomAddress } from "lib/index.js";
@@ -23,9 +22,11 @@ type CheckerFixture = {
 };
 
 const deployChecker = async (): Promise<CheckerFixture> => {
+  const { ethers, networkHelpers } = await hre.network.getOrCreate();
+
   const [deployer] = await ethers.getSigners();
   const withdrawalVaultAddress = randomAddress();
-  await setBalance(withdrawalVaultAddress, 0n);
+  await networkHelpers.setBalance(withdrawalVaultAddress, 0n);
 
   const burner = await ethers.deployContract("Burner__MockForSanityChecker", []);
   const accounting = (await ethers.deployContract(
@@ -95,6 +96,7 @@ const report = (
 
 describe("OracleReportSanityChecker.sol:migration deposit accounting", () => {
   it("keeps migration deposits out of reportData baseline so the first report counts them once", async () => {
+    const { ethers } = await hre.network.getOrCreate();
     const validatorsBalance = ether("3200");
     const migratedDeposits = ether("320");
     const realLoss = ether("100");
@@ -104,12 +106,12 @@ describe("OracleReportSanityChecker.sol:migration deposit accounting", () => {
     await fixture.lido.mock__setContractVersion(4n);
     await fixture.lido.mock__setBalanceStats(validatorsBalance, migratedDeposits, migratedDeposits, migratedDeposits);
 
-    await expect(fixture.checker.migrateBaselineSnapshot()).not.to.be.reverted;
+    await expect(fixture.checker.migrateBaselineSnapshot()).not.to.be.revert(ethers);
 
     const migrationBaseline = await fixture.checker.reportData(0n);
     expect(migrationBaseline.clBalance, "migration baseline ignores migrated deposits").to.equal(validatorsBalance);
     expect(migrationBaseline.deposits, "migration baseline stores zero report deposits").to.equal(0n);
 
-    await expect(report(fixture, validatorsBalance, postReportCLBalance, migratedDeposits)).not.to.be.reverted;
+    await expect(report(fixture, validatorsBalance, postReportCLBalance, migratedDeposits)).not.to.be.revert(ethers);
   });
 });

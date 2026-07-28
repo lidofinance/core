@@ -2,14 +2,20 @@ import { expect } from "chai";
 import { parseUnits, ZeroAddress } from "ethers";
 import hre from "hardhat";
 
-import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
-import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import type { Accounting__MockForSanityChecker, AccountingOracle__MockForSanityChecker, Lido__MockForSanityChecker, LidoLocator__MockForSanityChecker, OracleReportSanityCheckerWrapper, StakingRouter__MockForSanityChecker } from "typechain-types/index.js";
+import type {
+  Accounting__MockForSanityChecker,
+  AccountingOracle__MockForSanityChecker,
+  Lido__MockForSanityChecker,
+  LidoLocator__MockForSanityChecker,
+  OracleReportSanityCheckerWrapper,
+  StakingRouter__MockForSanityChecker,
+} from "typechain-types/index.js";
 
 import { impersonate } from "lib/account.js";
-import { getCurrentBlockTimestamp } from "lib/time.js";
 import { ether } from "lib/units.js";
 
 import { Snapshot } from "test/suite/index.js";
@@ -24,6 +30,7 @@ const artifacts = hre.artifacts;
 
 describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
 
   let locator: LidoLocator__MockForSanityChecker;
   let checker: OracleReportSanityCheckerWrapper;
@@ -120,9 +127,10 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   };
 
   before(async () => {
-    ({ ethers } = await hre.network.getOrCreate());
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
 
-    [deployer] = await ethers.getSigners();
+    [deployer, withdrawalVault] = await ethers.getSigners();
+    await networkHelpers.setBalance(withdrawalVault.address, ether("10000"));
 
     const sanityCheckerAddress = deployer.address;
 
@@ -281,19 +289,19 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       it("passes when postCL >= preCL (no decrease)", async () => {
         await expect(
           callCheck(ether("101"), ether("101.001"), 0n, 0n, 0n, 4n * 24n * 60n * 60n, ether("1"), ether("0.999")),
-        ).not.to.be.reverted;
+        ).not.to.be.revert(ethers);
       });
 
       it("passes when postCL + withdrawals >= preCL", async () => {
-        await expect(callCheck(ether("105"), ether("100"), ether("5"))).not.to.be.reverted;
+        await expect(callCheck(ether("105"), ether("100"), ether("5"))).not.to.be.revert(ethers);
       });
 
       it("passes when postCL + withdrawals == preCL", async () => {
-        await expect(callCheck(ether("100"), ether("95"), ether("5"))).not.to.be.reverted;
+        await expect(callCheck(ether("100"), ether("95"), ether("5"))).not.to.be.revert(ethers);
       });
 
       it("passes when postCL == preCL", async () => {
-        await expect(callCheck(ether("100"), ether("100"))).not.to.be.reverted;
+        await expect(callCheck(ether("100"), ether("100"))).not.to.be.revert(ethers);
       });
 
       it("does not use cumulative withdrawal vault balance for early exit when no new CL withdrawals", async () => {
@@ -323,7 +331,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
     context("first report (no history)", () => {
       it("passes on first report even with large decrease", async () => {
-        await expect(callCheck(ether("100"), ether("50"))).not.to.be.reverted;
+        await expect(callCheck(ether("100"), ether("50"))).not.to.be.revert(ethers);
       });
     });
 
@@ -526,7 +534,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
         // deposits raise adjusted balance, increasing the allowed decrease
         await setRefSlot(baseRefSlot);
-        await expect(callCheckWithPendingDeposits(ether("9700"), ether("9700"), ether("300"))).not.to.be.reverted;
+        await expect(callCheckWithPendingDeposits(ether("9700"), ether("9700"), ether("300"))).not.to.be.revert(ethers);
       });
 
       it("single large decrease exceeds limit", async () => {
@@ -631,7 +639,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         await callCheck(day1Baseline, day1Baseline);
 
         await setRefSlot(baseRefSlot - 35n * SLOTS_PER_DAY);
-        await expect(callCheck(day1Baseline, day2BaselineIfOffByOne)).not.to.be.reverted;
+        await expect(callCheck(day1Baseline, day2BaselineIfOffByOne)).not.to.be.revert(ethers);
 
         for (let daysBeforeCurrent = 34; daysBeforeCurrent >= 1; --daysBeforeCurrent) {
           await setRefSlot(baseRefSlot - BigInt(daysBeforeCurrent) * SLOTS_PER_DAY);
@@ -943,7 +951,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       // adjustedWindowBalance <= totalCLWithdrawals saturates the recreated CL balance to zero.
       await setRefSlot(baseRefSlot);
-      await expect(callCheck(ether("80"), ether("50"))).not.to.be.reverted;
+      await expect(callCheck(ether("80"), ether("50"))).not.to.be.revert(ethers);
     });
 
     it("reverts with IncorrectCLWithdrawalsVaultBalance when reported vault balance is below previous post-transfer state", async () => {
@@ -974,7 +982,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
       const postCL = totalCLBalance - decrease;
       await setRefSlot(baseRefSlot);
-      await expect(callCheck(totalCLBalance, postCL)).not.to.be.reverted;
+      await expect(callCheck(totalCLBalance, postCL)).not.to.be.revert(ethers);
     });
 
     it("getReportDataCount returns correct count after reports", async () => {
@@ -1016,13 +1024,13 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     it("accepts 0", async () => {
       const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
       await checker.grantRole(role, deployer.address);
-      await expect(checker.setMaxCLBalanceDecreaseBP(0)).not.to.be.reverted;
+      await expect(checker.setMaxCLBalanceDecreaseBP(0)).not.to.be.revert(ethers);
     });
 
     it("accepts 10000 (MAX_BASIS_POINTS)", async () => {
       const role = await checker.MAX_CL_BALANCE_DECREASE_MANAGER_ROLE();
       await checker.grantRole(role, deployer.address);
-      await expect(checker.setMaxCLBalanceDecreaseBP(10000)).not.to.be.reverted;
+      await expect(checker.setMaxCLBalanceDecreaseBP(10000)).not.to.be.revert(ethers);
     });
 
     it("reverts for 10001 with IncorrectLimitValue", async () => {
@@ -1197,7 +1205,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       );
 
       await checker.grantRole(role, deployer.address);
-      await expect(checker.setInitialSlashingAndPenaltiesAmount(1000, 101)).to.not.revert(ethers);
+      await expect(checker.setMaxCLBalanceDecreaseBP(500)).to.not.revert(ethers);
     });
 
     it("SECOND_OPINION_MANAGER_ROLE works", async () => {
@@ -1226,8 +1234,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
 
     it("is permissionless before migration completes", async () => {
       await lido.mock__setContractVersion(4);
-      await setBalance(withdrawalVault.address, 0n);
-      await expect(checker.migrateBaselineSnapshot()).not.to.be.reverted;
+      await networkHelpers.setBalance(withdrawalVault.address, 0n);
+      await expect(checker.migrateBaselineSnapshot()).not.to.be.revert(ethers);
     });
 
     it("reverts with UnexpectedLidoVersion when version != 4", async () => {

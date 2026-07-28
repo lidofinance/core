@@ -1,10 +1,10 @@
 import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade.js";
 
+import { type UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript.js";
 import { UpgradeVoteScript__factory } from "typechain-types/index.js";
-import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript.js";
 
 import {
-  ConstructorArgs,
+  type ConstructorArgs,
   deployWithoutProxy,
   getDeployerSigner,
   logArgs,
@@ -20,7 +20,7 @@ export async function skip(): Promise<boolean> {
 }
 
 export async function main() {
-  const state = readNetworkState();
+  const state = await readNetworkState();
   const deployer = (await getDeployerSigner()).address;
 
   await logScriptHeader("SRv3/CMv2 — Deploy UpgradeVotingScript contract", deployer);

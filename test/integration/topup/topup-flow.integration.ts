@@ -1,16 +1,15 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import { ether, findEventsWithInterfaces, log } from "lib/index.js";
 import { randomValidatorPubkey } from "lib/pdg.js";
-import { getProtocolContext, ProtocolContext } from "lib/protocol/index.js";
 import {
   buildTopUpData,
   cmv2CreateOperatorWithKeys,
   cmv2EnsureDepositedOperatorKeys,
-  CMv2OperatorKeys,
+  type CMv2OperatorKeys,
   cmv2SuiteEnabled,
   depositEventAmountWei,
   depositEventInterface,
@@ -21,6 +20,7 @@ import {
   topUpEnsureDepositableEther,
   topUpEnsureModuleAllocation,
 } from "lib/protocol/helpers/index.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 
@@ -47,6 +47,8 @@ const CMV2_ERRORS_ABI = [
  * INTEGRATION_WITH_CMv2=off opt-out.
  */
 describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
 
   let topUpCaller: HardhatEthersSigner;
@@ -67,6 +69,8 @@ describe("Integration: TopUp Flow (TopUpGateway -> StakingRouter -> Real CMv2)",
   let testSnapshot: string;
 
   before(async function () {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     globalSnapshot = await Snapshot.take();

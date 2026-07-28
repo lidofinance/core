@@ -6,18 +6,25 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import { LIMITER_PRECISION_BASE } from "lib/constants.js";
-import { ether, impersonate, ONE_GWEI, updateBalance } from "lib/index.js";
+import { advanceChainTime, ether, impersonate, ONE_GWEI, updateBalance } from "lib/index.js";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 import {
+  ensureFirstPostMigrationReport,
+  finalizeWQViaElVault,
   getProtocolContext,
   getReportTimeElapsed,
+  normalizeWithdrawalVaultBaseline,
   type ProtocolContext,
   removeStakingLimit,
   report,
+  reportWithoutClActivation,
+  seedProtocolPendingBaseline,
+  updateOracleReportLimits,
+  waitNextAvailableReportTime,
 } from "lib/protocol/index.js";
 
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants.js";
 import { Snapshot } from "test/suite/index.js";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 
 describe("Integration: Accounting", () => {
   let ethers: HardhatEthers;

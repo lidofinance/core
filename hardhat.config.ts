@@ -11,6 +11,7 @@ import {
   compileOverrideTask,
   extractAbisTask,
   lintSolidityTask,
+  protocolGetAddressesTask,
   validateConfigsTask,
   verifyDeployedTask,
 } from "./tasks/index.js";
@@ -28,6 +29,7 @@ export default defineConfig({
     compileOverrideTask,
     extractAbisTask,
     lintSolidityTask,
+    protocolGetAddressesTask,
     validateConfigsTask,
     verifyDeployedTask,
   ],
@@ -198,13 +200,6 @@ export default defineConfig({
       },
       forking: getHardhatForkingConfig(),
       hardfork: "prague",
-      chains: {
-        32382: {
-          hardforkHistory: {
-            prague: 0,
-          },
-        },
-      },
       mining: {
         mempool: {
           order: "fifo",
@@ -286,6 +281,12 @@ export default defineConfig({
   chainDescriptors: {
     [LOCAL_DEVNET_CHAIN_ID]: {
       name: "local-devnet",
+      // Ported from the HH2 `networks.hardhat.chains[32382].hardforkHistory`:
+      // in HH3 the hardfork history of a (forked) chain lives in its chain
+      // descriptor, and activations are objects, not bare block numbers.
+      hardforkHistory: {
+        prague: { blockNumber: 0 },
+      },
       blockExplorers: {
         etherscan: {
           name: "local-devnet",

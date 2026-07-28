@@ -1,5 +1,5 @@
 import { bigintToHex } from "bigint-conversion";
-import { type Addressable } from "ethers";
+import { type Addressable, getAddress } from "ethers";
 import hre from "hardhat";
 
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
@@ -15,6 +15,8 @@ export async function getSignerOrImpersonate(
   if (typeof address !== "string") {
     address = await address.getAddress();
   }
+
+  const { ethers } = await hre.network.getOrCreate();
 
   const signers = await ethers.getSigners();
   const signer = signers.find((item) => item.address.toLowerCase() === address.toLowerCase());
@@ -74,7 +76,7 @@ export async function getDeployerSigner() {
     throw new Error("Env variable DEPLOYER is not set");
   }
 
-  const deployerAddress = ethers.getAddress(deployer);
+  const deployerAddress = getAddress(deployer);
 
   if (cachedDeployerSigner && cachedDeployerAddress === deployerAddress) {
     return cachedDeployerSigner;

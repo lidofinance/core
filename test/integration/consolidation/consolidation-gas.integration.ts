@@ -1,25 +1,30 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types/index.js";
+import {
+  type ConsolidationBus,
+  type ConsolidationGateway,
+  type ConsolidationMigrator,
+  type NodeOperatorsRegistry,
+} from "typechain-types/index.js";
 
 import { EIP7251_MIN_CONSOLIDATION_FEE, findEventsWithInterfaces, normalizeEIP7251Excess } from "lib/index.js";
-import { getProtocolContext, ProtocolContext } from "lib/protocol/index.js";
 import {
   assertConsolidationTopology,
   calcConsolidationBatchHash,
   cmv2EnsureDepositedOperatorKeys,
-  CMv2OperatorKeys,
+  type CMv2OperatorKeys,
   cmv2SuiteEnabled,
   ensureBatchNotPending,
   norEnsureDepositedOperatorKeys,
-  NorOperatorKeys,
+  type NorOperatorKeys,
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
 } from "lib/protocol/helpers/index.js";
-import { LoadedContract } from "lib/protocol/types.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { type LoadedContract } from "lib/protocol/types.js";
 
 import { Snapshot } from "test/suite/index.js";
 
@@ -31,6 +36,8 @@ import { Snapshot } from "test/suite/index.js";
  * grouped into NUM_GROUPS source groups targeting real deposited CMv2 keys.
  */
 describe("Integration: Consolidation gas measurement (full stack via Migrator)", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let nor: LoadedContract<NodeOperatorsRegistry>;
   let consolidationBus: ConsolidationBus;
@@ -57,6 +64,8 @@ describe("Integration: Consolidation gas measurement (full stack via Migrator)",
   let originalState: string;
 
   before(async function () {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     originalState = await Snapshot.take();

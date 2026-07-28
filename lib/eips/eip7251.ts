@@ -1,3 +1,4 @@
+import { toBeHex, ZeroHash } from "ethers";
 import hre from "hardhat";
 
 import type { EIP7251MaxEffectiveBalanceRequest__Mock } from "typechain-types/index.js";
@@ -30,7 +31,8 @@ export const deployEIP7251MaxEffectiveBalanceRequestContract = async (
  * exponential consolidation fee. Zeroing it makes the fee deterministic (1 wei).
  */
 export const normalizeEIP7251Excess = async (): Promise<void> => {
-  await ethers.provider.send("hardhat_setStorageAt", [EIP7251_ADDRESS, ethers.toBeHex(0, 32), ethers.ZeroHash]);
+  const { ethers } = await hre.network.getOrCreate();
+  await ethers.provider.send("hardhat_setStorageAt", [EIP7251_ADDRESS, toBeHex(0, 32), ZeroHash]);
 };
 
 export const ensureEIP7251MaxEffectiveBalanceRequestContractPresent = async (): Promise<void> => {

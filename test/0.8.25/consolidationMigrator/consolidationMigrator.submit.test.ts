@@ -1,14 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  ConsolidationBus__MockForConsolidationMigrator,
-  ConsolidationMigrator,
-  SourceModule__MockForConsolidationMigrator,
-  StakingRouter__MockForConsolidationMigrator,
-  TargetModule__MockForConsolidationMigrator,
+  type ConsolidationBus__MockForConsolidationMigrator,
+  type ConsolidationMigrator,
+  type SourceModule__MockForConsolidationMigrator,
+  type StakingRouter__MockForConsolidationMigrator,
+  type TargetModule__MockForConsolidationMigrator,
 } from "typechain-types/index.js";
 
 import { proxify } from "lib/proxy.js";
@@ -18,6 +18,8 @@ import { Snapshot } from "test/suite/index.js";
 import { PUBKEYS } from "../consolidation-helpers.js";
 
 describe("ConsolidationMigrator.sol: submit", () => {
+  let ethers: HardhatEthers;
+
   let consolidationMigrator: ConsolidationMigrator;
   let stakingRouter: StakingRouter__MockForConsolidationMigrator;
   let sourceModule: SourceModule__MockForConsolidationMigrator;
@@ -36,6 +38,8 @@ describe("ConsolidationMigrator.sol: submit", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [admin, allowPairManager, submitter, stranger] = await ethers.getSigners();
 
     // Deploy mocks

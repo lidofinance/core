@@ -2,12 +2,12 @@ import { ether } from "lib/index.js";
 
 import {
   DAY,
-  FormulaFixtureSet,
+  type FormulaFixtureSet,
   migrate,
-  MigrationStep,
-  ModuleBalanceStep,
-  OracleReportLimits,
-  ReportStep,
+  type MigrationStep,
+  type ModuleBalanceStep,
+  type OracleReportLimits,
+  type ReportStep,
 } from "../lib.js";
 
 export { migrate };

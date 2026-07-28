@@ -1,16 +1,22 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { WithdrawalVault__MockForConsolidationGateway } from "typechain-types/index.js";
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
+
+import { type WithdrawalVault__MockForConsolidationGateway } from "typechain-types/index.js";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
 
 const DUMMY_GI = "0x0000000000000000000000000000000000000000000000000096000000000028";
 
 describe("ConsolidationGateway.sol: deployment", () => {
+  let ethers: HardhatEthers;
+
   let withdrawalVault: WithdrawalVault__MockForConsolidationGateway;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     const locator = await deployLidoLocator();
     const locatorAddr = await locator.getAddress();
 

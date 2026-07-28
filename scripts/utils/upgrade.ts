@@ -1,25 +1,49 @@
 import { type ContractTransactionReceipt, type ContractTransactionResponse } from "ethers";
 import fs from "fs";
-import { getMode } from "hardhat.helpers";
+import { getMode } from "hardhat.helpers.js";
 
 import * as toml from "@iarna/toml";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import type { IDualGovernance, type ITimelock, type TokenManager, type UpgradeTemplate, type UpgradeVoteScript, type Voting } from "typechain-types/index.js";
+import type {
+  IDualGovernance,
+  ITimelock,
+  TokenManager,
+  UpgradeTemplate,
+  UpgradeVoteScript,
+  Voting,
+} from "typechain-types/index.js";
 
 import { impersonate } from "lib/account.js";
 import { type UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas.js";
 import { loadContract } from "lib/contract.js";
+import { getTxLink } from "lib/explorer.js";
+import {
+  bl,
+  type ConvertibleToString,
+  findEventsWithInterfaces,
+  getCurrentBlockTimestamp,
+  getSignerOrImpersonate,
+  isContractDeployed,
+  type LoadedContract,
+  or,
+  yl,
+} from "lib/index.js";
 import { log } from "lib/log.js";
-import { getAddress, getAddressValidated, readNetworkState, updateObjectInState, type DeploymentState, Sk } from "lib/state-file.js";
+import {
+  type DeploymentState,
+  getAddress,
+  getAddressValidated,
+  readNetworkState,
+  Sk,
+  updateObjectInState,
+} from "lib/state-file.js";
 import { advanceChainTime } from "lib/time.js";
 import { ether } from "lib/units.js";
 
 import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite/index.js";
 
-import { encodeCallScript, VoteItem } from "./omnibus.js";
-import { bl, ConvertibleToString, findEventsWithInterfaces, getCurrentBlockTimestamp, getSignerOrImpersonate, isContractDeployed, LoadedContract, or, yl } from "lib/index.js";
-import { getTxLink } from "lib/explorer.js";
+import { encodeCallScript, type VoteItem } from "./omnibus.js";
 
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
 const PROPOSAL_ID = BigInt(process.env.PROPOSAL_ID || "0");
@@ -28,7 +52,7 @@ const VOTE_ID = BigInt(process.env.VOTE_ID || "0");
 const VOTE_DESCRIPTION = process.env.VOTE_DESCRIPTION || "vote-description";
 const VOTE_MODE = process.env.VOTE_MODE || "dg"; // DG mode by default
 
-export { UpgradeParameters };
+export type { UpgradeParameters };
 
 ///
 /// ---- Upgrade helpers ----
@@ -168,7 +192,7 @@ export const mockAragonVoting = async (state: DeploymentState) => {
     voteId = await newAragonVoting(state, holder, voteDescription);
 
     // save voteId in deployed state
-    updateObjectInState(Sk.upgradeVoteScript, {
+    await updateObjectInState(Sk.upgradeVoteScript, {
       voteState: {
         voteId,
         voteDescription,
@@ -478,7 +502,7 @@ export async function txWaitAndLog(tx: ContractTransactionResponse): Promise<Con
 }
 
 export async function checkArtifactDeployedAndLog(artifactName: Sk): Promise<boolean> {
-  const state = readNetworkState();
+  const state = await readNetworkState();
   // check if contract object exists in deployed state but address set as empty string or zero address
   const address = getAddressValidated(artifactName, state);
   // check if contract not deployed yet

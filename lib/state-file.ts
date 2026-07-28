@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { ethers } from "ethers";
 import hre from "hardhat";
 import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch.js";
 
@@ -264,8 +265,12 @@ export function getSubAddressValidated(contractKey: Sk, subKey: string, state: D
 
 // Deep-merge `supplement` into `state[key].contracts[subKey]`, preserving sibling sub-entries and the
 // existing fields of the targeted sub-entry, then persist.
-export function updateSubObjectInState(contractKey: Sk, subKey: string, supplement: object): DeploymentState {
-  const state = readNetworkState();
+export async function updateSubObjectInState(
+  contractKey: Sk,
+  subKey: string,
+  supplement: object,
+): Promise<DeploymentState> {
+  const state = await readNetworkState();
   const parent = state[contractKey] ?? {};
   const contracts = parent.contracts ?? {};
   state[contractKey] = {
@@ -278,7 +283,7 @@ export function updateSubObjectInState(contractKey: Sk, subKey: string, suppleme
       },
     },
   };
-  persistNetworkState(state);
+  await persistNetworkState(state);
   return state as unknown as DeploymentState;
 }
 
@@ -327,13 +332,17 @@ export async function setValueInState(key: Sk, value: unknown): Promise<Deployme
   return state;
 }
 
-export async function incrementGasUsed(increment: bigint | number, useStateFile = true) {
+export async function incrementGasUsed(
+  increment: bigint | number,
+  useStateFile = true,
+  key: Sk = Sk.scratchDeployGasUsed,
+) {
   if (!useStateFile) {
     return;
   }
 
   const state = await readNetworkState();
-  state[Sk.scratchDeployGasUsed] = (BigInt(state[Sk.scratchDeployGasUsed] || 0) + BigInt(increment)).toString();
+  state[key] = (BigInt(state[key] || 0) + BigInt(increment)).toString();
   await persistNetworkState(state);
 }
 

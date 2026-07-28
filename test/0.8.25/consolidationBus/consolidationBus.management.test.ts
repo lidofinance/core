@@ -1,9 +1,9 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
+import { type ConsolidationBus, type ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
 
 import { proxify } from "lib/proxy.js";
 
@@ -12,6 +12,8 @@ import { Snapshot } from "test/suite/index.js";
 import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers.js";
 
 describe("ConsolidationBus.sol: management", () => {
+  let ethers: HardhatEthers;
+
   let consolidationBus: ConsolidationBus;
   let consolidationGateway: ConsolidationGateway__MockForConsolidationBus;
   let admin: HardhatEthersSigner;
@@ -26,6 +28,8 @@ describe("ConsolidationBus.sol: management", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [admin, manager, publisher, stranger] = await ethers.getSigners();
 
     consolidationGateway = await ethers.deployContract("ConsolidationGateway__MockForConsolidationBus");

@@ -1,6 +1,6 @@
 import { ether } from "lib/index.js";
 
-import { migrate, NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib.js";
+import { migrate, type NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib.js";
 
 const hoodiCLValidators = 62_500n;
 const hoodiCLBalance = ether("2000000");

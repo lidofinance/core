@@ -1,26 +1,28 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
-  AccountingOracle__MockForStakingRouter,
-  DepositContract__MockForBeaconChainDepositor,
-  Lido__MockForStakingRouter,
-  LidoLocator,
-  StakingModuleV2__MockForStakingRouter,
-  StakingRouter__Harness,
+  type AccountingOracle__MockForStakingRouter,
+  type DepositContract__MockForBeaconChainDepositor,
+  type Lido__MockForStakingRouter,
+  type LidoLocator,
+  type StakingModuleV2__MockForStakingRouter,
+  type StakingRouter__Harness,
 } from "typechain-types/index.js";
 
-import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib/index.js";
 import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "lib/constants.js";
+import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib/index.js";
 
 import { deployLidoLocator, deployStakingRouter } from "test/deploy/index.js";
 import { Snapshot } from "test/suite/index.js";
 
-import { CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers/index.js";
+import { type CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers/index.js";
 
 describe("StakingRouter.sol:topUp", () => {
+  let ethers: HardhatEthers;
+
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
   let topUpGatewaySigner: HardhatEthersSigner;
@@ -42,6 +44,8 @@ describe("StakingRouter.sol:topUp", () => {
   const depositSecurityModule = "0x0000000000000000000000000000000000000002";
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [deployer, admin, topUpGatewaySigner, stranger] = await ethers.getSigners();
     // Deploy Lido mock
     lidoMock = await ethers.deployContract("Lido__MockForStakingRouter", deployer);

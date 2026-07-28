@@ -1,6 +1,6 @@
 import {
   bufferToHex,
-  ECDSASignature,
+  type ECDSASignature,
   ecrecover,
   ecsign,
   pubToAddress,

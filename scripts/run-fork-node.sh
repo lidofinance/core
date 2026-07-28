@@ -64,8 +64,8 @@ else
   echo "HARDHAT_CHAIN_ID: $HARDHAT_CHAIN_ID"
 
   if [[ -n ${TRACE:-} ]]; then
-    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile --trace --gascost --vvv
+    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" -vvv
   else
-    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}" --nocompile
+    yarn hardhat node --fork $RPC_URL "${BLOCK_ARG[@]}"
   fi
 fi

@@ -682,7 +682,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
       it("should accept different balance values", async () => {
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion)).not.to.be.reverted;
+        await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion)).not.to.be.revert(ethers);
       });
 
       it("should process balance data correctly", async () => {
@@ -714,8 +714,9 @@ describe("AccountingOracle.sol:submitReport", () => {
         );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
-          .reverted;
+        await expect(
+          oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion),
+        ).not.to.be.revert(ethers);
       });
 
       it("should accept zero pending balance", async () => {
@@ -735,8 +736,9 @@ describe("AccountingOracle.sol:submitReport", () => {
         );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
-          .reverted;
+        await expect(
+          oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion),
+        ).not.to.be.revert(ethers);
       });
 
       it("should accept large balance values", async () => {
@@ -755,8 +757,9 @@ describe("AccountingOracle.sol:submitReport", () => {
         );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
-          .reverted;
+        await expect(
+          oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion),
+        ).not.to.be.revert(ethers);
       });
 
       it("should handle pending larger than active", async () => {
@@ -775,8 +778,9 @@ describe("AccountingOracle.sol:submitReport", () => {
         );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
-          .reverted;
+        await expect(
+          oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion),
+        ).not.to.be.revert(ethers);
       });
 
       it("should convert gwei to wei correctly", async () => {
@@ -815,8 +819,9 @@ describe("AccountingOracle.sol:submitReport", () => {
         );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
-          .reverted;
+        await expect(
+          oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion),
+        ).not.to.be.revert(ethers);
       });
 
       it("should accept minimal gwei values", async () => {
@@ -832,8 +837,9 @@ describe("AccountingOracle.sol:submitReport", () => {
         );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
-          .reverted;
+        await expect(
+          oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion),
+        ).not.to.be.revert(ethers);
       });
 
       it("should handle realistic scenarios", async () => {
@@ -852,8 +858,9 @@ describe("AccountingOracle.sol:submitReport", () => {
         );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
-          .reverted;
+        await expect(
+          oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion),
+        ).not.to.be.revert(ethers);
       });
 
       it("should verify ReportValues structure", async () => {

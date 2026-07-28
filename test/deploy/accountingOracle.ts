@@ -19,7 +19,10 @@ import {
 
 import { deployHashConsensus } from "./hashConsensus.js";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator.js";
-import { MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02 } from "./validatorExitBusOracle.js";
+import {
+  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+  MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
+} from "./validatorExitBusOracle.js";
 
 export const ORACLE_LAST_COMPLETED_EPOCH = 2n * EPOCHS_PER_FRAME;
 export const ORACLE_LAST_REPORT_SLOT = ORACLE_LAST_COMPLETED_EPOCH * SLOTS_PER_EPOCH;
@@ -152,15 +155,10 @@ export async function initAccountingOracle({
   return initTx;
 }
 
-async function deployOracleReportSanityCheckerForAccounting(
-  lidoLocator: string,
-  accountingOracle: string,
-  accounting: string,
-  admin: string,
-) {
+async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string, accounting: string, admin: string) {
   const { ethers } = await hre.network.getOrCreate();
-  const exitedValidatorsPerDayLimit = 55;
-  const appearedValidatorsPerDayLimit = 100;
+  const exitedEthAmountPerDayLimit = 65_535n;
+  const appearedEthAmountPerDayLimit = 65_535n;
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
     f.deploy(lidoLocator, accounting, admin, {
       exitedEthAmountPerDayLimit,

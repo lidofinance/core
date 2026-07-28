@@ -8,13 +8,12 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 import { type Lido, type LidoLocator } from "typechain-types/index.js";
 
 import { certainAddress } from "lib/address.js";
-import { INITIAL_STETH_HOLDER } from "lib/constants.js";
+import { DEPOSITS_RESERVE_TARGET, INITIAL_STETH_HOLDER } from "lib/constants.js";
 import { streccak } from "lib/keccak.js";
 import { proxify } from "lib/proxy.js";
 
 import { deployLidoLocator } from "test/deploy/index.js";
 import { Snapshot } from "test/suite/index.js";
-import { DEPOSITS_RESERVE_TARGET } from "lib/index.js";
 
 describe("Lido.sol:initialize", () => {
   let ethers: HardhatEthers;
@@ -57,11 +56,11 @@ describe("Lido.sol:initialize", () => {
     });
 
     it("Reverts if Locator is zero address", async () => {
-      await expect(lido.initialize(ZeroAddress, eip712helperAddress)).to.revert(ethers);
+      await expect(lido.initialize(ZeroAddress, eip712helperAddress, DEPOSITS_RESERVE_TARGET)).to.revert(ethers);
     });
 
     it("Reverts if EIP-712 helper is zero address", async () => {
-      await expect(lido.initialize(locator, ZeroAddress)).to.revert(ethers);
+      await expect(lido.initialize(locator, ZeroAddress, DEPOSITS_RESERVE_TARGET)).to.revert(ethers);
     });
 
     it("Reverts if already initialized", async () => {

@@ -6,12 +6,12 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 import type { Kernel } from "typechain-types/@aragon/os/contracts/kernel/Kernel.js";
 import type { LidoLocator } from "typechain-types/index.js";
 
+import { DEPOSITS_RESERVE_TARGET } from "lib/constants.js";
 import { findEvents } from "lib/event.js";
 import { streccak } from "lib/keccak.js";
 import { ether } from "lib/units.js";
 
 import { deployLidoLocator } from "./locator.js";
-import { DEPOSITS_RESERVE_TARGET } from "lib/index.js";
 
 interface CreateAddAppArgs {
   dao: Kernel;
@@ -65,7 +65,12 @@ export async function addAragonApp({ dao, name, impl, rootAccount }: CreateAddAp
 }
 
 // TODO: extract initialization from this function
-export async function deployLidoDao({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
+export async function deployLidoDao({
+  rootAccount,
+  initialized,
+  locatorConfig = {},
+  depositsReserveTarget = DEPOSITS_RESERVE_TARGET,
+}: DeployLidoDaoArgs) {
   const { ethers } = await hre.network.getOrCreate();
   const { dao, acl } = await createAragonDao(rootAccount);
 
@@ -91,7 +96,12 @@ export async function deployLidoDao({ rootAccount, initialized, locatorConfig = 
   return { lido, dao, acl };
 }
 
-export async function deployLidoDaoForNor({ rootAccount, initialized, locatorConfig = {} }: DeployLidoDaoArgs) {
+export async function deployLidoDaoForNor({
+  rootAccount,
+  initialized,
+  locatorConfig = {},
+  depositsReserveTarget = DEPOSITS_RESERVE_TARGET,
+}: DeployLidoDaoArgs) {
   const { ethers } = await hre.network.getOrCreate();
   const { dao, acl } = await createAragonDao(rootAccount);
 

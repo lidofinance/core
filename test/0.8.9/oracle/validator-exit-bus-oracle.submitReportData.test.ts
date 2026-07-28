@@ -4,12 +4,23 @@ import hre from "hardhat";
 
 import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import type { HashConsensus__Harness, OracleReportSanityChecker, type StakingModule__MockForKeyVerification, ValidatorsExitBus__Harness } from "typechain-types/index.js";
+import type {
+  HashConsensus__Harness,
+  OracleReportSanityChecker,
+  StakingModule__MockForKeyVerification,
+  ValidatorsExitBus__Harness,
+} from "typechain-types/index.js";
 
 import { VEBO_CONSENSUS_VERSION } from "lib/constants.js";
 import { de0x, numberToHex } from "lib/string.js";
 
-import { computeTimestampAtSlot, deployVEBO, initVEBO, seedMockModuleSigningKeys, DATA_FORMAT_LIST_WITH_KEY_INDEX } from "test/deploy/index.js";
+import {
+  computeTimestampAtSlot,
+  DATA_FORMAT_LIST_WITH_KEY_INDEX,
+  deployVEBO,
+  initVEBO,
+  seedMockModuleSigningKeys,
+} from "test/deploy/index.js";
 import { Snapshot } from "test/suite/index.js";
 
 const PUBKEYS = [

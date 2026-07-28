@@ -1,4 +1,4 @@
-import { execSync, SpawnSyncReturns } from "child_process";
+import { execSync, type SpawnSyncReturns } from "child_process";
 import { task } from "hardhat/config";
 
 interface RuleOverride {

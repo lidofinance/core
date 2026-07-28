@@ -1,14 +1,14 @@
 import { expect } from "chai";
 import { MaxUint256 } from "ethers";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import {
-  AccountingOracle__MockForStakingRouter,
-  Lido__HarnessForFinalizeUpgradeV4,
-  LidoLocator,
+  type AccountingOracle__MockForStakingRouter,
+  type Lido__HarnessForFinalizeUpgradeV4,
+  type LidoLocator,
 } from "typechain-types/index.js";
 
 import { DEPOSITS_RESERVE_TARGET, ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib/index.js";
@@ -17,6 +17,9 @@ import { deployLidoLocator } from "test/deploy/locator.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("Lido.sol:finalizeUpgrade_v4", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let deployer: HardhatEthersSigner;
 
   let impl: Lido__HarnessForFinalizeUpgradeV4;
@@ -30,6 +33,8 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [deployer] = await ethers.getSigners();
     impl = await ethers.deployContract("Lido__HarnessForFinalizeUpgradeV4", {
       signer: deployer,
@@ -48,7 +53,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
 
   context("initialized", () => {
     before(async () => {
-      const latestBlock = BigInt(await time.latestBlock());
+      const latestBlock = BigInt(await networkHelpers.time.latestBlock());
 
       await lido.connect(deployer).harness_initialize_v3(locator, { value: initialValue });
       // simulate report
@@ -96,7 +101,7 @@ describe("Lido.sol:finalizeUpgrade_v4", () => {
 
       const depositedBalance = (depositedValidators - clValidators) * ether("32");
 
-      await expect(lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET)).to.not.be.reverted;
+      await expect(lido.finalizeUpgrade_v4(DEPOSITS_RESERVE_TARGET)).to.not.be.revert(ethers);
 
       expect(await lido.getBufferedEther()).to.equal(bufferedEther);
       expect((await lido.getBeaconStat()).beaconBalance).to.equal(clBalance);
