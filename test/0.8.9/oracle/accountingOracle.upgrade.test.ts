@@ -1,11 +1,12 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { AccountingOracle__Harness } from "typechain-types";
+import type { AccountingOracle__Harness } from "typechain-types/index.js";
 
-import { deployAndConfigureAccountingOracle } from "test/deploy";
+import { ethers } from "lib/hardhat.js";
+
+import { deployAndConfigureAccountingOracle } from "test/deploy/index.js";
 
 describe("AccountingOracle.sol:upgrade", () => {
   context("finalizeUpgrade_v5", () => {

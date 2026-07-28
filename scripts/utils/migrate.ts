@@ -1,4 +1,5 @@
-import { applyMigrationScript, loadSteps, log, resolveMigrationFile } from "lib";
+import { log } from "lib/log.js";
+import { applyMigrationScript, loadSteps, resolveMigrationFile } from "lib/scratch.js";
 
 const runMigrations = async (stepsFile: string): Promise<void> => {
   const steps = loadSteps(stepsFile);

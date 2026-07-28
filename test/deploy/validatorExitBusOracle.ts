@@ -1,12 +1,6 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import {
-  HashConsensus__Harness,
-  ReportProcessor__Mock,
-  StakingModule__MockForKeyVerification,
-  ValidatorsExitBusOracle,
-} from "typechain-types";
+import type { HashConsensus__Harness, ReportProcessor__Mock, type StakingModule__MockForKeyVerification, ValidatorsExitBusOracle } from "typechain-types/index.js";
 
 import {
   EPOCHS_PER_FRAME,
@@ -15,10 +9,11 @@ import {
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
   VEBO_CONSENSUS_VERSION,
-} from "lib";
+} from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 
-import { deployHashConsensus } from "./hashConsensus";
-import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator";
+import { deployHashConsensus } from "./hashConsensus.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator.js";
 
 export const DATA_FORMAT_LIST = 1;
 export const DATA_FORMAT_LIST_WITH_KEY_INDEX = 2;

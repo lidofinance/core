@@ -1,12 +1,12 @@
 import { bigintToHex } from "bigint-conversion";
 import { keccak256, ZeroHash } from "ethers";
-import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "typechain-types";
+import type { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "typechain-types/index.js";
 
-import { numberToHex } from "./string";
-
-import { ether, impersonate } from ".";
+import { impersonate } from "./account.js";
+import { ethers } from "./hardhat.js";
+import { numberToHex } from "./string.js";
+import { ether } from "./units.js";
 
 function splitArrayIntoChunks<T>(inputArray: T[], maxItemsPerChunk: number): T[][] {
   const result: T[][] = [];

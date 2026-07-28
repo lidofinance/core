@@ -1,15 +1,19 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { getStorageAt, setStorageAt } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { LidoLocator, ValidatorsExitBus__Harness } from "typechain-types";
+import type { LidoLocator, ValidatorsExitBus__Harness } from "typechain-types/index.js";
 
-import { EPOCHS_PER_FRAME, INITIAL_FAST_LANE_LENGTH_SLOTS, SLOTS_PER_EPOCH, VEBO_CONSENSUS_VERSION } from "lib";
+import {
+  EPOCHS_PER_FRAME,
+  INITIAL_FAST_LANE_LENGTH_SLOTS,
+  SLOTS_PER_EPOCH,
+  VEBO_CONSENSUS_VERSION,
+} from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v3", () => {
   let originalState: string;

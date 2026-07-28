@@ -1,19 +1,20 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   StakingRouter__MockForTWG,
   TriggerableWithdrawalsGateway__Harness,
   WithdrawalVault__MockForTWG,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { advanceChainTime, getCurrentBlockTimestamp, streccak } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { streccak } from "lib/keccak.js";
+import { advanceChainTime, getCurrentBlockTimestamp } from "lib/time.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator.js";
 
 const PAUSE_ROLE = streccak("PAUSE_ROLE");
 const RESUME_ROLE = streccak("RESUME_ROLE");

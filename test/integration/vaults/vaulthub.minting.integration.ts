@@ -1,22 +1,22 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, Lido, StakingVault, VaultHub } from "typechain-types";
+import type { Dashboard, Lido, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { BigIntMath, certainAddress, impersonate, TOTAL_BASIS_POINTS } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { BigIntMath, certainAddress, impersonate, TOTAL_BASIS_POINTS } from "lib/index.js";
+import { ceilDiv, reportVaultDataWithProof, setStakingLimit } from "lib/protocol/helpers/index.js";
 import {
   calculateLockedValue,
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   setupLidoForVaults,
-} from "lib/protocol";
-import { ceilDiv, reportVaultDataWithProof, setStakingLimit } from "lib/protocol/helpers";
-import { ether } from "lib/units";
+} from "lib/protocol/index.js";
+import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: VaultHub ", () => {
   let ctx: ProtocolContext;

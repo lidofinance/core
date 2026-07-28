@@ -1,7 +1,8 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { ExitLimitUtils__Harness, ExitLimitUtilsStorage__Harness } from "typechain-types";
+import type { ExitLimitUtils__Harness, ExitLimitUtilsStorage__Harness } from "typechain-types/index.js";
+
+import { ethers } from "lib/hardhat.js";
 
 interface ExitRequestLimitData {
   maxExitRequestsLimit: bigint;

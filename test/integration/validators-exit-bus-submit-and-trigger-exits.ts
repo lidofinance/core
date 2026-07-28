@@ -1,15 +1,15 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { NodeOperatorsRegistry, ValidatorsExitBusOracle, WithdrawalVault } from "typechain-types";
+import type { NodeOperatorsRegistry, ValidatorsExitBusOracle, WithdrawalVault } from "typechain-types/index.js";
 
-import { de0x, ether, numberToHex } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { ethers } from "lib/hardhat.js";
+import { de0x, ether, numberToHex } from "lib/index.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 interface ExitRequest {
   moduleId: number;

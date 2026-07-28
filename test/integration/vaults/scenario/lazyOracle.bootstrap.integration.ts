@@ -1,17 +1,11 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
-  createVaultWithDashboard,
-  getProtocolContext,
-  ProtocolContext,
-  reportVaultDataWithProof,
-  reportWithoutClActivation,
-} from "lib/protocol";
+import { ethers } from "lib/hardhat.js";
+import { createVaultWithDashboard, getProtocolContext, reportVaultDataWithProof, reportWithoutClActivation, type ProtocolContext } from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Scenario: Lazy Oracle after mainnet upgrade before the first report", () => {
   let ctx: ProtocolContext;

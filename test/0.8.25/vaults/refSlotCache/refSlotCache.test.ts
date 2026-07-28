@@ -1,9 +1,10 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HashConsensus__Mock, RefSlotCacheTest } from "typechain-types";
+import type { HashConsensus__Mock, RefSlotCacheTest } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite";
+import { ethers } from "lib/hardhat.js";
+
+import { Snapshot } from "test/suite/index.js";
 
 describe("RefSlotCache.sol", () => {
   let consensus: HashConsensus__Mock;

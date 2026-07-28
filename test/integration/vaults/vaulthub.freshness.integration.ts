@@ -1,19 +1,12 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, days } from "lib";
-import {
-  createVaultWithDashboard,
-  getProtocolContext,
-  ProtocolContext,
-  reportWithoutClActivation,
-  setupLidoForVaults,
-  waitNextAvailableReportTime,
-} from "lib/protocol";
+import { ethers } from "lib/hardhat.js";
+import { advanceChainTime, days } from "lib/index.js";
+import { createVaultWithDashboard, getProtocolContext, reportWithoutClActivation, setupLidoForVaults, waitNextAvailableReportTime, type ProtocolContext } from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: VaultHub ", () => {
   let ctx: ProtocolContext;

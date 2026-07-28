@@ -1,9 +1,10 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { PositiveTokenRebaseLimiter__Harness } from "typechain-types";
+import type { PositiveTokenRebaseLimiter__Harness } from "typechain-types/index.js";
 
-import { ether, MAX_UINT256 } from "lib";
+import { MAX_UINT256 } from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
+import { ether } from "lib/units.js";
 
 const LIMITER_PRECISION_BASE = 1000000000n;
 const MAX_UINT64 = 2n ** 64n - 1n;

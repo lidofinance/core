@@ -1,6 +1,6 @@
-import { ethers } from "hardhat";
-
-import { bl, getDeployerSigner, gr, log } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { log } from "lib/log.js";
+import { bl, getDeployerSigner, gr } from "lib/index.js";
 
 export async function main() {
   const deployer = (await getDeployerSigner()).address;

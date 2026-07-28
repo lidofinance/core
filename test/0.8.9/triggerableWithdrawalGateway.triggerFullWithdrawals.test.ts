@@ -1,15 +1,16 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   StakingRouter__MockForTWG,
   TriggerableWithdrawalsGateway__Harness,
   WithdrawalVault__MockForTWG,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
+import { ethers } from "lib/hardhat.js";
+
+import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator.js";
 
 interface ExitRequest {
   moduleId: number;

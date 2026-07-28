@@ -1,17 +1,19 @@
-import { ContractTransactionResponse } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractTransactionResponse } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   NFTDescriptor__MockForWithdrawalQueue,
   OssifiableProxy,
   StETHPermit__HarnessForWithdrawalQueueDeploy,
   WithdrawalQueueERC721,
   WstETH__HarnessForWithdrawalQueueDeploy,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { ONE_ETHER, proxify, WITHDRAWAL_QUEUE_NAME, WITHDRAWAL_QUEUE_SYMBOL } from "lib";
+import { WITHDRAWAL_QUEUE_NAME, WITHDRAWAL_QUEUE_SYMBOL } from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
+import { proxify } from "lib/proxy.js";
+import { ONE_ETHER } from "lib/units.js";
 
 interface StEthDeploymentParams {
   initialStEth: bigint;

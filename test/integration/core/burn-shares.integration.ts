@@ -1,19 +1,13 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, impersonate, log } from "lib";
-import {
-  ensureFirstPostMigrationReport,
-  getProtocolContext,
-  normalizeWithdrawalVaultBaseline,
-  ProtocolContext,
-  reportWithoutClActivation,
-} from "lib/protocol";
+import { ethers } from "lib/hardhat.js";
+import { ether, impersonate, log } from "lib/index.js";
+import { ensureFirstPostMigrationReport, getProtocolContext, normalizeWithdrawalVaultBaseline, reportWithoutClActivation, type ProtocolContext } from "lib/protocol/index.js";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 describe("Scenario: Burn Shares", () => {
   let ctx: ProtocolContext;

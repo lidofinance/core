@@ -1,14 +1,14 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import type { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types/index.js";
 
-import { de0x, numberToHex } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { de0x, numberToHex } from "lib/string.js";
 
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
+import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy/index.js";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers

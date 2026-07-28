@@ -8,7 +8,7 @@ import {
   toChecksumAddress,
 } from "ethereumjs-util";
 
-import { de0x } from "./string";
+import { de0x } from "./string.js";
 
 export function sign(message: string, privateKey: string) {
   return ecsign(Buffer.from(de0x(message), "hex"), Buffer.from(de0x(privateKey), "hex"));

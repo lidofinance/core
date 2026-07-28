@@ -1,13 +1,13 @@
 import { assert } from "chai";
-import { ethers } from "hardhat";
 
-import { ENS } from "typechain-types";
+import type { ENS } from "typechain-types/index.js";
 
-import { loadContract } from "lib/contract";
-import { makeTx } from "lib/deploy";
-import { streccak } from "lib/keccak";
-import { cy, log, mg, yl } from "lib/log";
-import { readNetworkState, Sk } from "lib/state-file";
+import { loadContract } from "lib/contract.js";
+import { makeTx } from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { streccak } from "lib/keccak.js";
+import { cy, log, mg, yl } from "lib/log.js";
+import { readNetworkState, Sk } from "lib/state-file.js";
 
 const TLD = "eth";
 

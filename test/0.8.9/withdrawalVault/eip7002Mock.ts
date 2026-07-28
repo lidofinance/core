@@ -1,10 +1,11 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
-import { ethers } from "hardhat";
 
-import { EIP7002WithdrawalRequest__Mock } from "typechain-types";
+import type { EIP7002WithdrawalRequest__Mock } from "typechain-types/index.js";
 
-import { EIP7002_ADDRESS, findEventsWithInterfaces } from "lib";
+import { EIP7002_ADDRESS } from "lib/eips/eip7002.js";
+import { findEventsWithInterfaces } from "lib/event.js";
+import { ethers } from "lib/hardhat.js";
 
 const eventName = "RequestAdded__Mock";
 const eip7002MockEventABI = [`event ${eventName}(bytes request, uint256 fee)`];

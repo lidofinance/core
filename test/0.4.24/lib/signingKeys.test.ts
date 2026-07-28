@@ -1,12 +1,13 @@
 import { expect } from "chai";
 import { solidityPackedKeccak256 } from "ethers";
-import { ethers } from "hardhat";
 
-import { SigningKeys__Harness } from "typechain-types";
+import type { SigningKeys__Harness } from "typechain-types/index.js";
 
-import { EMPTY_PUBLIC_KEY, EMPTY_SIGNATURE, FakeValidatorKeys } from "lib";
+import { EMPTY_PUBLIC_KEY, EMPTY_SIGNATURE } from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
+import { FakeValidatorKeys } from "lib/signing-keys.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const NODE_OPERATOR_1 = 1;
 const NODE_OPERATOR_2 = 2;

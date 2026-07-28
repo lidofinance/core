@@ -1,42 +1,25 @@
-import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
+import { type ContractTransactionReceipt, type ContractTransactionResponse } from "ethers";
 import fs from "fs";
 import { getMode } from "hardhat.helpers";
 
 import * as toml from "@iarna/toml";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { IDualGovernance, ITimelock, TokenManager, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types";
+import type { IDualGovernance, type ITimelock, type TokenManager, type UpgradeTemplate, type UpgradeVoteScript, type Voting } from "typechain-types/index.js";
 
-import {
-  advanceChainTime,
-  bl,
-  ConvertibleToString,
-  ether,
-  findEventsWithInterfaces,
-  getCurrentBlockTimestamp,
-  getSignerOrImpersonate,
-  impersonate,
-  isContractDeployed,
-  loadContract,
-  LoadedContract,
-  log,
-  or,
-  yl,
-} from "lib";
-import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
-import { getTxLink } from "lib/explorer";
-import {
-  DeploymentState,
-  getAddress,
-  getAddressValidated,
-  readNetworkState,
-  Sk,
-  updateObjectInState,
-} from "lib/state-file";
+import { impersonate } from "lib/account.js";
+import { type UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas.js";
+import { loadContract } from "lib/contract.js";
+import { log } from "lib/log.js";
+import { getAddress, getAddressValidated, readNetworkState, updateObjectInState, type DeploymentState, Sk } from "lib/state-file.js";
+import { advanceChainTime } from "lib/time.js";
+import { ether } from "lib/units.js";
 
-import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite";
+import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite/index.js";
 
-import { encodeCallScript, VoteItem } from "./omnibus";
+import { encodeCallScript, VoteItem } from "./omnibus.js";
+import { bl, ConvertibleToString, findEventsWithInterfaces, getCurrentBlockTimestamp, getSignerOrImpersonate, isContractDeployed, LoadedContract, or, yl } from "lib/index.js";
+import { getTxLink } from "lib/explorer.js";
 
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
 const PROPOSAL_ID = BigInt(process.env.PROPOSAL_ID || "0");

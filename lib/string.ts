@@ -1,4 +1,4 @@
-import { BigNumberish, hexlify, randomBytes } from "ethers";
+import { type BigNumberish, hexlify, randomBytes } from "ethers";
 
 export function de0x(hex: string) {
   return hex.startsWith("0x") ? hex.slice(2) : hex;

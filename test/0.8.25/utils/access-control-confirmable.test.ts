@@ -1,11 +1,11 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { AccessControlConfirmable__Harness } from "typechain-types";
+import type { AccessControlConfirmable__Harness } from "typechain-types/index.js";
 
-import { advanceChainTime, days, getNextBlockTimestamp, hours } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { advanceChainTime, days, getNextBlockTimestamp, hours } from "lib/time.js";
 
 describe("AccessControlConfirmable.sol", () => {
   let harness: AccessControlConfirmable__Harness;

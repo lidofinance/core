@@ -1,8 +1,7 @@
-import { ethers } from "hardhat";
-
-import { deployWithoutProxy } from "lib/deploy";
-import { cy, log } from "lib/log";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { deployWithoutProxy } from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { cy, log } from "lib/log.js";
+import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;

@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers } from "lib/hardhat.js";
 
 function toValidatorPubKey(num: number): string {
   if (num < 0 || num > 0xffff) {

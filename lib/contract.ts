@@ -1,11 +1,12 @@
-import { BaseContract, ContractRunner } from "ethers";
-import { artifacts, ethers } from "hardhat";
+import { type BaseContract, type ContractRunner } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { NonPayableOverrides } from "typechain-types/common";
+import { artifacts, ethers } from "./hardhat.js";
 
-import { getDeployerSigner } from "./account";
+import { NonPayableOverrides } from "typechain-types/common.js";
+
+import { getDeployerSigner } from "./account.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type MethodArgs<C, M extends keyof C> = C[M] extends (...args: any[]) => any ? Parameters<C[M]> : never;

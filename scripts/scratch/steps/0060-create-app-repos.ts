@@ -1,8 +1,7 @@
-import { ethers } from "hardhat";
-
-import { loadContract } from "lib/contract";
-import { makeTx } from "lib/deploy";
-import { readNetworkState, setValueInState, Sk } from "lib/state-file";
+import { loadContract } from "lib/contract.js";
+import { makeTx } from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { readNetworkState, setValueInState, Sk } from "lib/state-file.js";
 
 const NULL_CONTENT_URI =
   "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";

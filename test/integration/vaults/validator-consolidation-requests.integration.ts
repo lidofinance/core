@@ -1,14 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard } from "typechain-types";
+import type { Dashboard } from "typechain-types/index.js";
 
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext } from "lib/protocol";
+import { ethers } from "lib/hardhat.js";
+import { createVaultWithDashboard, getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { generateConsolidationRequestPayload } from "test/0.8.25/vaults/consolidation/consolidationHelper";
-import { Snapshot } from "test/suite";
+import { generateConsolidationRequestPayload } from "test/0.8.25/vaults/consolidation/consolidationHelper.js";
+import { Snapshot } from "test/suite/index.js";
 
 const KEY_LENGTH = 48;
 

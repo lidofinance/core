@@ -1,9 +1,10 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { Pausable__Harness } from "typechain-types";
+import type { Pausable__Harness } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite";
+import { ethers } from "lib/hardhat.js";
+
+import { Snapshot } from "test/suite/index.js";
 
 describe("Pausable.sol", () => {
   let pausable: Pausable__Harness;

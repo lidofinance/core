@@ -1,15 +1,17 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ACL, Lido } from "typechain-types";
+import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
+import { type Lido } from "typechain-types/index.js";
 
-import { certainAddress, ether, ONE_ETHER } from "lib";
+import { certainAddress } from "lib/address.js";
+import { ethers } from "lib/hardhat.js";
+import { ether, ONE_ETHER } from "lib/units.js";
 
-import { deployLidoDao } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoDao } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Lido.sol:staking", () => {
   let deployer: HardhatEthersSigner;

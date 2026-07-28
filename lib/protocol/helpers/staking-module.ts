@@ -1,8 +1,8 @@
 import { randomBytes } from "ethers";
 
-import { IStakingModule } from "typechain-types";
+import type { IStakingModule } from "typechain-types/index.js";
 
-import { LoadedContract } from "lib";
+import type { LoadedContract } from "../../contract.js";
 
 export const NOR_MODULE_ID = 1n;
 export const SDVT_MODULE_ID = 2n;

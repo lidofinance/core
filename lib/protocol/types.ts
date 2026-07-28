@@ -1,8 +1,9 @@
 import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interface, LogDescription } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import { type StakingModuleStructOutput } from "typechain-types/contracts/0.8.25/sr/StakingRouter.js";
+import type {
   Accounting,
   AccountingOracle,
   ACL,
@@ -35,8 +36,7 @@ import {
   WithdrawalQueueERC721,
   WithdrawalVault,
   WstETH,
-} from "typechain-types";
-import { StakingModuleStructOutput } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
+} from "typechain-types/index.js";
 
 export type LogDescriptionExtended = LogDescription & {
   address?: string;

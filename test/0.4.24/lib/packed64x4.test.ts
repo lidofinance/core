@@ -1,9 +1,10 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { Packed64x4__Harness } from "typechain-types";
+import type { Packed64x4__Harness } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite";
+import { ethers } from "lib/hardhat.js";
+
+import { Snapshot } from "test/suite/index.js";
 
 const OVER_UINT64_MAX = 2n ** 64n;
 

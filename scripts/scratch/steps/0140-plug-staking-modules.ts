@@ -1,12 +1,10 @@
-import { ethers } from "hardhat";
-
-import { Burner, ConsolidationMigrator, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
-
-import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "lib";
-import { loadContract } from "lib/contract";
-import { makeTx } from "lib/deploy";
-import { streccak } from "lib/keccak";
-import { readNetworkState, Sk } from "lib/state-file";
+import { loadContract } from "lib/contract.js";
+import { makeTx } from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { streccak } from "lib/keccak.js";
+import { readNetworkState, Sk } from "lib/state-file.js";
+import { type Burner, type ConsolidationMigrator, type StakingRouter, type TriggerableWithdrawalsGateway } from "typechain-types/index.js";
+import { ether, HASH_CONSENSUS_FAR_FUTURE_EPOCH, impersonate, WithdrawalCredentialsType } from "lib/index.js";
 
 const STAKING_MODULE_MANAGE_ROLE = streccak("STAKING_MODULE_MANAGE_ROLE");
 const ZERO_ADDRESS = ethers.ZeroAddress;

@@ -1,15 +1,15 @@
 import { assert } from "chai";
-import { ethers } from "hardhat";
 
-import { ENS, LidoTemplate } from "typechain-types";
+import type { ENS, LidoTemplate } from "typechain-types/index.js";
 
-import { loadContract } from "lib/contract";
-import { makeTx } from "lib/deploy";
-import { getENSNodeOwner } from "lib/ens";
-import { findEvents } from "lib/event";
-import { streccak } from "lib/keccak";
-import { cy, log, mg, yl } from "lib/log";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { loadContract } from "lib/contract.js";
+import { makeTx } from "lib/deploy.js";
+import { getENSNodeOwner } from "lib/ens.js";
+import { findEvents } from "lib/event.js";
+import { ethers } from "lib/hardhat.js";
+import { streccak } from "lib/keccak.js";
+import { cy, log, mg, yl } from "lib/log.js";
+import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 
 function splitDomain(domain: string) {
   const dotIndex = domain.indexOf(".");

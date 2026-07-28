@@ -1,10 +1,9 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   LazyOracle__MockForNodeOperatorFee,
   LidoLocator,
   NodeOperatorFee__Harness,
@@ -14,22 +13,16 @@ import {
   VaultFactory__MockForNodeOperatorFee,
   VaultHub__MockForNodeOperatorFee,
   WstETH__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import {
-  ABNORMALLY_HIGH_FEE_THRESHOLD_BP,
-  advanceChainTime,
-  days,
-  ether,
-  findEvents,
-  getCurrentBlockTimestamp,
-  getNextBlockTimestamp,
-  MAX_UINT256,
-  TOTAL_BASIS_POINTS,
-} from "lib";
+import { ABNORMALLY_HIGH_FEE_THRESHOLD_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
+import { findEvents } from "lib/event.js";
+import { ethers } from "lib/hardhat.js";
+import { advanceChainTime, days, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib/time.js";
+import { ether } from "lib/units.js";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 const BP_BASE = 10000n;
 

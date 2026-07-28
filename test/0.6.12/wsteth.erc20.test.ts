@@ -1,8 +1,7 @@
-import { ethers } from "hardhat";
+import { ethers } from "lib/hardhat.js";
+import { ether } from "lib/units.js";
 
-import { ether } from "lib/units";
-
-import { testERC20Compliance } from "../common/erc20.test";
+import { testERC20Compliance } from "../common/erc20.test.js";
 
 testERC20Compliance({
   tokenName: "wstETH",

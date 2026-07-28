@@ -1,11 +1,11 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
+import type { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types/index.js";
 
-import { SECONDS_PER_SLOT } from "lib";
+import { SECONDS_PER_SLOT } from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 
 import {
   deadlineFromRefSlot,
@@ -16,8 +16,8 @@ import {
   HASH_3,
   nextRefSlotFromRefSlot,
   ZERO_HASH,
-} from "test/deploy";
-import { Snapshot } from "test/suite";
+} from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("BaseOracle.sol:submitReport", () => {
   let admin: HardhatEthersSigner;

@@ -1,22 +1,15 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { HashConsensus } from "typechain-types";
+import type { HashConsensus } from "typechain-types/index.js";
 
-import { ether, impersonate } from "lib";
-import {
-  calcReportDataHash,
-  getProtocolContext,
-  getReportDataItems,
-  ProtocolContext,
-  reportWithoutClActivation,
-  waitNextAvailableReportTime,
-} from "lib/protocol";
+import { ethers } from "lib/hardhat.js";
+import { ether, impersonate } from "lib/index.js";
+import { calcReportDataHash, getProtocolContext, getReportDataItems, reportWithoutClActivation, waitNextAvailableReportTime, type ProtocolContext } from "lib/protocol/index.js";
 
-import { Snapshot, ZERO_HASH } from "test/suite";
+import { Snapshot, ZERO_HASH } from "test/suite/index.js";
 
 const UINT64_MAX = 2n ** 64n - 1n;
 

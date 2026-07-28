@@ -1,11 +1,10 @@
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard } from "typechain-types";
-import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
+import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
+import type { Dashboard } from "typechain-types/index.js";
 
-import { ether } from "lib/units";
-
-import { ProtocolContext } from "../types";
+import { ether } from "../../units.js";
+import type { ProtocolContext } from "../types.js";
 
 export const DEFAULT_TIER_PARAMS: TierParamsStruct = {
   shareLimit: ether("1000"),

@@ -1,16 +1,16 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 import { beforeEach } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { LazyOracle } from "typechain-types";
+import type { LazyOracle } from "typechain-types/index.js";
 
-import { days, ether, impersonate } from "lib";
-import { getProtocolContext, ProtocolContext, setupLidoForVaults, testMethod } from "lib/protocol";
+import { ethers } from "lib/hardhat.js";
+import { days, ether, impersonate } from "lib/index.js";
+import { getProtocolContext, type ProtocolContext, setupLidoForVaults, testMethod } from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: LazyOracle Roles and Access Control", () => {
   let ctx: ProtocolContext;

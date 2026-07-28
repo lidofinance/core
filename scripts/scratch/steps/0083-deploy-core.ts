@@ -1,30 +1,22 @@
-import { ethers } from "hardhat";
+import type { type ConsolidationBus, type ConsolidationGateway, type ConsolidationMigrator, StakingRouter, type TopUpGateway, TriggerableWithdrawalsGateway } from "typechain-types/index.js";
 
-import {
-  ConsolidationBus,
-  ConsolidationGateway,
-  ConsolidationMigrator,
-  StakingRouter,
-  TopUpGateway,
-  TriggerableWithdrawalsGateway,
-} from "typechain-types";
-
-import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib";
-import { encodeFunctionCall, getContractPath, InitializeArgs, loadContract } from "lib/contract";
+import { encodeFunctionCall, getContractPath, loadContract, InitializeArgs } from "lib/contract.js";
 import {
   deployBehindOssifiableProxy,
   deployContract,
   deployImplementation,
   deployWithoutProxy,
   makeTx,
-} from "lib/deploy";
-import { EIP7002_ADDRESS } from "lib/eips/eip7002";
-import { EIP7251_ADDRESS } from "lib/eips/eip7251";
-import { log } from "lib/log";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
-import { en0x } from "lib/string";
+} from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { log } from "lib/log.js";
+import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
+import { en0x } from "lib/string.js";
 
-import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
+import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState.js";
+import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib/index.js";
+import { EIP7002_ADDRESS } from "lib/eips/eip7002.js";
+import { EIP7251_ADDRESS } from "lib/eips/eip7251.js";
 
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
 

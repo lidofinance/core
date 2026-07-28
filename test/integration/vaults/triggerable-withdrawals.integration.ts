@@ -1,15 +1,20 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, StakingVault, VaultHub } from "typechain-types";
+import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { impersonate, randomAddress } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
-import { ether } from "lib/units";
+import { ethers } from "lib/hardhat.js";
+import { impersonate, randomAddress } from "lib/index.js";
+import {
+  createVaultWithDashboard,
+  getProtocolContext,
+  type ProtocolContext,
+  setupLidoForVaults,
+} from "lib/protocol/index.js";
+import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 

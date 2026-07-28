@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { MaxUint256, TypedDataDomain, TypedDataEncoder, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { MaxUint256, type TypedDataDomain, TypedDataEncoder, ZeroAddress } from "ethers";
 
-import { EIP712StETH } from "typechain-types";
+import type { EIP712StETH } from "typechain-types/index.js";
 
-import { certainAddress } from "lib";
+import { certainAddress } from "lib/address.js";
+import { ethers } from "lib/hardhat.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("EIP712StETH.sol", () => {
   let domain: TypedDataDomain;

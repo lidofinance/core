@@ -1,9 +1,8 @@
-import { ethers } from "hardhat";
+import type { LidoLocator } from "typechain-types/index.js";
 
-import { LidoLocator } from "typechain-types";
-
-import { updateProxyImplementation } from "lib/deploy";
-import { getAddress, readNetworkState, Sk } from "lib/state-file";
+import { updateProxyImplementation } from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { getAddress, readNetworkState, Sk } from "lib/state-file.js";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;

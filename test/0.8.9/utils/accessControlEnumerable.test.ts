@@ -1,20 +1,20 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { PANIC_CODES } from "@nomicfoundation/hardhat-chai-matchers/panic";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { PANIC_CODES } from "@nomicfoundation/hardhat-ethers-chai-matchers/panic";
 
-import { AccessControlEnumerable__Harness } from "typechain-types";
+import type { AccessControlEnumerable__Harness } from "typechain-types/index.js";
 
 import {
   ERC165_INTERFACE_ID,
   INVALID_INTERFACE_ID,
   OZ_ACCESS_CONTROL_ENUMERABLE_INTERFACE_ID,
   OZ_ACCESS_CONTROL_INTERFACE_ID,
-  streccak,
-} from "lib";
+} from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
+import { streccak } from "lib/keccak.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const TEST_ROLE = streccak("TEST_ROLE");
 

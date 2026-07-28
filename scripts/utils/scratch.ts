@@ -2,12 +2,12 @@ import fs from "fs";
 
 import * as toml from "@iarna/toml";
 
-import { Sk } from "lib";
-import { ScratchParameters, validateScratchParameters } from "lib/config-schemas";
+import { type ScratchParameters, validateScratchParameters } from "lib/config-schemas.js";
+import { Sk } from "lib/index.js";
 
 const SCRATCH_DEPLOY_CONFIG = process.env.SCRATCH_DEPLOY_CONFIG || "scripts/scratch/deploy-params-testnet.toml";
 
-export { ScratchParameters };
+export type { ScratchParameters };
 
 export function readScratchParameters(): ScratchParameters {
   if (!fs.existsSync(SCRATCH_DEPLOY_CONFIG)) {

@@ -1,13 +1,14 @@
 import { expect } from "chai";
-import { MaxUint256, Signer } from "ethers";
-import { ethers } from "hardhat";
+import { MaxUint256, type Signer } from "ethers";
 
-import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
+import type { HashConsensus, ReportProcessor__Mock } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION, findEventsWithInterfaces } from "lib";
+import { BASE_CONSENSUS_VERSION } from "lib/constants.js";
+import { findEventsWithInterfaces } from "lib/event.js";
+import { ethers } from "lib/hardhat.js";
 
-import { deployHashConsensus, DeployHashConsensusParams, HASH_1, ZERO_HASH } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployHashConsensus, type DeployHashConsensusParams, HASH_1, ZERO_HASH } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("HashConsensus.sol:setQuorum", function () {
   let admin: Signer;

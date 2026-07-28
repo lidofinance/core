@@ -1,4 +1,4 @@
-import { BigNumberish, parseEther as ether, parseUnits } from "ethers";
+import { type BigNumberish, parseEther as ether, parseUnits } from "ethers";
 
 export const ONE_ETHER = ether("1.0");
 

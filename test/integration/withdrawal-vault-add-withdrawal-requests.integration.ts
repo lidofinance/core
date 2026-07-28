@@ -1,17 +1,17 @@
 // ToDo: add integration tests for the withdrawal vault
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { WithdrawalVault } from "typechain-types";
+import type { WithdrawalVault } from "typechain-types/index.js";
 
-import { ether, readWithdrawalRequests } from "lib";
-import { impersonate } from "lib/account";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { impersonate } from "lib/account.js";
+import { ethers } from "lib/hardhat.js";
+import { ether, readWithdrawalRequests } from "lib/index.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { encodeEIP7002Payload } from "test/0.8.9/withdrawalVault/eip7002Mock";
-import { Snapshot } from "test/suite";
+import { encodeEIP7002Payload } from "test/0.8.9/withdrawalVault/eip7002Mock.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: WithdrawalVault: addWithdrawalRequests", () => {
   let ctx: ProtocolContext;

@@ -1,19 +1,17 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { mine } from "@nomicfoundation/hardhat-network-helpers";
+import type { CLProofVerifier__Harness, SSZMerkleTree } from "typechain-types/index.js";
 
-import { CLProofVerifier__Harness, SSZMerkleTree } from "typechain-types";
-
+import { ethers, networkHelpers } from "lib/hardhat.js";
 import {
   generateBeaconHeader,
   generateValidator,
   prepareLocalMerkleTree,
   randomBytes32,
   setBeaconBlockRoot,
-} from "lib";
+} from "lib/pdg.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 // CSM "borrowed" prefab validator object with precalculated proofs & root
 // allows us to be sure that core merkle proof validation is working correctly
@@ -303,7 +301,7 @@ describe("CLProofVerifier.sol", () => {
       provenValidator.container.withdrawalCredentials,
     );
 
-    await mine(1);
+    await networkHelpers.mine(1);
 
     // curr works
     const timestampCurr = await setBeaconBlockRoot(curr.beaconRoot);

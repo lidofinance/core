@@ -1,8 +1,7 @@
 import { expect } from "chai";
-import { Signer, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer, ZeroAddress } from "ethers";
 
-import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
+import type { HashConsensus, ReportProcessor__Mock } from "typechain-types/index.js";
 
 import {
   BASE_CONSENSUS_VERSION,
@@ -11,9 +10,10 @@ import {
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-} from "lib";
+} from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 
-import { deployHashConsensus } from "test/deploy";
+import { deployHashConsensus } from "test/deploy/index.js";
 
 describe("HashConsensus.sol:deploy", function () {
   let admin: Signer;

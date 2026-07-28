@@ -1,11 +1,12 @@
 import { expect } from "chai";
-import { Signer } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer } from "ethers";
 
-import { HashConsensus__Harness } from "typechain-types";
+import type { HashConsensus__Harness } from "typechain-types/index.js";
 
-import { deployHashConsensus, DeployHashConsensusParams } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { ethers } from "lib/hardhat.js";
+
+import { deployHashConsensus, type DeployHashConsensusParams } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("HashConsensus.sol:fastLaneLength", function () {
   let admin: Signer;

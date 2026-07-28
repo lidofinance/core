@@ -1,10 +1,9 @@
-import { ethers } from "hardhat";
+import type { VaultHub } from "typechain-types/index.js";
 
-import { VaultHub } from "typechain-types";
-
-import { ether, loadContract, makeTx } from "lib";
-import { deployBehindOssifiableProxy, deployWithoutProxy } from "lib/deploy";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { deployBehindOssifiableProxy, deployWithoutProxy } from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { ether, loadContract, makeTx } from "lib/index.js";
+import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;

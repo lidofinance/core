@@ -1,4 +1,6 @@
-import { advanceChainTime, log } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { log } from "lib/log.js";
+import { advanceChainTime } from "lib/index.js";
 
 async function main() {
   log.scriptStart(__filename);

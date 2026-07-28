@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 
-import { HardhatNetworkForkingUserConfig } from "hardhat/types";
+import type { EdrNetworkForkingUserConfig } from "hardhat/types/config";
 
 export function getMode() {
   return process.env.MODE || "scratch";
@@ -21,7 +21,7 @@ export function getHardhatForkingConfig() {
       throw new Error("RPC_URL must be set when MODE=forking");
     }
 
-    const config: HardhatNetworkForkingUserConfig = { url };
+    const config: EdrNetworkForkingUserConfig = { url };
     const block = process.env.FORKING_BLOCK_NUMBER;
 
     if (block) {

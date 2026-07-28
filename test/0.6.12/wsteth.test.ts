@@ -1,14 +1,15 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { StETH__HarnessForWstETH, WstETH } from "typechain-types";
+import type { StETH__HarnessForWstETH, WstETH } from "typechain-types/index.js";
 
-import { batch, ether, ONE_ETHER } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { batch } from "lib/promise.js";
+import { ether, ONE_ETHER } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("WstETH.sol", () => {
   let steth: StETH__HarnessForWstETH;

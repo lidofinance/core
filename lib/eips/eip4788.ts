@@ -1,6 +1,5 @@
-import { ethers } from "hardhat";
-
-import { impersonate } from "lib";
+import { impersonate } from "../account.js";
+import { ethers } from "../hardhat.js";
 
 // Address of the Beacon Block Storage contract, which exposes beacon chain roots.
 // This corresponds to `BEACON_ROOTS_ADDRESS` as specified in EIP-4788.

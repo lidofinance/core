@@ -1,24 +1,24 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
-import { Dashboard, DepositContract, StakingVault } from "typechain-types";
+import type { Dashboard, DepositContract, StakingVault } from "typechain-types/index.js";
 
-import { ether, generateValidator, PDGPolicy, toGwei, toLittleEndian64 } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { ether, generateValidator, PDGPolicy, toGwei, toLittleEndian64 } from "lib/index.js";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
   generatePredepositData,
   getProtocolContext,
   mockProof,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol";
+} from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Predeposit Guarantee core functionality", () => {
   let ctx: ProtocolContext;

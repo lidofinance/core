@@ -1,15 +1,18 @@
 import { hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "ethers";
-import { ethers } from "hardhat";
 
 import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
 
-import { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types";
-import {
+import type {
   BLS12_381,
   PredepositGuarantee,
-} from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+} from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.js";
+import type { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types/index.js";
 
-import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
+import { impersonate } from "./account.js";
+import { computeDepositDataRoot, computeDepositMessageRoot } from "./deposit.js";
+import { ethers } from "./hardhat.js";
+import { de0x } from "./string.js";
+import { ether } from "./units.js";
 
 export type Validator = { container: SSZBLSHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
 

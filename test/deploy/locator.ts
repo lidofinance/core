@@ -1,10 +1,14 @@
-import { ethers } from "hardhat";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import {
+  type LidoLocator,
+  LidoLocator__factory,
+  type OssifiableProxy,
+  OssifiableProxy__factory,
+} from "typechain-types/index.js";
 
-import { LidoLocator, LidoLocator__factory, OssifiableProxy, OssifiableProxy__factory } from "typechain-types";
-
-import { certainAddress } from "lib";
+import { certainAddress } from "lib/address.js";
+import { ethers } from "lib/hardhat.js";
 
 async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, deployer?: HardhatEthersSigner) {
   if (!deployer) {

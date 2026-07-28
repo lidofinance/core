@@ -1,18 +1,14 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import {
-  BigIntMath,
-  certainAddress,
-  ether,
-  impersonate,
-  log,
-  ONE_GWEI,
-  StakingModuleStatus,
-  toGwei,
-  TOTAL_BASIS_POINTS,
-} from "lib";
+import { ONE_GWEI, StakingModuleStatus, toGwei } from "lib/index.js";
 
-import { ProtocolContext } from "../types";
+import { impersonate } from "../../account.js";
+import { certainAddress } from "../../address.js";
+import { BigIntMath } from "../../bigint-math.js";
+import { TOTAL_BASIS_POINTS } from "../../constants.js";
+import { log } from "../../log.js";
+import { ether } from "../../units.js";
+import type { ProtocolContext } from "../types.js";
 
 import {
   adjustReportModuleBalances,
@@ -21,9 +17,9 @@ import {
   report,
   reportWithoutClActivation,
   submitReportDataWithConsensusAndEmptyExtraData,
-} from "./accounting";
-import { norSdvtSetOperatorStakingLimit } from "./nor-sdvt";
-import { NOR_MODULE_ID, SDVT_MODULE_ID } from "./staking-module";
+} from "./accounting.js";
+import { norSdvtSetOperatorStakingLimit } from "./nor-sdvt.js";
+import { NOR_MODULE_ID, SDVT_MODULE_ID } from "./staking-module.js";
 
 const DEPOSIT_SIZE = ether("32");
 

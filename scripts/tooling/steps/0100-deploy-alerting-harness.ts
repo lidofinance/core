@@ -1,7 +1,8 @@
 import assert from "assert";
-import { ethers } from "hardhat";
 
-import { deployImplementation, readNetworkState, Sk } from "lib";
+import { deployImplementation } from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { readNetworkState, Sk } from "lib/state-file.js";
 
 export async function main(): Promise<void> {
   const deployer = (await ethers.provider.getSigner()).address;

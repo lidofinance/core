@@ -1,26 +1,26 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, StakingVault, VaultHub } from "typechain-types";
+import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { BigIntMath, DISCONNECT_NOT_INITIATED, impersonate } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { BigIntMath, DISCONNECT_NOT_INITIATED, impersonate } from "lib/index.js";
 import {
   changeTier,
   createVaultsReportTree,
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
   setUpOperatorGrid,
   waitNextAvailableReportTime,
-} from "lib/protocol";
-import { getCurrentBlockTimestamp } from "lib/time";
-import { ether } from "lib/units";
+} from "lib/protocol/index.js";
+import { getCurrentBlockTimestamp } from "lib/time.js";
+import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: VaultHub:force-disconnect", () => {
   let ctx: ProtocolContext;

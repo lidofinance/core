@@ -1,7 +1,8 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { Math__Harness } from "typechain-types";
+import type { Math__Harness } from "typechain-types/index.js";
+
+import { ethers } from "lib/hardhat.js";
 
 describe("Math.sol", () => {
   let math: Math__Harness;

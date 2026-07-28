@@ -1,8 +1,9 @@
 import { expect } from "chai";
 
-import { certainAddress, impersonate, log } from "lib";
-
-import { ProtocolContext } from "../types";
+import { impersonate } from "../../account.js";
+import { certainAddress } from "../../address.js";
+import { log } from "../../log.js";
+import type { ProtocolContext } from "../types.js";
 
 /**
  * Ensures that the DSM has the required number of guardians and quorum.

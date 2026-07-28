@@ -1,17 +1,16 @@
-import { ethers } from "hardhat";
-
-import {
+import type {
   Burner,
   StakingRouter,
   TriggerableWithdrawalsGateway,
   ValidatorsExitBusOracle,
   WithdrawalQueueERC721,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { loadContract } from "lib/contract";
-import { makeTx } from "lib/deploy";
-import { log } from "lib/log";
-import { readNetworkState, Sk } from "lib/state-file";
+import { loadContract } from "lib/contract.js";
+import { makeTx } from "lib/deploy.js";
+import { ethers } from "lib/hardhat.js";
+import { log } from "lib/log.js";
+import { readNetworkState, Sk } from "lib/state-file.js";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;

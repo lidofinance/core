@@ -1,10 +1,10 @@
 import { expect } from "chai";
-import { Signer } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer } from "ethers";
 
-import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
+import type { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION, EPOCHS_PER_FRAME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
+import { BASE_CONSENSUS_VERSION, EPOCHS_PER_FRAME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 
 import {
   computeEpochFirstSlotAt,
@@ -18,7 +18,7 @@ import {
   SECONDS_PER_FRAME,
   SLOTS_PER_FRAME,
   ZERO_HASH,
-} from "test/deploy";
+} from "test/deploy/index.js";
 
 const INITIAL_EPOCH = 3n;
 

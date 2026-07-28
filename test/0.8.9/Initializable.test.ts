@@ -1,9 +1,10 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { Initializable__Mock } from "typechain-types";
+import type { Initializable__Mock } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite";
+import { ethers } from "lib/hardhat.js";
+
+import { Snapshot } from "test/suite/index.js";
 
 describe("Initializable.sol", function () {
   let initializable: Initializable__Mock;

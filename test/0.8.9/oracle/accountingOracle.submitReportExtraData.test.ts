@@ -1,42 +1,41 @@
 import { expect } from "chai";
-import { BigNumberish, ZeroHash } from "ethers";
-import { ethers } from "hardhat";
+import { type BigNumberish, ZeroHash } from "ethers";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
-import {
+import type {
   AccountingOracle__Harness,
   HashConsensus__Harness,
   OracleReportSanityChecker,
   StakingRouter__MockForAccountingOracle,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
+import { AO_CONSENSUS_VERSION, ONE_GWEI } from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 import {
-  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
   constructOracleReport,
   encodeExtraDataItem,
   encodeExtraDataItems,
-  ether,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   EXTRA_DATA_TYPE_EXITED_VALIDATORS,
   EXTRA_DATA_TYPE_STUCK_VALIDATORS,
-  ExtraData,
-  ExtraDataType,
+  type ExtraData,
+  type ExtraDataType,
   getReportDataItems,
-  numberToHex,
-  ONE_GWEI,
-  OracleReport,
-  OracleReportProps,
+  type OracleReport,
+  type OracleReportProps,
   packExtraDataList,
-  ReportFieldsWithoutExtraData,
-} from "lib";
+  type ReportFieldsWithoutExtraData,
+} from "lib/oracle.js";
+import { numberToHex } from "lib/string.js";
+import { ether } from "lib/units.js";
 
-import { deployAndConfigureAccountingOracle } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployAndConfigureAccountingOracle } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 const getDefaultExtraData = (): ExtraDataType => ({
   exitedKeys: [
