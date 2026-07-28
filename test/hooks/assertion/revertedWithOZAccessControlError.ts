@@ -21,20 +21,7 @@ declare global {
 
 Assertion.addMethod("revertedWithOZAccessControlError", async function (address: string, role: string) {
   const ctx = util.flag(this, "object");
+  const reason = `AccessControl: account ${address.toLowerCase()} is missing role ${role}`;
 
-  try {
-    await ctx;
-  } catch (error) {
-    const msg = (error as Error).message.toUpperCase().replace(/^error:\s*/i, "");
-    const reason = `AccessControl: account ${address} is missing role ${role}`;
-
-    expect(msg).to.equal(
-      `VM Exception while processing transaction: reverted with reason string '${reason}'`.toUpperCase(),
-    );
-    return;
-  }
-
-  throw new Error(
-    `Transaction has been executed without revert. Expected access control error for ${address} without role: ${role}`,
-  );
+  await expect(ctx).to.be.revertedWith(reason);
 });
