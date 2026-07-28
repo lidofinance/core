@@ -2,9 +2,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { task } from "hardhat/config";
-import { HardhatRuntimeEnvironment, TaskArguments } from "hardhat/types";
+import type { HardhatRuntimeEnvironment } from "hardhat/types/hre";
 
-import { cy, log, yl } from "lib/log";
+import { verifyContract } from "@nomicfoundation/hardhat-verify/verify";
+
+import { cy, log, yl } from "lib/log.js";
 
 type DeployedContract = {
   contract: string;
@@ -31,21 +33,21 @@ type NetworkState = {
 
 const errors = [] as string[];
 
-task("verify:deployed", "Verifies deployed contracts based on state file")
-  .addOptionalParam("file", "Path to network state file")
-  .addOptionalParam("only", "Comma-separated list of paths to contracts to verify")
-  .setAction(async (taskArgs: TaskArguments, hre: HardhatRuntimeEnvironment) => {
+export const verifyDeployedTask = task("verify:deployed", "Verifies deployed contracts based on state file")
+  .addOption({ name: "file", description: "Path to network state file", defaultValue: "" })
+  .addOption({ name: "only", description: "Comma-separated list of paths to contracts to verify", defaultValue: "" })
+  .setInlineAction(async (taskArgs, hre) => {
     try {
-      const network = hre.network.name;
-      log("Verifying contracts for network:", network);
+      const { networkName } = await hre.network.connect();
+      log("Verifying contracts for network:", networkName);
 
-      const networkStateFile = taskArgs.file ?? `deployed-${network}.json`;
+      const networkStateFile = taskArgs.file || `deployed-${networkName}.json`;
       log("Using network state file:", networkStateFile);
 
       const networkStateFilePath = path.resolve("./", networkStateFile);
       const data = await fs.readFile(networkStateFilePath, "utf8");
       const networkState = JSON.parse(data) as NetworkState;
-      const onlyContracts = taskArgs.only?.split(",") ?? [];
+      const onlyContracts = taskArgs.only ? taskArgs.only.split(",") : [];
 
       const deployedContracts = Object.values(networkState)
         .filter((c): c is Contract => typeof c === "object")
@@ -60,7 +62,7 @@ task("verify:deployed", "Verifies deployed contracts based on state file")
           continue;
         }
 
-        await verifyContract(contract, hre);
+        await verifyDeployedContract(contract, hre);
       }
     } catch (error) {
       log.error("Error verifying deployed contracts:", error as Error);
@@ -71,9 +73,10 @@ task("verify:deployed", "Verifies deployed contracts based on state file")
       log.error(`Failed to verify ${errors.length} contract(s):`, errors as string[]);
       process.exitCode = errors.length;
     }
-  });
+  })
+  .build();
 
-async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
+async function verifyDeployedContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
   await new Promise((resolve) => setTimeout(resolve, 3000));
 
   if (!contract.contract) {
@@ -84,23 +87,28 @@ async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnv
   log.splitter();
 
   const contractName = contract.contractName ?? contract.contract.split("/").pop()?.split(".")[0];
-  const verificationParams = {
-    address: contract.address,
-    constructorArguments: contract.constructorArgs ?? [],
-    contract: `${contract.contract}:${contractName}`,
-  };
+  const constructorArgs = contract.constructorArgs ?? [];
+  const contractFqn = `${contract.contract}:${contractName}`;
 
   log.withArguments(
     `Verifying contract: ${yl(contract.contract)} at ${cy(contract.address)} with constructor args `,
-    verificationParams.constructorArguments as string[],
+    constructorArgs as string[],
   );
 
   try {
-    await hre.run("verify:verify", verificationParams);
+    await verifyContract(
+      {
+        address: contract.address,
+        constructorArgs,
+        contract: contractFqn,
+        provider: "etherscan",
+      },
+      hre,
+    );
     log.success(`Successfully verified ${yl(contract.contract)}!`);
   } catch (error) {
     log.error(`Failed to verify ${yl(contract.contract)}:`, error as Error);
-    errors.push(verificationParams.address);
+    errors.push(contract.address);
   }
   log.emptyLine();
 }

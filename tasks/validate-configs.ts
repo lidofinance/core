@@ -8,7 +8,7 @@ import {
   safeValidateUpgradeParameters,
   ScratchParameters,
   UpgradeParameters,
-} from "lib/config-schemas";
+} from "lib/config-schemas.js";
 
 // Re-implement parameter reading without hardhat dependencies
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";
@@ -264,9 +264,12 @@ function validateParameterConsistency(): {
   return { results, missingInScratch, expectedMissingInScratch, matchCount, totalChecked };
 }
 
-task("validate-configs", "Validate configuration consistency between upgrade and scratch parameters")
-  .addFlag("silent", "Run in silent mode (no output on success)")
-  .setAction(async (taskArgs) => {
+export const validateConfigsTask = task(
+  "validate-configs",
+  "Validate configuration consistency between upgrade and scratch parameters",
+)
+  .addFlag({ name: "silent", description: "Run in silent mode (no output on success)" })
+  .setInlineAction(async (taskArgs) => {
     const silent = taskArgs.silent;
 
     if (!silent) {
@@ -390,4 +393,5 @@ task("validate-configs", "Validate configuration consistency between upgrade and
         console.log("All parameters that should match are consistent between upgrade and scratch configs.");
       }
     }
-  });
+  })
+  .build();

@@ -1,9 +1,6 @@
-import "./logger";
-import "./overrides";
-import "./extract-abis";
-import "./verify-contracts";
-import "./compile";
-import "./check-interfaces";
-import "./validate-configs";
-import "./lint-solidity";
-import "./protocol-get-addresses";
+export { checkInterfacesTask } from "./check-interfaces.js";
+export { compileOverrideTask } from "./compile.js";
+export { extractAbisTask } from "./extract-abis.js";
+export { lintSolidityTask } from "./lint-solidity.js";
+export { validateConfigsTask } from "./validate-configs.js";
+export { verifyDeployedTask } from "./verify-contracts.js";

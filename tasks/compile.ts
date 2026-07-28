@@ -1,21 +1,21 @@
-import { TASK_COMPILE } from "hardhat/builtin-tasks/task-names";
-import { task } from "hardhat/config";
-import { HardhatRuntimeEnvironment, RunSuperFunction } from "hardhat/types";
+import { overrideTask } from "hardhat/config";
 
-task(TASK_COMPILE, "Compile contracts").setAction(
-  async (_: unknown, hre: HardhatRuntimeEnvironment, runSuper: RunSuperFunction<unknown>) => {
-    await runSuper();
+export const compileOverrideTask = overrideTask("build")
+  .setInlineAction(async (taskArgs, hre, runSuper) => {
+    const result = await runSuper(taskArgs);
 
     if (process.env.SKIP_LINT_SOLIDITY) {
       console.log("Skipping lint-solidity upon compile because SKIP_LINT_SOLIDITY is set");
     } else {
-      await hre.run("lint-solidity");
+      await hre.tasks.getTask("lint-solidity").run();
     }
 
     if (process.env.SKIP_INTERFACES_CHECK) {
       console.log("Skipping interfaces check upon compile because SKIP_INTERFACES_CHECK is set");
     } else {
-      await hre.run("check-interfaces");
+      await hre.tasks.getTask("check-interfaces").run();
     }
-  },
-);
+
+    return result;
+  })
+  .build();

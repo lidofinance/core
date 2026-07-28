@@ -171,6 +171,8 @@ async function runSolhintLinting(): Promise<void> {
   }
 }
 
-task("lint-solidity", "Lint Solidity files with custom rule filtering").setAction(async () => {
-  await runSolhintLinting();
-});
+export const lintSolidityTask = task("lint-solidity", "Lint Solidity files with custom rule filtering")
+  .setInlineAction(async () => {
+    await runSolhintLinting();
+  })
+  .build();
