@@ -1,9 +1,9 @@
 import { ethers } from "hardhat";
-import { VoteItem } from "scripts/utils/omnibus";
+import { VoteItem } from "scripts/utils/omnibus.js";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { IDualGovernance, ITimelock, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types";
+import { IDualGovernance, ITimelock, UpgradeTemplate, UpgradeVoteScript, Voting } from "typechain-types/index.js";
 
 import {
   DeploymentState,
@@ -18,7 +18,7 @@ import {
   or,
   readNetworkState,
   Sk,
-} from "lib";
+} from "lib/index.js";
 
 const PROPOSAL_ID = BigInt(process.env.PROPOSAL_ID || "0");
 const VOTE_ID = BigInt(process.env.VOTE_ID || "0");

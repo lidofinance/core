@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
@@ -10,13 +10,13 @@ import {
   Lido__MockForSanityChecker,
   OracleReportSanityCheckerWrapper,
   StakingRouter__MockForAccountingOracle,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib";
+import { ether, impersonate, randomAddress } from "lib/index.js";
 
-import { getMigrationCLValidatorsBalance } from "../lib";
+import { getMigrationCLValidatorsBalance } from "../lib.js";
 
-import { moduleBalanceFixtureSets } from "./fixtures/index";
+import { moduleBalanceFixtureSets } from "./fixtures/index.js";
 import {
   calcModuleBalanceFormula,
   getPostCLValidatorsBalance,
@@ -27,7 +27,7 @@ import {
   ModuleBalanceStepFixture,
   OracleReportLimits,
   toGwei,
-} from "./lib";
+} from "./lib.js";
 
 describe("OracleReportSanityChecker.sol: module balance formula specs", () => {
   const deployChecker = async (

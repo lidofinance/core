@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
@@ -10,11 +10,11 @@ import {
   Lido__HarnessForFinalizeUpgradeV4,
   LidoLocator,
   OracleReportSanityCheckerWrapper,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { ether, impersonate, proxify, randomAddress } from "lib";
+import { ether, impersonate, proxify, randomAddress } from "lib/index.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/locator";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/locator.js";
 
 export const DAY = 86_400n;
 export const DEPOSIT_SIZE = ether("32");

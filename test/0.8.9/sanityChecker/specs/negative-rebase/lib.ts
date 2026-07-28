@@ -8,7 +8,7 @@ import {
   OracleReportLimits,
   ReportStep,
   ReportStepInput,
-} from "../lib";
+} from "../lib.js";
 
 export const MAX_BASIS_POINTS = 10_000n;
 export const MAX_CL_BALANCE_DECREASE_BP = 360n;

@@ -9,12 +9,12 @@ import {
   readUpgradeParameters,
   writeUpgradeParameterAddress,
   writeUpgradeParameterAddresses,
-} from "scripts/utils/upgrade";
+} from "scripts/utils/upgrade.js";
 
-import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types";
+import { HashConsensus, ValidatorExitDelayVerifier } from "typechain-types/index.js";
 
-import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib";
-import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
+import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib/index.js";
+import { DeploymentState, Sk, updateObjectInState } from "lib/state-file.js";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";
 const STAKING_MODULES_REPO_BRANCH = "develop";

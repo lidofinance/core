@@ -2,14 +2,14 @@ import { expect } from "chai";
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { AccountingOracle__MockForStakingRouter, LidoLocator, StakingRouter__Harness } from "typechain-types";
+import { AccountingOracle__MockForStakingRouter, LidoLocator, StakingRouter__Harness } from "typechain-types/index.js";
 
-import { certainAddress, ether, MAX_TOP_UP_PER_BLOCK_GWEI, randomAddress, randomBytes32, randomWCType1 } from "lib";
+import { certainAddress, ether, MAX_TOP_UP_PER_BLOCK_GWEI, randomAddress, randomBytes32, randomWCType1 } from "lib/index.js";
 
-import { deployLidoLocator, deployStakingRouter } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, deployStakingRouter } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("StakingRouter.sol:misc", () => {
   let deployer: HardhatEthersSigner;

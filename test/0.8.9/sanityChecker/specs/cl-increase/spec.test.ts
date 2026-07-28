@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
@@ -9,9 +9,9 @@ import {
   AccountingOracle__MockForSanityChecker,
   Lido__MockForSanityChecker,
   OracleReportSanityCheckerWrapper,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib";
+import { ether, impersonate, randomAddress } from "lib/index.js";
 
 import {
   deployFinalizeUpgradeV4Checker,
@@ -24,10 +24,10 @@ import {
   moveToFirstPostMigrationReportFrame,
   resolveScenarioSteps,
   setLastVaultBalanceAfterTransfer,
-} from "../lib";
+} from "../lib.js";
 
-import { clIncreaseFixtureSets } from "./fixtures/index";
-import { calcClIncreaseFormula, ClIncreaseCase, OracleReportLimits, ResolvedClIncreaseReport } from "./lib";
+import { clIncreaseFixtureSets } from "./fixtures/index.js";
+import { calcClIncreaseFormula, ClIncreaseCase, OracleReportLimits, ResolvedClIncreaseReport } from "./lib.js";
 
 describe("OracleReportSanityChecker.sol: CL increase formula specs", () => {
   type MockCheckerFixture = {

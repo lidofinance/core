@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
@@ -9,12 +9,12 @@ import {
   AccountingOracle__MockForSanityChecker,
   Lido__MockForSanityChecker,
   OracleReportSanityChecker,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib";
+import { ether, impersonate, randomAddress } from "lib/index.js";
 
-import { DAY } from "./specs/lib";
-import { migrationHoodiNegativeRebaseFormulaFixtureSet } from "./specs/negative-rebase/fixtures/migration-hoodi";
+import { DAY } from "./specs/lib.js";
+import { migrationHoodiNegativeRebaseFormulaFixtureSet } from "./specs/negative-rebase/fixtures/migration-hoodi.js";
 
 type CheckerFixture = {
   checker: OracleReportSanityChecker;

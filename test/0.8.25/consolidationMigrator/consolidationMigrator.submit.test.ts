@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   ConsolidationBus__MockForConsolidationMigrator,
@@ -9,13 +9,13 @@ import {
   SourceModule__MockForConsolidationMigrator,
   StakingRouter__MockForConsolidationMigrator,
   TargetModule__MockForConsolidationMigrator,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "lib/proxy.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
-import { PUBKEYS } from "../consolidation-helpers";
+import { PUBKEYS } from "../consolidation-helpers.js";
 
 describe("ConsolidationMigrator.sol: submit", () => {
   let consolidationMigrator: ConsolidationMigrator;

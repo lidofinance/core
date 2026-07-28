@@ -1,4 +1,4 @@
-import { ether } from "lib";
+import { ether } from "lib/index.js";
 
 import {
   DAY,
@@ -8,7 +8,7 @@ import {
   ModuleBalanceStep,
   OracleReportLimits,
   ReportStep,
-} from "../lib";
+} from "../lib.js";
 
 export { migrate };
 export type { OracleReportLimits };

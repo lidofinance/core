@@ -1,17 +1,17 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   ConsolidationBus__MockForConsolidationMigrator,
   ConsolidationMigrator,
   StakingRouter__MockForConsolidationMigrator,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "lib/proxy.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("ConsolidationMigrator.sol: allowlist", () => {
   let consolidationMigrator: ConsolidationMigrator;

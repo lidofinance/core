@@ -1,8 +1,8 @@
 import { ethers } from "hardhat";
-import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade.js";
 
-import { UpgradeTemplate__factory } from "typechain-types";
-import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig";
+import { UpgradeTemplate__factory } from "typechain-types/index.js";
+import { UpgradeParametersStruct } from "typechain-types/contracts/upgrade/UpgradeConfig.js";
 
 import {
   ConstructorArgs,
@@ -17,7 +17,7 @@ import {
   readNetworkState,
   Sk,
   updateObjectInState,
-} from "lib";
+} from "lib/index.js";
 
 /**
  * Validates that `value` is a non-zero address and returns it unchanged, throwing otherwise.

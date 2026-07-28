@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
-import { deployStakingModules } from "scripts/utils/staking-modules";
+import { deployStakingModules } from "scripts/utils/staking-modules.js";
 
-import { readNetworkState } from "lib/state-file";
+import { readNetworkState } from "lib/state-file.js";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;

@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   BeaconChainDepositor,
@@ -8,11 +8,11 @@ import {
   Lido__MockForStakingRouter,
   LidoLocator,
   StakingRouter__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02, proxify } from "lib";
+import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02, proxify } from "lib/index.js";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator } from "test/deploy/index.js";
 
 export interface DeployStakingRouterSigners {
   deployer: HardhatEthersSigner;

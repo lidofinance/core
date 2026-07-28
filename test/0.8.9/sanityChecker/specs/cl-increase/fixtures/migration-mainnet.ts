@@ -1,7 +1,7 @@
-import { ether } from "lib";
+import { ether } from "lib/index.js";
 
-import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib";
-import { ClIncreaseFixtureSet, migrate, report } from "../lib";
+import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib.js";
+import { ClIncreaseFixtureSet, migrate, report } from "../lib.js";
 
 const mainnetCLValidators = 281_250n;
 const mainnetCLValidatorsBalance = mainnetCLValidators * ether("32");

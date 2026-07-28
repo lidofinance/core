@@ -1,12 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
+import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types/index.js";
 
-import { certainAddress, findEventsWithInterfaces } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { certainAddress, findEventsWithInterfaces } from "lib/index.js";
+import { getProtocolContext, ProtocolContext } from "lib/protocol/index.js";
 import {
   assertConsolidationTopology,
   calcConsolidationBatchHash,
@@ -24,10 +24,10 @@ import {
   norSdvtSetOperatorStakingLimit,
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
-} from "lib/protocol/helpers";
-import { LoadedContract } from "lib/protocol/types";
+} from "lib/protocol/helpers/index.js";
+import { LoadedContract } from "lib/protocol/types.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const fakeWitnessForTarget = (pubkey: string) => ({
   proof: [],

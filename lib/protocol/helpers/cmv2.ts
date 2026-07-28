@@ -2,14 +2,14 @@ import { expect } from "chai";
 import { Contract } from "ethers";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { certainAddress, ether, impersonate, log } from "lib";
+import { certainAddress, ether, impersonate, log } from "lib/index.js";
 
-import { ProtocolContext } from "../types";
+import { ProtocolContext } from "../types.js";
 
-import { depositAndReportValidators } from "./staking";
-import { randomPubkeys, randomSignatures } from "./staking-module";
+import { depositAndReportValidators } from "./staking.js";
+import { randomPubkeys, randomSignatures } from "./staking-module.js";
 
 /**
  * Helpers for preparing real CMv2 (curated-onchain-v2) node operators in integration tests.

@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
@@ -10,9 +10,9 @@ import {
   Lido__MockForSanityChecker,
   OracleReportSanityChecker,
   OracleReportSanityCheckerWrapper,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib";
+import { ether, impersonate, randomAddress } from "lib/index.js";
 
 import {
   deployFinalizeUpgradeV4Checker,
@@ -22,9 +22,9 @@ import {
   migrateFinalizeUpgradeV4State,
   MigrationStep,
   resolveScenarioSteps,
-} from "../lib";
+} from "../lib.js";
 
-import { negativeRebaseFormulaFixtureSets } from "./fixtures/index";
+import { negativeRebaseFormulaFixtureSets } from "./fixtures/index.js";
 import {
   buildStoredReportsModel,
   calcExpectedWindowDiff,
@@ -32,7 +32,7 @@ import {
   OracleReportLimits,
   ResolvedNegativeRebaseStep,
   ResolvedOracleReportFixture,
-} from "./lib";
+} from "./lib.js";
 
 describe("OracleReportSanityChecker.sol: negative rebase formula specs", () => {
   type MockCheckerFixture = {

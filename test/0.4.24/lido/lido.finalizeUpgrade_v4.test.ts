@@ -2,19 +2,19 @@ import { expect } from "chai";
 import { MaxUint256 } from "ethers";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   AccountingOracle__MockForStakingRouter,
   Lido__HarnessForFinalizeUpgradeV4,
   LidoLocator,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { DEPOSITS_RESERVE_TARGET, ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib";
+import { DEPOSITS_RESERVE_TARGET, ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib/index.js";
 
-import { deployLidoLocator } from "test/deploy/locator";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "test/deploy/locator.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Lido.sol:finalizeUpgrade_v4", () => {
   let deployer: HardhatEthersSigner;

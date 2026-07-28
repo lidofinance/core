@@ -1,4 +1,4 @@
-import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade";
+import { checkArtifactDeployedAndLog, readUpgradeParameters } from "scripts/utils/upgrade.js";
 
 import {
   Accounting__factory,
@@ -22,7 +22,7 @@ import {
   UpgradeTemporaryAdmin__factory,
   ValidatorsExitBusOracle__factory,
   WithdrawalVault__factory,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 import {
   ConstructorArgs,
@@ -42,8 +42,8 @@ import {
   MethodArgs,
   readNetworkState,
   Sk,
-} from "lib";
-import { OracleReportSanityCheckerSchema } from "lib/config-schemas";
+} from "lib/index.js";
+import { OracleReportSanityCheckerSchema } from "lib/config-schemas.js";
 
 export async function skip(): Promise<boolean> {
   return await checkArtifactDeployedAndLog(Sk.upgradeTemporaryAdmin);

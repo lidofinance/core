@@ -2,9 +2,9 @@ import { expect } from "chai";
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, ether, updateBalance } from "lib";
+import { advanceChainTime, ether, updateBalance } from "lib/index.js";
 import {
   depositAllocatedValidatorsFromBuffer,
   depositValidatorsWithoutReport,
@@ -16,9 +16,9 @@ import {
   report,
   reportWithoutClActivation,
   setStakingLimit,
-} from "lib/protocol";
+} from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Deposits reserve", () => {
   let ctx: ProtocolContext;

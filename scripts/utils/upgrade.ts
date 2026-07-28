@@ -3,7 +3,7 @@ import fs from "fs";
 import { getMode } from "hardhat.helpers";
 
 import * as toml from "@iarna/toml";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { IDualGovernance, type ITimelock, type TokenManager, type UpgradeTemplate, type UpgradeVoteScript, type Voting } from "typechain-types/index.js";
 

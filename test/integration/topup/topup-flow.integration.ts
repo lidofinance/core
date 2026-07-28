@@ -1,11 +1,11 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, findEventsWithInterfaces, log } from "lib";
-import { randomValidatorPubkey } from "lib/pdg";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { ether, findEventsWithInterfaces, log } from "lib/index.js";
+import { randomValidatorPubkey } from "lib/pdg.js";
+import { getProtocolContext, ProtocolContext } from "lib/protocol/index.js";
 import {
   buildTopUpData,
   cmv2CreateOperatorWithKeys,
@@ -20,9 +20,9 @@ import {
   prepareTopUpWitnesses,
   topUpEnsureDepositableEther,
   topUpEnsureModuleAllocation,
-} from "lib/protocol/helpers";
+} from "lib/protocol/helpers/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const GWEI = 10n ** 9n;
 const toGwei = (wei: bigint) => wei / GWEI;

@@ -1,16 +1,16 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import type { TopUpGateway__Harness } from "typechain-types";
-import { Lido__MockForTopUpGateway, LidoLocator, StakingRouter__MockForTopUpGateway } from "typechain-types";
+import type { TopUpGateway__Harness } from "typechain-types/index.js";
+import { Lido__MockForTopUpGateway, LidoLocator, StakingRouter__MockForTopUpGateway } from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "lib/proxy.js";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("TopUpGateway.sol", () => {
   let admin: HardhatEthersSigner;

@@ -1,7 +1,7 @@
-import { deployStakingModules } from "scripts/utils/staking-modules";
-import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade";
+import { deployStakingModules } from "scripts/utils/staking-modules.js";
+import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade.js";
 
-import { getDeployerSigner, logScriptHeader, readNetworkState, Sk } from "lib";
+import { getDeployerSigner, logScriptHeader, readNetworkState, Sk } from "lib/index.js";
 
 export async function skip(): Promise<boolean> {
   return (await checkArtifactDeployedAndLog(Sk.sm_CM)) && (await checkArtifactDeployedAndLog(Sk.sm_CSM));

@@ -1,12 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types";
+import { ConsolidationBus, ConsolidationGateway, ConsolidationMigrator, NodeOperatorsRegistry } from "typechain-types/index.js";
 
-import { EIP7251_MIN_CONSOLIDATION_FEE, findEventsWithInterfaces, normalizeEIP7251Excess } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { EIP7251_MIN_CONSOLIDATION_FEE, findEventsWithInterfaces, normalizeEIP7251Excess } from "lib/index.js";
+import { getProtocolContext, ProtocolContext } from "lib/protocol/index.js";
 import {
   assertConsolidationTopology,
   calcConsolidationBatchHash,
@@ -18,10 +18,10 @@ import {
   NorOperatorKeys,
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
-} from "lib/protocol/helpers";
-import { LoadedContract } from "lib/protocol/types";
+} from "lib/protocol/helpers/index.js";
+import { LoadedContract } from "lib/protocol/types.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 /**
  * Gas measurement for a full consolidation batch (no mocks):

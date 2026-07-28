@@ -1,10 +1,10 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { CLValidatorVerifier__Harness, SSZValidatorsMerkleTree } from "typechain-types";
+import { CLValidatorVerifier__Harness, SSZValidatorsMerkleTree } from "typechain-types/index.js";
 
-import { generateBeaconHeader, generateValidator, randomBytes32, setBeaconBlockRoot } from "lib/pdg";
-import { prepareLocalMerkleTree } from "lib/top-ups";
+import { generateBeaconHeader, generateValidator, randomBytes32, setBeaconBlockRoot } from "lib/pdg.js";
+import { prepareLocalMerkleTree } from "lib/top-ups.js";
 
 const STATIC_VALIDATOR = {
   blockRoot: "0xbe928e3a9fa76b916df79d78a8b67237f9b133269bb421f37490b7624abad452",

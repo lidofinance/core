@@ -1,7 +1,7 @@
-import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade";
+import { checkArtifactDeployedAndLog } from "scripts/utils/upgrade.js";
 
-import { UpgradeVoteScript__factory } from "typechain-types";
-import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript";
+import { UpgradeVoteScript__factory } from "typechain-types/index.js";
+import { UpgradeVoteScript } from "typechain-types/contracts/upgrade/UpgradeVoteScript.js";
 
 import {
   ConstructorArgs,
@@ -13,7 +13,7 @@ import {
   logStartReview,
   readNetworkState,
   Sk,
-} from "lib";
+} from "lib/index.js";
 
 export async function skip(): Promise<boolean> {
   return await checkArtifactDeployedAndLog(Sk.upgradeVoteScript);

@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   HashConsensus__Harness,
@@ -9,9 +9,9 @@ import {
   StakingModule__MockBadKeys,
   StakingRouter__MockForValidatorsExitBus,
   ValidatorsExitBus__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { numberToHex } from "lib";
+import { numberToHex } from "lib/index.js";
 
 import {
   DATA_FORMAT_LIST,
@@ -20,7 +20,7 @@ import {
   initVEBO,
   makeMockPubkey,
   updateLidoLocatorImplementation,
-} from "test/deploy";
+} from "test/deploy/index.js";
 
 const PUBKEY_AA = "0x" + "aa".repeat(48);
 const PUBKEY_BB = "0x" + "bb".repeat(48);

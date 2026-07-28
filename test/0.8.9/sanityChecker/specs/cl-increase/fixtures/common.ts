@@ -1,7 +1,7 @@
-import { ether } from "lib";
+import { ether } from "lib/index.js";
 
-import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib";
-import { ClIncreaseFixtureSet, report } from "../lib";
+import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib.js";
+import { ClIncreaseFixtureSet, report } from "../lib.js";
 
 export const commonClIncreaseFixtureSet: ClIncreaseFixtureSet = {
   title: "common",

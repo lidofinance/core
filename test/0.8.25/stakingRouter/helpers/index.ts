@@ -2,16 +2,16 @@ import { expect } from "chai";
 import { randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   StakingModule__MockForStakingRouter,
   StakingModuleV2__MockForStakingRouter,
   StakingRouter__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { wcTypeMaxEB } from "lib";
-import { ONE_GWEI, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants";
+import { wcTypeMaxEB } from "lib/index.js";
+import { ONE_GWEI, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants.js";
 
 export const DEFAULT_CONFIG: ModuleConfig = {
   stakeShareLimit: TOTAL_BASIS_POINTS,

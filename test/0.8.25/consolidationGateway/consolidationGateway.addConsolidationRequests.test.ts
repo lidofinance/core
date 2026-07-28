@@ -1,21 +1,21 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   ConsolidationGateway,
   DepositSecurityModule__MockForConsolidationGateway,
   Lido__MockForConsolidationGateway,
   WithdrawalVault__MockForConsolidationGateway,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTree } from "lib";
+import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTree } from "lib/index.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
-import { PUBKEYS } from "../consolidation-helpers";
+import { PUBKEYS } from "../consolidation-helpers.js";
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
 

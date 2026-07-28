@@ -4,9 +4,9 @@ import { ethers } from "hardhat";
 import {
   ConsolidationBus__MockForConsolidationMigrator,
   StakingRouter__MockForConsolidationMigrator,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "lib/proxy.js";
 
 describe("ConsolidationMigrator.sol: deployment", () => {
   let stakingRouter: StakingRouter__MockForConsolidationMigrator;

@@ -1,9 +1,9 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { WithdrawalVault__MockForConsolidationGateway } from "typechain-types";
+import { WithdrawalVault__MockForConsolidationGateway } from "typechain-types/index.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
 
 const DUMMY_GI = "0x0000000000000000000000000000000000000000000000000096000000000028";
 

@@ -1,16 +1,16 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types";
+import { ConsolidationBus, ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
 
-import { advanceChainTime, getCurrentBlockTimestamp } from "lib";
-import { proxify } from "lib/proxy";
+import { advanceChainTime, getCurrentBlockTimestamp } from "lib/index.js";
+import { proxify } from "lib/proxy.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
-import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers";
+import { buildWitnessGroups, PUBKEYS } from "../consolidation-helpers.js";
 
 describe("ConsolidationBus.sol: execution delay", () => {
   let consolidationBus: ConsolidationBus;

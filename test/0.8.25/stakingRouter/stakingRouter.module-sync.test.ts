@@ -2,7 +2,7 @@ import { bigintToHex, bufToHex } from "bigint-conversion";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   AccountingOracle__MockForStakingRouter,
@@ -11,8 +11,8 @@ import {
   LidoLocator,
   StakingModule__MockForStakingRouter,
   StakingRouter__Harness,
-} from "typechain-types";
-import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
+} from "typechain-types/index.js";
+import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter.js";
 
 import {
   ether,
@@ -24,10 +24,10 @@ import {
   StakingModuleStatus,
   wcTypeMaxEB,
   WithdrawalCredentialsType,
-} from "lib";
+} from "lib/index.js";
 
-import { deployLidoLocator, deployStakingRouter } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, deployStakingRouter } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("StakingRouter.sol:module-sync", () => {
   let deployer: HardhatEthersSigner;

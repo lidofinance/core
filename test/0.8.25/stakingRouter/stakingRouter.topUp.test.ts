@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   AccountingOracle__MockForStakingRouter,
@@ -10,15 +10,15 @@ import {
   LidoLocator,
   StakingModuleV2__MockForStakingRouter,
   StakingRouter__Harness,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib";
-import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "lib/constants";
+import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib/index.js";
+import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "lib/constants.js";
 
-import { deployLidoLocator, deployStakingRouter } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, deployStakingRouter } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
-import { CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers";
+import { CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers/index.js";
 
 describe("StakingRouter.sol:topUp", () => {
   let deployer: HardhatEthersSigner;

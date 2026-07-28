@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
   Accounting__MockForSanityChecker,
@@ -13,12 +13,12 @@ import {
   StakingRouter__Harness,
   StakingRouter__MockForAccountingOracle,
   WithdrawalQueue__MockForSanityChecker,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { ether, impersonate, MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib";
+import { ether, impersonate, MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, randomWCType1, WithdrawalCredentialsType } from "lib/index.js";
 
-import { deployStakingRouter } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployStakingRouter } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 const ONE_DAY = 24n * 60n * 60n;
 const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");

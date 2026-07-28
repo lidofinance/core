@@ -1,9 +1,9 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { ConsolidationGateway__MockForConsolidationBus } from "typechain-types";
+import { ConsolidationGateway__MockForConsolidationBus } from "typechain-types/index.js";
 
-import { proxify } from "lib/proxy";
+import { proxify } from "lib/proxy.js";
 
 describe("ConsolidationBus.sol: deployment", () => {
   let consolidationGateway: ConsolidationGateway__MockForConsolidationBus;

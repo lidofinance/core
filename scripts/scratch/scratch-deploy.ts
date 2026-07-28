@@ -1,4 +1,4 @@
-import { getProtocolContext } from "lib/protocol/context";
+import { getProtocolContext } from "lib/protocol/context.js";
 
 async function main() {
   console.log("Starting scratch deploy...");

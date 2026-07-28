@@ -1,7 +1,7 @@
-import { ether } from "lib";
+import { ether } from "lib/index.js";
 
-import { DAY } from "../../lib";
-import { NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib";
+import { DAY } from "../../lib.js";
+import { NegativeRebaseFormulaFixtureSet, repeatReports, report } from "../lib.js";
 
 export const commonNegativeRebaseFormulaFixtureSet: NegativeRebaseFormulaFixtureSet = {
   title: "common",

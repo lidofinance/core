@@ -1,8 +1,8 @@
 import { ethers } from "hardhat";
 
-import { SSZValidatorsMerkleTree } from "typechain-types";
+import { SSZValidatorsMerkleTree } from "typechain-types/index.js";
 
-import { generateValidator } from "lib";
+import { generateValidator } from "lib/index.js";
 
 const DEFAULT_GI_VALIDATOR_0 = "0x0000000000000000000000000000000000000000000000000096000000000028";
 

@@ -1,4 +1,4 @@
-import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01 } from "lib";
+import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01 } from "lib/index.js";
 
 export const ONE_HOUR = 60n * 60n;
 export const ONE_DAY = 24n * 60n * 60n;

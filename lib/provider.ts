@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { log } from "./log";
+import { log } from "./log.js";
 
 const CONNECTION_CLOSED_RETRY_ATTEMPTS = 3;
 const CONNECTION_CLOSED_RETRY_DELAY_MS = 250;

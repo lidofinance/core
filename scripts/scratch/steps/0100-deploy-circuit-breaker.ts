@@ -5,8 +5,8 @@ import { ethers, network as hardhatNetwork } from "hardhat";
 import os from "os";
 import path from "path";
 
-import { cy, deployWithoutProxy, log, warmUpJsonRpcProvider } from "lib";
-import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { cy, deployWithoutProxy, log, warmUpJsonRpcProvider } from "lib/index.js";
+import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 
 const CIRCUIT_BREAKER_REPO = "https://github.com/lidofinance/circuit-breaker.git";
 const CIRCUIT_BREAKER_BRANCH = "deploy-script";

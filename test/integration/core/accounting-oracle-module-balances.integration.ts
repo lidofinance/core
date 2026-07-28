@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { getBigInt } from "ethers";
 
-import { ether, ONE_GWEI } from "lib";
+import { ether, ONE_GWEI } from "lib/index.js";
 import {
   buildModuleAccountingReportParams,
   depositValidatorsWithoutReport,
@@ -15,11 +15,11 @@ import {
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   updateOracleReportLimits,
-} from "lib/protocol";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
+} from "lib/protocol/index.js";
+import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const ONE_DAY = 24n * 60n * 60n;
 const ONE_VALIDATOR_BALANCE_ETH = 32n;
