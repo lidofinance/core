@@ -1,0 +1,7 @@
+{
+  "steps": [
+    "upgrade/steps/0000-check-env",
+    "upgrade/steps/0990-edf-prepare-fork-enact",
+    "upgrade/steps/1000-mock-voting"
+  ]
+}

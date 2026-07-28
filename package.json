@@ -56,10 +56,16 @@
     "deploy:upgrade": "UPGRADE=true yarn deploy:helper:run",
     "deploy:upgrade:base": "STEPS_FILE=upgrade/steps-deploy-base.json yarn deploy:upgrade",
     "deploy:upgrade:edf": "STEPS_FILE=upgrade/steps-edf-deploy.json yarn deploy:upgrade",
+    "deploy:upgrade:edf:contracts": "STEPS_FILE=upgrade/steps-edf-deploy-contracts.json yarn deploy:upgrade",
+    "deploy:upgrade:edf:voting": "STEPS_FILE=upgrade/steps-edf-deploy-voting.json yarn deploy:upgrade",
     "deploy:upgrade:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn deploy:upgrade",
+    "upgrade:edf:enact": "MODE=forking STEPS_FILE=upgrade/steps-edf-enact.json yarn deploy:upgrade",
     "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
     "deploy:upgrade:edf:local": "NETWORK=hoodi RUN_NETWORK=local yarn deploy:upgrade:edf",
+    "deploy:upgrade:edf:contracts:local": "NETWORK=hoodi RUN_NETWORK=local yarn deploy:upgrade:edf:contracts",
+    "deploy:upgrade:edf:voting:local": "NETWORK=hoodi RUN_NETWORK=local yarn deploy:upgrade:edf:voting",
     "deploy:upgrade:template:local": "NETWORK=local yarn deploy:upgrade:template",
+    "upgrade:edf:enact:local": "NETWORK=hoodi RUN_NETWORK=local yarn upgrade:edf:enact",
     "postinstall": "husky"
   },
   "lint-staged": {

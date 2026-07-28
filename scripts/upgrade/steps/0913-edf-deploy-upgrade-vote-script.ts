@@ -9,6 +9,7 @@ import {
   logConfirmReview,
   logScriptHeader,
   logStartReview,
+  persistNetworkState,
   readNetworkState,
   Sk,
 } from "lib";
@@ -30,4 +31,8 @@ export async function main() {
   await logConfirmReview();
 
   await deployWithoutProxy(Sk.upgradeVoteScript, "EDFUpgradeVoteScript", deployer, constructorArgs);
+
+  const updatedState = readNetworkState();
+  delete updatedState[Sk.upgradeVoteScript].voteState;
+  persistNetworkState(updatedState);
 }
