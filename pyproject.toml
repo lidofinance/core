@@ -12,8 +12,12 @@ python = "^3.12.1"
 setuptools = "^78.1.1"
 
 [tool.poetry.group.dev.dependencies]
-slither-analyzer = "^0.10.4"
-slitherin = "^0.7.2"
+# Slither >=0.11.6 requires crytic-compile >=0.4.2, which parses Hardhat 3 build-info.
+# The CI still runs Slither through ci/slither_hh3_alias_shim.py because crytic-compile
+# does not resolve yarn version-aliased npm deps (this repo's three OZ versions).
+# slitherin is intentionally not included: its latest release (0.7.2, 2024) is incompatible
+# with this Slither's API and the project is unmaintained.
+slither-analyzer = "^0.11.6"
 
 [build-system]
 requires = ["poetry-core"]
