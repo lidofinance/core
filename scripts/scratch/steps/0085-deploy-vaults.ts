@@ -1,13 +1,15 @@
+import hre from "hardhat";
+
 import type { VaultHub } from "typechain-types/index.js";
 
 import { deployBehindOssifiableProxy, deployWithoutProxy } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { ether, loadContract, makeTx } from "lib/index.js";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   const stethAddress = state[Sk.appLido].proxy.address;
   const wstethAddress = state[Sk.wstETH].address;
@@ -141,7 +143,7 @@ export async function main() {
     [locatorAddress],
   );
   const validatorConsolidationRequestsAddress = await validatorConsolidationRequests_.getAddress();
-  updateObjectInState(Sk.validatorConsolidationRequests, {
+  await updateObjectInState(Sk.validatorConsolidationRequests, {
     validatorConsolidationRequests: validatorConsolidationRequestsAddress,
   });
 }

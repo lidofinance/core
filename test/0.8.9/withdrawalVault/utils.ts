@@ -1,4 +1,4 @@
-import { ethers } from "lib/hardhat.js";
+import { parseEther } from "ethers";
 
 function toValidatorPubKey(num: number): string {
   if (num < 0 || num > 0xffff) {
@@ -10,7 +10,7 @@ function toValidatorPubKey(num: number): string {
 
 const convertEthToGwei = (ethAmount: string | number): bigint => {
   const ethString = ethAmount.toString();
-  const wei = ethers.parseEther(ethString);
+  const wei = parseEther(ethString);
   return wei / 1_000_000_000n;
 };
 

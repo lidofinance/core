@@ -1,9 +1,10 @@
 import * as process from "node:process";
 
+import hre from "hardhat";
+
 import { log } from "lib/log.js";
 
 import { getMode } from "../../hardhat.helpers.js";
-import { networkConfig } from "../hardhat.js";
 import { readNetworkState, Sk } from "../state-file.js";
 
 import {
@@ -14,7 +15,8 @@ import {
 } from "./mainnet.js";
 import type { ProtocolNetworkItems } from "./types.js";
 
-export function isNonForkingHardhatNetwork() {
+export async function isNonForkingHardhatNetwork() {
+  const { networkConfig } = await hre.network.getOrCreate();
   if (networkConfig.type === "edr-simulated") {
     return !networkConfig.forking?.enabled;
   }
@@ -109,7 +111,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
 }
 
 async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
-  const state = readNetworkState();
+  const state = await readNetworkState();
 
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
@@ -126,7 +128,7 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
 }
 
 async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
-  const state = readNetworkState();
+  const state = await readNetworkState();
 
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),

@@ -1,15 +1,18 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ethers } from "lib/hardhat.js";
 import { ether } from "lib/index.js";
 import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
 import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 describe("Scenario: EL rewards distribution", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let stranger: HardhatEthersSigner;
@@ -17,6 +20,8 @@ describe("Scenario: EL rewards distribution", () => {
   const REWARD_AMOUNT = ether("1");
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     [stranger] = await ethers.getSigners();
     snapshot = await Snapshot.take();

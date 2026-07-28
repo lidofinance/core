@@ -1,14 +1,14 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
 import { type Lido, type LidoLocator } from "typechain-types/index.js";
 
 import { impersonate } from "lib/account.js";
 import { MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 import { advanceChainTime } from "lib/time.js";
 import { ether } from "lib/units.js";
 
@@ -16,6 +16,8 @@ import { deployLidoDao } from "test/deploy/index.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("Lido.sol:externalShares", () => {
+  let ethers: HardhatEthers;
+
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let whale: HardhatEthersSigner;
@@ -30,6 +32,7 @@ describe("Lido.sol:externalShares", () => {
   const maxExternalRatioBP = 1000n;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
     [deployer, user, whale] = await ethers.getSigners();
 
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));

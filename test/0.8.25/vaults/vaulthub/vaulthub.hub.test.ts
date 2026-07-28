@@ -1,7 +1,9 @@
 import { expect } from "chai";
 import { type ContractTransactionReceipt, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
 import type {
@@ -23,7 +25,6 @@ import { impersonate } from "lib/account.js";
 import { certainAddress } from "lib/address.js";
 import { DISCONNECT_NOT_INITIATED, GENESIS_FORK_VERSION, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
 import { findEvents } from "lib/event.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { ceilDiv } from "lib/protocol/helpers/vaults.js";
 import { advanceChainTime, days, getCurrentBlockTimestamp } from "lib/time.js";
 import { ether } from "lib/units.js";
@@ -43,6 +44,9 @@ const TIER_PARAMS: TierParamsStruct = {
 const CONNECT_DEPOSIT = ether("1");
 
 describe("VaultHub.sol:hub", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -137,6 +141,8 @@ describe("VaultHub.sol:hub", () => {
   }
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [deployer, user, stranger, whale] = await ethers.getSigners();
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [

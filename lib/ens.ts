@@ -1,8 +1,9 @@
+import { namehash, ZeroAddress } from "ethers";
+
 import type { ENS } from "typechain-types/index.js";
 
 import { type LoadedContract } from "./contract.js";
 import { makeTx } from "./deploy.js";
-import { ethers } from "./hardhat.js";
 import { streccak } from "./keccak.js";
 import { cy, log, yl } from "./log.js";
 
@@ -18,10 +19,10 @@ export async function assignENSName(
   const assigneeFullDesc = assigneeDesc ? `${yl(assigneeDesc)} at ${cy(assigneeAddress)}` : `${cy(assigneeAddress)}`;
   log(`Assigning ENS name ${yl(`${labelName}.${parentName}`)} to ${assigneeFullDesc}...`);
 
-  const parentNode = ethers.namehash(parentName);
+  const parentNode = namehash(parentName);
   const labelHash = streccak(labelName);
   const nodeName = `${labelName}.${parentName}`;
-  const node = ethers.namehash(nodeName);
+  const node = namehash(nodeName);
 
   log(`Node: ${yl(nodeName)} (${cy(node)})`);
   log(`Parent node: ${yl(parentName)} (${cy(parentNode)})`);
@@ -60,5 +61,5 @@ export async function assignENSName(
 
 export async function getENSNodeOwner(ens: ENS, node: string) {
   const ownerAddr = await ens.owner(node);
-  return ownerAddr == ethers.ZeroAddress ? null : ownerAddr;
+  return ownerAddr == ZeroAddress ? null : ownerAddr;
 }

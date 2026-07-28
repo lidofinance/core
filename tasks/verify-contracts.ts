@@ -38,7 +38,7 @@ export const verifyDeployedTask = task("verify:deployed", "Verifies deployed con
   .addOption({ name: "only", description: "Comma-separated list of paths to contracts to verify", defaultValue: "" })
   .setInlineAction(async (taskArgs, hre) => {
     try {
-      const { networkName } = await hre.network.connect();
+      const { networkName } = await hre.network.getOrCreate();
       log("Verifying contracts for network:", networkName);
 
       const networkStateFile = taskArgs.file || `deployed-${networkName}.json`;

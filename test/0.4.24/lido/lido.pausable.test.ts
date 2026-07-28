@@ -1,16 +1,18 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
 import { type Lido } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
-
 import { deployLidoDao } from "test/deploy/index.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("Lido.sol:pausable", () => {
+  let ethers: HardhatEthers;
+
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -21,6 +23,8 @@ describe("Lido.sol:pausable", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [deployer, user, stranger] = await ethers.getSigners();
 
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));

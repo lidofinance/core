@@ -1,10 +1,12 @@
 import { expect } from "chai";
 import { type Signer } from "ethers";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
 import { BASE_CONSENSUS_VERSION } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 
 import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "test/deploy/index.js";
 import { Snapshot } from "test/suite/index.js";
@@ -12,6 +14,8 @@ import { Snapshot } from "test/suite/index.js";
 const CONSENSUS_VERSION_NEW = 4n;
 
 describe("HashConsensus.sol:submitReport", function () {
+  let ethers: HardhatEthers;
+
   let admin: Signer;
   let member1: Signer;
   let member2: Signer;
@@ -28,6 +32,10 @@ describe("HashConsensus.sol:submitReport", function () {
     frame = await consensus.getCurrentFrame();
     await consensus.addMember(await member1.getAddress(), 1);
   };
+
+  before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+  });
 
   before(deploy);
 

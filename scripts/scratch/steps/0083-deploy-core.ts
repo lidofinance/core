@@ -1,4 +1,6 @@
-import type { type ConsolidationBus, type ConsolidationGateway, type ConsolidationMigrator, StakingRouter, type TopUpGateway, TriggerableWithdrawalsGateway } from "typechain-types/index.js";
+import hre from "hardhat";
+
+import type { StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types/index.js";
 
 import { encodeFunctionCall, getContractPath, loadContract, InitializeArgs } from "lib/contract.js";
 import {
@@ -8,7 +10,6 @@ import {
   deployWithoutProxy,
   makeTx,
 } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { log } from "lib/log.js";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 import { en0x } from "lib/string.js";
@@ -27,8 +28,9 @@ export const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
 export const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  let state = readNetworkState({ deployer });
+  let state = await readNetworkState({ deployer });
 
   // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
@@ -136,7 +138,7 @@ export async function main() {
     deployer,
   );
 
-  state = updateObjectInState(Sk.withdrawalVault, {
+  state = await updateObjectInState(Sk.withdrawalVault, {
     proxy: {
       contract: await getContractPath("WithdrawalsManagerProxy"),
       address: withdrawalsManagerProxy.address,

@@ -1,10 +1,12 @@
+import hre from "hardhat";
+
 import { deployImplementation, deployWithoutProxy } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   // Deploy Aragon app implementations
   await deployImplementation(Sk.appAgent, "Agent", deployer);
@@ -36,5 +38,5 @@ export async function main() {
   ]);
 
   const receipt = await ethers.provider.getTransactionReceipt(template.deploymentTx);
-  updateObjectInState(Sk.lidoTemplate, { deployBlock: receipt?.blockNumber });
+  await updateObjectInState(Sk.lidoTemplate, { deployBlock: receipt?.blockNumber });
 }

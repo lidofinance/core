@@ -1,13 +1,15 @@
 import { expect } from "chai";
 import { randomBytes } from "crypto";
 import { AbiCoder, hexlify } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Address__Harness, Recipient__MockForAddress } from "typechain-types/index.js";
 
 import { certainAddress } from "lib/address.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { batch } from "lib/promise.js";
 
 import { Snapshot } from "test/suite/index.js";
@@ -16,6 +18,9 @@ import { Snapshot } from "test/suite/index.js";
 const INVALID_BYTECODE = "0xFE";
 
 describe("WithdrawalsManagerProxy.sol:address", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
@@ -24,6 +29,8 @@ describe("WithdrawalsManagerProxy.sol:address", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [deployer, user] = await ethers.getSigners();
 
     address = await ethers.deployContract("Address__Harness", deployer);

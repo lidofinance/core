@@ -1,10 +1,11 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { days, ether } from "lib/index.js";
 import {
   createVaultWithDashboard,
@@ -17,6 +18,9 @@ import {
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Vault hub beacon deposits pause flows", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let originalSnapshot: string;
   let snapshot: string;
@@ -34,6 +38,8 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
   let redemptionMaster: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();

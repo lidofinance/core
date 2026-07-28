@@ -1,6 +1,9 @@
-import { ethers } from "lib/hardhat.js";
-import { log } from "lib/log.js";
+import { fileURLToPath } from "node:url";
+
 import { advanceChainTime } from "lib/index.js";
+import { log } from "lib/log.js";
+
+const __filename = fileURLToPath(import.meta.url);
 
 async function main() {
   log.scriptStart(__filename);

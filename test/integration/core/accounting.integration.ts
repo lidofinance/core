@@ -1,22 +1,36 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt, type LogDescription, TransactionResponse, ZeroAddress } from "ethers";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import { LIMITER_PRECISION_BASE } from "lib/constants.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
-import { advanceChainTime, ether, impersonate, updateBalance, ONE_GWEI } from "lib/index.js";
-import { ensureFirstPostMigrationReport, finalizeWQViaElVault, getProtocolContext, getReportTimeElapsed, normalizeWithdrawalVaultBaseline, removeStakingLimit, report, reportWithoutClActivation, seedProtocolPendingBaseline, updateOracleReportLimits, waitNextAvailableReportTime, type ProtocolContext } from "lib/protocol/index.js";
+import { ether, impersonate, ONE_GWEI, updateBalance } from "lib/index.js";
+import {
+  getProtocolContext,
+  getReportTimeElapsed,
+  type ProtocolContext,
+  removeStakingLimit,
+  report,
+} from "lib/protocol/index.js";
 
 import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants.js";
 import { Snapshot } from "test/suite/index.js";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 
 describe("Integration: Accounting", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
 
   let snapshot: string;
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

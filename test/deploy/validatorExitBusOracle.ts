@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
 import type { HashConsensus__Harness, ReportProcessor__Mock, type StakingModule__MockForKeyVerification, ValidatorsExitBusOracle } from "typechain-types/index.js";
 
@@ -10,7 +11,6 @@ import {
   SLOTS_PER_EPOCH,
   VEBO_CONSENSUS_VERSION,
 } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 
 import { deployHashConsensus } from "./hashConsensus.js";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator.js";
@@ -23,6 +23,7 @@ export const MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01 = 32n; // 32 ETH for WC 0x0
 export const MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02 = 2048n; // 2048 ETH for 0x02 validators
 
 async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, genesisTime = GENESIS_TIME) {
+  const { ethers } = await hre.network.getOrCreate();
   const lido = await ethers.deployContract("Accounting__MockForAccountingOracle");
   const ao = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
     await lido.getAddress(),
@@ -32,7 +33,13 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, accounting: string, admin: string) {
+async function deployOracleReportSanityCheckerForExitBus(
+  lidoLocator: string,
+  accountingOracle: string,
+  accounting: string,
+  admin: string,
+) {
+  const { ethers } = await hre.network.getOrCreate();
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
     f.deploy(lidoLocator, accounting, admin, {
       exitedEthAmountPerDayLimit: 0n,
@@ -56,6 +63,7 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ac
 }
 
 async function deployTWG() {
+  const { ethers } = await hre.network.getOrCreate();
   return await ethers.deployContract("TriggerableWithdrawalsGateway__MockForVEB");
 }
 
@@ -69,6 +77,7 @@ export async function deployVEBO(
     initialEpoch = INITIAL_EPOCH,
   } = {},
 ) {
+  const { ethers } = await hre.network.getOrCreate();
   const locator = await deployLidoLocator();
   const locatorAddr = await locator.getAddress();
 

@@ -1,18 +1,36 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
-import { type AccountingOracle__MockForStakingRouter, AccountingOracle__MockForStakingRouter__factory, type Burner__MockForAccounting, Burner__MockForAccounting__factory, type Lido, type LidoExecutionLayerRewardsVault__MockForLidoAccounting, LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory, type LidoLocator, LidoLocator__factory, type StakingRouter__MockForLidoAccounting, StakingRouter__MockForLidoAccounting__factory, type WithdrawalQueue__MockForAccounting, WithdrawalQueue__MockForAccounting__factory, type WithdrawalVault__MockForLidoAccounting, WithdrawalVault__MockForLidoAccounting__factory } from "typechain-types/index.js";
+import {
+  type AccountingOracle__MockForStakingRouter,
+  AccountingOracle__MockForStakingRouter__factory,
+  type Burner__MockForAccounting,
+  Burner__MockForAccounting__factory,
+  type Lido,
+  type LidoExecutionLayerRewardsVault__MockForLidoAccounting,
+  LidoExecutionLayerRewardsVault__MockForLidoAccounting__factory,
+  type LidoLocator,
+  LidoLocator__factory,
+  type StakingRouter__MockForLidoAccounting,
+  StakingRouter__MockForLidoAccounting__factory,
+  type WithdrawalQueue__MockForAccounting,
+  WithdrawalQueue__MockForAccounting__factory,
+  type WithdrawalVault__MockForLidoAccounting,
+  WithdrawalVault__MockForLidoAccounting__factory,
+} from "typechain-types/index.js";
 
 import { impersonate, updateBalance } from "lib/account.js";
-import { ethers } from "lib/hardhat.js";
 import { getNextBlockTimestamp } from "lib/time.js";
 import { ether } from "lib/units.js";
 
 import { deployLidoDao } from "test/deploy/index.js";
 
 describe("Lido:accounting", () => {
+  let ethers: HardhatEthers;
+
   let deployer: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
@@ -26,6 +44,10 @@ describe("Lido:accounting", () => {
   let elRewardsVault: LidoExecutionLayerRewardsVault__MockForLidoAccounting;
   let withdrawalVault: WithdrawalVault__MockForLidoAccounting;
   let accountingOracle: AccountingOracle__MockForStakingRouter;
+
+  before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+  });
 
   beforeEach(async () => {
     [deployer, stranger] = await ethers.getSigners();

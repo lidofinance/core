@@ -1,8 +1,8 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ethers } from "lib/hardhat.js";
 import { impersonate } from "lib/index.js";
 import { ensureExactShareRate, reportVaultDataWithProof } from "lib/protocol/helpers/index.js";
 import {
@@ -16,6 +16,8 @@ import { ether } from "lib/units.js";
 import { SHARE_RATE_PRECISION, Snapshot } from "test/suite/index.js";
 
 describe("Integration: VaultHub Shortfall", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -25,6 +27,7 @@ describe("Integration: VaultHub Shortfall", () => {
   let agentSigner: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

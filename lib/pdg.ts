@@ -1,4 +1,5 @@
 import { hexlify, parseUnits, randomBytes, zeroPadBytes, zeroPadValue } from "ethers";
+import hre from "hardhat";
 
 import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
 
@@ -10,7 +11,6 @@ import type { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-type
 
 import { impersonate } from "./account.js";
 import { computeDepositDataRoot, computeDepositMessageRoot } from "./deposit.js";
-import { ethers } from "./hardhat.js";
 import { de0x } from "./string.js";
 import { ether } from "./units.js";
 
@@ -239,6 +239,7 @@ export interface LocalMerkleTree {
 export const prepareLocalMerkleTree = async (
   gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028",
 ): Promise<LocalMerkleTree> => {
+  const { ethers } = await hre.network.getOrCreate();
   const sszMerkleTree: SSZMerkleTree = await ethers.deployContract("SSZMerkleTree", [gIndex], {});
   const firstValidator = generateValidator();
 

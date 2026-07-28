@@ -1,12 +1,12 @@
 // ToDo: add integration tests for the withdrawal vault
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { WithdrawalVault } from "typechain-types/index.js";
 
 import { impersonate } from "lib/account.js";
-import { ethers } from "lib/hardhat.js";
 import { ether, readWithdrawalRequests } from "lib/index.js";
 import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
@@ -14,11 +14,13 @@ import { encodeEIP7002Payload } from "test/0.8.9/withdrawalVault/eip7002Mock.js"
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: WithdrawalVault: addWithdrawalRequests", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let withdrawalVault: WithdrawalVault;
   let withdrawalVaultAddress: string;
-  let stranger: Awaited<ReturnType<typeof ethers.getSigners>>[number];
+  let stranger: HardhatEthersSigner;
   let gateway: HardhatEthersSigner;
 
   // Example 48-byte pubkeys
@@ -26,6 +28,8 @@ describe("Integration: WithdrawalVault: addWithdrawalRequests", () => {
   const AMOUNTS = [0n, 123456n];
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     snapshot = await Snapshot.take();
 
     ctx = await getProtocolContext();

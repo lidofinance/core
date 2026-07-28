@@ -1,5 +1,6 @@
+import hre from "hardhat";
+
 import { makeTx } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { loadContract } from "lib/index.js";
 import { cy, log, yl } from "lib/log.js";
 import { readNetworkState, Sk } from "lib/state-file.js";
@@ -11,8 +12,9 @@ function formatDate(unixTimestamp: number) {
 }
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   const vesting = state[Sk.vestingParams];
   const pairs = Object.entries(vesting.holders);

@@ -1,17 +1,20 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { StETH__HarnessForWstETH, WstETH } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import { batch } from "lib/promise.js";
 import { ether, ONE_ETHER } from "lib/units.js";
 
 import { Snapshot } from "test/suite/index.js";
 
 describe("WstETH.sol", () => {
+  let ethers: HardhatEthers;
+
   let steth: StETH__HarnessForWstETH;
   let wsteth: WstETH;
 
@@ -21,6 +24,7 @@ describe("WstETH.sol", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
     [deployer, user] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__HarnessForWstETH", [user], { value: ether("1.0"), from: deployer });

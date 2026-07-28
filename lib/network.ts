@@ -1,6 +1,7 @@
-import { ethers } from "./hardhat.js";
+import hre from "hardhat";
 
 export async function getNetworkName(): Promise<string> {
+  const { ethers } = await hre.network.getOrCreate();
   let clientVersion = await ethers.provider.send("web3_clientVersion");
 
   if (typeof clientVersion !== "string") {

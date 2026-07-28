@@ -1,20 +1,31 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { ether, findEvents, findEventsWithInterfaces } from "lib/index.js";
-import { finalizeWQViaElVault, getProtocolContext, reportWithoutClActivation, type ProtocolContext } from "lib/protocol/index.js";
+import {
+  finalizeWQViaElVault,
+  getProtocolContext,
+  type ProtocolContext,
+  reportWithoutClActivation,
+} from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Withdrawal happy path", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let holder: HardhatEthersSigner;
 
   let snapshot: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     snapshot = await Snapshot.take();

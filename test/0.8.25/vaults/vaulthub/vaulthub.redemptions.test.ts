@@ -1,17 +1,21 @@
 import { expect } from "chai";
+import hre from "hardhat";
 import { describe } from "mocha";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { StakingVault__MockForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { ether } from "lib/units.js";
 
 import { deployVaults } from "test/deploy/index.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("VaultHub.sol:redemptions", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let vaultsContext: Awaited<ReturnType<typeof deployVaults>>;
   let vaultHub: VaultHub;
   let disconnectedVault: StakingVault__MockForVaultHub;
@@ -25,6 +29,8 @@ describe("VaultHub.sol:redemptions", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [deployer, user, stranger, redemptionMaster] = await ethers.getSigners();
 
     vaultsContext = await deployVaults({ deployer, admin: user });

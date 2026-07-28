@@ -1,14 +1,15 @@
 import assert from "assert";
+import hre from "hardhat";
 
 import { deployImplementation } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { readNetworkState, Sk } from "lib/state-file.js";
 
 export async function main(): Promise<void> {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
   assert.equal(process.env.DEPLOYER, deployer);
 
-  const state = readNetworkState();
+  const state = await readNetworkState();
 
   //
   // Extract necessary addresses and parameters from the state

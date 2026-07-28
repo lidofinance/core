@@ -1,13 +1,15 @@
 import { expect } from "chai";
 import { parseUnits, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
 import type { Accounting__MockForSanityChecker, AccountingOracle__MockForSanityChecker, Lido__MockForSanityChecker, LidoLocator__MockForSanityChecker, OracleReportSanityCheckerWrapper, StakingRouter__MockForSanityChecker } from "typechain-types/index.js";
 
 import { impersonate } from "lib/account.js";
-import { artifacts, ethers } from "lib/hardhat.js";
+import { getCurrentBlockTimestamp } from "lib/time.js";
 import { ether } from "lib/units.js";
 
 import { Snapshot } from "test/suite/index.js";
@@ -18,7 +20,11 @@ const CL_BALANCE_WINDOW = BigInt(REPORTS_WINDOW) * 24n * 60n * 60n;
 const MAX_BASIS_POINTS = 10_000n;
 const MAX_CL_BALANCE_DECREASE_BP = 360n; // 3.6%
 
+const artifacts = hre.artifacts;
+
 describe("OracleReportSanityChecker.sol:negative-rebase", () => {
+  let ethers: HardhatEthers;
+
   let locator: LidoLocator__MockForSanityChecker;
   let checker: OracleReportSanityCheckerWrapper;
   let accountingOracle: AccountingOracle__MockForSanityChecker;
@@ -114,8 +120,9 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
   };
 
   before(async () => {
-    [deployer, withdrawalVault] = await ethers.getSigners();
-    await setBalance(withdrawalVault.address, ether("10000"));
+    ({ ethers } = await hre.network.getOrCreate());
+
+    [deployer] = await ethers.getSigners();
 
     const sanityCheckerAddress = deployer.address;
 

@@ -1,11 +1,12 @@
 import { expect } from "chai";
+import hre from "hardhat";
 import { describe } from "mocha";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Lido, StakingVault__MockForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { advanceChainTime } from "lib/time.js";
 import { ether } from "lib/units.js";
 
@@ -17,6 +18,9 @@ const GWEI_TO_WEI = 1_000_000_000n;
 const CONNECTION_DEPOSIT = ether("1");
 
 describe("VaultHub.sol:withdrawal", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let vaultsContext: Awaited<ReturnType<typeof deployVaults>>;
   let vaultHub: VaultHub;
   let lido: Lido;
@@ -31,6 +35,8 @@ describe("VaultHub.sol:withdrawal", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [deployer, user, redemptionMaster, stranger] = await ethers.getSigners();
 
     vaultsContext = await deployVaults({ deployer, admin: user });

@@ -1,8 +1,8 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ethers } from "lib/hardhat.js";
 import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "lib/index.js";
 import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
@@ -16,6 +16,8 @@ import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Report Validator Exit Delay", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let rootSnapshot: string;
   let beforeEachSnapshot: string;
@@ -25,6 +27,8 @@ describe("Integration: Report Validator Exit Delay", () => {
   const moduleId = 1; // NOR module ID
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     rootSnapshot = await Snapshot.take();
 

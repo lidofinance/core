@@ -1,4 +1,5 @@
 import { assert } from "chai";
+import hre from "hardhat";
 
 import type { ENS, LidoTemplate } from "typechain-types/index.js";
 
@@ -6,7 +7,6 @@ import { loadContract } from "lib/contract.js";
 import { makeTx } from "lib/deploy.js";
 import { getENSNodeOwner } from "lib/ens.js";
 import { findEvents } from "lib/event.js";
-import { ethers } from "lib/hardhat.js";
 import { streccak } from "lib/keccak.js";
 import { cy, log, mg, yl } from "lib/log.js";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
@@ -23,8 +23,9 @@ function splitDomain(domain: string) {
 }
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
   const templateAddress = state.lidoTemplate.address;
 
   log(`APM ENS domain: ${yl(state.lidoApmEnsName)}`);
@@ -54,7 +55,7 @@ export async function main() {
   const template = await loadContract<LidoTemplate>("LidoTemplate", templateAddress);
   const lidoApmDeployArguments = [parentHash, subHash];
   const receipt = await makeTx(template, "deployLidoAPM", lidoApmDeployArguments, { from: deployer });
-  updateObjectInState(Sk.lidoApm, {
+  await updateObjectInState(Sk.lidoApm, {
     deployArguments: lidoApmDeployArguments,
     deployTx: receipt.hash,
   });
@@ -65,5 +66,5 @@ export async function main() {
   log(`Using APMRegistry: ${cy(registryAddress)}`);
   log.emptyLine();
 
-  updateObjectInState(Sk.lidoApm, { address: registryAddress });
+  await updateObjectInState(Sk.lidoApm, { address: registryAddress });
 }

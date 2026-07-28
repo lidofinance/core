@@ -1,14 +1,16 @@
+import hre from "hardhat";
+
 import { loadContract } from "lib/contract.js";
 import { makeTx } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { readNetworkState, setValueInState, Sk } from "lib/state-file.js";
 
 const NULL_CONTENT_URI =
   "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   const template = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
 
@@ -40,6 +42,6 @@ export async function main() {
   );
 
   // Update state with transaction hashes
-  setValueInState(Sk.lidoTemplateCreateStdAppReposTx, aragonStdAppsReceipt.hash);
-  setValueInState(Sk.createAppReposTx, lidoAppsReceipt.hash);
+  await setValueInState(Sk.lidoTemplateCreateStdAppReposTx, aragonStdAppsReceipt.hash);
+  await setValueInState(Sk.createAppReposTx, lidoAppsReceipt.hash);
 }

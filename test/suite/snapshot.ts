@@ -1,16 +1,19 @@
+import hre from "hardhat";
+
 import { HardhatEthersProvider } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ethers } from "lib/hardhat.js";
-
 export class Snapshot {
-  private static provider: HardhatEthersProvider = ethers.provider;
+  private static async provider(): Promise<HardhatEthersProvider> {
+    const { ethers } = await hre.network.getOrCreate();
+    return ethers.provider;
+  }
 
   public static async take() {
-    return Snapshot.provider.send("evm_snapshot", []);
+    return (await Snapshot.provider()).send("evm_snapshot", []);
   }
 
   public static async restore(snapshot: string) {
-    const result = await Snapshot.provider.send("evm_revert", [snapshot]);
+    const result = await (await Snapshot.provider()).send("evm_revert", [snapshot]);
     if (!result) {
       throw new Error("`evm_revert` failed.");
     }

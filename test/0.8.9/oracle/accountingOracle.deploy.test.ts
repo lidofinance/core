@@ -1,6 +1,8 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
@@ -19,7 +21,6 @@ import {
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
 } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 
 import {
   deployAccountingOracleSetup,
@@ -29,6 +30,12 @@ import {
 } from "test/deploy/index.js";
 
 describe("AccountingOracle.sol:deploy", () => {
+  let ethers: HardhatEthers;
+
+  before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+  });
+
   context("Deployment and initial configuration", () => {
     let admin: HardhatEthersSigner;
     let defaultOracle: AccountingOracle;

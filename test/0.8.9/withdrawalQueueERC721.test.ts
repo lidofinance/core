@@ -1,7 +1,10 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type {
   ERC721Receiver__Mock,
@@ -23,7 +26,6 @@ import {
   WITHDRAWAL_QUEUE_NAME,
   WITHDRAWAL_QUEUE_SYMBOL,
 } from "lib/constants.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { streccak } from "lib/keccak.js";
 import { proxify } from "lib/proxy.js";
 import { ether, shareRate, shares } from "lib/units.js";
@@ -36,6 +38,9 @@ const MOCK_NFT_DESCRIPTOR_BASE_URI = "https://example-descriptor.com/";
 const MOCK_TOKEN_BASE_URL = "https://example.com";
 
 describe("WithdrawalQueueERC721.sol", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let owner: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -56,6 +61,8 @@ describe("WithdrawalQueueERC721.sol", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [owner, user, stranger, tokenManager, finalizer] = await ethers.getSigners();
 
     nftDescriptor = await ethers.deployContract("NFTDescriptor__MockForWithdrawalQueue", [

@@ -1,11 +1,13 @@
+import hre from "hardhat";
+
 import { deployWithoutProxy } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { cy, log } from "lib/log.js";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   let depositContractAddress = state.chainSpec.depositContract;
   if (depositContractAddress) {
@@ -15,7 +17,7 @@ export async function main() {
 
   depositContractAddress = (await deployWithoutProxy(Sk.depositContract, "DepositContract", deployer)).address;
 
-  updateObjectInState(Sk.chainSpec, {
+  await updateObjectInState(Sk.chainSpec, {
     depositContract: depositContractAddress,
   });
 }

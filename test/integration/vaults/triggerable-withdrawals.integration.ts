@@ -1,10 +1,10 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import { impersonate, randomAddress } from "lib/index.js";
 import {
   createVaultWithDashboard,
@@ -19,6 +19,8 @@ import { Snapshot } from "test/suite/index.js";
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 
 describe("Integration: Triggerable Withdrawals", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -31,6 +33,8 @@ describe("Integration: Triggerable Withdrawals", () => {
   let dashboard: Dashboard;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

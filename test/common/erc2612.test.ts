@@ -1,13 +1,16 @@
 import { expect } from "chai";
 import { MaxUint256, Signature, type Signer, type TypedDataDomain, TypedDataEncoder, ZeroAddress } from "ethers";
+import hre from "hardhat";
 import { type ExclusiveSuiteFunction, type PendingSuiteFunction } from "mocha";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { IERC20 } from "typechain-types/@openzeppelin/contracts/token/ERC20/IERC20.js";
 import type { IERC2612 } from "typechain-types/index.js";
 
 import { certainAddress } from "lib/address.js";
 import { type Permit, signPermit } from "lib/eips/eip712.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { days } from "lib/time.js";
 
 import { Snapshot } from "test/suite/index.js";
@@ -25,6 +28,9 @@ interface ERC2612Target {
 
 export function testERC2612Compliance({ tokenName, deploy, suiteFunction = describe }: ERC2612Target) {
   suiteFunction(`${tokenName} ERC-2612 Compliance`, () => {
+    let ethers: HardhatEthers;
+    let networkHelpers: NetworkHelpers;
+
     let token: IERC20 & IERC2612;
     let domain: TypedDataDomain;
     let holder: string;
@@ -36,6 +42,7 @@ export function testERC2612Compliance({ tokenName, deploy, suiteFunction = descr
     let originalState: string;
 
     before(async () => {
+      ({ ethers, networkHelpers } = await hre.network.getOrCreate());
       ({ token, domain, owner: holder, signer } = await deploy());
 
       const holderBalance = await token.balanceOf(holder);

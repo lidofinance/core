@@ -1,10 +1,11 @@
 import { expect } from "chai";
+import { formatEther } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, Lido, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import { BigIntMath, certainAddress, impersonate, TOTAL_BASIS_POINTS } from "lib/index.js";
 import { ceilDiv, reportVaultDataWithProof, setStakingLimit } from "lib/protocol/helpers/index.js";
 import {
@@ -19,6 +20,8 @@ import { ether } from "lib/units.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: VaultHub ", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -32,6 +35,7 @@ describe("Integration: VaultHub ", () => {
   let lido: Lido;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 
@@ -236,7 +240,7 @@ describe("Integration: VaultHub ", () => {
     });
 
     for (const deltaValue of [1n, 2n, 3n, 5n, 10n, 100n, 1000n, ether("1"), ether("10")]) {
-      it(`handles ${ethers.formatEther(deltaValue)} deltas`, async () => {
+      it(`handles ${formatEther(deltaValue)} deltas`, async () => {
         const totalValue = await vaultHub.totalValue(stakingVault);
         const record = await vaultHub.vaultRecord(stakingVault);
         const connection = await vaultHub.vaultConnection(stakingVault);

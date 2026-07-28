@@ -1,10 +1,12 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { LidoLocator } from "typechain-types/index.js";
 
 import { randomAddress } from "lib/address.js";
-import { ethers } from "lib/hardhat.js";
 
 const services = [
   "accountingOracle",
@@ -49,10 +51,14 @@ function randomConfig(): Config {
 }
 
 describe("LidoLocator.sol", () => {
+  let ethers: HardhatEthers;
+
   const config = randomConfig();
   let locator: LidoLocator;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     locator = await ethers.deployContract("LidoLocator", [config]);
   });
 

@@ -1,6 +1,8 @@
 import { expect } from "chai";
 import { ZeroHash } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
@@ -13,7 +15,6 @@ import type {
 } from "typechain-types/index.js";
 
 import { AO_CONSENSUS_VERSION, GENESIS_TIME, ONE_GWEI, SECONDS_PER_SLOT } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 import {
   calcExtraDataListHash,
   calcReportDataHash,
@@ -39,6 +40,8 @@ import {
 } from "test/deploy/index.js";
 
 describe("AccountingOracle.sol:happyPath", () => {
+  let ethers: HardhatEthers;
+
   let consensus: HashConsensus__Harness;
   let oracle: AccountingOracle__Harness;
   let oracleVersion: number;
@@ -61,6 +64,8 @@ describe("AccountingOracle.sol:happyPath", () => {
   let stranger: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [admin, member1, member2, member3, stranger] = await ethers.getSigners();
 
     const deployed = await deployAndConfigureAccountingOracle(admin.address);

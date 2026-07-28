@@ -1,16 +1,20 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Lido } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { ether } from "lib/index.js";
 import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 
 describe("Staking limits", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let lido: Lido;
   let snapshot: string;
@@ -19,6 +23,8 @@ describe("Staking limits", () => {
   let agent: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

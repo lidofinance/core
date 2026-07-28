@@ -1,11 +1,13 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Dashboard, ERC20__Harness, EthRejector, Lido, StakingVault, WstETH } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { ether, impersonate } from "lib/index.js";
 import {
   autofillRoles,
@@ -23,6 +25,9 @@ import { Snapshot } from "test/suite/index.js";
 const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -41,6 +46,8 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
   let wstETH: WstETH;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

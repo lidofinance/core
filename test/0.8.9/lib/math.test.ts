@@ -1,13 +1,18 @@
 import { expect } from "chai";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Math__Harness } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
-
 describe("Math.sol", () => {
+  let ethers: HardhatEthers;
+
   let math: Math__Harness;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     math = await ethers.deployContract("Math__Harness");
   });
 

@@ -1,7 +1,8 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
 import type {
@@ -25,7 +26,6 @@ import {
   MAX_RESERVE_RATIO_BP,
   MAX_UINT96,
 } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 import { getNextBlockTimestamp } from "lib/time.js";
 import { ether } from "lib/units.js";
 
@@ -40,6 +40,7 @@ const LIQUIDITY_FEE = 400;
 const RESERVATION_FEE = 100;
 
 describe("OperatorGrid.sol", () => {
+  let ethers: HardhatEthers;
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let vaultHubAsSigner: HardhatEthersSigner;
@@ -91,6 +92,8 @@ describe("OperatorGrid.sol", () => {
   };
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [deployer, vaultOwner, stranger, nodeOperator1, nodeOperator2] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForOperatorGrid");

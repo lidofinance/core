@@ -1,10 +1,11 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -17,6 +18,9 @@ import { ether } from "lib/units.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Unhealthy vault", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -28,6 +32,8 @@ describe("Integration: Unhealthy vault", () => {
   let dashboard: Dashboard;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     const { stakingVaultFactory, vaultHub } = ctx.contracts;
     originalSnapshot = await Snapshot.take();

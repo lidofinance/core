@@ -1,4 +1,5 @@
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
 import type { DAOFactory, ENS } from "typechain-types/index.js";
 
@@ -6,7 +7,6 @@ import { loadContract, type LoadedContract } from "lib/contract.js";
 import { deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy.js";
 import { assignENSName } from "lib/ens.js";
 import { findEvents } from "lib/event.js";
-import { ethers } from "lib/hardhat.js";
 import { streccak } from "lib/keccak.js";
 import { cy, log, mg, yl } from "lib/log.js";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
@@ -43,6 +43,7 @@ async function deployAPM(
 }
 
 async function deployAragonID(owner: string, ens: LoadedContract<ENS>) {
+  const { ethers } = await hre.network.getOrCreate();
   // Get public resolver
   const publicNode = ethers.namehash("resolver.eth");
   const publicResolverAddress = await ens.resolver(publicNode);
@@ -65,8 +66,9 @@ async function deployAragonID(owner: string, ens: LoadedContract<ENS>) {
 }
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  let state = readNetworkState({ deployer });
+  let state = await readNetworkState({ deployer });
 
   let ens: LoadedContract<ENS>;
 
@@ -81,7 +83,7 @@ export async function main() {
     const ensAddress = findEvents(receipt, "DeployENS")[0].args.ens;
 
     ens = await loadContract<ENS>("ENS", ensAddress);
-    state = updateObjectInState(Sk.ens, {
+    state = await updateObjectInState(Sk.ens, {
       address: ensAddress,
       constructorArgs: [],
       contract: ens.contractPath,
@@ -134,8 +136,8 @@ export async function main() {
     apmRegistryFactory,
   );
 
-  updateObjectInState(Sk.ensNode, { nodeName: ensNodeName, nodeIs: ensNode });
-  state = updateObjectInState(Sk.aragonApmRegistry, {
+  await updateObjectInState(Sk.ensNode, { nodeName: ensNodeName, nodeIs: ensNode });
+  state = await updateObjectInState(Sk.aragonApmRegistry, {
     proxy: {
       address: apmRegistry.address,
       contract: apmRegistry.contractPath,

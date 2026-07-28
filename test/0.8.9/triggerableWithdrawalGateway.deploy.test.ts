@@ -1,16 +1,21 @@
 import { expect } from "chai";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { StakingRouter__MockForTWG, WithdrawalVault__MockForTWG } from "typechain-types/index.js";
-
-import { ethers } from "lib/hardhat.js";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator.js";
 
 describe("TriggerableWithdrawalsGateway.sol: deployment", () => {
+  let ethers: HardhatEthers;
+
   let withdrawalVault: WithdrawalVault__MockForTWG;
   let stakingRouter: StakingRouter__MockForTWG;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     const locator = await deployLidoLocator();
     const locatorAddr = await locator.getAddress();
 

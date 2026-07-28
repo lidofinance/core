@@ -1,6 +1,8 @@
 import { expect } from "chai";
 import { encodeBytes32String } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
@@ -16,7 +18,6 @@ import {
 } from "typechain-types/index.js";
 
 import { certainAddress } from "lib/address.js";
-import { ethers } from "lib/hardhat.js";
 import { addNodeOperator, type NodeOperatorConfig, RewardDistributionState } from "lib/nor.js";
 
 import { addAragonApp, deployLidoDao } from "test/deploy/index.js";
@@ -31,6 +32,8 @@ enum UpdateTargetLimitsMethods {
 }
 
 describe("NodeOperatorsRegistry.sol:validatorsLimits", () => {
+  let ethers: HardhatEthers;
+
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -84,6 +87,8 @@ describe("NodeOperatorsRegistry.sol:validatorsLimits", () => {
   const contractVersionV3 = 3n;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager, stranger] =
       await ethers.getSigners();
 

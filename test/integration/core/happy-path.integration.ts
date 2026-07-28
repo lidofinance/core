@@ -1,11 +1,21 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt, Result, TransactionResponse, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ethers } from "lib/hardhat.js";
-import { advanceChainTime, batch, ether, log, updateBalance, ONE_GWEI } from "lib/index.js";
-import { adjustReportModuleBalances, buildModuleAccountingReportParams, depositAllocatedValidatorsFromBuffer, ensureFirstPostMigrationReport, finalizeWQViaElVault, getProtocolContext, normalizeWithdrawalVaultBaseline, norSdvtEnsureOperators, removeStakingLimit, report, reportWithoutClActivation, setStakingLimit, submitReportDataWithConsensusAndEmptyExtraData, type OracleReportParams, type ProtocolContext } from "lib/protocol/index.js";
+import { advanceChainTime, batch, ether, impersonate, log, updateBalance } from "lib/index.js";
+import {
+  finalizeWQViaElVault,
+  getProtocolContext,
+  norSdvtEnsureOperators,
+  type OracleReportParams,
+  type ProtocolContext,
+  removeStakingLimit,
+  report,
+  setStakingLimit,
+} from "lib/protocol/index.js";
 
 import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
@@ -15,6 +25,8 @@ import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 const AMOUNT = ether("100");
 
 describe("Scenario: Protocol Happy Path", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -28,6 +40,8 @@ describe("Scenario: Protocol Happy Path", () => {
   let norPendingDepositsGwei: bigint;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     [stEthHolder, stranger] = await ethers.getSigners();

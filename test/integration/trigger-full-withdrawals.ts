@@ -1,8 +1,9 @@
 // ToDo: write test for triggerFullWithdrawals
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   NodeOperatorsRegistry,
@@ -11,13 +12,14 @@ import type {
   WithdrawalVault,
 } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import { ether } from "lib/index.js";
 import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
 import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 describe("Scenario: TriggerFullWithdrawals", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -44,6 +46,8 @@ describe("Scenario: TriggerFullWithdrawals", () => {
   ];
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     [authorizedEntity, stranger, admin] = await ethers.getSigners();

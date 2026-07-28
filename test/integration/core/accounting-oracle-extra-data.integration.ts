@@ -1,13 +1,21 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib/index.js";
 import { EXTRA_DATA_FORMAT_LIST, type KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle.js";
 import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting.js";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
-import { getProtocolContext, reportWithEffectiveClDiff, seedProtocolPendingBaseline, type OracleReportParams, type ProtocolContext } from "lib/protocol/index.js";
+import {
+  getProtocolContext,
+  type OracleReportParams,
+  type ProtocolContext,
+  reportWithEffectiveClDiff,
+  seedProtocolPendingBaseline,
+} from "lib/protocol/index.js";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite/index.js";
 
@@ -16,6 +24,9 @@ const NUM_NEWLY_EXITED_VALIDATORS = 1n;
 const MAIN_REPORT_EFFECTIVE_CL_REWARD = ether("1");
 
 describe("Integration: AccountingOracle extra data", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
 
@@ -25,6 +36,8 @@ describe("Integration: AccountingOracle extra data", () => {
   let exitedKeys: KeyType;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

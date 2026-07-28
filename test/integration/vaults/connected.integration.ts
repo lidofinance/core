@@ -1,11 +1,11 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import { advanceChainTime, days, ether, impersonate, randomAddress, TOTAL_BASIS_POINTS } from "lib/index.js";
 import {
   createVaultWithDashboard,
@@ -23,6 +23,8 @@ const TEST_STETH_AMOUNT_WEI = 100n;
 const CONNECT_DEPOSIT = ether("1");
 
 describe("Integration: Actions with vault connected to VaultHub", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -40,6 +42,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   let testSharesAmountWei: bigint;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

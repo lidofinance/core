@@ -1,14 +1,19 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
-import { ether, impersonate } from "lib/index.js";
-import { getDepositedSinceLastReport, getProtocolContext, reportWithoutClActivation, resetCLBalanceDecreaseWindow, type ProtocolContext } from "lib/protocol/index.js";
+import { ether } from "lib/index.js";
+import { getProtocolContext, type ProtocolContext, report } from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Negative rebase", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let ethHolder: HardhatEthersSigner;
 
@@ -16,6 +21,8 @@ describe("Integration: Negative rebase", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     snapshot = await Snapshot.take();

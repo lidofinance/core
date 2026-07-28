@@ -1,11 +1,11 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
 import type { Dashboard, DepositContract, StakingVault } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import {
   addressToWC,
   certainAddress,
@@ -34,6 +34,8 @@ import {
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Actions with vault disconnected from hub", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -47,6 +49,8 @@ describe("Integration: Actions with vault disconnected from hub", () => {
   let stranger: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

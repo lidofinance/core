@@ -1,7 +1,8 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   LazyOracle__MockForNodeOperatorFee,
@@ -17,7 +18,6 @@ import type {
 
 import { ABNORMALLY_HIGH_FEE_THRESHOLD_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
 import { findEvents } from "lib/event.js";
-import { ethers } from "lib/hardhat.js";
 import { advanceChainTime, days, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib/time.js";
 import { ether } from "lib/units.js";
 
@@ -27,6 +27,7 @@ import { Snapshot } from "test/suite/index.js";
 const BP_BASE = 10000n;
 
 describe("NodeOperatorFee.sol", () => {
+  let ethers: HardhatEthers;
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
@@ -53,6 +54,8 @@ describe("NodeOperatorFee.sol", () => {
   const initialConfirmExpiry = days(7n);
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [deployer, vaultOwner, stranger, vaultDepositor, nodeOperatorManager, nodeOperatorFeeExempter] =
       await ethers.getSigners();
 

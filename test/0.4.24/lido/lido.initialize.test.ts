@@ -1,13 +1,14 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import { type Lido, type LidoLocator } from "typechain-types/index.js";
 
 import { certainAddress } from "lib/address.js";
 import { INITIAL_STETH_HOLDER } from "lib/constants.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { streccak } from "lib/keccak.js";
 import { proxify } from "lib/proxy.js";
 
@@ -16,6 +17,9 @@ import { Snapshot } from "test/suite/index.js";
 import { DEPOSITS_RESERVE_TARGET } from "lib/index.js";
 
 describe("Lido.sol:initialize", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let deployer: HardhatEthersSigner;
 
   let lido: Lido;
@@ -23,6 +27,7 @@ describe("Lido.sol:initialize", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
     [deployer] = await ethers.getSigners();
     const impl = await ethers.deployContract("Lido", {
       signer: deployer,

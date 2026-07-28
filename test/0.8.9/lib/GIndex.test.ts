@@ -1,9 +1,10 @@
 import { expect } from "chai";
 import { type BigNumberish, type BytesLike, randomBytes, ZeroHash, zeroPadValue } from "ethers";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { GIndex__Harness, GIndexLibrary__Harness } from "typechain-types/index.js";
-
-import { ethers } from "lib/hardhat.js";
 
 import { Snapshot } from "test/suite/index.js";
 
@@ -55,6 +56,8 @@ class GIndexWrapper {
 }
 
 describe("GIndex", () => {
+  let ethers: HardhatEthers;
+
   let originalState: string;
 
   let gIndexTest: GIndex__Harness;
@@ -66,6 +69,8 @@ describe("GIndex", () => {
   let MAX: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     // Deploy the test contracts
     gIndexTest = await ethers.deployContract("GIndex__Harness");
     library = await ethers.deployContract("GIndexLibrary__Harness");

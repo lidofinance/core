@@ -1,6 +1,5 @@
 import { type Addressable, Signature, type Signer, type TypedDataDomain } from "ethers";
-
-import { networkConfig } from "../hardhat.js";
+import hre from "hardhat";
 
 export interface Permit {
   owner: string;
@@ -11,6 +10,7 @@ export interface Permit {
 }
 
 export async function stethDomain(verifyingContract: Addressable): Promise<TypedDataDomain> {
+  const { networkConfig } = await hre.network.getOrCreate();
   return {
     name: "Liquid staked Ether 2.0",
     version: "2",
@@ -20,6 +20,7 @@ export async function stethDomain(verifyingContract: Addressable): Promise<Typed
 }
 
 export async function wstethDomain(verifyingContract: Addressable): Promise<TypedDataDomain> {
+  const { networkConfig } = await hre.network.getOrCreate();
   return {
     name: "Wrapped liquid staked Ether 2.0",
     version: "1",

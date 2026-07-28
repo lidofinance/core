@@ -1,5 +1,6 @@
+import hre from "hardhat";
+
 import { impersonate } from "../account.js";
-import { ethers } from "../hardhat.js";
 
 // Address of the Beacon Block Storage contract, which exposes beacon chain roots.
 // This corresponds to `BEACON_ROOTS_ADDRESS` as specified in EIP-4788.
@@ -24,6 +25,7 @@ export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
 };
 
 export const ensureEIP4788BeaconBlockRootContractPresent = async (): Promise<void> => {
+  const { ethers } = await hre.network.getOrCreate();
   const code = await ethers.provider.getCode(BEACON_ROOTS_ADDRESS);
 
   if (code === "0x") {

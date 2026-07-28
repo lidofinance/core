@@ -1,13 +1,13 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
+import hre from "hardhat";
 import { beforeEach } from "mocha";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { StETH__Harness } from "typechain-types/index.js";
 
 import { impersonate } from "lib/account.js";
-import { ethers } from "lib/hardhat.js";
 import { batch } from "lib/promise.js";
 import { ether, ONE_ETHER } from "lib/units.js";
 
@@ -19,6 +19,8 @@ const ONE_SHARE = 10n ** 18n;
 const INITIAL_SHARES_HOLDER = "0x000000000000000000000000000000000000dead";
 
 describe("StETH.sol:non-ERC-20 behavior", () => {
+  let ethers: HardhatEthers;
+
   let deployer: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
   let recipient: HardhatEthersSigner;
@@ -34,6 +36,8 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     zeroAddressSigner = await impersonate(ZeroAddress, ONE_ETHER);
 
     [deployer, holder, recipient, spender] = await ethers.getSigners();

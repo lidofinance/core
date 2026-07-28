@@ -1,11 +1,13 @@
 import { expect } from "chai";
 import { ZeroHash } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { DSMPauseMessage, ether, findEventsWithInterfaces, impersonate } from "lib/index.js";
 import { setSingleGuardian } from "lib/protocol/helpers/dsm.js";
 import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
@@ -13,6 +15,9 @@ import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js"
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: DSM pause deposits", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
   let dsm: DepositSecurityModule;
@@ -21,6 +26,8 @@ describe("Integration: DSM pause deposits", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     dsm = ctx.contracts.depositSecurityModule;
 

@@ -1,12 +1,14 @@
+import hre from "hardhat";
+
 import type { LidoLocator } from "typechain-types/index.js";
 
 import { updateProxyImplementation } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { getAddress, readNetworkState, Sk } from "lib/state-file.js";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   // Extract necessary addresses and parameters from the state using getAddress
   const locatorAddress = getAddress(Sk.lidoLocator, state);

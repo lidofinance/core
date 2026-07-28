@@ -1,3 +1,5 @@
+import hre from "hardhat";
+
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import {
@@ -8,9 +10,9 @@ import {
 } from "typechain-types/index.js";
 
 import { certainAddress } from "lib/address.js";
-import { ethers } from "lib/hardhat.js";
 
 async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, deployer?: HardhatEthersSigner) {
+  const { ethers } = await hre.network.getOrCreate();
   if (!deployer) {
     [deployer] = await ethers.getSigners();
   }
@@ -49,6 +51,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
 }
 
 export async function deployLidoLocator(config?: Partial<LidoLocator.ConfigStruct>, deployer?: HardhatEthersSigner) {
+  const { ethers } = await hre.network.getOrCreate();
   if (!deployer) {
     [deployer] = await ethers.getSigners();
   }
@@ -66,6 +69,7 @@ async function updateImplementation(
   customLocator?: string,
   proxyOwner?: HardhatEthersSigner,
 ) {
+  const { ethers } = await hre.network.getOrCreate();
   if (!proxyOwner) {
     [proxyOwner] = await ethers.getSigners();
   }
@@ -99,6 +103,7 @@ export async function updateLidoLocatorImplementation(
 }
 
 async function getLocatorConfig(locatorAddress: string): Promise<LidoLocator.ConfigStruct> {
+  const { ethers } = await hre.network.getOrCreate();
   const locator = await ethers.getContractAt("LidoLocator", locatorAddress);
 
   const addresses = [

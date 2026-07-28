@@ -1,15 +1,21 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { AccountingOracle__Harness } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
-
 import { deployAndConfigureAccountingOracle } from "test/deploy/index.js";
 
 describe("AccountingOracle.sol:upgrade", () => {
-  context("finalizeUpgrade_v5", () => {
+  let ethers: HardhatEthers;
+
+  before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+  });
+
+  context("finalizeUpgrade_v3", () => {
     let admin: HardhatEthersSigner;
     let oracle: AccountingOracle__Harness;
     const NEW_CONSENSUS_VERSION = 42n; // Just a test value

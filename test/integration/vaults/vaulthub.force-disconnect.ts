@@ -1,10 +1,10 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import { BigIntMath, DISCONNECT_NOT_INITIATED, impersonate } from "lib/index.js";
 import {
   changeTier,
@@ -23,6 +23,8 @@ import { ether } from "lib/units.js";
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: VaultHub:force-disconnect", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -36,6 +38,8 @@ describe("Integration: VaultHub:force-disconnect", () => {
   let vaultHub: VaultHub;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     originalSnapshot = await Snapshot.take();
     [, owner, nodeOperator, vaultMaster] = await ethers.getSigners();
     ctx = await getProtocolContext();

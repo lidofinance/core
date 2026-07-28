@@ -1,8 +1,10 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt, hexlify } from "ethers";
+import hre from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
 import type {
@@ -17,7 +19,6 @@ import type {
   VaultHub,
 } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import {
   advanceChainTime,
   days,
@@ -78,6 +79,9 @@ type ValidatorInfo = {
 
 resetState(
   describe("Scenario: Vault Happy Path with PDG Paused (Unguaranteed & Side Deposits)", () => {
+    let ethers: HardhatEthers;
+    let networkHelpers: NetworkHelpers;
+
     let ctx: ProtocolContext;
 
     // EOAs
@@ -115,6 +119,8 @@ resetState(
     const fundAmount = ether("200");
 
     before(async () => {
+      ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
       [, vaultOwner, nodeOperator, nodeOperatorManager, stranger] = await ethers.getSigners();
 
       ctx = await getProtocolContext();

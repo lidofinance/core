@@ -1,10 +1,10 @@
 import { assert } from "chai";
+import hre from "hardhat";
 
 import type { ENS } from "typechain-types/index.js";
 
 import { loadContract } from "lib/contract.js";
 import { makeTx } from "lib/deploy.js";
-import { ethers } from "lib/hardhat.js";
 import { streccak } from "lib/keccak.js";
 import { cy, log, mg, yl } from "lib/log.js";
 import { readNetworkState, Sk } from "lib/state-file.js";
@@ -12,9 +12,10 @@ import { readNetworkState, Sk } from "lib/state-file.js";
 const TLD = "eth";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployerSigner = await ethers.provider.getSigner();
   const deployer = deployerSigner.address;
-  const state = readNetworkState({ deployer });
+  const state = await readNetworkState({ deployer });
 
   // Load ENS contract
   log(`Using ENS: ${cy(state[Sk.ens].address)}`);

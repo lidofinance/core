@@ -1,7 +1,9 @@
 import { expect } from "chai";
 import { getBigInt, MaxUint256, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type {
   Dashboard,
@@ -26,7 +28,6 @@ import { certainAddress } from "lib/address.js";
 import { DISCONNECT_NOT_INITIATED } from "lib/constants.js";
 import { deployEIP7002WithdrawalRequestContract, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "lib/eips/eip7002.js";
 import { findEvents } from "lib/event.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { PDGPolicy, randomValidatorPubkey } from "lib/pdg.js";
 import { days, getCurrentBlockTimestamp } from "lib/time.js";
 import { ether } from "lib/units.js";
@@ -37,6 +38,8 @@ import { Snapshot } from "test/suite/index.js";
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 describe("Dashboard.sol", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -163,6 +166,8 @@ describe("Dashboard.sol", () => {
   };
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [deployer, vaultOwner, nodeOperator, stranger, user] = await ethers.getSigners();
 
     await deployEIP7002WithdrawalRequestContract();

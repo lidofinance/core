@@ -1,18 +1,32 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import { advanceChainTime, days, getCurrentBlockTimestamp, MAX_UINT256, SECONDS_PER_SLOT } from "lib/index.js";
 import { simulateReport } from "lib/protocol/helpers/accounting.js";
-import { createVaultWithDashboard, getProtocolContext, getReportTimeElapsed, reportVaultDataWithProof, reportVaultsDataWithProof, reportWithoutClActivation, resetDefaultTierShareLimit, setupLidoForVaults, upDefaultTierShareLimit, waitNextAvailableReportTime, type ProtocolContext } from "lib/protocol/index.js";
+import {
+  createVaultWithDashboard,
+  getProtocolContext,
+  getReportTimeElapsed,
+  type ProtocolContext,
+  reportVaultDataWithProof,
+  reportVaultsDataWithProof,
+  reportWithoutClActivation,
+  resetDefaultTierShareLimit,
+  setupLidoForVaults,
+  upDefaultTierShareLimit,
+  waitNextAvailableReportTime,
+} from "lib/protocol/index.js";
 import { ether } from "lib/units.js";
 
 import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Vault with bad debt", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -25,6 +39,8 @@ describe("Integration: Vault with bad debt", () => {
   let dashboard: Dashboard;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     const { lido, stakingVaultFactory, vaultHub } = ctx.contracts;
     originalSnapshot = await Snapshot.take();

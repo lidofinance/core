@@ -1,9 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import hre from "hardhat";
 import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch.js";
-
-import { networkConfig, networkName as hardhatNetworkName } from "./hardhat.js";
 
 const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";
@@ -283,14 +282,14 @@ export function updateSubObjectInState(contractKey: Sk, subKey: string, suppleme
   return state as unknown as DeploymentState;
 }
 
-export function readNetworkState({
+export async function readNetworkState({
   deployer,
   networkStateFile,
 }: {
   deployer?: string;
   networkStateFile?: string;
 } = {}) {
-  const fileName = _getStateFileFileName(networkStateFile);
+  const fileName = await _getStateFileFileName(networkStateFile);
   const state = _readStateFile(fileName);
 
   // Validate the deployer
@@ -299,6 +298,7 @@ export function readNetworkState({
   }
 
   // Validate the chainId
+  const { networkConfig } = await hre.network.getOrCreate();
   const networkChainId = networkConfig.chainId;
   if (state[Sk.chainSpec].chainId && networkChainId !== parseInt(state[Sk.chainSpec].chainId)) {
     throw new Error(
@@ -309,44 +309,44 @@ export function readNetworkState({
   return state;
 }
 
-export function updateObjectInState(key: Sk, supplement: object): DeploymentState {
-  const state = readNetworkState();
+export async function updateObjectInState(key: Sk, supplement: object): Promise<DeploymentState> {
+  const state = await readNetworkState();
   state[key] = {
     ...state[key],
     ...supplement,
   };
-  persistNetworkState(state);
+  await persistNetworkState(state);
   return state as unknown as DeploymentState;
 }
 
 // path is either top level key or array of keys
-export function setValueInState(key: Sk, value: unknown): DeploymentState {
-  const state = readNetworkState();
+export async function setValueInState(key: Sk, value: unknown): Promise<DeploymentState> {
+  const state = await readNetworkState();
   state[key] = value;
-  persistNetworkState(state);
+  await persistNetworkState(state);
   return state;
 }
 
-export function incrementGasUsed(increment: bigint | number, useStateFile = true, key: Sk = Sk.scratchDeployGasUsed) {
+export async function incrementGasUsed(increment: bigint | number, useStateFile = true) {
   if (!useStateFile) {
     return;
   }
 
-  const state = readNetworkState();
-  state[key] = (BigInt(state[key] || 0) + BigInt(increment)).toString();
-  persistNetworkState(state);
+  const state = await readNetworkState();
+  state[Sk.scratchDeployGasUsed] = (BigInt(state[Sk.scratchDeployGasUsed] || 0) + BigInt(increment)).toString();
+  await persistNetworkState(state);
 }
 
 export async function resetStateFileFromDeployParams(): Promise<void> {
-  const fileName = _getStateFileFileName();
+  const fileName = await _getStateFileFileName();
   const scratchParams = readScratchParameters();
   const initialState = scratchParametersToDeploymentState(scratchParams);
   const data = JSON.stringify(_sortKeysAlphabetically(initialState), null, 2);
   writeFileSync(fileName, `${data}\n`, { encoding: "utf8", flag: "w" });
 }
 
-export function persistNetworkState(state: DeploymentState): void {
-  const fileName = _getStateFileFileName();
+export async function persistNetworkState(state: DeploymentState): Promise<void> {
+  const fileName = await _getStateFileFileName();
   const stateSorted = _sortKeysAlphabetically(state);
   const data = JSON.stringify(stateSorted, null, 2);
 
@@ -357,12 +357,14 @@ export function persistNetworkState(state: DeploymentState): void {
   }
 }
 
-function _getStateFileFileName(networkStateFile = "") {
+async function _getStateFileFileName(networkStateFile = "") {
   // Use the specified network state file or the one from the environment
   networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
-  return networkStateFile
-    ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
-    : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetworkName);
+  if (networkStateFile) {
+    return resolve(NETWORK_STATE_FILE_DIR, networkStateFile);
+  }
+  const { networkName } = await hre.network.getOrCreate();
+  return _getFileName(NETWORK_STATE_FILE_DIR, networkName);
 }
 
 function _getFileName(dir: string, networkName: string, prefix: string = NETWORK_STATE_FILE_PREFIX) {

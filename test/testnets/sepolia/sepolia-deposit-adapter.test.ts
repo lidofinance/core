@@ -1,12 +1,13 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ISepoliaDepositContract, SepoliaDepositAdapter } from "typechain-types/index.js";
 
 import { findEvents } from "lib/event.js";
-import { ethers } from "lib/hardhat.js";
 import { ether } from "lib/units.js";
 
 import { Snapshot } from "test/suite/index.js";
@@ -16,6 +17,8 @@ import { Snapshot } from "test/suite/index.js";
 // Then run the tests with the following command:
 // RPC_URL=http://127.0.0.1:8545 npx hardhat test test/testnets/sepolia/sepolia-deposit-adapter.test.ts --network sepolia
 describe("SepoliaDepositAdapter.sol", () => {
+  let ethers: HardhatEthers;
+
   let originalState: string;
 
   let owner: HardhatEthersSigner;
@@ -35,6 +38,7 @@ describe("SepoliaDepositAdapter.sol", () => {
   };
 
   before(async function () {
+    ({ ethers } = await hre.network.getOrCreate());
     const { chainId } = await ethers.provider.getNetwork();
     log("chainId", chainId);
     if (chainId !== 11155111n) {

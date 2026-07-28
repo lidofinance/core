@@ -1,19 +1,21 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub } from "typechain-types/index.js";
 
 import { randomAddress } from "lib/address.js";
 import { TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 import { ether } from "lib/units.js";
 
 import { deployLidoLocator } from "test/deploy/index.js";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
 
 describe("VaultHub.sol:initialization", () => {
+  let ethers: HardhatEthers;
+
   let admin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let holder: HardhatEthersSigner;
@@ -29,6 +31,8 @@ describe("VaultHub.sol:initialization", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [admin, user, holder, stranger] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: ether("10.0") });

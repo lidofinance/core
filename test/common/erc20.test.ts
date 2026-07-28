@@ -1,12 +1,13 @@
 import { expect } from "chai";
 import { parseUnits } from "ethers";
+import hre from "hardhat";
 import { type ExclusiveSuiteFunction, type PendingSuiteFunction } from "mocha";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ERC20 } from "typechain-types/@openzeppelin/contracts/token/ERC20/ERC20.js";
 
-import { ethers } from "lib/hardhat.js";
 import { batch } from "lib/promise.js";
 
 import { Snapshot } from "test/suite/index.js";
@@ -55,6 +56,8 @@ interface ERC20Target {
  */
 export function testERC20Compliance({ tokenName, deploy, suiteFunction = describe }: ERC20Target) {
   suiteFunction(`${tokenName} ERC-20 Compliance`, () => {
+    let ethers: HardhatEthers;
+
     let token: ERC20;
     let name: string;
     let symbol: string;
@@ -68,6 +71,7 @@ export function testERC20Compliance({ tokenName, deploy, suiteFunction = describ
     let originalState: string;
 
     before(async () => {
+      ({ ethers } = await hre.network.getOrCreate());
       ({ token, name, symbol, decimals, totalSupply, holder, spender, recipient } = await deploy());
     });
 

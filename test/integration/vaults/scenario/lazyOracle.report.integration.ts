@@ -1,10 +1,11 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import { MAX_SANE_SETTLED_GROWTH } from "lib/index.js";
 import {
   createVaultWithDashboard,
@@ -18,6 +19,8 @@ import { advanceChainTime } from "lib/time.js";
 import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 describe("Scenario: Lazy Oracle prevents overwriting freshly reconnected vault report", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -27,6 +30,8 @@ describe("Scenario: Lazy Oracle prevents overwriting freshly reconnected vault r
   let dashboard: Dashboard;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

@@ -1,11 +1,13 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { NodeOperatorsRegistry } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import {
   advanceChainTime,
   ether,
@@ -57,6 +59,9 @@ class ListKeyMapHelper<ValueType> {
 }
 
 describe("Integration: AccountingOracle extra data full items", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
 
@@ -66,6 +71,8 @@ describe("Integration: AccountingOracle extra data full items", () => {
   let maxItemsPerExtraDataTransaction: number;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

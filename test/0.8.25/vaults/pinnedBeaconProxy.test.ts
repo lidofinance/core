@@ -1,7 +1,9 @@
 import { expect } from "chai";
 import { keccak256 } from "ethers";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type {
   DepositContract__MockForBeaconChainDepositor,
@@ -12,13 +14,15 @@ import type {
 } from "typechain-types/index.js";
 
 import { randomAddress } from "lib/address.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 
 import { Snapshot } from "test/suite/index.js";
 
 const PINNED_BEACON_STORAGE_SLOT = "0x8d75cfa6c9a3cd2fb8b6d445eafb32adc5497a45b333009f9000379f7024f9f5";
 
 describe("PinnedBeaconProxy.sol", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
 
@@ -30,6 +34,8 @@ describe("PinnedBeaconProxy.sol", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [deployer, admin] = await ethers.getSigners();
 
     // Deploy mock deposit contract

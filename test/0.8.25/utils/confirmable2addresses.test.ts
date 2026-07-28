@@ -1,18 +1,20 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Confirmable2Addresses__Harness } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
-
 describe("Confirmable2Addresses", () => {
+  let ethers: HardhatEthers;
   let confirmer1: HardhatEthersSigner;
   let confirmer2: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let confirmable: Confirmable2Addresses__Harness;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [confirmer1, confirmer2, stranger] = await ethers.getSigners();
     confirmable = await ethers.deployContract("Confirmable2Addresses__Harness");
     await confirmable.setConfirmers(confirmer1, confirmer2);

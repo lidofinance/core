@@ -1,8 +1,9 @@
 import { expect } from "chai";
 import { hexlify, MaxUint256, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
 import type {
   Dashboard,
@@ -14,7 +15,6 @@ import type {
   WstETH,
 } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
 import {
   advanceChainTime,
   days,
@@ -55,6 +55,8 @@ type ValidatorInfo = {
 };
 
 describe("Integration: Dashboard Full Coverage", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -78,6 +80,8 @@ describe("Integration: Dashboard Full Coverage", () => {
   let beaconBlockHeader: SSZBLSHelpers.BeaconBlockHeaderStruct;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 

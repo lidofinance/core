@@ -1,13 +1,22 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ethers } from "lib/hardhat.js";
-import { createVaultWithDashboard, getProtocolContext, reportVaultDataWithProof, reportWithoutClActivation, type ProtocolContext } from "lib/protocol/index.js";
+import {
+  createVaultWithDashboard,
+  getProtocolContext,
+  type ProtocolContext,
+  report,
+  reportVaultDataWithProof,
+} from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 
 describe("Scenario: Lazy Oracle after mainnet upgrade before the first report", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
 
@@ -15,6 +24,8 @@ describe("Scenario: Lazy Oracle after mainnet upgrade before the first report", 
   let nodeOperator: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 

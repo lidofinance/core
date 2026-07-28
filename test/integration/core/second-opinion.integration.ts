@@ -1,10 +1,12 @@
 import { expect } from "chai";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { SecondOpinionOracle__Mock } from "typechain-types/index.js";
 
-import { ethers } from "lib/hardhat.js";
-import { ether, log, ONE_GWEI } from "lib/index.js";
-import { depositValidatorsWithoutReport, getProtocolContext, report, reportWithoutClActivation, resetCLBalanceDecreaseWindow, type ProtocolContext } from "lib/protocol/index.js";
+import { ether, impersonate, log, ONE_GWEI } from "lib/index.js";
+import { getProtocolContext, type ProtocolContext, report } from "lib/protocol/index.js";
 
 import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
@@ -25,6 +27,8 @@ async function getWithdrawalVaultBalance(ctx: ProtocolContext): Promise<bigint> 
 }
 
 describe("Integration: Second opinion", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
 
   let snapshot: string;
@@ -35,6 +39,8 @@ describe("Integration: Second opinion", () => {
   let validatorsBalance: bigint;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     snapshot = await Snapshot.take();

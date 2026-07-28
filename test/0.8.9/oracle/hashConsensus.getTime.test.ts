@@ -1,5 +1,8 @@
 import { expect } from "chai";
 import { type Signer } from "ethers";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus } from "typechain-types/index.js";
 
@@ -11,7 +14,6 @@ import {
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
 } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 
 import { type DeployHashConsensusParams } from "test/deploy/index.js";
 
@@ -25,6 +27,8 @@ async function deployOriginalHashConsensus(
     fastLaneLengthSlots = INITIAL_FAST_LANE_LENGTH_SLOTS,
   }: DeployHashConsensusParams = {},
 ) {
+  const { ethers } = await hre.network.getOrCreate();
+
   const reportProcessor = await ethers.deployContract("ReportProcessor__Mock", [BASE_CONSENSUS_VERSION]);
 
   const consensus = await ethers.deployContract("HashConsensus", [
@@ -47,10 +51,14 @@ async function deployOriginalHashConsensus(
 }
 
 describe("HashConsensus.sol:getTime", function () {
+  let ethers: HardhatEthers;
+
   let admin: Signer;
   let consensus: HashConsensus;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [admin] = await ethers.getSigners();
     const deployed = await deployOriginalHashConsensus(await admin.getAddress());
     consensus = deployed.consensus;

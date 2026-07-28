@@ -1,12 +1,12 @@
 import { assert } from "chai";
 import { ContractTransactionReceipt } from "ethers";
+import hre from "hardhat";
 
 import type { ERCProxy, EVMScriptRegistryFactory, Kernel, LidoTemplate } from "typechain-types/index.js";
 
 import { getContractPath, loadContract, type LoadedContract } from "lib/contract.js";
 import { makeTx } from "lib/deploy.js";
 import { findEvents, findEventsWithInterfaces } from "lib/event.js";
-import { ethers } from "lib/hardhat.js";
 import { cy, log, yl } from "lib/log.js";
 import {
   type DeploymentState,
@@ -62,7 +62,8 @@ function updateAgentVestingAddressPlaceholder(state: DeploymentState) {
 }
 
 async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) {
-  let state = readNetworkState();
+  const { ethers } = await hre.network.getOrCreate();
+  let state = await readNetworkState();
 
   // Extract DAO and token addresses from the event
   const newDAOEvent = findEvents(newDAOReceipt, "TmplDAOAndTokenDeployed")[0];
@@ -70,7 +71,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   const daoTokenAddress = newDAOEvent.args.token;
 
   // Update state with kernel proxy information
-  state = updateObjectInState(Sk.aragonKernel, {
+  state = await updateObjectInState(Sk.aragonKernel, {
     proxy: {
       address: kernelProxyAddress,
       contract: await getContractPath("KernelProxy"),
@@ -80,7 +81,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   });
 
   // Update state with DAO token information
-  state = updateObjectInState(Sk.ldo, {
+  state = await updateObjectInState(Sk.ldo, {
     address: daoTokenAddress,
     contract: await getContractPath("MiniMeToken"),
     constructorArgs: [
@@ -101,7 +102,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     state[Sk.evmScriptRegistryFactory].address,
   );
 
-  state = updateObjectInState(Sk.callsScript, {
+  state = await updateObjectInState(Sk.callsScript, {
     address: await evmScriptRegistryFactory.baseCallScript(),
     contract: await getContractPath("CallsScript"),
     constructorArgs: [],
@@ -155,7 +156,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   }
 
   // Update state with app information
-  state = readNetworkState();
+  state = await readNetworkState();
   for (const [appName, appData] of Object.entries(dataByAppName)) {
     const key = `app:${appName}`;
     const proxyAddress = appData.proxyAddress;
@@ -174,7 +175,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     };
   }
   updateAgentVestingAddressPlaceholder(state);
-  persistNetworkState(state);
+  await persistNetworkState(state);
 
   // Process missing proxies (ACL and EVMScriptRegistry)
   const newAppProxyEvents = findEventsWithInterfaces(newDAOReceipt, "NewAppProxy", [kernel.interface]);
@@ -219,22 +220,23 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
 
   log.emptyLine(); // Make the output more readable
 
-  persistNetworkState(state);
+  await persistNetworkState(state);
 }
 
-function addRepoAddress(state: DeploymentState, key: Sk, repoAddress: string) {
+async function addRepoAddress(state: DeploymentState, key: Sk, repoAddress: string) {
   const entry = state[key];
   entry["aragonApp"]["repo"] = {
     proxy: {
       address: repoAddress,
     },
   };
-  updateObjectInState(key, entry);
+  await updateObjectInState(key, entry);
 }
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  let state = readNetworkState({ deployer });
+  let state = await readNetworkState({ deployer });
 
   const template = await loadContract<LidoTemplate>("LidoTemplate", state[Sk.lidoTemplate].address);
   if (state[Sk.lidoTemplate].deployBlock) {
@@ -243,17 +245,17 @@ export async function main() {
 
   const newDAOReceipt = await doTemplateNewDAO(template, deployer, state[Sk.daoInitialSettings]);
 
-  setValueInState(Sk.lidoTemplateNewDaoTx, newDAOReceipt.hash);
+  await setValueInState(Sk.lidoTemplateNewDaoTx, newDAOReceipt.hash);
 
   await saveStateFromNewDAOTx(newDAOReceipt);
 
   // Save repo addresses for aragon apps
-  state = readNetworkState({ deployer });
+  state = await readNetworkState({ deployer });
   const appRepos = await template.apmRepos();
-  addRepoAddress(state, Sk.appLido, appRepos.lido);
-  addRepoAddress(state, Sk.appNodeOperatorsRegistry, appRepos.nodeOperatorsRegistry);
-  addRepoAddress(state, Sk.appAgent, appRepos.aragonAgent);
-  addRepoAddress(state, Sk.appFinance, appRepos.aragonFinance);
-  addRepoAddress(state, Sk.appTokenManager, appRepos.aragonTokenManager);
-  addRepoAddress(state, Sk.appVoting, appRepos.aragonVoting);
+  await addRepoAddress(state, Sk.appLido, appRepos.lido);
+  await addRepoAddress(state, Sk.appNodeOperatorsRegistry, appRepos.nodeOperatorsRegistry);
+  await addRepoAddress(state, Sk.appAgent, appRepos.aragonAgent);
+  await addRepoAddress(state, Sk.appFinance, appRepos.aragonFinance);
+  await addRepoAddress(state, Sk.appTokenManager, appRepos.aragonTokenManager);
+  await addRepoAddress(state, Sk.appVoting, appRepos.aragonVoting);
 }

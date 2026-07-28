@@ -1,7 +1,9 @@
-import { ethers } from "lib/hardhat.js";
+import hre from "hardhat";
+
 import { cy, log } from "lib/log.js";
 
 export async function main() {
+  const { ethers } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
   if (deployer !== process.env.DEPLOYER) {
     throw new Error(`Deployer address mismatch: env DEPLOYER=${process.env.DEPLOYER}, signer=${deployer}`);

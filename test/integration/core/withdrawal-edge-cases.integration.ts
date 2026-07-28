@@ -1,18 +1,22 @@
 import { expect } from "chai";
+import hre from "hardhat";
 
-import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Lido, WithdrawalQueueERC721 } from "typechain-types/index.js";
 
-import { ethers, networkHelpers } from "lib/hardhat.js";
-import { certainAddress, ether, findEventsWithInterfaces, impersonate, toGwei } from "lib/index.js";
-import { buildModuleAccountingReportParams, depositValidatorsWithoutReport, finalizeWQViaSubmit, getProtocolContext, report, reportWithoutClActivation, resetCLBalanceDecreaseWindow, waitNextAvailableReportTime, type ProtocolContext } from "lib/protocol/index.js";
+import { ether, findEventsWithInterfaces } from "lib/index.js";
+import { finalizeWQViaSubmit, getProtocolContext, type ProtocolContext, report } from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 import { ZeroAddress } from "ethers";
 import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
 
 describe("Integration: Withdrawal edge cases", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalState: string;
@@ -97,6 +101,8 @@ describe("Integration: Withdrawal edge cases", () => {
   };
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
     lido = ctx.contracts.lido;
     wq = ctx.contracts.withdrawalQueue;

@@ -1,12 +1,14 @@
 import { expect } from "chai";
 import { parseUnits, Result } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers, HardhatEthersProvider } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type { Receiver__MockForWithdrawalQueueBase, WithdrawalsQueueBase__Harness } from "typechain-types/index.js";
 
 import { WITHDRAWAL_MAX_BATCHES_LENGTH } from "lib/constants.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { ether, shareRate, shares } from "lib/units.js";
 
 import { Snapshot } from "test/suite/index.js";
@@ -21,6 +23,9 @@ const buildBatchCalculationState = (...args: unknown[]) => ({
 const MAX_BATCHES = Number(WITHDRAWAL_MAX_BATCHES_LENGTH);
 
 describe("WithdrawalQueueBase.sol", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let owner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
@@ -29,7 +34,7 @@ describe("WithdrawalQueueBase.sol", () => {
   let receiver: Receiver__MockForWithdrawalQueueBase;
 
   let originalState: string;
-  let provider: typeof ethers.provider;
+  let provider: HardhatEthersProvider;
 
   // Required for _findCheckpointHint, _calculateClaimableEther, _calcBatch tests
   const setUpRequestsState = async (requestsCount: number, finalizedCount: number) => {
@@ -42,6 +47,8 @@ describe("WithdrawalQueueBase.sol", () => {
   };
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     ({ provider } = ethers);
     [owner, stranger] = await ethers.getSigners();
 

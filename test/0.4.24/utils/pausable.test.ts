@@ -1,17 +1,22 @@
 import { expect } from "chai";
+import hre from "hardhat";
+
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Pausable__Harness } from "typechain-types/index.js";
-
-import { ethers } from "lib/hardhat.js";
 
 import { Snapshot } from "test/suite/index.js";
 
 describe("Pausable.sol", () => {
+  let ethers: HardhatEthers;
+
   let pausable: Pausable__Harness;
 
   let originalState: string;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     pausable = await ethers.deployContract("Pausable__Harness");
     expect(await pausable.isStopped()).to.equal(true);
   });

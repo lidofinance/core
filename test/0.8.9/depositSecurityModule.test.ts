@@ -9,10 +9,13 @@ import {
   ZeroAddress,
   ZeroHash,
 } from "ethers";
+import hre from "hardhat";
+import type { NetworkConfig } from "hardhat/types/config";
 import { describe } from "mocha";
 
-import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { type HardhatEthers, type HardhatEthersProvider, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { PANIC_CODES } from "@nomicfoundation/hardhat-ethers-chai-matchers/panic";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type {
   DepositContract__MockForDepositSecurityModule,
@@ -22,7 +25,6 @@ import type {
 
 import { certainAddress } from "lib/address.js";
 import { DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage } from "lib/dsm.js";
-import { ethers, networkConfig, networkHelpers } from "lib/hardhat.js";
 import { streccak } from "lib/keccak.js";
 import { ether } from "lib/units.js";
 
@@ -61,6 +63,10 @@ function initialParams(): Params {
 }
 
 describe("DepositSecurityModule.sol", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+  let networkConfig: NetworkConfig;
+
   const config = initialParams();
 
   let dsm: DepositSecurityModule;
@@ -77,7 +83,7 @@ describe("DepositSecurityModule.sol", () => {
   let unrelatedGuardian2: Wallet;
 
   let originalState: string;
-  let provider: typeof ethers.provider;
+  let provider: HardhatEthersProvider;
 
   async function getLatestBlock(): Promise<Block> {
     const block = await provider.getBlock("latest");
@@ -126,6 +132,8 @@ describe("DepositSecurityModule.sol", () => {
   }
 
   before(async () => {
+    ({ ethers, networkHelpers, networkConfig } = await hre.network.getOrCreate());
+
     ({ provider } = ethers);
     [admin, stranger] = await ethers.getSigners();
 

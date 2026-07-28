@@ -1,6 +1,6 @@
 import { type AddressLike, resolveAddress } from "ethers";
+import hre from "hardhat";
 
-import { networkHelpers } from "./hardhat.js";
 import { streccak } from "./keccak.js";
 
 const MASK_128_BITS = (1n << 128n) - 1n;
@@ -17,6 +17,7 @@ export type Uint128Pair = {
  * @returns The storage at the given position
  */
 export async function getStorageAtPosition(contract: AddressLike, positionTag: string): Promise<string> {
+  const { networkHelpers } = await hre.network.getOrCreate();
   return networkHelpers.getStorageAt(await resolveAddress(contract), streccak(positionTag));
 }
 

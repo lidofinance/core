@@ -1,7 +1,10 @@
 import { expect } from "chai";
 import { HDNodeWallet, Wallet, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
 import type {
   StETH__HarnessForWithdrawalQueue,
@@ -16,7 +19,6 @@ import {
   WITHDRAWAL_MAX_STETH_WITHDRAWAL_AMOUNT,
   WITHDRAWAL_MIN_STETH_WITHDRAWAL_AMOUNT,
 } from "lib/constants.js";
-import { ethers, networkHelpers } from "lib/hardhat.js";
 import { streccak } from "lib/keccak.js";
 import { proxify } from "lib/proxy.js";
 import { ether, shareRate, shares } from "lib/units.js";
@@ -42,6 +44,9 @@ const DEFAULT_PERMIT = {
 };
 
 describe("WithdrawalQueue.sol", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let aliceWallet: HDNodeWallet;
   let alice: HardhatEthersSigner;
 
@@ -62,6 +67,8 @@ describe("WithdrawalQueue.sol", () => {
   let originalState: string;
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [owner, stranger, user, oracle] = await ethers.getSigners();
 
     stEth = await ethers.deployContract("StETH__HarnessForWithdrawalQueue", []);

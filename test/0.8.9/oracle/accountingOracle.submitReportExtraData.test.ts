@@ -1,6 +1,8 @@
 import { expect } from "chai";
 import { type BigNumberish, ZeroHash } from "ethers";
+import hre from "hardhat";
 
+import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
@@ -12,7 +14,6 @@ import type {
 } from "typechain-types/index.js";
 
 import { AO_CONSENSUS_VERSION, ONE_GWEI } from "lib/constants.js";
-import { ethers } from "lib/hardhat.js";
 import {
   calcExtraDataListHash,
   calcReportDataHash,
@@ -61,7 +62,7 @@ const getDefaultReportFields = (override = {}) => ({
   withdrawalFinalizationBatches: [1],
   simulatedShareRate: 10n ** 27n,
   isBunkerMode: true,
-  vaultsDataTreeRoot: ethers.ZeroHash,
+  vaultsDataTreeRoot: ZeroHash,
   vaultsDataTreeCid: "",
   extraDataFormat: EXTRA_DATA_FORMAT_LIST,
   extraDataHash: ZeroHash,
@@ -70,6 +71,8 @@ const getDefaultReportFields = (override = {}) => ({
 });
 
 describe("AccountingOracle.sol:submitReportExtraData", () => {
+  let ethers: HardhatEthers;
+
   let consensus: HashConsensus__Harness;
   let oracle: AccountingOracle__Harness;
   let oracleVersion: bigint;
@@ -81,6 +84,8 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
   let member1: HardhatEthersSigner;
 
   before(async () => {
+    ({ ethers } = await hre.network.getOrCreate());
+
     [admin, member1] = await ethers.getSigners();
     const deployed = await deployAndConfigureAccountingOracle(admin.address);
     oracle = deployed.oracle;
