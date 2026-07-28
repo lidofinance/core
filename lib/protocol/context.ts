@@ -1,13 +1,18 @@
 import { ContractTransactionReceipt, Interface } from "ethers";
-import hre from "hardhat";
-import { getMode } from "hardhat.helpers";
 
-import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log, toBool } from "lib";
+import { getMode } from "../../hardhat.helpers.js";
+import { impersonate } from "../account.js";
+import { findEventsWithInterfaces } from "../event.js";
+import { networkName } from "../hardhat.js";
+import { log } from "../log.js";
+import { deployScratchProtocol, deployUpgrade } from "../scratch.js";
+import { toBool } from "../string.js";
+import { ether } from "../units.js";
 
-import { discover } from "./discover";
-import { MAINNET_LOCATOR_ADDRESS } from "./mainnet";
-import { provision } from "./provision";
-import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "./types";
+import { discover } from "./discover.js";
+import { MAINNET_LOCATOR_ADDRESS } from "./mainnet.js";
+import { provision } from "./provision.js";
+import { type ProtocolContext, type ProtocolContextFlags, type ProtocolSigners, type Signer } from "./types.js";
 
 const getSigner = async (signer: Signer, balance = ether("100"), signers: ProtocolSigners) => {
   const signerAddress = signers[signer] ?? signer;
@@ -62,7 +67,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
   if (isScratch) {
     await deployScratchProtocol();
   } else if (toBool(process.env.UPGRADE)) {
-    await deployUpgrade(hre.network.name, process.env.STEPS_FILE!);
+    await deployUpgrade(networkName, process.env.STEPS_FILE!);
   }
 
   const { contracts, signers, modules } = await discover(skipV3Contracts);
