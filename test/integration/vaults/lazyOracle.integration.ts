@@ -7,7 +7,14 @@ import type { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-ty
 
 import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib/index.js";
 import { calculateLockedValue, createVaultsReportTree, type VaultReportItem } from "lib/protocol/helpers/vaults.js";
-import { createVaultWithDashboard, getProtocolContext, reportVaultDataWithProof, reportWithoutClActivation, setupLidoForVaults, type ProtocolContext } from "lib/protocol/index.js";
+import {
+  createVaultWithDashboard,
+  getProtocolContext,
+  type ProtocolContext,
+  reportVaultDataWithProof,
+  reportWithoutClActivation,
+  setupLidoForVaults,
+} from "lib/protocol/index.js";
 
 import { Snapshot } from "test/suite/index.js";
 
@@ -680,7 +687,7 @@ describe("Integration: LazyOracle", () => {
           liabilityShares: snapshotLiab,
           maxLiabilityShares: snapshotMaxLiab,
         }),
-      ).to.not.be.reverted;
+      ).to.not.revert(ethers);
     });
 
     it("oracle cannot inflate record.maxLiabilityShares beyond on-chain value", async () => {

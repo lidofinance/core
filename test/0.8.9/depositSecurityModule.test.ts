@@ -13,7 +13,11 @@ import hre from "hardhat";
 import type { NetworkConfig } from "hardhat/types/config";
 import { describe } from "mocha";
 
-import { type HardhatEthers, type HardhatEthersProvider, type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import {
+  type HardhatEthers,
+  type HardhatEthersProvider,
+  type HardhatEthersSigner,
+} from "@nomicfoundation/hardhat-ethers/types";
 import { PANIC_CODES } from "@nomicfoundation/hardhat-ethers-chai-matchers/panic";
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 

@@ -1,9 +1,9 @@
 import readline from "node:readline";
 
-import { ethers, network } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
+import hre from "hardhat";
+import { readUpgradeParameters } from "scripts/utils/upgrade.js";
 
-import { bl, cy, deployImplementation, gr, log, mg, rd, readNetworkState, Sk, yl } from "lib";
+import { bl, cy, deployImplementation, gr, log, mg, rd, readNetworkState, Sk, yl } from "lib/index.js";
 
 async function confirm(question: string): Promise<void> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -20,8 +20,9 @@ async function confirm(question: string): Promise<void> {
 }
 
 export async function main(): Promise<void> {
+  const { ethers, networkName } = await hre.network.getOrCreate();
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState();
+  const state = await readNetworkState();
 
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const lidoAddress = state[Sk.appLido].proxy.address;
@@ -39,7 +40,7 @@ export async function main(): Promise<void> {
   log.splitter();
 
   log.info("Network", {
-    "name": mg(network.name),
+    "name": mg(networkName),
     "chain ID": mg(chainId.toString()),
   });
 

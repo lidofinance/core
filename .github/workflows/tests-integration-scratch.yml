@@ -33,7 +33,11 @@ jobs:
         run: cargo install just
 
       - name: Set env
-        run: cp .env.example .env
+        run: |
+          cp .env.example .env
+          # HH3's configVariable() reads process.env; load .env into the job
+          # environment so all subsequent steps inherit the values.
+          grep -v '^#' .env | grep -v '^[[:space:]]*$' >> "$GITHUB_ENV"
 
       - name: Run scratch deployment
         run: yarn test:integration:scratch
