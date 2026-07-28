@@ -49,10 +49,6 @@ interface IEDFHashConsensus {
     function getMembers() external view returns (address[] memory addresses, uint256[] memory lastReportedRefSlots);
     function getIsMember(address member) external view returns (bool);
     function getQuorum() external view returns (uint256);
-    function getConsensusState()
-        external
-        view
-        returns (uint256 refSlot, bytes32 consensusReport, bool isReportProcessing);
     function addMember(address member, uint256 quorum) external;
     function removeMember(address member, uint256 quorum) external;
 }
@@ -71,11 +67,6 @@ interface IEDFDepositSecurityModule {
     function getGuardians() external view returns (address[] memory);
     function isGuardian(address guardian) external view returns (bool);
     function isDepositsPaused() external view returns (bool);
-    function isMinDepositDistancePassed(uint256 stakingModuleId) external view returns (bool);
-}
-
-interface IEDFStakingRouter {
-    function getStakingModuleIds() external view returns (uint256[] memory);
 }
 
 interface IEDFDelegationContract {

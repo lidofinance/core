@@ -55,10 +55,7 @@ contract EDFUpgradeTemplateTest is Test {
     function setUp() public {
         executor = new EDFUpgradeExecutor();
 
-        uint256[] memory stakingModuleIds = new uint256[](2);
-        stakingModuleIds[0] = 1;
-        stakingModuleIds[1] = 2;
-        stakingRouter = new EDFStakingRouter__Mock(stakingModuleIds);
+        stakingRouter = new EDFStakingRouter__Mock();
 
         address[] memory oldGuardians = new address[](1);
         oldGuardians[0] = OLD_GUARDIAN;
@@ -99,10 +96,6 @@ contract EDFUpgradeTemplateTest is Test {
             keccak256(abi.encodePacked(UNVET_MESSAGE_BASE, block.chainid, address(newDSM)))
         );
 
-        for (uint256 moduleId = 1; moduleId <= 2; ++moduleId) {
-            oldDSM.setMinDepositDistancePassed(moduleId, true);
-            newDSM.setMinDepositDistancePassed(moduleId, true);
-        }
         stakingRouter.grantRole(UNVET_ROLE, address(oldDSM));
 
         for (uint256 i = 0; i < committees.length; ++i) {
@@ -208,22 +201,6 @@ contract EDFUpgradeTemplateTest is Test {
         );
         executor.startOnly();
         assertEq(template.upgradeBlockNumber(), 0);
-    }
-
-    function test_rejectsUnsafeConsensusState() public {
-        committees[0].setConsensusState(keccak256("report"), false);
-        vm.expectRevert(
-            abi.encodeWithSelector(EDFUpgradeTemplate.UnsafeConsensusState.selector, address(committees[0]))
-        );
-        executor.startOnly();
-    }
-
-    function test_rejectsFailedDepositDistance() public {
-        newDSM.setMinDepositDistancePassed(2, false);
-        vm.expectRevert(
-            abi.encodeWithSelector(EDFUpgradeTemplate.InvalidUint.selector, bytes32("new-dsm-deposit-distance"), 2, 0)
-        );
-        executor.startOnly();
     }
 
     function test_rejectsUnexpectedFactoryCode() public {

@@ -6,7 +6,7 @@ import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 import { DepositSecurityModule } from "typechain-types";
 
-import { certainAddress, DSMAttestMessage, ether, impersonate } from "lib";
+import { certainAddress, DSMAttestMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { setGuardians } from "lib/protocol/helpers/dsm";
 import { deployDelegationContract, DeployedDelegationContract } from "lib/protocol/helpers/edf";
@@ -29,7 +29,7 @@ describe("Integration: DSM buffered ether deposit", () => {
     ctx = await getProtocolContext();
     suiteSnapshot = await Snapshot.take();
 
-    if (!ctx.isScratch) this.skip();
+    if (ctx.isMainnet) this.skip();
 
     dsm = ctx.contracts.depositSecurityModule;
     depositContract = new ethers.Contract(await dsm.DEPOSIT_CONTRACT(), DEPOSIT_CONTRACT_ABI, ethers.provider);
@@ -88,10 +88,12 @@ describe("Integration: DSM buffered ether deposit", () => {
     const [moduleBefore] = await stakingRouter.getStakingModuleDigests([stakingModuleId]);
 
     const tx = await dsm.connect(submitter).depositBufferedEther(...signingArgs, signatures);
-    await expect(tx).to.emit(dsm, "LastDepositBlockChanged");
-
     const receipt = await tx.wait();
     if (!receipt) throw new Error("DSM deposit transaction has no receipt");
+
+    const lastDepositBlockEvents = findEventsWithInterfaces(receipt, "LastDepositBlockChanged", [dsm.interface]);
+    expect(lastDepositBlockEvents).to.have.length(1);
+    expect(lastDepositBlockEvents[0].args.newValue).to.equal(receipt.blockNumber);
 
     const bufferedAfter = await lido.getBufferedEther();
     const depositedAfter = (await lido.getBalanceStats()).depositedSinceLastReport;

@@ -28,4 +28,10 @@ export SKIP_LINT_SOLIDITY=true
 prepare_migration_env "test"
 prepare_trace_args
 
-yarn hardhat --network "$RUN_NETWORK" test test/integration/**/*.ts "${TRACE_ARGS[@]}"
+if (($#)); then
+  TEST_FILES=("$@")
+else
+  TEST_FILES=(test/integration/**/*.ts)
+fi
+
+yarn hardhat --network "$RUN_NETWORK" test "${TEST_FILES[@]}" "${TRACE_ARGS[@]}"

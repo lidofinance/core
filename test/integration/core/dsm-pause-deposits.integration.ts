@@ -28,7 +28,7 @@ describe("Integration: DSM pause deposits", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    if (!ctx.isScratch) this.skip();
+    if (ctx.isMainnet) this.skip();
     dsm = ctx.contracts.depositSecurityModule;
 
     [stranger, delegationOwner, delegate] = await ethers.getSigners();
@@ -181,7 +181,7 @@ describe("Integration: DSM pause deposits", () => {
     const guardian = await deployDelegationContract(delegationOwner, currentDelegate.address, cooldown);
     await setSingleGuardian(ctx, guardian.address);
 
-    await (guardian.contract.connect(delegationOwner) as Contract).assignDelegate(nextDelegate.address);
+    await (await (guardian.contract.connect(delegationOwner) as Contract).assignDelegate(nextDelegate.address)).wait();
 
     const blockNumber = await time.latestBlock();
     const pauseMessage = new DSMPauseMessage(guardian.address, blockNumber);
@@ -202,7 +202,7 @@ describe("Integration: DSM pause deposits", () => {
     const guardian = await deployDelegationContract(delegationOwner, currentDelegate.address, cooldown);
     await setSingleGuardian(ctx, guardian.address);
 
-    await (guardian.contract.connect(delegationOwner) as Contract).assignDelegate(nextDelegate.address);
+    await (await (guardian.contract.connect(delegationOwner) as Contract).assignDelegate(nextDelegate.address)).wait();
     await time.increase(cooldown);
 
     const blockNumber = await time.latestBlock();
@@ -225,7 +225,7 @@ describe("Integration: DSM pause deposits", () => {
 
     const blockNumber = await time.latestBlock();
     const sig = new DSMPauseMessage(guardian.address, blockNumber).sign(currentDelegate.privateKey);
-    await (guardian.contract.connect(delegationOwner) as Contract).revokeDelegate();
+    await (await (guardian.contract.connect(delegationOwner) as Contract).revokeDelegate()).wait();
 
     await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
       dsm,
@@ -244,7 +244,7 @@ describe("Integration: DSM pause deposits", () => {
 
     const blockNumber = await time.latestBlock();
     const sig = new DSMPauseMessage(guardian.address, blockNumber).sign(currentDelegate.privateKey);
-    await (guardian.contract.connect(delegationOwner) as Contract).terminate();
+    await (await (guardian.contract.connect(delegationOwner) as Contract).terminate()).wait();
 
     await expect(dsm.connect(stranger).pauseDeposits(blockNumber, sig)).to.be.revertedWithCustomError(
       dsm,

@@ -41,7 +41,7 @@ export const ensureDsmGuardians = async (ctx: ProtocolContext, minGuardiansCount
     count++;
   }
 
-  await dsm.connect(ownerSigner).addGuardians(newGuardians, quorum);
+  await (await dsm.connect(ownerSigner).addGuardians(newGuardians, quorum)).wait();
 
   log.debug("Checked DSM guardians count", {
     "Min guardians count": minGuardiansCount,
@@ -60,10 +60,10 @@ export const setGuardians = async (ctx: ProtocolContext, guardiansToSet: string[
   // Remove all existing guardians
   const guardians = await dsm.getGuardians();
   for (const existingGuardian of guardians) {
-    await dsm.connect(ownerSigner).removeGuardian(existingGuardian, 0);
+    await (await dsm.connect(ownerSigner).removeGuardian(existingGuardian, 0)).wait();
   }
 
-  await dsm.connect(ownerSigner).addGuardians(guardiansToSet, quorum);
+  await (await dsm.connect(ownerSigner).addGuardians(guardiansToSet, quorum)).wait();
 
   log.debug("Set DSM guardians", {
     Guardians: guardiansToSet.join(", "),

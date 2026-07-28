@@ -4,6 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+import { findEventsWithInterfaces } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { readNetworkState, Sk } from "lib/state-file";
 
@@ -45,7 +46,7 @@ describe("Integration: Execution Delegation Framework", () => {
     ctx = await getProtocolContext();
     suiteSnapshot = await Snapshot.take();
 
-    if (!ctx.isScratch) this.skip();
+    if (ctx.isMainnet) this.skip();
 
     const factoryAddress = readNetworkState()[Sk.delegationFactory]?.address;
     if (!factoryAddress) {
@@ -101,14 +102,19 @@ describe("Integration: Execution Delegation Framework", () => {
     const key = "EDF_INTEGRATION_TEST";
     const value = "0xdeadbeef";
 
-    await oracleDaemonConfig.connect(agent).grantRole(role, delegationAddress);
+    await (await oracleDaemonConfig.connect(agent).grantRole(role, delegationAddress)).wait();
 
     await expect(oracleDaemonConfig.connect(delegate).set(key, value)).to.be.reverted;
 
     const data = oracleDaemonConfig.interface.encodeFunctionData("set", [key, value]);
-    await expect(connectSigner(delegation, delegate).execute(oracleDaemonConfig.address, data))
-      .to.emit(oracleDaemonConfig, "ConfigValueSet")
-      .withArgs(key, value);
+    const tx = await connectSigner(delegation, delegate).execute(oracleDaemonConfig.address, data);
+    const receipt = await tx.wait();
+    if (!receipt) throw new Error("DelegationContract execute transaction has no receipt");
+
+    const configValueSetEvents = findEventsWithInterfaces(receipt, "ConfigValueSet", [oracleDaemonConfig.interface]);
+    expect(configValueSetEvents).to.have.length(1);
+    expect(configValueSetEvents[0].args.key).to.equal(key);
+    expect(configValueSetEvents[0].args.value).to.equal(value);
 
     expect(await oracleDaemonConfig.get(key)).to.equal(value);
   });

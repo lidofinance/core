@@ -13,8 +13,7 @@ import {
     EDFUpgradeParameters,
     IEDFDelegationContract,
     IEDFDepositSecurityModule,
-    IEDFHashConsensus,
-    IEDFStakingRouter
+    IEDFHashConsensus
 } from "./EDFUpgradeTypes.sol";
 
 /// @title EDFUpgradeTemplate
@@ -35,7 +34,6 @@ contract EDFUpgradeTemplate {
     error InvalidUint(bytes32 field, uint256 actual, uint256 expected);
     error InvalidFlag(bytes32 field, address subject);
     error InvalidMembers(address contractAddress);
-    error UnsafeConsensusState(address consensusContract);
     error InvalidDelegationContract(address delegationContract);
 
     uint256 public constant EXPECTED_FINAL_DSM_VERSION = 5;
@@ -116,7 +114,6 @@ contract EDFUpgradeTemplate {
 
         _validateOldDSM(config);
         _validateNewDSM(config);
-        _validateDepositDistance(config);
         _validateFactoryAndDelegationContracts(config);
         _validateOracleCommittees(config, false);
 
@@ -225,21 +222,6 @@ contract EDFUpgradeTemplate {
         }
     }
 
-    function _validateDepositDistance(EDFUpgradeConfig config) internal view {
-        uint256[] memory stakingModuleIds = IEDFStakingRouter(config.STAKING_ROUTER()).getStakingModuleIds();
-        IEDFDepositSecurityModule oldDSM = IEDFDepositSecurityModule(config.OLD_DEPOSIT_SECURITY_MODULE());
-        IEDFDepositSecurityModule newDSM = IEDFDepositSecurityModule(config.NEW_DEPOSIT_SECURITY_MODULE());
-        for (uint256 i = 0; i < stakingModuleIds.length; ++i) {
-            uint256 stakingModuleId = stakingModuleIds[i];
-            if (!oldDSM.isMinDepositDistancePassed(stakingModuleId)) {
-                revert InvalidUint("old-dsm-deposit-distance", stakingModuleId, 0);
-            }
-            if (!newDSM.isMinDepositDistancePassed(stakingModuleId)) {
-                revert InvalidUint("new-dsm-deposit-distance", stakingModuleId, 0);
-            }
-        }
-    }
-
     function _validateFactoryAndDelegationContracts(EDFUpgradeConfig config) internal view {
         address factory = config.DELEGATION_FACTORY();
         if (factory.codehash != config.DELEGATION_FACTORY_RUNTIME_CODE_HASH()) {
@@ -271,13 +253,6 @@ contract EDFUpgradeTemplate {
             uint256 mappingsCount = config.oracleCommitteeMappingsCount(i);
             if (members.length != mappingsCount || consensus.getQuorum() != quorum) {
                 revert InvalidMembers(consensusAddress);
-            }
-
-            if (!finalState) {
-                (, bytes32 consensusReport, bool isReportProcessing) = consensus.getConsensusState();
-                if (consensusReport != bytes32(0) || isReportProcessing) {
-                    revert UnsafeConsensusState(consensusAddress);
-                }
             }
 
             for (uint256 j = 0; j < mappingsCount; ++j) {

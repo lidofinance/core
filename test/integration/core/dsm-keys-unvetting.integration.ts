@@ -33,7 +33,7 @@ describe("Integration: DSM keys unvetting", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    if (!ctx.isScratch) this.skip();
+    if (ctx.isMainnet) this.skip();
     dsm = ctx.contracts.depositSecurityModule;
 
     [stranger, delegationOwner, delegate] = await ethers.getSigners();
@@ -74,11 +74,11 @@ describe("Integration: DSM keys unvetting", () => {
     await expect(dsm.connect(stranger).setMaxOperatorsPerUnvetting(1)).to.be.revertedWithCustomError(dsm, "NotAnOwner");
 
     // Owner should be able to set new value
-    await dsm.connect(ownerSigner).setMaxOperatorsPerUnvetting(1);
+    await (await dsm.connect(ownerSigner).setMaxOperatorsPerUnvetting(1)).wait();
     expect(await dsm.getMaxOperatorsPerUnvetting()).to.equal(1);
 
     // Reset to initial value
-    await dsm.connect(ownerSigner).setMaxOperatorsPerUnvetting(initialMaxOperators);
+    await (await dsm.connect(ownerSigner).setMaxOperatorsPerUnvetting(initialMaxOperators)).wait();
   });
 
   it("Should revert when stranger tries to unvet keys without valid guardian signature", async () => {
@@ -242,18 +242,22 @@ describe("Integration: DSM keys unvetting", () => {
     const vettedSigningKeysCounts = ethers.solidityPacked(["uint128"], [vettedSigningKeysCount]);
 
     // Guardian should be able to unvet directly without signature
-    await expect(
-      executeUnvet(guardian.contract, delegate, [
-        blockNumber,
-        blockHash,
-        stakingModuleId,
-        nonce,
-        nodeOperatorIds,
-        vettedSigningKeysCounts,
-      ]),
-    )
-      .to.emit(nor, "VettedSigningKeysCountChanged")
-      .withArgs(operatorId, totalVettedValidatorsAfter);
+    const tx = await executeUnvet(guardian.contract, delegate, [
+      blockNumber,
+      blockHash,
+      stakingModuleId,
+      nonce,
+      nodeOperatorIds,
+      vettedSigningKeysCounts,
+    ]);
+    const receipt = await tx.wait();
+    if (!receipt) throw new Error("DSM unvet transaction has no receipt");
+
+    const unvetEvents = findEventsWithInterfaces(receipt, "VettedSigningKeysCountChanged", [nor.interface]);
+    expect(unvetEvents).to.have.length(1);
+    expect(unvetEvents[0].args.nodeOperatorId).to.equal(operatorId);
+    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(totalVettedValidatorsAfter);
+
     // Verify node operator state after unvetting
     const nodeOperatorAfter = await nor.getNodeOperator(operatorId, true);
     expect(nodeOperatorAfter.totalDepositedValidators).to.equal(totalDepositedValidators);

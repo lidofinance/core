@@ -142,7 +142,6 @@ contract EDFDepositSecurityModule__Mock {
     bool private _depositsPaused;
     address[] private _guardians;
     mapping(address guardian => bool) private _isGuardian;
-    mapping(uint256 moduleId => bool) private _isMinDepositDistancePassed;
 
     constructor(
         uint256 version,
@@ -195,10 +194,6 @@ contract EDFDepositSecurityModule__Mock {
         return _depositsPaused;
     }
 
-    function isMinDepositDistancePassed(uint256 moduleId) external view returns (bool) {
-        return _isMinDepositDistancePassed[moduleId];
-    }
-
     function setPrefixes(bytes32 attest, bytes32 pause, bytes32 unvet) external {
         ATTEST_MESSAGE_PREFIX = attest;
         PAUSE_MESSAGE_PREFIX = pause;
@@ -208,24 +203,11 @@ contract EDFDepositSecurityModule__Mock {
     function setDepositsPaused(bool depositsPaused) external {
         _depositsPaused = depositsPaused;
     }
-
-    function setMinDepositDistancePassed(uint256 moduleId, bool passed) external {
-        _isMinDepositDistancePassed[moduleId] = passed;
-    }
 }
 
 contract EDFStakingRouter__Mock {
     mapping(bytes32 role => mapping(address account => bool)) private _hasRole;
     mapping(bytes32 role => address[]) private _roleMembers;
-    uint256[] private _stakingModuleIds;
-
-    constructor(uint256[] memory stakingModuleIds) {
-        _stakingModuleIds = stakingModuleIds;
-    }
-
-    function getStakingModuleIds() external view returns (uint256[] memory) {
-        return _stakingModuleIds;
-    }
 
     function hasRole(bytes32 role, address account) external view returns (bool) {
         return _hasRole[role][account];
@@ -259,8 +241,6 @@ contract EDFHashConsensus__Mock {
     address[] private _members;
     mapping(address member => bool) private _isMember;
     uint256 private _quorum;
-    bytes32 private _consensusReport;
-    bool private _isReportProcessing;
 
     constructor(address[] memory members, uint256 quorum) {
         _members = members;
@@ -283,10 +263,6 @@ contract EDFHashConsensus__Mock {
         return _quorum;
     }
 
-    function getConsensusState() external view returns (uint256, bytes32, bool) {
-        return (1, _consensusReport, _isReportProcessing);
-    }
-
     function addMember(address member, uint256 quorum) external {
         require(!_isMember[member], "DUPLICATE_MEMBER");
         _isMember[member] = true;
@@ -305,11 +281,6 @@ contract EDFHashConsensus__Mock {
             }
         }
         _quorum = quorum;
-    }
-
-    function setConsensusState(bytes32 consensusReport, bool isReportProcessing) external {
-        _consensusReport = consensusReport;
-        _isReportProcessing = isReportProcessing;
     }
 }
 
