@@ -1,25 +1,26 @@
 import { expect } from "chai";
 import { encodeBytes32String } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
+import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
+import type { Kernel } from "typechain-types/@aragon/os/contracts/kernel/Kernel.js";
+import { type NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory.js";
 import {
-  ACL,
-  Kernel,
-  Lido,
-  LidoLocator,
+  type Lido,
+  type LidoLocator,
   LidoLocator__factory,
   MinFirstAllocationStrategy__factory,
-  NodeOperatorsRegistry__Harness,
+  type NodeOperatorsRegistry__Harness,
   NodeOperatorsRegistry__Harness__factory,
-} from "typechain-types";
-import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory";
+} from "typechain-types/index.js";
 
-import { addNodeOperator, certainAddress, NodeOperatorConfig, prepIdsCountsPayload } from "lib";
+import { certainAddress } from "lib/address.js";
+import { ethers } from "lib/hardhat.js";
+import { addNodeOperator, type NodeOperatorConfig, prepIdsCountsPayload } from "lib/nor.js";
 
-import { addAragonApp, deployLidoDao } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { addAragonApp, deployLidoDao } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("NodeOperatorsRegistry.sol:stakingLimit", () => {
   let deployer: HardhatEthersSigner;
@@ -98,7 +99,7 @@ describe("NodeOperatorsRegistry.sol:stakingLimit", () => {
 
     const allocLib = await new MinFirstAllocationStrategy__factory(deployer).deploy();
     const allocLibAddr: NodeOperatorsRegistryLibraryAddresses = {
-      ["__contracts/common/lib/MinFirstAllocat__"]: await allocLib.getAddress(),
+      ["__project/contracts/common/lib/MinFirs__"]: await allocLib.getAddress(),
     };
 
     impl = await new NodeOperatorsRegistry__Harness__factory(allocLibAddr, deployer).deploy();

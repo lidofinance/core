@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { Signer } from "ethers";
-import { ethers } from "hardhat";
+import { type Signer } from "ethers";
 
-import { HashConsensus__Harness } from "typechain-types";
+import type { HashConsensus__Harness } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION, MAX_UINT256 } from "lib";
+import { BASE_CONSENSUS_VERSION, MAX_UINT256 } from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 
-import { deployHashConsensus, DeployHashConsensusParams, HASH_1 } from "test/deploy";
+import { deployHashConsensus, type DeployHashConsensusParams, HASH_1 } from "test/deploy/index.js";
 
 const prepareFrameData = async ({
   fastLaneMembers,
@@ -166,8 +166,9 @@ describe("HashConsensus.sol:fastlaneMembers", () => {
           await consensus.advanceTimeBySlots(1);
           for (const member of preparedFrameData.restMembers) {
             expect((await consensus.getConsensusStateForMember(member)).canReport).to.be.true;
-            await expect(consensus.connect(member).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION)).not.to
-              .be.reverted;
+            await expect(
+              consensus.connect(member).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION),
+            ).not.to.revert(ethers);
           }
 
           const { variants, support } = await consensus.getReportVariants();

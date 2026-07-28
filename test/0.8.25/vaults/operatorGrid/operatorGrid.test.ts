@@ -1,10 +1,10 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
+import type {
   LidoLocator,
   OperatorGrid,
   OssifiableProxy,
@@ -14,23 +14,23 @@ import {
   VaultHub,
   VaultHub__MockForOperatorGrid,
   WstETH__Harness,
-} from "typechain-types";
-import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
+} from "typechain-types/index.js";
 
+import { impersonate } from "lib/account.js";
+import { certainAddress } from "lib/address.js";
 import {
-  certainAddress,
   DISCONNECT_NOT_INITIATED,
-  ether,
   GENESIS_FORK_VERSION,
-  getNextBlockTimestamp,
-  impersonate,
   MAX_FEE_BP,
   MAX_RESERVE_RATIO_BP,
   MAX_UINT96,
-} from "lib";
+} from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
+import { getNextBlockTimestamp } from "lib/time.js";
+import { ether } from "lib/units.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 const RESERVE_RATIO = 2000;
@@ -685,8 +685,8 @@ describe("OperatorGrid.sol", () => {
         },
       ]);
 
-      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, 1)).not.to.be.reverted;
-      await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V2, 1, 1)).not.to.be.reverted;
+      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, 1)).not.to.revert(ethers);
+      await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V2, 1, 1)).not.to.revert(ethers);
 
       await expect(operatorGrid.connect(stranger).changeTier(vault_NO1_V1, 1, 1)).to.be.revertedWithCustomError(
         operatorGrid,
@@ -728,7 +728,7 @@ describe("OperatorGrid.sol", () => {
         .to.emit(operatorGrid, "RoleMemberConfirmed")
         .withArgs(vaultOwner, vaultOwnerRole, confirmTimestamp, expiryTimestamp, msgData);
 
-      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit)).to.not.be.reverted;
+      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit)).to.not.revert(ethers);
     });
 
     it("changeTier should revert if requested share limit is greater than tier share limit", async function () {
@@ -852,7 +852,7 @@ describe("OperatorGrid.sol", () => {
         },
       ]);
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
-      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit - 1)).to.not.be.reverted;
+      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit - 1)).to.not.revert(ethers);
     });
 
     it("reverts if TierLimitExceeded", async function () {
@@ -1095,7 +1095,7 @@ describe("OperatorGrid.sol", () => {
       await expect(
         operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit),
       ).to.be.revertedWithCustomError(operatorGrid, "VaultNotConnected");
-      await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit)).to.not.be.reverted;
+      await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit)).to.not.revert(ethers);
     });
   });
 
@@ -1264,8 +1264,9 @@ describe("OperatorGrid.sol", () => {
 
       // But should succeed with _bypassLimits=true
       const exceedingAmount = 50;
-      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, exceedingAmount, true)).to.not.be
-        .reverted;
+      await expect(
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, exceedingAmount, true),
+      ).to.not.revert(ethers);
 
       // Verify shares were actually minted beyond the limit
       const tierAfter = await operatorGrid.tier(tier_NO1_Id1);
@@ -1412,8 +1413,9 @@ describe("OperatorGrid.sol", () => {
       ).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
 
       // But bypass should work
-      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, true)).to.not.be
-        .reverted;
+      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, true)).to.not.revert(
+        ethers,
+      );
 
       // Verify shares were minted
       const tier = await operatorGrid.tier(1);
@@ -1438,8 +1440,9 @@ describe("OperatorGrid.sol", () => {
       ).to.be.revertedWithCustomError(operatorGrid, "TierLimitExceeded");
 
       // But bypass should work
-      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, exceedingAmount, true)).to.not.be
-        .reverted;
+      await expect(
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, exceedingAmount, true),
+      ).to.not.revert(ethers);
 
       // Verify shares were minted beyond the limit
       const tierAfter = await operatorGrid.tier(1);
@@ -1463,8 +1466,9 @@ describe("OperatorGrid.sol", () => {
       // Now simulate socializeBadDebt by calling onMintedShares with bypass
       // This should exceed tier limits but still update counters
       const exceedingAmount = 300;
-      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, exceedingAmount, true)).to.not.be
-        .reverted;
+      await expect(
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, exceedingAmount, true),
+      ).to.not.revert(ethers);
 
       // Verify tier counters are still updated correctly despite bypass
       const tierAfter = await operatorGrid.tier(1);
@@ -1613,8 +1617,9 @@ describe("OperatorGrid.sol", () => {
         expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
 
         // Mint shares - should succeed
-        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false)).to.not.be
-          .reverted;
+        await expect(
+          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false),
+        ).to.not.revert(ethers);
 
         // Verify shares were minted
         const tier = await operatorGrid.tier(1);
@@ -1638,8 +1643,9 @@ describe("OperatorGrid.sol", () => {
         expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
 
         // Now minting should succeed
-        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false)).to.not.be
-          .reverted;
+        await expect(
+          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false),
+        ).to.not.revert(ethers);
 
         // Verify shares were minted
         const tier = await operatorGrid.tier(1);
@@ -1655,8 +1661,9 @@ describe("OperatorGrid.sol", () => {
         expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
 
         // Minting with _bypassLimits=true should succeed even when in jail
-        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, true)).to.not.be
-          .reverted;
+        await expect(
+          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, true),
+        ).to.not.revert(ethers);
 
         // Verify shares were minted
         const tier = await operatorGrid.tier(1);
@@ -1772,8 +1779,9 @@ describe("OperatorGrid.sol", () => {
         await operatorGrid.setVaultJailStatus(vaultAddress, true);
 
         // Burning should still be allowed even when jailed
-        await expect(operatorGrid.connect(vaultHubAsSigner).onBurnedShares(vaultAddress, burnAmount)).to.not.be
-          .reverted;
+        await expect(operatorGrid.connect(vaultHubAsSigner).onBurnedShares(vaultAddress, burnAmount)).to.not.revert(
+          ethers,
+        );
 
         // Verify shares were burned
         const tier = await operatorGrid.tier(tierId);

@@ -1,11 +1,11 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractTransactionReceipt, ZeroAddress } from "ethers";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import {
+import type {
   ACL,
   LazyOracle__MockForVaultHub,
   Lido,
@@ -15,15 +15,17 @@ import {
   StakingVault__MockForVaultHub,
   VaultFactory__MockForVaultHub,
   VaultHub,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
-import { ONE_GWEI, TOTAL_BASIS_POINTS } from "lib/constants";
-import { findEvents } from "lib/event";
-import { ceilDiv } from "lib/protocol";
+import { impersonate } from "lib/account.js";
+import { ONE_GWEI, TOTAL_BASIS_POINTS } from "lib/constants.js";
+import { findEvents } from "lib/event.js";
+import { ceilDiv } from "lib/protocol/helpers/vaults.js";
+import { advanceChainTime, days, getCurrentBlockTimestamp } from "lib/time.js";
+import { ether } from "lib/units.js";
 
-import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy/index.js";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
 
 const SHARE_LIMIT = ether("10");
 const RESERVE_RATIO_BP = 20_00n; // 20%
@@ -34,6 +36,9 @@ const RESERVATION_FEE_BP = 1_00n;
 const CONNECT_DEPOSIT = ether("1");
 
 describe("VaultHub.sol:owner-functions", () => {
+  let ethers: HardhatEthers;
+  let networkHelpers: NetworkHelpers;
+
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let newOwner: HardhatEthersSigner;
@@ -109,6 +114,8 @@ describe("VaultHub.sol:owner-functions", () => {
   }
 
   before(async () => {
+    ({ ethers, networkHelpers } = await hre.network.getOrCreate());
+
     [deployer, vaultOwner, newOwner, stranger, recipient] = await ethers.getSigners();
 
     // Deploy dependencies
@@ -321,7 +328,7 @@ describe("VaultHub.sol:owner-functions", () => {
       expect(withdrawable).to.be.lessThanOrEqual(totalValue - locked);
 
       // Should succeed for withdrawable amount
-      await expect(vaultHub.connect(vaultOwner).withdraw(vaultAddress, recipient, withdrawable)).to.not.be.reverted;
+      await expect(vaultHub.connect(vaultOwner).withdraw(vaultAddress, recipient, withdrawable)).to.not.revert(ethers);
 
       // Should fail for more than withdrawable
       if (withdrawable > 0) {
@@ -825,7 +832,7 @@ describe("VaultHub.sol:owner-functions", () => {
       const OVERFLOW256 = MAX_UINT256 - MAX_UINT64 + 1n;
 
       const data = generateTriggerValidatorWithdrawalsData(SAMPLE_PUBKEY, OVERFLOW256, recipient);
-      await expect(vaultOwner.sendTransaction({ to: vaultHub, data, value: ether("1") })).to.be.reverted;
+      await expect(vaultOwner.sendTransaction({ to: vaultHub, data, value: ether("1") })).to.revert(ethers);
     });
 
     it("works for uint64 max value", async function () {
@@ -846,7 +853,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
 
-      await setBalance(vaultAddress, 0n); // simulate vault total value is on Beacon Chain
+      await networkHelpers.setBalance(vaultAddress, 0n); // simulate vault total value is on Beacon Chain
 
       const healthShortfallShares = await vaultHub.healthShortfallShares(vaultAddress);
       const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(healthShortfallShares);
@@ -871,7 +878,7 @@ describe("VaultHub.sol:owner-functions", () => {
         vaultHub
           .connect(vaultOwner)
           .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [1n], recipient, { value: FEE }),
-      ).to.not.be.reverted;
+      ).to.not.revert(ethers);
     });
 
     it("forbids partial withdrawals when vault is unhealthy and requested amount is enough to cover rebalance shortfall", async () => {
@@ -883,7 +890,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
 
-      await setBalance(vaultAddress, 0n); // simulate vault total value is on Beacon Chain
+      await networkHelpers.setBalance(vaultAddress, 0n); // simulate vault total value is on Beacon Chain
 
       const healthShortfallShares = await vaultHub.healthShortfallShares(vaultAddress);
       const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(healthShortfallShares);
@@ -910,7 +917,7 @@ describe("VaultHub.sol:owner-functions", () => {
         vaultHub
           .connect(vaultOwner)
           .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], recipient, { value: FEE }),
-      ).to.not.be.reverted;
+      ).to.not.revert(ethers);
     });
 
     it("reverts when on partial withdrawal with stale report", async () => {
@@ -953,7 +960,7 @@ describe("VaultHub.sol:owner-functions", () => {
       ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
 
       // New owner should be able to operate
-      await expect(vaultHub.connect(newOwner).fund(vaultAddress, { value: ether("1") })).to.not.be.reverted;
+      await expect(vaultHub.connect(newOwner).fund(vaultAddress, { value: ether("1") })).to.not.revert(ethers);
     });
   });
 
@@ -998,7 +1005,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await vaultHub.connect(vaultOwner).connectVault(vaultAddress);
 
       // Should be able to operate again
-      await expect(vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("1") })).to.not.be.reverted;
+      await expect(vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("1") })).to.not.revert(ethers);
     });
   });
 });

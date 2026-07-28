@@ -1,21 +1,20 @@
 import { expect } from "chai";
 import { keccak256 } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setStorageAt } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   DepositContract__MockForBeaconChainDepositor,
   PinnedBeaconProxy,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   UpgradeableBeacon,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { randomAddress } from "lib";
+import { randomAddress } from "lib/address.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const PINNED_BEACON_STORAGE_SLOT = "0x8d75cfa6c9a3cd2fb8b6d445eafb32adc5497a45b333009f9000379f7024f9f5";
 
@@ -54,7 +53,7 @@ describe("PinnedBeaconProxy.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   async function ossify(proxy: PinnedBeaconProxy, pin: string) {
-    await setStorageAt(await proxy.getAddress(), PINNED_BEACON_STORAGE_SLOT, pin);
+    await networkHelpers.setStorageAt(await proxy.getAddress(), PINNED_BEACON_STORAGE_SLOT, pin);
   }
 
   async function resetOssify(proxy: PinnedBeaconProxy) {

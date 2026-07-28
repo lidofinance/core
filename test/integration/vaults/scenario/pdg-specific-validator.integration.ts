@@ -1,34 +1,34 @@
 import { expect } from "chai";
 import { toChecksumAddress } from "ethereumjs-util";
 import { hexlify, parseUnits } from "ethers";
-import { ethers } from "hardhat";
-import { getMode } from "hardhat.helpers";
+import { getMode } from "hardhat.helpers.js";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
-import {
+import type {
   Dashboard,
   DepositContract,
   OssifiableProxy,
   PredepositGuarantee,
   SSZBLSHelpers,
   StakingVault,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
+import { ethers } from "lib/hardhat.js";
 import {
   ether,
   impersonate,
-  LocalMerkleTree,
+  type LocalMerkleTree,
   PDGPolicy,
   prepareLocalMerkleTree,
   toGwei,
   toLittleEndian64,
   ValidatorStage,
-} from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+} from "lib/index.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 /**
  * Integration test for PDG with a specific validator deposited during soft launch
@@ -239,6 +239,6 @@ describe("Scenario: PDG specific validator prove and top up on mainnet fork", fu
       .to.emit(depositContract, "DepositEvent")
       .withArgs(VALIDATOR_PUBKEY, withdrawalCredentials, toLittleEndian64(toGwei(topUpAmount)), anyValue, anyValue);
 
-    await expect(tx).changeEtherBalance(stakingVault, -topUpAmount);
+    await expect(tx).changeEtherBalance(ethers, stakingVault, -topUpAmount);
   });
 });

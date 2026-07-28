@@ -1,16 +1,17 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { mine } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ACL, Lido } from "typechain-types";
+import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
+import { type Lido } from "typechain-types/index.js";
 
-import { certainAddress, ether, ONE_ETHER } from "lib";
+import { certainAddress } from "lib/address.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { ether, ONE_ETHER } from "lib/units.js";
 
-import { deployLidoDao } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoDao } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Lido.sol:staking-limit", () => {
   let deployer: HardhatEthersSigner;
@@ -67,7 +68,7 @@ describe("Lido.sol:staking-limit", () => {
       const fullReplenishInBlocks = maxStakeLimit / stakeLimitIncreasePerBlock;
 
       for (let i = 1n; i <= fullReplenishInBlocks; i++) {
-        await mine(1);
+        await networkHelpers.mine(1);
         expect(await lido.getCurrentStakeLimit()).to.equal(stakeLimitIncreasePerBlock * i);
       }
     });
@@ -160,7 +161,7 @@ describe("Lido.sol:staking-limit", () => {
       expect(await lido.getStakeLimitFullInfo()).to.deep.equal(Object.values(expected));
 
       for (let i = 1n; i <= expected.maxStakeLimitGrowthBlocks; i++) {
-        await mine(1);
+        await networkHelpers.mine(1);
         expected.currentStakeLimit = (expected.maxStakeLimit / expected.maxStakeLimitGrowthBlocks) * i;
         expect(await lido.getStakeLimitFullInfo()).to.deep.equal(Object.values(expected));
       }

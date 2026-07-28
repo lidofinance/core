@@ -9,22 +9,24 @@ import {
   ZeroAddress,
   ZeroHash,
 } from "ethers";
-import { ethers, network } from "hardhat";
 import { describe } from "mocha";
 
-import { PANIC_CODES } from "@nomicfoundation/hardhat-chai-matchers/panic";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { mineUpTo, setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { PANIC_CODES } from "@nomicfoundation/hardhat-ethers-chai-matchers/panic";
 
-import {
+import type {
   DepositContract__MockForDepositSecurityModule,
   DepositSecurityModule,
   StakingRouter__MockForDepositSecurityModule,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { certainAddress, DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage, ether, streccak } from "lib";
+import { certainAddress } from "lib/address.js";
+import { DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage } from "lib/dsm.js";
+import { ethers, networkConfig, networkHelpers } from "lib/hardhat.js";
+import { streccak } from "lib/keccak.js";
+import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const STAKING_MODULE_ID = 100;
 const MAX_DEPOSITS_PER_BLOCK = 100;
@@ -133,11 +135,11 @@ describe("DepositSecurityModule.sol", () => {
     unrelatedGuardian1 = new Wallet(streccak("unrelatedGuardian1"), provider);
     unrelatedGuardian2 = new Wallet(streccak("unrelatedGuardian2"), provider);
 
-    await setBalance(guardian1.address, ether("100"));
-    await setBalance(guardian2.address, ether("100"));
-    await setBalance(guardian3.address, ether("100"));
-    await setBalance(unrelatedGuardian1.address, ether("100"));
-    await setBalance(unrelatedGuardian2.address, ether("100"));
+    await networkHelpers.setBalance(guardian1.address, ether("100"));
+    await networkHelpers.setBalance(guardian2.address, ether("100"));
+    await networkHelpers.setBalance(guardian3.address, ether("100"));
+    await networkHelpers.setBalance(unrelatedGuardian1.address, ether("100"));
+    await networkHelpers.setBalance(unrelatedGuardian2.address, ether("100"));
 
     stakingRouter = await ethers.deployContract("StakingRouter__MockForDepositSecurityModule", [STAKING_MODULE_ID]);
     depositContract = await ethers.deployContract("DepositContract__MockForDepositSecurityModule");
@@ -165,7 +167,7 @@ describe("DepositSecurityModule.sol", () => {
     await depositContract.set_deposit_root(DEPOSIT_ROOT);
     expect(await depositContract.get_deposit_root()).to.equal(DEPOSIT_ROOT);
 
-    await mineUpTo((await time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
+    await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
     originalState = await Snapshot.take();
   });
 
@@ -214,7 +216,7 @@ describe("DepositSecurityModule.sol", () => {
       const encodedAttestMessagePrefix = keccak256(
         solidityPacked(
           ["bytes32", "uint256", "address"],
-          [dsmAttestMessagePrefix, network.config.chainId, await dsm.getAddress()],
+          [dsmAttestMessagePrefix, networkConfig.chainId, await dsm.getAddress()],
         ),
       );
 
@@ -228,7 +230,7 @@ describe("DepositSecurityModule.sol", () => {
       const encodedPauseMessagePrefix = keccak256(
         solidityPacked(
           ["bytes32", "uint256", "address"],
-          [dsmPauseMessagePrefix, network.config.chainId, await dsm.getAddress()],
+          [dsmPauseMessagePrefix, networkConfig.chainId, await dsm.getAddress()],
         ),
       );
 
@@ -242,7 +244,7 @@ describe("DepositSecurityModule.sol", () => {
       const encodedPauseMessagePrefix = keccak256(
         solidityPacked(
           ["bytes32", "uint256", "address"],
-          [dsmUnvetMessagePrefix, network.config.chainId, await dsm.getAddress()],
+          [dsmUnvetMessagePrefix, networkConfig.chainId, await dsm.getAddress()],
         ),
       );
 
@@ -645,7 +647,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Reverts if signature is not guardian", async () => {
-      const blockNumber = await time.latestBlock();
+      const blockNumber = await networkHelpers.time.latestBlock();
       const validPauseMessage = new DSMPauseMessage(blockNumber);
 
       const sig = validPauseMessage.sign(guardian3.privateKey);
@@ -654,7 +656,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Reverts if called by an anon submitting an unrelated sig", async () => {
-      const blockNumber = await time.latestBlock();
+      const blockNumber = await networkHelpers.time.latestBlock();
       const validPauseMessage = new DSMPauseMessage(blockNumber);
 
       const sig = validPauseMessage.sign(guardian3.privateKey);
@@ -666,7 +668,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Reverts if called with an expired `blockNumber` by a guardian", async () => {
-      const blockNumber = await time.latestBlock();
+      const blockNumber = await networkHelpers.time.latestBlock();
       const staleBlockNumber = blockNumber - PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
       const validPauseMessage = new DSMPauseMessage(blockNumber);
 
@@ -679,7 +681,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Reverts if called with an expired `blockNumber` by an anon submitting a guardian's sig", async () => {
-      const blockNumber = await time.latestBlock();
+      const blockNumber = await networkHelpers.time.latestBlock();
       const staleBlockNumber = blockNumber - PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
 
       const stalePauseMessage = new DSMPauseMessage(staleBlockNumber);
@@ -692,7 +694,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Reverts if called with a future `blockNumber` by a guardian", async () => {
-      const futureBlockNumber = (await time.latestBlock()) + 100;
+      const futureBlockNumber = (await networkHelpers.time.latestBlock()) + 100;
 
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
@@ -705,7 +707,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Reverts if called with a future `blockNumber` by an anon submitting a guardian's sig", async () => {
-      const futureBlockNumber = (await time.latestBlock()) + 100;
+      const futureBlockNumber = (await networkHelpers.time.latestBlock()) + 100;
 
       const futurePauseMessage = new DSMPauseMessage(futureBlockNumber);
       const sig = futurePauseMessage.sign(guardian1.privateKey);
@@ -716,7 +718,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Pause if called by guardian and fires `DepositsPaused` event", async () => {
-      const blockNumber = await time.latestBlock();
+      const blockNumber = await networkHelpers.time.latestBlock();
       const sig: DepositSecurityModule.SignatureStruct = {
         r: encodeBytes32String(""),
         vs: encodeBytes32String(""),
@@ -728,7 +730,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Pause if called by anon submitting sig of guardian", async () => {
-      const blockNumber = await time.latestBlock();
+      const blockNumber = await networkHelpers.time.latestBlock();
 
       const validPauseMessage = new DSMPauseMessage(blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
@@ -739,7 +741,7 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Do not pause and emits events if was paused before", async () => {
-      const blockNumber = await time.latestBlock();
+      const blockNumber = await networkHelpers.time.latestBlock();
 
       const validPauseMessage = new DSMPauseMessage(blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
@@ -760,7 +762,7 @@ describe("DepositSecurityModule.sol", () => {
 
       await dsm.addGuardians([guardian1, guardian2], 0);
 
-      const blockNumber = await time.latestBlock();
+      const blockNumber = await networkHelpers.time.latestBlock();
 
       const validPauseMessage = new DSMPauseMessage(blockNumber);
       const sig = validPauseMessage.sign(guardian2.privateKey);
@@ -789,6 +791,113 @@ describe("DepositSecurityModule.sol", () => {
     });
   });
 
+  context("Function `canDeposit`", () => {
+    let originalContextState: string;
+
+    beforeEach(async () => {
+      originalContextState = await Snapshot.take();
+
+      await dsm.addGuardian(guardian1, 1);
+      const lastDepositBlockNumber = await networkHelpers.time.latestBlock();
+      await stakingRouter.setStakingModuleLastDepositBlock(lastDepositBlockNumber);
+      await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
+    });
+
+    afterEach(async () => {
+      await Snapshot.restore(originalContextState);
+    });
+
+    it("Returns `false` if staking module is unregistered in StakingRouter", async () => {
+      expect(await dsm.canDeposit(UNREGISTERED_STAKING_MODULE_ID)).to.equal(false);
+    });
+
+    it("Returns `true` if: \n\t\t1) Deposits is not paused \n\t\t2) Module is active \n\t\t3) DSM quorum > 0 \n\t\t4) Min deposit block distance is passed \n\t\t5) Lido.canDeposit() is true", async () => {
+      const dsmLastDepositBlock = await dsm.getLastDepositBlock();
+      const moduleLastDepositBlock = await stakingRouter.getStakingModuleLastDepositBlock(STAKING_MODULE_ID);
+      const minDepositBlockDistance = await stakingRouter.getStakingModuleMinDepositBlockDistance(STAKING_MODULE_ID);
+      const currentBlockNumber = await networkHelpers.time.latestBlock();
+      const maxLastDepositBlock = Math.max(Number(dsmLastDepositBlock), Number(moduleLastDepositBlock));
+
+      expect(await dsm.isDepositsPaused()).to.equal(false);
+      expect(await stakingRouter.getStakingModuleIsActive(STAKING_MODULE_ID)).to.equal(true);
+      expect(await dsm.getGuardianQuorum()).to.equal(1);
+      expect(currentBlockNumber - maxLastDepositBlock >= minDepositBlockDistance).to.equal(true);
+      expect(await lido.canDeposit()).to.equal(true);
+
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(true);
+    });
+
+    it("Returns `false` if deposits paused", async () => {
+      const blockNumber = await networkHelpers.time.latestBlock();
+      const sig: DepositSecurityModule.SignatureStruct = {
+        r: encodeBytes32String(""),
+        vs: encodeBytes32String(""),
+      };
+
+      await dsm.connect(guardian1).pauseDeposits(blockNumber, sig);
+      expect(await dsm.isDepositsPaused()).to.equal(true);
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
+    });
+
+    it("Returns `false` if module is paused", async () => {
+      await stakingRouter.setStakingModuleStatus(STAKING_MODULE_ID, StakingModuleStatus.DepositsPaused);
+      expect(await stakingRouter.getStakingModuleIsActive(STAKING_MODULE_ID)).to.equal(false);
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
+    });
+
+    it("Returns `false` if module is stopped", async () => {
+      await stakingRouter.setStakingModuleStatus(STAKING_MODULE_ID, StakingModuleStatus.Stopped);
+      expect(await stakingRouter.getStakingModuleIsActive(STAKING_MODULE_ID)).to.equal(false);
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
+    });
+
+    it("Returns `false` if quorum is 0", async () => {
+      await dsm.setGuardianQuorum(0);
+      expect(await dsm.getGuardianQuorum()).to.equal(0);
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
+    });
+
+    it("Returns `false` if min deposit block distance is not passed and dsm.lastDepositBlock < module.lastDepositBlock", async () => {
+      const moduleLastDepositBlock = await networkHelpers.time.latestBlock();
+      const dsmLastDepositBlock = Number(await dsm.getLastDepositBlock());
+
+      await stakingRouter.setStakingModuleLastDepositBlock(moduleLastDepositBlock);
+      await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE / 2);
+
+      const minDepositBlockDistance = await stakingRouter.getStakingModuleMinDepositBlockDistance(STAKING_MODULE_ID);
+      const currentBlockNumber = await networkHelpers.time.latestBlock();
+
+      expect(dsmLastDepositBlock < moduleLastDepositBlock).to.equal(true);
+      expect(currentBlockNumber - dsmLastDepositBlock >= minDepositBlockDistance).to.equal(true);
+      expect(currentBlockNumber - moduleLastDepositBlock < minDepositBlockDistance).to.equal(true);
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
+    });
+
+    it("Returns `false` if min deposit block distance is not passed and dsm.lastDepositBlock > module.lastDepositBlock", async () => {
+      await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
+      await deposit([guardian1]);
+
+      const dsmLastDepositBlock = Number(await dsm.getLastDepositBlock());
+      const moduleLastDepositBlock = dsmLastDepositBlock - MIN_DEPOSIT_BLOCK_DISTANCE;
+      await stakingRouter.setStakingModuleLastDepositBlock(moduleLastDepositBlock);
+
+      const minDepositBlockDistance = await stakingRouter.getStakingModuleMinDepositBlockDistance(STAKING_MODULE_ID);
+      const currentBlockNumber = await networkHelpers.time.latestBlock();
+
+      expect(dsmLastDepositBlock > moduleLastDepositBlock).to.equal(true);
+      expect(currentBlockNumber - dsmLastDepositBlock < minDepositBlockDistance).to.equal(true);
+      expect(currentBlockNumber - moduleLastDepositBlock >= minDepositBlockDistance).to.equal(true);
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
+    });
+
+    it("Returns `false` if Lido.canDeposit() is false", async () => {
+      await lido.setCanDeposit(false);
+
+      expect(await lido.canDeposit()).to.equal(false);
+      expect(await dsm.canDeposit(STAKING_MODULE_ID)).to.equal(false);
+    });
+  });
+
   context("Function `getLastDepositBlock`", () => {
     it("Returns deployment block before any deposits", async () => {
       const tx = await dsm.deploymentTransaction();
@@ -812,7 +921,7 @@ describe("DepositSecurityModule.sol", () => {
   context("Function `isMinDepositDistancePassed`", () => {
     beforeEach(async () => {
       await dsm.addGuardian(guardian1, 1);
-      await mineUpTo((await time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
+      await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + MIN_DEPOSIT_BLOCK_DISTANCE);
     });
 
     it("Returns true if min deposit distance is passed", async () => {
@@ -826,7 +935,7 @@ describe("DepositSecurityModule.sol", () => {
 
       const moduleLastDepositBlock = await stakingRouter.getStakingModuleLastDepositBlock(STAKING_MODULE_ID);
       const minDepositBlockDistance = await stakingRouter.getStakingModuleMinDepositBlockDistance(STAKING_MODULE_ID);
-      const currentBlockNumber = await time.latestBlock();
+      const currentBlockNumber = await networkHelpers.time.latestBlock();
 
       expect(dsmLastDepositBlock).to.equal(moduleLastDepositBlock);
       expect(currentBlockNumber - Number(dsmLastDepositBlock) < minDepositBlockDistance).to.equal(true);
@@ -837,7 +946,7 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Returns false if distance is not passed for dsm.lastDepositBlock but passed for module.lastDepositBlock", async () => {
       await deposit([guardian1]);
-      const currentBlockNumber = await time.latestBlock();
+      const currentBlockNumber = await networkHelpers.time.latestBlock();
       const minDepositBlockDistance = await stakingRouter.getStakingModuleMinDepositBlockDistance(STAKING_MODULE_ID);
       await stakingRouter.setStakingModuleLastDepositBlock(currentBlockNumber - Number(minDepositBlockDistance));
 
@@ -958,9 +1067,9 @@ describe("DepositSecurityModule.sol", () => {
       });
 
       it("Reverts if `block.hash` and `block.number` from different blocks", async () => {
-        const previousBlockNumber = await time.latestBlock();
-        await mineUpTo((await time.latestBlock()) + 1);
-        const latestBlockNumber = await time.latestBlock();
+        const previousBlockNumber = await networkHelpers.time.latestBlock();
+        await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + 1);
+        const latestBlockNumber = await networkHelpers.time.latestBlock();
         expect(latestBlockNumber > previousBlockNumber).to.equal(true);
 
         await dsm.addGuardian(guardian1, 1);
@@ -989,7 +1098,7 @@ describe("DepositSecurityModule.sol", () => {
 
       it("Reverts if called for block with unrecoverable `block.hash`", async () => {
         const tooOldBlock = await getLatestBlock();
-        await mineUpTo((await time.latestBlock()) + 255);
+        await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + 255);
         const latestBlock = await getLatestBlock();
         expect(latestBlock.number > tooOldBlock.number).to.equal(true);
 
@@ -1007,7 +1116,7 @@ describe("DepositSecurityModule.sol", () => {
       });
 
       it("Reverts if deposits are paused", async () => {
-        const blockNumber = await time.latestBlock();
+        const blockNumber = await networkHelpers.time.latestBlock();
 
         await dsm.addGuardian(guardian1, 1);
         expect(await dsm.getGuardians()).to.deep.equal([guardian1.address]);
@@ -1252,7 +1361,7 @@ describe("DepositSecurityModule.sol", () => {
 
     it("Reverts if called for block with unrecoverable `block.hash`", async () => {
       const tooOldBlock = await getLatestBlock();
-      await mineUpTo((await time.latestBlock()) + 255);
+      await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + 255);
       const latestBlock = await getLatestBlock();
       expect(latestBlock.number > tooOldBlock.number).to.equal(true);
 
@@ -1263,9 +1372,9 @@ describe("DepositSecurityModule.sol", () => {
     });
 
     it("Reverts if `block.hash` and `block.number` from different blocks", async () => {
-      const previousBlockNumber = await time.latestBlock();
-      await mineUpTo((await time.latestBlock()) + 1);
-      const latestBlockNumber = await time.latestBlock();
+      const previousBlockNumber = await networkHelpers.time.latestBlock();
+      await networkHelpers.mineUpTo((await networkHelpers.time.latestBlock()) + 1);
+      const latestBlockNumber = await networkHelpers.time.latestBlock();
       expect(latestBlockNumber > previousBlockNumber).to.equal(true);
 
       await expect(unvetSigningKeys(guardian1, { blockNumber: previousBlockNumber })).to.be.revertedWithCustomError(

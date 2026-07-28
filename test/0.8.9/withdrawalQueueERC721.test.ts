@@ -1,37 +1,34 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   ERC721Receiver__Mock,
   NFTDescriptor__MockForWithdrawalQueue,
   Receiver__MockForWithdrawalQueueBase,
   StETH__HarnessForWithdrawalQueue,
   WithdrawalQueueERC721,
   WstETH__MockForWithdrawalQueue,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
 import {
   ERC165_INTERFACE_ID,
   ERC721_INTERFACE_ID,
   ERC721METADATA_INTERFACE_ID,
   ERC4906_INTERFACE_ID,
-  ether,
   INVALID_INTERFACE_ID,
   OZ_ACCESS_CONTROL_ENUMERABLE_INTERFACE_ID,
   OZ_ACCESS_CONTROL_INTERFACE_ID,
-  proxify,
-  shareRate,
-  shares,
-  streccak,
   WITHDRAWAL_QUEUE_NAME,
   WITHDRAWAL_QUEUE_SYMBOL,
-} from "lib";
+} from "lib/constants.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { streccak } from "lib/keccak.js";
+import { proxify } from "lib/proxy.js";
+import { ether, shareRate, shares } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const MANAGE_TOKEN_URI_ROLE = streccak("MANAGE_TOKEN_URI_ROLE");
 
@@ -407,7 +404,7 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     it("Reverts when token is already claimed", async () => {
-      await setBalance(queueAddress, ether("10.00"));
+      await networkHelpers.setBalance(queueAddress, ether("10.00"));
 
       await queue.connect(user).requestWithdrawals([ether("25.00")], user);
       await queue.connect(finalizer).finalize(1, shareRate(300n), { value: ether("25.00") });
@@ -641,7 +638,7 @@ describe("WithdrawalQueueERC721.sol", () => {
     });
 
     it("Reverts if request is already claimed", async () => {
-      await setBalance(queueAddress, ether("10.00"));
+      await networkHelpers.setBalance(queueAddress, ether("10.00"));
 
       await queue.connect(user).requestWithdrawals([ether("25.00")], user);
       await queue.connect(finalizer).finalize(1, shareRate(300n), { value: ether("25.00") });

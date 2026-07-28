@@ -1,15 +1,17 @@
 import { expect } from "chai";
 import { MaxUint256, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 import { beforeEach } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { StETH__Harness } from "typechain-types";
+import type { StETH__Harness } from "typechain-types/index.js";
 
-import { batch, ether, impersonate, ONE_ETHER } from "lib";
+import { impersonate } from "lib/account.js";
+import { ethers } from "lib/hardhat.js";
+import { batch } from "lib/promise.js";
+import { ether, ONE_ETHER } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const ONE_STETH = 10n ** 18n;
 const ONE_SHARE = 10n ** 18n;
@@ -515,7 +517,7 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
 
     it("Mints shares to the recipient", async () => {
       const balanceOfHolderBefore = await steth.balanceOf(holder);
-      await expect(steth.harness__mintShares(holder, 1000n)).to.not.be.reverted;
+      await expect(steth.harness__mintShares(holder, 1000n)).to.not.revert(ethers);
       expect(await steth.sharesOf(holder)).to.equal(balanceOfHolderBefore + 1000n);
     });
   });

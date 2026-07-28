@@ -1,23 +1,24 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   Dashboard__Mock,
   EIP7251MaxEffectiveBalanceRequest__Mock,
   LidoLocator,
   ValidatorConsolidationRequests,
   VaultHub__MockForDashboard,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { deployEIP7251MaxEffectiveBalanceRequestContract, DISCONNECT_NOT_INITIATED, EIP7251_ADDRESS, ether } from "lib";
+import { DISCONNECT_NOT_INITIATED } from "lib/constants.js";
+import { deployEIP7251MaxEffectiveBalanceRequestContract, EIP7251_ADDRESS } from "lib/eips/eip7251.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { ether } from "lib/units.js";
 
-import { deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deployLidoLocator } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
-import { generateConsolidationRequestPayload } from "./consolidationHelper";
+import { generateConsolidationRequestPayload } from "./consolidationHelper.js";
 
 const PUBKEY = "0x800276cfb86f1c08a1e7238c76a9ca45d5528d2072e51500b343266203d5d7794e6fc848ce7948e9c81960f71f821b42";
 const KEY_LENGTH = 48;
@@ -37,7 +38,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     [actor, stakingVault] = await ethers.getSigners();
 
     // Set a high balance for the actor account
-    await setBalance(actor.address, ether("1000000"));
+    await networkHelpers.setBalance(actor.address, ether("1000000"));
 
     dashboard = await ethers.deployContract("Dashboard__Mock");
     dashboardAddress = await dashboard.getAddress();

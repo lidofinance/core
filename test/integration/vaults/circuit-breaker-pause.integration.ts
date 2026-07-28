@@ -1,22 +1,22 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import hre from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, PredepositGuarantee, StakingVault, VaultHub } from "typechain-types";
+import type { Dashboard, PredepositGuarantee, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ether, generateValidator, impersonate } from "lib";
+import { ether, generateValidator, impersonate } from "lib/index.js";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
   generatePredepositData,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   setupLidoForVaults,
-} from "lib/protocol";
+} from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 // TS interface aligned with the CircuitBreaker contract.
 interface ICircuitBreaker {
@@ -44,6 +44,8 @@ const ICircuitBreaker_ABI = [
 ];
 
 describe("Integration: CircuitBreaker pause functionality for VaultHub and PredepositGuarantee", () => {
+  let ethers: HardhatEthers;
+
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
@@ -62,6 +64,8 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
   let stranger: HardhatEthersSigner;
 
   before(async function () {
+    ({ ethers } = await hre.network.getOrCreate());
+
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();
@@ -88,7 +92,7 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
     predepositGuarantee = ctx.contracts.predepositGuarantee;
 
     // Look up the CircuitBreaker address from the state file (replaces the previous GateSeal flow).
-    const state = await import("lib/state-file").then((m) => m.readNetworkState());
+    const state = await import("lib/state-file.js").then((m) => m.readNetworkState());
     const circuitBreakerAddress = state.circuitBreaker?.address;
 
     if (!circuitBreakerAddress) {
@@ -278,7 +282,7 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
       this.skip();
     }
     // Attempt to pause with an unauthorized address should revert
-    await expect(circuitBreaker.connect(stranger).pause(await vaultHub.getAddress())).to.be.reverted;
+    await expect(circuitBreaker.connect(stranger).pause(await vaultHub.getAddress())).to.revert(ethers);
   });
 
   it("Cannot pause when VaultHub is already paused", async function () {
@@ -292,7 +296,7 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
     expect(await vaultHub.isPaused()).to.equal(true);
 
     // Attempt to pause an already-paused contract should revert
-    await expect(circuitBreaker.connect(vaultHubPauser).pause(await vaultHub.getAddress())).to.be.reverted;
+    await expect(circuitBreaker.connect(vaultHubPauser).pause(await vaultHub.getAddress())).to.revert(ethers);
   });
 
   it("Cannot pause when PredepositGuarantee is already paused", async function () {
@@ -307,7 +311,8 @@ describe("Integration: CircuitBreaker pause functionality for VaultHub and Prede
     expect(await predepositGuarantee.isPaused()).to.equal(true);
 
     // Attempt to pause an already-paused contract should revert
-    await expect(circuitBreaker.connect(predepositGuaranteePauser).pause(await predepositGuarantee.getAddress())).to.be
-      .reverted;
+    await expect(
+      circuitBreaker.connect(predepositGuaranteePauser).pause(await predepositGuarantee.getAddress()),
+    ).to.revert(ethers);
   });
 });

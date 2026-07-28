@@ -1,15 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { mine } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Lido } from "typechain-types";
+import type { Lido } from "typechain-types/index.js";
 
-import { ether } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { ether } from "lib/index.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Staking limits", () => {
   let ctx: ProtocolContext;
@@ -174,7 +173,7 @@ describe("Staking limits", () => {
       const stakingLimitAfterSubmit = await lido.getCurrentStakeLimit();
       expect(stakingLimitAfterSubmit).to.equal(stakingLimitBefore - limitPerBlock);
 
-      await mine(1);
+      await networkHelpers.mine(1);
 
       // Check limit restored to max
       const stakingLimitAfterBlock = await lido.getCurrentStakeLimit();

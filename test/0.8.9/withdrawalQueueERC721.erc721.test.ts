@@ -1,10 +1,11 @@
-import { ethers } from "hardhat";
+import type { ERC721 } from "typechain-types/index.js";
 
-import { ether } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { ether } from "lib/units.js";
 
-import { deployWithdrawalQueue } from "test/deploy";
+import { deployWithdrawalQueue } from "test/deploy/index.js";
 
-import { testERC721Compliance } from "../common/erc721.test";
+import { testERC721Compliance } from "../common/erc721.test.js";
 
 testERC721Compliance({
   tokenName: "unstETH NFT",
@@ -28,7 +29,7 @@ testERC721Compliance({
     const holderTokenId = await queue.getLastRequestId();
 
     return {
-      token: queue,
+      token: queue as unknown as ERC721,
       name: deployed.name,
       symbol: deployed.symbol,
       holder: owner,

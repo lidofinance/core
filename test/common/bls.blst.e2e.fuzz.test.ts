@@ -1,12 +1,13 @@
 import { expect } from "chai";
 import { getBytes, hexlify, keccak256, toBeHex, zeroPadValue } from "ethers";
-import { ethers } from "hardhat";
 
 import { PublicKey, SecretKey, Signature, verify } from "@chainsafe/blst";
 
-import { BLS12_381__Harness } from "typechain-types";
+import type { BLS12_381__Harness } from "typechain-types/index.js";
 
-import { computeDepositDomain, computeDepositMessageRoot, ONE_GWEI } from "lib";
+import { ONE_GWEI } from "lib/constants.js";
+import { computeDepositDomain, computeDepositMessageRoot } from "lib/deposit.js";
+import { ethers } from "lib/hardhat.js";
 
 type FpStruct = { a: string; b: string };
 type Fp2Struct = { c0_a: string; c0_b: string; c1_a: string; c1_b: string };
@@ -234,7 +235,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
       await expect(
         harness.verifyDepositMessage(pubkey, signature, amount, depositY, withdrawalCredentials, depositDomain),
         `solidity rejected a valid vector (i=${i})`,
-      ).not.to.be.reverted;
+      ).not.to.revert(ethers);
     }
   });
 
@@ -262,7 +263,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
       expect(blstVerifyDeposit(signingRoot, pubkey, signature), `invariant: blst valid failed (i=${i})`).to.equal(true);
       await expect(
         harness.verifyDepositMessage(pubkey, signature, amount, depositY, withdrawalCredentials, depositDomain),
-      ).not.to.be.reverted;
+      ).not.to.revert(ethers);
 
       const cases: Array<{
         name: string;
@@ -385,7 +386,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
             await expect(tx, `case "${c.name}" (i=${i})`).to.be.revertedWithCustomError(harness, c.expectError.name);
           }
         } else {
-          await expect(tx, `case "${c.name}" (i=${i})`).to.be.reverted;
+          await expect(tx, `case "${c.name}" (i=${i})`).to.revert(ethers);
         }
       }
     }
@@ -419,7 +420,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
       // Sanity: Solidity accepts when DepositY matches.
       await expect(
         harness.verifyDepositMessage(pubkey, signature, amount, depositY, withdrawalCredentials, depositDomain),
-      ).not.to.be.reverted;
+      ).not.to.revert(ethers);
 
       // Pubkey: flip Y to p - Y => must mismatch sign bit.
       const pubkeyYNeg = negateFpStruct(depositY.pubkeyY);
@@ -641,7 +642,7 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
           baseWithdrawalCredentials,
           baseDepositDomain,
         ),
-      ).not.to.be.reverted;
+      ).not.to.revert(ethers);
 
       for (let m = 0; m < MUTATIONS_PER_RUN; m++) {
         const msalt = keccak256(`0x${salt.slice(2)}${toBeHex(m, 32).slice(2)}`);
@@ -726,11 +727,15 @@ describe("BLS.sol <-> @chainsafe/blst E2E fuzz", function () {
           depositDomain,
         );
         if (blstOk) {
-          await expect(tx, `mutation accepted by blst must be accepted by solidity (i=${i},m=${m},choice=${choice})`)
-            .not.to.be.reverted;
+          await expect(
+            tx,
+            `mutation accepted by blst must be accepted by solidity (i=${i},m=${m},choice=${choice})`,
+          ).not.to.revert(ethers);
         } else {
-          await expect(tx, `mutation rejected by blst must be rejected by solidity (i=${i},m=${m},choice=${choice})`).to
-            .be.reverted;
+          await expect(
+            tx,
+            `mutation rejected by blst must be rejected by solidity (i=${i},m=${m},choice=${choice})`,
+          ).to.revert(ethers);
         }
       }
     }

@@ -1,23 +1,16 @@
 import { expect } from "chai";
 import { parseUnits, ZeroAddress } from "ethers";
-import { artifacts, ethers } from "hardhat";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
-import {
-  Accounting__MockForSanityChecker,
-  AccountingOracle__MockForSanityChecker,
-  Lido__MockForSanityChecker,
-  LidoLocator__MockForSanityChecker,
-  OracleReportSanityCheckerWrapper,
-  StakingRouter__MockForSanityChecker,
-} from "typechain-types";
+import type { Accounting__MockForSanityChecker, AccountingOracle__MockForSanityChecker, Lido__MockForSanityChecker, LidoLocator__MockForSanityChecker, OracleReportSanityCheckerWrapper, StakingRouter__MockForSanityChecker } from "typechain-types/index.js";
 
-import { ether, impersonate } from "lib";
+import { impersonate } from "lib/account.js";
+import { artifacts, ethers } from "lib/hardhat.js";
+import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const SLOTS_PER_DAY = 7200n;
 const REPORTS_WINDOW = 36;
@@ -1197,7 +1190,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       );
 
       await checker.grantRole(role, deployer.address);
-      await expect(checker.setMaxCLBalanceDecreaseBP(500)).to.not.be.reverted;
+      await expect(checker.setInitialSlashingAndPenaltiesAmount(1000, 101)).to.not.revert(ethers);
     });
 
     it("SECOND_OPINION_MANAGER_ROLE works", async () => {
@@ -1208,7 +1201,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
       ).to.be.revertedWithOZAccessControlError(deployer.address, clOraclesRole);
 
       await checker.grantRole(clOraclesRole, deployer.address);
-      await expect(checker.setSecondOpinionOracleAndCLBalanceUpperMargin(ZeroAddress, 74)).to.not.be.reverted;
+      await expect(checker.setSecondOpinionOracleAndCLBalanceUpperMargin(ZeroAddress, 74)).to.not.revert(ethers);
     });
   });
 

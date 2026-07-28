@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { BytesLike } from "ethers";
-import { ethers } from "hardhat";
+import { type BytesLike } from "ethers";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs";
 
-import { Dashboard, DepositContract, PredepositGuarantee, StakingVault } from "typechain-types";
+import type { Dashboard, DepositContract, PredepositGuarantee, StakingVault } from "typechain-types/index.js";
 
+import { ethers } from "lib/hardhat.js";
 import {
   addressToWC,
   ether,
@@ -14,20 +14,20 @@ import {
   generateValidator,
   toGwei,
   toLittleEndian64,
-  Validator,
+  type Validator,
   ValidatorStage,
-} from "lib";
+} from "lib/index.js";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
   mockProof,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol";
+} from "lib/protocol/index.js";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
   let ctx: ProtocolContext;
@@ -147,7 +147,7 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
       predepositGuarantee
         .connect(stranger)
         .verifyDepositMessage(predepositDataHappyPath.deposit, predepositDataHappyPath.depositY, withdrawalCredentials),
-    ).to.not.be.reverted;
+    ).to.not.revert(ethers);
 
     const tx = predepositGuarantee
       .connect(depositor)
@@ -179,7 +179,7 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
         anyValue,
       );
 
-    await expect(tx).changeEtherBalance(stakingVault, -ether("2"));
+    await expect(tx).changeEtherBalance(ethers, stakingVault, -ether("2"));
 
     await expectPendingPredeposits(
       [predepositDataHappyPath.deposit.pubkey, predepositDataFrontrunned.deposit.pubkey],
@@ -215,7 +215,7 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
         anyValue,
       );
 
-    await expect(tx).changeEtherBalance(stakingVault, -ether("31"));
+    await expect(tx).changeEtherBalance(ethers, stakingVault, -ether("31"));
     expect(await predepositGuarantee.pendingActivations(stakingVault)).to.equal(1);
     expect((await predepositGuarantee.validatorStatus(witness.pubkey)).stage).to.equal(ValidatorStage.ACTIVATED);
 
@@ -244,7 +244,7 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
         anyValue,
       );
 
-    await expect(tx).changeEtherBalance(stakingVault, -ether("1"));
+    await expect(tx).changeEtherBalance(ethers, stakingVault, -ether("1"));
     await expectPendingPredeposits([validatorFrontrunned.container.pubkey], ether("2"));
     expect(await vaultHub.totalValue(stakingVault)).to.equal(totalValueBefore);
   });
@@ -264,7 +264,7 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
       .to.emit(stakingVault, "EtherUnstaged")
       .withArgs(ether("31"));
 
-    await expect(tx).changeEtherBalance(stakingVault, ether("1"));
+    await expect(tx).changeEtherBalance(ethers, stakingVault, ether("1"));
 
     expect(await predepositGuarantee.nodeOperatorBalance(nodeOperator)).to.deep.equal([ether("1"), ether("0")]);
     expect(await stakingVault.stagedBalance()).to.equal(0n);
@@ -283,7 +283,7 @@ describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
 
     const tx = predepositGuarantee.connect(guarantor).claimGuarantorRefund(guarantor);
     await expect(tx).to.emit(predepositGuarantee, "GuarantorRefundClaimed").withArgs(guarantor, guarantor, ether("1"));
-    await expect(tx).changeEtherBalance(guarantor, ether("1"));
+    await expect(tx).changeEtherBalance(ethers, guarantor, ether("1"));
 
     expect(await predepositGuarantee.claimableRefund(guarantor)).to.equal(0n);
   });

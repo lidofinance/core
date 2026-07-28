@@ -1,24 +1,23 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, ERC20__Harness, EthRejector, Lido, StakingVault, WstETH } from "typechain-types";
+import type { Dashboard, ERC20__Harness, EthRejector, Lido, StakingVault, WstETH } from "typechain-types/index.js";
 
-import { ether, impersonate } from "lib";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { ether, impersonate } from "lib/index.js";
 import {
   autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
-} from "lib/protocol";
+  type VaultRoles,
+} from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 // EIP-7528 ETH address
 const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -252,7 +251,7 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
         const dashboardAddress = await dashboard.getAddress();
         const currentBalance = await ethers.provider.getBalance(dashboardAddress);
         const newBalance = currentBalance + ethAmount;
-        await setBalance(dashboardAddress, newBalance);
+        await networkHelpers.setBalance(dashboardAddress, newBalance);
       });
 
       it("Allows admin to recover ETH from dashboard using EIP-7528 address", async () => {
@@ -622,7 +621,7 @@ describe("Integration: RecoverTokens in StakingVault and Dashboard", () => {
 
       // Add extra ETH to dashboard (not part of feeLeftover)
       const extraETH = ether("1");
-      await setBalance(await dashboard.getAddress(), dashboardBalance + extraETH);
+      await networkHelpers.setBalance(await dashboard.getAddress(), dashboardBalance + extraETH);
 
       // Try to recover more than available (balance - feeLeftover)
       // Should fail because feeLeftover is protected

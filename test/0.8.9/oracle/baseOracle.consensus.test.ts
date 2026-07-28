@@ -1,15 +1,21 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
+import type { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
+import {
+  BASE_CONSENSUS_VERSION,
+  EPOCHS_PER_FRAME,
+  GENESIS_TIME,
+  SECONDS_PER_SLOT,
+  SLOTS_PER_EPOCH,
+} from "lib/constants.js";
+import { ethers } from "lib/hardhat.js";
 
-import { deadlineFromRefSlot, deployBaseOracle, epochFirstSlotAt, HASH_1, HASH_2 } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { deadlineFromRefSlot, deployBaseOracle, epochFirstSlotAt, HASH_1, HASH_2 } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("BaseOracle.sol:consensus", () => {
   let admin: HardhatEthersSigner;
@@ -59,7 +65,7 @@ describe("BaseOracle.sol:consensus", () => {
       });
 
       it("on invalid contract", async () => {
-        await expect(baseOracle.setConsensusContract(member.address)).to.be.revertedWithoutReason();
+        await expect(baseOracle.setConsensusContract(member.address)).to.be.revertedWithoutReason(ethers);
       });
 
       it("on mismatched config", async () => {
@@ -180,7 +186,7 @@ describe("BaseOracle.sol:consensus", () => {
     });
 
     it("Checks correct data without errors", async () => {
-      await expect(baseOracle.checkConsensusData(initialRefSlot, BASE_CONSENSUS_VERSION, HASH_1)).not.to.be.reverted;
+      await expect(baseOracle.checkConsensusData(initialRefSlot, BASE_CONSENSUS_VERSION, HASH_1)).not.to.revert(ethers);
     });
   });
 

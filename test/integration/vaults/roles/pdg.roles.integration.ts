@@ -1,22 +1,22 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 import { beforeEach } from "mocha";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { PredepositGuarantee, StakingVault } from "typechain-types";
+import type { PredepositGuarantee, StakingVault } from "typechain-types/index.js";
 
-import { days, ether, impersonate, randomValidatorPubkey } from "lib";
+import { ethers } from "lib/hardhat.js";
+import { days, ether, impersonate, randomValidatorPubkey } from "lib/index.js";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   setupLidoForVaults,
   testMethod,
-} from "lib/protocol";
+} from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: PredepositGuarantee Roles and Access Control", () => {
   let ctx: ProtocolContext;
@@ -226,8 +226,9 @@ describe("Integration: PredepositGuarantee Roles and Access Control", () => {
       }
 
       // Should succeed for node operator (default guarantor is the node operator itself)
-      await expect(predepositGuarantee.connect(nodeOperator)[method](...args, { value: ether("1") })).to.not.be
-        .reverted;
+      await expect(predepositGuarantee.connect(nodeOperator)[method](...args, { value: ether("1") })).to.not.revert(
+        ethers,
+      );
     });
 
     it("setNodeOperatorGuarantor - can be called by node operator", async () => {
@@ -236,7 +237,7 @@ describe("Integration: PredepositGuarantee Roles and Access Control", () => {
       const args: [string] = [newGuarantor.address];
 
       // Should succeed for node operator (permissionless for the node operator to set their own guarantor)
-      await expect(predepositGuarantee.connect(nodeOperator)[method](...args)).to.not.be.reverted;
+      await expect(predepositGuarantee.connect(nodeOperator)[method](...args)).to.not.revert(ethers);
     });
 
     it("setNodeOperatorDepositor - can be called by node operator", async () => {
@@ -245,7 +246,7 @@ describe("Integration: PredepositGuarantee Roles and Access Control", () => {
       const args: [string] = [newDepositor.address];
 
       // Should succeed for node operator (permissionless for the node operator to set their own depositor)
-      await expect(predepositGuarantee.connect(nodeOperator)[method](...args)).to.not.be.reverted;
+      await expect(predepositGuarantee.connect(nodeOperator)[method](...args)).to.not.revert(ethers);
     });
   });
 });

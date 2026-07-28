@@ -1,15 +1,16 @@
 import { expect } from "chai";
-import { MaxUint256, Signature, Signer, TypedDataDomain, TypedDataEncoder, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
-import { ExclusiveSuiteFunction, PendingSuiteFunction } from "mocha";
+import { MaxUint256, Signature, type Signer, type TypedDataDomain, TypedDataEncoder, ZeroAddress } from "ethers";
+import { type ExclusiveSuiteFunction, type PendingSuiteFunction } from "mocha";
 
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import type { IERC20 } from "typechain-types/@openzeppelin/contracts/token/ERC20/IERC20.js";
+import type { IERC2612 } from "typechain-types/index.js";
 
-import { IERC20, IERC2612 } from "typechain-types";
+import { certainAddress } from "lib/address.js";
+import { type Permit, signPermit } from "lib/eips/eip712.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { days } from "lib/time.js";
 
-import { certainAddress, days, Permit, signPermit } from "lib";
-
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 interface ERC2612Target {
   tokenName: string;
@@ -44,7 +45,7 @@ export function testERC2612Compliance({ tokenName, deploy, suiteFunction = descr
         spender: certainAddress("spender"),
         value: holderBalance,
         nonce: await token.nonces(holder),
-        deadline: BigInt(await time.latest()) + days(7n),
+        deadline: BigInt(await networkHelpers.time.latest()) + days(7n),
       };
       signature = await signPermit(domain, permit, signer);
     });
@@ -71,39 +72,39 @@ export function testERC2612Compliance({ tokenName, deploy, suiteFunction = descr
         const deadline = MaxUint256;
         const { v, r, s } = await signPermit(domain, { ...permit, deadline }, signer);
 
-        await expect(token.permit(owner, spender, value, deadline, v, r, s)).not.to.be.reverted;
+        await expect(token.permit(owner, spender, value, deadline, v, r, s)).not.to.revert(ethers);
       });
 
       context("Reverts if not", () => {
         it("The current blocktime is less than or equal to deadline", async () => {
-          const deadline = BigInt(await time.latest());
+          const deadline = BigInt(await networkHelpers.time.latest());
           const { owner, spender, value } = permit;
           const { v, r, s } = await signPermit(domain, { ...permit, deadline }, signer);
 
-          await expect(token.permit(owner, spender, value, deadline, v, r, s)).to.be.reverted;
+          await expect(token.permit(owner, spender, value, deadline, v, r, s)).to.revert(ethers);
         });
 
         it("owner is not the zero address", async () => {
           const { spender, value, deadline } = permit;
           const { v, r, s } = await signPermit(domain, { ...permit, owner: ZeroAddress }, signer);
 
-          await expect(token.permit(ZeroAddress, spender, value, deadline, v, r, s)).to.be.reverted;
+          await expect(token.permit(ZeroAddress, spender, value, deadline, v, r, s)).to.revert(ethers);
         });
 
         it("nonces[owner] (before the state update) is equal to nonce", async () => {
           const { owner, spender, value, deadline, nonce } = permit;
           const { v, r, s } = signature;
 
-          await expect(token.permit(owner, spender, value, deadline, v, r, s)).not.to.be.reverted;
+          await expect(token.permit(owner, spender, value, deadline, v, r, s)).not.to.revert(ethers);
           expect(await token.nonces(owner)).to.equal(nonce + 1n);
-          await expect(token.permit(owner, spender, value, deadline, v, r, s)).to.be.reverted;
+          await expect(token.permit(owner, spender, value, deadline, v, r, s)).to.revert(ethers);
         });
 
         it("r, s and v is a valid secp256k1 signature from owner of the message", async () => {
           const { owner, spender, value, deadline } = permit;
           const { v, r, s } = signature;
 
-          await expect(token.permit(owner, spender, value, deadline, v + 1, r, s)).to.be.reverted;
+          await expect(token.permit(owner, spender, value, deadline, v + 1, r, s)).to.revert(ethers);
         });
 
         it("r, s and v is a valid secp256k1 signature from owner of the message", async () => {
@@ -114,7 +115,7 @@ export function testERC2612Compliance({ tokenName, deploy, suiteFunction = descr
             (await ethers.getSigners())[9],
           );
 
-          await expect(token.permit(owner, spender, value, deadline, v, r, s)).to.be.reverted;
+          await expect(token.permit(owner, spender, value, deadline, v, r, s)).to.revert(ethers);
         });
       });
 
@@ -122,28 +123,30 @@ export function testERC2612Compliance({ tokenName, deploy, suiteFunction = descr
         const { spender, value, deadline } = permit;
         const { v, r, s } = signature;
 
-        await expect(token.permit(spender, spender, value, deadline, v, r, s)).to.be.reverted;
+        await expect(token.permit(spender, spender, value, deadline, v, r, s)).to.revert(ethers);
       });
 
       it("Reverts if spender does not match", async () => {
         const { owner, value, deadline } = permit;
         const { v, r, s } = signature;
 
-        await expect(token.permit(owner, owner, value, deadline, v, r, s)).to.be.reverted;
+        await expect(token.permit(owner, owner, value, deadline, v, r, s)).to.revert(ethers);
       });
 
       it("Reverts if value does not match", async () => {
         const { owner, value, deadline } = permit;
         const { v, r, s } = signature;
 
-        await expect(token.permit(owner, owner, value + 1n, deadline, v, r, s)).to.be.reverted;
+        await expect(token.permit(owner, owner, value + 1n, deadline, v, r, s)).to.revert(ethers);
       });
 
       it("Reverts if deadline does not match", async () => {
         const { owner, value } = permit;
         const { v, r, s } = signature;
 
-        await expect(token.permit(owner, owner, value, BigInt(await time.latest()) + days(1n), v, r, s)).to.be.reverted;
+        await expect(
+          token.permit(owner, owner, value, BigInt(await networkHelpers.time.latest()) + days(1n), v, r, s),
+        ).to.revert(ethers);
       });
     });
 

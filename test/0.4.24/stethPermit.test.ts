@@ -1,14 +1,15 @@
 import { expect } from "chai";
-import { Signature, Signer, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type Signature, type Signer, ZeroAddress } from "ethers";
 
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import type { StETHPermit__HarnessWithEip712Initialization } from "typechain-types/index.js";
 
-import { StETHPermit__HarnessWithEip712Initialization } from "typechain-types";
+import { certainAddress } from "lib/address.js";
+import { type Permit, signPermit, stethDomain } from "lib/eips/eip712.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { days } from "lib/time.js";
+import { ether } from "lib/units.js";
 
-import { certainAddress, days, ether, Permit, signPermit, stethDomain } from "lib";
-
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("StETHPermit.sol", () => {
   let deployer: Signer;
@@ -35,7 +36,7 @@ describe("StETHPermit.sol", () => {
       spender: certainAddress("spender"),
       value: holderBalance,
       nonce: await steth.nonces(signer),
-      deadline: BigInt(await time.latest()) + days(7n),
+      deadline: BigInt(await networkHelpers.time.latest()) + days(7n),
     };
 
     signature = await signPermit(await stethDomain(steth), permit, signer);
@@ -75,11 +76,11 @@ describe("StETHPermit.sol", () => {
       const { owner, spender, deadline, value } = permit;
       const { v, r, s } = signature;
 
-      await expect(steth.permit(owner, spender, value, deadline, v, r, s)).to.be.reverted;
+      await expect(steth.permit(owner, spender, value, deadline, v, r, s)).to.revert(ethers);
     });
 
     it("eip712Domain() reverts", async () => {
-      await expect(steth.eip712Domain()).to.be.revertedWithoutReason();
+      await expect(steth.eip712Domain()).to.be.revertedWithoutReason(ethers);
     });
   });
 
@@ -93,7 +94,7 @@ describe("StETHPermit.sol", () => {
       const { owner, spender, deadline, value } = permit;
       const { v, r, s } = signature;
 
-      await expect(steth.permit(owner, spender, value, deadline, v, r, s)).not.to.be.reverted;
+      await expect(steth.permit(owner, spender, value, deadline, v, r, s)).not.to.revert(ethers);
     });
 
     it("eip712Domain() returns the EIP-712 domain", async () => {

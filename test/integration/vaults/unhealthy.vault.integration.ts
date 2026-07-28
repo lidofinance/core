@@ -1,21 +1,20 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, StakingVault } from "typechain-types";
+import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
+import { ethers, networkHelpers } from "lib/hardhat.js";
 import {
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol";
-import { ether } from "lib/units";
+} from "lib/protocol/index.js";
+import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Unhealthy vault", () => {
   let ctx: ProtocolContext;
@@ -92,7 +91,7 @@ describe("Integration: Unhealthy vault", () => {
 
       // Set vault balance to 0.1 ETH
       const availableBalance = ether("0.1");
-      await setBalance(await stakingVault.getAddress(), availableBalance);
+      await networkHelpers.setBalance(await stakingVault.getAddress(), availableBalance);
 
       const recordBefore = await vaultHub.vaultRecord(stakingVault);
       const obligationsBefore = await vaultHub.obligations(stakingVault);
@@ -126,7 +125,7 @@ describe("Integration: Unhealthy vault", () => {
       const { vaultHub } = ctx.contracts;
 
       // Set vault balance to 0
-      await setBalance(await stakingVault.getAddress(), 0n);
+      await networkHelpers.setBalance(await stakingVault.getAddress(), 0n);
 
       await expect(vaultHub.connect(stranger).forceRebalance(stakingVault))
         .to.be.revertedWithCustomError(vaultHub, "NoFundsForForceRebalance")

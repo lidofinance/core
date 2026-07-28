@@ -1,11 +1,9 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractTransactionReceipt, ZeroAddress } from "ethers";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   LazyOracle__MockForVaultHub,
   LidoLocator,
   OperatorGrid,
@@ -16,15 +14,15 @@ import {
   StETH__HarnessForVaultHub,
   VaultFactory__MockForVaultHub,
   VaultHub,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
-import { GENESIS_FORK_VERSION } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
-import { findEvents } from "lib/event";
-import { ether } from "lib/units";
+import { GENESIS_FORK_VERSION, TOTAL_BASIS_POINTS } from "lib/constants.js";
+import { findEvents } from "lib/event.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { ether } from "lib/units.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 
@@ -192,7 +190,7 @@ describe("VaultHub.sol:forceExit", () => {
     await reportVault({});
     await vaultHub.mintShares(vaultAddress, user, ether("0.9"));
     await reportVault({ totalValue: ether("0.9") });
-    await setBalance(vaultAddress, ether("0.85"));
+    await networkHelpers.setBalance(vaultAddress, ether("0.85"));
   };
 
   context("forceValidatorExit", () => {
@@ -236,7 +234,7 @@ describe("VaultHub.sol:forceExit", () => {
       beforeEach(async () => await makeVaultUnhealthy());
 
       it("reverts if the value on the vault is not enough to cover rebalance", async () => {
-        await setBalance(vaultAddress, ether("0.9")); // 0.9 ETH is enough to cover rebalance
+        await networkHelpers.setBalance(vaultAddress, ether("0.9")); // 0.9 ETH is enough to cover rebalance
 
         await expect(
           vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }),

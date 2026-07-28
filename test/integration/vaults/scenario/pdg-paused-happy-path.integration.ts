@@ -1,12 +1,11 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt, hexlify } from "ethers";
-import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid.js";
+import type {
   Dashboard,
   LazyOracle,
   Lido,
@@ -16,9 +15,9 @@ import {
   StakingVault,
   VaultFactory,
   VaultHub,
-} from "typechain-types";
-import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
+} from "typechain-types/index.js";
 
+import { ethers, networkHelpers } from "lib/hardhat.js";
 import {
   advanceChainTime,
   days,
@@ -26,21 +25,21 @@ import {
   generateDepositStruct,
   generatePredeposit,
   generateValidator,
-  LocalMerkleTree,
+  type LocalMerkleTree,
   PDGPolicy,
   prepareLocalMerkleTree,
-} from "lib";
-import { mEqual } from "lib/promise";
+} from "lib/index.js";
+import { mEqual } from "lib/promise.js";
 import {
   createVaultProxyWithoutConnectingToVaultHub,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
   VAULT_CONNECTION_DEPOSIT,
-} from "lib/protocol";
+} from "lib/protocol/index.js";
 
-import { resetState, Snapshot } from "test/suite";
+import { resetState, Snapshot } from "test/suite/index.js";
 
 const VAULT_NODE_OPERATOR_FEE = 5_00n;
 const CONFIRM_EXPIRY = days(7n);
@@ -124,7 +123,7 @@ resetState(
       agent = await ctx.getSigner("agent");
 
       await setupLidoForVaults(ctx);
-      await setBalance(nodeOperator.address, ether("100"));
+      await networkHelpers.setBalance(nodeOperator.address, ether("100"));
 
       const pdgIsPaused = await predepositGuarantee.isPaused();
       if (!pdgIsPaused) {

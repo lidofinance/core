@@ -1,24 +1,23 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { Dashboard, StakingVault } from "typechain-types";
+import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
+import { ethers, networkHelpers } from "lib/hardhat.js";
 import {
   changeTier,
   createVaultWithDashboard,
   getProtocolContext,
-  ProtocolContext,
+  type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
   setUpOperatorGrid,
   waitNextAvailableReportTime,
-} from "lib/protocol";
-import { ether } from "lib/units";
+} from "lib/protocol/index.js";
+import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: VaultHub", () => {
   let ctx: ProtocolContext;
@@ -113,7 +112,7 @@ describe("Integration: VaultHub", () => {
         const { vaultHub } = ctx.contracts;
 
         await reportVaultDataWithProof(ctx, stakingVault, { totalValue: 100n, cumulativeLidoFees: 200n });
-        await setBalance(await stakingVault.getAddress(), ether("1.5"));
+        await networkHelpers.setBalance(await stakingVault.getAddress(), ether("1.5"));
 
         await vaultHub.connect(await ctx.getSigner("agent")).grantRole(await vaultHub.VAULT_MASTER_ROLE(), dao);
 

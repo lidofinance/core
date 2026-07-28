@@ -1,16 +1,21 @@
 // ToDo: write test for triggerFullWithdrawals
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { NodeOperatorsRegistry, StakingRouter, TriggerableWithdrawalsGateway, WithdrawalVault } from "typechain-types";
+import type {
+  NodeOperatorsRegistry,
+  StakingRouter,
+  TriggerableWithdrawalsGateway,
+  WithdrawalVault,
+} from "typechain-types/index.js";
 
-import { ether } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { ethers } from "lib/hardhat.js";
+import { ether } from "lib/index.js";
+import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 describe("Scenario: TriggerFullWithdrawals", () => {
   let ctx: ProtocolContext;
@@ -81,7 +86,9 @@ describe("Scenario: TriggerFullWithdrawals", () => {
       triggerableWithdrawalsGateway
         .connect(stranger)
         .triggerFullWithdrawals(validatorData, ZeroAddress, 0, { value: totalFee }),
-    ).to.be.revertedWithCustomError;
+    ).to.be.revertedWith(
+      `AccessControl: account ${(await stranger.getAddress()).toLowerCase()} is missing role ${ADD_FULL_WITHDRAWAL_REQUEST_ROLE}`,
+    );
   });
 
   it("Should revert when insufficient fee is provided", async () => {

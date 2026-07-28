@@ -1,16 +1,17 @@
 import { expect } from "chai";
 import { encodeBytes32String, MaxUint256, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
+import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
+import type { Kernel } from "typechain-types/@aragon/os/contracts/kernel/Kernel.js";
+import { type Lido, type LidoLocator, type NodeOperatorsRegistry__Harness } from "typechain-types/index.js";
 
-import { RewardDistributionState } from "lib";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { RewardDistributionState } from "lib/nor.js";
 
-import { addAragonApp, deployLidoDao, deployLidoLocator } from "test/deploy";
-import { Snapshot } from "test/suite";
+import { addAragonApp, deployLidoDao, deployLidoLocator } from "test/deploy/index.js";
+import { Snapshot } from "test/suite/index.js";
 
 describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
   let deployer: HardhatEthersSigner;
@@ -48,7 +49,8 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
     const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
     const norHarnessFactory = await ethers.getContractFactory("NodeOperatorsRegistry__Harness", {
       libraries: {
-        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+        ["project/contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]:
+          await allocLib.getAddress(),
       },
     });
 
@@ -88,7 +90,7 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
     });
 
     it("Reverts if Locator is zero address", async () => {
-      await expect(nor.initialize(ZeroAddress, moduleType, 86400n)).to.be.reverted;
+      await expect(nor.initialize(ZeroAddress, moduleType, 86400n)).to.revert(ethers);
     });
 
     it("Reverts if was initialized with v1", async () => {
@@ -105,7 +107,7 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
 
     it("Makes the contract initialized to v4", async () => {
       const burnerAddress = await locator.burner();
-      const latestBlock = BigInt(await time.latestBlock());
+      const latestBlock = BigInt(await networkHelpers.time.latestBlock());
 
       await expect(nor.initialize(locator, moduleType, 86400n))
         .to.emit(nor, "ContractVersionSet")
@@ -198,7 +200,7 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
       expect(await nor.exitDeadlineThreshold(0)).to.equal(86400n);
 
       // Verify exit penalty cutoff timestamp is set correctly (this is done in _setExitDeadlineThreshold)
-      const currentTimestamp = await time.latest();
+      const currentTimestamp = await networkHelpers.time.latest();
       expect(await nor.exitPenaltyCutoffTimestamp()).to.be.lte(currentTimestamp);
     });
   });
@@ -228,7 +230,7 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
     });
 
     it("Reverts when sum of threshold and reporting window causes underflow", async () => {
-      const currentTime = await time.latest();
+      const currentTime = await networkHelpers.time.latest();
       const threshold = BigInt(currentTime) + 1000n; // Future timestamp
       const reportingWindow = 1000n;
 
@@ -259,14 +261,14 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
 
       expect(await nor.exitDeadlineThreshold(0)).to.equal(threshold);
 
-      const currentTime = BigInt(await time.latest());
+      const currentTime = BigInt(await networkHelpers.time.latest());
       const actualCutoff = await nor.exitPenaltyCutoffTimestamp();
       expect(actualCutoff).to.be.closeTo(currentTime - 1n, 5n);
     });
 
     it("Prevents underflow scenario", async () => {
       // Simulate scenario where _threshold + _lateReportingWindow > block.timestamp
-      const currentTime = BigInt(await time.latest());
+      const currentTime = BigInt(await networkHelpers.time.latest());
 
       // This should fail due to underflow protection
       await expect(
@@ -300,10 +302,10 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
       const currentCutoff = await nor.exitPenaltyCutoffTimestamp();
 
       // Advance time a bit
-      await time.increase(3600); // 1 hour
+      await networkHelpers.time.increase(3600); // 1 hour
 
       // Calculate parameters that would result in the same cutoff timestamp
-      const newCurrentTime = BigInt(await time.latest());
+      const newCurrentTime = BigInt(await networkHelpers.time.latest());
       const targetCutoff = currentCutoff;
       const newThreshold = 43200n; // 12 hours
       const newReportingWindow = newCurrentTime - targetCutoff - newThreshold;

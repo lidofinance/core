@@ -1,13 +1,11 @@
 import { expect } from "chai";
-import { ContractTransactionResponse } from "ethers";
-import { ethers } from "hardhat";
+import { type ContractTransactionResponse } from "ethers";
 
-import { mineUpTo } from "@nomicfoundation/hardhat-network-helpers";
-import { latestBlock } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
+import type { StakeLimitUnstructuredStorage__Harness, StakeLimitUtils__Harness } from "typechain-types/index.js";
 
-import { StakeLimitUnstructuredStorage__Harness, StakeLimitUtils__Harness } from "typechain-types";
+import { ethers, networkHelpers } from "lib/hardhat.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("StakeLimitUtils.sol", () => {
   let stakeLimitUnstructuredStorage: StakeLimitUnstructuredStorage__Harness;
@@ -175,7 +173,7 @@ describe("StakeLimitUtils.sol", () => {
     const maxStakeLimitGrowthBlocks = 91n;
 
     beforeEach(async () => {
-      prevStakeBlockNumber = BigInt(await latestBlock());
+      prevStakeBlockNumber = BigInt(await networkHelpers.time.latestBlock());
 
       await expect(
         stakeLimitUtils.harness_setState(
@@ -207,12 +205,12 @@ describe("StakeLimitUtils.sol", () => {
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber2, staticStakeLimit, 0n, staticStakeLimit);
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(staticStakeLimit);
 
-        await mineUpTo(123n + BigInt(await latestBlock()));
+        await networkHelpers.mineUpTo(123n + BigInt(await networkHelpers.time.latestBlock()));
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(staticStakeLimit);
       });
 
       it("the full limit gets restored after growth blocks (increasing to limit)", async () => {
-        prevStakeBlockNumber = BigInt(await latestBlock());
+        prevStakeBlockNumber = BigInt(await networkHelpers.time.latestBlock());
         const baseStakeLimit = 0n;
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber, 0n, maxStakeLimitGrowthBlocks, maxStakeLimit);
 
@@ -222,19 +220,19 @@ describe("StakeLimitUtils.sol", () => {
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(growthPerBlock);
 
         // growth blocks passed (might be not equal to maxStakeLimit yet due to rounding)
-        await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
+        await networkHelpers.mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
           baseStakeLimit + maxStakeLimitGrowthBlocks * growthPerBlock,
         );
 
         // move forward one more block to account for rounding and reach max
-        await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks + 1n);
+        await networkHelpers.mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks + 1n);
         // growth blocks mined, the limit should be full
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(maxStakeLimit);
       });
 
       it("the full limit gets restored after growth blocks (decreasing to limit)", async () => {
-        prevStakeBlockNumber = BigInt(await latestBlock());
+        prevStakeBlockNumber = BigInt(await networkHelpers.time.latestBlock());
         const initial = maxStakeLimit * 2n;
 
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber, initial, maxStakeLimitGrowthBlocks, maxStakeLimit);
@@ -245,13 +243,13 @@ describe("StakeLimitUtils.sol", () => {
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(initial - growthPerBlock);
 
         // growth blocks passed (might be not equal to maxStakeLimit yet due to rounding)
-        await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
+        await networkHelpers.mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
           initial - maxStakeLimitGrowthBlocks * growthPerBlock,
         );
 
         // move forward one more block to account for rounding and reach max
-        await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks + 1n);
+        await networkHelpers.mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks + 1n);
         // growth blocks mined, the limit should be full
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(maxStakeLimit);
       });
@@ -265,7 +263,7 @@ describe("StakeLimitUtils.sol", () => {
         );
 
         for (let i = 0n; i < maxStakeLimitGrowthBlocks; ++i) {
-          const blockNumber = await latestBlock();
+          const blockNumber = await networkHelpers.time.latestBlock();
           const curPrevStakeLimit = maxStakeLimit - ((i + 1n) * maxStakeLimit) / maxStakeLimitGrowthBlocks;
 
           await stakeLimitUtils.harness_setState(
@@ -353,7 +351,7 @@ describe("StakeLimitUtils.sol", () => {
           await expect(stakeLimitUtils.setStakingLimit(updatedMaxStakeLimit, stakeLimitIncreasePerBlock))
             .to.emit(stakeLimitUtils, "StakingLimitSet")
             .withArgs(updatedMaxStakeLimit, stakeLimitIncreasePerBlock);
-          const updatedBlock = await latestBlock();
+          const updatedBlock = await networkHelpers.time.latestBlock();
 
           const state = await stakeLimitUtils.harness_getState();
 
@@ -370,7 +368,7 @@ describe("StakeLimitUtils.sol", () => {
           await expect(stakeLimitUtils.setStakingLimit(updatedMaxStakeLimit, stakeLimitIncreasePerBlock))
             .to.emit(stakeLimitUtils, "StakingLimitSet")
             .withArgs(updatedMaxStakeLimit, stakeLimitIncreasePerBlock);
-          const updatedBlock = await latestBlock();
+          const updatedBlock = await networkHelpers.time.latestBlock();
 
           const state = await stakeLimitUtils.harness_getState();
 
@@ -386,7 +384,7 @@ describe("StakeLimitUtils.sol", () => {
         await expect(stakeLimitUtils.setStakingLimit(maxStakeLimit, 0n))
           .to.emit(stakeLimitUtils, "StakingLimitSet")
           .withArgs(maxStakeLimit, 0n);
-        const updatedBlock = await latestBlock();
+        const updatedBlock = await networkHelpers.time.latestBlock();
 
         const state = await stakeLimitUtils.harness_getState();
 
@@ -403,7 +401,7 @@ describe("StakeLimitUtils.sol", () => {
         await expect(stakeLimitUtils.setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock))
           .to.emit(stakeLimitUtils, "StakingLimitSet")
           .withArgs(maxStakeLimit, stakeLimitIncreasePerBlock);
-        const updatedBlock = await latestBlock();
+        const updatedBlock = await networkHelpers.time.latestBlock();
 
         const state = await stakeLimitUtils.harness_getState();
 
@@ -429,10 +427,10 @@ describe("StakeLimitUtils.sol", () => {
 
     context("update", () => {
       it("reverts on bad input", async () => {
-        await expect(stakeLimitUtils.updatePrevStakeLimit(2n ** 96n)).revertedWithoutReason();
+        await expect(stakeLimitUtils.updatePrevStakeLimit(2n ** 96n)).revertedWithoutReason(ethers);
 
         await stakeLimitUtils.harness_setState(0n, prevStakeLimit, maxStakeLimitGrowthBlocks, maxStakeLimit);
-        await expect(stakeLimitUtils.updatePrevStakeLimit(10n)).revertedWithoutReason();
+        await expect(stakeLimitUtils.updatePrevStakeLimit(10n)).revertedWithoutReason(ethers);
       });
 
       it("works for regular cases", async () => {
@@ -441,7 +439,7 @@ describe("StakeLimitUtils.sol", () => {
         await expect(stakeLimitUtils.updatePrevStakeLimit(updatedValue))
           .to.emit(stakeLimitUtils, "PrevStakeLimitUpdated")
           .withArgs(updatedValue);
-        const stakeBlockNumber = await latestBlock();
+        const stakeBlockNumber = await networkHelpers.time.latestBlock();
 
         const state = await stakeLimitUtils.harness_getState();
 

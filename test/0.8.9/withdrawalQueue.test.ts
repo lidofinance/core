@@ -1,30 +1,27 @@
 import { expect } from "chai";
 import { HDNodeWallet, Wallet, ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import {
+import type {
   StETH__HarnessForWithdrawalQueue,
   WithdrawalsQueue__Harness,
   WstETH__MockForWithdrawalQueue,
-} from "typechain-types";
+} from "typechain-types/index.js";
 
+import { impersonate } from "lib/account.js";
+import { randomAddress } from "lib/address.js";
 import {
-  ether,
-  impersonate,
   MAX_UINT256,
-  proxify,
-  randomAddress,
-  shareRate,
-  shares,
-  streccak,
   WITHDRAWAL_MAX_STETH_WITHDRAWAL_AMOUNT,
   WITHDRAWAL_MIN_STETH_WITHDRAWAL_AMOUNT,
-} from "lib";
+} from "lib/constants.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { streccak } from "lib/keccak.js";
+import { proxify } from "lib/proxy.js";
+import { ether, shareRate, shares } from "lib/units.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 const ZERO = 0n;
 
@@ -118,7 +115,9 @@ describe("WithdrawalQueue.sol", () => {
 
   context("constructor", () => {
     it("Reverts if wstETH address is zero", async () => {
-      await expect(ethers.deployContract("WithdrawalsQueue__Harness", [ZeroAddress])).to.be.revertedWithoutReason();
+      await expect(ethers.deployContract("WithdrawalsQueue__Harness", [ZeroAddress])).to.be.revertedWithoutReason(
+        ethers,
+      );
     });
 
     it("Sets initial properties", async () => {
@@ -236,7 +235,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Reverts if the caller is unauthorised", async () => {
-        const blockTimestamp = await time.latest();
+        const blockTimestamp = await networkHelpers.time.latest();
 
         await expect(queue.connect(stranger).pauseUntil(blockTimestamp + 1)).to.be.revertedWithOZAccessControlError(
           stranger.address,
@@ -245,7 +244,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Pauses the contract with PAUSE_ROLE", async () => {
-        const blockTimestamp = await time.latest();
+        const blockTimestamp = await networkHelpers.time.latest();
 
         await queue.grantRole(await queue.PAUSE_ROLE(), owner);
 
@@ -253,7 +252,7 @@ describe("WithdrawalQueue.sol", () => {
 
         expect(await queue.isPaused()).to.equal(true, "isPaused after pauseUntil");
 
-        await time.increase(100);
+        await networkHelpers.time.increase(100);
 
         expect(await queue.isPaused()).to.equal(false, "isPaused after time increase");
       });
@@ -558,7 +557,7 @@ describe("WithdrawalQueue.sol", () => {
     context("getWithdrawalStatus", () => {
       beforeEach(async () => {
         await stEth.mock__setTotalPooledEther(ether("1000.00"));
-        await setBalance(stEthAddress, ether("1001.00"));
+        await networkHelpers.setBalance(stEthAddress, ether("1001.00"));
 
         await stEth.harness__mintShares(user, shares(300n));
         await stEth.connect(user).approve(queueAddress, ether("300.00"));
@@ -583,7 +582,7 @@ describe("WithdrawalQueue.sol", () => {
 
         await queue.connect(user).requestWithdrawals([amount1, amount2], stranger);
 
-        const timestamp = BigInt(await time.latest());
+        const timestamp = BigInt(await networkHelpers.time.latest());
 
         expect(await queue.getWithdrawalStatus([1, 2])).to.deep.equal([
           [amount1, shares1, stranger.address, timestamp, false, false],
@@ -677,7 +676,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Claims the withdrawals for stranger and emit `WithdrawalClaimed` and triggers emitting of `Transfer` event", async () => {
-        await setBalance(queueAddress, ether("10.00"));
+        await networkHelpers.setBalance(queueAddress, ether("10.00"));
 
         const requests = [1, 2];
 
@@ -716,7 +715,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Claims the withdrawals and emit `WithdrawalClaimed` and triggers emitting of `Transfer` event", async () => {
-        await setBalance(queueAddress, ether("10.00"));
+        await networkHelpers.setBalance(queueAddress, ether("10.00"));
 
         const requests = [1, 2];
 
@@ -750,7 +749,7 @@ describe("WithdrawalQueue.sol", () => {
       it("Claims the withdrawals and emit `WithdrawalClaimed` and triggers emitting of `Transfer` event", async () => {
         const requestId = 1;
 
-        await setBalance(queueAddress, ether("10.00"));
+        await networkHelpers.setBalance(queueAddress, ether("10.00"));
         await queue.harness__enqueue(ether("1.00"), shares(1n), owner);
         await queue.prefinalize([requestId], shareRate(1n));
         await queue.harness__finalize(requestId, shareRate(1n), { value: ether("1.00") });
@@ -808,7 +807,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Reverts if the bunker mode start time in future", async () => {
-        const futureTimestamp = (await time.latest()) + 1000;
+        const futureTimestamp = (await networkHelpers.time.latest()) + 1000;
 
         await expect(queue.connect(oracle).onOracleReport(true, futureTimestamp, 0)).to.be.revertedWithCustomError(
           queue,
@@ -817,7 +816,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Reverts if the current report time in future", async () => {
-        const futureTimestamp = (await time.latest()) + 1000;
+        const futureTimestamp = (await networkHelpers.time.latest()) + 1000;
 
         await expect(queue.connect(oracle).onOracleReport(true, 0, futureTimestamp)).to.be.revertedWithCustomError(
           queue,
@@ -826,7 +825,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Enables bunker mode and emit `BunkerModeEnabled`", async () => {
-        const validTimestamp = await time.latest();
+        const validTimestamp = await networkHelpers.time.latest();
 
         await expect(queue.connect(oracle).onOracleReport(true, validTimestamp, validTimestamp))
           .to.emit(queue, "BunkerModeEnabled")
@@ -837,7 +836,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Disables bunker mode and emit `BunkerModeDisabled`", async () => {
-        const validTimestamp = await time.latest();
+        const validTimestamp = await networkHelpers.time.latest();
 
         await queue.connect(oracle).onOracleReport(true, validTimestamp, validTimestamp);
 
@@ -851,7 +850,7 @@ describe("WithdrawalQueue.sol", () => {
       });
 
       it("Changes nothing if the bunker mode is already active", async () => {
-        const validTimestamp = await time.latest();
+        const validTimestamp = await networkHelpers.time.latest();
 
         await queue.connect(oracle).onOracleReport(true, validTimestamp, validTimestamp);
 

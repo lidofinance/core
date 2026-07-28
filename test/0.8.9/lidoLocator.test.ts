@@ -1,10 +1,10 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { LidoLocator } from "typechain-types";
+import type { LidoLocator } from "typechain-types/index.js";
 
-import { randomAddress } from "lib";
+import { randomAddress } from "lib/address.js";
+import { ethers } from "lib/hardhat.js";
 
 const services = [
   "accountingOracle",
@@ -71,7 +71,7 @@ describe("LidoLocator.sol", () => {
 
     it("Does not revert if `postTokenRebaseReceiver` is zero address", async () => {
       const randomConfiguration = randomConfig();
-      await expect(ethers.deployContract("LidoLocator", [randomConfiguration])).to.not.be.reverted;
+      await expect(ethers.deployContract("LidoLocator", [randomConfiguration])).to.not.revert(ethers);
     });
   });
 

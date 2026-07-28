@@ -1,27 +1,16 @@
 import { expect } from "chai";
+
+import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
+
+import type { Lido, WithdrawalQueueERC721 } from "typechain-types/index.js";
+
+import { ethers, networkHelpers } from "lib/hardhat.js";
+import { certainAddress, ether, findEventsWithInterfaces, impersonate, toGwei } from "lib/index.js";
+import { buildModuleAccountingReportParams, depositValidatorsWithoutReport, finalizeWQViaSubmit, getProtocolContext, report, reportWithoutClActivation, resetCLBalanceDecreaseWindow, waitNextAvailableReportTime, type ProtocolContext } from "lib/protocol/index.js";
+
+import { Snapshot } from "test/suite/index.js";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
-
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
-
-import { Lido, WithdrawalQueueERC721 } from "typechain-types";
-
-import { certainAddress, ether, findEventsWithInterfaces, impersonate, toGwei } from "lib";
-import {
-  buildModuleAccountingReportParams,
-  depositValidatorsWithoutReport,
-  finalizeWQViaSubmit,
-  getProtocolContext,
-  ProtocolContext,
-  report,
-  reportWithoutClActivation,
-  resetCLBalanceDecreaseWindow,
-  waitNextAvailableReportTime,
-} from "lib/protocol";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting";
-
-import { Snapshot } from "test/suite";
+import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
 
 describe("Integration: Withdrawal edge cases", () => {
   let ctx: ProtocolContext;
@@ -115,7 +104,7 @@ describe("Integration: Withdrawal edge cases", () => {
     snapshot = await Snapshot.take();
 
     [, holder] = await ethers.getSigners();
-    await setBalance(holder.address, ether("1000000"));
+    await networkHelpers.setBalance(holder.address, ether("1000000"));
 
     await finalizeWQViaSubmit(ctx);
 
@@ -234,9 +223,9 @@ describe("Integration: Withdrawal edge cases", () => {
       const requestIds = [requestId];
 
       // Skip next report by waiting extra time
-      const timeBeforeMissedReport = await time.latest();
-      await time.increase(24 * 60 * 60); // 24 hours
-      const timeAfterMissedReport = await time.latest();
+      const timeBeforeMissedReport = await networkHelpers.time.latest();
+      await networkHelpers.time.increase(24 * 60 * 60); // 24 hours
+      const timeAfterMissedReport = await networkHelpers.time.latest();
 
       // Check request not finalized after missed report
       const [status] = await wq.getWithdrawalStatus([...requestIds]);

@@ -1,16 +1,15 @@
 import { expect } from "chai";
 import { randomBytes } from "crypto";
 import { hexlify } from "ethers";
-import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { getStorageAt } from "@nomicfoundation/hardhat-network-helpers";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ERC1967Proxy__Harness, WithdrawalsManagerProxy__Mock } from "typechain-types";
+import type { ERC1967Proxy__Harness, WithdrawalsManagerProxy__Mock } from "typechain-types/index.js";
 
-import { certainAddress } from "lib";
+import { certainAddress } from "lib/address.js";
+import { ethers, networkHelpers } from "lib/hardhat.js";
 
-import { Snapshot } from "test/suite";
+import { Snapshot } from "test/suite/index.js";
 
 describe("WithdrawalsManagerProxy.sol:erc1967proxy", () => {
   let deployer: HardhatEthersSigner;
@@ -51,7 +50,7 @@ describe("WithdrawalsManagerProxy.sol:erc1967proxy", () => {
         deployer,
       );
 
-      expect(await getStorageAt(await proxy.getAddress(), slot)).to.equal(value);
+      expect(await networkHelpers.getStorageAt(await proxy.getAddress(), slot)).to.equal(value);
     });
 
     it("Set the implementation", async () => {
