@@ -1,169 +1,110 @@
-import * as process from "node:process";
-
-import "@nomicfoundation/hardhat-chai-matchers";
-import "@nomicfoundation/ethereumjs-util";
-import "@nomicfoundation/hardhat-verify";
-import "@typechain/hardhat";
-
 import "dotenv/config";
-import "solidity-coverage";
-import "tsconfig-paths/register";
-import "hardhat-tracer";
-import "hardhat-watcher";
-import "hardhat-ignore-warnings";
-import "hardhat-contract-sizer";
-import "hardhat-gas-reporter";
-import { HardhatUserConfig } from "hardhat/config";
+import { configVariable, defineConfig } from "hardhat/config";
+import HardhatIgnoreWarnings from "hardhat-ignore-warnings";
 
-import { mochaRootHooks } from "test/hooks";
+import HardhatToolbox from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
+import HardhatContractSizer from "@solidstate/hardhat-contract-sizer";
 
-import "./tasks";
-
-import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers";
-
-const RPC_URL: string = process.env.RPC_URL || "";
-const HARDHAT_CHAIN_ID = process.env.HARDHAT_CHAIN_ID ? parseInt(process.env.HARDHAT_CHAIN_ID, 10) : undefined;
+import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers.js";
+import {
+  checkInterfacesTask,
+  compileOverrideTask,
+  extractAbisTask,
+  lintSolidityTask,
+  validateConfigsTask,
+  verifyDeployedTask,
+} from "./tasks/index.js";
+import { mochaRootHooks } from "./test/hooks/index.js";
 
 export const ZERO_PK = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-const config: HardhatUserConfig = {
-  defaultNetwork: "hardhat",
-  gasReporter: {
-    enabled: !process.env.SKIP_GAS_REPORT,
-    reportPureAndViewMethods: true,
-    etherscan: process.env.ETHERSCAN_API_KEY || "",
-  },
-  networks: {
-    "hardhat": {
-      // setting base fee to 0 to avoid extra calculations doesn't work :(
-      // minimal base fee is 1 for EIP-1559
-      // gasPrice: 0,
-      // initialBaseFeePerGas: 0,
-      ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
-      blockGasLimit: 30000000,
-      allowUnlimitedContractSize: true,
-      accounts: {
-        // default hardhat's node mnemonic
-        mnemonic: "test test test test test test test test test test test junk",
-        count: 30,
-        accountsBalance: "10000000000000000000000000",
-      },
-      forking: getHardhatForkingConfig(),
-      hardfork: "prague",
-      chains: {
-        32382: {
-          hardforkHistory: {
-            prague: 0,
-          },
-        },
-      },
-      mining: {
-        mempool: {
-          order: "fifo",
-        },
-      },
-    },
-    "custom": {
-      url: RPC_URL,
-      timeout: 120_000,
-    },
-    // local nodes
-    "local": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
-    "local-devnet": {
-      url: process.env.LOCAL_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-      accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
-      chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID || "32382", 10),
-    },
-    // testnets
-    "sepolia": {
-      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
-      chainId: 11155111,
-      accounts: loadAccounts("sepolia"),
-    },
-    "hoodi": {
-      url: process.env.HOODI_RPC_URL || RPC_URL,
-      chainId: 560048,
-      accounts: loadAccounts("hoodi"),
-    },
-    "mainnet": {
-      url: RPC_URL,
-      chainId: 1,
-      accounts: loadAccounts("mainnet"),
-    },
-    // forks
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
-    "sepolia-fork": {
-      url: process.env.SEPOLIA_RPC_URL || RPC_URL,
-      chainId: 11155111,
-    },
-    "hoodi-fork": {
-      url: process.env.HOODI_RPC_URL || RPC_URL,
-      chainId: 560048,
-    },
-  },
-  etherscan: {
-    customChains: [
-      {
-        network: "local-devnet",
-        chainId: 32382,
-        urls: {
-          apiURL: "http://localhost:3080/api",
-          browserURL: "http://localhost:3080",
-        },
-      },
-      {
-        network: "hoodi",
-        chainId: 560048,
-        urls: {
-          apiURL: "https://api-hoodi.etherscan.io/api",
-          browserURL: "https://hoodi.etherscan.io/",
-        },
-      },
-      {
-        network: "local-devnet",
-        chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),
-        urls: {
-          apiURL: process.env.LOCAL_DEVNET_EXPLORER_API_URL ?? "",
-          browserURL: process.env.LOCAL_DEVNET_EXPLORER_URL ?? "",
-        },
-      },
-      {
-        network: "holesky",
-        chainId: 17000,
-        urls: {
-          apiURL: "https://api-holesky.etherscan.io/api",
-          browserURL: "https://holesky.etherscan.io/",
-        },
-      },
-      {
-        network: "sepolia",
-        chainId: 11155111,
-        urls: {
-          apiURL: "https://api-sepolia.etherscan.io/api",
-          browserURL: "https://sepolia.etherscan.io/",
-        },
-      },
-      {
-        network: "hoodi",
-        chainId: 560048,
-        urls: {
-          apiURL: "https://api-hoodi.etherscan.io/api",
-          browserURL: "https://hoodi.etherscan.io/",
-        },
-      },
+const LOCAL_DEVNET_CHAIN_ID = parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10);
+const HARDHAT_CHAIN_ID = process.env.HARDHAT_CHAIN_ID ? parseInt(process.env.HARDHAT_CHAIN_ID, 10) : undefined;
+
+export default defineConfig({
+  plugins: [HardhatToolbox, HardhatContractSizer, HardhatIgnoreWarnings],
+  tasks: [
+    checkInterfacesTask,
+    compileOverrideTask,
+    extractAbisTask,
+    lintSolidityTask,
+    validateConfigsTask,
+    verifyDeployedTask,
+  ],
+  coverage: {
+    // Ported from the former .solcover.js (HH2 / solidity-coverage). HH3's native
+    // coverage reads exclusions from here, not .solcover.js. Globs are relative to
+    // the project root (note the `contracts/` prefix and `/**` for directories).
+    skipFiles: [
+      "contracts/common/interfaces/**",
+      "contracts/0.4.24/template/**",
+      "contracts/0.6.11/deposit_contract.sol",
+      "contracts/0.6.12/interfaces/**",
+      "contracts/0.8.9/interfaces/**",
+      // Skip contracts that are tested by Foundry tests
+      "contracts/common/lib/**", // covered by test/common/*.t.sol
+      "contracts/0.8.9/lib/UnstructuredStorage.sol", // covered by test/0.8.9/unstructuredStorage.t.sol
+      "contracts/openzeppelin/**",
+      "contracts/upgrade/**",
+      // Test-only mocks and harnesses. HH3 instruments these because `paths.sources`
+      // includes `test`; solidity-coverage (HH2) only ever counted `contracts/`.
+      "test/**",
     ],
-    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL
-      ? { "local-devnet": "local-devnet" }
-      : process.env.ETHERSCAN_API_KEY || "",
+  },
+  contractSizer: {
+    alphaSort: false,
+    runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
+    strict: false,
+    except: [/template/, /mocks/, /@aragon/, /openzeppelin/, /test/],
+  },
+  typechain: {
+    outDir: "typechain-types",
+  },
+  test: {
+    mocha: {
+      timeout: 20 * 60 * 1000, // 20 minutes
+      rootHooks: mochaRootHooks,
+      parallel: process.env.PARALLEL === "true",
+    },
+  },
+  paths: {
+    sources: {
+      solidity: ["contracts", "test"],
+    },
+    tests: {
+      mocha: "test",
+    },
   },
   solidity: {
+    npmFilesToBuild: [
+      "@aragon/apps-agent/contracts/Agent.sol",
+      "@aragon/apps-finance/contracts/Finance.sol",
+      "@aragon/apps-vault/contracts/Vault.sol",
+      "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol",
+      "@aragon/apps-lido/apps/voting/contracts/Voting.sol",
+      "@aragon/id/contracts/FIFSResolvingRegistrar.sol",
+      "@aragon/minime/contracts/MiniMeToken.sol",
+      "@aragon/os/contracts/acl/ACL.sol",
+      "@aragon/os/contracts/apm/APMRegistry.sol",
+      "@aragon/os/contracts/apm/Repo.sol",
+      "@aragon/os/contracts/ens/ENSSubdomainRegistrar.sol",
+      "@aragon/os/contracts/factory/APMRegistryFactory.sol",
+      "@aragon/os/contracts/factory/DAOFactory.sol",
+      "@aragon/os/contracts/factory/ENSFactory.sol",
+      "@aragon/os/contracts/factory/EVMScriptRegistryFactory.sol",
+      "@aragon/os/contracts/apps/AppProxyPinned.sol",
+      "@aragon/os/contracts/apps/AppProxyUpgradeable.sol",
+      "@aragon/os/contracts/evmscript/EVMScriptRegistry.sol",
+      "@aragon/os/contracts/evmscript/executors/CallsScript.sol",
+      "@aragon/os/contracts/kernel/Kernel.sol",
+      "@aragon/os/contracts/kernel/KernelProxy.sol",
+      "@aragon/os/contracts/lib/ens/ENS.sol",
+      "@aragon/os/contracts/lib/misc/ERCProxy.sol",
+      "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol",
+      "@openzeppelin/contracts/token/ERC20/ERC20.sol",
+      "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+      "@openzeppelin/contracts/token/ERC721/ERC721.sol",
+    ],
     compilers: [
       {
         version: "0.4.24",
@@ -233,53 +174,155 @@ const config: HardhatUserConfig = {
       },
     },
   },
-  tracer: {
-    tasks: ["watch"],
-  },
-  typechain: {
-    outDir: "typechain-types",
-    target: "ethers-v6",
-    alwaysGenerateOverloads: false,
-    externalArtifacts: ["externalArtifacts/*.json"],
-    dontOverrideCompile: false,
-  },
-  watcher: {
-    test: {
-      tasks: [
-        { command: "compile", params: { quiet: true } },
-        { command: "test", params: { noCompile: true, testFiles: ["{path}"] } },
-      ],
-      files: ["./test/**/*"],
-      clearOnStart: true,
-      start: "echo Running tests...",
-    },
-  },
-  mocha: {
-    fullTrace: true,
-    rootHooks: mochaRootHooks,
-    timeout: 20 * 60 * 1000, // 20 minutes
-  },
   warnings: {
-    "@aragon/**/*": {
-      default: "off",
+    "@aragon/**/*": { default: "off" },
+    "contracts/*/mocks/**/*": { default: "off" },
+    "test/*/contracts/**/*": { default: "off" },
+    "contracts/common/interfaces/ILidoLocator.sol": { default: "off" },
+  },
+  networks: {
+    "default": {
+      type: "edr-simulated",
+      // setting base fee to 0 to avoid extra calculations doesn't work :(
+      // minimal base fee is 1 for EIP-1559
+      // gasPrice: 0,
+      // initialBaseFeePerGas: 0,
+      ...(HARDHAT_CHAIN_ID ? { chainId: HARDHAT_CHAIN_ID } : {}),
+      blockGasLimit: 30000000,
+      allowUnlimitedContractSize: true,
+      accounts: {
+        // default hardhat's node mnemonic
+        mnemonic: "test test test test test test test test test test test junk",
+        count: 30,
+        accountsBalance: "10000000000000000000000000",
+      },
+      forking: getHardhatForkingConfig(),
+      hardfork: "prague",
+      chains: {
+        32382: {
+          hardforkHistory: {
+            prague: 0,
+          },
+        },
+      },
+      mining: {
+        mempool: {
+          order: "fifo",
+        },
+      },
     },
-    "contracts/*/mocks/**/*": {
-      default: "off",
+    "node": {
+      type: "edr-simulated",
+      blockGasLimit: 30000000,
+      allowUnlimitedContractSize: true,
+      accounts: {
+        mnemonic: "test test test test test test test test test test test junk",
+        count: 30,
+        accountsBalance: "10000000000000000000000000",
+      },
+      hardfork: "prague",
+      mining: {
+        mempool: {
+          order: "fifo",
+        },
+      },
     },
-    "test/*/contracts/**/*": {
-      default: "off",
+    "custom": {
+      type: "http",
+      url: configVariable("RPC_URL"),
+      timeout: 120_000,
     },
-    "contracts/common/interfaces/ILidoLocator.sol": {
-      default: "off",
+    "local": {
+      type: "http",
+      url: configVariable("LOCAL_RPC_URL"),
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
+    "local-devnet": {
+      type: "http",
+      url: configVariable("LOCAL_RPC_URL"),
+      timeout: 20 * 60 * 1000, // 20 minutes
+      accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
+      chainId: LOCAL_DEVNET_CHAIN_ID,
+    },
+    "sepolia": {
+      type: "http",
+      url: configVariable("SEPOLIA_RPC_URL"),
+      chainId: 11155111,
+      accounts: loadAccounts("sepolia"),
+    },
+    "hoodi": {
+      type: "http",
+      url: configVariable("HOODI_RPC_URL"),
+      chainId: 560048,
+      accounts: loadAccounts("hoodi"),
+    },
+    "mainnet": {
+      type: "http",
+      url: configVariable("RPC_URL"),
+      chainId: 1,
+      accounts: loadAccounts("mainnet"),
+    },
+    "mainnet-fork": {
+      type: "http",
+      url: configVariable("MAINNET_RPC_URL"),
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
+    "sepolia-fork": {
+      type: "http",
+      url: configVariable("SEPOLIA_RPC_URL"),
+      chainId: 11155111,
+    },
+    "hoodi-fork": {
+      type: "http",
+      url: configVariable("HOODI_RPC_URL"),
+      chainId: 560048,
     },
   },
-  contractSizer: {
-    alphaSort: false,
-    disambiguatePaths: false,
-    runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
-    strict: false,
-    except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
+  verify: {
+    etherscan: {
+      apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL ? "local-devnet" : configVariable("ETHERSCAN_API_KEY"),
+    },
   },
-};
-
-export default config;
+  chainDescriptors: {
+    [LOCAL_DEVNET_CHAIN_ID]: {
+      name: "local-devnet",
+      blockExplorers: {
+        etherscan: {
+          name: "local-devnet",
+          apiUrl: process.env.LOCAL_DEVNET_EXPLORER_API_URL ?? "http://localhost:3080/api",
+          url: process.env.LOCAL_DEVNET_EXPLORER_URL ?? "http://localhost:3080",
+        },
+      },
+    },
+    17000: {
+      name: "holesky",
+      blockExplorers: {
+        etherscan: {
+          name: "holesky",
+          apiUrl: "https://api-holesky.etherscan.io/api",
+          url: "https://holesky.etherscan.io/",
+        },
+      },
+    },
+    11155111: {
+      name: "sepolia",
+      blockExplorers: {
+        etherscan: {
+          name: "sepolia",
+          apiUrl: "https://api-sepolia.etherscan.io/api",
+          url: "https://sepolia.etherscan.io/",
+        },
+      },
+    },
+    560048: {
+      name: "hoodi",
+      blockExplorers: {
+        etherscan: {
+          name: "hoodi",
+          apiUrl: "https://api-hoodi.etherscan.io/api",
+          url: "https://hoodi.etherscan.io/",
+        },
+      },
+    },
+  },
+});
