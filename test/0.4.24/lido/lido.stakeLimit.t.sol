@@ -20,10 +20,10 @@ contract StakeUtilsTest {
     // Standard address for the cheatcode contract in Foundry/DappTools.
     Vm constant vm = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
-    StakeLimitUtils__Harness public stakeLimitUtils;
+    StakeLimitUtils__FuzzHarness public stakeLimitUtils;
 
     function setUp() public {
-        stakeLimitUtils = new StakeLimitUtils__Harness();
+        stakeLimitUtils = new StakeLimitUtils__FuzzHarness();
     }
 
     uint256 private constant MAX_STAKE_LIMIT_GROWTH_BLOCKS = 1000;
@@ -145,7 +145,7 @@ contract StakeUtilsTest {
     }
 }
 
-contract StakeLimitUtils__Harness {
+contract StakeLimitUtils__FuzzHarness {
     using StakeLimitUtils for StakeLimitState.Data;
 
     StakeLimitState.Data public state;

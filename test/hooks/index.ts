@@ -1,7 +1,7 @@
 import * as Mocha from "mocha";
 
 import "./assertion/equalStETH.js";
-import "./assertion/revertedWithOZAccessControlError";
+import "./assertion/revertedWithOZAccessControlError.js";
 
 // Increase number of stack frames shown in error messages
 Error.stackTraceLimit = Infinity;
@@ -15,8 +15,11 @@ export const mochaRootHooks: Mocha.RootHookObject = {
    * This is also used to add custom assertions to the Chai assertion library in the test suite when it's run in parallel mode.
    */
   async beforeAll() {
-    // Dynamic import to avoid circular dependency at config load time
-    const { ethers, networkHelpers } = await import("lib/hardhat.js");
+    // Dynamic import to avoid a circular dependency at config load time:
+    // hardhat.config.ts imports these root hooks, so this module must not import
+    // the hardhat runtime at module top level.
+    const hre = (await import("hardhat")).default;
+    const { ethers, networkHelpers } = await hre.network.getOrCreate();
 
     console.log(`#️⃣  Tests started on block number ${await ethers.provider.getBlockNumber()}`);
 

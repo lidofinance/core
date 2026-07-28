@@ -15,8 +15,12 @@ async function getBlockExplorer(): Promise<ExplorerConfig | null> {
     return cachedExplorer;
   }
 
-  // Import ethers lazily at runtime to avoid circular dependency with hardhat.config.ts
-  const { ethers } = await import("./hardhat.js");
+  // Dynamic import to avoid a circular dependency at config load time: hardhat.config.ts
+  // pulls in the tasks barrel, which transitively imports lib/log.ts -> this module. Importing
+  // the hardhat runtime at module top level here would close that loop while the config is
+  // still loading.
+  const hre = (await import("hardhat")).default;
+  const { ethers } = await hre.network.getOrCreate();
   const network = await ethers.provider.getNetwork();
   const chainId = Number(network.chainId);
   cachedExplorer = BLOCK_EXPLORERS[chainId] || null;
