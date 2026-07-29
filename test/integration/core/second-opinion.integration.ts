@@ -27,6 +27,10 @@ function getExpectedSecondOpinionBalance(validatorsBalance: bigint, reportedDiff
   return (validatorsBalance - reportedDiff) / ONE_GWEI;
 }
 
+async function getWithdrawalVaultBalance(ctx: ProtocolContext): Promise<bigint> {
+  return ethers.provider.getBalance(ctx.contracts.withdrawalVault);
+}
+
 describe("Integration: Second opinion", () => {
   let ctx: ProtocolContext;
 
@@ -119,7 +123,11 @@ describe("Integration: Second opinion", () => {
     // Provide a second opinion
     const curFrame = await hashConsensus.getCurrentFrame();
     const expectedBalance = getExpectedSecondOpinionBalance(validatorsBalance, reportedDiff);
-    await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance, 0n);
+    await secondOpinion.addPlainReport(
+      curFrame.reportProcessingDeadlineSlot,
+      expectedBalance,
+      await getWithdrawalVaultBalance(ctx),
+    );
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
     await reportWithoutClActivation(ctx, { effectiveClDiff: -reportedDiff, reportElVault: false });
@@ -137,7 +145,11 @@ describe("Integration: Second opinion", () => {
 
     const curFrame = await hashConsensus.getCurrentFrame();
     const expectedBalance = getExpectedSecondOpinionBalance(validatorsBalance, reportedDiff) - 1n;
-    await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance, 0n);
+    await secondOpinion.addPlainReport(
+      curFrame.reportProcessingDeadlineSlot,
+      expectedBalance,
+      await getWithdrawalVaultBalance(ctx),
+    );
 
     await expect(
       reportWithoutClActivation(ctx, { effectiveClDiff: -reportedDiff, reportElVault: false }),
@@ -153,7 +165,11 @@ describe("Integration: Second opinion", () => {
     const expectedBalance = getExpectedSecondOpinionBalance(validatorsBalance, reportedDiff);
     // Less than 0.5% diff in balances
     const correction = (expectedBalance * 4n) / 1000n;
-    await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance + correction, 0n);
+    await secondOpinion.addPlainReport(
+      curFrame.reportProcessingDeadlineSlot,
+      expectedBalance + correction,
+      await getWithdrawalVaultBalance(ctx),
+    );
     log.debug("Reporting parameters", {
       totalSupply,
       validatorsBalance,
@@ -181,7 +197,11 @@ describe("Integration: Second opinion", () => {
     const expectedBalance = getExpectedSecondOpinionBalance(validatorsBalance, reportedDiff);
     // More than 0.5% diff in balances
     const correction = (expectedBalance * 9n) / 1000n;
-    await secondOpinion.addPlainReport(curFrame.reportProcessingDeadlineSlot, expectedBalance + correction, 0n);
+    await secondOpinion.addPlainReport(
+      curFrame.reportProcessingDeadlineSlot,
+      expectedBalance + correction,
+      await getWithdrawalVaultBalance(ctx),
+    );
     log.debug("Reporting parameters", {
       totalSupply,
       validatorsBalance,

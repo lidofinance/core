@@ -189,8 +189,9 @@ initialMaxGroupsInBatch = 10          # Max source groups in a batch
 initialExecutionDelay = 0             # Delay before pending batch execution
 
 [consolidationMigrator]
-sourceModuleId = 1                    # Source staking module ID
-targetModuleId = 1                    # Target staking module ID, for scratch deploy testing, we use moduleId=1 which corresponds to NOR.
+sourceModuleId = 1                    # Source staking module ID (NOR)
+targetModuleId = 4                    # Target staking module ID: CMv2 is plugged fourth (after NOR, SimpleDVT, CSM) on a full scratch deploy.
+                                      # The 0140-plug-staking-modules step asserts the actually assigned CMv2 ID matches this value.
 
 
 # Predeposit guarantee configuration for validator deposit guarantees
