@@ -19,6 +19,7 @@ export {
   getNextReportContext,
   getReportTimeElapsed,
   adjustReportModuleBalances,
+  ensureCurrentAccountingReport,
   ensureFirstPostMigrationReport,
   waitNextAvailableReportTime,
   handleOracleReport,

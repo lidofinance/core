@@ -6,6 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { advanceChainTime, days } from "lib";
 import {
   createVaultWithDashboard,
+  ensureCurrentAccountingReport,
   getProtocolContext,
   ProtocolContext,
   reportWithoutClActivation,
@@ -89,6 +90,7 @@ describe("Integration: VaultHub ", () => {
     it("Vault is created with fresh report after refSlot but before report", async () => {
       const { stakingVaultFactory, vaultHub } = ctx.contracts;
 
+      await ensureCurrentAccountingReport(ctx);
       await waitNextAvailableReportTime(ctx);
 
       const { stakingVault } = await createVaultWithDashboard(
