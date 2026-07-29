@@ -6,11 +6,10 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus, ReportProcessor__Mock } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION } from "lib/constants.js";
-import { findEventsWithInterfaces } from "lib/event.js";
+import { BASE_CONSENSUS_VERSION, findEventsWithInterfaces } from "#lib";
 
-import { deployHashConsensus, type DeployHashConsensusParams, HASH_1, ZERO_HASH } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployHashConsensus, type DeployHashConsensusParams, HASH_1, ZERO_HASH } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("HashConsensus.sol:setQuorum", function () {
   let ethers: HardhatEthers;

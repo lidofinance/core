@@ -9,10 +9,9 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Address__Harness, Recipient__MockForAddress } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
-import { batch } from "lib/promise.js";
+import { batch, certainAddress } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 // this contract code reverts any call to it
 const INVALID_BYTECODE = "0xFE";

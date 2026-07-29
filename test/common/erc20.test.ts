@@ -8,9 +8,9 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { ERC20 } from "typechain-types/@openzeppelin/contracts/token/ERC20/ERC20.js";
 
-import { batch } from "lib/promise.js";
+import { batch } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 interface ERC20Target {
   tokenName: string;

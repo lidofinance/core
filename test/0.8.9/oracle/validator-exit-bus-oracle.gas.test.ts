@@ -11,8 +11,7 @@ import type {
   ValidatorsExitBus__Harness,
 } from "typechain-types/index.js";
 
-import { VEBO_CONSENSUS_VERSION } from "lib/constants.js";
-import { de0x, numberToHex } from "lib/string.js";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "#lib";
 
 import {
   computeTimestampAtSlot,
@@ -22,8 +21,8 @@ import {
   SECONDS_PER_FRAME,
   seedMockModuleSigningKeys,
   SLOTS_PER_FRAME,
-} from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+} from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

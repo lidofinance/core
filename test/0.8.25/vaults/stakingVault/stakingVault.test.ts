@@ -14,18 +14,22 @@ import type {
 } from "typechain-types/index.js";
 import { StakingVault__factory } from "typechain-types/index.js";
 
-import { certainAddress, randomAddress } from "lib/address.js";
-import { MAX_UINT256, ONE_GWEI } from "lib/constants.js";
-import { computeDepositDataRoot } from "lib/deposit.js";
-import { EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "lib/eips/eip7002.js";
-import { streccak } from "lib/keccak.js";
-import { getPubkeys } from "lib/protocol/helpers/vaults.js";
-import { proxify } from "lib/proxy.js";
-import { de0x } from "lib/string.js";
-import { ether } from "lib/units.js";
+import {
+  certainAddress,
+  computeDepositDataRoot,
+  de0x,
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+  ether,
+  MAX_UINT256,
+  ONE_GWEI,
+  proxify,
+  randomAddress,
+  streccak,
+} from "#lib";
+import { getPubkeys } from "#lib/protocol";
 
+import { Snapshot } from "#test/suite";
 import { deployEIP7002WithdrawalRequestContractMock } from "test/0.8.9/withdrawalVault/eip7002Mock.js";
-import { Snapshot } from "test/suite/index.js";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const INVALID_PUBKEY = "0x" + "ab".repeat(47);

@@ -11,12 +11,9 @@ import type {
   StETH__Harness,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
-import { batch } from "lib/promise.js";
-import { ether } from "lib/units.js";
+import { batch, certainAddress, ether, impersonate } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("LidoExecutionLayerRewardsVault.sol", () => {
   let ethers: HardhatEthers;

@@ -12,11 +12,11 @@ import {
   type StakingRouter__Harness,
 } from "typechain-types/index.js";
 
+import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "#lib";
 import { MAX_TOP_UP_PER_BLOCK_GWEI, ONE_GWEI, WithdrawalCredentialsType } from "lib/constants.js";
-import { findEventsWithInterfaces, randomString, randomWCType1, wcTypeMaxEB } from "lib/index.js";
 
-import { deployLidoLocator, deployStakingRouter } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator, deployStakingRouter } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 import { type CtxConfig, DEFAULT_CONFIG, setupModule } from "./helpers/index.js";
 

@@ -1,4 +1,4 @@
-import { ether } from "lib/index.js";
+import { ether } from "#lib";
 
 import {
   DAY,

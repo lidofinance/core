@@ -6,9 +6,9 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION } from "lib/constants.js";
+import { BASE_CONSENSUS_VERSION } from "#lib";
 
-import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "test/deploy/index.js";
+import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "#test/deploy";
 
 // TODO: This is a very heavy test, need to speed it up using proper Snapshot strategy
 describe("HashConsensus.sol:members", function () {

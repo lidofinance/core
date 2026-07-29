@@ -1,6 +1,6 @@
 import hre from "hardhat";
 
-import { cy, deployWithoutProxy, log, updateObjectInState } from "lib/index.js";
+import { cy, deployWithoutProxy, log, updateObjectInState } from "#lib";
 import { readNetworkState, Sk } from "lib/state-file.js";
 
 export async function main() {

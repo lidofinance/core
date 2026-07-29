@@ -14,23 +14,23 @@ import type {
   StakingVault__MockForPDG,
 } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
-import { GENESIS_FORK_VERSION } from "lib/constants.js";
 import {
   addressToWC,
+  certainAddress,
+  ether,
   generateBeaconHeader,
   generatePredeposit,
   generateTopUp,
   generateValidator,
+  GENESIS_FORK_VERSION,
   prepareLocalMerkleTree,
   randomBytes32,
   setBeaconBlockRoot,
   type Validator,
-} from "lib/pdg.js";
-import { ether } from "lib/units.js";
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("PredepositGuarantee.sol", () => {
   let ethers: HardhatEthers;

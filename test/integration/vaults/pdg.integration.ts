@@ -6,7 +6,7 @@ import { anyValue } from "@nomicfoundation/hardhat-ethers-chai-matchers/withArgs
 
 import type { Dashboard, DepositContract, StakingVault } from "typechain-types/index.js";
 
-import { ether, generateValidator, PDGPolicy, toGwei, toLittleEndian64 } from "lib/index.js";
+import { ether, generateValidator, PDGPolicy, toGwei, toLittleEndian64 } from "#lib";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
@@ -16,9 +16,9 @@ import {
   type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Predeposit Guarantee core functionality", () => {
   let ethers: HardhatEthers;

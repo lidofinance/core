@@ -7,10 +7,10 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { Accounting } from "typechain-types/index.js";
 
-import { ether, impersonate } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext, setupLidoForVaults } from "lib/protocol/index.js";
+import { ether, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext, setupLidoForVaults } from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Accounting Roles and Access Control", () => {
   let ethers: HardhatEthers;

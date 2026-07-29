@@ -6,7 +6,7 @@ import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { WithdrawalsManagerStub } from "typechain-types/index.js";
 
-import { ether } from "lib/units.js";
+import { ether } from "#lib";
 
 describe("WithdrawalsManagerProxy.sol:stub", () => {
   let ethers: HardhatEthers;

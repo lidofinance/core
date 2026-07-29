@@ -10,8 +10,7 @@ import type {
   WithdrawalQueueERC721,
 } from "typechain-types/index.js";
 
-import { log } from "../log.js";
-import { batch } from "../promise.js";
+import { batch, log } from "#lib";
 
 import { getNetworkConfig, type ProtocolNetworkConfig } from "./networks.js";
 import type {

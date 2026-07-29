@@ -6,10 +6,10 @@ import { type HardhatEthers, type HardhatEthersSigner } from "@nomicfoundation/h
 
 import type { ValidatorsExitBus__Harness } from "typechain-types/index.js";
 
-import { de0x, numberToHex } from "lib/string.js";
+import { de0x, numberToHex } from "#lib";
 
-import { deployVEBO, initVEBO } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployVEBO, initVEBO } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

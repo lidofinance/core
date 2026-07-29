@@ -4,7 +4,7 @@ import hre from "hardhat";
 
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, ether, updateBalance } from "lib/index.js";
+import { advanceChainTime, ether, updateBalance } from "#lib";
 import {
   depositAllocatedValidatorsFromBuffer,
   depositValidatorsWithoutReport,
@@ -16,9 +16,9 @@ import {
   report,
   reportWithoutClActivation,
   setStakingLimit,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Deposits reserve", () => {
   let ethers: HardhatEthers;

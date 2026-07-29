@@ -10,7 +10,8 @@ import {
   type NodeOperatorsRegistry,
 } from "typechain-types/index.js";
 
-import { EIP7251_MIN_CONSOLIDATION_FEE, findEventsWithInterfaces, normalizeEIP7251Excess } from "lib/index.js";
+import { EIP7251_MIN_CONSOLIDATION_FEE, findEventsWithInterfaces, normalizeEIP7251Excess } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import {
   assertConsolidationTopology,
   calcConsolidationBatchHash,
@@ -22,11 +23,10 @@ import {
   type NorOperatorKeys,
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
-} from "lib/protocol/helpers/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+} from "#lib/protocol/helpers";
 import { type LoadedContract } from "lib/protocol/types.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 /**
  * Gas measurement for a full consolidation batch (no mocks):

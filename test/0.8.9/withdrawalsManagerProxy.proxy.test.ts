@@ -9,9 +9,9 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Proxy__Harness, WithdrawalsManagerProxy__Mock } from "typechain-types/index.js";
 
-import { ether } from "lib/units.js";
+import { ether } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 // This is a test suite for a low-level OZ contract located in
 // contracts/0.8.9/WithdrawalsManagerProxy.sol:Proxy

@@ -4,15 +4,15 @@ import hre from "hardhat";
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { ether, findEvents, findEventsWithInterfaces } from "lib/index.js";
+import { ether, findEvents, findEventsWithInterfaces } from "#lib";
 import {
   finalizeWQViaElVault,
   getProtocolContext,
   type ProtocolContext,
   reportWithoutClActivation,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Withdrawal happy path", () => {
   let ethers: HardhatEthers;

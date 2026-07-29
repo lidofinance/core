@@ -5,8 +5,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib/index.js";
-import { calculateLockedValue, createVaultsReportTree, type VaultReportItem } from "lib/protocol/helpers/vaults.js";
+import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -14,9 +13,10 @@ import {
   reportVaultDataWithProof,
   reportWithoutClActivation,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { calculateLockedValue, createVaultsReportTree, type VaultReportItem } from "lib/protocol/helpers/vaults.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: LazyOracle", () => {
   let ethers: HardhatEthers;

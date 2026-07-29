@@ -24,7 +24,6 @@ import {
   WithdrawalVault__factory,
 } from "typechain-types/index.js";
 
-import { OracleReportSanityCheckerSchema } from "lib/config-schemas.js";
 import {
   type ConstructorArgs,
   deployBehindOssifiableProxy,
@@ -43,7 +42,8 @@ import {
   type MethodArgs,
   readNetworkState,
   Sk,
-} from "lib/index.js";
+} from "#lib";
+import { OracleReportSanityCheckerSchema } from "lib/config-schemas.js";
 
 export async function skip(): Promise<boolean> {
   return await checkArtifactDeployedAndLog(Sk.upgradeTemporaryAdmin);

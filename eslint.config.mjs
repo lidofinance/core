@@ -40,7 +40,7 @@ export default [
       "no-only-tests/no-only-tests": "warn",
       "no-shadow": "off",
       "simple-import-sort/imports": ["error", {
-        "groups": [["^node:"], ["^\\u0000"], ["^[^@]\\w"], ["^@\\w"], ["^typechain-types"], ["^lib"], ["^test"], ["^../"], ["^./"], ["^"]],
+        "groups": [["^node:"], ["^\\u0000"], ["^[^@]\\w"], ["^@\\w"], ["^typechain-types"], ["^#?lib"], ["^#?test"], ["^../"], ["^./"], ["^"]],
       }],
     },
   },

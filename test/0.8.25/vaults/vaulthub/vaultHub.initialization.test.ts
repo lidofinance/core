@@ -6,12 +6,11 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub } from "typechain-types/index.js";
 
-import { randomAddress } from "lib/address.js";
+import { ether, randomAddress } from "#lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { ether } from "lib/units.js";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 describe("VaultHub.sol:initialization", () => {
   let ethers: HardhatEthers;

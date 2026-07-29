@@ -6,17 +6,17 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
-import { MAX_SANE_SETTLED_GROWTH } from "lib/index.js";
+import { MAX_SANE_SETTLED_GROWTH } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
   type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 import { advanceChainTime } from "lib/time.js";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 describe("Scenario: Lazy Oracle prevents overwriting freshly reconnected vault report", () => {
   let ethers: HardhatEthers;

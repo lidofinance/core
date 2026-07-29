@@ -7,16 +7,16 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { Dashboard, OperatorGrid, VaultHub } from "typechain-types/index.js";
 
-import { days, ether, impersonate } from "lib/index.js";
+import { days, ether, impersonate } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
   type ProtocolContext,
   setupLidoForVaults,
   testMethod,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: OperatorGrid Roles and Access Control", () => {
   let ethers: HardhatEthers;

@@ -13,7 +13,7 @@ import {
 
 import { proxify } from "lib/proxy.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 import { PUBKEYS } from "../consolidation-helpers.js";
 

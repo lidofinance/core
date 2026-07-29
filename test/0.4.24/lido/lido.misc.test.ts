@@ -15,12 +15,9 @@ import {
   type WithdrawalQueue__MockForLidoMisc,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
-import { batch } from "lib/promise.js";
-import { ether, ONE_ETHER } from "lib/units.js";
+import { batch, certainAddress, ether, impersonate, ONE_ETHER } from "#lib";
 
-import { deployLidoDao } from "test/deploy/index.js";
+import { deployLidoDao } from "#test/deploy";
 
 describe("Lido.sol:misc", () => {
   let ethers: HardhatEthers;

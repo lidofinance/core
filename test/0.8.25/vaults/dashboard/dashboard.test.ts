@@ -23,17 +23,22 @@ import type {
   WstETH__Harness,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
-import { DISCONNECT_NOT_INITIATED } from "lib/constants.js";
-import { deployEIP7002WithdrawalRequestContract, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "lib/eips/eip7002.js";
-import { findEvents } from "lib/event.js";
-import { PDGPolicy, randomValidatorPubkey } from "lib/pdg.js";
-import { days, getCurrentBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
+import {
+  certainAddress,
+  days,
+  deployEIP7002WithdrawalRequestContract,
+  DISCONNECT_NOT_INITIATED,
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+  ether,
+  findEvents,
+  getCurrentBlockTimestamp,
+  impersonate,
+  PDGPolicy,
+  randomValidatorPubkey,
+} from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 

@@ -13,16 +13,10 @@ import type {
   VaultHub,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
-import { GENESIS_FORK_VERSION, TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { findEvents } from "lib/event.js";
-import { ether } from "lib/units.js";
+import { certainAddress, ether, findEvents, GENESIS_FORK_VERSION, impersonate, TOTAL_BASIS_POINTS } from "#lib";
 
-import { VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
-
-import { deployLidoDao } from "./dao.js";
-import { updateLidoLocatorImplementation } from "./locator.js";
+import { deployLidoDao, updateLidoLocatorImplementation } from "#test/deploy";
+import { VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const CONNECT_DEPOSIT = ether("1");
 

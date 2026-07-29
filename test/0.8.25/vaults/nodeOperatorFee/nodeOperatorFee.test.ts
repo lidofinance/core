@@ -16,13 +16,20 @@ import type {
   WstETH__Harness,
 } from "typechain-types/index.js";
 
-import { ABNORMALLY_HIGH_FEE_THRESHOLD_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { findEvents } from "lib/event.js";
-import { advanceChainTime, days, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
+import {
+  ABNORMALLY_HIGH_FEE_THRESHOLD_BP,
+  advanceChainTime,
+  days,
+  ether,
+  findEvents,
+  getCurrentBlockTimestamp,
+  getNextBlockTimestamp,
+  MAX_UINT256,
+  TOTAL_BASIS_POINTS,
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const BP_BASE = 10000n;
 

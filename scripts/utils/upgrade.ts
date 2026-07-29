@@ -14,10 +14,6 @@ import type {
   Voting,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { type UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas.js";
-import { loadContract } from "lib/contract.js";
-import { getTxLink } from "lib/explorer.js";
 import {
   bl,
   type ConvertibleToString,
@@ -28,7 +24,11 @@ import {
   type LoadedContract,
   or,
   yl,
-} from "lib/index.js";
+} from "#lib";
+import { impersonate } from "lib/account.js";
+import { type UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas.js";
+import { loadContract } from "lib/contract.js";
+import { getTxLink } from "lib/explorer.js";
 import { log } from "lib/log.js";
 import {
   type DeploymentState,
@@ -41,7 +41,7 @@ import {
 import { advanceChainTime } from "lib/time.js";
 import { ether } from "lib/units.js";
 
-import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "test/suite/index.js";
+import { FUSAKA_TX_GAS_LIMIT, ONE_HOUR } from "#test/suite";
 
 import { encodeCallScript, type VoteItem } from "./omnibus.js";
 

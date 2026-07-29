@@ -9,7 +9,7 @@ import {
   OssifiableProxy__factory,
 } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
+import { certainAddress } from "#lib";
 
 async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, deployer?: HardhatEthersSigner) {
   const { ethers } = await hre.network.getOrCreate();

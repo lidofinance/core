@@ -7,7 +7,7 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { StakeLimitUnstructuredStorage__Harness, StakeLimitUtils__Harness } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("StakeLimitUtils.sol", () => {
   let ethers: HardhatEthers;

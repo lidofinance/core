@@ -26,12 +26,9 @@ import {
   WithdrawalQueue__MockForAccounting__factory,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
-import { getCurrentBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
+import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
 
 describe("Accounting.sol:report", () => {
   let ethers: HardhatEthers;

@@ -4,9 +4,9 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { ERC721 } from "typechain-types/index.js";
 
-import { ether } from "lib/units.js";
+import { ether } from "#lib";
 
-import { deployWithdrawalQueue } from "test/deploy/index.js";
+import { deployWithdrawalQueue } from "#test/deploy";
 
 import { testERC721Compliance } from "../common/erc721.test.js";
 

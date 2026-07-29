@@ -8,7 +8,7 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Dashboard, ERC20__Harness, EthRejector, Lido, StakingVault, WstETH } from "typechain-types/index.js";
 
-import { ether, impersonate } from "lib/index.js";
+import { ether, impersonate } from "#lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -17,9 +17,9 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
   type VaultRoles,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 // EIP-7528 ETH address
 const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";

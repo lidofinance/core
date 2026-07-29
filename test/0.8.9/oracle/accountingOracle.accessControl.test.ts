@@ -12,22 +12,23 @@ import type {
   HashConsensus__Harness,
 } from "typechain-types/index.js";
 
-import { AO_CONSENSUS_VERSION, ONE_GWEI } from "lib/constants.js";
 import {
+  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
   encodeExtraDataItems,
+  ether,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   getReportDataItems,
+  ONE_GWEI,
   type OracleReport,
   packExtraDataList,
   type ReportAsArray,
-} from "lib/oracle.js";
-import { ether } from "lib/units.js";
+} from "#lib";
 
-import { deployAndConfigureAccountingOracle } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployAndConfigureAccountingOracle } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("AccountingOracle.sol:accessControl", () => {
   let ethers: HardhatEthers;

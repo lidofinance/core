@@ -14,8 +14,8 @@ import {
 
 import { proxify } from "lib/proxy.js";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("TopUpGateway.sol", () => {
   let ethers: HardhatEthers;

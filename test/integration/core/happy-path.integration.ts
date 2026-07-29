@@ -4,8 +4,7 @@ import hre from "hardhat";
 
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, batch, ether, log, ONE_GWEI, updateBalance } from "lib/index.js";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
+import { advanceChainTime, batch, ether, log, ONE_GWEI, updateBalance } from "#lib";
 import {
   adjustReportModuleBalances,
   buildModuleAccountingReportParams,
@@ -22,9 +21,10 @@ import {
   reportWithoutClActivation,
   setStakingLimit,
   submitReportDataWithConsensusAndEmptyExtraData,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 import { type LogDescriptionExtended } from "../../../lib/protocol/types.js";
 

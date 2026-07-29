@@ -10,7 +10,7 @@ import {
   type OracleReportSanityChecker,
 } from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib/index.js";
+import { ether, impersonate, randomAddress } from "#lib";
 
 import { DAY } from "./specs/lib.js";
 import { migrationHoodiNegativeRebaseFormulaFixtureSet } from "./specs/negative-rebase/fixtures/migration-hoodi.js";

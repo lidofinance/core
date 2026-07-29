@@ -12,9 +12,9 @@ import {
   prepareLocalMerkleTree,
   randomBytes32,
   setBeaconBlockRoot,
-} from "lib/pdg.js";
+} from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 // CSM "borrowed" prefab validator object with precalculated proofs & root
 // allows us to be sure that core merkle proof validation is working correctly

@@ -1,8 +1,7 @@
 import { expect } from "chai";
 
-import { impersonate } from "../../account.js";
-import { certainAddress } from "../../address.js";
-import { log } from "../../log.js";
+import { certainAddress, impersonate, log } from "#lib";
+
 import type { ProtocolContext } from "../types.js";
 
 /**

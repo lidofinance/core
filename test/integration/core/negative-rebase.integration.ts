@@ -4,16 +4,16 @@ import hre from "hardhat";
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { ether, impersonate } from "lib/index.js";
+import { ether, impersonate } from "#lib";
 import {
   getDepositedSinceLastReport,
   getProtocolContext,
   type ProtocolContext,
   reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Negative rebase", () => {
   let ethers: HardhatEthers;

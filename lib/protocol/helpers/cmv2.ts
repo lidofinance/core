@@ -4,7 +4,7 @@ import hre from "hardhat";
 
 import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { certainAddress, ether, impersonate, log } from "lib/index.js";
+import { certainAddress, ether, impersonate, log } from "#lib";
 
 import { type ProtocolContext } from "../types.js";
 

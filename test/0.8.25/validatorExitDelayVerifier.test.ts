@@ -12,10 +12,10 @@ import type {
 } from "typechain-types/index.js";
 import type { ValidatorExitDelayVerifier__Harness } from "typechain-types/test/0.8.25/contracts/ValidatorExitDelayVerifier__Harness.js";
 
-import { updateBeaconBlockRoot } from "lib/eips/eip4788.js";
+import { updateBeaconBlockRoot } from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 import {
   encodeExitRequestsDataListWithFormat,

@@ -1,6 +1,6 @@
 import hre from "hardhat";
 
-import { impersonate } from "../account.js";
+import { impersonate } from "#lib";
 
 // Address of the Beacon Block Storage contract, which exposes beacon chain roots.
 // This corresponds to `BEACON_ROOTS_ADDRESS` as specified in EIP-4788.

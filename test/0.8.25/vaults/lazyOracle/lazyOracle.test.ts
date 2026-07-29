@@ -13,15 +13,19 @@ import type {
   VaultHub__MockForLazyOracle,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { randomAddress } from "lib/address.js";
-import { DISCONNECT_NOT_INITIATED } from "lib/constants.js";
+import {
+  advanceChainTime,
+  days,
+  DISCONNECT_NOT_INITIATED,
+  ether,
+  getCurrentBlockTimestamp,
+  impersonate,
+  randomAddress,
+} from "#lib";
 import { createVaultsReportTree, type VaultReportItem } from "lib/protocol/helpers/vaults.js";
-import { advanceChainTime, days, getCurrentBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
-import { Snapshot, ZERO_BYTES32 } from "test/suite/index.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { Snapshot, ZERO_BYTES32 } from "#test/suite";
 
 const QUARANTINE_PERIOD = days(3n);
 const MAX_REWARD_RATIO_BP = 350n;

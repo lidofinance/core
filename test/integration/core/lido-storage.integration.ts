@@ -3,10 +3,10 @@ import hre from "hardhat";
 
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, streccak, updateBalance } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { ether, streccak, updateBalance } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Lido storage slots after V3", () => {
   let ethers: HardhatEthers;

@@ -24,10 +24,10 @@ import {
   StakingModuleStatus,
   wcTypeMaxEB,
   WithdrawalCredentialsType,
-} from "lib/index.js";
+} from "#lib";
 
-import { deployLidoLocator, deployStakingRouter } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator, deployStakingRouter } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("StakingRouter.sol:module-sync", () => {
   let ethers: HardhatEthers;

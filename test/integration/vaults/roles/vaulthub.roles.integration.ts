@@ -8,7 +8,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { days, ether, impersonate, PDGPolicy } from "lib/index.js";
+import { days, ether, impersonate, PDGPolicy } from "#lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -17,9 +17,9 @@ import {
   setupLidoForVaults,
   testMethod,
   type VaultRoles,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub Roles and Access Control", () => {
   let ethers: HardhatEthers;

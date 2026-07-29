@@ -1,10 +1,8 @@
 import { ZeroAddress } from "ethers";
 
-import { impersonate } from "../../account.js";
-import { certainAddress } from "../../address.js";
+import { certainAddress, ether, impersonate, log } from "#lib";
+
 import { LIMITER_PRECISION_BASE } from "../../constants.js";
-import { log } from "../../log.js";
-import { ether } from "../../units.js";
 import type { ProtocolContext } from "../types.js";
 
 import { ensureFirstPostMigrationReport, reportWithoutClActivation } from "./accounting.js";

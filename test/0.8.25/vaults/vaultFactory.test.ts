@@ -20,14 +20,12 @@ import type {
   WstETH__Harness,
 } from "typechain-types/index.js";
 
-import { randomAddress } from "lib/address.js";
-import { GENESIS_FORK_VERSION } from "lib/constants.js";
-import { createVaultProxy, createVaultProxyWithoutConnectingToVaultHub } from "lib/protocol/helpers/vaults.js";
-import { days } from "lib/time.js";
-import { ether } from "lib/units.js";
+import { days, ether, GENESIS_FORK_VERSION, randomAddress } from "#lib";
+import { createVaultProxy } from "#lib/protocol/helpers";
+import { createVaultProxyWithoutConnectingToVaultHub } from "lib/protocol/helpers/vaults.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 describe("VaultFactory.sol", () => {
   let ethers: HardhatEthers;

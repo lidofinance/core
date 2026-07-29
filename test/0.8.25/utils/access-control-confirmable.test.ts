@@ -5,9 +5,9 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { AccessControlConfirmable__Harness } from "typechain-types/index.js";
 
-import { advanceChainTime, days, getNextBlockTimestamp, hours } from "lib/time.js";
+import { advanceChainTime, days, getNextBlockTimestamp, hours } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("AccessControlConfirmable.sol", () => {
   let ethers: HardhatEthers;

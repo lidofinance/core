@@ -11,7 +11,7 @@ import {
   type OracleReportSanityCheckerWrapper,
 } from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib/index.js";
+import { ether, impersonate, randomAddress } from "#lib";
 
 import {
   deployFinalizeUpgradeV4Checker,

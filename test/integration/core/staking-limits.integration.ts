@@ -6,10 +6,10 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Lido } from "typechain-types/index.js";
 
-import { ether } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { ether } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Staking limits", () => {
   let ethers: HardhatEthers;

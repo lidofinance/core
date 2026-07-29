@@ -11,9 +11,7 @@ import type {
   WstETH__HarnessForWithdrawalQueueDeploy,
 } from "typechain-types/index.js";
 
-import { WITHDRAWAL_QUEUE_NAME, WITHDRAWAL_QUEUE_SYMBOL } from "lib/constants.js";
-import { proxify } from "lib/proxy.js";
-import { ONE_ETHER } from "lib/units.js";
+import { ONE_ETHER, proxify, WITHDRAWAL_QUEUE_NAME, WITHDRAWAL_QUEUE_SYMBOL } from "#lib";
 
 interface StEthDeploymentParams {
   initialStEth: bigint;

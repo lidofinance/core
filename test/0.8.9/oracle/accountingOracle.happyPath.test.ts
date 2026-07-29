@@ -14,21 +14,24 @@ import type {
   WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types/index.js";
 
-import { AO_CONSENSUS_VERSION, GENESIS_TIME, ONE_GWEI, SECONDS_PER_SLOT } from "lib/constants.js";
 import {
+  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
   encodeExtraDataItems,
+  ether,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   type ExtraDataType,
+  GENESIS_TIME,
   getReportDataItems,
+  numberToHex,
+  ONE_GWEI,
   type OracleReport,
   packExtraDataList,
   type ReportAsArray,
-} from "lib/oracle.js";
-import { numberToHex } from "lib/string.js";
-import { ether } from "lib/units.js";
+  SECONDS_PER_SLOT,
+} from "#lib";
 
 import {
   deployAndConfigureAccountingOracle,
@@ -37,7 +40,7 @@ import {
   SECONDS_PER_FRAME,
   SLOTS_PER_FRAME,
   timestampAtSlot,
-} from "test/deploy/index.js";
+} from "#test/deploy";
 
 describe("AccountingOracle.sol:happyPath", () => {
   let ethers: HardhatEthers;

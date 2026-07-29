@@ -6,10 +6,10 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { NodeOperatorsRegistry, ValidatorsExitBusOracle, WithdrawalVault } from "typechain-types/index.js";
 
-import { de0x, ether, numberToHex } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { de0x, ether, numberToHex } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 interface ExitRequest {
   moduleId: number;

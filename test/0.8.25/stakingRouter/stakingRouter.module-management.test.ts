@@ -13,9 +13,9 @@ import {
   randomString,
   randomWCType1,
   WithdrawalCredentialsType,
-} from "lib/index.js";
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
+import { deployLidoLocator } from "#test/deploy";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter.js";
 

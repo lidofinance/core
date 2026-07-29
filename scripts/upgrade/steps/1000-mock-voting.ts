@@ -1,6 +1,6 @@
 import { mockAragonVoting } from "scripts/utils/upgrade.js";
 
-import { readNetworkState } from "lib/index.js";
+import { readNetworkState } from "#lib";
 
 export async function main() {
   const state = await readNetworkState();

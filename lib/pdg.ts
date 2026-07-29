@@ -9,10 +9,7 @@ import type {
 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.js";
 import type { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types/index.js";
 
-import { impersonate } from "./account.js";
-import { computeDepositDataRoot, computeDepositMessageRoot } from "./deposit.js";
-import { de0x } from "./string.js";
-import { ether } from "./units.js";
+import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "#lib";
 
 export type Validator = { container: SSZBLSHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
 

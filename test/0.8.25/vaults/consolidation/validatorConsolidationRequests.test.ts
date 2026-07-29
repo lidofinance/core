@@ -12,12 +12,15 @@ import type {
   VaultHub__MockForDashboard,
 } from "typechain-types/index.js";
 
-import { DISCONNECT_NOT_INITIATED } from "lib/constants.js";
-import { deployEIP7251MaxEffectiveBalanceRequestContract, EIP7251_ADDRESS } from "lib/eips/eip7251.js";
-import { ether } from "lib/units.js";
+import {
+  deployEIP7251MaxEffectiveBalanceRequestContract,
+  DISCONNECT_NOT_INITIATED,
+  EIP7251_ADDRESS,
+  ether,
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 import { generateConsolidationRequestPayload } from "./consolidationHelper.js";
 

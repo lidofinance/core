@@ -5,7 +5,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Initializable__Mock } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Initializable.sol", function () {
   let ethers: HardhatEthers;

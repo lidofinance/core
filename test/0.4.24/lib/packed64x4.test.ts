@@ -5,7 +5,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { Packed64x4__Harness } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const OVER_UINT64_MAX = 2n ** 64n;
 

@@ -8,10 +8,9 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Receiver__MockForWithdrawalQueueBase, WithdrawalsQueueBase__Harness } from "typechain-types/index.js";
 
-import { WITHDRAWAL_MAX_BATCHES_LENGTH } from "lib/constants.js";
-import { ether, shareRate, shares } from "lib/units.js";
+import { ether, shareRate, shares, WITHDRAWAL_MAX_BATCHES_LENGTH } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const buildBatchCalculationState = (...args: unknown[]) => ({
   remainingEthBudget: args[0] as bigint,

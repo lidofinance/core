@@ -17,10 +17,10 @@ import {
   generateValidator,
   getCurrentBlockTimestamp,
   prepareLocalMerkleTree,
-} from "lib/index.js";
+} from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 import { PUBKEYS } from "../consolidation-helpers.js";
 

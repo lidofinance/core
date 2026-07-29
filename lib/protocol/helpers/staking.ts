@@ -1,6 +1,6 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import { ONE_GWEI, StakingModuleStatus, toGwei } from "lib/index.js";
+import { ONE_GWEI, StakingModuleStatus, toGwei } from "#lib";
 
 import { impersonate } from "../../account.js";
 import { certainAddress } from "../../address.js";

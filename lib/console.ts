@@ -2,7 +2,7 @@ import readline from "node:readline";
 
 import hre from "hardhat";
 
-import { bl, type ConvertibleToString, cy, gr, gy, log, or, rd, toBool, yg, yl } from "lib/index.js";
+import { bl, type ConvertibleToString, cy, gr, gy, log, or, rd, toBool, yg, yl } from "#lib";
 
 export async function confirm(question: string): Promise<void> {
   const AUTO_CONFIRM = toBool(process.env.AUTO_CONFIRM);

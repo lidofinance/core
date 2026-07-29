@@ -9,9 +9,9 @@ import {
   type ValidatorsExitBus__Harness,
 } from "typechain-types/index.js";
 
-import { de0x, numberToHex } from "lib/index.js";
+import { de0x, numberToHex } from "#lib";
 
-import { DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO } from "test/deploy/index.js";
+import { DATA_FORMAT_LIST, DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO } from "#test/deploy";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

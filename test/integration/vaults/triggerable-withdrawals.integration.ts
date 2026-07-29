@@ -5,16 +5,11 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { impersonate, randomAddress } from "lib/index.js";
-import {
-  createVaultWithDashboard,
-  getProtocolContext,
-  type ProtocolContext,
-  setupLidoForVaults,
-} from "lib/protocol/index.js";
+import { impersonate, randomAddress } from "#lib";
+import { createVaultWithDashboard, getProtocolContext, type ProtocolContext, setupLidoForVaults } from "#lib/protocol";
 import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 

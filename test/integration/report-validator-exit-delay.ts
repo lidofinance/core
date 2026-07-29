@@ -3,9 +3,10 @@ import hre from "hardhat";
 
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoot } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
+import { Snapshot } from "#test/suite";
 import {
   encodeExitRequestsDataListWithFormat,
   toHistoricalHeaderWitness,
@@ -13,7 +14,6 @@ import {
   toValidatorWitness,
 } from "test/0.8.25/validatorExitDelayVerifierHelpers.js";
 import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState.js";
-import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Report Validator Exit Delay", () => {
   let ethers: HardhatEthers;

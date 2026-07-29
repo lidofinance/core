@@ -1,4 +1,4 @@
-import { ether } from "lib/index.js";
+import { ether } from "#lib";
 
 import { MAX_VALIDATOR_EFFECTIVE_BALANCE } from "../../lib.js";
 import { type ClIncreaseFixtureSet, report } from "../lib.js";

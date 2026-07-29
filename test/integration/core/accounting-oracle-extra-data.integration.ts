@@ -5,19 +5,19 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib/index.js";
-import { EXTRA_DATA_FORMAT_LIST, type KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle.js";
-import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting.js";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
+import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "#lib";
 import {
   getProtocolContext,
   type OracleReportParams,
   type ProtocolContext,
   reportWithEffectiveClDiff,
   seedProtocolPendingBaseline,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { EXTRA_DATA_FORMAT_LIST, type KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle.js";
+import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting.js";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 
-import { MAX_BASIS_POINTS, Snapshot } from "test/suite/index.js";
+import { MAX_BASIS_POINTS, Snapshot } from "#test/suite";
 
 const MODULE_ID = NOR_MODULE_ID;
 const NUM_NEWLY_EXITED_VALIDATORS = 1n;

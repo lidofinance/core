@@ -4,9 +4,7 @@ import hre from "hardhat";
 
 import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, ONE_GWEI } from "lib/index.js";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
+import { ether, ONE_GWEI } from "#lib";
 import {
   buildModuleAccountingReportParams,
   depositValidatorsWithoutReport,
@@ -20,9 +18,11 @@ import {
   submitReportDataWithConsensus,
   submitReportDataWithConsensusAndEmptyExtraData,
   updateOracleReportLimits,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const ONE_DAY = 24n * 60n * 60n;
 const ONE_VALIDATOR_BALANCE_ETH = 32n;

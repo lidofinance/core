@@ -19,7 +19,7 @@ import {
   toGwei,
   toLittleEndian64,
   ValidatorStage,
-} from "lib/index.js";
+} from "#lib";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
@@ -29,9 +29,9 @@ import {
   type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Actions with vault disconnected from hub", () => {
   let ethers: HardhatEthers;

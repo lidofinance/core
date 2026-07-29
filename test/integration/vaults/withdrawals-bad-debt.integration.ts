@@ -5,8 +5,7 @@ import hre from "hardhat";
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { LIMITER_PRECISION_BASE } from "lib/constants.js";
-import { advanceChainTime, ether } from "lib/index.js";
+import { advanceChainTime, ether } from "#lib";
 import {
   getProtocolContext,
   type ProtocolContext,
@@ -16,10 +15,11 @@ import {
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { LIMITER_PRECISION_BASE } from "lib/constants.js";
 
+import { Snapshot } from "#test/suite";
 import { SHARE_RATE_PRECISION } from "test/suite/constants.js";
-import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Withdrawals finalization with bad debt internalization", () => {
   let ethers: HardhatEthers;

@@ -7,7 +7,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { PredepositGuarantee, StakingVault } from "typechain-types/index.js";
 
-import { days, ether, impersonate, randomValidatorPubkey } from "lib/index.js";
+import { days, ether, impersonate, randomValidatorPubkey } from "#lib";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
@@ -15,9 +15,9 @@ import {
   type ProtocolContext,
   setupLidoForVaults,
   testMethod,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: PredepositGuarantee Roles and Access Control", () => {
   let ethers: HardhatEthers;

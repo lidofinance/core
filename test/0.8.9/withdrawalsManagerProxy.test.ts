@@ -12,10 +12,9 @@ import type {
   WithdrawalsVault__MockForWithdrawalManagerProxy,
 } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
-import { streccak } from "lib/keccak.js";
+import { certainAddress, streccak } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("WithdrawalsManagerProxy.sol", () => {
   let ethers: HardhatEthers;

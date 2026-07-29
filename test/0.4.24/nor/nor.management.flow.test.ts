@@ -13,12 +13,17 @@ import {
   type NodeOperatorsRegistry__Harness,
 } from "typechain-types/index.js";
 
-import { certainAddress, randomAddress } from "lib/address.js";
-import { addNodeOperator, type NodeOperatorConfig, RewardDistributionState } from "lib/nor.js";
-import { ether } from "lib/units.js";
+import {
+  addNodeOperator,
+  certainAddress,
+  ether,
+  type NodeOperatorConfig,
+  randomAddress,
+  RewardDistributionState,
+} from "#lib";
 
-import { addAragonApp, deployLidoDaoForNor } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { addAragonApp, deployLidoDaoForNor } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("NodeOperatorsRegistry.sol:management", () => {
   let ethers: HardhatEthers;

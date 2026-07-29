@@ -7,8 +7,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { BLS12_381__Harness } from "typechain-types/index.js";
 
-import { ONE_GWEI } from "lib/constants.js";
-import { computeDepositDomain, computeDepositMessageRoot } from "lib/deposit.js";
+import { computeDepositDomain, computeDepositMessageRoot, ONE_GWEI } from "#lib";
 
 type FpStruct = { a: string; b: string };
 type Fp2Struct = { c0_a: string; c0_b: string; c1_a: string; c1_b: string };

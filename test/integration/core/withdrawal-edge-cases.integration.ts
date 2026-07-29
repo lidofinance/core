@@ -7,8 +7,7 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Lido, WithdrawalQueueERC721 } from "typechain-types/index.js";
 
-import { certainAddress, ether, findEventsWithInterfaces, impersonate, toGwei } from "lib/index.js";
-import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
+import { certainAddress, ether, findEventsWithInterfaces, impersonate, toGwei } from "#lib";
 import {
   buildModuleAccountingReportParams,
   depositValidatorsWithoutReport,
@@ -19,9 +18,10 @@ import {
   reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
   waitNextAvailableReportTime,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { adjustReportModuleBalances } from "lib/protocol/helpers/accounting.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Withdrawal edge cases", () => {
   let ethers: HardhatEthers;

@@ -6,8 +6,8 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness } from "typechain-types/index.js";
 
-import { deployHashConsensus, type DeployHashConsensusParams } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployHashConsensus, type DeployHashConsensusParams } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("HashConsensus.sol:fastLaneLength", function () {
   let ethers: HardhatEthers;

@@ -12,10 +12,10 @@ import {
   type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Dashboard ", () => {
   let ethers: HardhatEthers;

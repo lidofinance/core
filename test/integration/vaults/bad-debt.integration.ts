@@ -5,8 +5,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, StakingVault } from "typechain-types/index.js";
 
-import { advanceChainTime, days, getCurrentBlockTimestamp, MAX_UINT256, SECONDS_PER_SLOT } from "lib/index.js";
-import { simulateReport } from "lib/protocol/helpers/accounting.js";
+import { advanceChainTime, days, getCurrentBlockTimestamp, MAX_UINT256, SECONDS_PER_SLOT } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -19,10 +18,11 @@ import {
   setupLidoForVaults,
   upDefaultTierShareLimit,
   waitNextAvailableReportTime,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { simulateReport } from "lib/protocol/helpers/accounting.js";
 import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Vault with bad debt", () => {
   let ethers: HardhatEthers;

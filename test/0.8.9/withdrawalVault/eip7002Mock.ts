@@ -4,8 +4,7 @@ import hre from "hardhat";
 
 import type { EIP7002WithdrawalRequest__Mock } from "typechain-types/index.js";
 
-import { EIP7002_ADDRESS } from "lib/eips/eip7002.js";
-import { findEventsWithInterfaces } from "lib/event.js";
+import { EIP7002_ADDRESS, findEventsWithInterfaces } from "#lib";
 
 const eventName = "RequestAdded__Mock";
 const eip7002MockEventABI = [`event ${eventName}(bytes request, uint256 fee)`];

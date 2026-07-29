@@ -13,9 +13,9 @@ import {
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-} from "lib/constants.js";
+} from "#lib";
 
-import { deployHashConsensus } from "test/deploy/index.js";
+import { deployHashConsensus } from "#test/deploy";
 
 describe("HashConsensus.sol:deploy", function () {
   let ethers: HardhatEthers;

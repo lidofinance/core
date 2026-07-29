@@ -13,13 +13,14 @@ import type {
   StakingRouter__MockForAccountingOracle,
 } from "typechain-types/index.js";
 
-import { AO_CONSENSUS_VERSION, ONE_GWEI } from "lib/constants.js";
 import {
+  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
   constructOracleReport,
   encodeExtraDataItem,
   encodeExtraDataItems,
+  ether,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   EXTRA_DATA_TYPE_EXITED_VALIDATORS,
@@ -27,16 +28,16 @@ import {
   type ExtraData,
   type ExtraDataType,
   getReportDataItems,
+  numberToHex,
+  ONE_GWEI,
   type OracleReport,
   type OracleReportProps,
   packExtraDataList,
   type ReportFieldsWithoutExtraData,
-} from "lib/oracle.js";
-import { numberToHex } from "lib/string.js";
-import { ether } from "lib/units.js";
+} from "#lib";
 
-import { deployAndConfigureAccountingOracle } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployAndConfigureAccountingOracle } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const getDefaultExtraData = (): ExtraDataType => ({
   exitedKeys: [

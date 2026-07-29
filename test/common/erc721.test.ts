@@ -8,14 +8,9 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { ERC721, ERC721Receiver__Mock } from "typechain-types/index.js";
 
-import {
-  ERC165_INTERFACE_ID,
-  ERC721_INTERFACE_ID,
-  ERC721METADATA_INTERFACE_ID,
-  INVALID_INTERFACE_ID,
-} from "lib/constants.js";
+import { ERC165_INTERFACE_ID, ERC721_INTERFACE_ID, ERC721METADATA_INTERFACE_ID, INVALID_INTERFACE_ID } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 interface ERC721Deployment {
   token: ERC721;

@@ -9,6 +9,7 @@ import type {
   TriggerableWithdrawalsGateway,
 } from "typechain-types/index.js";
 
+import { MAX_TOP_UP_PER_BLOCK_GWEI } from "#lib";
 import type { InitializeArgs } from "lib/contract.js";
 import { encodeFunctionCall, getContractPath, loadContract } from "lib/contract.js";
 import {
@@ -20,7 +21,6 @@ import {
 } from "lib/deploy.js";
 import { EIP7002_ADDRESS } from "lib/eips/eip7002.js";
 import { EIP7251_ADDRESS } from "lib/eips/eip7251.js";
-import { MAX_TOP_UP_PER_BLOCK_GWEI } from "lib/index.js";
 import { log } from "lib/log.js";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 import { en0x } from "lib/string.js";

@@ -11,10 +11,10 @@ import {
   type LidoLocator,
 } from "typechain-types/index.js";
 
-import { DEPOSITS_RESERVE_TARGET, ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "lib/index.js";
+import { DEPOSITS_RESERVE_TARGET, ether, getStorageAtPositionAsUint128Pair, impersonate, proxify } from "#lib";
 
+import { Snapshot } from "#test/suite";
 import { deployLidoLocator } from "test/deploy/locator.js";
-import { Snapshot } from "test/suite/index.js";
 
 describe("Lido.sol:finalizeUpgrade_v4", () => {
   let ethers: HardhatEthers;

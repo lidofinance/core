@@ -10,9 +10,9 @@ import type {
   ValidatorsExitBusOracle,
 } from "typechain-types/index.js";
 
-import { SECONDS_PER_SLOT, VEBO_CONSENSUS_VERSION } from "lib/constants.js";
+import { SECONDS_PER_SLOT, VEBO_CONSENSUS_VERSION } from "#lib";
 
-import { deployVEBO, initVEBO } from "test/deploy/index.js";
+import { deployVEBO, initVEBO } from "#test/deploy";
 
 describe("ValidatorsExitBusOracle.sol:deploy", () => {
   let ethers: HardhatEthers;

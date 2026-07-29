@@ -1,6 +1,6 @@
 import hre from "hardhat";
 
-import { gr, log } from "lib/log.js";
+import { gr, log } from "#lib";
 
 export async function main() {
   const { ethers } = await hre.network.getOrCreate();

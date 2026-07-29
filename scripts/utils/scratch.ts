@@ -2,8 +2,8 @@ import fs from "fs";
 
 import * as toml from "@iarna/toml";
 
+import { Sk } from "#lib";
 import { type ScratchParameters, validateScratchParameters } from "lib/config-schemas.js";
-import { Sk } from "lib/index.js";
 
 const SCRATCH_DEPLOY_CONFIG = process.env.SCRATCH_DEPLOY_CONFIG || "scripts/scratch/deploy-params-testnet.toml";
 

@@ -15,10 +15,9 @@ import type {
   StakingRouter__MockForSanityChecker,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { ether } from "lib/units.js";
+import { ether, impersonate } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const SLOTS_PER_DAY = 7200n;
 const REPORTS_WINDOW = 36;

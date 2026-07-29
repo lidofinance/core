@@ -6,7 +6,7 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { PausableUntil__Harness } from "typechain-types/index.js";
 
-import { MAX_UINT256 } from "lib/constants.js";
+import { MAX_UINT256 } from "#lib";
 
 describe("PausableUtils.sol", () => {
   let ethers: HardhatEthers;

@@ -17,11 +17,10 @@ import {
   NodeOperatorsRegistry__Harness__factory,
 } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
-import { addNodeOperator, type NodeOperatorConfig, RewardDistributionState } from "lib/nor.js";
+import { addNodeOperator, certainAddress, type NodeOperatorConfig, RewardDistributionState } from "#lib";
 
-import { addAragonApp, deployLidoDao } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { addAragonApp, deployLidoDao } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const updateTargetLimits = "updateTargetValidatorsLimits(uint256,uint256,uint256)" as const;
 const updateTargetLimitsDeprecated = "updateTargetValidatorsLimits(uint256,bool,uint256)" as const;

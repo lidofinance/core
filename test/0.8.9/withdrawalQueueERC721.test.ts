@@ -20,17 +20,19 @@ import {
   ERC721_INTERFACE_ID,
   ERC721METADATA_INTERFACE_ID,
   ERC4906_INTERFACE_ID,
+  ether,
   INVALID_INTERFACE_ID,
   OZ_ACCESS_CONTROL_ENUMERABLE_INTERFACE_ID,
   OZ_ACCESS_CONTROL_INTERFACE_ID,
+  proxify,
+  shareRate,
+  shares,
+  streccak,
   WITHDRAWAL_QUEUE_NAME,
   WITHDRAWAL_QUEUE_SYMBOL,
-} from "lib/constants.js";
-import { streccak } from "lib/keccak.js";
-import { proxify } from "lib/proxy.js";
-import { ether, shareRate, shares } from "lib/units.js";
+} from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const MANAGE_TOKEN_URI_ROLE = streccak("MANAGE_TOKEN_URI_ROLE");
 

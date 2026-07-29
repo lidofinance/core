@@ -5,7 +5,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, OperatorGrid, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ether, MAX_SANE_SETTLED_GROWTH, randomValidatorPubkey } from "lib/index.js";
+import { ether, MAX_SANE_SETTLED_GROWTH, randomValidatorPubkey } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -13,10 +13,10 @@ import {
   reportVaultDataWithProof,
   reportWithoutClActivation,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 import { advanceChainTime, days } from "lib/time.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: OperatorGrid", () => {
   let ethers: HardhatEthers;

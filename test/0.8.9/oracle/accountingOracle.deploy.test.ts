@@ -14,20 +14,14 @@ import type {
   WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types/index.js";
 
-import {
-  AO_CONSENSUS_VERSION,
-  EPOCHS_PER_FRAME,
-  GENESIS_TIME,
-  SECONDS_PER_SLOT,
-  SLOTS_PER_EPOCH,
-} from "lib/constants.js";
+import { AO_CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "#lib";
 
 import {
   deployAccountingOracleSetup,
   deployAndConfigureAccountingOracle,
   initAccountingOracle,
   ORACLE_LAST_COMPLETED_EPOCH,
-} from "test/deploy/index.js";
+} from "#test/deploy";
 
 describe("AccountingOracle.sol:deploy", () => {
   let ethers: HardhatEthers;

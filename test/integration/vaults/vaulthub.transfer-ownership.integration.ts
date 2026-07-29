@@ -5,16 +5,16 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { certainAddress, ether } from "lib/index.js";
+import { certainAddress, ether } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
   type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub.transferVaultOwnership", () => {
   let ethers: HardhatEthers;

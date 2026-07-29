@@ -6,18 +6,18 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, Lido, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { BigIntMath, certainAddress, impersonate, TOTAL_BASIS_POINTS } from "lib/index.js";
-import { ceilDiv, reportVaultDataWithProof, setStakingLimit } from "lib/protocol/helpers/index.js";
+import { BigIntMath, certainAddress, impersonate, TOTAL_BASIS_POINTS } from "#lib";
 import {
   calculateLockedValue,
   createVaultWithDashboard,
   getProtocolContext,
   type ProtocolContext,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { ceilDiv, reportVaultDataWithProof, setStakingLimit } from "#lib/protocol/helpers";
 import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub ", () => {
   let ethers: HardhatEthers;

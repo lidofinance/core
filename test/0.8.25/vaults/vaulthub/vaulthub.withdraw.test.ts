@@ -7,11 +7,10 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Lido, StakingVault__MockForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { advanceChainTime } from "lib/time.js";
-import { ether } from "lib/units.js";
+import { advanceChainTime, ether } from "#lib";
 
-import { deployVaults } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployVaults } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const GWEI_TO_WEI = 1_000_000_000n;
 

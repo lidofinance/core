@@ -5,10 +5,10 @@ import hre from "hardhat";
 import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { ether } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 describe("Scenario: EL rewards distribution", () => {
   let ethers: HardhatEthers;

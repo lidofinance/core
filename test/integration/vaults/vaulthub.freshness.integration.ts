@@ -3,7 +3,7 @@ import hre from "hardhat";
 
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { advanceChainTime, days } from "lib/index.js";
+import { advanceChainTime, days } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -11,9 +11,9 @@ import {
   reportWithoutClActivation,
   setupLidoForVaults,
   waitNextAvailableReportTime,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub ", () => {
   let ethers: HardhatEthers;

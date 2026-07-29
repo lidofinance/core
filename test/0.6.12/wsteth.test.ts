@@ -7,10 +7,9 @@ import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { StETH__HarnessForWstETH, WstETH } from "typechain-types/index.js";
 
-import { batch } from "lib/promise.js";
-import { ether, ONE_ETHER } from "lib/units.js";
+import { batch, ether, ONE_ETHER } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("WstETH.sol", () => {
   let ethers: HardhatEthers;

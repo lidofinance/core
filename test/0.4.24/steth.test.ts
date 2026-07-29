@@ -7,11 +7,9 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { StETH__Harness } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { batch } from "lib/promise.js";
-import { ether, ONE_ETHER } from "lib/units.js";
+import { batch, ether, impersonate, ONE_ETHER } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const ONE_STETH = 10n ** 18n;
 const ONE_SHARE = 10n ** 18n;

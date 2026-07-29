@@ -7,7 +7,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { HashConsensus } from "typechain-types/index.js";
 
-import { ether, impersonate } from "lib/index.js";
+import { ether, impersonate } from "#lib";
 import {
   calcReportDataHash,
   getProtocolContext,
@@ -15,9 +15,9 @@ import {
   type ProtocolContext,
   reportWithoutClActivation,
   waitNextAvailableReportTime,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot, ZERO_HASH } from "test/suite/index.js";
+import { Snapshot, ZERO_HASH } from "#test/suite";
 
 const UINT64_MAX = 2n ** 64n - 1n;
 

@@ -2,7 +2,7 @@ import { randomBytes } from "ethers";
 
 import type { IStakingModule } from "typechain-types/index.js";
 
-import type { LoadedContract } from "../../contract.js";
+import { type LoadedContract } from "#lib";
 
 export const NOR_MODULE_ID = 1n;
 export const SDVT_MODULE_ID = 2n;

@@ -6,10 +6,9 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { SigningKeys__Harness } from "typechain-types/index.js";
 
-import { EMPTY_PUBLIC_KEY, EMPTY_SIGNATURE } from "lib/constants.js";
-import { FakeValidatorKeys } from "lib/signing-keys.js";
+import { EMPTY_PUBLIC_KEY, EMPTY_SIGNATURE, FakeValidatorKeys } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const NODE_OPERATOR_1 = 1;
 const NODE_OPERATOR_2 = 2;

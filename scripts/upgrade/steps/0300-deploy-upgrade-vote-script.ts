@@ -13,7 +13,7 @@ import {
   logStartReview,
   readNetworkState,
   Sk,
-} from "lib/index.js";
+} from "#lib";
 
 export async function skip(): Promise<boolean> {
   return await checkArtifactDeployedAndLog(Sk.upgradeVoteScript);

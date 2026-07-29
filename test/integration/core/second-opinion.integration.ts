@@ -5,7 +5,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { SecondOpinionOracle__Mock } from "typechain-types/index.js";
 
-import { ether, log, ONE_GWEI } from "lib/index.js";
+import { ether, log, ONE_GWEI } from "#lib";
 import {
   depositValidatorsWithoutReport,
   getProtocolContext,
@@ -13,9 +13,9 @@ import {
   report,
   reportWithoutClActivation,
   resetCLBalanceDecreaseWindow,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 const AMOUNT = ether("100");
 const INITIAL_REPORTED_BALANCE = ether("32") * 3n; // 32 ETH * 3 validators

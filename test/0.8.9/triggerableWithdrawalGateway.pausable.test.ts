@@ -11,10 +11,9 @@ import type {
   WithdrawalVault__MockForTWG,
 } from "typechain-types/index.js";
 
-import { streccak } from "lib/keccak.js";
-import { advanceChainTime, getCurrentBlockTimestamp } from "lib/time.js";
+import { advanceChainTime, getCurrentBlockTimestamp, streccak } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator.js";
 

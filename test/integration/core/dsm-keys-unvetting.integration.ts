@@ -8,23 +8,16 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import {
-  BigIntMath,
-  certainAddress,
-  DSMUnvetMessage,
-  ether,
-  findEventsWithInterfaces,
-  impersonate,
-} from "lib/index.js";
+import { BigIntMath, certainAddress, DSMUnvetMessage, ether, findEventsWithInterfaces, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import { setSingleGuardian } from "lib/protocol/helpers/dsm.js";
 import {
   norSdvtAddNodeOperator,
   norSdvtAddOperatorKeys,
   norSdvtSetOperatorStakingLimit,
 } from "lib/protocol/helpers/nor-sdvt.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 // Just an arbitrary account for using in tests
 const GUARDIAN_PRIVATE_KEY = "0x516b8a7d9290502f5661da81f0cf43893e3d19cb9aea3c426cfb36e8186e9c09";

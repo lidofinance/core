@@ -11,10 +11,10 @@ import {
   type WithdrawalVault__MockForConsolidationGateway,
 } from "typechain-types/index.js";
 
-import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTree } from "lib/index.js";
+import { addressToWC, advanceChainTime, generateValidator, prepareLocalMerkleTree } from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 import { PUBKEYS } from "../consolidation-helpers.js";
 

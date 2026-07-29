@@ -15,10 +15,10 @@ import {
   setupLidoForVaults,
   setUpOperatorGrid,
   waitNextAvailableReportTime,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub", () => {
   let ethers: HardhatEthers;

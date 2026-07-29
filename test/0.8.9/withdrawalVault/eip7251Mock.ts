@@ -4,7 +4,7 @@ import hre from "hardhat";
 
 import { type EIP7251ConsolidationRequest__Mock } from "typechain-types/index.js";
 
-import { EIP7251_ADDRESS, findEventsWithInterfaces } from "lib/index.js";
+import { EIP7251_ADDRESS, findEventsWithInterfaces } from "#lib";
 
 const eventName = "ConsolidationRequestAdded__Mock";
 const eip7251MockEventABI = [`event ${eventName}(bytes request, uint256 fee)`];

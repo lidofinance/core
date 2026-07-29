@@ -5,7 +5,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import { type WithdrawalVault__MockForConsolidationGateway } from "typechain-types/index.js";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
 
 const DUMMY_GI = "0x0000000000000000000000000000000000000000000000000096000000000028";
 

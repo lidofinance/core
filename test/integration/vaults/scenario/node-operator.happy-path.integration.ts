@@ -19,7 +19,6 @@ import type {
   VaultHub,
 } from "typechain-types/index.js";
 
-import { TOTAL_BASIS_POINTS } from "lib/constants.js";
 import {
   advanceChainTime,
   certainAddress,
@@ -31,8 +30,7 @@ import {
   type LocalMerkleTree,
   PDGPolicy,
   prepareLocalMerkleTree,
-} from "lib/index.js";
-import { mEqual } from "lib/promise.js";
+} from "#lib";
 import {
   createVaultProxyWithoutConnectingToVaultHub,
   ensurePredepositGuaranteeUnpaused,
@@ -43,10 +41,12 @@ import {
   reportVaultsDataWithProof,
   setupLidoForVaults,
   VAULT_CONNECTION_DEPOSIT,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { TOTAL_BASIS_POINTS } from "lib/constants.js";
+import { mEqual } from "lib/promise.js";
 
+import { resetState, Snapshot } from "#test/suite";
 import { ONE_DAY } from "test/suite/constants.js";
-import { resetState, Snapshot } from "test/suite/index.js";
 
 const ONE_YEAR = 365n * ONE_DAY;
 

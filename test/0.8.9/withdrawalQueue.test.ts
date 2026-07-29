@@ -12,18 +12,20 @@ import type {
   WstETH__MockForWithdrawalQueue,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { randomAddress } from "lib/address.js";
 import {
+  ether,
+  impersonate,
   MAX_UINT256,
+  proxify,
+  randomAddress,
+  shareRate,
+  shares,
+  streccak,
   WITHDRAWAL_MAX_STETH_WITHDRAWAL_AMOUNT,
   WITHDRAWAL_MIN_STETH_WITHDRAWAL_AMOUNT,
-} from "lib/constants.js";
-import { streccak } from "lib/keccak.js";
-import { proxify } from "lib/proxy.js";
-import { ether, shareRate, shares } from "lib/units.js";
+} from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const ZERO = 0n;
 

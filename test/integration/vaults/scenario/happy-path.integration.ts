@@ -9,7 +9,6 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Dashboard, SSZBLSHelpers, StakingVault } from "typechain-types/index.js";
 
-import { TOTAL_BASIS_POINTS } from "lib/constants.js";
 import {
   days,
   ether,
@@ -19,7 +18,7 @@ import {
   log,
   prepareLocalMerkleTree,
   updateBalance,
-} from "lib/index.js";
+} from "#lib";
 import {
   calculateLockedValue,
   ensurePredepositGuaranteeUnpaused,
@@ -30,10 +29,11 @@ import {
   reportVaultDataWithProof,
   reportWithoutClActivation,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { TOTAL_BASIS_POINTS } from "lib/constants.js";
 
+import { bailOnFailure, Snapshot } from "#test/suite";
 import { ONE_DAY } from "test/suite/constants.js";
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
 
 const VALIDATORS_PER_VAULT = 2n;
 const VALIDATOR_DEPOSIT_SIZE = ether("33");

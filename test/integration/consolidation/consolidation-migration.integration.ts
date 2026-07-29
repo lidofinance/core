@@ -10,7 +10,8 @@ import {
   type NodeOperatorsRegistry,
 } from "typechain-types/index.js";
 
-import { certainAddress, findEventsWithInterfaces } from "lib/index.js";
+import { certainAddress, findEventsWithInterfaces } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import {
   assertConsolidationTopology,
   calcConsolidationBatchHash,
@@ -28,11 +29,10 @@ import {
   norSdvtSetOperatorStakingLimit,
   prepareConsolidationTargetWitnesses,
   waitUntilBatchExecutable,
-} from "lib/protocol/helpers/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+} from "#lib/protocol/helpers";
 import { type LoadedContract } from "lib/protocol/types.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const fakeWitnessForTarget = (pubkey: string) => ({
   proof: [],

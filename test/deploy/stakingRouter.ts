@@ -10,9 +10,9 @@ import {
   type StakingRouter__Harness,
 } from "typechain-types/index.js";
 
-import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02, proxify } from "lib/index.js";
+import { MAX_EFFECTIVE_BALANCE_WC_TYPE_01, MAX_EFFECTIVE_BALANCE_WC_TYPE_02, proxify } from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
+import { deployLidoLocator } from "#test/deploy";
 
 export interface DeployStakingRouterSigners {
   deployer: HardhatEthersSigner;

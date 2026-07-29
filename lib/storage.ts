@@ -1,7 +1,7 @@
 import { type AddressLike, resolveAddress } from "ethers";
 import hre from "hardhat";
 
-import { streccak } from "./keccak.js";
+import { streccak } from "#lib";
 
 const MASK_128_BITS = (1n << 128n) - 1n;
 

@@ -7,12 +7,10 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { OperatorGrid, OssifiableProxy, StETH__HarnessForVaultHub, VaultHub } from "typechain-types/index.js";
 
-import { randomAddress } from "lib/address.js";
-import { MAX_UINT256 } from "lib/constants.js";
-import { ether } from "lib/units.js";
+import { ether, MAX_UINT256, randomAddress } from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 

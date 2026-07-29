@@ -10,10 +10,10 @@ import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
 import type { Kernel } from "typechain-types/@aragon/os/contracts/kernel/Kernel.js";
 import { type Lido, type LidoLocator, type NodeOperatorsRegistry__Harness } from "typechain-types/index.js";
 
-import { RewardDistributionState } from "lib/nor.js";
+import { RewardDistributionState } from "#lib";
 
-import { addAragonApp, deployLidoDao, deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { addAragonApp, deployLidoDao, deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
   let ethers: HardhatEthers;

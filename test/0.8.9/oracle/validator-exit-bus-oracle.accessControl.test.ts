@@ -10,11 +10,10 @@ import type {
   ValidatorsExitBus__Harness,
 } from "typechain-types/index.js";
 
-import { VEBO_CONSENSUS_VERSION } from "lib/constants.js";
-import { de0x, numberToHex } from "lib/string.js";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "#lib";
 
-import { DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO, seedMockModuleSigningKeys } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { DATA_FORMAT_LIST_WITH_KEY_INDEX, deployVEBO, initVEBO, seedMockModuleSigningKeys } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

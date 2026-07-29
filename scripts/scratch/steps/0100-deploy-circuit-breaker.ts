@@ -6,7 +6,7 @@ import type { ResolvedConfigurationVariable } from "hardhat/types/config";
 import os from "os";
 import path from "path";
 
-import { cy, deployWithoutProxy, log, warmUpJsonRpcProvider } from "lib/index.js";
+import { cy, deployWithoutProxy, log, warmUpJsonRpcProvider } from "#lib";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file.js";
 
 const CIRCUIT_BREAKER_REPO = "https://github.com/lidofinance/circuit-breaker.git";

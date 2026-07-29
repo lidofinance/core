@@ -3,11 +3,11 @@ import hre from "hardhat";
 
 import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
-import { certainAddress, ether, findEventsWithInterfaces, impersonate } from "lib/index.js";
+import { certainAddress, ether, findEventsWithInterfaces, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/staking-module.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 type NodeOperatorState = {
   active: boolean;

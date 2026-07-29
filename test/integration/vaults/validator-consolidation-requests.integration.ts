@@ -5,10 +5,10 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard } from "typechain-types/index.js";
 
-import { createVaultWithDashboard, getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { createVaultWithDashboard, getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
+import { Snapshot } from "#test/suite";
 import { generateConsolidationRequestPayload } from "test/0.8.25/vaults/consolidation/consolidationHelper.js";
-import { Snapshot } from "test/suite/index.js";
 
 const KEY_LENGTH = 48;
 

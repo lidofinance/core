@@ -2,10 +2,7 @@ import { namehash, ZeroAddress } from "ethers";
 
 import type { ENS } from "typechain-types/index.js";
 
-import { type LoadedContract } from "./contract.js";
-import { makeTx } from "./deploy.js";
-import { streccak } from "./keccak.js";
-import { cy, log, yl } from "./log.js";
+import { cy, type LoadedContract, log, makeTx, streccak, yl } from "#lib";
 
 // Default parentName is "eth"
 export async function assignENSName(

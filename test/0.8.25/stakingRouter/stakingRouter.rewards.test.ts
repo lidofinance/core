@@ -5,11 +5,11 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import { type LidoLocator, type StakingRouter__Harness } from "typechain-types/index.js";
 
+import { certainAddress, ether, randomWCType1 } from "#lib";
 import { MAX_TOP_UP_PER_BLOCK_GWEI, StakingModuleStatus, WithdrawalCredentialsType } from "lib/constants.js";
-import { certainAddress, ether, randomWCType1 } from "lib/index.js";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter.js";
 

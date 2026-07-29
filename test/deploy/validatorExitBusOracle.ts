@@ -16,7 +16,7 @@ import {
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
   VEBO_CONSENSUS_VERSION,
-} from "lib/constants.js";
+} from "#lib";
 
 import { deployHashConsensus } from "./hashConsensus.js";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator.js";

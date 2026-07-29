@@ -5,7 +5,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { BigIntMath, DISCONNECT_NOT_INITIATED, impersonate } from "lib/index.js";
+import { BigIntMath, DISCONNECT_NOT_INITIATED, impersonate } from "#lib";
 import {
   changeTier,
   createVaultsReportTree,
@@ -16,11 +16,11 @@ import {
   setupLidoForVaults,
   setUpOperatorGrid,
   waitNextAvailableReportTime,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 import { getCurrentBlockTimestamp } from "lib/time.js";
 import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub:force-disconnect", () => {
   let ethers: HardhatEthers;

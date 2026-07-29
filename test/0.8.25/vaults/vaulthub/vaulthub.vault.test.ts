@@ -17,15 +17,13 @@ import type {
   VaultHub,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
+import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate } from "#lib";
+import { ceilDiv } from "#lib/protocol";
 import { ONE_GWEI, TOTAL_BASIS_POINTS } from "lib/constants.js";
 import { findEvents } from "lib/event.js";
-import { ceilDiv } from "lib/protocol/helpers/vaults.js";
-import { advanceChainTime, days, getCurrentBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
 
-import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy/index.js";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
+import { deployLidoDao, updateLidoLocatorImplementation } from "#test/deploy";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const SHARE_LIMIT = ether("10");
 const RESERVE_RATIO_BP = 20_00n; // 20%

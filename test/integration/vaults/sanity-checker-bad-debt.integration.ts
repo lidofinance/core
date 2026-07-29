@@ -6,8 +6,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/types";
 
-import { ether, impersonate, LIMITER_PRECISION_BASE, ONE_GWEI } from "lib/index.js";
-import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
+import { ether, impersonate, LIMITER_PRECISION_BASE, ONE_GWEI } from "#lib";
 import {
   getNextReportContext,
   getProtocolContext,
@@ -21,10 +20,11 @@ import {
   setupLidoForVaults,
   setupVaultWithBadDebt,
   upDefaultTierShareLimit,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
 
+import { Snapshot } from "#test/suite";
 import { SHARE_RATE_PRECISION } from "test/suite/constants.js";
-import { Snapshot } from "test/suite/index.js";
 
 describe("Integration: Sanity checker with bad debt internalization", () => {
   let ethers: HardhatEthers;

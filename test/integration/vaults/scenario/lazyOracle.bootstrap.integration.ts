@@ -9,9 +9,9 @@ import {
   type ProtocolContext,
   reportVaultDataWithProof,
   reportWithoutClActivation,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Scenario: Lazy Oracle after mainnet upgrade before the first report", () => {
   let ethers: HardhatEthers;

@@ -5,7 +5,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Mock, RefSlotCacheTest } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("RefSlotCache.sol", () => {
   let ethers: HardhatEthers;

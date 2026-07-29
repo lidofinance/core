@@ -27,12 +27,9 @@ import type {
   StakingRouter__MockForDepositSecurityModule,
 } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
-import { DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage } from "lib/dsm.js";
-import { streccak } from "lib/keccak.js";
-import { ether } from "lib/units.js";
+import { certainAddress, DSMAttestMessage, DSMPauseMessage, DSMUnvetMessage, ether, streccak } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const STAKING_MODULE_ID = 100;
 const MAX_DEPOSITS_PER_BLOCK = 100;

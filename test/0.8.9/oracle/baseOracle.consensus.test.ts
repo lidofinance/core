@@ -7,16 +7,10 @@ import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types/index.js";
 
-import {
-  BASE_CONSENSUS_VERSION,
-  EPOCHS_PER_FRAME,
-  GENESIS_TIME,
-  SECONDS_PER_SLOT,
-  SLOTS_PER_EPOCH,
-} from "lib/constants.js";
+import { BASE_CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "#lib";
 
-import { deadlineFromRefSlot, deployBaseOracle, epochFirstSlotAt, HASH_1, HASH_2 } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deadlineFromRefSlot, deployBaseOracle, epochFirstSlotAt, HASH_1, HASH_2 } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("BaseOracle.sol:consensus", () => {
   let ethers: HardhatEthers;

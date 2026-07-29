@@ -11,7 +11,7 @@ import {
   type ValidatorsExitBus__Harness,
 } from "typechain-types/index.js";
 
-import { numberToHex } from "lib/index.js";
+import { numberToHex } from "#lib";
 
 import {
   DATA_FORMAT_LIST,
@@ -20,7 +20,7 @@ import {
   initVEBO,
   makeMockPubkey,
   updateLidoLocatorImplementation,
-} from "test/deploy/index.js";
+} from "#test/deploy";
 
 const PUBKEY_AA = "0x" + "aa".repeat(48);
 const PUBKEY_BB = "0x" + "bb".repeat(48);

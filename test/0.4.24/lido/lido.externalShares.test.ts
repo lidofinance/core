@@ -7,13 +7,11 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 import type { ACL } from "typechain-types/@aragon/os/contracts/acl/ACL.js";
 import { type Lido, type LidoLocator } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { advanceChainTime } from "lib/time.js";
-import { ether } from "lib/units.js";
+import { advanceChainTime, ether, impersonate, MAX_UINT256 } from "#lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants.js";
 
-import { deployLidoDao } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoDao } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("Lido.sol:externalShares", () => {
   let ethers: HardhatEthers;

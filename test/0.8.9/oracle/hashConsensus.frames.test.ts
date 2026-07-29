@@ -14,7 +14,7 @@ import {
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
   SLOTS_PER_EPOCH,
-} from "lib/constants.js";
+} from "#lib";
 
 import {
   computeEpochFirstSlot,
@@ -23,8 +23,8 @@ import {
   HASH_1,
   SLOTS_PER_FRAME,
   ZERO_HASH,
-} from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+} from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("HashConsensus.sol:frames", function () {
   const TEST_INITIAL_EPOCH = 3n;

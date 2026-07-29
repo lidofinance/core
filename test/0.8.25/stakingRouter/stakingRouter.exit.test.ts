@@ -16,10 +16,10 @@ import {
   randomString,
   randomWCType1,
   WithdrawalCredentialsType,
-} from "lib/index.js";
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 import { deployStakingRouter } from "../../deploy/stakingRouter.js";
 

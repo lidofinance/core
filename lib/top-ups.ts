@@ -2,7 +2,7 @@ import hre from "hardhat";
 
 import { type SSZValidatorsMerkleTree } from "typechain-types/index.js";
 
-import { generateValidator } from "lib/index.js";
+import { generateValidator } from "#lib";
 
 const DEFAULT_GI_VALIDATOR_0 = "0x0000000000000000000000000000000000000000000000000096000000000028";
 

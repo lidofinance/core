@@ -7,13 +7,10 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import { type Lido, type LidoLocator } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
-import { DEPOSITS_RESERVE_TARGET, INITIAL_STETH_HOLDER } from "lib/constants.js";
-import { streccak } from "lib/keccak.js";
-import { proxify } from "lib/proxy.js";
+import { certainAddress, DEPOSITS_RESERVE_TARGET, INITIAL_STETH_HOLDER, proxify, streccak } from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("Lido.sol:initialize", () => {
   let ethers: HardhatEthers;

@@ -12,10 +12,10 @@ import type {
   WithdrawalVault,
 } from "typechain-types/index.js";
 
-import { ether } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+import { ether } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 describe("Scenario: TriggerFullWithdrawals", () => {
   let ethers: HardhatEthers;

@@ -3,8 +3,8 @@ import hre from "hardhat";
 
 import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, findEventsWithInterfaces, log } from "lib/index.js";
-import { randomValidatorPubkey } from "lib/pdg.js";
+import { ether, findEventsWithInterfaces, log } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import {
   buildTopUpData,
   cmv2CreateOperatorWithKeys,
@@ -19,10 +19,10 @@ import {
   prepareTopUpWitnesses,
   topUpEnsureDepositableEther,
   topUpEnsureModuleAllocation,
-} from "lib/protocol/helpers/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+} from "#lib/protocol/helpers";
+import { randomValidatorPubkey } from "lib/pdg.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const GWEI = 10n ** 9n;
 const toGwei = (wei: bigint) => wei / GWEI;

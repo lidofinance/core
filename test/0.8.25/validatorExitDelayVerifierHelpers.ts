@@ -7,8 +7,7 @@ import type {
   ValidatorWitnessStruct,
 } from "typechain-types/contracts/0.8.25/ValidatorExitDelayVerifier.sol/ValidatorExitDelayVerifier.js";
 
-import { findEventsWithInterfaces } from "lib/event.js";
-import { de0x, numberToHex } from "lib/string.js";
+import { de0x, findEventsWithInterfaces, numberToHex } from "#lib";
 
 import { type BlockHeader, type ValidatorStateProof } from "./validatorState.js";
 

@@ -13,10 +13,10 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
   setUpOperatorGrid,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: VaultHub:fees", () => {
   let ethers: HardhatEthers;

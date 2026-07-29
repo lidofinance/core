@@ -6,7 +6,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { advanceChainTime, days, ether, impersonate, randomAddress, TOTAL_BASIS_POINTS } from "lib/index.js";
+import { advanceChainTime, days, ether, impersonate, randomAddress, TOTAL_BASIS_POINTS } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -14,9 +14,9 @@ import {
   type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const TEST_STETH_AMOUNT_WEI = 100n;

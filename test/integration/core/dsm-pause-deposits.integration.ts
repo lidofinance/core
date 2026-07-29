@@ -8,11 +8,11 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { DepositSecurityModule } from "typechain-types/index.js";
 
-import { DSMPauseMessage, ether, findEventsWithInterfaces, impersonate } from "lib/index.js";
+import { DSMPauseMessage, ether, findEventsWithInterfaces, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 import { setSingleGuardian } from "lib/protocol/helpers/dsm.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: DSM pause deposits", () => {
   let ethers: HardhatEthers;

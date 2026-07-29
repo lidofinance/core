@@ -22,11 +22,9 @@ import {
   WithdrawalVault__MockForLidoAccounting__factory,
 } from "typechain-types/index.js";
 
-import { impersonate, updateBalance } from "lib/account.js";
-import { getNextBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
+import { ether, getNextBlockTimestamp, impersonate, updateBalance } from "#lib";
 
-import { deployLidoDao } from "test/deploy/index.js";
+import { deployLidoDao } from "#test/deploy";
 
 describe("Lido:accounting", () => {
   let ethers: HardhatEthers;

@@ -6,9 +6,9 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION, MAX_UINT256 } from "lib/constants.js";
+import { BASE_CONSENSUS_VERSION, MAX_UINT256 } from "#lib";
 
-import { deployHashConsensus, type DeployHashConsensusParams, HASH_1 } from "test/deploy/index.js";
+import { deployHashConsensus, type DeployHashConsensusParams, HASH_1 } from "#test/deploy";
 
 describe("HashConsensus.sol:fastlaneMembers", () => {
   let ethers: HardhatEthers;

@@ -7,12 +7,9 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { StETHPermit__HarnessWithEip712Initialization } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
-import { type Permit, signPermit, stethDomain } from "lib/eips/eip712.js";
-import { days } from "lib/time.js";
-import { ether } from "lib/units.js";
+import { certainAddress, days, ether, type Permit, signPermit, stethDomain } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("StETHPermit.sol", () => {
   let ethers: HardhatEthers;

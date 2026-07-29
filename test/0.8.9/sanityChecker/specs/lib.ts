@@ -11,7 +11,7 @@ import {
   type OracleReportSanityCheckerWrapper,
 } from "typechain-types/index.js";
 
-import { ether, impersonate, proxify, randomAddress } from "lib/index.js";
+import { ether, impersonate, proxify, randomAddress } from "#lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/locator.js";
 

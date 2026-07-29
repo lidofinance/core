@@ -9,9 +9,9 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { ERC1967Proxy__Harness, WithdrawalsManagerProxy__Mock } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
+import { certainAddress } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("WithdrawalsManagerProxy.sol:erc1967proxy", () => {
   let ethers: HardhatEthers;

@@ -6,16 +6,16 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 
 import type { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { days, ether } from "lib/index.js";
+import { days, ether } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
   type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Vault hub beacon deposits pause flows", () => {
   let ethers: HardhatEthers;

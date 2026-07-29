@@ -6,7 +6,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION, EPOCHS_PER_FRAME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib/constants.js";
+import { BASE_CONSENSUS_VERSION, EPOCHS_PER_FRAME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "#lib";
 
 import {
   computeEpochFirstSlotAt,
@@ -20,7 +20,7 @@ import {
   SECONDS_PER_FRAME,
   SLOTS_PER_FRAME,
   ZERO_HASH,
-} from "test/deploy/index.js";
+} from "#test/deploy";
 
 const INITIAL_EPOCH = 3n;
 

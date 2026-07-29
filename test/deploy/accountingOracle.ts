@@ -6,16 +6,14 @@ import type { AccountingOracle, HashConsensus__Harness, ReportProcessor__Mock } 
 import {
   AO_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
-  GENESIS_TIME,
-  SECONDS_PER_SLOT,
-  SLOTS_PER_EPOCH,
-} from "lib/constants.js";
-import {
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   EXTRA_DATA_TYPE_EXITED_VALIDATORS,
   EXTRA_DATA_TYPE_STUCK_VALIDATORS,
-} from "lib/oracle.js";
+  GENESIS_TIME,
+  SECONDS_PER_SLOT,
+  SLOTS_PER_EPOCH,
+} from "#lib";
 
 import { deployHashConsensus } from "./hashConsensus.js";
 import { deployLidoLocator, updateLidoLocatorImplementation } from "./locator.js";

@@ -6,11 +6,9 @@ import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { Versioned__Harness089 } from "typechain-types/index.js";
 
-import { MAX_UINT256 } from "lib/constants.js";
-import { streccak } from "lib/keccak.js";
-import { proxify } from "lib/proxy.js";
+import { MAX_UINT256, proxify, streccak } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Versioned.sol", () => {
   let ethers: HardhatEthers;

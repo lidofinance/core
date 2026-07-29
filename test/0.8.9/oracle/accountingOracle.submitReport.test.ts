@@ -17,23 +17,26 @@ import type {
   WithdrawalQueue__MockForAccountingOracle,
 } from "typechain-types/index.js";
 
-import { AO_CONSENSUS_VERSION, GENESIS_TIME, ONE_GWEI, SECONDS_PER_SLOT } from "lib/constants.js";
 import {
+  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
   encodeExtraDataItems,
+  ether,
   EXTRA_DATA_FORMAT_EMPTY,
   EXTRA_DATA_FORMAT_LIST,
   type ExtraDataType,
+  GENESIS_TIME,
   getReportDataItems,
+  ONE_GWEI,
   type OracleReport,
   packExtraDataList,
   type ReportAsArray,
-} from "lib/oracle.js";
-import { ether } from "lib/units.js";
+  SECONDS_PER_SLOT,
+} from "#lib";
 
-import { deployAndConfigureAccountingOracle, HASH_1, SLOTS_PER_FRAME } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployAndConfigureAccountingOracle, HASH_1, SLOTS_PER_FRAME } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("AccountingOracle.sol:submitReport", () => {
   let ethers: HardhatEthers;

@@ -11,7 +11,7 @@ import {
 
 import { proxify } from "lib/proxy.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("ConsolidationMigrator.sol: allowlist", () => {
   let ethers: HardhatEthers;

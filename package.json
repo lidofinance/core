@@ -8,6 +8,13 @@
   },
   "type": "module",
   "packageManager": "yarn@4.9.2",
+  "imports": {
+    "#lib": "./lib/index.js",
+    "#lib/protocol": "./lib/protocol/index.js",
+    "#lib/protocol/helpers": "./lib/protocol/helpers/index.js",
+    "#test/suite": "./test/suite/index.js",
+    "#test/deploy": "./test/deploy/index.js"
+  },
   "scripts": {
     "compile": "hardhat build",
     "cleanup": "hardhat clean",

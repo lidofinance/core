@@ -1,12 +1,9 @@
 import { ZeroAddress } from "ethers";
 
-import { SHARE_RATE_PRECISION } from "test/suite/index.js";
+import { certainAddress, ether, getCurrentBlockTimestamp, impersonate, log } from "#lib";
 
-import { impersonate } from "../../account.js";
-import { certainAddress } from "../../address.js";
-import { log } from "../../log.js";
-import { getCurrentBlockTimestamp } from "../../time.js";
-import { ether } from "../../units.js";
+import { SHARE_RATE_PRECISION } from "#test/suite";
+
 import type { ProtocolContext } from "../types.js";
 
 import { reportWithEffectiveClDiff } from "./accounting.js";

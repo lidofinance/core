@@ -17,7 +17,7 @@ import {
   readNetworkState,
   Sk,
   updateObjectInState,
-} from "lib/index.js";
+} from "#lib";
 
 /**
  * Validates that `value` is a non-zero address and returns it unchanged, throwing otherwise.

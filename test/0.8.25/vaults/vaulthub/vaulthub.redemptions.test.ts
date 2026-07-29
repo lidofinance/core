@@ -9,8 +9,8 @@ import type { StakingVault__MockForVaultHub, VaultHub } from "typechain-types/in
 
 import { ether } from "lib/units.js";
 
-import { deployVaults } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployVaults } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("VaultHub.sol:redemptions", () => {
   let ethers: HardhatEthers;

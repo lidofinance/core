@@ -6,10 +6,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 import type { Kernel } from "typechain-types/@aragon/os/contracts/kernel/Kernel.js";
 import type { LidoLocator } from "typechain-types/index.js";
 
-import { DEPOSITS_RESERVE_TARGET } from "lib/constants.js";
-import { findEvents } from "lib/event.js";
-import { streccak } from "lib/keccak.js";
-import { ether } from "lib/units.js";
+import { DEPOSITS_RESERVE_TARGET, ether, findEvents, streccak } from "#lib";
 
 import { deployLidoLocator } from "./locator.js";
 

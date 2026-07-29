@@ -18,15 +18,17 @@ import type {
 } from "typechain-types/index.js";
 import { Permissions__Harness__factory, StakingVault__factory } from "typechain-types/index.js";
 
-import { getRandomSigners } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
-import { deployEIP7002WithdrawalRequestContract } from "lib/eips/eip7002.js";
-import { findEvents } from "lib/event.js";
-import { days } from "lib/time.js";
-import { ether } from "lib/units.js";
+import {
+  certainAddress,
+  days,
+  deployEIP7002WithdrawalRequestContract,
+  ether,
+  findEvents,
+  getRandomSigners,
+} from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 type PermissionsConfigStruct = {
   defaultAdmin: HardhatEthersSigner;

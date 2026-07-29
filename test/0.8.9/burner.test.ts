@@ -15,13 +15,10 @@ import type {
 } from "typechain-types/index.js";
 import { OssifiableProxy__factory } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
-import { batch } from "lib/promise.js";
-import { ether } from "lib/units.js";
+import { batch, certainAddress, ether, impersonate } from "#lib";
 
-import { deployLidoLocator } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("Burner.sol", () => {
   let ethers: HardhatEthers;

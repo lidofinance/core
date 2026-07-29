@@ -12,10 +12,10 @@ import {
   INVALID_INTERFACE_ID,
   OZ_ACCESS_CONTROL_ENUMERABLE_INTERFACE_ID,
   OZ_ACCESS_CONTROL_INTERFACE_ID,
-} from "lib/constants.js";
-import { streccak } from "lib/keccak.js";
+  streccak,
+} from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const TEST_ROLE = streccak("TEST_ROLE");
 

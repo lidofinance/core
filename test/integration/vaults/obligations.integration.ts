@@ -5,7 +5,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, LazyOracle, Lido, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { days, ether, updateBalance } from "lib/index.js";
+import { days, ether, updateBalance } from "#lib";
 import {
   calculateLockedValue,
   createVaultWithDashboard,
@@ -14,9 +14,9 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
   upDefaultTierShareLimit,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Vault redemptions and fees obligations", () => {
   let ethers: HardhatEthers;

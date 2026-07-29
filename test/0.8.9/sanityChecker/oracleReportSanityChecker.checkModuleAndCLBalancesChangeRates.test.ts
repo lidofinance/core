@@ -22,10 +22,10 @@ import {
   ONE_GWEI,
   randomWCType1,
   WithdrawalCredentialsType,
-} from "lib/index.js";
+} from "#lib";
 
-import { deployStakingRouter } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployStakingRouter } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const ONE_DAY = 24n * 60n * 60n;
 const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");

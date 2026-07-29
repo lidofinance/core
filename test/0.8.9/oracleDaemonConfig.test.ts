@@ -8,7 +8,7 @@ import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 import type { OracleDaemonConfig } from "typechain-types/index.js";
 import { OracleDaemonConfig__factory } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("OracleDaemonConfig.sol", () => {
   let ethers: HardhatEthers;

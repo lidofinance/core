@@ -14,10 +14,10 @@ import type {
   VaultHub,
 } from "typechain-types/index.js";
 
-import { ether } from "lib/units.js";
+import { ether } from "#lib";
 
+import { Snapshot } from "#test/suite";
 import { deployVaults } from "test/deploy/vaults.js";
-import { Snapshot } from "test/suite/index.js";
 
 describe("AlertingHarness.sol", () => {
   let ethers: HardhatEthers;

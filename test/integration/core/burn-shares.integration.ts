@@ -5,16 +5,16 @@ import hre from "hardhat";
 import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types";
 
-import { ether, impersonate, log } from "lib/index.js";
+import { ether, impersonate, log } from "#lib";
 import {
   ensureFirstPostMigrationReport,
   getProtocolContext,
   normalizeWithdrawalVaultBaseline,
   type ProtocolContext,
   reportWithoutClActivation,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 describe("Scenario: Burn Shares", () => {
   let ethers: HardhatEthers;

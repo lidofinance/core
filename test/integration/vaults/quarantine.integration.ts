@@ -5,7 +5,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { advanceChainTime, ether } from "lib/index.js";
+import { advanceChainTime, ether } from "#lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -13,9 +13,9 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
   waitNextAvailableReportTime,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Quarantine", () => {
   let ethers: HardhatEthers;

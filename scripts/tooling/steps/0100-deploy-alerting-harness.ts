@@ -1,8 +1,7 @@
 import assert from "assert";
 import hre from "hardhat";
 
-import { deployImplementation } from "lib/deploy.js";
-import { readNetworkState, Sk } from "lib/state-file.js";
+import { deployImplementation, readNetworkState, Sk } from "#lib";
 
 export async function main(): Promise<void> {
   const { ethers } = await hre.network.getOrCreate();

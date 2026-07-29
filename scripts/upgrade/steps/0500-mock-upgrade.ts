@@ -24,7 +24,7 @@ import {
   or,
   readNetworkState,
   Sk,
-} from "lib/index.js";
+} from "#lib";
 
 const PROPOSAL_ID = BigInt(process.env.PROPOSAL_ID || "0");
 const VOTE_ID = BigInt(process.env.VOTE_ID || "0");

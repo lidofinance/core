@@ -14,7 +14,7 @@ import {
 
 import { type HashConsensus, type ValidatorExitDelayVerifier } from "typechain-types/index.js";
 
-import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "lib/index.js";
+import { cy, getAddress, loadContract, log, warmUpJsonRpcProvider } from "#lib";
 import { type DeploymentState, Sk, updateObjectInState } from "lib/state-file.js";
 
 const STAKING_MODULES_REPO = "https://github.com/lidofinance/community-staking-module.git";

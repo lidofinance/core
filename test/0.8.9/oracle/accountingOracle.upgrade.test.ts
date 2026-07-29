@@ -6,7 +6,7 @@ import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { AccountingOracle__Harness } from "typechain-types/index.js";
 
-import { deployAndConfigureAccountingOracle } from "test/deploy/index.js";
+import { deployAndConfigureAccountingOracle } from "#test/deploy";
 
 describe("AccountingOracle.sol:upgrade", () => {
   let ethers: HardhatEthers;

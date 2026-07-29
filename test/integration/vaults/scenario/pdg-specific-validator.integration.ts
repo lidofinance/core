@@ -25,10 +25,10 @@ import {
   toGwei,
   toLittleEndian64,
   ValidatorStage,
-} from "lib/index.js";
-import { getProtocolContext, type ProtocolContext } from "lib/protocol/index.js";
+} from "#lib";
+import { getProtocolContext, type ProtocolContext } from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 /**
  * Integration test for PDG with a specific validator deposited during soft launch

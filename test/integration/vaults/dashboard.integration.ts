@@ -28,7 +28,7 @@ import {
   randomAddress,
   randomValidatorPubkey,
   TOTAL_BASIS_POINTS,
-} from "lib/index.js";
+} from "#lib";
 import {
   autofillRoles,
   calculateLockedValue,
@@ -40,9 +40,9 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
   type VaultRoles,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 // EIP-7528 ETH address
 const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";

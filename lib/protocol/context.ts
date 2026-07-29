@@ -1,13 +1,9 @@
 import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
 
+import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log, toBool } from "#lib";
+
 import { getMode } from "../../hardhat.helpers.js";
-import { impersonate } from "../account.js";
-import { findEventsWithInterfaces } from "../event.js";
-import { log } from "../log.js";
-import { deployScratchProtocol, deployUpgrade } from "../scratch.js";
-import { toBool } from "../string.js";
-import { ether } from "../units.js";
 
 import { discover } from "./discover.js";
 import { MAINNET_LOCATOR_ADDRESS } from "./mainnet.js";

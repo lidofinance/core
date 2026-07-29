@@ -1,7 +1,6 @@
 import hre from "hardhat";
 
-import { stethDomain } from "lib/eips/eip712.js";
-import { ether } from "lib/units.js";
+import { ether, stethDomain } from "#lib";
 
 import { testERC2612Compliance } from "../common/erc2612.test.js";
 

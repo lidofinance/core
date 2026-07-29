@@ -6,7 +6,7 @@ import type { HardhatEthers, HardhatEthersSigner } from "@nomicfoundation/hardha
 
 import type { Dashboard, PredepositGuarantee, StakingVault, VaultHub } from "typechain-types/index.js";
 
-import { ether, generateValidator, impersonate } from "lib/index.js";
+import { ether, generateValidator, impersonate } from "#lib";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
@@ -14,9 +14,9 @@ import {
   getProtocolContext,
   type ProtocolContext,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 // TS interface aligned with the CircuitBreaker contract.
 interface ICircuitBreaker {

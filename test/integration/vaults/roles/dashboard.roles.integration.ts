@@ -8,8 +8,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { Dashboard } from "typechain-types/index.js";
 
-import { days, ether, MAX_SANE_SETTLED_GROWTH, PDGPolicy, randomValidatorPubkey } from "lib/index.js";
-import { vaultRoleKeys } from "lib/protocol/helpers/vaults.js";
+import { days, ether, MAX_SANE_SETTLED_GROWTH, PDGPolicy, randomValidatorPubkey } from "#lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -21,9 +20,10 @@ import {
   setupLidoForVaults,
   testMethod,
   type VaultRoles,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { vaultRoleKeys } from "lib/protocol/helpers/vaults.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   let ethers: HardhatEthers;

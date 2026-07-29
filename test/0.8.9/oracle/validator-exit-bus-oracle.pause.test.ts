@@ -7,9 +7,9 @@ import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types/index.js";
 
-import { de0x, numberToHex } from "lib/string.js";
+import { de0x, numberToHex } from "#lib";
 
-import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy/index.js";
+import { DATA_FORMAT_LIST, deployVEBO, initVEBO } from "#test/deploy";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers

@@ -2,10 +2,8 @@ import { expect } from "chai";
 
 import type { NodeOperatorsRegistry } from "typechain-types/index.js";
 
-import { impersonate } from "../../account.js";
-import { certainAddress } from "../../address.js";
-import { log } from "../../log.js";
-import { ether } from "../../units.js";
+import { certainAddress, ether, impersonate, log } from "#lib";
+
 import type { LoadedContract } from "../types.js";
 import type { ProtocolContext, StakingModuleName } from "../types.js";
 

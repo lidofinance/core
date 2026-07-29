@@ -22,13 +22,19 @@ import type {
   VaultFactory,
 } from "typechain-types/index.js";
 
-import { impersonate } from "../../account.js";
-import { TOTAL_BASIS_POINTS } from "../../constants.js";
-import { findEventsWithInterfaces } from "../../event.js";
-import { log } from "../../log.js";
-import { generatePredeposit, prepareLocalMerkleTree, type Validator } from "../../pdg.js";
-import { de0x } from "../../string.js";
-import { days, getCurrentBlockTimestamp } from "../../time.js";
+import {
+  days,
+  de0x,
+  findEventsWithInterfaces,
+  generatePredeposit,
+  getCurrentBlockTimestamp,
+  impersonate,
+  log,
+  prepareLocalMerkleTree,
+  TOTAL_BASIS_POINTS,
+  type Validator,
+} from "#lib";
+
 import { ether } from "../../units.js";
 import type { LoadedContract, ProtocolContext } from "../types.js";
 

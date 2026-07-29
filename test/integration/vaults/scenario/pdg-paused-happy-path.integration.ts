@@ -29,8 +29,7 @@ import {
   type LocalMerkleTree,
   PDGPolicy,
   prepareLocalMerkleTree,
-} from "lib/index.js";
-import { mEqual } from "lib/promise.js";
+} from "#lib";
 import {
   createVaultProxyWithoutConnectingToVaultHub,
   getProtocolContext,
@@ -38,9 +37,10 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
   VAULT_CONNECTION_DEPOSIT,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
+import { mEqual } from "lib/promise.js";
 
-import { resetState, Snapshot } from "test/suite/index.js";
+import { resetState, Snapshot } from "#test/suite";
 
 const VAULT_NODE_OPERATOR_FEE = 5_00n;
 const CONFIRM_EXPIRY = days(7n);

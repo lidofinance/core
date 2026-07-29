@@ -6,7 +6,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { GIndex__Harness, GIndexLibrary__Harness } from "typechain-types/index.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 /**
  * Wrapper for the GIndex operations to match the Solidity test

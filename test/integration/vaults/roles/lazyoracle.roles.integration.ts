@@ -8,10 +8,10 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 
 import type { LazyOracle } from "typechain-types/index.js";
 
-import { days, ether, impersonate } from "lib/index.js";
-import { getProtocolContext, type ProtocolContext, setupLidoForVaults, testMethod } from "lib/protocol/index.js";
+import { days, ether, impersonate } from "#lib";
+import { getProtocolContext, type ProtocolContext, setupLidoForVaults, testMethod } from "#lib/protocol";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("Integration: LazyOracle Roles and Access Control", () => {
   let ethers: HardhatEthers;

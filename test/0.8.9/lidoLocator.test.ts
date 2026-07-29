@@ -6,7 +6,7 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { LidoLocator } from "typechain-types/index.js";
 
-import { randomAddress } from "lib/address.js";
+import { randomAddress } from "#lib";
 
 const services = [
   "accountingOracle",

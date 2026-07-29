@@ -16,11 +16,10 @@ import type {
   WithdrawalQueue__MockForSanityChecker,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
+import { ether, impersonate } from "#lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { ether } from "lib/units.js";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const OVER_UINT16 = 1n << 16n;
 const OVER_UINT32 = 1n << 32n;

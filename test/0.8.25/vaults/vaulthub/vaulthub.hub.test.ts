@@ -21,16 +21,21 @@ import type {
   VaultHub,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
-import { DISCONNECT_NOT_INITIATED, GENESIS_FORK_VERSION, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
-import { findEvents } from "lib/event.js";
-import { ceilDiv } from "lib/protocol/helpers/vaults.js";
-import { advanceChainTime, days, getCurrentBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
+import {
+  advanceChainTime,
+  certainAddress,
+  days,
+  ether,
+  findEvents,
+  GENESIS_FORK_VERSION,
+  getCurrentBlockTimestamp,
+  impersonate,
+} from "#lib";
+import { ceilDiv } from "#lib/protocol";
+import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants.js";
 
-import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy/index.js";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite/index.js";
+import { deployLidoDao, updateLidoLocatorImplementation } from "#test/deploy";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "#test/suite";
 
 const TIER_PARAMS: TierParamsStruct = {
   shareLimit: ether("1"),

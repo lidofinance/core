@@ -7,13 +7,20 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/types"
 import type { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.sol/Accounting.js";
 import type { AccountingOracle } from "typechain-types/index.js";
 
-import { impersonate } from "../../account.js";
-import { certainAddress } from "../../address.js";
-import { HASH_CONSENSUS_FAR_FUTURE_EPOCH, ONE_GWEI } from "../../constants.js";
-import { log } from "../../log.js";
-import { EXTRA_DATA_FORMAT_EMPTY, EXTRA_DATA_FORMAT_LIST, prepareExtraData } from "../../oracle.js";
-import { advanceChainTime, getCurrentBlockTimestamp } from "../../time.js";
-import { ether } from "../../units.js";
+import {
+  advanceChainTime,
+  certainAddress,
+  ether,
+  EXTRA_DATA_FORMAT_EMPTY,
+  EXTRA_DATA_FORMAT_LIST,
+  getCurrentBlockTimestamp,
+  HASH_CONSENSUS_FAR_FUTURE_EPOCH,
+  impersonate,
+  log,
+  ONE_GWEI,
+  prepareExtraData,
+} from "#lib";
+
 import type { ProtocolContext } from "../types.js";
 
 import { buildModuleAccountingReportParams } from "./staking.js";

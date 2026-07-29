@@ -2,7 +2,7 @@ import * as process from "node:process";
 
 import hre from "hardhat";
 
-import { log } from "lib/log.js";
+import { log } from "#lib";
 
 import { getMode } from "../../hardhat.helpers.js";
 import { readNetworkState, Sk } from "../state-file.js";

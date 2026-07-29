@@ -18,7 +18,8 @@ import {
   prepareExtraData,
   RewardDistributionState,
   setAnnualBalanceIncreaseLimit,
-} from "lib/index.js";
+} from "#lib";
+import { getProtocolContext, type ProtocolContext, seedProtocolPendingBaseline, withCSM } from "#lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting.js";
 import {
   getOperatorName,
@@ -34,10 +35,9 @@ import {
   setModuleStakeShareLimit,
 } from "lib/protocol/helpers/staking.js";
 import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module.js";
-import { getProtocolContext, type ProtocolContext, seedProtocolPendingBaseline, withCSM } from "lib/protocol/index.js";
 import type { LoadedContract as ProtocolLoadedContract, StakingModuleName } from "lib/protocol/types.js";
 
-import { MAX_BASIS_POINTS, Snapshot } from "test/suite/index.js";
+import { MAX_BASIS_POINTS, Snapshot } from "#test/suite";
 
 const MIN_KEYS_PER_OPERATOR = 5n;
 const MIN_OPERATORS_COUNT = 30n;

@@ -6,9 +6,9 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { EIP712StETH } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
+import { certainAddress } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 describe("EIP712StETH.sol", () => {
   let ethers: HardhatEthers;

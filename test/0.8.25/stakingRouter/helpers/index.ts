@@ -10,8 +10,8 @@ import {
   type StakingRouter__Harness,
 } from "typechain-types/index.js";
 
+import { wcTypeMaxEB } from "#lib";
 import { ONE_GWEI, StakingModuleStatus, TOTAL_BASIS_POINTS, WithdrawalCredentialsType } from "lib/constants.js";
-import { wcTypeMaxEB } from "lib/index.js";
 
 export const DEFAULT_CONFIG: ModuleConfig = {
   stakeShareLimit: TOTAL_BASIS_POINTS,

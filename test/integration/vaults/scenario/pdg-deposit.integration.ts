@@ -16,7 +16,7 @@ import {
   toLittleEndian64,
   type Validator,
   ValidatorStage,
-} from "lib/index.js";
+} from "#lib";
 import {
   createVaultWithDashboard,
   ensurePredepositGuaranteeUnpaused,
@@ -25,9 +25,9 @@ import {
   type ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-} from "lib/protocol/index.js";
+} from "#lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite/index.js";
+import { bailOnFailure, Snapshot } from "#test/suite";
 
 describe("Scenario: Predeposit Guarantee happy path and frontrunning", () => {
   let ethers: HardhatEthers;

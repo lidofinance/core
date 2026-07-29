@@ -1,14 +1,12 @@
 import { ZeroAddress } from "ethers";
 
-import { impersonate } from "../account.js";
-import { certainAddress } from "../address.js";
+import { certainAddress, ether, impersonate, log } from "#lib";
+
 import {
   ensureEIP4788BeaconBlockRootContractPresent,
   ensureEIP7002WithdrawalRequestContractPresent,
   ensureEIP7251MaxEffectiveBalanceRequestContractPresent,
 } from "../eips/index.js";
-import { log } from "../log.js";
-import { ether } from "../units.js";
 
 import {
   ensureDsmGuardians,

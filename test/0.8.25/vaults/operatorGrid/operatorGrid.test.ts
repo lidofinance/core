@@ -17,20 +17,20 @@ import type {
   WstETH__Harness,
 } from "typechain-types/index.js";
 
-import { impersonate } from "lib/account.js";
-import { certainAddress } from "lib/address.js";
 import {
+  certainAddress,
   DISCONNECT_NOT_INITIATED,
+  ether,
   GENESIS_FORK_VERSION,
+  getNextBlockTimestamp,
+  impersonate,
   MAX_FEE_BP,
   MAX_RESERVE_RATIO_BP,
   MAX_UINT96,
-} from "lib/constants.js";
-import { getNextBlockTimestamp } from "lib/time.js";
-import { ether } from "lib/units.js";
+} from "#lib";
 
-import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 const RESERVE_RATIO = 2000;

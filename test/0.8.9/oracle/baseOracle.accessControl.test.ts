@@ -13,10 +13,10 @@ import {
   INITIAL_EPOCH,
   INITIAL_FAST_LANE_LENGTH_SLOTS,
   SECONDS_PER_SLOT,
-} from "lib/constants.js";
+} from "#lib";
 
-import { deployBaseOracle, HASH_1, SECONDS_PER_EPOCH, SLOTS_PER_FRAME } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployBaseOracle, HASH_1, SECONDS_PER_EPOCH, SLOTS_PER_FRAME } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("BaseOracle.sol:accessControl", () => {
   let ethers: HardhatEthers;

@@ -13,9 +13,9 @@ import type {
   UpgradeableBeacon,
 } from "typechain-types/index.js";
 
-import { randomAddress } from "lib/address.js";
+import { randomAddress } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 const PINNED_BEACON_STORAGE_SLOT = "0x8d75cfa6c9a3cd2fb8b6d445eafb32adc5497a45b333009f9000379f7024f9f5";
 

@@ -9,11 +9,9 @@ import type { NetworkHelpers } from "@nomicfoundation/hardhat-network-helpers/ty
 import type { IERC20 } from "typechain-types/@openzeppelin/contracts/token/ERC20/IERC20.js";
 import type { IERC2612 } from "typechain-types/index.js";
 
-import { certainAddress } from "lib/address.js";
-import { type Permit, signPermit } from "lib/eips/eip712.js";
-import { days } from "lib/time.js";
+import { certainAddress, days, type Permit, signPermit } from "#lib";
 
-import { Snapshot } from "test/suite/index.js";
+import { Snapshot } from "#test/suite";
 
 interface ERC2612Target {
   tokenName: string;

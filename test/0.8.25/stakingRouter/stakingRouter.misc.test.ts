@@ -10,17 +10,10 @@ import {
   type StakingRouter__Harness,
 } from "typechain-types/index.js";
 
-import {
-  certainAddress,
-  ether,
-  MAX_TOP_UP_PER_BLOCK_GWEI,
-  randomAddress,
-  randomBytes32,
-  randomWCType1,
-} from "lib/index.js";
+import { certainAddress, ether, MAX_TOP_UP_PER_BLOCK_GWEI, randomAddress, randomBytes32, randomWCType1 } from "#lib";
 
-import { deployLidoLocator, deployStakingRouter } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployLidoLocator, deployStakingRouter } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 describe("StakingRouter.sol:misc", () => {
   let ethers: HardhatEthers;

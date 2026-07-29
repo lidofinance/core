@@ -12,8 +12,7 @@ import type {
   ValidatorsExitBus__Harness,
 } from "typechain-types/index.js";
 
-import { VEBO_CONSENSUS_VERSION } from "lib/constants.js";
-import { de0x, numberToHex } from "lib/string.js";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "#lib";
 
 import {
   DATA_FORMAT_LIST_WITH_KEY_INDEX,
@@ -21,7 +20,7 @@ import {
   initVEBO,
   SECONDS_PER_FRAME,
   seedMockModuleSigningKeys,
-} from "test/deploy/index.js";
+} from "#test/deploy";
 
 // -----------------------------------------------------------------------------
 // Constants & helpers

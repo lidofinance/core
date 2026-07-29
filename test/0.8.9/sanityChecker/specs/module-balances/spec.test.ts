@@ -12,7 +12,7 @@ import {
   type StakingRouter__MockForAccountingOracle,
 } from "typechain-types/index.js";
 
-import { ether, impersonate, randomAddress } from "lib/index.js";
+import { ether, impersonate, randomAddress } from "#lib";
 
 import { getMigrationCLValidatorsBalance } from "../lib.js";
 

@@ -6,11 +6,10 @@ import type { HardhatEthers } from "@nomicfoundation/hardhat-ethers/types";
 
 import type { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types/index.js";
 
-import { BASE_CONSENSUS_VERSION } from "lib/constants.js";
-import { streccak } from "lib/keccak.js";
+import { BASE_CONSENSUS_VERSION, streccak } from "#lib";
 
-import { deployHashConsensus, HASH_1, HASH_2 } from "test/deploy/index.js";
-import { Snapshot } from "test/suite/index.js";
+import { deployHashConsensus, HASH_1, HASH_2 } from "#test/deploy";
+import { Snapshot } from "#test/suite";
 
 const manageReportProcessorRoleKeccak256 = streccak("MANAGE_REPORT_PROCESSOR_ROLE");
 
