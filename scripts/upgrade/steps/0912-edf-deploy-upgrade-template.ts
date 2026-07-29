@@ -35,8 +35,8 @@ type ResolvedStoredDelegationContract = StoredDelegationContract & {
 
 async function resolveExpiryTimestamp(configuredExpiry: number | undefined): Promise<number> {
   if (configuredExpiry !== undefined) return configuredExpiry;
-  if (hardhatNetwork.name !== "local") {
-    throw new Error("EDF upgrade vote expiryTimestamp is required outside the local Hoodi fork");
+  if (hardhatNetwork.name !== "local" && hardhatNetwork.name !== "local-devnet") {
+    throw new Error("EDF upgrade vote expiryTimestamp is required on this network");
   }
 
   const latestBlock = await ethers.provider.getBlock("latest");
@@ -62,7 +62,7 @@ function getStoredDelegationContract(
   return stored as ResolvedStoredDelegationContract;
 }
 
-export async function main() {
+export async function deployEDFUpgradeTemplate(dualGovernance?: string) {
   const state = readNetworkState();
   const parameters = readEDFUpgradeParameters();
   const deployerSigner = await getDeployerSigner();
@@ -95,7 +95,7 @@ export async function main() {
     locatorAdmin: await locatorProxy.proxy__getAdmin(),
     agent: getAddress(Sk.appAgent, state),
     voting: getAddress(Sk.appVoting, state),
-    dualGovernance: getAddress(Sk.dgDualGovernance, state),
+    dualGovernance: dualGovernance ?? getAddress(Sk.dgDualGovernance, state),
     stakingRouter: getAddress(Sk.stakingRouter, state),
     oldDepositSecurityModule,
     newDepositSecurityModule: getAddress(Sk.depositSecurityModule, state),
@@ -145,4 +145,8 @@ export async function main() {
     address: configAddress,
     constructorArgs: [upgradeParams],
   });
+}
+
+export async function main() {
+  await deployEDFUpgradeTemplate();
 }

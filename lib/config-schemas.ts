@@ -440,18 +440,27 @@ export const EDFDelegationContractSchema = z
     deploymentTx: Bytes32Schema.optional(),
   })
   .superRefine((contract, ctx) => {
-    const configuredFields = [
-      contract.address,
-      contract.owner,
-      contract.delegate,
-      contract.cooldown,
-      contract.runtimeCodeHash,
-      contract.deploymentTx,
-    ].filter((value) => value !== undefined).length;
-    if (configuredFields !== 0 && configuredFields !== 6) {
+    const deploymentConfig = [contract.owner, contract.delegate, contract.cooldown];
+    const deployedConfig = [contract.address, contract.runtimeCodeHash, contract.deploymentTx];
+    const deploymentConfigCount = deploymentConfig.filter((value) => value !== undefined).length;
+    const deployedConfigCount = deployedConfig.filter((value) => value !== undefined).length;
+
+    if (deploymentConfigCount !== 0 && deploymentConfigCount !== deploymentConfig.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "address, owner, delegate, cooldown, runtimeCodeHash and deploymentTx must be configured together",
+        message: "owner, delegate and cooldown must be configured together",
+      });
+    }
+    if (deployedConfigCount !== 0 && deployedConfigCount !== deployedConfig.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "address, runtimeCodeHash and deploymentTx must be configured together",
+      });
+    }
+    if (deployedConfigCount === deployedConfig.length && deploymentConfigCount !== deploymentConfig.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "a deployed contract must include owner, delegate and cooldown",
       });
     }
     if (contract.owner && contract.delegate && contract.owner.toLowerCase() === contract.delegate.toLowerCase()) {
@@ -480,7 +489,7 @@ const EDFOracleCommitteeSchema = z.object({
 
 export const EDFUpgradeParametersSchema = z
   .object({
-    chainId: z.literal(560048),
+    chainId: PositiveIntSchema,
     executionDelegationFramework: z.object({
       repository: z.string().url(),
       ref: z.string().min(1),

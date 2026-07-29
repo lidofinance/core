@@ -105,11 +105,13 @@ export function buildDelegationDeploymentPlan(
   });
 }
 
-async function validateHoodiState(state: DeploymentState, expectedChainId: number) {
+async function validateChainState(state: DeploymentState, expectedChainId: number) {
   const { chainId } = await ethers.provider.getNetwork();
   const stateChainId = state[Sk.chainId] ?? state[Sk.chainSpec]?.chainId;
   if (chainId !== BigInt(expectedChainId) || stateChainId === undefined || BigInt(stateChainId) !== chainId) {
-    throw new Error(`EDF deploy is Hoodi-only: provider chain ID ${chainId}, state chain ID ${stateChainId}`);
+    throw new Error(
+      `EDF deploy chain ID mismatch: expected ${expectedChainId}, provider ${chainId}, state ${stateChainId}`,
+    );
   }
 }
 
@@ -292,7 +294,7 @@ export async function deployOrReuseEDFDelegationContracts(
   state: DeploymentState,
   parameters: EDFUpgradeParameters,
 ): Promise<Record<string, StoredDelegationContract>> {
-  await validateHoodiState(state, parameters.chainId);
+  await validateChainState(state, parameters.chainId);
   const framework = parameters.executionDelegationFramework;
   if (framework.repository !== EDF_REPO || framework.ref !== EDF_REPO_BRANCH) {
     throw new Error(
@@ -300,9 +302,10 @@ export async function deployOrReuseEDFDelegationContracts(
     );
   }
 
-  if (hardhatNetwork.name !== "local") {
+  const canDeployPrerequisites = hardhatNetwork.name === "local" || hardhatNetwork.name === "local-devnet";
+  if (!canDeployPrerequisites) {
     if (!framework.factory.address || !framework.factory.runtimeCodeHash) {
-      throw new Error("DelegationFactory address and runtime code hash are required outside the local Hoodi fork");
+      throw new Error("DelegationFactory address and runtime code hash are required on this network");
     }
     const incompleteContract = framework.delegationContracts.find(
       ({ address, owner, delegate, cooldown, runtimeCodeHash, deploymentTx }) =>
@@ -310,7 +313,17 @@ export async function deployOrReuseEDFDelegationContracts(
     );
     if (incompleteContract) {
       throw new Error(
-        `Delegation contract ${incompleteContract.id} requires address, owner, delegate, cooldown, runtimeCodeHash and deploymentTx outside the local Hoodi fork`,
+        `Delegation contract ${incompleteContract.id} requires address, owner, delegate, cooldown, runtimeCodeHash and deploymentTx on this network`,
+      );
+    }
+  }
+  if (hardhatNetwork.name === "local-devnet") {
+    const incompleteContract = framework.delegationContracts.find(
+      ({ owner, delegate, cooldown }) => !owner || !delegate || cooldown === undefined,
+    );
+    if (incompleteContract) {
+      throw new Error(
+        `Delegation contract ${incompleteContract.id} requires owner, delegate and cooldown on local-devnet`,
       );
     }
   }
@@ -320,7 +333,7 @@ export async function deployOrReuseEDFDelegationContracts(
   const factoryAddress = await deployExecutionDelegationFramework(state, {
     expectedAddress: framework.factory.address,
     expectedRuntimeCodeHash: framework.factory.runtimeCodeHash,
-    allowDeploy: hardhatNetwork.name === "local",
+    allowDeploy: canDeployPrerequisites,
   });
   const deployer = await getDeployerSigner();
   const factory = new ethers.Contract(factoryAddress, DELEGATION_FACTORY_ABI, deployer);
@@ -332,7 +345,7 @@ export async function deployOrReuseEDFDelegationContracts(
   const needsTestConfiguration = plan.some((item) => item.action === "deploy" && (!item.owner || !item.delegate));
   const testSigners = needsTestConfiguration ? await ethers.getSigners() : [];
   if (needsTestConfiguration && hardhatNetwork.name !== "local") {
-    throw new Error("Missing delegation contract owner/delegate configuration outside the local Hoodi fork");
+    throw new Error("Missing delegation contract owner/delegate configuration outside the local fork runtime");
   }
   if (needsTestConfiguration && testSigners.length < 2) {
     throw new Error("At least two local signers are required to deploy test delegation contracts");
