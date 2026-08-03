@@ -60,6 +60,7 @@
     "deploy:upgrade:template": "STEPS_FILE=upgrade/steps-deploy-template.json yarn deploy:upgrade",
     "deploy:upgrade:base:local": "NETWORK=local yarn deploy:upgrade:base",
     "deploy:upgrade:template:local": "NETWORK=local yarn deploy:upgrade:template",
+    "deploy:token-rate-notifier-nest": "STEPS_FILE=upgrade/steps-deploy-token-rate-notifier-nest.json hardhat run scripts/utils/migrate.ts",
     "postinstall": "husky"
   },
   "lint-staged": {
