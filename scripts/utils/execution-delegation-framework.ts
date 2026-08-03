@@ -9,7 +9,7 @@ import { cy, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
 export const EDF_REPO = "https://github.com/lidofinance/execution-delegation-framework.git";
-export const EDF_REPO_BRANCH = "feat/local-devnet";
+export const EDF_REPO_BRANCH = "main";
 
 type ExternalDeployArtifact = {
   "ChainId"?: number | string;

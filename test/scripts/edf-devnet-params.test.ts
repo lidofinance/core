@@ -43,7 +43,7 @@ describe("EDF devnet parameters", () => {
     const parameters = buildEDFDevnetUpgradeParameters({
       chainId: 32382,
       repository: "https://github.com/lidofinance/execution-delegation-framework.git",
-      ref: "feat/local-devnet",
+      ref: "main",
       owner,
       cooldown: 0,
       guardians,

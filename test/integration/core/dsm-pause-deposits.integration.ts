@@ -181,7 +181,9 @@ describe("Integration: DSM pause deposits", () => {
     const guardian = await deployDelegationContract(delegationOwner, currentDelegate.address, cooldown);
     await setSingleGuardian(ctx, guardian.address);
 
-    await (await (guardian.contract.connect(delegationOwner) as Contract).assignDelegate(nextDelegate.address)).wait();
+    await (
+      await (guardian.contract.connect(delegationOwner) as Contract).nominateDelegate(nextDelegate.address)
+    ).wait();
 
     const blockNumber = await time.latestBlock();
     const pauseMessage = new DSMPauseMessage(guardian.address, blockNumber);
@@ -202,7 +204,9 @@ describe("Integration: DSM pause deposits", () => {
     const guardian = await deployDelegationContract(delegationOwner, currentDelegate.address, cooldown);
     await setSingleGuardian(ctx, guardian.address);
 
-    await (await (guardian.contract.connect(delegationOwner) as Contract).assignDelegate(nextDelegate.address)).wait();
+    await (
+      await (guardian.contract.connect(delegationOwner) as Contract).nominateDelegate(nextDelegate.address)
+    ).wait();
     await time.increase(cooldown);
 
     const blockNumber = await time.latestBlock();
