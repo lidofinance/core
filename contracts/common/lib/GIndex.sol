@@ -12,9 +12,11 @@ pragma solidity ^0.8.25;
 
 type GIndex is bytes32;
 
-using {isRoot, index, width, shr, shl, concat, unwrap, pow} for GIndex global;
+using {isRoot, index, width, shr, shl, concat, unwrap, pow, staticListNodeGIndex} for GIndex global;
 
 error IndexOutOfRange();
+
+uint256 constant INDEX_BIT_SIZE = 248;
 
 /// @param gI Is a generalized index of a node in a tree.
 /// @param p Is a power of a tree level the node belongs to.
@@ -80,12 +82,11 @@ function concat(GIndex lhs, GIndex rhs) pure returns (GIndex) {
     uint256 lhsMSbIndex = fls(lindex);
     uint256 rhsMSbIndex = fls(rindex);
 
-    if (lhsMSbIndex + 1 + rhsMSbIndex > 248) {
+    if (lhsMSbIndex + 1 + rhsMSbIndex > INDEX_BIT_SIZE) {
         revert IndexOutOfRange();
     }
 
-    return
-        pack((lindex << rhsMSbIndex) | (rindex ^ (1 << rhsMSbIndex)), pow(rhs));
+    return pack((lindex << rhsMSbIndex) | (rindex ^ (1 << rhsMSbIndex)), pow(rhs));
 }
 
 /// @dev From Solady LibBit, see https://github.com/Vectorized/solady/blob/main/src/utils/LibBit.sol.
@@ -94,16 +95,51 @@ function concat(GIndex lhs, GIndex rhs) pure returns (GIndex) {
 /// counting from the least significant bit position.
 /// If `x` is zero, returns 256.
 function fls(uint256 x) pure returns (uint256 r) {
+    // prettier-ignore
     /// @solidity memory-safe-assembly
     assembly {
-        // prettier-ignore
         r := or(shl(8, iszero(x)), shl(7, lt(0xffffffffffffffffffffffffffffffff, x)))
         r := or(r, shl(6, lt(0xffffffffffffffff, shr(r, x))))
         r := or(r, shl(5, lt(0xffffffff, shr(r, x))))
         r := or(r, shl(4, lt(0xffff, shr(r, x))))
         r := or(r, shl(3, lt(0xff, shr(r, x))))
-        // prettier-ignore
         r := or(r, byte(and(0x1f, shr(shr(r, x), 0x8421084210842108cc6318c6db6d54be)),
                 0x0706060506020504060203020504030106050205030304010505030400000000))
+    }
+}
+
+/// @return Generalized index for item n relative to the configured first static-list item.
+function staticListNodeGIndex(GIndex self, uint256 n) pure returns (GIndex) {
+    return self.shr(n);
+}
+
+/// @param i Index of a node relative to the root of ProgressiveList[type].
+function progressiveListNodeGIndex(uint256 i) pure returns (GIndex gI) {
+    if (i > (type(uint256).max - 1) / 3) {
+        revert IndexOutOfRange();
+    }
+
+    // Progressive-list chunk sizes are powers of four. The geometric series
+    // identifies the chunk containing i without walking every preceding chunk.
+    uint256 k = fls(i * 3 + 1) >> 1;
+
+    unchecked {
+        if (3 * k + 3 > INDEX_BIT_SIZE) revert IndexOutOfRange();
+    }
+
+    assembly ("memory-safe") {
+        let twoK := shl(1, k)
+        // Down to the chunk root (getting in binary something like this: 0x101(1)).
+        gI := sub(shl(k, 3), 1)
+        // One step to the left to the nodes.
+        gI := shl(1, gI)
+        // Down to the first node in the chunk.
+        gI := shl(twoK, gI)
+        // Using the geometric series formula we compute how many nodes we skipped to get the correct offset in the level.
+        i := sub(i, div(sub(shl(twoK, 1), 1), 3))
+        // To the right to the node we're looking for.
+        gI := add(gI, i)
+        // Shift to conform the current GIndex layout.
+        gI := shl(8, gI)
     }
 }

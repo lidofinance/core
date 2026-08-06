@@ -5,7 +5,7 @@
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity >=0.8.25;
 
-import {GIndex, pack, IndexOutOfRange, fls} from "contracts/common/lib/GIndex.sol";
+import {GIndex, pack, fls, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
 
 /**
  * @dev Test contract for GIndex library in TypeScript tests
@@ -50,6 +50,14 @@ contract GIndex__Harness {
     function fls(uint256 x) external pure returns (uint256) {
         return fls(x);
     }
+
+    function staticListNode(GIndex self, uint256 n) external pure returns (GIndex) {
+        return self.staticListNodeGIndex(n);
+    }
+
+    function progressiveListNode(uint256 i) external pure returns (GIndex) {
+        return progressiveListNodeGIndex(i);
+    }
 }
 
 /**
@@ -66,5 +74,13 @@ contract GIndexLibrary__Harness {
 
     function shl(GIndex self, uint256 n) public returns (GIndex) {
         return self.shl(n);
+    }
+
+    function staticListNode(GIndex self, uint256 n) external pure returns (GIndex) {
+        return self.staticListNodeGIndex(n);
+    }
+
+    function progressiveListNode(uint256 i) external pure returns (GIndex) {
+        return progressiveListNodeGIndex(i);
     }
 }

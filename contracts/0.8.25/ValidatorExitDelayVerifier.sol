@@ -386,7 +386,7 @@ contract ValidatorExitDelayVerifier {
 
     function _getValidatorGI(uint256 offset, uint64 stateSlot) internal view returns (GIndex) {
         GIndex gI = stateSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
-        return gI.shr(offset);
+        return gI.staticListNodeGIndex(offset);
     }
 
     function _getHistoricalBlockRootGI(
@@ -406,7 +406,7 @@ contract ValidatorExitDelayVerifier {
             ? GI_FIRST_HISTORICAL_SUMMARY_PREV
             : GI_FIRST_HISTORICAL_SUMMARY_CURR;
 
-        gI = gI.shr(summaryIndex); // historicalSummaries[summaryIndex]
+        gI = gI.staticListNodeGIndex(summaryIndex); // historicalSummaries[summaryIndex]
         gI = gI.concat(
             summaryCreatedAtSlot < PIVOT_SLOT
                 ? GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV

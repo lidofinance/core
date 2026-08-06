@@ -96,7 +96,7 @@ abstract contract CLValidatorVerifier {
     /// @dev GIndex for Validator[i] given slot (fork-aware).
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
         GIndex gI = _provenSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
-        return gI.shr(_offset);
+        return gI.staticListNodeGIndex(_offset);
     }
 
     /// @dev Reads parent_beacon_block_root from EIP-4788 by timestamp.

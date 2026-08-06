@@ -6,6 +6,24 @@ import { GIndex__Harness, GIndexLibrary__Harness } from "typechain-types";
 
 import { Snapshot } from "test/suite";
 
+const LARGEST_PROGRESSIVE_LIST_INDEX = ((4n ** 81n - 1n) * 4n) / 3n;
+
+function progressiveListNodeGIndexReference(i: bigint): bigint {
+  let depth = 0n;
+  let gI = 2n;
+
+  while (true) {
+    const chunkSize = 1n << depth;
+    if (i < chunkSize) {
+      return ((gI << 1n) << depth) + i;
+    }
+
+    i -= chunkSize;
+    depth += 2n;
+    gI = (gI << 1n) + 1n;
+  }
+}
+
 /**
  * Wrapper for the GIndex operations to match the Solidity test
  */
@@ -50,6 +68,14 @@ class GIndexWrapper {
 
   async fls(x: BigNumberish): Promise<bigint> {
     return await this.contract.fls(x);
+  }
+
+  async staticListNode(self: string, n: BigNumberish): Promise<string> {
+    return await this.contract.staticListNode(self, n);
+  }
+
+  async progressiveListNode(i: BigNumberish): Promise<string> {
+    return await this.contract.progressiveListNode(i);
   }
 }
 
@@ -364,5 +390,57 @@ describe("GIndex", () => {
     expect(await gIndex.fls(10n)).to.equal(3n); // 1010
     expect(await gIndex.fls(300n)).to.equal(8n); // 0001 0010 1100
     expect(await gIndex.fls(0n)).to.equal(256n);
+  });
+
+  it("test_staticListNode", async () => {
+    const firstNode = await gIndex.pack(0x960000000000n, 40);
+
+    expect(await gIndex.staticListNode(firstNode, 0)).to.equal(await gIndex.pack(0x960000000000n, 40));
+    expect(await gIndex.staticListNode(firstNode, 129)).to.equal(await gIndex.pack(0x960000000081n, 40));
+    expect(await gIndex.staticListNode(firstNode, (1n << 40n) - 1n)).to.equal(await gIndex.pack(0x96ffffffffffn, 40));
+
+    await expect(library.staticListNode(firstNode, 1n << 40n)).to.be.revertedWithCustomError(
+      library,
+      "IndexOutOfRange",
+    );
+  });
+
+  it("testFuzz_staticListNode_IsEquivalentToShr", async () => {
+    const maxUint248 = 2n ** 248n - 1n;
+
+    for (let run = 0; run < 20; run++) {
+      const pow = BigInt(ethers.hexlify(randomBytes(1))) % 248n;
+      const width = 1n << pow;
+      const index = (BigInt(ethers.hexlify(randomBytes(31))) % (maxUint248 - width + 1n)) + width;
+      const n = BigInt(ethers.hexlify(randomBytes(32))) % (width - (index % width));
+      const gI = await gIndex.pack(index, pow);
+
+      expect(await gIndex.staticListNode(gI, n)).to.equal(await gIndex.shr(gI, n));
+    }
+  });
+
+  it("test_progressiveListNode", async () => {
+    expect(await gIndex.progressiveListNode(0)).to.equal(await gIndex.pack(0x4, 0));
+    expect(await gIndex.progressiveListNode(1)).to.equal(await gIndex.pack(0x28, 0));
+    expect(await gIndex.progressiveListNode(12345678)).to.equal(await gIndex.pack(0x5ffe670bf9n, 0));
+
+    await expect(library.progressiveListNode(ethers.MaxUint256 / 3n)).to.be.revertedWithCustomError(
+      library,
+      "IndexOutOfRange",
+    );
+    await expect(library.progressiveListNode(ethers.MaxUint256)).to.be.revertedWithCustomError(
+      library,
+      "IndexOutOfRange",
+    );
+  });
+
+  it("testFuzz_progressiveListNode", async () => {
+    for (let run = 0; run < 20; run++) {
+      const i = BigInt(ethers.hexlify(randomBytes(32))) % (LARGEST_PROGRESSIVE_LIST_INDEX + 1n);
+      const gI = await gIndex.progressiveListNode(i);
+
+      expect(await gIndex.index(gI)).to.equal(progressiveListNodeGIndexReference(i));
+      expect(await gIndex.width(gI)).to.equal(1n);
+    }
   });
 });
