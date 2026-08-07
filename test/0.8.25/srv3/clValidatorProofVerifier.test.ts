@@ -3,8 +3,12 @@ import { ethers } from "hardhat";
 
 import { CLValidatorVerifier__Harness, SSZValidatorsMerkleTree } from "typechain-types";
 
-import { generateBeaconHeader, generateValidator, randomBytes32, setBeaconBlockRoot } from "lib/pdg";
+import { generateBeaconHeader, generateValidator, setBeaconBlockRoot } from "lib/pdg";
 import { prepareLocalMerkleTree } from "lib/top-ups";
+
+const GLOAS_VALIDATORS_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000016600";
+const NULL_GINDEX = ethers.ZeroHash;
+const MAX_UINT64 = (1n << 64n) - 1n;
 
 const STATIC_VALIDATOR = {
   blockRoot: "0xbe928e3a9fa76b916df79d78a8b67237f9b133269bb421f37490b7624abad452",
@@ -165,11 +169,11 @@ describe("CLTopUpProofVerifier", () => {
       await sszMerkleTree.addValidatorsLeaf(v);
     }
 
-    // 2) Deploy the verifier (same GI for prev/curr, no pivot)
+    // 2) Keep the fixed-depth fixture on the pre-Gloas path.
     verifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
-      gIFirstValidator, // GI_FIRST_VALIDATOR_PREV
-      gIFirstValidator, // GI_FIRST_VALIDATOR_CURR
-      0, // PIVOT_SLOT
+      gIFirstValidator, // GI_FIRST_VALIDATOR_PRE_GLOAS
+      NULL_GINDEX, // GI_VALIDATORS is unused before MAX_UINT64
+      MAX_UINT64, // PIVOT_SLOT
     ]);
   });
 
@@ -417,8 +421,8 @@ describe("CLTopUpProofVerifier", () => {
   it("should verify static validator 12345 with real mainnet proof", async () => {
     const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
-      STATIC_VALIDATOR.gIFirstValidator,
-      0,
+      NULL_GINDEX,
+      MAX_UINT64,
     ]);
 
     const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
@@ -440,8 +444,8 @@ describe("CLTopUpProofVerifier", () => {
   it("should verify static validator 67890 with real mainnet proof", async () => {
     const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
-      STATIC_VALIDATOR.gIFirstValidator,
-      0,
+      NULL_GINDEX,
+      MAX_UINT64,
     ]);
 
     const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
@@ -463,8 +467,8 @@ describe("CLTopUpProofVerifier", () => {
   it("should reject static validator with wrong withdrawal credentials", async () => {
     const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
-      STATIC_VALIDATOR.gIFirstValidator,
-      0,
+      NULL_GINDEX,
+      MAX_UINT64,
     ]);
 
     const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
@@ -482,8 +486,8 @@ describe("CLTopUpProofVerifier", () => {
   it("should reject static validator with fake proof", async () => {
     const staticVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [
       STATIC_VALIDATOR.gIFirstValidator,
-      STATIC_VALIDATOR.gIFirstValidator,
-      0,
+      NULL_GINDEX,
+      MAX_UINT64,
     ]);
 
     const timestamp = await setBeaconBlockRoot(STATIC_VALIDATOR.blockRoot);
@@ -512,12 +516,21 @@ describe("CLTopUpProofVerifier", () => {
 
   it("should change gIndex on pivot slot", async () => {
     const pivotSlot = 1000;
-    const giPrev = randomBytes32();
-    const giCurr = randomBytes32();
+    const giPrev = "0x0000000000000000000000000000000000000000000000000096000000000028";
 
-    const proofVerifier = await ethers.deployContract("CLValidatorVerifier__Harness", [giPrev, giCurr, pivotSlot], {});
-    expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot - 1)).to.equal(giPrev);
-    expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(giCurr);
-    expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot + 1)).to.equal(giCurr);
+    const proofVerifier = await ethers.deployContract(
+      "CLValidatorVerifier__Harness",
+      [giPrev, GLOAS_VALIDATORS_GINDEX, pivotSlot],
+      {},
+    );
+    expect(await proofVerifier.TEST_getValidatorGI(1n, pivotSlot - 1)).to.equal(
+      "0x0000000000000000000000000000000000000000000000000096000000000128",
+    );
+    expect(await proofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(
+      "0x0000000000000000000000000000000000000000000000000000000000059800",
+    );
+    expect(await proofVerifier.TEST_getValidatorGI(1n, pivotSlot + 1)).to.equal(
+      "0x00000000000000000000000000000000000000000000000000000000002cc800",
+    );
   });
 });

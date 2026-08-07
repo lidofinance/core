@@ -91,8 +91,8 @@ describe("Scenario: PDG specific validator prove and top up on mainnet fork", fu
     withdrawalCredentials = await stakingVault.withdrawalCredentials();
 
     // Initialize mock CL tree for proof generation
-    slot = await predepositGuarantee.PIVOT_SLOT();
-    mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
+    slot = 8192n;
+    mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS());
   });
 
   async function upgradePDG() {

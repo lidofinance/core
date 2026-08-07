@@ -70,10 +70,6 @@ class GIndexWrapper {
     return await this.contract.fls(x);
   }
 
-  async staticListNode(self: string, n: BigNumberish): Promise<string> {
-    return await this.contract.staticListNode(self, n);
-  }
-
   async progressiveListNode(i: BigNumberish): Promise<string> {
     return await this.contract.progressiveListNode(i);
   }
@@ -390,33 +386,6 @@ describe("GIndex", () => {
     expect(await gIndex.fls(10n)).to.equal(3n); // 1010
     expect(await gIndex.fls(300n)).to.equal(8n); // 0001 0010 1100
     expect(await gIndex.fls(0n)).to.equal(256n);
-  });
-
-  it("test_staticListNode", async () => {
-    const firstNode = await gIndex.pack(0x960000000000n, 40);
-
-    expect(await gIndex.staticListNode(firstNode, 0)).to.equal(await gIndex.pack(0x960000000000n, 40));
-    expect(await gIndex.staticListNode(firstNode, 129)).to.equal(await gIndex.pack(0x960000000081n, 40));
-    expect(await gIndex.staticListNode(firstNode, (1n << 40n) - 1n)).to.equal(await gIndex.pack(0x96ffffffffffn, 40));
-
-    await expect(library.staticListNode(firstNode, 1n << 40n)).to.be.revertedWithCustomError(
-      library,
-      "IndexOutOfRange",
-    );
-  });
-
-  it("testFuzz_staticListNode_IsEquivalentToShr", async () => {
-    const maxUint248 = 2n ** 248n - 1n;
-
-    for (let run = 0; run < 20; run++) {
-      const pow = BigInt(ethers.hexlify(randomBytes(1))) % 248n;
-      const width = 1n << pow;
-      const index = (BigInt(ethers.hexlify(randomBytes(31))) % (maxUint248 - width + 1n)) + width;
-      const n = BigInt(ethers.hexlify(randomBytes(32))) % (width - (index % width));
-      const gI = await gIndex.pack(index, pow);
-
-      expect(await gIndex.staticListNode(gI, n)).to.equal(await gIndex.shr(gI, n));
-    }
   });
 
   it("test_progressiveListNode", async () => {

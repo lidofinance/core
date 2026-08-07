@@ -63,11 +63,11 @@ contract TopUpGateway is CLValidatorVerifier, AccessControlEnumerableUpgradeable
 
     constructor(
         address _lidoLocator,
-        GIndex _gIFirstValidatorPrev,
-        GIndex _gIFirstValidatorCurr,
+        GIndex _gIFirstValidatorPreGloas,
+        GIndex _gIValidators,
         uint64 _pivotSlot,
         uint256 _slotsPerEpoch
-    ) CLValidatorVerifier(_gIFirstValidatorPrev, _gIFirstValidatorCurr, _pivotSlot) {
+    ) CLValidatorVerifier(_gIFirstValidatorPreGloas, _gIValidators, _pivotSlot) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         LOCATOR = ILidoLocator(_lidoLocator);
         SLOTS_PER_EPOCH = _slotsPerEpoch;

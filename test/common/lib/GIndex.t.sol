@@ -24,10 +24,6 @@ contract Library {
         return self.shl(n);
     }
 
-    function staticListNode(GIndex self, uint256 n) external pure returns (GIndex) {
-        return self.staticListNodeGIndex(n);
-    }
-
     function progressiveListNode(uint256 i) external pure returns (GIndex) {
         return progressiveListNodeGIndex(i);
     }
@@ -319,30 +315,6 @@ contract GIndexTest is Test {
         assertEq(fls(10), 3); // 1010
         assertEq(fls(300), 8); // 0001 0010 1100
         assertEq(fls(0), 256);
-    }
-
-    function test_staticListNodeGIndex() public {
-        GIndex firstNode = pack(0x960000000000, 40);
-
-        assertEq(firstNode.staticListNodeGIndex(0).unwrap(), pack(0x960000000000, 40).unwrap());
-        assertEq(firstNode.staticListNodeGIndex(1).unwrap(), pack(0x960000000001, 40).unwrap());
-        assertEq(firstNode.staticListNodeGIndex(129).unwrap(), pack(0x960000000081, 40).unwrap());
-        assertEq(firstNode.staticListNodeGIndex((1 << 40) - 1).unwrap(), pack(0x96ffffffffff, 40).unwrap());
-    }
-
-    function testFuzz_staticListNodeGIndex_IsEquivalentToShr(uint248 i, uint8 p, uint256 n) public {
-        vm.assume(p < 248);
-        uint256 w = 1 << p;
-        vm.assume(i >= w);
-        n = bound(n, 0, w - (uint256(i) % w) - 1);
-        GIndex gI = pack(i, p);
-
-        assertEq(gI.staticListNodeGIndex(n).unwrap(), gI.shr(n).unwrap());
-    }
-
-    function test_staticListNodeGIndex_RevertsWhenOutOfRange() public {
-        vm.expectRevert(IndexOutOfRange.selector);
-        lib.staticListNode(pack(0x960000000000, 40), 1 << 40);
     }
 
     function test_progressiveListNodeGIndex() public {

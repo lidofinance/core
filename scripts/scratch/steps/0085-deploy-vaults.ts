@@ -122,8 +122,8 @@ export async function main() {
     deployer,
     [
       state.chainSpec.genesisForkVersion,
-      pdgDeployParams.gIndex,
-      pdgDeployParams.gIndexAfterChange,
+      pdgDeployParams.gIFirstValidatorPreGloas,
+      pdgDeployParams.gIValidators,
       pdgDeployParams.changeSlot,
     ],
   );

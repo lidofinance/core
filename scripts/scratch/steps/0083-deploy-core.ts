@@ -232,8 +232,8 @@ export async function main() {
     deployer,
     [
       locator.address,
-      topUpGatewayParams.gIFirstValidatorPrev,
-      topUpGatewayParams.gIFirstValidatorCurr,
+      topUpGatewayParams.gIFirstValidatorPreGloas,
+      topUpGatewayParams.gIValidators,
       topUpGatewayParams.pivotSlot,
       chainSpec.slotsPerEpoch,
     ],
@@ -385,8 +385,8 @@ export async function main() {
     consolidationGatewayParams.maxConsolidationRequestsLimit,
     consolidationGatewayParams.consolidationsPerFrame,
     consolidationGatewayParams.frameDurationInSec,
-    consolidationGatewayParams.gIFirstValidatorPrev,
-    consolidationGatewayParams.gIFirstValidatorCurr,
+    consolidationGatewayParams.gIFirstValidatorPreGloas,
+    consolidationGatewayParams.gIValidators,
     consolidationGatewayParams.pivotSlot,
   ]);
 
@@ -484,8 +484,8 @@ export async function main() {
   const validatorExitDelayVerifierCtorArgs = [
     locator.address,
     {
-      gIFirstValidatorPrev: validatorExitDelayVerifierParams.gIFirstValidatorPrev,
-      gIFirstValidatorCurr: validatorExitDelayVerifierParams.gIFirstValidatorCurr,
+      gIFirstValidatorPreGloas: validatorExitDelayVerifierParams.gIFirstValidatorPreGloas,
+      gIValidators: validatorExitDelayVerifierParams.gIValidators,
       gIFirstHistoricalSummaryPrev: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryPrev,
       gIFirstHistoricalSummaryCurr: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryCurr,
       gIFirstBlockRootInSummaryPrev: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryPrev,

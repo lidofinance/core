@@ -32,6 +32,9 @@ import {
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
+const NULL_GINDEX = ethers.ZeroHash;
+const MAX_UINT64 = (1n << 64n) - 1n;
+
 describe("PredepositGuarantee.sol", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
@@ -67,7 +70,7 @@ describe("PredepositGuarantee.sol", () => {
     // PDG
     pdgImpl = await ethers.deployContract(
       "PredepositGuarantee",
-      [GENESIS_FORK_VERSION, localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
+      [GENESIS_FORK_VERSION, localMerkle.gIFirstValidator, NULL_GINDEX, MAX_UINT64],
       { from: deployer },
     );
     proxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);

@@ -4,7 +4,7 @@
 pragma solidity 0.8.25;
 
 import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol";
-import {GIndex} from "contracts/common/lib/GIndex.sol";
+import {GIndex, progressiveListNodeGIndex} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 
 interface ILidoLocator {
@@ -64,8 +64,8 @@ struct HistoricalHeaderWitness {
 }
 
 struct GIndices {
-    GIndex gIFirstValidatorPrev;
-    GIndex gIFirstValidatorCurr;
+    GIndex gIFirstValidatorPreGloas;
+    GIndex gIValidators;
     GIndex gIFirstHistoricalSummaryPrev;
     GIndex gIFirstHistoricalSummaryCurr;
     GIndex gIFirstBlockRootInSummaryPrev;
@@ -94,10 +94,10 @@ contract ValidatorExitDelayVerifier {
     uint32 public immutable SHARD_COMMITTEE_PERIOD_IN_SECONDS;
 
     /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
-    GIndex public immutable GI_FIRST_VALIDATOR_PREV;
+    GIndex public immutable GI_FIRST_VALIDATOR_PRE_GLOAS;
 
-    /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
-    GIndex public immutable GI_FIRST_VALIDATOR_CURR;
+    /// @dev This index is relative to a Gloas state like: `BeaconState.validators`.
+    GIndex public immutable GI_VALIDATORS;
 
     /// @dev This index is relative to a state like: `BeaconState.historical_summaries[0]`.
     GIndex public immutable GI_FIRST_HISTORICAL_SUMMARY_PREV;
@@ -173,8 +173,8 @@ contract ValidatorExitDelayVerifier {
         LOCATOR = ILidoLocator(lidoLocator);
 
         // Assign individual GIndex values from the struct
-        GI_FIRST_VALIDATOR_PREV = gIndices.gIFirstValidatorPrev;
-        GI_FIRST_VALIDATOR_CURR = gIndices.gIFirstValidatorCurr;
+        GI_FIRST_VALIDATOR_PRE_GLOAS = gIndices.gIFirstValidatorPreGloas;
+        GI_VALIDATORS = gIndices.gIValidators;
         GI_FIRST_HISTORICAL_SUMMARY_PREV = gIndices.gIFirstHistoricalSummaryPrev;
         GI_FIRST_HISTORICAL_SUMMARY_CURR = gIndices.gIFirstHistoricalSummaryCurr;
         GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = gIndices.gIFirstBlockRootInSummaryPrev;
@@ -385,8 +385,10 @@ contract ValidatorExitDelayVerifier {
     }
 
     function _getValidatorGI(uint256 offset, uint64 stateSlot) internal view returns (GIndex) {
-        GIndex gI = stateSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
-        return gI.staticListNodeGIndex(offset);
+        if (stateSlot < PIVOT_SLOT) {
+            return GI_FIRST_VALIDATOR_PRE_GLOAS.shr(offset);
+        }
+        return GI_VALIDATORS.concat(progressiveListNodeGIndex(offset));
     }
 
     function _getHistoricalBlockRootGI(
@@ -406,7 +408,7 @@ contract ValidatorExitDelayVerifier {
             ? GI_FIRST_HISTORICAL_SUMMARY_PREV
             : GI_FIRST_HISTORICAL_SUMMARY_CURR;
 
-        gI = gI.staticListNodeGIndex(summaryIndex); // historicalSummaries[summaryIndex]
+        gI = gI.shr(summaryIndex); // historicalSummaries[summaryIndex]
         gI = gI.concat(
             summaryCreatedAtSlot < PIVOT_SLOT
                 ? GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV

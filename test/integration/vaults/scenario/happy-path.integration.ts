@@ -236,9 +236,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       predeposits.map((p) => p.depositY),
     );
 
-    const slot = await pdg.PIVOT_SLOT();
+    const slot = 8192n;
 
-    const mockCLtree = await prepareLocalMerkleTree(await pdg.GI_FIRST_VALIDATOR_CURR());
+    const mockCLtree = await prepareLocalMerkleTree(await pdg.GI_FIRST_VALIDATOR_PRE_GLOAS());
 
     for (let index = 0; index < validators.length; index++) {
       const validator = validators[index];

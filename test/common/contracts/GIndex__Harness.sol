@@ -51,10 +51,6 @@ contract GIndex__Harness {
         return fls(x);
     }
 
-    function staticListNode(GIndex self, uint256 n) external pure returns (GIndex) {
-        return self.staticListNodeGIndex(n);
-    }
-
     function progressiveListNode(uint256 i) external pure returns (GIndex) {
         return progressiveListNodeGIndex(i);
     }
@@ -74,10 +70,6 @@ contract GIndexLibrary__Harness {
 
     function shl(GIndex self, uint256 n) public returns (GIndex) {
         return self.shl(n);
-    }
-
-    function staticListNode(GIndex self, uint256 n) external pure returns (GIndex) {
-        return self.staticListNodeGIndex(n);
     }
 
     function progressiveListNode(uint256 i) external pure returns (GIndex) {

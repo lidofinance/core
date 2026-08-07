@@ -12,7 +12,7 @@ pragma solidity ^0.8.25;
 
 type GIndex is bytes32;
 
-using {isRoot, index, width, shr, shl, concat, unwrap, pow, staticListNodeGIndex} for GIndex global;
+using {isRoot, index, width, shr, shl, concat, unwrap, pow} for GIndex global;
 
 error IndexOutOfRange();
 
@@ -106,11 +106,6 @@ function fls(uint256 x) pure returns (uint256 r) {
         r := or(r, byte(and(0x1f, shr(shr(r, x), 0x8421084210842108cc6318c6db6d54be)),
                 0x0706060506020504060203020504030106050205030304010505030400000000))
     }
-}
-
-/// @return Generalized index for item n relative to the configured first static-list item.
-function staticListNodeGIndex(GIndex self, uint256 n) pure returns (GIndex) {
-    return self.shr(n);
 }
 
 /// @param i Index of a node relative to the root of ProgressiveList[type].

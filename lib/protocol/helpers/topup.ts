@@ -16,8 +16,8 @@ import { ensureSubmitFitsStakeLimit, setModuleStakeShareLimit } from "./staking"
  * TopUpGateway.topUp -> StakingRouter.topUp -> module.allocateDeposits -> DepositContract.
  *
  * Witnesses are built against a local SSZ validators tree committed to the EIP-4788
- * beacon roots contract. The tree uses the generalized index and pivot slot read from
- * the deployed TopUpGateway, so the same code works on scratch, Hoodi and mainnet forks.
+ * beacon roots contract. This helper only supports deployments with a pre-Gloas
+ * proof window; a zero pivot denotes a Gloas-only deployment.
  */
 
 const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
@@ -69,12 +69,16 @@ export const prepareTopUpWitnesses = async (
 ): Promise<TopUpWitnessBundle> => {
   const { topUpGateway, withdrawalVault } = ctx.contracts;
 
-  const gIFirstValidator = await topUpGateway.GI_FIRST_VALIDATOR_CURR();
+  const gIFirstValidator = await topUpGateway.GI_FIRST_VALIDATOR_PRE_GLOAS();
   const pivotSlot = await topUpGateway.PIVOT_SLOT();
-  const slotsPerEpoch = await topUpGateway.SLOTS_PER_EPOCH();
 
-  // Any slot at/after the pivot resolves to GI_FIRST_VALIDATOR_CURR in the verifier
-  const slot = pivotSlot + slotsPerEpoch * 100n;
+  const slot = 8192;
+  if (pivotSlot === 0n) {
+    throw new Error("Pre-Gloas top-up proofs are disabled when pivot slot is zero");
+  }
+  if (slot >= pivotSlot) {
+    throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+  }
 
   const { stateTree, firstValidatorLeafIndex } = await prepareLocalMerkleTree(gIFirstValidator);
 

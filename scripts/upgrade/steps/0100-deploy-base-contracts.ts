@@ -136,8 +136,8 @@ export async function main() {
     ],
     TopUpGateway: [
       locatorAddress,
-      parameters.topUpGateway.gIFirstValidatorPrev,
-      parameters.topUpGateway.gIFirstValidatorCurr,
+      parameters.topUpGateway.gIFirstValidatorPreGloas,
+      parameters.topUpGateway.gIValidators,
       parameters.topUpGateway.pivotSlot,
       chainSpec.slotsPerEpoch,
     ],
@@ -154,8 +154,8 @@ export async function main() {
       parameters.consolidationGateway.maxConsolidationRequestsLimit,
       parameters.consolidationGateway.consolidationsPerFrame,
       parameters.consolidationGateway.frameDurationInSec,
-      parameters.consolidationGateway.gIFirstValidatorPrev,
-      parameters.consolidationGateway.gIFirstValidatorCurr,
+      parameters.consolidationGateway.gIFirstValidatorPreGloas,
+      parameters.consolidationGateway.gIValidators,
       parameters.consolidationGateway.pivotSlot,
     ],
   };

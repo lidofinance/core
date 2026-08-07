@@ -613,13 +613,18 @@ export const mockProof = async (ctx: ProtocolContext, validator: Validator) => {
   const { predepositGuarantee } = ctx.contracts;
 
   // Step 3: Prove and deposit the validator
-  const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
+  const pivotSlot = await predepositGuarantee.PIVOT_SLOT();
+  const slot = 8192;
+  if (pivotSlot === 0n) {
+    throw new Error("Pre-Gloas vault proofs are disabled when pivot slot is zero");
+  }
+  if (BigInt(slot) >= pivotSlot) {
+    throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+  }
 
-  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PREV());
+  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS());
   const { validatorIndex } = await mockCLtree.addValidator(validator.container);
-  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(
-    Number(pivot_slot) + 100,
-  );
+  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(slot);
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
   const pubkey = hexlify(validator.container.pubkey);

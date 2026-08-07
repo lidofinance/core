@@ -142,8 +142,8 @@ resetState(
         expect(await predepositGuarantee.isPaused()).to.equal(true);
       }
 
-      slot = await predepositGuarantee.PIVOT_SLOT();
-      mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
+      slot = 8192n;
+      mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS());
     });
 
     // ==================== Part 1: Vault Creation and Connection ====================

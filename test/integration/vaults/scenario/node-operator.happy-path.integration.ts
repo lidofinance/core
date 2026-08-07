@@ -195,8 +195,8 @@ resetState(
       await ensurePredepositGuaranteeUnpaused(ctx);
       await setBalance(nodeOperator.address, ether("100"));
 
-      slot = await predepositGuarantee.PIVOT_SLOT();
-      mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
+      slot = 8192n;
+      mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS());
       depositDomain = await predepositGuarantee.DEPOSIT_DOMAIN();
       activationDepositAmount = await predepositGuarantee.ACTIVATION_DEPOSIT_AMOUNT();
     });
