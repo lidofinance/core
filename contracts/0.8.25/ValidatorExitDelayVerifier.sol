@@ -182,7 +182,7 @@ contract ValidatorExitDelayVerifier {
         if (lidoLocator == address(0)) revert ZeroLidoLocatorAddress();
         if (firstSupportedSlot > pivotSlot) revert InvalidPivotSlot();
         if (capellaSlot > firstSupportedSlot) revert InvalidCapellaSlot();
-        if (slotsPerHistoricalRoot == 0) revert InvalidPerHistoricalRootSlot();
+        if (!_isPowerOfTwo(slotsPerHistoricalRoot)) revert InvalidPerHistoricalRootSlot();
 
         LOCATOR = ILidoLocator(lidoLocator);
 
@@ -453,5 +453,10 @@ contract ValidatorExitDelayVerifier {
 
     function _slotToTimestamp(uint64 slot) internal view returns (uint256) {
         return GENESIS_TIME + slot * SECONDS_PER_SLOT;
+    }
+
+    /// @dev Returns true if `value` is a non-zero power of two, i.e. exactly one bit is set.
+    function _isPowerOfTwo(uint64 value) internal pure returns (bool) {
+        return value != 0 && (value & (value - 1)) == 0;
     }
 }

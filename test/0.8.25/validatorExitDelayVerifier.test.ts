@@ -197,6 +197,58 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         ]),
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidCapellaSlot");
     });
+
+    it("reverts with 'InvalidPerHistoricalRootSlot' if slotsPerHistoricalRoot is zero", async () => {
+      await expect(
+        ethers.deployContract("ValidatorExitDelayVerifier", [
+          LIDO_LOCATOR,
+          {
+            gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
+            gIValidators: GI_VALIDATORS,
+            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIBlockRootsPreGloas: GI_BLOCK_ROOTS_PRE_GLOAS,
+            gIBlockRoots: GI_BLOCK_ROOTS,
+          },
+          FIRST_SUPPORTED_SLOT,
+          PIVOT_SLOT,
+          CAPELLA_SLOT,
+          0, // Invalid slotsPerHistoricalRoot
+          SLOTS_PER_EPOCH,
+          SECONDS_PER_SLOT,
+          GENESIS_TIME,
+          SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+        ]),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidPerHistoricalRootSlot");
+    });
+
+    it("reverts with 'InvalidPerHistoricalRootSlot' if slotsPerHistoricalRoot is not a power of two", async () => {
+      await expect(
+        ethers.deployContract("ValidatorExitDelayVerifier", [
+          LIDO_LOCATOR,
+          {
+            gIFirstValidatorPreGloas: GI_FIRST_VALIDATOR_PRE_GLOAS,
+            gIValidators: GI_VALIDATORS,
+            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIBlockRootsPreGloas: GI_BLOCK_ROOTS_PRE_GLOAS,
+            gIBlockRoots: GI_BLOCK_ROOTS,
+          },
+          FIRST_SUPPORTED_SLOT,
+          PIVOT_SLOT,
+          CAPELLA_SLOT,
+          SLOTS_PER_HISTORICAL_ROOT + 1, // Not a power of two
+          SLOTS_PER_EPOCH,
+          SECONDS_PER_SLOT,
+          GENESIS_TIME,
+          SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+        ]),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidPerHistoricalRootSlot");
+    });
   });
 
   describe("verifyValidatorExitDelay method", () => {
