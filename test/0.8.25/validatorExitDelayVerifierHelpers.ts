@@ -1,7 +1,10 @@
 import { expect } from "chai";
 import { ContractTransactionReceipt, ethers, keccak256 } from "ethers";
 
+import { ByteVectorType, VectorCompositeType } from "@chainsafe/ssz";
+
 import {
+  BlockRootsHeaderWitnessStruct,
   HistoricalHeaderWitnessStruct,
   ProvableBeaconBlockHeaderStruct,
   ValidatorWitnessStruct,
@@ -81,5 +84,89 @@ export function toHistoricalHeaderWitness(validatorStateProf: ValidatorStateProo
   return {
     header: validatorStateProf.beaconBlockHeader,
     proof: validatorStateProf.historicalRootProof,
+  };
+}
+
+// `block_roots` is Vector[Root, SLOTS_PER_HISTORICAL_ROOT]. SSZ gives us the generalized index of
+// element `rootIndex` within that vector (which encodes the vector's tree depth); we then concat
+// it under the provided `block_roots` field gindex.
+const SLOTS_PER_HISTORICAL_ROOT = 8192;
+const Root = new ByteVectorType(32);
+const BlockRootsType = new VectorCompositeType(Root, SLOTS_PER_HISTORICAL_ROOT);
+
+// Generalized index (in GIndex packed form, i.e. `rawGindex << 8`) of `block_roots[targetSlot % N]`
+// for a `block_roots` field located at `fieldGindex`.
+export function blockRootsLeafGIndex(fieldGindex: bigint, targetSlot: bigint): bigint {
+  const rootIndex = Number(targetSlot % BigInt(SLOTS_PER_HISTORICAL_ROOT));
+  const elementGindex = BlockRootsType.getPathInfo([rootIndex]).gindex; // 2**depth | rootIndex
+  const depth = BigInt(elementGindex.toString(2).length - 1);
+  const rawGindex = (fieldGindex << depth) | (elementGindex - (1n << depth)); // concat under the field
+  return rawGindex << 8n;
+}
+
+function toLittleEndian(value: bigint): string {
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 8; i++) {
+    bytes[i] = Number(value & 0xffn);
+    value >>= 8n;
+  }
+  return ethers.hexlify(bytes);
+}
+
+function hashPair(left: string, right: string): string {
+  return ethers.sha256(ethers.concat([left, right]));
+}
+
+function hashBeaconBlockHeader(header: BlockHeader): string {
+  let nodes = [
+    toLittleEndian(BigInt(header.slot)),
+    toLittleEndian(BigInt(header.proposerIndex)),
+    header.parentRoot,
+    header.stateRoot,
+    header.bodyRoot,
+    ethers.ZeroHash,
+    ethers.ZeroHash,
+    ethers.ZeroHash,
+  ];
+
+  while (nodes.length > 1) {
+    nodes = nodes.reduce<string[]>((next, node, index) => {
+      if (index % 2 === 0) next.push(hashPair(node, nodes[index + 1]));
+      return next;
+    }, []);
+  }
+  return nodes[0];
+}
+
+export function createBlockRootsProof(targetHeader: BlockHeader): {
+  recentBlock: BlockHeader;
+  recentBlockRoot: string;
+  targetBlock: BlockRootsHeaderWitnessStruct;
+} {
+  // A synthetic all-zero-sibling proof is enough here: we set recentBlock.stateRoot to whatever
+  // root it reconstructs, so the proof is self-consistent for the pre-Gloas block_roots field.
+  const slotsPerHistoricalRoot = 8192n;
+  const targetSlot = BigInt(targetHeader.slot);
+  let gI = (0x45n << 13n) | targetSlot % slotsPerHistoricalRoot;
+  const proof = Array<string>(19).fill(ethers.ZeroHash);
+  let stateRoot = hashBeaconBlockHeader(targetHeader);
+
+  for (const sibling of proof) {
+    stateRoot = gI & 1n ? hashPair(sibling, stateRoot) : hashPair(stateRoot, sibling);
+    gI >>= 1n;
+  }
+
+  const recentBlock: BlockHeader = {
+    slot: targetHeader.slot + 1,
+    proposerIndex: "0",
+    parentRoot: ethers.ZeroHash,
+    stateRoot,
+    bodyRoot: ethers.ZeroHash,
+  };
+
+  return {
+    recentBlock,
+    recentBlockRoot: hashBeaconBlockHeader(recentBlock),
+    targetBlock: { header: targetHeader, proof },
   };
 }

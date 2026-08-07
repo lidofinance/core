@@ -490,6 +490,8 @@ export async function main() {
       gIFirstHistoricalSummaryCurr: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryCurr,
       gIFirstBlockRootInSummaryPrev: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryPrev,
       gIFirstBlockRootInSummaryCurr: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryCurr,
+      gIBlockRootsPreGloas: validatorExitDelayVerifierParams.gIBlockRootsPreGloas,
+      gIBlockRoots: validatorExitDelayVerifierParams.gIBlockRoots,
     },
     validatorExitDelayVerifierParams.firstSupportedSlot,
     validatorExitDelayVerifierParams.pivotSlot,

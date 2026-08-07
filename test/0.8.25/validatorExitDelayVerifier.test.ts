@@ -12,6 +12,8 @@ import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import {
+  blockRootsLeafGIndex,
+  createBlockRootsProof,
   encodeExitRequestsDataListWithFormat,
   ExitRequest,
   findStakingRouterMockEvents,
@@ -22,6 +24,7 @@ import {
 import { ACTIVE_VALIDATOR_PROOF } from "./validatorState";
 
 const EMPTY_REPORT = { data: "0x", dataFormat: 1n };
+const BLOCK_ROOTS_PROOF = createBlockRootsProof(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader);
 
 describe("ValidatorExitDelayVerifier.sol", () => {
   let originalState: string;
@@ -55,6 +58,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
     const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
     const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
+    const GI_BLOCK_ROOTS_PRE_GLOAS = "0x0000000000000000000000000000000000000000000000000000000000004500";
+    const GI_BLOCK_ROOTS = "0x0000000000000000000000000000000000000000000000000000000000016000";
 
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
@@ -68,6 +73,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
           gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
           gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          gIBlockRootsPreGloas: GI_BLOCK_ROOTS_PRE_GLOAS,
+          gIBlockRoots: GI_BLOCK_ROOTS,
         },
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
@@ -96,6 +103,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR()).to.equal(
         GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
       );
+      expect(await validatorExitDelayVerifier.GI_BLOCK_ROOTS_PRE_GLOAS()).to.equal(GI_BLOCK_ROOTS_PRE_GLOAS);
+      expect(await validatorExitDelayVerifier.GI_BLOCK_ROOTS()).to.equal(GI_BLOCK_ROOTS);
       expect(await validatorExitDelayVerifier.FIRST_SUPPORTED_SLOT()).to.equal(FIRST_SUPPORTED_SLOT);
       expect(await validatorExitDelayVerifier.PIVOT_SLOT()).to.equal(PIVOT_SLOT);
       expect(await validatorExitDelayVerifier.SLOTS_PER_EPOCH()).to.equal(SLOTS_PER_EPOCH);
@@ -119,6 +128,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
             gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
             gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIBlockRootsPreGloas: GI_BLOCK_ROOTS_PRE_GLOAS,
+            gIBlockRoots: GI_BLOCK_ROOTS,
           },
           200_000, // firstSupportedSlot
           100_000, // pivotSlot < firstSupportedSlot
@@ -143,6 +154,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
             gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
             gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIBlockRootsPreGloas: GI_BLOCK_ROOTS_PRE_GLOAS,
+            gIBlockRoots: GI_BLOCK_ROOTS,
           },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
@@ -170,6 +183,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
             gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
             gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+            gIBlockRootsPreGloas: GI_BLOCK_ROOTS_PRE_GLOAS,
+            gIBlockRoots: GI_BLOCK_ROOTS,
           },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
@@ -191,6 +206,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
     const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
     const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
+    const GI_BLOCK_ROOTS_PRE_GLOAS = "0x0000000000000000000000000000000000000000000000000000000000004500";
+    const GI_BLOCK_ROOTS = "0x0000000000000000000000000000000000000000000000000000000000016000";
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
     let locator: LidoLocator;
@@ -221,6 +238,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
           gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
           gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          gIBlockRootsPreGloas: GI_BLOCK_ROOTS_PRE_GLOAS,
+          gIBlockRoots: GI_BLOCK_ROOTS,
         },
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
@@ -279,12 +298,13 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         expect(secondEvent.args[4]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
       };
 
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
       const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+      const recentBlockRootTimestamp = await updateBeaconBlockRoot(BLOCK_ROOTS_PROOF.recentBlockRoot);
 
       await verifyExitDelayEvents(
         await validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, recentBlockRootTimestamp),
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0), toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
           encodedExitRequests,
         ),
@@ -325,7 +345,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const blockRootTimestamp = await updateBeaconBlockRoot(BLOCK_ROOTS_PROOF.recentBlockRoot);
       const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
       const verifyExitDelayEvents = async (tx: ContractTransactionResponse) => {
@@ -343,7 +363,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await verifyExitDelayEvents(
         await validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, blockRootTimestamp),
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           encodedExitRequests,
         ),
@@ -372,6 +393,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
             rootsTimestamp: 1n,
             header: invalidHeader,
           },
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
@@ -417,8 +439,9 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         validatorExitDelayVerifier.verifyValidatorExitDelay(
           {
             rootsTimestamp: badTimestamp,
-            header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
+            header: BLOCK_ROOTS_PROOF.recentBlock,
           },
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
@@ -443,7 +466,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, mismatchTimestamp),
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
@@ -479,11 +503,12 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const blockRootTimestamp = await updateBeaconBlockRoot(BLOCK_ROOTS_PROOF.recentBlockRoot);
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, blockRootTimestamp),
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           encodedExitRequests,
         ),
@@ -520,11 +545,12 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const blockRootTimestamp = await updateBeaconBlockRoot(BLOCK_ROOTS_PROOF.recentBlockRoot);
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, blockRootTimestamp),
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           encodedExitRequests,
         ),
@@ -561,7 +587,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const blockRootTimestamp = await updateBeaconBlockRoot(BLOCK_ROOTS_PROOF.recentBlockRoot);
       const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
       const verifyExitDelayEvents = async (tx: ContractTransactionResponse) => {
@@ -579,7 +605,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await verifyExitDelayEvents(
         await validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, blockRootTimestamp),
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           encodedExitRequests,
         ),
@@ -614,7 +641,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
-      const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const timestamp = await updateBeaconBlockRoot(BLOCK_ROOTS_PROOF.recentBlockRoot);
+      const historicalTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
       // Mutate one proof entry to break it
       const badWitness = {
@@ -628,7 +656,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, timestamp),
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, timestamp),
+          BLOCK_ROOTS_PROOF.targetBlock,
           [badWitness],
           encodedExitRequests,
         ),
@@ -636,7 +665,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await expect(
         validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, timestamp),
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, historicalTimestamp),
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [badWitness],
           encodedExitRequests,
@@ -655,7 +684,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ];
       const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
 
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const blockRootTimestamp = await updateBeaconBlockRoot(BLOCK_ROOTS_PROOF.recentBlockRoot);
       const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
       const unpackedExitRequestIndex = 0;
@@ -665,7 +694,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, blockRootTimestamp),
+          BLOCK_ROOTS_PROOF.targetBlock,
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
           encodedExitRequests,
         ),
@@ -699,6 +729,26 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           EMPTY_REPORT,
         ),
       ).to.be.reverted;
+    });
+
+    it("reverts if the block_roots proof is corrupted", async () => {
+      const blockRootsProof = createBlockRootsProof(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader);
+      const timestamp = await updateBeaconBlockRoot(blockRootsProof.recentBlockRoot);
+      const badProof = [
+        ...blockRootsProof.targetBlock.proof.slice(0, -1),
+        "0xbadbadbad0000000000000000000000000000000000000000000000000000000",
+      ];
+
+      // InvalidProof is defined in the SSZ library, not on ValidatorExitDelayVerifier itself.
+      // _verifyBlockRootsBeaconBlockRoot calls SSZ.verifyProof(), which reverts with SSZ.InvalidProof().
+      await expect(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
+          toProvableBeaconBlockHeader(blockRootsProof.recentBlock, timestamp),
+          { ...blockRootsProof.targetBlock, proof: badProof },
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
+        ),
+      ).to.be.revertedWithCustomError({ interface: ethers.Interface.from(["error InvalidProof()"]) }, "InvalidProof");
     });
 
     it("reverts if the validatorProof in the witness is corrupted", async () => {
@@ -762,6 +812,8 @@ describe("GIndex helpers", () => {
 
   const GI_FIRST_VALIDATOR_PRE_GLOAS = "0x0000000000000000000000000000000000000000000000000096000000000028";
   const GI_VALIDATORS = "0x0000000000000000000000000000000000000000000000000000000000016600";
+  const GI_BLOCK_ROOTS_PRE_GLOAS = "0x0000000000000000000000000000000000000000000000000000000000004500";
+  const GI_BLOCK_ROOTS = "0x0000000000000000000000000000000000000000000000000000000000016000";
 
   let harness: ValidatorExitDelayVerifier__Harness;
 
@@ -775,6 +827,8 @@ describe("GIndex helpers", () => {
         gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
         gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
         gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+        gIBlockRootsPreGloas: GI_BLOCK_ROOTS_PRE_GLOAS,
+        gIBlockRoots: GI_BLOCK_ROOTS,
       },
       FIRST_SUPPORTED_SLOT,
       PIVOT_SLOT,
@@ -874,5 +928,40 @@ describe("GIndex helpers", () => {
       harness,
       "HistoricalSummaryDoesNotExist",
     );
+  });
+
+  it("computes block_roots GIs across the Gloas pivot", async () => {
+    // Expected GIndices are derived via SSZ (see blockRootsLeafGIndex), not hard-coded, so they
+    // track PIVOT_SLOT / SLOTS_PER_HISTORICAL_ROOT / the block_roots field GI constants.
+    const cases: [bigint, bigint][] = [
+      // recentSlot before the pivot -> pre-Gloas block_roots field.
+      [PIVOT_SLOT - 1n, PIVOT_SLOT - 2n],
+      [PIVOT_SLOT - 1n, PIVOT_SLOT - SLOTS_PER_HISTORICAL_ROOT - 1n],
+      // recentSlot at/after the pivot -> Gloas block_roots field, rootIndex 0 and max.
+      [PIVOT_SLOT + SLOTS_PER_HISTORICAL_ROOT, PIVOT_SLOT],
+      [PIVOT_SLOT + SLOTS_PER_HISTORICAL_ROOT, PIVOT_SLOT + SLOTS_PER_HISTORICAL_ROOT - 1n],
+    ];
+
+    for (const [recentSlot, targetSlot] of cases) {
+      // The field GI constant is packed (rawGindex << 8); blockRootsLeafGIndex wants the raw gindex.
+      const fieldGindex = (recentSlot < PIVOT_SLOT ? BigInt(GI_BLOCK_ROOTS_PRE_GLOAS) : BigInt(GI_BLOCK_ROOTS)) >> 8n;
+      expect(await harness.getBlockRootsBlockGI(recentSlot, targetSlot)).to.equal(
+        blockRootsLeafGIndex(fieldGindex, targetSlot),
+      );
+    }
+  });
+
+  it("reverts when the target block root is outside the block_roots ring", async () => {
+    await expect(harness.getBlockRootsBlockGI(PIVOT_SLOT, PIVOT_SLOT)).to.be.revertedWithCustomError(
+      harness,
+      "BlockRootNotInRange",
+    );
+    await expect(harness.getBlockRootsBlockGI(PIVOT_SLOT, PIVOT_SLOT + 1n)).to.be.revertedWithCustomError(
+      harness,
+      "BlockRootNotInRange",
+    );
+    await expect(
+      harness.getBlockRootsBlockGI(PIVOT_SLOT, PIVOT_SLOT - SLOTS_PER_HISTORICAL_ROOT - 1n),
+    ).to.be.revertedWithCustomError(harness, "BlockRootNotInRange");
   });
 });

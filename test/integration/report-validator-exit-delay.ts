@@ -7,6 +7,7 @@ import { advanceChainTime, ether, getCurrentBlockTimestamp, updateBeaconBlockRoo
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import {
+  createBlockRootsProof,
   encodeExitRequestsDataListWithFormat,
   toHistoricalHeaderWitness,
   toProvableBeaconBlockHeader,
@@ -23,6 +24,7 @@ describe("Integration: Report Validator Exit Delay", () => {
   let vebReportSubmitter: HardhatEthersSigner;
 
   const moduleId = 1; // NOR module ID
+  const blockRootsProof = createBlockRootsProof(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader);
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -92,7 +94,7 @@ describe("Integration: Report Validator Exit Delay", () => {
     const deliveryTimestamp = await validatorsExitBusOracle.getDeliveryTimestamp(encodedExitRequestsHash);
     const eligibleToExitInSec = proofSlotTimestamp - deliveryTimestamp;
 
-    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+    const blockRootTimestamp = await updateBeaconBlockRoot(blockRootsProof.recentBlockRoot);
 
     expect(
       await nor.isValidatorExitDelayPenaltyApplicable(
@@ -105,7 +107,8 @@ describe("Integration: Report Validator Exit Delay", () => {
 
     await expect(
       validatorExitDelayVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        toProvableBeaconBlockHeader(blockRootsProof.recentBlock, blockRootTimestamp),
+        blockRootsProof.targetBlock,
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
@@ -123,7 +126,8 @@ describe("Integration: Report Validator Exit Delay", () => {
     ).to.be.false;
 
     const tx = validatorExitDelayVerifier.verifyValidatorExitDelay(
-      toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+      toProvableBeaconBlockHeader(blockRootsProof.recentBlock, blockRootTimestamp),
+      blockRootsProof.targetBlock,
       [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
       encodedExitRequests,
     );
@@ -230,11 +234,12 @@ describe("Integration: Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
-    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+    const blockRootTimestamp = await updateBeaconBlockRoot(blockRootsProof.recentBlockRoot);
 
     const witnesses = nodeOpIds.map((_, index) => toValidatorWitness(ACTIVE_VALIDATOR_PROOF, index));
     const tx = validatorExitDelayVerifier.verifyValidatorExitDelay(
-      toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+      toProvableBeaconBlockHeader(blockRootsProof.recentBlock, blockRootTimestamp),
+      blockRootsProof.targetBlock,
       witnesses,
       encodedExitRequests,
     );
@@ -274,11 +279,12 @@ describe("Integration: Report Validator Exit Delay", () => {
 
     // Note that we don't submit the hash to ValidatorsExitBusOracle
 
-    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+    const blockRootTimestamp = await updateBeaconBlockRoot(blockRootsProof.recentBlockRoot);
 
     await expect(
       validatorExitDelayVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        toProvableBeaconBlockHeader(blockRootsProof.recentBlock, blockRootTimestamp),
+        blockRootsProof.targetBlock,
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
@@ -316,11 +322,12 @@ describe("Integration: Report Validator Exit Delay", () => {
     // Note that we don't submit actual report, only hash
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
 
-    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+    const blockRootTimestamp = await updateBeaconBlockRoot(blockRootsProof.recentBlockRoot);
 
     await expect(
       validatorExitDelayVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        toProvableBeaconBlockHeader(blockRootsProof.recentBlock, blockRootTimestamp),
+        blockRootsProof.targetBlock,
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
@@ -361,7 +368,8 @@ describe("Integration: Report Validator Exit Delay", () => {
 
     await expect(
       validatorExitDelayVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
+        toProvableBeaconBlockHeader(blockRootsProof.recentBlock, mismatchTimestamp),
+        blockRootsProof.targetBlock,
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
@@ -396,7 +404,7 @@ describe("Integration: Report Validator Exit Delay", () => {
     const deliveryTimestamp = await validatorsExitBusOracle.getDeliveryTimestamp(encodedExitRequestsHash);
     const eligibleToExitInSec = proofSlotTimestamp - deliveryTimestamp;
 
-    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+    const blockRootTimestamp = await updateBeaconBlockRoot(blockRootsProof.recentBlockRoot);
 
     expect(
       await nor.isValidatorExitDelayPenaltyApplicable(
@@ -409,7 +417,8 @@ describe("Integration: Report Validator Exit Delay", () => {
 
     await expect(
       validatorExitDelayVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        toProvableBeaconBlockHeader(blockRootsProof.recentBlock, blockRootTimestamp),
+        blockRootsProof.targetBlock,
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
