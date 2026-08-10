@@ -10,7 +10,7 @@ chainId = 560048
 
 [executionDelegationFramework]
 repository = "https://github.com/lidofinance/execution-delegation-framework.git"
-ref = "main"
+ref = "557299104ad3eb1a74198933bd016328c490e276"
 
 [[executionDelegationFramework.delegationContracts]]
 id = "dsm-guardian-01"

@@ -16,7 +16,6 @@ export const DELEGATION_CONTRACT_ABI = [
   "function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)",
   "function supportsInterface(bytes4 interfaceId) view returns (bool)",
   "function nominateDelegate(address delegate)",
-  "function revokeNomination()",
   "function revokeDelegate()",
   "function terminate()",
   "function execute(address target, bytes data) payable returns (bytes result)",

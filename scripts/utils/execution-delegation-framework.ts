@@ -12,7 +12,7 @@ export const EDF_REPO = "https://github.com/lidofinance/execution-delegation-fra
 // Pinned commit of lidofinance/execution-delegation-framework `main` (2026-08-10).
 // The deploy clones exactly this ref, and the upgrade parameters must name it too
 // (validateFrameworkSource), so the deployed bytecode is reproducible.
-export const EDF_REPO_REF = "d0b8947f2b8db6c5fe72586ae065c3205a7134e7";
+export const EDF_REPO_REF = "557299104ad3eb1a74198933bd016328c490e276";
 
 type ExternalDeployArtifact = {
   "ChainId"?: number | string;
