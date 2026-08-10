@@ -609,20 +609,36 @@ export const generatePredepositData = async (
   });
 };
 
+export const getFirstValidatorGIndexForProof = async (
+  predepositGuarantee: PredepositGuarantee,
+  slot: bigint | number,
+) => {
+  const pivotSlot = await predepositGuarantee.PIVOT_SLOT();
+  if (BigInt(slot) < pivotSlot) {
+    return predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS();
+  }
+
+  if (pivotSlot !== 0n) {
+    throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+  }
+
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS PDG IS DEPLOYED WITH A REAL GLOAS PIVOT SLOT.
+  // Fork tests use the deployed legacy verifier, where the zero pivot selects
+  // a static post-pivot validator gindex.
+  const legacyVerifier = new ethers.Contract(
+    await predepositGuarantee.getAddress(),
+    ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
+    ethers.provider,
+  );
+  return legacyVerifier.GI_FIRST_VALIDATOR_CURR();
+};
+
 export const mockProof = async (ctx: ProtocolContext, validator: Validator) => {
   const { predepositGuarantee } = ctx.contracts;
 
   // Step 3: Prove and deposit the validator
-  const pivotSlot = await predepositGuarantee.PIVOT_SLOT();
   const slot = 8192;
-  if (pivotSlot === 0n) {
-    throw new Error("Pre-Gloas vault proofs are disabled when pivot slot is zero");
-  }
-  if (BigInt(slot) >= pivotSlot) {
-    throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
-  }
-
-  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS());
+  const mockCLtree = await prepareLocalMerkleTree(await getFirstValidatorGIndexForProof(predepositGuarantee, slot));
   const { validatorIndex } = await mockCLtree.addValidator(validator.container);
   const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(slot);
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);

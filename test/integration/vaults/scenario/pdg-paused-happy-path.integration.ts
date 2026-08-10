@@ -33,6 +33,7 @@ import {
 import { mEqual } from "lib/promise";
 import {
   createVaultProxyWithoutConnectingToVaultHub,
+  getFirstValidatorGIndexForProof,
   getProtocolContext,
   ProtocolContext,
   reportVaultDataWithProof,
@@ -143,7 +144,7 @@ resetState(
       }
 
       slot = 8192n;
-      mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS());
+      mockCLtree = await prepareLocalMerkleTree(await getFirstValidatorGIndexForProof(predepositGuarantee, slot));
     });
 
     // ==================== Part 1: Vault Creation and Connection ====================

@@ -22,6 +22,7 @@ import { TOTAL_BASIS_POINTS } from "lib/constants";
 import {
   calculateLockedValue,
   ensurePredepositGuaranteeUnpaused,
+  getFirstValidatorGIndexForProof,
   getProtocolContext,
   getReportTimeElapsed,
   OracleReportParams,
@@ -238,7 +239,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const slot = 8192n;
 
-    const mockCLtree = await prepareLocalMerkleTree(await pdg.GI_FIRST_VALIDATOR_PRE_GLOAS());
+    const mockCLtree = await prepareLocalMerkleTree(await getFirstValidatorGIndexForProof(pdg, slot));
 
     for (let index = 0; index < validators.length; index++) {
       const validator = validators[index];

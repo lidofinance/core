@@ -47,15 +47,23 @@ export const prepareConsolidationTargetWitnesses = async (
 ): Promise<ConsolidationWitnessSet> => {
   const { consolidationGateway, withdrawalVault } = ctx.contracts;
 
-  const gIFirstValidator = await consolidationGateway.GI_FIRST_VALIDATOR_PRE_GLOAS();
   const pivotSlot = await consolidationGateway.PIVOT_SLOT();
   const slot = 8192;
-  if (pivotSlot === 0n) {
-    throw new Error("Pre-Gloas consolidation proofs are disabled when pivot slot is zero");
-  }
   if (BigInt(slot) >= pivotSlot) {
-    throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+    if (pivotSlot !== 0n) {
+      throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+    }
   }
+
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS PIVOT SLOT.
+  const gIFirstValidator =
+    pivotSlot === 0n
+      ? await new ethers.Contract(
+          await consolidationGateway.getAddress(),
+          ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
+          ethers.provider,
+        ).GI_FIRST_VALIDATOR_CURR()
+      : await consolidationGateway.GI_FIRST_VALIDATOR_PRE_GLOAS();
 
   const merkleTree = await prepareLocalMerkleTree(gIFirstValidator);
   const withdrawalCredentials = addressToWC(await withdrawalVault.getAddress(), 2);

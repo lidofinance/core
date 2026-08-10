@@ -36,6 +36,7 @@ import { mEqual } from "lib/promise";
 import {
   createVaultProxyWithoutConnectingToVaultHub,
   ensurePredepositGuaranteeUnpaused,
+  getFirstValidatorGIndexForProof,
   getProtocolContext,
   getReportTimeElapsed,
   ProtocolContext,
@@ -196,7 +197,7 @@ resetState(
       await setBalance(nodeOperator.address, ether("100"));
 
       slot = 8192n;
-      mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PRE_GLOAS());
+      mockCLtree = await prepareLocalMerkleTree(await getFirstValidatorGIndexForProof(predepositGuarantee, slot));
       depositDomain = await predepositGuarantee.DEPOSIT_DOMAIN();
       activationDepositAmount = await predepositGuarantee.ACTIVATION_DEPOSIT_AMOUNT();
     });

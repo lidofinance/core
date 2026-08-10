@@ -69,16 +69,24 @@ export const prepareTopUpWitnesses = async (
 ): Promise<TopUpWitnessBundle> => {
   const { topUpGateway, withdrawalVault } = ctx.contracts;
 
-  const gIFirstValidator = await topUpGateway.GI_FIRST_VALIDATOR_PRE_GLOAS();
   const pivotSlot = await topUpGateway.PIVOT_SLOT();
 
   const slot = 8192;
-  if (pivotSlot === 0n) {
-    throw new Error("Pre-Gloas top-up proofs are disabled when pivot slot is zero");
-  }
   if (slot >= pivotSlot) {
-    throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+    if (pivotSlot !== 0n) {
+      throw new Error(`Pre-Gloas proof slot ${slot} must be below pivot slot ${pivotSlot}`);
+    }
   }
+
+  // TODO(GLOAS): REMOVE THIS LEGACY FORK-TEST PATH AS SOON AS THE GATEWAY IS DEPLOYED WITH A REAL GLOAS PIVOT SLOT.
+  const gIFirstValidator =
+    pivotSlot === 0n
+      ? await new ethers.Contract(
+          await topUpGateway.getAddress(),
+          ["function GI_FIRST_VALIDATOR_CURR() view returns (bytes32)"],
+          ethers.provider,
+        ).GI_FIRST_VALIDATOR_CURR()
+      : await topUpGateway.GI_FIRST_VALIDATOR_PRE_GLOAS();
 
   const { stateTree, firstValidatorLeafIndex } = await prepareLocalMerkleTree(gIFirstValidator);
 
