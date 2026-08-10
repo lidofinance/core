@@ -508,6 +508,10 @@ export const EDFUpgradeParametersSchema = z
       guardianMappings: z.array(EDFMemberMappingSchema).min(1),
     }),
     oracleCommittees: z.array(EDFOracleCommitteeSchema).length(4),
+    topUpGateway: z.object({
+      address: EthereumAddressSchema,
+      delegationContractId: z.string().min(1),
+    }),
     upgradeVoteScript: z
       .object({
         expiryTimestamp: PositiveIntSchema.optional(),
@@ -605,11 +609,20 @@ export const EDFUpgradeParametersSchema = z
       });
     }
 
+    if (!ids.has(parameters.topUpGateway.delegationContractId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["topUpGateway", "delegationContractId"],
+        message: `Unknown delegation contract id ${parameters.topUpGateway.delegationContractId}`,
+      });
+    }
+
     const referencedIds = new Set([
       ...guardianMappings.map(({ delegationContractId }) => delegationContractId),
       ...parameters.oracleCommittees.flatMap(({ memberMappings }) =>
         memberMappings.map(({ delegationContractId }) => delegationContractId),
       ),
+      parameters.topUpGateway.delegationContractId,
     ]);
     delegationContracts.forEach((contract, index) => {
       if (!referencedIds.has(contract.id)) {

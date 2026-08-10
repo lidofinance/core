@@ -25,6 +25,7 @@ abstract contract EDFUpgradeTestBase {
     address internal constant OLD_DSM = address(0x1008);
     address internal constant NEW_DSM = address(0x1009);
     address internal constant FACTORY = address(0x1010);
+    address internal constant TOP_UP_GATEWAY = address(0x1011);
 
     function _makeParams(address agent) internal view returns (EDFUpgradeParameters memory params) {
         params.chainId = block.chainid;
@@ -44,6 +45,8 @@ abstract contract EDFUpgradeTestBase {
         params.pauseIntentValidityPeriodBlocks = 6646;
         params.maxOperatorsPerUnvetting = 200;
         params.guardianQuorum = 2;
+        params.topUpGateway = TOP_UP_GATEWAY;
+        params.depositorDelegationContract = _delegationContract(0);
 
         params.delegationContracts = new EDFDelegationContract[](DELEGATION_CONTRACTS_COUNT);
         for (uint256 i = 0; i < DELEGATION_CONTRACTS_COUNT; ++i) {

@@ -40,6 +40,7 @@ contract EDFUpgradeTemplate {
     bytes4 public constant ERC1271_INTERFACE_ID = 0x1626ba7e;
 
     bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+    bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
     bytes32 internal constant ATTEST_MESSAGE_BASE = 0x1085395a994e25b1b3d0ea7937b7395495fb405b31c7d22dbc3976a6bd01f2bf;
     bytes32 internal constant PAUSE_MESSAGE_BASE = 0x9c4c40205558f12027f21204d6218b8006985b7a6359bcab15404bcc3e3fa122;
     bytes32 internal constant UNVET_MESSAGE_BASE = 0x2dd9727393562ed11c29080a884630e2d3a7078e71b313e713a8a1ef68948f6a;
@@ -125,6 +126,14 @@ contract EDFUpgradeTemplate {
         if (stakingRouter.hasRole(STAKING_MODULE_UNVETTING_ROLE, config.NEW_DEPOSIT_SECURITY_MODULE())) {
             revert InvalidFlag("new-dsm-no-unvet-role", config.NEW_DEPOSIT_SECURITY_MODULE());
         }
+
+        if (
+            IAccessControlEnumerable(config.TOP_UP_GATEWAY()).hasRole(
+                TOP_UP_ROLE, config.DEPOSITOR_DELEGATION_CONTRACT()
+            )
+        ) {
+            revert InvalidFlag("depositor-no-top-up-role", config.DEPOSITOR_DELEGATION_CONTRACT());
+        }
     }
 
     function _validatePostUpgradeState(EDFUpgradeConfig config) internal virtual {
@@ -152,6 +161,14 @@ contract EDFUpgradeTemplate {
         }
         if (!stakingRouter.hasRole(STAKING_MODULE_UNVETTING_ROLE, config.NEW_DEPOSIT_SECURITY_MODULE())) {
             revert InvalidFlag("new-dsm-unvet-role", config.NEW_DEPOSIT_SECURITY_MODULE());
+        }
+
+        if (
+            !IAccessControlEnumerable(config.TOP_UP_GATEWAY()).hasRole(
+                TOP_UP_ROLE, config.DEPOSITOR_DELEGATION_CONTRACT()
+            )
+        ) {
+            revert InvalidFlag("depositor-top-up-role", config.DEPOSITOR_DELEGATION_CONTRACT());
         }
     }
 

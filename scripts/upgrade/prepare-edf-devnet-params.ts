@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { ethers } from "hardhat";
 import { buildEDFDevnetUpgradeParameters, EDFDevnetCommittee } from "scripts/utils/edf-devnet";
-import { EDF_REPO, EDF_REPO_BRANCH } from "scripts/utils/execution-delegation-framework";
+import { EDF_REPO, EDF_REPO_REF } from "scripts/utils/execution-delegation-framework";
 
 import * as toml from "@iarna/toml";
 
@@ -29,6 +29,9 @@ const ORACLE_DELEGATES = [
   "0x3e95dFbBaF6B348396E6674C7871546dCC568e56",
   "0x5918b2e647464d4743601a865753e64C8059Dc4F",
 ];
+// The depositor bot's hot key on the devnet (shared wallet #12): the delegate of the
+// `depositor-01` contract that receives TOP_UP_ROLE on TopUpGateway in the vote.
+const DEPOSITOR_DELEGATE = "0x589A698b7b7dA0Bec545177D3963A2741105C7C9";
 
 const COMMITTEE_PATHS: {
   id: EDFDevnetCommittee["id"];
@@ -201,6 +204,11 @@ async function main() {
     }
   }
 
+  const topUpGateway =
+    findAddress(devnetState, [["lidoCore", "topUpGateway", "proxy", "address"]]) ??
+    readAddress(networkState, [["topUpGateway", "proxy", "address"]], "TopUpGateway");
+  await requireCode(topUpGateway, "TopUpGateway");
+
   const deployer = readAddress(networkState, [["deployer"]], "Core deployer");
   const owner = ethers.getAddress(process.env.EDF_DEVNET_OWNER ?? deployer);
   const cooldown = Number(process.env.EDF_DEVNET_COOLDOWN ?? "0");
@@ -211,7 +219,7 @@ async function main() {
   const parameters = buildEDFDevnetUpgradeParameters({
     chainId,
     repository: EDF_REPO,
-    ref: process.env.EDF_REPO_REF ?? EDF_REPO_BRANCH,
+    ref: process.env.EDF_REPO_REF ?? EDF_REPO_REF,
     owner,
     cooldown,
     guardians,
@@ -227,6 +235,8 @@ async function main() {
     ),
     oracleCommittees,
     oracleDelegates: ORACLE_DELEGATES,
+    depositorDelegate: DEPOSITOR_DELEGATE,
+    topUpGateway,
   });
 
   const comments = [

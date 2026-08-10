@@ -9,7 +9,10 @@ import { cy, log, warmUpJsonRpcProvider } from "lib";
 import { DeploymentState, Sk, updateObjectInState } from "lib/state-file";
 
 export const EDF_REPO = "https://github.com/lidofinance/execution-delegation-framework.git";
-export const EDF_REPO_BRANCH = "main";
+// Pinned commit of lidofinance/execution-delegation-framework `main` (2026-08-10).
+// The deploy clones exactly this ref, and the upgrade parameters must name it too
+// (validateFrameworkSource), so the deployed bytecode is reproducible.
+export const EDF_REPO_REF = "d0b8947f2b8db6c5fe72586ae065c3205a7134e7";
 
 type ExternalDeployArtifact = {
   "ChainId"?: number | string;
@@ -108,7 +111,7 @@ export async function deployExecutionDelegationFramework(
       address: normalizedAddress,
       runtimeCodeHash,
       repository: EDF_REPO,
-      ref: state[Sk.delegationFactory]?.ref ?? EDF_REPO_BRANCH,
+      ref: state[Sk.delegationFactory]?.ref ?? EDF_REPO_REF,
     });
     log(`Using the deployed DelegationFactory address: ${cy(normalizedAddress)}`);
     log.emptyLine();
@@ -133,12 +136,8 @@ export async function deployExecutionDelegationFramework(
   log(`Cloning Execution Delegation Framework repo to ${tmpDir}...`);
 
   try {
-    run(
-      "git",
-      ["clone", "--depth", "1", "-b", EDF_REPO_BRANCH, "--single-branch", EDF_REPO, tmpDir],
-      process.cwd(),
-      process.env,
-    );
+    run("git", ["clone", EDF_REPO, tmpDir], process.cwd(), process.env);
+    run("git", ["checkout", "--detach", EDF_REPO_REF], tmpDir, process.env);
     run("just", ["deps"], tmpDir, process.env);
 
     const externalEnv = {

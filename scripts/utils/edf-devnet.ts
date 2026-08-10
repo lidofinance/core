@@ -23,6 +23,8 @@ export type EDFDevnetUpgradeInput = {
   pauseIntentValidityPeriodBlocks: number;
   oracleCommittees: EDFDevnetCommittee[];
   oracleDelegates: string[];
+  depositorDelegate: string;
+  topUpGateway: string;
 };
 
 function normalizeAddress(address: string): string {
@@ -58,7 +60,8 @@ export function buildEDFDevnetUpgradeParameters(input: EDFDevnetUpgradeInput): E
     throw new Error(`Expected ${oracleMembers.length} oracle delegates, got ${oracleDelegates.length}`);
   }
 
-  const delegates = [...guardianDelegates, ...oracleDelegates];
+  const depositorDelegate = normalizeAddress(input.depositorDelegate);
+  const delegates = [...guardianDelegates, ...oracleDelegates, depositorDelegate];
   const delegateSet = new Set(delegates.map((address) => address.toLowerCase()));
   if (delegateSet.size !== delegates.length) {
     throw new Error("EDF devnet delegates must be unique");
@@ -82,6 +85,12 @@ export function buildEDFDevnetUpgradeParameters(input: EDFDevnetUpgradeInput): E
       delegate,
       cooldown: input.cooldown,
     })),
+    {
+      id: memberId("depositor", 0),
+      owner,
+      delegate: depositorDelegate,
+      cooldown: input.cooldown,
+    },
   ];
 
   return validateEDFUpgradeParameters({
@@ -100,6 +109,10 @@ export function buildEDFDevnetUpgradeParameters(input: EDFDevnetUpgradeInput): E
         oldMember,
         delegationContractId: memberId("dsm-guardian", index),
       })),
+    },
+    topUpGateway: {
+      address: normalizeAddress(input.topUpGateway),
+      delegationContractId: memberId("depositor", 0),
     },
     oracleCommittees: input.oracleCommittees.map((committee) => ({
       id: committee.id,

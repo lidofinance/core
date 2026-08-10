@@ -31,6 +31,7 @@ contract EDFUpgradeTemplateTest is Test {
     event UpgradeFinished();
 
     bytes32 internal constant UNVET_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+    bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
     bytes32 internal constant ATTEST_MESSAGE_BASE = 0x1085395a994e25b1b3d0ea7937b7395495fb405b31c7d22dbc3976a6bd01f2bf;
     bytes32 internal constant PAUSE_MESSAGE_BASE = 0x9c4c40205558f12027f21204d6218b8006985b7a6359bcab15404bcc3e3fa122;
     bytes32 internal constant UNVET_MESSAGE_BASE = 0x2dd9727393562ed11c29080a884630e2d3a7078e71b313e713a8a1ef68948f6a;
@@ -43,6 +44,7 @@ contract EDFUpgradeTemplateTest is Test {
     EDFUpgradeConfig internal config;
     EDFDelegationFactory__Mock internal factory;
     EDFStakingRouter__Mock internal stakingRouter;
+    EDFStakingRouter__Mock internal topUpGateway;
     EDFDepositSecurityModule__Mock internal oldDSM;
     EDFDepositSecurityModule__Mock internal newDSM;
     EDFLidoLocator__Mock internal oldLocatorImplementation;
@@ -56,6 +58,7 @@ contract EDFUpgradeTemplateTest is Test {
         executor = new EDFUpgradeExecutor();
 
         stakingRouter = new EDFStakingRouter__Mock();
+        topUpGateway = new EDFStakingRouter__Mock();
 
         address[] memory oldGuardians = new address[](1);
         oldGuardians[0] = OLD_GUARDIAN;
@@ -180,6 +183,7 @@ contract EDFUpgradeTemplateTest is Test {
         assertFalse(stakingRouter.hasRole(UNVET_ROLE, address(oldDSM)));
         assertTrue(stakingRouter.hasRole(UNVET_ROLE, address(newDSM)));
         assertEq(stakingRouter.getRoleMemberCount(UNVET_ROLE), 1);
+        assertTrue(topUpGateway.hasRole(TOP_UP_ROLE, address(delegationContracts[0])));
 
         for (uint256 i = 0; i < committees.length; ++i) {
             assertFalse(committees[i].getIsMember(_oldOracleMember(i)));
@@ -326,6 +330,8 @@ contract EDFUpgradeTemplateTest is Test {
         params.pauseIntentValidityPeriodBlocks = 6646;
         params.maxOperatorsPerUnvetting = 200;
         params.guardianQuorum = 1;
+        params.topUpGateway = address(topUpGateway);
+        params.depositorDelegationContract = address(delegationContracts[0]);
 
         params.delegationContracts = new EDFDelegationContract[](delegationContracts.length);
         for (uint256 i = 0; i < delegationContracts.length; ++i) {

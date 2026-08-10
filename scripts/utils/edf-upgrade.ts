@@ -3,7 +3,7 @@ import { ethers, network as hardhatNetwork } from "hardhat";
 import {
   deployExecutionDelegationFramework,
   EDF_REPO,
-  EDF_REPO_BRANCH,
+  EDF_REPO_REF,
 } from "scripts/utils/execution-delegation-framework";
 
 import { cy, getDeployerSigner, log } from "lib";
@@ -296,9 +296,9 @@ export async function deployOrReuseEDFDelegationContracts(
 ): Promise<Record<string, StoredDelegationContract>> {
   await validateChainState(state, parameters.chainId);
   const framework = parameters.executionDelegationFramework;
-  if (framework.repository !== EDF_REPO || framework.ref !== EDF_REPO_BRANCH) {
+  if (framework.repository !== EDF_REPO || framework.ref !== EDF_REPO_REF) {
     throw new Error(
-      `Unsupported EDF source ${framework.repository}@${framework.ref}; expected ${EDF_REPO}@${EDF_REPO_BRANCH}`,
+      `Unsupported EDF source ${framework.repository}@${framework.ref}; expected ${EDF_REPO}@${EDF_REPO_REF}`,
     );
   }
 

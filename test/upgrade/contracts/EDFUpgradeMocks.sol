@@ -326,6 +326,7 @@ contract EDFDelegationContract__Mock {
 
 contract EDFUpgradeExecutor {
     bytes32 private constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+    bytes32 private constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
 
     EDFUpgradeTemplate public template;
 
@@ -382,6 +383,7 @@ contract EDFUpgradeExecutor {
                 config.NEW_DEPOSIT_SECURITY_MODULE()
             );
         }
+        IAccessControl(config.TOP_UP_GATEWAY()).grantRole(TOP_UP_ROLE, config.DEPOSITOR_DELEGATION_CONTRACT());
         template.finishUpgrade();
     }
 }

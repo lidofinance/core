@@ -105,6 +105,11 @@ export async function deployEDFUpgradeTemplate(dualGovernance?: string) {
     pauseIntentValidityPeriodBlocks: parameters.depositSecurityModule.pauseIntentValidityPeriodBlocks,
     maxOperatorsPerUnvetting: parameters.depositSecurityModule.maxOperatorsPerUnvetting,
     guardianQuorum: parameters.depositSecurityModule.quorum,
+    topUpGateway: parameters.topUpGateway.address,
+    depositorDelegationContract: getResolvedDelegationContractAddress(
+      state,
+      parameters.topUpGateway.delegationContractId,
+    ),
     guardianMappings: parameters.depositSecurityModule.guardianMappings.map((mapping) => ({
       oldMember: mapping.oldMember,
       newMember: getResolvedDelegationContractAddress(state, mapping.delegationContractId),

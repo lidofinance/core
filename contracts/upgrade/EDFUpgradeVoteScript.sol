@@ -26,6 +26,7 @@ contract EDFUpgradeVoteScript is OmnibusBase {
     uint256 public constant DG_ITEMS_COUNT = 1;
     uint256 public constant VOTING_ITEMS_COUNT = 0;
     bytes32 internal constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+    bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
 
     address public immutable TEMPLATE;
     address public immutable CONFIG;
@@ -75,7 +76,7 @@ contract EDFUpgradeVoteScript is OmnibusBase {
     }
 
     function rawActionsCount() public view returns (uint256) {
-        return 5 + 2 * EDFUpgradeConfig(CONFIG).oracleMappingsCount();
+        return 6 + 2 * EDFUpgradeConfig(CONFIG).oracleMappingsCount();
     }
 
     function _getVoteItems() internal view returns (VoteItem[] memory items) {
@@ -131,6 +132,11 @@ contract EDFUpgradeVoteScript is OmnibusBase {
             abi.encodeCall(
                 IAccessControl.grantRole, (STAKING_MODULE_UNVETTING_ROLE, config.NEW_DEPOSIT_SECURITY_MODULE())
             )
+        );
+        items[itemIndex++] = _item(
+            "Grant the top-up role to the depositor delegation contract",
+            config.TOP_UP_GATEWAY(),
+            abi.encodeCall(IAccessControl.grantRole, (TOP_UP_ROLE, config.DEPOSITOR_DELEGATION_CONTRACT()))
         );
         items[itemIndex++] = _item(
             "Call EDFUpgradeTemplate.finishUpgrade",

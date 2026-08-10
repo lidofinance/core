@@ -27,6 +27,8 @@ describe("EDF devnet parameters", () => {
       "0x3e95dFbBaF6B348396E6674C7871546dCC568e56",
       "0x5918b2e647464d4743601a865753e64C8059Dc4F",
     ];
+    const depositorDelegate = "0x589A698b7b7dA0Bec545177D3963A2741105C7C9";
+    const topUpGateway = "0x0000000000000000000000000000000000000201";
     const committeeIds = [
       "accounting-oracle",
       "validators-exit-bus-oracle",
@@ -58,21 +60,29 @@ describe("EDF devnet parameters", () => {
         quorum: 2,
       })),
       oracleDelegates,
+      depositorDelegate,
+      topUpGateway,
     });
 
     expect(parameters.chainId).to.equal(32382);
-    expect(parameters.executionDelegationFramework.delegationContracts).to.have.length(5);
+    expect(parameters.executionDelegationFramework.delegationContracts).to.have.length(6);
     expect(parameters.executionDelegationFramework.delegationContracts.map(({ id }) => id)).to.deep.equal([
       "dsm-guardian-01",
       "dsm-guardian-02",
       "oracle-member-01",
       "oracle-member-02",
       "oracle-member-03",
+      "depositor-01",
     ]);
     expect(parameters.executionDelegationFramework.delegationContracts.map(({ delegate }) => delegate)).to.deep.equal([
       ...guardianDelegates,
       ...oracleDelegates,
+      depositorDelegate,
     ]);
+    expect(parameters.topUpGateway).to.deep.equal({
+      address: topUpGateway,
+      delegationContractId: "depositor-01",
+    });
     expect(parameters.oracleCommittees).to.have.length(4);
     for (const committee of parameters.oracleCommittees) {
       expect(committee.memberMappings.map(({ delegationContractId }) => delegationContractId)).to.deep.equal([

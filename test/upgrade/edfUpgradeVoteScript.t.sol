@@ -23,6 +23,7 @@ contract EDFUpgradeVoteScriptTest is Test, EDFUpgradeTestBase {
     using CallsScriptBuilder for CallsScriptBuilder.Context;
 
     bytes32 internal constant UNVET_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
+    bytes32 internal constant TOP_UP_ROLE = keccak256("TOP_UP_ROLE");
     address internal constant AGENT = address(0xA001);
 
     EDFUpgradeTemplate internal template;
@@ -41,7 +42,7 @@ contract EDFUpgradeVoteScriptTest is Test, EDFUpgradeTestBase {
         assertEq(voteScript.getVoteItems().length, voteScript.DG_ITEMS_COUNT());
         assertEq(voteScript.DG_ITEMS_COUNT(), 1);
         assertEq(voteScript.getInnerVoteItems().length, voteScript.rawActionsCount());
-        assertEq(voteScript.rawActionsCount(), 85);
+        assertEq(voteScript.rawActionsCount(), 86);
 
         OmnibusBase.VoteItem[] memory dgItems = voteScript.getVoteItems();
         assertEq(dgItems[0].description, "1. Submit the EDF/DSM v5 upgrade to Dual Governance");
@@ -51,7 +52,7 @@ contract EDFUpgradeVoteScriptTest is Test, EDFUpgradeTestBase {
 
     function test_exactRawActionsOrderTargetsCalldataAndDescriptions() public view {
         OmnibusBase.VoteItem[] memory items = voteScript.getVoteItemsRaw();
-        assertEq(items.length, 85);
+        assertEq(items.length, 86);
         _assertItem(
             items[0],
             "1.1. Call EDFUpgradeTemplate.startUpgrade",
@@ -108,7 +109,13 @@ contract EDFUpgradeVoteScriptTest is Test, EDFUpgradeTestBase {
         );
         _assertItem(
             items[itemIndex++],
-            "1.85. Call EDFUpgradeTemplate.finishUpgrade",
+            "1.85. Grant the top-up role to the depositor delegation contract",
+            TOP_UP_GATEWAY,
+            abi.encodeCall(IAccessControl.grantRole, (TOP_UP_ROLE, _delegationContract(0)))
+        );
+        _assertItem(
+            items[itemIndex++],
+            "1.86. Call EDFUpgradeTemplate.finishUpgrade",
             address(template),
             abi.encodeCall(EDFUpgradeTemplate.finishUpgrade, ())
         );
@@ -158,6 +165,10 @@ contract EDFUpgradeVoteScriptTest is Test, EDFUpgradeTestBase {
         innerScript.addCall(LOCATOR, abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (NEW_LOCATOR_IMPLEMENTATION)));
         innerScript.addCall(STAKING_ROUTER, abi.encodeCall(IAccessControl.revokeRole, (UNVET_ROLE, OLD_DSM)));
         innerScript.addCall(STAKING_ROUTER, abi.encodeCall(IAccessControl.grantRole, (UNVET_ROLE, NEW_DSM)));
+        innerScript.addCall(
+            TOP_UP_GATEWAY,
+            abi.encodeCall(IAccessControl.grantRole, (TOP_UP_ROLE, _delegationContract(0)))
+        );
         innerScript.addCall(address(template), abi.encodeCall(EDFUpgradeTemplate.finishUpgrade, ()));
         return innerScript.getResult();
     }

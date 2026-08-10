@@ -35,6 +35,8 @@ contract EDFUpgradeConfig {
     uint256 public immutable PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS;
     uint256 public immutable MAX_OPERATORS_PER_UNVETTING;
     uint256 public immutable GUARDIAN_QUORUM;
+    address public immutable TOP_UP_GATEWAY;
+    address public immutable DEPOSITOR_DELEGATION_CONTRACT;
 
     EDFMemberMapping[] private _guardianMappings;
     EDFOracleCommittee[] private _oracleCommittees;
@@ -63,10 +65,16 @@ contract EDFUpgradeConfig {
         PAUSE_INTENT_VALIDITY_PERIOD_BLOCKS = params.pauseIntentValidityPeriodBlocks;
         MAX_OPERATORS_PER_UNVETTING = params.maxOperatorsPerUnvetting;
         GUARDIAN_QUORUM = params.guardianQuorum;
+        TOP_UP_GATEWAY = _nonZero(params.topUpGateway, "topUpGateway");
+        DEPOSITOR_DELEGATION_CONTRACT = _nonZero(params.depositorDelegationContract, "depositorDelegationContract");
 
         _storeDelegationContracts(params.delegationContracts);
         _storeGuardianMappings(params.guardianMappings, params.guardianQuorum);
         _storeOracleCommittees(params.oracleCommittees);
+
+        if (!isConfiguredDelegationContract(params.depositorDelegationContract)) {
+            revert UnknownDelegationContract(params.depositorDelegationContract);
+        }
     }
 
     function guardiansCount() external view returns (uint256) {

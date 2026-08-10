@@ -40,6 +40,8 @@ struct EDFUpgradeParameters {
     uint256 pauseIntentValidityPeriodBlocks;
     uint256 maxOperatorsPerUnvetting;
     uint256 guardianQuorum;
+    address topUpGateway;
+    address depositorDelegationContract;
     EDFMemberMapping[] guardianMappings;
     EDFOracleCommittee[] oracleCommittees;
     EDFDelegationContract[] delegationContracts;
