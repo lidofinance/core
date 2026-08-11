@@ -1,4 +1,6 @@
 [profile.default]
+# Read access for JSON test fixtures
+fs_permissions = [{ access = "read", path = "./test/fixtures" }]
 # The source directory
 src = 'contracts'
 
