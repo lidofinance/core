@@ -485,6 +485,26 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
     });
 
+    it("reverts with 'UnsupportedSlot' if the targetBlock slot < FIRST_SUPPORTED_SLOT", async () => {
+      const blockRootTimestamp = await updateBeaconBlockRoot(BLOCK_ROOTS_PROOF.recentBlockRoot);
+      const invalidTargetBlock = {
+        ...BLOCK_ROOTS_PROOF.targetBlock,
+        header: {
+          ...BLOCK_ROOTS_PROOF.targetBlock.header,
+          slot: 0,
+        },
+      };
+
+      await expect(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
+          toProvableBeaconBlockHeader(BLOCK_ROOTS_PROOF.recentBlock, blockRootTimestamp),
+          invalidTargetBlock,
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
+    });
+
     it("reverts with 'RootNotFound' if the staticcall to the block roots contract fails/returns empty", async () => {
       const badTimestamp = 999_999_999;
       await expect(
