@@ -428,6 +428,17 @@ In order to make the protocol fully operational, the following additional steps 
 - add validator keys to the Node Operators: `NodeOperatorsRegistry.addSigningKeys`;
 - set staking limits for the Node Operators: `NodeOperatorsRegistry.setNodeOperatorStakingLimit`.
 
+> [!TIP]
+> The **core "unpause"** subset of the above — `Lido.resume`, setting the staking rate limit, and resuming
+> `WithdrawalQueueERC721` + `ValidatorsExitBusOracle` — can be performed automatically as part of the deploy,
+> without an Aragon/DG vote or timelock wait, by setting `PROTOCOL_ACTIVATION_ENABLED=1` (default: off). Step
+> `0155-activate-protocol` then drives these via the `LidoTemplate` while it still controls the Agent (before the
+> Agent is handed to Dual Governance in `0160`); step `0145` resumes the sealables. The staking limit values come
+> from the optional `[protocolActivation]` section of the deploy-params TOML (default 150000 ETH max / 20 ETH per
+> block). The remaining items (oracle committee members, hash-consensus initial epoch, DSM guardians, node
+> operators and keys) are out of scope and still require the post-deploy actions above. Example:
+> `PROTOCOL_ACTIVATION_ENABLED=1 bash scripts/dao-local-deploy.sh` (or `PROTOCOL_ACTIVATION_ENABLED=1 just sepolia-fork-dg`).
+
 > [!NOTE]
 > Some of these actions require prior granting of the required roles, e.g. `STAKING_MODULE_MANAGE_ROLE` for
 > `StakingRouter.addStakingModule`:

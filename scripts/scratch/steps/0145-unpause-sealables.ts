@@ -5,17 +5,18 @@ import { ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types"
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { cy, log } from "lib/log";
-import { isDGDeploymentEnabled } from "lib/scratch";
+import { isDGDeploymentEnabled, isProtocolActivationEnabled } from "lib/scratch";
 import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 // DG's `addSealableWithdrawalBlocker` rejects paused sealables, so WQ + VEBO
 // must be resumed before step 0160 registers them. Runs before 0150 so the
 // deployer still holds DEFAULT_ADMIN_ROLE on both — no impersonation, works
-// on a live network. No-op when DG is disabled (matches historical pre-DG
-// scratch state where WQ stays paused).
+// on a live network. Also resumes them when protocol activation is enabled
+// (an operational deploy without DG). No-op otherwise (matches historical
+// pre-DG scratch state where WQ stays paused).
 export async function main() {
-  if (!isDGDeploymentEnabled()) {
-    log("DG deployment disabled — leaving sealables paused");
+  if (!isDGDeploymentEnabled() && !isProtocolActivationEnabled()) {
+    log("DG deployment and protocol activation disabled — leaving sealables paused");
     return;
   }
 

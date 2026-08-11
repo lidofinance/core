@@ -235,9 +235,10 @@ l1:
         decimals: *DECIMALS_18
         hasInitialized: true
         isPetrified: false
-        # Scratch deploy leaves the protocol stopped until the DAO resumes it
-        isStopped: true
-        isStakingPaused: true
+        # Paused right after deploy unless PROTOCOL_ACTIVATION_ENABLED resumed it during
+        # deploy; expected values are generated per-deploy by prepare-state-mate-check.ts.
+        isStopped: *lidoIsStopped
+        isStakingPaused: *lidoIsStakingPaused
         getContractVersion: 3
         getMaxExternalRatioBP: 0
         getLidoLocator: *lidoLocator

@@ -370,6 +370,13 @@ const DualGovernanceConfigSchema = z
     });
   });
 
+// Optional protocol-activation parameters (consumed only when PROTOCOL_ACTIVATION_ENABLED is set):
+// staking rate limit applied by step 0155 after Lido.resume(). Values are wei strings.
+const ProtocolActivationSchema = z.object({
+  maxStakeLimit: BigIntStringSchema,
+  stakeLimitIncreasePerBlock: BigIntStringSchema,
+});
+
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
@@ -399,6 +406,7 @@ export const ScratchParametersSchema = z.object({
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
+  protocolActivation: ProtocolActivationSchema.optional(),
   dualGovernance: DualGovernanceConfigSchema.optional(),
 });
 

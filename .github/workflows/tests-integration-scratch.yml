@@ -1,5 +1,15 @@
 name: Integration Tests Scratch
 
+# Each job deploys the protocol TWICE, on purpose:
+#   1. `dao-deploy.sh` runs the PRODUCTION deploy driver (scripts/utils/migrate.ts) —
+#      the path a real testnet/mainnet deploy takes. Its artifact is then discarded
+#      (the `mine.ts` step only flushes its last txs).
+#   2. `test:integration:fork:local` (MODE=scratch) RE-deploys from 0000 via the TEST
+#      driver (lib/scratch.ts:applyDeploySteps) and asserts against THAT instance.
+# So step 1 smoke-tests the production driver; step 2 is the functionally-tested deploy.
+# The two drivers are near-duplicates over the same steps.json — the assertions cover
+# the test driver's output, not step 1's. See docs/scratch-deploy.md (CI section).
+
 on: [push]
 
 jobs:

@@ -34,24 +34,25 @@ contract LidoTemplate is IsContract {
     // Configuration errors
     string private constant ERROR_ZERO_OWNER = "TMPL_ZERO_OWNER";
     string private constant ERROR_ENS_NOT_CONTRACT = "TMPL_ENS_NOT_CONTRACT";
-    string private constant ERROR_DAO_FACTORY_NOT_CONTRACT = "TMPL_DAO_FAC_NOT_CONTRACT";
-    string private constant ERROR_MINIME_FACTORY_NOT_CONTRACT = "TMPL_MINIME_FAC_NOT_CONTRACT";
-    string private constant ERROR_ARAGON_ID_NOT_CONTRACT = "TMPL_ARAGON_ID_NOT_CONTRACT";
-    string private constant ERROR_APM_REGISTRY_FACTORY_NOT_CONTRACT = "TMPL_APM_REGISTRY_FAC_NOT_CONTRACT";
+    string private constant ERROR_DAO_FACTORY_NOT_CONTRACT = "TMPL_DAO_FAC";
+    string private constant ERROR_MINIME_FACTORY_NOT_CONTRACT = "TMPL_MINIME_FAC";
+    string private constant ERROR_ARAGON_ID_NOT_CONTRACT = "TMPL_ARAGON_ID";
+    // Short messages keep LidoTemplate under the 24KB EIP-170 limit (see ERROR_INVALID_DG_ADMIN_EXECUTOR).
+    string private constant ERROR_APM_REGISTRY_FACTORY_NOT_CONTRACT = "TMPL_APM_FAC";
     string private constant ERROR_EMPTY_HOLDERS = "TMPL_EMPTY_HOLDERS";
     string private constant ERROR_BAD_AMOUNTS_LEN = "TMPL_BAD_AMOUNTS_LEN";
     string private constant ERROR_INVALID_ID = "TMPL_INVALID_ID";
-    string private constant ERROR_UNEXPECTED_TOTAL_SUPPLY = "TMPL_UNEXPECTED_TOTAL_SUPPLY";
+    string private constant ERROR_UNEXPECTED_TOTAL_SUPPLY = "TMPL_TOTAL_SUPPLY";
     // Short message keeps LidoTemplate under the 24KB EIP-170 limit after the
     // DG-finalization functions were added (see hardhat.config.ts override).
     string private constant ERROR_INVALID_DG_ADMIN_EXECUTOR = "TMPL_0_ADDR";
 
     // Operational errors
-    string private constant ERROR_PERMISSION_DENIED = "TMPL_PERMISSION_DENIED";
-    string private constant ERROR_REGISTRY_ALREADY_DEPLOYED = "TMPL_REGISTRY_ALREADY_DEPLOYED";
-    string private constant ERROR_ENS_NODE_NOT_OWNED_BY_TEMPLATE = "TMPL_ENS_NODE_NOT_OWNED_BY_TEMPLATE";
-    string private constant ERROR_REGISTRY_NOT_DEPLOYED = "TMPL_REGISTRY_NOT_DEPLOYED";
-    string private constant ERROR_DAO_ALREADY_DEPLOYED = "TMPL_DAO_ALREADY_DEPLOYED";
+    string private constant ERROR_PERMISSION_DENIED = "TMPL_PERM_DENIED";
+    string private constant ERROR_REGISTRY_ALREADY_DEPLOYED = "TMPL_REG_DEPLOYED";
+    string private constant ERROR_ENS_NODE_NOT_OWNED_BY_TEMPLATE = "TMPL_ENS_OWNER";
+    string private constant ERROR_REGISTRY_NOT_DEPLOYED = "TMPL_REG_NOT_DEPLOYED";
+    string private constant ERROR_DAO_ALREADY_DEPLOYED = "TMPL_DAO_DEPLOYED";
     string private constant ERROR_DAO_NOT_DEPLOYED = "TMPL_DAO_NOT_DEPLOYED";
     string private constant ERROR_ALREADY_FINALIZED = "TMPL_ALREADY_FINALIZED";
 
@@ -439,6 +440,28 @@ contract LidoTemplate is IsContract {
     ///      contract applies — call in the same deployment session as `finalizeDAO()`.
     function finalizePermissionsWithoutDGDeployment() external onlyOwner {
         _finalizePermissions(address(deployState.voting));
+    }
+
+    /**
+     * @notice Optionally bring the freshly deployed protocol to an operational state in a single
+     *         transaction, with no Aragon/DG vote and no timelock wait.
+     * @dev Lido's RESUME_ROLE / STAKING_CONTROL_ROLE are held by the Agent, and until one of the
+     *      `finalizePermissions*` functions runs this template is the manager of the Agent's
+     *      RUN_SCRIPT_ROLE. So the template grants itself RUN_SCRIPT_ROLE, forwards the EVM script
+     *      (executed as the Agent), then renounces it. MUST be called before `finalizePermissions*`
+     *      reassigns the Agent permission managers (i.e. before the Agent is handed to Dual
+     *      Governance). The script is an Aragon CallsScript encoded off-chain — keeping this
+     *      contract under the EIP-170 limit — typically bundling Lido.resume() (included only when
+     *      the pool is stopped, since resume() reverts otherwise) and Lido.setStakingLimit(...).
+     */
+    function activateProtocol(bytes evmScript) external onlyOwner {
+        ACL acl = deployState.acl;
+        Agent agent = deployState.agent;
+        bytes32 runScriptRole = agent.RUN_SCRIPT_ROLE();
+
+        acl.grantPermission(address(this), address(agent), runScriptRole);
+        agent.forward(evmScript);
+        acl.revokePermission(address(this), address(agent), runScriptRole);
     }
 
     /* DAO AND APPS */

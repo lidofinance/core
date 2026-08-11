@@ -24,3 +24,12 @@ export function isDGDeploymentEnabled(): boolean {
   const v = process.env.DG_DEPLOYMENT_ENABLED?.trim().toLowerCase();
   return !v || !FALSY_VALUES.has(v);
 }
+
+// `PROTOCOL_ACTIVATION_ENABLED` is opt-in (default OFF): when truthy, the scratch
+// deploy leaves the core protocol operationally unpaused — it calls `Lido.resume()`
+// and sets the staking rate limit (step 0155), and resumes WithdrawalQueue + VEBO
+// even without Dual Governance (step 0145). Default OFF preserves the historical
+// paused bootstrap state where the protocol is resumed by governance after deploy.
+export function isProtocolActivationEnabled(): boolean {
+  return isTruthyEnv("PROTOCOL_ACTIVATION_ENABLED");
+}

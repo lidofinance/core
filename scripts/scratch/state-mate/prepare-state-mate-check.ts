@@ -15,6 +15,15 @@ import * as path from "node:path";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
+// Mirrors lib/env-flags.ts isProtocolActivationEnabled. Inlined (not imported) because this
+// script runs under plain ts-node, which need not resolve the "lib/*" path alias. When
+// activation is enabled the deploy resumed Lido, so the expected post-deploy pause state
+// flips true -> false (consumed by scratch.yaml via the generated *lidoIsStopped anchors).
+function isProtocolActivationEnabled(): boolean {
+  const v = process.env.PROTOCOL_ACTIVATION_ENABLED?.trim().toLowerCase();
+  return v !== undefined && ["1", "true", "yes", "on"].includes(v);
+}
+
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const CONFIG_DIR = __dirname;
 const MAIN_CONFIG = path.join(CONFIG_DIR, "scratch.yaml");
@@ -253,6 +262,9 @@ function buildInputsYaml(state: StateFile): string {
     ["secondsPerSlot", chainSpec.secondsPerSlot],
     ["lidoWithdrawalCredentials", withdrawalCredentials],
     ["HC_FAR_FUTURE_INITIAL_EPOCH", hcFarFutureInitialEpoch],
+    // Lido pause state right after deploy: paused unless the optional activation step ran.
+    ["lidoIsStopped", !isProtocolActivationEnabled()],
+    ["lidoIsStakingPaused", !isProtocolActivationEnabled()],
   ];
   const externals: [string, unknown][] = [
     ["chainId", state["chainId"]],

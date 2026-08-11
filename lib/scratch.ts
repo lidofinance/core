@@ -31,7 +31,7 @@ class MigrationMainFunctionError extends Error {
 
 const deployedSteps: string[] = [];
 
-export { isDGDeploymentEnabled, isResumeEnabled } from "./env-flags";
+export { isDGDeploymentEnabled, isProtocolActivationEnabled, isResumeEnabled } from "./env-flags";
 
 function getCompletedStepsFromState(): string[] {
   if (!networkStateFileExists()) return [];

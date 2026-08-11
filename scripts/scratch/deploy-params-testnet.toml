@@ -186,6 +186,15 @@ infraFeeBP = 100                      # Infrastructure fee in basis points (5%)
 liquidityFeeBP = 650                  # Liquidity provision fee in basis points (4%)
 reservationFeeBP = 0                # Reservation fee in basis points (1%)
 
+# Optional protocol activation (opt-in via PROTOCOL_ACTIVATION_ENABLED=1).
+# When enabled, step 0155 calls Lido.resume() and sets the staking rate limit to
+# these values (wei). Defaults match lib/protocol/provision.ts ensureStakeLimit
+# (150000 ETH max / 20 ETH per block). maxStakeLimit must be < 2^95 and greater
+# than the per-block increase; set maxStakeLimit = "0" to resume without a limit.
+[protocolActivation]
+maxStakeLimit = "150000000000000000000000"           # 150000 ETH
+stakeLimitIncreasePerBlock = "20000000000000000000"  # 20 ETH per block
+
 # Dual Governance configuration for the scratch deploy.
 #
 # Source of the numeric values and dev addresses below:

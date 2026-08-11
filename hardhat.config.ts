@@ -228,15 +228,17 @@ const config: HardhatUserConfig = {
       },
       // NB: low optimizer `runs` keeps LidoTemplate under the 24KB EIP-170 limit
       // after the DG-finalization additions (finalizePermissionsAfterDGDeployment,
-      // finalizePermissionsWithoutDGDeployment, _finalizePermissions). solc 0.4.24
-      // predates the IR pipeline, so `viaIR` is a no-op here — the size win is
-      // entirely from `runs`; the rest of the config matches the base 0.4.24 block.
+      // finalizePermissionsWithoutDGDeployment, _finalizePermissions) and the
+      // activateProtocol addition. The template is deployed once and each function
+      // is called once during deploy, so `runs: 1` (optimize for size, not runtime
+      // gas) is the right trade-off. solc 0.4.24 predates the IR pipeline, so `viaIR`
+      // is a no-op here — the size win is entirely from `runs`.
       "contracts/0.4.24/template/LidoTemplate.sol": {
         version: "0.4.24",
         settings: {
           optimizer: {
             enabled: true,
-            runs: 50,
+            runs: 1,
           },
           evmVersion: "constantinople",
         },

@@ -113,6 +113,19 @@ async function finalizeWithoutDG(
   await setTemplateOwnerToAgent(deployer, agentAddress, lidoTemplate);
 }
 
+// WQ + VEBO are the protocol's two sealable withdrawal blockers. Several finalize
+// paths load both and iterate them as [label, contract]; load them in parallel.
+async function loadSealables(state: ReturnType<typeof readNetworkState>) {
+  const [wq, vebo] = await Promise.all([
+    loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", getAddress(Sk.withdrawalQueueERC721, state)),
+    loadContract<ValidatorsExitBusOracle>("ValidatorsExitBusOracle", getAddress(Sk.validatorsExitBusOracle, state)),
+  ]);
+  return [
+    ["WithdrawalQueueERC721", wq],
+    ["ValidatorsExitBusOracle", vebo],
+  ] as const;
+}
+
 // When DG is enabled at 0150-time, that step defers the deployer's
 // DEFAULT_ADMIN_ROLE renounce on WQ/VEBO to 0160's DG path (which needs the
 // role to wire ResealManager). If DG_DEPLOYMENT_ENABLED is then flipped off
@@ -123,19 +136,7 @@ async function renounceSealableAdminDeferredFor0160(
   deployer: string,
   state: ReturnType<typeof readNetworkState>,
 ): Promise<void> {
-  const wq = await loadContract<WithdrawalQueueERC721>(
-    "WithdrawalQueueERC721",
-    getAddress(Sk.withdrawalQueueERC721, state),
-  );
-  const vebo = await loadContract<ValidatorsExitBusOracle>(
-    "ValidatorsExitBusOracle",
-    getAddress(Sk.validatorsExitBusOracle, state),
-  );
-
-  for (const [label, c] of [
-    ["WithdrawalQueueERC721", wq],
-    ["ValidatorsExitBusOracle", vebo],
-  ] as const) {
+  for (const [label, c] of await loadSealables(state)) {
     if (await c.hasRole(DEFAULT_ADMIN_ROLE, deployer)) {
       log.warning(
         `${label}: deployer still holds DEFAULT_ADMIN_ROLE (deferred by 0150 while DG was enabled); renouncing. ` +
@@ -166,19 +167,7 @@ async function transferSealableRolesForDG(
   state: ReturnType<typeof readNetworkState>,
   resealManagerAddress: string,
 ): Promise<void> {
-  const wq = await loadContract<WithdrawalQueueERC721>(
-    "WithdrawalQueueERC721",
-    getAddress(Sk.withdrawalQueueERC721, state),
-  );
-  const vebo = await loadContract<ValidatorsExitBusOracle>(
-    "ValidatorsExitBusOracle",
-    getAddress(Sk.validatorsExitBusOracle, state),
-  );
-
-  for (const [label, c] of [
-    ["WithdrawalQueueERC721", wq],
-    ["ValidatorsExitBusOracle", vebo],
-  ] as const) {
+  for (const [label, c] of await loadSealables(state)) {
     if (!(await c.hasRole(DEFAULT_ADMIN_ROLE, deployer))) {
       log(`${cy(label)}: deployer no longer holds DEFAULT_ADMIN_ROLE, sealable roles already wired, skipping`);
       continue;
