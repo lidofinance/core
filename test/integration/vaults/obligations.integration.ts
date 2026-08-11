@@ -188,9 +188,11 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
     context("Decreases on liability shares change", () => {
       let redemptionShares: bigint;
+      let ownerSharesBefore: bigint;
 
       beforeEach(async () => {
         redemptionShares = ether("1");
+        ownerSharesBefore = await lido.sharesOf(owner);
 
         await dashboard.fund({ value: ether("2") });
         await dashboard.mintShares(owner, redemptionShares);
@@ -202,7 +204,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         const recordBefore = await vaultHub.vaultRecord(stakingVault);
         expect(recordBefore.redemptionShares).to.equal(redemptionShares);
 
-        expect(await lido.sharesOf(owner)).to.equal(redemptionShares);
+        expect((await lido.sharesOf(owner)) - ownerSharesBefore).to.equal(redemptionShares);
         await lido.connect(owner).approve(dashboard, redemptionShares);
 
         const parts = 2n;
