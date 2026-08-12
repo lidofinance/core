@@ -10,6 +10,7 @@ contract StakingRouter__MockForSanityChecker {
     mapping(uint256 => bool) private moduleExistsById;
 
     uint256[] private moduleIds;
+    mapping(uint256 => uint64) private validatorsBalanceGweiByModuleId;
 
     constructor() {}
 
@@ -50,6 +51,10 @@ contract StakingRouter__MockForSanityChecker {
         delete moduleExistsById[moduleId];
     }
 
+    function mock__setStakingModuleAccounting(uint256 moduleId, uint64 validatorsBalanceGwei) external {
+        validatorsBalanceGweiByModuleId[moduleId] = validatorsBalanceGwei;
+    }
+
     function getStakingModuleIds() external view returns (uint256[] memory) {
         return moduleIds;
     }
@@ -64,7 +69,10 @@ contract StakingRouter__MockForSanityChecker {
 
     function getStakingModuleStateAccounting(
         uint256 stakingModuleId
-    ) external view returns (uint64 validatorsBalanceGwei, uint64 pendingBalanceGwei, uint64 exitedValidatorsCount) {
-        return (0, 0, uint64(modules[stakingModuleId].exitedValidatorsCount));
+    ) external view returns (uint64 validatorsBalanceGwei, uint64 exitedValidatorsCount) {
+        return (
+            validatorsBalanceGweiByModuleId[stakingModuleId],
+            uint64(modules[stakingModuleId].exitedValidatorsCount)
+        );
     }
 }

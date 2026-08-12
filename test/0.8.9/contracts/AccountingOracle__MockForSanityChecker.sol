@@ -20,6 +20,8 @@ contract AccountingOracle__MockForSanityChecker {
     uint256 public immutable GENESIS_TIME;
 
     uint256 internal _lastRefSlot;
+    bytes32 internal _consensusReportHash;
+    bool internal _processingStarted;
 
     constructor(address lido, uint256 secondsPerSlot, uint256 genesisTime) {
         LIDO = lido;
@@ -31,6 +33,8 @@ contract AccountingOracle__MockForSanityChecker {
         require(data.refSlot >= _lastRefSlot, "refSlot less than _lastRefSlot");
         uint256 slotsElapsed = data.refSlot - _lastRefSlot;
         _lastRefSlot = data.refSlot;
+        _consensusReportHash = keccak256(abi.encode(data));
+        _processingStarted = true;
 
         IReportReceiver(LIDO).handleOracleReport(
             ReportValues(
@@ -49,6 +53,16 @@ contract AccountingOracle__MockForSanityChecker {
 
     function setLastProcessingRefSlot(uint256 refSlot) external {
         _lastRefSlot = refSlot;
+    }
+
+    function setConsensusReport(bytes32 reportHash, uint256 refSlot, bool processingStarted) external {
+        _consensusReportHash = reportHash;
+        _lastRefSlot = refSlot;
+        _processingStarted = processingStarted;
+    }
+
+    function getConsensusReport() external view returns (bytes32, uint256, uint256, bool) {
+        return (_consensusReportHash, _lastRefSlot, 0, _processingStarted);
     }
 
     function getLastProcessingRefSlot() external view returns (uint256) {

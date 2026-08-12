@@ -9,11 +9,8 @@ import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
-import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IBurner} from "contracts/common/interfaces/IBurner.sol";
-import {ILido} from "contracts/common/interfaces/ILido.sol";
-import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {ISecondOpinionOracle} from "../interfaces/ISecondOpinionOracle.sol";
 
 interface IWithdrawalQueue {
@@ -38,9 +35,12 @@ interface IWithdrawalQueue {
 }
 
 interface IBaseOracle {
-    function SECONDS_PER_SLOT() external view returns (uint256);
-    function GENESIS_TIME() external view returns (uint256);
-    function getLastProcessingRefSlot() external view returns (uint256);
+    function getConsensusReport() external view returns (
+        bytes32 hash,
+        uint256 refSlot,
+        uint256 processingDeadlineTime,
+        bool processingStarted
+    );
 }
 
 interface IStakingRouter {
@@ -64,12 +64,9 @@ struct LimitsList {
     ///     per single day.
     /// @dev Must fit into uint32 (<= 4_294_967_295)
     uint256 appearedEthAmountPerDayLimit;
-    /// @notice The max annual increase of the total validators' balances on the Consensus Layer
-    ///     since the previous oracle report
-    /// (the increase that is limited does not include fresh deposits to the Beacon Chain as well as withdrawn ether)
-    ///
+    /// @notice The soft annualized limit for a positive CL accounting rebase.
     /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 annualBalanceIncreaseBPLimit;
+    uint256 annualCLRebaseIncreaseSoftBPLimit;
 
     /// @notice The max deviation of the provided `simulatedShareRate`
     ///     and the actual one within the currently processing oracle report
@@ -95,17 +92,15 @@ struct LimitsList {
     /// @notice The min time required to be passed from the creation of the request to be
     ///     finalized till the time of the oracle report
     uint256 requestTimestampMargin;
-    /// @notice The positive token rebase allowed per single LidoOracle report
-    /// @dev uses 1e9 precision, e.g.: 1e6 - 0.1%; 1e9 - 100%, see `setMaxPositiveTokenRebase()`
-    uint256 maxPositiveTokenRebase;
-    /// @notice The max allowed CL balance decrease over the CL_BALANCE_WINDOW as a fraction of the adjusted balance
-    /// @dev Represented in the Basis Points (100% == 10_000). Must fit into uint16 (<= 65_535)
-    uint256 maxCLBalanceDecreaseBP;
-    /// @notice The maximum percent on how Second Opinion Oracle reported value could be greater
-    ///     than reported by the AccountingOracle. There is an assumption that second opinion oracle CL balance
-    ///     can be greater as calculated for the withdrawal credentials.
+    /// @notice The hard annualized limit for a positive CL accounting rebase.
     /// @dev Represented in the Basis Points (100% == 10_000)
-    uint256 clBalanceOraclesErrorUpperBPLimit;
+    uint256 annualCLRebaseIncreaseHardBPLimit;
+    /// @notice The soft per-report limit for a negative CL accounting rebase.
+    /// @dev Represented in the Basis Points (100% == 10_000)
+    uint256 clRebaseDecreaseSoftBPLimit;
+    /// @notice The hard per-report limit for a negative CL accounting rebase.
+    /// @dev Represented in the Basis Points (100% == 10_000)
+    uint256 clRebaseDecreaseHardBPLimit;
     /// @notice The max possible consolidation ETH amount that might be reported
     ///     per single day.
     /// @dev Must fit into uint32 (<= 4_294_967_295)
@@ -125,11 +120,11 @@ struct AccountingCoreLimitsPacked {
     uint32 exitedEthAmountPerDayLimit;
     uint32 appearedEthAmountPerDayLimit;
     uint32 consolidationEthAmountPerDayLimit;
-    uint16 annualBalanceIncreaseBPLimit;
+    uint16 annualCLRebaseIncreaseSoftBPLimit;
     uint16 simulatedShareRateDeviationBPLimit;
-    uint64 maxPositiveTokenRebase;
-    uint16 maxCLBalanceDecreaseBP;
-    uint16 clBalanceOraclesErrorUpperBPLimit;
+    uint16 annualCLRebaseIncreaseHardBPLimit;
+    uint16 clRebaseDecreaseSoftBPLimit;
+    uint16 clRebaseDecreaseHardBPLimit;
     uint16 exitedValidatorEthAmountLimit;
     uint16 externalPendingBalanceCapEth;
 }
@@ -142,25 +137,6 @@ struct OperationalLimitsPacked {
     uint16 maxItemsPerExtraDataTransaction;
     uint16 maxNodeOperatorsPerExtraDataItem;
     uint32 requestTimestampMargin;
-}
-
-struct ReportData {
-    uint64 timestamp;       // Report-window timestamp in seconds
-    uint128 clBalance;      // Total CL balance (validators + pending) in Wei
-    uint128 deposits;       // Deposits for the period since the last report in Wei
-    uint128 clWithdrawals;  // Actual ETH moved from CL to withdrawal vault this period
-}
-
-struct CLBalanceDecreaseCheckParams {
-    uint256 maxCLBalanceDecreaseBP;
-    uint256 clBalanceOraclesErrorUpperBPLimit;
-    uint256 preCLBalance;
-    uint256 postCLBalance;
-    uint256 postCLValidatorsBalance;
-    uint256 withdrawalVaultBalance;
-    uint256 withdrawalsVaultTransfer;
-    uint256 deposits;
-    uint256 timeElapsed;
 }
 
 struct CLBalanceChangeCheckParams {
@@ -186,7 +162,6 @@ uint256 constant SHARE_RATE_PRECISION_E27 = 1e27;
 contract OracleReportSanityChecker is AccessControlEnumerable {
     using LimitsListPacker for LimitsList;
     using LimitsListUnpacker for AccountingCoreLimitsPacked;
-    using PositiveTokenRebaseLimiter for TokenRebaseLimiterData;
 
     bytes32 public constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
     bytes32 public constant EXITED_ETH_AMOUNT_PER_DAY_LIMIT_MANAGER_ROLE =
@@ -199,8 +174,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         keccak256("EXITED_VALIDATOR_ETH_AMOUNT_LIMIT_MANAGER_ROLE");
     bytes32 public constant EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE =
         keccak256("EXTERNAL_PENDING_BALANCE_CAP_MANAGER_ROLE");
-    bytes32 public constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
-        keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
+    bytes32 public constant ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE =
+        keccak256("ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE");
     bytes32 public constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
         keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
     bytes32 public constant MAX_BALANCE_EXIT_REQUESTED_PER_REPORT_IN_ETH_ROLE =
@@ -212,11 +187,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     bytes32 public constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE =
         keccak256("MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE");
     bytes32 public constant REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE = keccak256("REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE");
-    bytes32 public constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
-        keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
     bytes32 public constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
-    bytes32 public constant MAX_CL_BALANCE_DECREASE_MANAGER_ROLE =
-        keccak256("MAX_CL_BALANCE_DECREASE_MANAGER_ROLE");
+    bytes32 public constant CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE =
+        keccak256("CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE");
     uint256 private constant DEFAULT_TIME_ELAPSED = 1 hours;
     uint256 private constant DEFAULT_CL_BALANCE = 1 gwei;
     uint256 private constant SECONDS_PER_DAY = 24 * 60 * 60;
@@ -224,8 +197,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @dev Electra max effective balance of a single validator. The appeared ETH limit is prorated by elapsed time,
     ///      while CL activations are discrete, so one max validator is allowed as a report-window boundary allowance.
     uint256 private constant MAX_VALIDATOR_EFFECTIVE_BALANCE = 2_048 ether;
-    /// @dev Time window for the CL balance decrease check
-    uint256 private constant CL_BALANCE_WINDOW = 36 days;
 
     ILidoLocator private immutable LIDO_LOCATOR;
     address private immutable ACCOUNTING_ADDRESS;
@@ -233,46 +204,29 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     AccountingCoreLimitsPacked private _accountingCoreLimits;
     OperationalLimitsPacked private _operationalLimits;
 
-    /// @dev Historical reports data
-    ReportData[] public reportData;
-
     /// @dev The address of the second opinion oracle
     ISecondOpinionOracle public secondOpinionOracle;
-
-    /// @dev Withdrawal vault balance after the last report's transfer was applied.
-    ///      Used to compute actual CL withdrawals: clWithdrawals = WVB_current - lastVaultBalanceAfterTransfer
-    uint256 public lastVaultBalanceAfterTransfer;
-
-    /// @dev Timestamp of the latest stored report snapshot used by the CL balance decrease window.
-    ///      It is advanced by `_timeElapsed` on each accounting report.
-    uint256 public lastReportTimestamp;
-
-    /// @dev Migration flag: false until the first successful accounting report after migration.
-    ///      The per-module validators balance increase check is skipped while the flag is false.
-    bool public isPostMigrationFirstReportDone;
 
     /// @param _lidoLocator address of the LidoLocator instance
     /// @param _accounting address of the Accounting instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
+    /// @param _secondOpinionOracle initial second-opinion provider; can be zero to leave it disabled
     constructor(
         address _lidoLocator,
         address _accounting,
         address _admin,
-        LimitsList memory _limitsList
+        LimitsList memory _limitsList,
+        ISecondOpinionOracle _secondOpinionOracle
     ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
         ACCOUNTING_ADDRESS = _accounting;
 
         _updateLimits(_limitsList);
+        secondOpinionOracle = _secondOpinionOracle;
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-    }
-
-    /// @notice Return number of report data elements available on the public reportData array.
-    function getReportDataCount() external view returns (uint256) {
-        return reportData.length;
     }
 
     /// @notice returns the address of the LidoLocator
@@ -285,10 +239,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return _accountingCoreLimits.unpack(_operationalLimits);
     }
 
-    function getMaxCLBalanceDecreaseBP() external view returns (uint256) {
-        return _accountingCoreLimits.maxCLBalanceDecreaseBP;
-    }
-
     function getMaxEffectiveBalanceWeightWCType01() external view returns (uint256) {
         return _operationalLimits.maxEffectiveBalanceWeightWCType01;
     }
@@ -297,36 +247,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return _operationalLimits.maxEffectiveBalanceWeightWCType02;
     }
 
-    /// @notice Returns max positive token rebase value with 1e9 precision:
-    ///     e.g.: 1e6 - 0.1%; 1e9 - 100%
-    ///     - zero value means uninitialized
-    ///     - type(uint64).max means unlimited
-    ///
-    /// @dev Get max positive rebase allowed per single oracle report token rebase happens on total
-    ///     supply adjustment, huge positive rebase can incur oracle report sandwiching.
-    ///
-    ///     stETH balance for the `account` defined as:
-    ///         balanceOf(account) =
-    ///             shares[account] * totalPooledEther / totalShares = shares[account] * shareRate
-    ///
-    ///     Suppose shareRate changes when oracle reports (see `handleOracleReport`)
-    ///     which means that token rebase happens:
-    ///
-    ///         preShareRate = preTotalPooledEther() / preTotalShares()
-    ///         postShareRate = postTotalPooledEther() / postTotalShares()
-    ///         R = (postShareRate - preShareRate) / preShareRate
-    ///
-    ///         R > 0 corresponds to the relative positive rebase value (i.e., instant APR)
-    ///
-    /// NB: The value is not set by default (explicit initialization required),
-    ///     the recommended sane values are from 0.05% to 0.1%.
-    function getMaxPositiveTokenRebase() public view returns (uint256) {
-        return _accountingCoreLimits.maxPositiveTokenRebase;
-    }
-
     /// @notice Sets the new values for the limits list and second opinion oracle
     /// @param _limitsList new limits list
-    /// @param _secondOpinionOracle negative rebase oracle.
+    /// @param _secondOpinionOracle second-opinion provider.
     function setOracleReportLimits(
         LimitsList calldata _limitsList,
         ISecondOpinionOracle _secondOpinionOracle
@@ -392,14 +315,16 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateAccountingCoreLimits(limits);
     }
 
-    /// @notice Sets the new value for the annualBalanceIncreaseBPLimit
-    /// @param _annualBalanceIncreaseBPLimit new annualBalanceIncreaseBPLimit value
-    function setAnnualBalanceIncreaseBPLimit(
-        uint256 _annualBalanceIncreaseBPLimit
-    ) external onlyRole(ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE) {
-        _checkLimitValue(_annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
+    /// @notice Sets the soft and hard annualized limits for a positive CL accounting rebase.
+    function setAnnualCLRebaseIncreaseBPLimits(
+        uint256 _softLimitBP,
+        uint256 _hardLimitBP
+    ) external onlyRole(ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE) {
+        _checkLimitValue(_hardLimitBP, 0, MAX_BASIS_POINTS);
+        _checkLimitValue(_softLimitBP, 0, _hardLimitBP);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
-        limits.annualBalanceIncreaseBPLimit = LimitsListPacker.toBasisPoints(_annualBalanceIncreaseBPLimit);
+        limits.annualCLRebaseIncreaseSoftBPLimit = LimitsListPacker.toBasisPoints(_softLimitBP);
+        limits.annualCLRebaseIncreaseHardBPLimit = LimitsListPacker.toBasisPoints(_hardLimitBP);
         _updateAccountingCoreLimits(limits);
     }
 
@@ -460,22 +385,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateOperationalLimits(limits);
     }
 
-    /// @notice Set max positive token rebase allowed per single oracle report token rebase happens
-    ///     on total supply adjustment, huge positive rebase can incur oracle report sandwiching.
-    ///
-    /// @param _maxPositiveTokenRebase max positive token rebase value with 1e9 precision:
-    ///     e.g.: 1e6 - 0.1%; 1e9 - 100%
-    ///     - passing zero value is prohibited
-    ///     - to allow unlimited rebases, pass max uint64, i.e.: type(uint64).max
-    function setMaxPositiveTokenRebase(
-        uint256 _maxPositiveTokenRebase
-    ) external onlyRole(MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE) {
-        _checkLimitValue(_maxPositiveTokenRebase, 1, type(uint64).max);
-        AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
-        limits.maxPositiveTokenRebase = SafeCast.toUint64(_maxPositiveTokenRebase);
-        _updateAccountingCoreLimits(limits);
-    }
-
     /// @notice Sets the new value for the maxItemsPerExtraDataTransaction
     /// @param _maxItemsPerExtraDataTransaction new maxItemsPerExtraDataTransaction value
     function setMaxItemsPerExtraDataTransaction(
@@ -498,138 +407,32 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateOperationalLimits(limits);
     }
 
-    /// @notice Sets the address of the second opinion oracle and clBalanceOraclesErrorUpperBPLimit value
+    /// @notice Sets the address of the second opinion oracle.
     /// @param _secondOpinionOracle second opinion oracle.
     ///     If it's zero address — oracle is disabled.
-    ///     Default value is zero address.
-    /// @param _clBalanceOraclesErrorUpperBPLimit new clBalanceOraclesErrorUpperBPLimit value
-    function setSecondOpinionOracleAndCLBalanceUpperMargin(
-        ISecondOpinionOracle _secondOpinionOracle,
-        uint256 _clBalanceOraclesErrorUpperBPLimit
+    function setSecondOpinionOracle(
+        ISecondOpinionOracle _secondOpinionOracle
     ) external onlyRole(SECOND_OPINION_MANAGER_ROLE) {
-        _checkLimitValue(_clBalanceOraclesErrorUpperBPLimit, 0, MAX_BASIS_POINTS);
-        AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
-        limits.clBalanceOraclesErrorUpperBPLimit = LimitsListPacker.toBasisPoints(_clBalanceOraclesErrorUpperBPLimit);
-        _updateAccountingCoreLimits(limits);
         if (_secondOpinionOracle != secondOpinionOracle) {
-            secondOpinionOracle = ISecondOpinionOracle(_secondOpinionOracle);
+            secondOpinionOracle = _secondOpinionOracle;
             emit SecondOpinionOracleChanged(_secondOpinionOracle);
         }
     }
 
-    /// @notice Sets the max allowed CL balance decrease in basis points
-    /// @param _maxCLBalanceDecreaseBP max CL balance decrease over the sliding window (in BP, e.g. 360 = 3.6%)
-    function setMaxCLBalanceDecreaseBP(uint256 _maxCLBalanceDecreaseBP)
-        external
-        onlyRole(MAX_CL_BALANCE_DECREASE_MANAGER_ROLE)
-    {
-        _checkLimitValue(_maxCLBalanceDecreaseBP, 0, MAX_BASIS_POINTS);
+    /// @notice Sets the soft and hard per-report limits for a negative CL accounting rebase.
+    function setCLRebaseDecreaseBPLimits(
+        uint256 _softLimitBP,
+        uint256 _hardLimitBP
+    ) external onlyRole(CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE) {
+        _checkLimitValue(_hardLimitBP, 0, MAX_BASIS_POINTS);
+        _checkLimitValue(_softLimitBP, 0, _hardLimitBP);
         AccountingCoreLimitsPacked memory limits = _accountingCoreLimits;
-        limits.maxCLBalanceDecreaseBP = LimitsListPacker.toBasisPoints(_maxCLBalanceDecreaseBP);
+        limits.clRebaseDecreaseSoftBPLimit = LimitsListPacker.toBasisPoints(_softLimitBP);
+        limits.clRebaseDecreaseHardBPLimit = LimitsListPacker.toBasisPoints(_hardLimitBP);
         _updateAccountingCoreLimits(limits);
     }
 
-    /// @notice One-time migration: seeds initial snapshots into reportData
-    ///     so that the sliding-window CL decrease check has a valid starting point.
-    /// @dev Permissionless by design: after the first successful call, further calls revert.
-    function migrateBaselineSnapshot() external {
-        if (reportData.length != 0) revert MigrationAlreadyDone();
-
-        address lidoAddr = LIDO_LOCATOR.lido();
-        uint256 lidoVersion = IVersioned(lidoAddr).getContractVersion();
-        if (lidoVersion != 4) revert UnexpectedLidoVersion(lidoVersion, 4);
-        // Do not include migrated transient deposits in the migration baseline.
-        // Lido's deposit tracker will expose them as deposits in the first post-migration
-        // report, and the negative rebase window adds report deposits to the previous CL
-        // balance. Including them here would count the same deposits twice.
-        (uint256 migrationCLBalance,,,) = ILido(lidoAddr).getBalanceStats();
-        uint256 migrationCLWithdrawals = LIDO_LOCATOR.withdrawalVault().balance;
-        uint256 postWithdrawalsMigrationCLBalance = migrationCLBalance - migrationCLWithdrawals;
-        // Use the current vault balance as the last post-transfer balance.
-        // Migration has no more precise post-report baseline; the seeded snapshots below compensate it.
-        lastVaultBalanceAfterTransfer = migrationCLWithdrawals;
-
-        // Seed the decrease-check window with two migration snapshots:
-        // 1) pre-withdrawals CL balance with zero flows;
-        // 2) post-withdrawals CL balance with migration-time vault balance recorded as CL withdrawals.
-        // Since `_calcWindowDiff` sums flows only after the baseline item, migration
-        // withdrawals must be stored in a separate, next reportData entry.
-        // Migrated transient deposits are not stored here; they belong to the first post-migration report.
-        // Align the migrated baseline with the latest processed oracle report so that the next
-        // `+ timeElapsed` lands on the current report's ref-slot timestamp.
-        IBaseOracle accountingOracle = IBaseOracle(LIDO_LOCATOR.accountingOracle());
-        uint256 migrationReportTimestamp = accountingOracle.GENESIS_TIME() +
-            accountingOracle.getLastProcessingRefSlot() *
-            accountingOracle.SECONDS_PER_SLOT();
-        lastReportTimestamp = migrationReportTimestamp;
-        _addReportData(migrationReportTimestamp, migrationCLBalance, 0, 0);
-        _addReportData(migrationReportTimestamp, postWithdrawalsMigrationCLBalance, 0, migrationCLWithdrawals);
-
-        emit BaselineSnapshotMigrated(migrationCLBalance, migrationCLWithdrawals);
-    }
-
-    /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
-    ///     rewards vault during Lido's oracle report processing
-    /// @param _preInternalEther amount of internal ETH controlled by the protocol before the report
-    /// @param _preInternalShares number of internal shares before the report
-    /// @param _preCLBalance sum of all Lido validators' active and pending balances on the CL + sum of EL deposits before the
-    ///     current oracle report
-    /// @param _postCLBalance sum of all Lido validators' and pending balances on the CL after the
-    ///     current oracle report
-    /// @param _withdrawalVaultBalance withdrawal vault balance on Execution Layer for the report calculation moment
-    /// @param _elRewardsVaultBalance elRewards vault balance on Execution Layer for the report calculation moment
-    /// @param _sharesRequestedToBurn shares requested to burn through Burner for the report calculation moment
-    /// @param _etherToLockForWithdrawals ether to lock on withdrawals queue contract
-    /// @param _newSharesToBurnForWithdrawals new shares to burn due to withdrawal request finalization
-    /// @return withdrawals ETH amount allowed to be taken from the withdrawals vault
-    /// @return elRewards ETH amount allowed to be taken from the EL rewards vault
-    /// @return sharesFromWQToBurn amount of shares from Burner that should be burned due to WQ finalization
-    /// @return sharesToBurn amount to be burnt (accounting for withdrawals finalization)
-    function smoothenTokenRebase(
-        uint256 _preInternalEther,
-        uint256 _preInternalShares,
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
-        uint256 _withdrawalVaultBalance,
-        uint256 _elRewardsVaultBalance,
-        uint256 _sharesRequestedToBurn,
-        uint256 _etherToLockForWithdrawals,
-        uint256 _newSharesToBurnForWithdrawals
-    ) external view returns (uint256 withdrawals, uint256 elRewards, uint256 sharesFromWQToBurn, uint256 sharesToBurn) {
-        TokenRebaseLimiterData memory tokenRebaseLimiter = PositiveTokenRebaseLimiter.initLimiterState(
-            getMaxPositiveTokenRebase(),
-            _preInternalEther,
-            _preInternalShares
-        );
-
-        if (_postCLBalance < _preCLBalance) {
-            tokenRebaseLimiter.decreaseEther(_preCLBalance - _postCLBalance);
-        } else {
-            tokenRebaseLimiter.increaseEther(_postCLBalance - _preCLBalance);
-        }
-
-        withdrawals = tokenRebaseLimiter.increaseEther(_withdrawalVaultBalance);
-        elRewards = tokenRebaseLimiter.increaseEther(_elRewardsVaultBalance);
-
-        // determining the shares to burn limit that would have been
-        // if no withdrawals finalized during the report
-        // it's used to check later the provided `simulatedShareRate` value
-        uint256 simulatedSharesToBurn = Math256.min(tokenRebaseLimiter.getSharesToBurnLimit(), _sharesRequestedToBurn);
-
-        // remove ether to lock for withdrawals from total pooled ether
-        tokenRebaseLimiter.decreaseEther(_etherToLockForWithdrawals);
-        // re-evaluate shares to burn after TVL was updated due to withdrawals finalization
-        sharesToBurn = Math256.min(
-            tokenRebaseLimiter.getSharesToBurnLimit(),
-            _newSharesToBurnForWithdrawals + _sharesRequestedToBurn
-        );
-
-        sharesFromWQToBurn = sharesToBurn - simulatedSharesToBurn;
-    }
-
-    /// @notice Applies sanity checks to the accounting params of Lido's oracle report
-    /// WARNING. The function has side effects and modifies the state of the contract.
-    ///          It's needed to keep CL balance snapshots for the balance decrease check over a sliding window.
+    /// @notice Applies sanity checks to the accounting params of Lido's oracle report.
     /// @param _timeElapsed time elapsed since the previous oracle report
     /// @param _preCLValidatorsBalance sum of all Lido validators' balances on the Consensus Layer
     ///     before the current oracle report
@@ -641,7 +444,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @param _elRewardsVaultBalance el rewards vault balance on Execution Layer for the report reference slot
     /// @param _sharesRequestedToBurn shares requested to burn for the report reference slot
     /// @param _deposits deposits to the Beacon Chain since the previous oracle report in Wei
-    /// @param _withdrawalsVaultTransfer ETH amount transferred from withdrawal vault this report
     function checkAccountingOracleReport(
         uint256 _timeElapsed,
         uint256 _preCLValidatorsBalance,
@@ -651,9 +453,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
-        uint256 _deposits,
-        uint256 _withdrawalsVaultTransfer
-    ) external {
+        uint256 _deposits
+    ) external view {
         if (msg.sender != ACCOUNTING_ADDRESS) {
             revert CalledNotFromAccounting();
         }
@@ -671,51 +472,40 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             postCLPendingBalance: _postCLPendingBalance,
             deposits: _deposits
         });
-        _checkAccountingOracleReportCLBalances(
-            checkParams,
-            _withdrawalVaultBalance,
-            _withdrawalsVaultTransfer
-        );
+        _checkAccountingOracleReportCLBalances(checkParams, _withdrawalVaultBalance);
     }
 
-    /// @dev Collects two CL balance notions for the decrease check:
-    ///      validators + pending is used by the on-chain sliding-window formula;
-    ///      validators-only balance is used for matching the second opinion oracle.
+    /// @dev Classifies the aggregate CL accounting rebase into normal, second-opinion, and hard-revert ranges.
     function _checkAccountingOracleReportCLBalances(
         CLBalanceChangeCheckParams memory _checkParams,
-        uint256 _withdrawalVaultBalance,
-        uint256 _withdrawalsVaultTransfer
-    ) internal {
+        uint256 _withdrawalVaultBalance
+    ) internal view {
         AccountingCoreLimitsPacked memory limitsList = _accountingCoreLimits;
-        CLBalanceDecreaseCheckParams memory decreaseCheckParams;
-        decreaseCheckParams.maxCLBalanceDecreaseBP = limitsList.maxCLBalanceDecreaseBP;
-        decreaseCheckParams.clBalanceOraclesErrorUpperBPLimit = limitsList.clBalanceOraclesErrorUpperBPLimit;
-        decreaseCheckParams.preCLBalance =
+        uint256 preCLBalance =
             _checkParams.preCLValidatorsBalance + _checkParams.preCLPendingBalance + _checkParams.deposits;
-        decreaseCheckParams.postCLBalance = _checkParams.postCLValidatorsBalance + _checkParams.postCLPendingBalance;
-        decreaseCheckParams.postCLValidatorsBalance = _checkParams.postCLValidatorsBalance;
-        decreaseCheckParams.withdrawalVaultBalance = _withdrawalVaultBalance;
-        decreaseCheckParams.withdrawalsVaultTransfer = _withdrawalsVaultTransfer;
-        decreaseCheckParams.deposits = _checkParams.deposits;
-        decreaseCheckParams.timeElapsed = _checkParams.timeElapsed;
+        uint256 postCLAccountingBalance =
+            _checkParams.postCLValidatorsBalance + _checkParams.postCLPendingBalance + _withdrawalVaultBalance;
 
-        uint256 clWithdrawals = _getCLWithdrawals(_withdrawalVaultBalance);
-        _checkWithdrawalsVaultTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
-        // 4. Consensus Layer pending and validators balances increase
-        _checkCLPendingAndValidatorsBalanceIncrease(limitsList, _checkParams, clWithdrawals);
-        // 5. Consensus Layer balance decrease
-        _checkCLBalanceDecrease(decreaseCheckParams, clWithdrawals);
-        // 6. Consensus Layer annual balances increase
-        _checkAnnualBalancesIncrease(
-            limitsList,
-            decreaseCheckParams.preCLBalance,
-            decreaseCheckParams.postCLBalance,
-            _checkParams.timeElapsed
-        );
-        _finalizePostReportState(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
+        bool requiresSecondOpinion;
+        if (postCLAccountingBalance < preCLBalance) {
+            requiresSecondOpinion = _classifyCLRebaseDecrease(
+                limitsList,
+                preCLBalance - postCLAccountingBalance,
+                preCLBalance
+            );
+        } else {
+            requiresSecondOpinion = _classifyAnnualCLRebaseIncrease(
+                limitsList,
+                postCLAccountingBalance - preCLBalance,
+                preCLBalance,
+                _getTimeElapsedForAllowanceChecks(_checkParams.timeElapsed)
+            );
+        }
+
+        if (requiresSecondOpinion) _checkSecondOpinionReportHash();
     }
 
-    /// @notice Check per-module validators balances consistency and global CL growth budget derived from protocol pending, all in wei.
+    /// @notice Checks per-module validators balances consistency and their deterministic growth budget, all in wei.
     function checkModuleAndCLBalancesChangeRates(
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _validatorBalancesWeiByStakingModule,
@@ -739,14 +529,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             _validatorBalancesWeiByStakingModule,
             checkParams.postCLValidatorsBalance
         );
-
-        // StakingRouter migration seeds per-module validators balances from active validators count
-        // using the max effective balance, so those migration values may be higher than the first
-        // oracle-reported balances. Skip the module validators balance increase check until the
-        // first report overwrites the migrated accounting state with the actual per-module values.
-        if (!isPostMigrationFirstReportDone) {
-            return;
-        }
 
         _checkModuleValidatorsBalanceIncrease(
             IStakingRouter(LIDO_LOCATOR.stakingRouter()),
@@ -902,13 +684,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return (_amountPerDay * _effectiveTimeElapsed) / SECONDS_PER_DAY;
     }
 
-    function _calculateValidatorsBalanceAprSafetyCap(
-        uint256 _preCLValidatorsBalance,
-        uint256 _annualBalanceIncreaseMultiplier
-    ) internal pure returns (uint256) {
-        return (_preCLValidatorsBalance * _annualBalanceIncreaseMultiplier) / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
-    }
-
     function _checkCLPendingBalanceAndCalculateMaxPossibleActivatedBalance(
         AccountingCoreLimitsPacked memory _limitsList,
         CLBalanceChangeCheckParams memory _checkParams
@@ -937,40 +712,18 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // If the previous report lands after epoch 7, this frame can observe the whole 2048 ETH jump.
         // That means we expect linear growth over the period, while the observed pending delta can
         // be bursty. The burst capacity is bounded by the max possible validator size.
-        if (activatedBalance > appearedEthLimitPerPeriod + MAX_VALIDATOR_EFFECTIVE_BALANCE) {
-            revert IncorrectTotalActivatedBalance(appearedEthLimitPerPeriod, activatedBalance);
+        uint256 activatedBalanceLimit = appearedEthLimitPerPeriod + MAX_VALIDATOR_EFFECTIVE_BALANCE;
+        if (activatedBalance > activatedBalanceLimit) {
+            revert IncorrectTotalActivatedBalance(activatedBalanceLimit, activatedBalance);
         }
 
         result.maxPossibleActivatedBalance =
             activatedBalance +
-            _calculateValidatorsBalanceAprSafetyCap(
+            _calculateAnnualCLRebaseIncreaseLimit(
                 _checkParams.preCLValidatorsBalance + activatedBalance,
-                uint256(_limitsList.annualBalanceIncreaseBPLimit) * result.effectiveTimeElapsed
+                _limitsList.annualCLRebaseIncreaseSoftBPLimit,
+                result.effectiveTimeElapsed
             );
-    }
-
-    function _checkCLPendingAndValidatorsBalanceIncrease(
-        AccountingCoreLimitsPacked memory _limitsList,
-        CLBalanceChangeCheckParams memory _checkParams,
-        uint256 _clWithdrawals
-    ) internal pure {
-        ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateMaxPossibleActivatedBalance(
-            _limitsList,
-            _checkParams
-        );
-        uint256 preCLValidatorsBalanceAfterWithdrawals = _clWithdrawals >= _checkParams.preCLValidatorsBalance
-            ? 0
-            : _checkParams.preCLValidatorsBalance - _clWithdrawals;
-        if (_checkParams.postCLValidatorsBalance > preCLValidatorsBalanceAfterWithdrawals) {
-            uint256 validatorsBalanceIncrease =
-                _checkParams.postCLValidatorsBalance - preCLValidatorsBalanceAfterWithdrawals;
-            if (validatorsBalanceIncrease > activationCheckResult.maxPossibleActivatedBalance) {
-                revert IncorrectTotalCLBalanceIncrease(
-                    activationCheckResult.maxPossibleActivatedBalance,
-                    validatorsBalanceIncrease
-                );
-            }
-        }
     }
 
     function _checkModuleValidatorsBalanceIncrease(
@@ -980,23 +733,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256[] calldata _validatorBalancesWeiByStakingModule,
         CLBalanceChangeCheckParams memory _checkParams
     ) internal view {
-        ActivationBalanceCheckResult memory activationCheckResult = _checkCLPendingBalanceAndCalculateMaxPossibleActivatedBalance(
-            _limitsList,
-            _checkParams
-        );
+        ActivationBalanceCheckResult memory activationCheckResult =
+            _checkCLPendingBalanceAndCalculateMaxPossibleActivatedBalance(_limitsList, _checkParams);
 
-        if (_checkParams.postCLValidatorsBalance > _checkParams.preCLValidatorsBalance) {
-            uint256 validatorsBalanceIncrease =
-                _checkParams.postCLValidatorsBalance - _checkParams.preCLValidatorsBalance;
-            if (validatorsBalanceIncrease > activationCheckResult.maxPossibleActivatedBalance) {
-                revert IncorrectTotalCLBalanceIncrease(
-                    activationCheckResult.maxPossibleActivatedBalance,
-                    validatorsBalanceIncrease
-                );
-            }
-        }
-
-        uint256 totalActivatedInClByModules = _calculateTotalActivatedInClByModules(
+        uint256 grossPositiveModuleDeltas = _calculateGrossPositiveModuleDeltas(
             _stakingRouter,
             _stakingModuleIdsWithUpdatedBalance,
             _validatorBalancesWeiByStakingModule
@@ -1006,23 +746,24 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256(_limitsList.consolidationEthAmountPerDayLimit) * 1 ether,
             activationCheckResult.effectiveTimeElapsed
         );
-        // During consolidation, positive per-module validators balance deltas may exceed
-        // activation-backed growth, so the consolidation allowance is added separately.
-        uint256 totalActivatedInClByModulesLimit =
+        // Positive module deltas include validator activations and ordinary CL rewards.
+        // Consolidations may move additional balance between modules, so their throughput
+        // allowance is added separately.
+        uint256 totalPositiveModuleDeltasLimit =
             activationCheckResult.maxPossibleActivatedBalance + consolidationLimitPerPeriodWei;
-        if (totalActivatedInClByModules > totalActivatedInClByModulesLimit) {
+        if (grossPositiveModuleDeltas > totalPositiveModuleDeltasLimit) {
             revert IncorrectTotalModuleValidatorsBalanceIncrease(
-                totalActivatedInClByModulesLimit,
-                totalActivatedInClByModules
+                totalPositiveModuleDeltasLimit,
+                grossPositiveModuleDeltas
             );
         }
     }
 
-    function _calculateTotalActivatedInClByModules(
+    function _calculateGrossPositiveModuleDeltas(
         IStakingRouter _stakingRouter,
         uint256[] calldata _stakingModuleIdsWithUpdatedBalance,
         uint256[] calldata _validatorBalancesWeiByStakingModule
-    ) internal view returns (uint256 totalActivatedInClByModules) {
+    ) internal view returns (uint256 grossPositiveModuleDeltas) {
         uint256 modulesCount = _stakingModuleIdsWithUpdatedBalance.length;
         for (uint256 i = 0; i < modulesCount;) {
             (bool hasPreviousAccounting, uint64 previousModuleValidatorsBalanceGwei,) =
@@ -1030,7 +771,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             uint256 previousModuleValidatorsBalanceWei = uint256(previousModuleValidatorsBalanceGwei) * 1 gwei;
             // Skip module-delta aggregation until the module has previous accounting baseline.
             if (hasPreviousAccounting && _validatorBalancesWeiByStakingModule[i] > previousModuleValidatorsBalanceWei) {
-                totalActivatedInClByModules +=
+                grossPositiveModuleDeltas +=
                     _validatorBalancesWeiByStakingModule[i] - previousModuleValidatorsBalanceWei;
             }
 
@@ -1094,222 +835,67 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _addReportData(
-        uint256 _timestamp,
-        uint256 _clBalance,
-        uint256 _deposits,
-        uint256 _clWithdrawals
-    ) internal {
-        reportData.push(
-            ReportData({
-                timestamp: SafeCast.toUint64(_timestamp),
-                clBalance: SafeCast.toUint128(_clBalance),
-                deposits: SafeCast.toUint128(_deposits),
-                clWithdrawals: SafeCast.toUint128(_clWithdrawals)
-            })
-        );
-    }
-
-    /// @dev Stores the current report snapshot and checks the sliding-window CL balance decrease.
-    ///      Historical snapshots include CL balance (validators + pending), deposits, and actual CL withdrawals.
-    ///      The window diff restores the expected CL balance from the selected baseline by adding
-    ///      deposits and subtracting withdrawals, then compares it with the current post-report CL balance.
-    ///      Reverts when the actual decrease exceeds the max allowed decrease derived from the restored balance.
-    function _checkCLBalanceDecrease(
-        CLBalanceDecreaseCheckParams memory _checkParams,
-        uint256 _clWithdrawals
-    ) internal {
-        uint256 reportTimestamp = lastReportTimestamp + _checkParams.timeElapsed;
-        _addReportData(reportTimestamp, _checkParams.postCLBalance, _checkParams.deposits, _clWithdrawals);
-        lastReportTimestamp = reportTimestamp;
-
-        if (_checkParams.preCLBalance <= _checkParams.postCLBalance) return;
-        // If the balance difference is less than or equal to withdrawals, no check is needed.
-        if (_checkParams.preCLBalance - _checkParams.postCLBalance <= _clWithdrawals) return;
-
-        (uint256 actualCLBalanceDiff, uint256 maxAllowedCLBalanceDiff) = _calcWindowDiff(
-            _checkParams.maxCLBalanceDecreaseBP,
-            _checkParams.postCLBalance,
-            reportData.length
-        );
-
-        if (actualCLBalanceDiff == 0) return;
-        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
-
-        if (actualCLBalanceDiff > maxAllowedCLBalanceDiff) {
-            if (address(secondOpinionOracle) == address(0)) {
-                revert IncorrectCLBalanceDecrease(actualCLBalanceDiff, maxAllowedCLBalanceDiff);
-            }
-            _askSecondOpinion(
-                refSlot,
-                _checkParams.postCLValidatorsBalance,
-                _checkParams.withdrawalVaultBalance,
-                _checkParams.clBalanceOraclesErrorUpperBPLimit
-            );
-            return;
-        }
-
-        emit NegativeCLRebaseAccepted(
-            refSlot,
-            _checkParams.postCLBalance,
-            actualCLBalanceDiff,
-            maxAllowedCLBalanceDiff
-        );
-    }
-
-    /// @dev Calculates actual CL withdrawals accumulated between successful reports.
-    ///      `_finalizePostReportState` stores the withdrawal vault balance after each report transfer,
-    ///      and the next report compares its vault balance against that stored post-transfer balance.
-    /// @param _withdrawalVaultBalance Withdrawal vault balance reported for the current report, before transfer.
-    /// @return CL withdrawals observed since the previous successful report.
-    function _getCLWithdrawals(uint256 _withdrawalVaultBalance) internal view returns (uint256) {
-        if (_withdrawalVaultBalance < lastVaultBalanceAfterTransfer) {
-            revert IncorrectCLWithdrawalsVaultBalance(_withdrawalVaultBalance, lastVaultBalanceAfterTransfer);
-        }
-        return _withdrawalVaultBalance - lastVaultBalanceAfterTransfer;
-    }
-
-    function _checkWithdrawalsVaultTransfer(
-        uint256 _withdrawalVaultBalance,
-        uint256 _withdrawalsVaultTransfer
-    ) internal pure {
-        // In the current Accounting flow `withdrawalsVaultTransfer` comes from `smoothenTokenRebase()`,
-        // where it is capped by `_withdrawalVaultBalance`, so the subtraction below cannot underflow.
-        // Keep this explicit guard anyway because `checkAccountingOracleReport` still receives it as an external input.
-        if (_withdrawalsVaultTransfer > _withdrawalVaultBalance) {
-            revert IncorrectWithdrawalsVaultTransfer(_withdrawalVaultBalance, _withdrawalsVaultTransfer);
-        }
-    }
-
-    /// @notice Finalizes sanity-check state after a successful accounting report.
-    /// @dev Stores the withdrawals vault balance after the current report transfer so the next report can derive
-    ///      actual CL withdrawals as `current vault balance - last vault balance after transfer`.
-    /// @dev Marks the post-migration first report as completed so subsequent reports stop skipping
-    ///      `_checkModuleValidatorsBalanceIncrease(...)`; this is needed because StakingRouter migration can seed
-    ///      per-module validators balances above the first oracle-reported values.
-    /// @param _withdrawalVaultBalance Withdrawal vault balance reported for the current report, before transfer.
-    /// @param _withdrawalsVaultTransfer ETH amount transferred from the withdrawal vault during the current report.
-    function _finalizePostReportState(
-        uint256 _withdrawalVaultBalance,
-        uint256 _withdrawalsVaultTransfer
-    ) internal {
-        lastVaultBalanceAfterTransfer = _withdrawalVaultBalance - _withdrawalsVaultTransfer;
-        isPostMigrationFirstReportDone = true;
-    }
-
-    function _calcWindowDiff(
-        uint256 _maxDecreaseBP,
-        uint256 _postCLBalance,
-        uint256 _reportCount
-    ) internal view returns (uint256 actualCLBalanceDiff, uint256 maxAllowedCLBalanceDiff) {
-        uint256 lastIndex = _reportCount - 1;
-        uint256 baselineIndex = _findWindowBaselineIndex(lastIndex);
-
-        uint256 baselineBalance = reportData[baselineIndex].clBalance;
-        uint256 totalDeposits;
-        uint256 totalCLWithdrawals;
-        for (uint256 i = baselineIndex + 1; i <= lastIndex; ++i) {
-            totalDeposits += reportData[i].deposits;
-            totalCLWithdrawals += reportData[i].clWithdrawals;
-        }
-
-        uint256 adjustedWindowBalance = baselineBalance + totalDeposits;
-        if (adjustedWindowBalance <= totalCLWithdrawals) return (0, 0);
-
-        uint256 expectedPostCLBalance = adjustedWindowBalance - totalCLWithdrawals;
-        if (expectedPostCLBalance <= _postCLBalance) return (0, 0);
-
-        actualCLBalanceDiff = expectedPostCLBalance - _postCLBalance;
-        maxAllowedCLBalanceDiff = (expectedPostCLBalance * _maxDecreaseBP) / MAX_BASIS_POINTS;
-    }
-
-    /// @dev Finds the earliest available report within `CL_BALANCE_WINDOW`, or starts from
-    ///      the first stored report when the observed history is shorter than the window.
-    ///      If the latest report is the only one inside the window, returns the nearest
-    ///      pre-window report as an anchor so a long reporting gap cannot reset the baseline.
-    /// @param _lastIndex Index of the latest/current `reportData` item.
-    /// @return baselineIndex Index of the snapshot whose CL balance anchors the window diff.
-    function _findWindowBaselineIndex(uint256 _lastIndex) internal view returns (uint256 baselineIndex) {
-        uint256 lastTimestamp = reportData[_lastIndex].timestamp;
-        uint256 windowStart = lastTimestamp - CL_BALANCE_WINDOW;
-
-        baselineIndex = _lastIndex;
-        while (baselineIndex > 0) {
-            uint256 previousIndex = baselineIndex - 1;
-            // If the previous snapshot is outside the window, stop at the current baseline candidate.
-            if (reportData[previousIndex].timestamp < windowStart) {
-                // If no earlier in-window snapshot was found, use the previous one as an anchor
-                // so reporting gaps cannot reset the baseline.
-                return baselineIndex == _lastIndex ? previousIndex : baselineIndex;
-            }
-            baselineIndex = previousIndex;
-        }
-
-        return baselineIndex;
-    }
-
-    function _askSecondOpinion(
-        uint256 _refSlot,
-        uint256 _postCLValidatorsBalance,
-        uint256 _withdrawalVaultBalance,
-        uint256 _clBalanceOraclesErrorUpperBPLimit
-    ) internal {
-        (bool success, uint256 clOracleBalanceGwei, uint256 oracleWithdrawalVaultBalanceWei, , ) = secondOpinionOracle
-            .getReport(_refSlot);
-
-        if (success) {
-            uint256 clBalanceWei = clOracleBalanceGwei * 1 gwei;
-            if (clBalanceWei < _postCLValidatorsBalance) {
-                revert NegativeRebaseFailedCLBalanceMismatch(
-                    _postCLValidatorsBalance,
-                    clBalanceWei,
-                    _clBalanceOraclesErrorUpperBPLimit
-                );
-            }
-            if (
-                MAX_BASIS_POINTS * (clBalanceWei - _postCLValidatorsBalance) >
-                _clBalanceOraclesErrorUpperBPLimit * clBalanceWei
-            ) {
-                revert NegativeRebaseFailedCLBalanceMismatch(
-                    _postCLValidatorsBalance,
-                    clBalanceWei,
-                    _clBalanceOraclesErrorUpperBPLimit
-                );
-            }
-            if (oracleWithdrawalVaultBalanceWei != _withdrawalVaultBalance) {
-                revert NegativeRebaseFailedWithdrawalVaultBalanceMismatch(
-                    _withdrawalVaultBalance,
-                    oracleWithdrawalVaultBalanceWei
-                );
-            }
-            emit NegativeCLRebaseConfirmed(_refSlot, _postCLValidatorsBalance, _withdrawalVaultBalance);
-        } else {
-            revert NegativeRebaseFailedSecondOpinionReportIsNotReady();
-        }
-    }
-
-    function _checkAnnualBalancesIncrease(
+    function _classifyCLRebaseDecrease(
         AccountingCoreLimitsPacked memory _limitsList,
-        uint256 _preCLBalance,
-        uint256 _postCLBalance,
-        uint256 _timeElapsed
-    ) internal pure {
-        // allow zero values for scratch deploy
-        // NB: annual increase have to be large enough for scratch deploy
-        if (_preCLBalance == 0) {
-            _preCLBalance = DEFAULT_CL_BALANCE;
+        uint256 _clRebaseDecrease,
+        uint256 _preCLBalance
+    ) internal pure returns (bool requiresSecondOpinion) {
+        uint256 hardLimit =
+            _preCLBalance * uint256(_limitsList.clRebaseDecreaseHardBPLimit) / MAX_BASIS_POINTS;
+        if (_clRebaseDecrease > hardLimit) {
+            revert CLRebaseDecreaseAboveHardLimit(_clRebaseDecrease, hardLimit);
         }
 
-        if (_preCLBalance >= _postCLBalance) return;
+        uint256 softLimit =
+            _preCLBalance * uint256(_limitsList.clRebaseDecreaseSoftBPLimit) / MAX_BASIS_POINTS;
+        return _clRebaseDecrease > softLimit;
+    }
 
-        _timeElapsed = _getTimeElapsedForAllowanceChecks(_timeElapsed);
+    function _classifyAnnualCLRebaseIncrease(
+        AccountingCoreLimitsPacked memory _limitsList,
+        uint256 _clRebaseIncrease,
+        uint256 _preCLBalance,
+        uint256 _effectiveTimeElapsed
+    ) internal pure returns (bool requiresSecondOpinion) {
+        uint256 hardLimit = _calculateAnnualCLRebaseIncreaseLimit(
+            _preCLBalance,
+            _limitsList.annualCLRebaseIncreaseHardBPLimit,
+            _effectiveTimeElapsed
+        );
+        if (_clRebaseIncrease > hardLimit) {
+            revert AnnualCLRebaseIncreaseAboveHardLimit(_clRebaseIncrease, hardLimit);
+        }
 
-        uint256 balanceIncrease = _postCLBalance - _preCLBalance;
-        uint256 annualBalanceIncrease = (ANNUAL_BALANCE_INCREASE_DENOMINATOR * balanceIncrease) / _preCLBalance /
-            _timeElapsed;
+        uint256 softLimit = _calculateAnnualCLRebaseIncreaseLimit(
+            _preCLBalance,
+            _limitsList.annualCLRebaseIncreaseSoftBPLimit,
+            _effectiveTimeElapsed
+        );
+        return _clRebaseIncrease > softLimit;
+    }
 
-        if (annualBalanceIncrease > _limitsList.annualBalanceIncreaseBPLimit) {
-            revert IncorrectCLBalanceIncrease(annualBalanceIncrease);
+    function _calculateAnnualCLRebaseIncreaseLimit(
+        uint256 _preCLBalance,
+        uint256 _annualLimitBP,
+        uint256 _effectiveTimeElapsed
+    ) internal pure returns (uint256) {
+        uint256 effectivePreCLBalance = _preCLBalance == 0 ? DEFAULT_CL_BALANCE : _preCLBalance;
+        return
+            effectivePreCLBalance * _annualLimitBP * _effectiveTimeElapsed / ANNUAL_BALANCE_INCREASE_DENOMINATOR;
+    }
+
+    function _checkSecondOpinionReportHash() internal view {
+        // slither-disable-next-line unused-return
+        (bytes32 consensusReportHash, uint256 refSlot,, bool processingStarted) =
+            IBaseOracle(LIDO_LOCATOR.accountingOracle()).getConsensusReport();
+        if (!processingStarted) revert ConsensusReportNotProcessing(refSlot);
+        if (address(secondOpinionOracle) == address(0)) revert SecondOpinionReportNotReady(refSlot);
+
+        (bool exists, bytes32 attestedReportHash) = secondOpinionOracle.getReportHash(refSlot);
+        if (!exists) revert SecondOpinionReportNotReady(refSlot);
+
+        if (attestedReportHash != consensusReportHash) {
+            revert SecondOpinionReportHashMismatch(refSlot, consensusReportHash, attestedReportHash);
         }
     }
 
@@ -1352,19 +938,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // simulated share rate ≤ actual share rate can be for a negative token rebase
         // simulated share rate ≥ actual share rate can be for a positive token rebase
         //
-        // Given that:
-        // 1) CL one-off balance decrease ≤ token rebase ≤ max positive token rebase
-        // 2) user-submitted ether & minted `stETH` don't exceed the current staking rate limit
-        // (see Lido.getCurrentStakeLimit())
-        //
-        // can conclude that `simulatedShareRateDeviationBPLimit` (L) should be set as follows:
-        // L = (2 * SRL) * max(CLD, MPR),
-        // where:
-        // - CLD is consensus layer one-off balance decrease (as BP),
-        // - MPR is max positive token rebase (as BP),
-        // - SRL is staking rate limit normalized by TVL (`maxStakeLimit / totalPooledEther`)
-        //   totalPooledEther should be chosen as a reasonable lower bound of the protocol TVL
-        //
         uint256 simulatedShareDiff = Math256.absDiff(actualShareRate, _simulatedShareRate);
         uint256 simulatedShareDeviation = (MAX_BASIS_POINTS * simulatedShareDiff) / actualShareRate;
 
@@ -1391,7 +964,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkLimitValue(_limitsList.consolidationEthAmountPerDayLimit, 0, type(uint32).max);
         _checkLimitValue(_limitsList.exitedValidatorEthAmountLimit, 1, type(uint16).max);
         _checkLimitValue(_limitsList.externalPendingBalanceCapEth, 0, type(uint16).max);
-        _checkLimitValue(_limitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
+        _checkLimitValue(_limitsList.annualCLRebaseIncreaseHardBPLimit, 0, MAX_BASIS_POINTS);
+        _checkLimitValue(
+            _limitsList.annualCLRebaseIncreaseSoftBPLimit,
+            0,
+            _limitsList.annualCLRebaseIncreaseHardBPLimit
+        );
         _checkLimitValue(_limitsList.simulatedShareRateDeviationBPLimit, 0, MAX_BASIS_POINTS);
         _checkLimitValue(_limitsList.maxBalanceExitRequestedPerReportInEth, 0, type(uint16).max);
         _checkLimitValue(_limitsList.maxEffectiveBalanceWeightWCType01, 1, type(uint16).max);
@@ -1399,9 +977,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkLimitValue(_limitsList.maxItemsPerExtraDataTransaction, 0, type(uint16).max);
         _checkLimitValue(_limitsList.maxNodeOperatorsPerExtraDataItem, 0, type(uint16).max);
         _checkLimitValue(_limitsList.requestTimestampMargin, 0, type(uint32).max);
-        _checkLimitValue(_limitsList.maxPositiveTokenRebase, 1, type(uint64).max);
-        _checkLimitValue(_limitsList.maxCLBalanceDecreaseBP, 0, MAX_BASIS_POINTS);
-        _checkLimitValue(_limitsList.clBalanceOraclesErrorUpperBPLimit, 0, MAX_BASIS_POINTS);
+        _checkLimitValue(_limitsList.clRebaseDecreaseHardBPLimit, 0, MAX_BASIS_POINTS);
+        _checkLimitValue(
+            _limitsList.clRebaseDecreaseSoftBPLimit,
+            0,
+            _limitsList.clRebaseDecreaseHardBPLimit
+        );
     }
 
     function _updateAccountingCoreLimits(AccountingCoreLimitsPacked memory _newLimits) internal {
@@ -1422,20 +1003,26 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (_oldLimits.externalPendingBalanceCapEth != _newLimits.externalPendingBalanceCapEth) {
             emit ExternalPendingBalanceCapEthSet(_newLimits.externalPendingBalanceCapEth);
         }
-        if (_oldLimits.annualBalanceIncreaseBPLimit != _newLimits.annualBalanceIncreaseBPLimit) {
-            emit AnnualBalanceIncreaseBPLimitSet(_newLimits.annualBalanceIncreaseBPLimit);
+        if (
+            _oldLimits.annualCLRebaseIncreaseSoftBPLimit != _newLimits.annualCLRebaseIncreaseSoftBPLimit ||
+            _oldLimits.annualCLRebaseIncreaseHardBPLimit != _newLimits.annualCLRebaseIncreaseHardBPLimit
+        ) {
+            emit AnnualCLRebaseIncreaseBPLimitsSet(
+                _newLimits.annualCLRebaseIncreaseSoftBPLimit,
+                _newLimits.annualCLRebaseIncreaseHardBPLimit
+            );
         }
         if (_oldLimits.simulatedShareRateDeviationBPLimit != _newLimits.simulatedShareRateDeviationBPLimit) {
             emit SimulatedShareRateDeviationBPLimitSet(_newLimits.simulatedShareRateDeviationBPLimit);
         }
-        if (_oldLimits.maxPositiveTokenRebase != _newLimits.maxPositiveTokenRebase) {
-            emit MaxPositiveTokenRebaseSet(_newLimits.maxPositiveTokenRebase);
-        }
-        if (_oldLimits.maxCLBalanceDecreaseBP != _newLimits.maxCLBalanceDecreaseBP) {
-            emit MaxCLBalanceDecreaseBPSet(_newLimits.maxCLBalanceDecreaseBP);
-        }
-        if (_oldLimits.clBalanceOraclesErrorUpperBPLimit != _newLimits.clBalanceOraclesErrorUpperBPLimit) {
-            emit CLBalanceOraclesErrorUpperBPLimitSet(_newLimits.clBalanceOraclesErrorUpperBPLimit);
+        if (
+            _oldLimits.clRebaseDecreaseSoftBPLimit != _newLimits.clRebaseDecreaseSoftBPLimit ||
+            _oldLimits.clRebaseDecreaseHardBPLimit != _newLimits.clRebaseDecreaseHardBPLimit
+        ) {
+            emit CLRebaseDecreaseBPLimitsSet(
+                _newLimits.clRebaseDecreaseSoftBPLimit,
+                _newLimits.clRebaseDecreaseHardBPLimit
+            );
         }
 
         _accountingCoreLimits = _newLimits;
@@ -1472,35 +1059,24 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event ExitedValidatorEthAmountLimitSet(uint256 exitedValidatorEthAmountLimit);
     event ExternalPendingBalanceCapEthSet(uint256 externalPendingBalanceCapEth);
     event SecondOpinionOracleChanged(ISecondOpinionOracle indexed secondOpinionOracle);
-    event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
+    event AnnualCLRebaseIncreaseBPLimitsSet(uint256 softLimitBP, uint256 hardLimitBP);
     event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
-    event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
     event MaxBalanceExitRequestedPerReportInEthSet(uint256 maxBalanceExitRequestedPerReportInEth);
     event MaxEffectiveBalanceWeightWCType01Set(uint256 maxEffectiveBalanceWeightWCType01);
     event MaxEffectiveBalanceWeightWCType02Set(uint256 maxEffectiveBalanceWeightWCType02);
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
     event MaxNodeOperatorsPerExtraDataItemSet(uint256 maxNodeOperatorsPerExtraDataItem);
     event RequestTimestampMarginSet(uint256 requestTimestampMargin);
-    event MaxCLBalanceDecreaseBPSet(uint256 maxCLBalanceDecreaseBP);
-    event CLBalanceOraclesErrorUpperBPLimitSet(uint256 clBalanceOraclesErrorUpperBPLimit);
-    event NegativeCLRebaseConfirmed(uint256 refSlot, uint256 clBalanceWei, uint256 withdrawalVaultBalance);
-    event NegativeCLRebaseAccepted(
-        uint256 refSlot,
-        uint256 clTotalBalance,
-        uint256 clBalanceDecrease,
-        uint256 maxAllowedDecrease
-    );
+    event CLRebaseDecreaseBPLimitsSet(uint256 softLimitBP, uint256 hardLimitBP);
 
     error IncorrectLimitValue(uint256 value, uint256 minAllowedValue, uint256 maxAllowedValue);
     error IncorrectWithdrawalsVaultBalance(uint256 actualWithdrawalVaultBalance);
     error IncorrectELRewardsVaultBalance(uint256 actualELRewardsVaultBalance);
     error IncorrectSharesRequestedToBurn(uint256 actualSharesToBurn);
-    error IncorrectCLBalanceIncrease(uint256 annualBalanceDiff);
     error InvalidClBalancesData();
     error InconsistentValidatorsBalanceByModule(uint256 expected, uint256 actual);
     error IncorrectTotalPendingBalance(uint256 maxAllowed, uint256 actual);
     error IncorrectTotalActivatedBalance(uint256 maxAllowed, uint256 actual);
-    error IncorrectTotalCLBalanceIncrease(uint256 maxAllowed, uint256 actual);
     error IncorrectTotalModuleValidatorsBalanceIncrease(uint256 maxAllowed, uint256 actual);
     error IncorrectSumOfExitBalancePerReport(uint256 maxBalanceSum);
     error IncorrectRequestFinalization(uint256 requestCreationTimestamp);
@@ -1510,20 +1086,12 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
     error AdminCannotBeZero();
 
-    error IncorrectCLBalanceDecrease(uint256 negativeCLRebaseSum, uint256 maxNegativeCLRebaseSum);
-    error NegativeRebaseFailedCLBalanceMismatch(uint256 reportedValue, uint256 provedValue, uint256 limitBP);
-    error NegativeRebaseFailedWithdrawalVaultBalanceMismatch(uint256 reportedValue, uint256 provedValue);
-    error NegativeRebaseFailedSecondOpinionReportIsNotReady();
+    error CLRebaseDecreaseAboveHardLimit(uint256 decrease, uint256 hardLimit);
+    error AnnualCLRebaseIncreaseAboveHardLimit(uint256 increase, uint256 hardLimit);
+    error ConsensusReportNotProcessing(uint256 refSlot);
+    error SecondOpinionReportNotReady(uint256 refSlot);
+    error SecondOpinionReportHashMismatch(uint256 refSlot, bytes32 consensusHash, bytes32 attestedHash);
     error CalledNotFromAccounting();
-    error IncorrectCLWithdrawalsVaultBalance(
-        uint256 withdrawalVaultBalance,
-        uint256 lastWithdrawalVaultBalanceAfterTransfer
-    );
-    error IncorrectWithdrawalsVaultTransfer(uint256 withdrawalVaultBalance, uint256 withdrawalsVaultTransfer);
-    error MigrationAlreadyDone();
-    error UnexpectedLidoVersion(uint256 actual, uint256 expected);
-
-    event BaselineSnapshotMigrated(uint256 clBalance, uint256 clWithdrawals);
 }
 
 library LimitsListPacker {
@@ -1535,11 +1103,11 @@ library LimitsListPacker {
         res.exitedEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.exitedEthAmountPerDayLimit);
         res.appearedEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.appearedEthAmountPerDayLimit);
         res.consolidationEthAmountPerDayLimit = SafeCast.toUint32(_limitsList.consolidationEthAmountPerDayLimit);
-        res.annualBalanceIncreaseBPLimit = toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
+        res.annualCLRebaseIncreaseSoftBPLimit = toBasisPoints(_limitsList.annualCLRebaseIncreaseSoftBPLimit);
         res.simulatedShareRateDeviationBPLimit = toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
-        res.maxPositiveTokenRebase = SafeCast.toUint64(_limitsList.maxPositiveTokenRebase);
-        res.maxCLBalanceDecreaseBP = toBasisPoints(_limitsList.maxCLBalanceDecreaseBP);
-        res.clBalanceOraclesErrorUpperBPLimit = toBasisPoints(_limitsList.clBalanceOraclesErrorUpperBPLimit);
+        res.annualCLRebaseIncreaseHardBPLimit = toBasisPoints(_limitsList.annualCLRebaseIncreaseHardBPLimit);
+        res.clRebaseDecreaseSoftBPLimit = toBasisPoints(_limitsList.clRebaseDecreaseSoftBPLimit);
+        res.clRebaseDecreaseHardBPLimit = toBasisPoints(_limitsList.clRebaseDecreaseHardBPLimit);
         res.exitedValidatorEthAmountLimit = SafeCast.toUint16(_limitsList.exitedValidatorEthAmountLimit);
         res.externalPendingBalanceCapEth = SafeCast.toUint16(_limitsList.externalPendingBalanceCapEth);
     }
@@ -1570,7 +1138,7 @@ library LimitsListUnpacker {
     ) internal pure returns (LimitsList memory res) {
         res.exitedEthAmountPerDayLimit = _accountingLimits.exitedEthAmountPerDayLimit;
         res.appearedEthAmountPerDayLimit = _accountingLimits.appearedEthAmountPerDayLimit;
-        res.annualBalanceIncreaseBPLimit = _accountingLimits.annualBalanceIncreaseBPLimit;
+        res.annualCLRebaseIncreaseSoftBPLimit = _accountingLimits.annualCLRebaseIncreaseSoftBPLimit;
         res.simulatedShareRateDeviationBPLimit = _accountingLimits.simulatedShareRateDeviationBPLimit;
         res.maxBalanceExitRequestedPerReportInEth = _operationalLimitsPacked.maxBalanceExitRequestedPerReportInEth;
         res.maxEffectiveBalanceWeightWCType01 = _operationalLimitsPacked.maxEffectiveBalanceWeightWCType01;
@@ -1578,9 +1146,9 @@ library LimitsListUnpacker {
         res.maxItemsPerExtraDataTransaction = _operationalLimitsPacked.maxItemsPerExtraDataTransaction;
         res.maxNodeOperatorsPerExtraDataItem = _operationalLimitsPacked.maxNodeOperatorsPerExtraDataItem;
         res.requestTimestampMargin = _operationalLimitsPacked.requestTimestampMargin;
-        res.maxPositiveTokenRebase = _accountingLimits.maxPositiveTokenRebase;
-        res.maxCLBalanceDecreaseBP = _accountingLimits.maxCLBalanceDecreaseBP;
-        res.clBalanceOraclesErrorUpperBPLimit = _accountingLimits.clBalanceOraclesErrorUpperBPLimit;
+        res.annualCLRebaseIncreaseHardBPLimit = _accountingLimits.annualCLRebaseIncreaseHardBPLimit;
+        res.clRebaseDecreaseSoftBPLimit = _accountingLimits.clRebaseDecreaseSoftBPLimit;
+        res.clRebaseDecreaseHardBPLimit = _accountingLimits.clRebaseDecreaseHardBPLimit;
         res.consolidationEthAmountPerDayLimit = _accountingLimits.consolidationEthAmountPerDayLimit;
         res.exitedValidatorEthAmountLimit = _accountingLimits.exitedValidatorEthAmountLimit;
         res.externalPendingBalanceCapEth = _accountingLimits.externalPendingBalanceCapEth;

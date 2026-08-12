@@ -253,7 +253,8 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       ((totalPendingBalanceBeforeWei / ONE_ETH) * ONE_DAY + reportTimeElapsed - 1n) / reportTimeElapsed;
 
     await updateOracleReportLimits(ctx, {
-      annualBalanceIncreaseBPLimit: 0n,
+      annualCLRebaseIncreaseSoftBPLimit: 0n,
+      annualCLRebaseIncreaseHardBPLimit: 0n,
       appearedEthAmountPerDayLimit: appearedLimitEthPerDay,
       consolidationEthAmountPerDayLimit: 0n,
     });
@@ -311,10 +312,13 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       .withArgs(totalPendingBalanceBeforeWei, totalPendingBalanceBeforeWei + ONE_ETH);
   });
 
-  it("should reject a report that grows module validators without consuming matching pending balance", async () => {
+  it("should accept residual module growth within the consolidation allowance", async () => {
     const { lido, oracleReportSanityChecker } = ctx.contracts;
 
-    await updateOracleReportLimits(ctx, { annualBalanceIncreaseBPLimit: 1n });
+    await updateOracleReportLimits(ctx, {
+      annualCLRebaseIncreaseSoftBPLimit: 1n,
+      annualCLRebaseIncreaseHardBPLimit: 1n,
+    });
 
     const validatorsDeltaGweiByModule = await depositValidatorsWithoutReport(ctx, 1n);
 
@@ -331,12 +335,23 @@ describe("Integration: AccountingOracle module balances sanity", () => {
     expect(totalPendingBalanceBeforeGwei).to.be.gt(0n);
 
     const { reportTimeElapsed } = await getNextReportContext(ctx);
-    const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
+    const { annualCLRebaseIncreaseSoftBPLimit, consolidationEthAmountPerDayLimit } =
+      await oracleReportSanityChecker.getOracleReportLimits();
     const allowedValidatorsGrowthGwei =
-      (totalValidatorsBalanceBeforeGwei * annualBalanceIncreaseBPLimit * reportTimeElapsed) /
+      (totalValidatorsBalanceBeforeGwei * annualCLRebaseIncreaseSoftBPLimit * reportTimeElapsed) /
       (SECONDS_PER_YEAR * MAX_BASIS_POINTS);
     const excessiveValidatorsGrowthGwei = allowedValidatorsGrowthGwei + 1n;
     const excessiveValidatorsGrowthWei = excessiveValidatorsGrowthGwei * ONE_GWEI;
+    const moduleRewardsAllowanceWei =
+      (balanceStatsBeforeReport.clValidatorsBalanceAtLastReport *
+        annualCLRebaseIncreaseSoftBPLimit *
+        reportTimeElapsed) /
+      (SECONDS_PER_YEAR * MAX_BASIS_POINTS);
+    const residualModuleGrowthWei = excessiveValidatorsGrowthWei - moduleRewardsAllowanceWei;
+    const consolidationAllowanceWei = (ether(String(consolidationEthAmountPerDayLimit)) * reportTimeElapsed) / ONE_DAY;
+
+    expect(residualModuleGrowthWei).to.be.gt(0n);
+    expect(residualModuleGrowthWei).to.be.lte(consolidationAllowanceWei);
 
     const reportedValidatorsBalancesGwei = withUpdatedModuleBalances(
       moduleReportState.validatorBalancesGweiByStakingModule,
@@ -364,7 +379,7 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       balanceStatsBeforeReport.clPendingBalanceAtLastReport +
       balanceStatsBeforeReport.depositedSinceLastReport;
     const totalCLGrowthCapWei =
-      (totalCLBalanceBeforeWei * annualBalanceIncreaseBPLimit * reportTimeElapsed) /
+      (totalCLBalanceBeforeWei * annualCLRebaseIncreaseSoftBPLimit * reportTimeElapsed) /
       (SECONDS_PER_YEAR * MAX_BASIS_POINTS);
 
     expect(totalCLGrowthCapWei).to.be.gte(
@@ -372,9 +387,6 @@ describe("Integration: AccountingOracle module balances sanity", () => {
       "test precondition failed: total CL annual cap must stay above the crafted validator-only growth",
     );
 
-    await expect(submitReportDataWithConsensus(ctx, data)).to.be.revertedWithCustomError(
-      oracleReportSanityChecker,
-      "IncorrectTotalCLBalanceIncrease",
-    );
+    await expect(submitReportDataWithConsensus(ctx, data)).not.to.be.reverted;
   });
 });

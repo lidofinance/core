@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
-import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
+import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualCLRebaseIncreaseLimits } from "lib/oracle";
 import {
   getProtocolContext,
   OracleReportParams,
@@ -75,7 +75,7 @@ describe("Integration: AccountingOracle extra data", () => {
 
       // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
       // with not that much TVL
-      await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
+      await setAnnualCLRebaseIncreaseLimits(oracleReportSanityChecker, MAX_BASIS_POINTS);
 
       // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
       // with not that much TVL

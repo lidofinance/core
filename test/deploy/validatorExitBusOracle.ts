@@ -39,24 +39,30 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
 
 async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, accounting: string, admin: string) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, accounting, admin, {
-      exitedEthAmountPerDayLimit: 0n,
-      appearedEthAmountPerDayLimit: 0n,
-      annualBalanceIncreaseBPLimit: 0n,
-      simulatedShareRateDeviationBPLimit: 0n,
-      maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
-      maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-      maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-      maxItemsPerExtraDataTransaction: 0n,
-      maxNodeOperatorsPerExtraDataItem: 0n,
-      requestTimestampMargin: 0n,
-      maxPositiveTokenRebase: 1n,
-      maxCLBalanceDecreaseBP: 360n,
-      clBalanceOraclesErrorUpperBPLimit: 0n,
-      consolidationEthAmountPerDayLimit: 0n,
-      exitedValidatorEthAmountLimit: 1n,
-      externalPendingBalanceCapEth: 0n,
-    }),
+    f.deploy(
+      lidoLocator,
+      accounting,
+      admin,
+      {
+        exitedEthAmountPerDayLimit: 0n,
+        appearedEthAmountPerDayLimit: 0n,
+        annualCLRebaseIncreaseSoftBPLimit: 0n,
+        simulatedShareRateDeviationBPLimit: 0n,
+        maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
+        maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+        maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
+        maxItemsPerExtraDataTransaction: 0n,
+        maxNodeOperatorsPerExtraDataItem: 0n,
+        requestTimestampMargin: 0n,
+        annualCLRebaseIncreaseHardBPLimit: 0n,
+        clRebaseDecreaseSoftBPLimit: 0n,
+        clRebaseDecreaseHardBPLimit: 10_000n,
+        consolidationEthAmountPerDayLimit: 0n,
+        exitedValidatorEthAmountLimit: 1n,
+        externalPendingBalanceCapEth: 0n,
+      },
+      ethers.ZeroAddress,
+    ),
   );
 }
 

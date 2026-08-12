@@ -535,8 +535,15 @@ export async function main() {
   await makeTx(burner, "initialize", [deployer, isMigrationAllowed], { from: deployer });
 
   //
-  // Deploy OracleReportSanityChecker
+  // Deploy SecondOpinionOracle and OracleReportSanityChecker
   //
+
+  // Scratch uses the DAO Agent for both roles so no transient deployer privilege remains.
+  // Production deployments require an explicitly configured independent committee.
+  const secondOpinionOracle = await deployWithoutProxy(Sk.secondOpinionOracle, "SecondOpinionOracle", deployer, [
+    agentAddress,
+    agentAddress,
+  ]);
 
   const sanityCheckerParams = state["oracleReportSanityChecker"].deployParameters;
   // TODO: set final NEW sanity limits in deploy params before release deployment:
@@ -547,7 +554,7 @@ export async function main() {
   const sanityLimits = {
     exitedEthAmountPerDayLimit: sanityCheckerParams.exitedEthAmountPerDayLimit,
     appearedEthAmountPerDayLimit: sanityCheckerParams.appearedEthAmountPerDayLimit,
-    annualBalanceIncreaseBPLimit: sanityCheckerParams.annualBalanceIncreaseBPLimit,
+    annualCLRebaseIncreaseSoftBPLimit: sanityCheckerParams.annualCLRebaseIncreaseSoftBPLimit,
     simulatedShareRateDeviationBPLimit: sanityCheckerParams.simulatedShareRateDeviationBPLimit,
     maxBalanceExitRequestedPerReportInEth: sanityCheckerParams.maxBalanceExitRequestedPerReportInEth,
     maxEffectiveBalanceWeightWCType01: sanityCheckerParams.maxEffectiveBalanceWeightWCType01,
@@ -555,15 +562,21 @@ export async function main() {
     maxItemsPerExtraDataTransaction: sanityCheckerParams.maxItemsPerExtraDataTransaction,
     maxNodeOperatorsPerExtraDataItem: sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
     requestTimestampMargin: sanityCheckerParams.requestTimestampMargin,
-    maxPositiveTokenRebase: sanityCheckerParams.maxPositiveTokenRebase,
-    maxCLBalanceDecreaseBP: sanityCheckerParams.maxCLBalanceDecreaseBP,
-    clBalanceOraclesErrorUpperBPLimit: sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
+    annualCLRebaseIncreaseHardBPLimit: sanityCheckerParams.annualCLRebaseIncreaseHardBPLimit,
+    clRebaseDecreaseSoftBPLimit: sanityCheckerParams.clRebaseDecreaseSoftBPLimit,
+    clRebaseDecreaseHardBPLimit: sanityCheckerParams.clRebaseDecreaseHardBPLimit,
     consolidationEthAmountPerDayLimit: sanityCheckerParams.consolidationEthAmountPerDayLimit,
     exitedValidatorEthAmountLimit: sanityCheckerParams.exitedValidatorEthAmountLimit,
     externalPendingBalanceCapEth: sanityCheckerParams.externalPendingBalanceCapEth,
   };
 
-  const oracleReportSanityCheckerArgs = [locator.address, accounting.address, admin, sanityLimits];
+  const oracleReportSanityCheckerArgs = [
+    locator.address,
+    accounting.address,
+    admin,
+    sanityLimits,
+    secondOpinionOracle.address,
+  ];
 
   await deployWithoutProxy(
     Sk.oracleReportSanityChecker,

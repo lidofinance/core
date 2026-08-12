@@ -1,157 +1,145 @@
 import { ether } from "lib";
 
-import {
-  DAY,
-  FormulaFixtureSet,
-  migrate,
-  MigrationStep,
-  ModuleBalanceStep,
-  OracleReportLimits,
-  ReportStep,
-} from "../lib";
-
-export { migrate };
-export type { OracleReportLimits };
-
+export const DAY = 86_400n;
 export const HOUR = 3_600n;
 export const MAX_BASIS_POINTS = 10_000n;
-export const ANNUAL_BALANCE_INCREASE_DENOMINATOR = 365n * DAY * MAX_BASIS_POINTS;
+export const DAYS_PER_YEAR = 365n;
+export const MAX_VALIDATOR_EFFECTIVE_BALANCE = ether("2048");
 
-const ONE_GWEI = 10n ** 9n;
+const ANNUAL_BALANCE_INCREASE_DENOMINATOR = MAX_BASIS_POINTS * DAYS_PER_YEAR * DAY;
 
-export const toGwei = (value: bigint) => value / ONE_GWEI;
+export type OracleReportLimits = {
+  exitedEthAmountPerDayLimit: bigint;
+  appearedEthAmountPerDayLimit: bigint;
+  annualCLRebaseIncreaseSoftBPLimit: bigint;
+  simulatedShareRateDeviationBPLimit: bigint;
+  maxBalanceExitRequestedPerReportInEth: bigint;
+  maxEffectiveBalanceWeightWCType01: bigint;
+  maxEffectiveBalanceWeightWCType02: bigint;
+  maxItemsPerExtraDataTransaction: bigint;
+  maxNodeOperatorsPerExtraDataItem: bigint;
+  requestTimestampMargin: bigint;
+  annualCLRebaseIncreaseHardBPLimit: bigint;
+  clRebaseDecreaseSoftBPLimit: bigint;
+  clRebaseDecreaseHardBPLimit: bigint;
+  consolidationEthAmountPerDayLimit: bigint;
+  exitedValidatorEthAmountLimit: bigint;
+  externalPendingBalanceCapEth: bigint;
+};
 
-export type ModuleBalanceLimits = Pick<
-  OracleReportLimits,
-  | "appearedEthAmountPerDayLimit"
-  | "annualBalanceIncreaseBPLimit"
-  | "consolidationEthAmountPerDayLimit"
-  | "externalPendingBalanceCapEth"
->;
+export type ModuleBalance = {
+  moduleId: bigint;
+  previousValidatorsBalance: bigint;
+  postValidatorsBalance: bigint;
+  hasPreviousAccounting?: boolean;
+};
 
-export type ModuleBalance = ModuleBalanceStep;
-
-export type ModuleBalanceReport = ReportStep & { modules: ModuleBalance[] };
-export type ModuleBalanceStepFixture = MigrationStep | ModuleBalanceReport;
+export type ModuleBalanceReport = {
+  timeElapsed: bigint;
+  preCLValidatorsBalance: bigint;
+  preCLPendingBalance: bigint;
+  postCLPendingBalance: bigint;
+  deposits: bigint;
+  modules: ModuleBalance[];
+};
 
 export type ModuleBalanceFormula = {
+  effectiveTimeElapsed: bigint;
+  fundedPendingBalance: bigint;
   pendingBalanceCap: bigint;
   activatedBalance: bigint;
-  appearedBalanceLimit: bigint;
-  validatorsBalanceIncrease: bigint;
-  validatorsGrowthLimit: bigint;
-  totalPositiveModuleDelta: bigint;
-  moduleValidatorsGrowthLimit: bigint;
+  appearedBalanceAllowance: bigint;
+  activatedBalanceLimit: bigint;
+  annualSoftAllowance: bigint;
+  consolidationAllowance: bigint;
+  grossPositiveModuleDeltas: bigint;
+  moduleGrowthLimit: bigint;
 };
 
-export type ModuleAccountingState = {
-  validatorsBalance: bigint;
-  hasPreviousAccounting: boolean;
-};
+export type ModuleBalanceOutcome =
+  | "accepted"
+  | "IncorrectTotalPendingBalance"
+  | "IncorrectTotalActivatedBalance"
+  | "IncorrectTotalModuleValidatorsBalanceIncrease";
 
 export type ModuleBalanceCase = {
   title: string;
   rationale: string;
   limits?: Partial<OracleReportLimits>;
-  steps: ModuleBalanceStepFixture[];
+  report: ModuleBalanceReport;
   expected: {
-    outcome:
-      | "accepted"
-      | "IncorrectTotalPendingBalance"
-      | "IncorrectTotalActivatedBalance"
-      | "IncorrectTotalCLBalanceIncrease"
-      | "IncorrectTotalModuleValidatorsBalanceIncrease";
+    outcome: ModuleBalanceOutcome;
     formula?: Partial<ModuleBalanceFormula>;
   };
 };
 
-export type ModuleBalanceFixtureSet = FormulaFixtureSet<ModuleBalanceCase>;
+export type ModuleBalanceFixtureSet = {
+  title: string;
+  limits: OracleReportLimits;
+  cases: ModuleBalanceCase[];
+};
 
 export const moduleReport = ({
-  label,
   timeElapsed = DAY,
   preCLValidatorsBalance,
   preCLPendingBalance = 0n,
-  postCLPendingBalance,
-  deposits,
-  clWithdrawals,
-  withdrawalsVaultTransfer,
+  postCLPendingBalance = 0n,
+  deposits = 0n,
   modules,
 }: {
-  label: string;
   timeElapsed?: bigint;
   preCLValidatorsBalance?: bigint;
   preCLPendingBalance?: bigint;
-  postCLPendingBalance: bigint;
-  deposits: bigint;
-  clWithdrawals: bigint;
-  withdrawalsVaultTransfer?: bigint;
+  postCLPendingBalance?: bigint;
+  deposits?: bigint;
   modules: ModuleBalance[];
-}): ModuleBalanceReport => {
-  const postValidatorsBalance = modules.reduce((sum, module) => sum + module.postValidatorsBalance, 0n);
+}): ModuleBalanceReport => ({
+  timeElapsed,
+  preCLValidatorsBalance:
+    preCLValidatorsBalance ?? modules.reduce((sum, module) => sum + module.previousValidatorsBalance, 0n),
+  preCLPendingBalance,
+  postCLPendingBalance,
+  deposits,
+  modules,
+});
 
-  return {
-    kind: "report",
-    label,
-    timeElapsed,
-    cl: {
-      preValidatorsBalance:
-        preCLValidatorsBalance ?? modules.reduce((sum, module) => sum + module.previousValidatorsBalance, 0n),
-      prePendingBalance: preCLPendingBalance,
-      postValidatorsBalance,
-      postPendingBalance: postCLPendingBalance,
-    },
-    movements: {
-      deposits,
-      clWithdrawals,
-      withdrawalsVaultTransfer,
-    },
-    modules,
-  };
-};
-
-export const getPreCLValidatorsBalance = (report: ModuleBalanceReport) => report.cl.preValidatorsBalance;
-
-export const getPostCLValidatorsBalance = (report: ModuleBalanceReport) => report.cl.postValidatorsBalance;
+export const getPostCLValidatorsBalance = (report: ModuleBalanceReport): bigint =>
+  report.modules.reduce((sum, module) => sum + module.postValidatorsBalance, 0n);
 
 export const calcModuleBalanceFormula = (
   report: ModuleBalanceReport,
-  limits: ModuleBalanceLimits,
-  moduleAccounting = new Map<bigint, ModuleAccountingState>(),
+  limits: OracleReportLimits,
 ): ModuleBalanceFormula => {
   const effectiveTimeElapsed = report.timeElapsed === 0n ? HOUR : report.timeElapsed;
-  const preCLValidatorsBalance = getPreCLValidatorsBalance(report);
-  const postCLValidatorsBalance = getPostCLValidatorsBalance(report);
-  const fundedPendingBalance = report.cl.prePendingBalance + report.movements.deposits;
+  const fundedPendingBalance = report.preCLPendingBalance + report.deposits;
   const pendingBalanceCap = fundedPendingBalance + ether(limits.externalPendingBalanceCapEth.toString());
   const activatedBalance =
-    fundedPendingBalance > report.cl.postPendingBalance ? fundedPendingBalance - report.cl.postPendingBalance : 0n;
-  const appearedBalanceLimit = (ether(limits.appearedEthAmountPerDayLimit.toString()) * effectiveTimeElapsed) / DAY;
-  const validatorsGrowthLimit =
-    activatedBalance +
-    ((preCLValidatorsBalance + activatedBalance) * limits.annualBalanceIncreaseBPLimit * effectiveTimeElapsed) /
-      ANNUAL_BALANCE_INCREASE_DENOMINATOR;
-  const validatorsBalanceIncrease =
-    postCLValidatorsBalance > preCLValidatorsBalance ? postCLValidatorsBalance - preCLValidatorsBalance : 0n;
-  const totalPositiveModuleDelta = report.modules.reduce((sum, module) => {
-    const previousAccounting = moduleAccounting.get(module.moduleId) ?? {
-      validatorsBalance: module.previousValidatorsBalance,
-      hasPreviousAccounting: module.hasPreviousAccounting !== false,
-    };
-
-    if (!previousAccounting.hasPreviousAccounting) return sum;
-    if (module.postValidatorsBalance <= previousAccounting.validatorsBalance) return sum;
-    return sum + module.postValidatorsBalance - previousAccounting.validatorsBalance;
+    fundedPendingBalance > report.postCLPendingBalance ? fundedPendingBalance - report.postCLPendingBalance : 0n;
+  const appearedBalanceAllowance = (ether(limits.appearedEthAmountPerDayLimit.toString()) * effectiveTimeElapsed) / DAY;
+  const activatedBalanceLimit = appearedBalanceAllowance + MAX_VALIDATOR_EFFECTIVE_BALANCE;
+  const annualSoftAllowance =
+    ((report.preCLValidatorsBalance + activatedBalance) *
+      limits.annualCLRebaseIncreaseSoftBPLimit *
+      effectiveTimeElapsed) /
+    ANNUAL_BALANCE_INCREASE_DENOMINATOR;
+  const consolidationAllowance =
+    (ether(limits.consolidationEthAmountPerDayLimit.toString()) * effectiveTimeElapsed) / DAY;
+  const grossPositiveModuleDeltas = report.modules.reduce((sum, module) => {
+    if (module.hasPreviousAccounting === false) return sum;
+    if (module.postValidatorsBalance <= module.previousValidatorsBalance) return sum;
+    return sum + module.postValidatorsBalance - module.previousValidatorsBalance;
   }, 0n);
-  const consolidationLimit = (ether(limits.consolidationEthAmountPerDayLimit.toString()) * effectiveTimeElapsed) / DAY;
 
   return {
+    effectiveTimeElapsed,
+    fundedPendingBalance,
     pendingBalanceCap,
     activatedBalance,
-    appearedBalanceLimit,
-    validatorsBalanceIncrease,
-    validatorsGrowthLimit,
-    totalPositiveModuleDelta,
-    moduleValidatorsGrowthLimit: validatorsGrowthLimit + consolidationLimit,
+    appearedBalanceAllowance,
+    activatedBalanceLimit,
+    annualSoftAllowance,
+    consolidationAllowance,
+    grossPositiveModuleDeltas,
+    moduleGrowthLimit: activatedBalance + annualSoftAllowance + consolidationAllowance,
   };
 };

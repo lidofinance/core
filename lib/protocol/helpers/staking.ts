@@ -16,10 +16,9 @@ import { ProtocolContext } from "../types";
 
 import {
   adjustReportModuleBalances,
-  ensureFirstPostMigrationReport,
-  normalizeWithdrawalVaultBaseline,
   report,
   reportWithoutClActivation,
+  setWithdrawalVaultBalance,
   submitReportDataWithConsensusAndEmptyExtraData,
 } from "./accounting";
 import { norSdvtSetOperatorStakingLimit } from "./nor-sdvt";
@@ -476,18 +475,15 @@ export const depositValidatorsWithoutReport = async (
  * Create a report where new deposits stay in CL pending balance.
  *
  * Some tests need pending validators to exist before the target report, but
- * must not activate them yet. This helper first moves the protocol past the
- * migration-only report and clears WVB history to zero. Then it deposits
- * validators and submits a report where those validators stay in
- * `clPendingBalanceGwei`.
+ * must not activate them yet. This helper clears the WVB test balance, deposits
+ * validators, and submits a report where they stay in `clPendingBalanceGwei`.
  */
 export const seedProtocolPendingBaseline = async (
   ctx: ProtocolContext,
   moduleId: bigint,
   depositsCount: bigint = 1n,
 ) => {
-  await ensureFirstPostMigrationReport(ctx);
-  await normalizeWithdrawalVaultBaseline(ctx, 0n);
+  await setWithdrawalVaultBalance(ctx, 0n);
   await depositValidatorsWithoutReport(ctx, depositsCount, moduleId);
 
   const { data } = await reportWithoutClActivation(ctx, {
@@ -534,8 +530,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
 
   // Operator-provisioning reports should activate only the deposited validators.
   // Keep unrelated WVB/EL rewards out of this helper's report.
-  await ensureFirstPostMigrationReport(ctx);
-  await normalizeWithdrawalVaultBaseline(ctx, 0n);
+  await setWithdrawalVaultBalance(ctx, 0n);
 
   const ethToDeposit = depositsCount * DEPOSIT_SIZE;
   const submitValue = (await withdrawalQueue.unfinalizedStETH()) + ethToDeposit;

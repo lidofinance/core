@@ -1,18 +1,5 @@
 import { ProtocolContext } from "../types";
 
-export const setMaxPositiveTokenRebase = async (ctx: ProtocolContext, maxPositiveTokenRebase: bigint) => {
-  const { oracleReportSanityChecker: sanityChecker } = ctx.contracts;
-  const agent = await ctx.getSigner("agent");
-
-  const initialMaxPositiveTokenRebase = await sanityChecker.getMaxPositiveTokenRebase();
-
-  const MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE = await sanityChecker.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE();
-  await sanityChecker.connect(agent).grantRole(MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE, agent.address);
-  await sanityChecker.connect(agent).setMaxPositiveTokenRebase(maxPositiveTokenRebase);
-  await sanityChecker.connect(agent).revokeRole(MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE, agent.address);
-  return initialMaxPositiveTokenRebase;
-};
-
 export const updateOracleReportLimits = async (
   ctx: ProtocolContext,
   patch: Partial<
@@ -27,7 +14,8 @@ export const updateOracleReportLimits = async (
   const nextLimits = {
     exitedEthAmountPerDayLimit: patch.exitedEthAmountPerDayLimit ?? currentLimits.exitedEthAmountPerDayLimit,
     appearedEthAmountPerDayLimit: patch.appearedEthAmountPerDayLimit ?? currentLimits.appearedEthAmountPerDayLimit,
-    annualBalanceIncreaseBPLimit: patch.annualBalanceIncreaseBPLimit ?? currentLimits.annualBalanceIncreaseBPLimit,
+    annualCLRebaseIncreaseSoftBPLimit:
+      patch.annualCLRebaseIncreaseSoftBPLimit ?? currentLimits.annualCLRebaseIncreaseSoftBPLimit,
     simulatedShareRateDeviationBPLimit:
       patch.simulatedShareRateDeviationBPLimit ?? currentLimits.simulatedShareRateDeviationBPLimit,
     maxBalanceExitRequestedPerReportInEth:
@@ -41,10 +29,10 @@ export const updateOracleReportLimits = async (
     maxNodeOperatorsPerExtraDataItem:
       patch.maxNodeOperatorsPerExtraDataItem ?? currentLimits.maxNodeOperatorsPerExtraDataItem,
     requestTimestampMargin: patch.requestTimestampMargin ?? currentLimits.requestTimestampMargin,
-    maxPositiveTokenRebase: patch.maxPositiveTokenRebase ?? currentLimits.maxPositiveTokenRebase,
-    maxCLBalanceDecreaseBP: patch.maxCLBalanceDecreaseBP ?? currentLimits.maxCLBalanceDecreaseBP,
-    clBalanceOraclesErrorUpperBPLimit:
-      patch.clBalanceOraclesErrorUpperBPLimit ?? currentLimits.clBalanceOraclesErrorUpperBPLimit,
+    annualCLRebaseIncreaseHardBPLimit:
+      patch.annualCLRebaseIncreaseHardBPLimit ?? currentLimits.annualCLRebaseIncreaseHardBPLimit,
+    clRebaseDecreaseSoftBPLimit: patch.clRebaseDecreaseSoftBPLimit ?? currentLimits.clRebaseDecreaseSoftBPLimit,
+    clRebaseDecreaseHardBPLimit: patch.clRebaseDecreaseHardBPLimit ?? currentLimits.clRebaseDecreaseHardBPLimit,
     consolidationEthAmountPerDayLimit:
       patch.consolidationEthAmountPerDayLimit ?? currentLimits.consolidationEthAmountPerDayLimit,
     exitedValidatorEthAmountLimit: patch.exitedValidatorEthAmountLimit ?? currentLimits.exitedValidatorEthAmountLimit,

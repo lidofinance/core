@@ -33,13 +33,16 @@ import {
     IInitializedVersionView,
     IMerkleGate,
     IOneShotCurveSetup,
-    IOracleReportSanityCheckerUpgrade,
     IWithdrawalVaultUpgrade,
     IConsolidationBus,
     IConsolidationMigrator
 } from "./UpgradeTypes.sol";
 
 import {UpgradeConfig} from "./UpgradeConfig.sol";
+
+interface IOracleReportSanityCheckerSecondOpinion {
+    function secondOpinionOracle() external view returns (address);
+}
 
 /**
  * @title Lido Upgrade Template
@@ -104,8 +107,8 @@ contract UpgradeTemplate is IUpgradeTemplate {
 
     //sanitychecker roles
     bytes32 internal constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
-    bytes32 internal constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
-        keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
+    bytes32 internal constant ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE =
+        keccak256("ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE");
     bytes32 internal constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
         keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
     bytes32 internal constant MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE =
@@ -114,14 +117,14 @@ contract UpgradeTemplate is IUpgradeTemplate {
         keccak256("MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE");
     bytes32 internal constant REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE =
         keccak256("REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE");
-    bytes32 internal constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
-        keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
+    bytes32 internal constant CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE =
+        keccak256("CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE");
     bytes32 internal constant SECOND_OPINION_MANAGER_ROLE = keccak256("SECOND_OPINION_MANAGER_ROLE");
 
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_STAKING_ROUTER_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 5;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 6;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 7;
     uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_VERSION = 3;
     uint256 public constant EXPECTED_FINAL_VALIDATORS_EXIT_BUS_ORACLE_CONSENSUS_VERSION = 5;
     uint256 public constant EXPECTED_FINAL_WITHDRAWAL_VAULT_VERSION = 3;
@@ -227,9 +230,6 @@ contract UpgradeTemplate is IUpgradeTemplate {
         // PostUpgrade steps
         //
         CoreUpgradeConfig memory c = UpgradeConfig(CONFIG).getCoreUpgradeConfig();
-
-        // OracleReportSanityChecker final migration
-        IOracleReportSanityCheckerUpgrade(c.newOracleReportSanityChecker).migrateBaselineSnapshot();
 
         _assertCoreFinalState(g, c);
         _assertCSMFinalState(g);
@@ -376,14 +376,17 @@ contract UpgradeTemplate is IUpgradeTemplate {
             address checker = c.newOracleReportSanityChecker;
             _assertLocatorAddress(locator.oracleReportSanityChecker(), checker);
             _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, agent);
+            address secondOpinionOracle =
+                IOracleReportSanityCheckerSecondOpinion(checker).secondOpinionOracle();
+            if (secondOpinionOracle == address(0)) revert InvalidSecondOpinionOracleAddress();
             bytes32[8] memory roles = [
                 ALL_LIMITS_MANAGER_ROLE,
-                ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE,
+                ANNUAL_CL_REBASE_INCREASE_LIMITS_MANAGER_ROLE,
                 SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE,
                 MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE,
                 MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE,
                 REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE,
-                MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE,
+                CL_REBASE_DECREASE_LIMITS_MANAGER_ROLE,
                 SECOND_OPINION_MANAGER_ROLE
             ];
             for (uint256 i = 0; i < roles.length; ++i) {
@@ -842,6 +845,7 @@ contract UpgradeTemplate is IUpgradeTemplate {
     error InvalidConsolidationGatewayAddressInConsolidationBus();
     error InvalidConsolidationGatewayAddressInWithdrawalVault();
     error InvalidTriggerableWithdrawalsGatewayInWithdrawalVault();
+    error InvalidSecondOpinionOracleAddress();
 
     error LidoMigrationIncorrectBufferedEther();
     error LidoMigrationIncorrectDepositedValidators();

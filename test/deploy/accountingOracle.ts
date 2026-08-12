@@ -154,24 +154,30 @@ async function deployOracleReportSanityCheckerForAccounting(lidoLocator: string,
   const exitedEthAmountPerDayLimit = 65_535n;
   const appearedEthAmountPerDayLimit = 65_535n;
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, accounting, admin, {
-      exitedEthAmountPerDayLimit,
-      appearedEthAmountPerDayLimit,
-      annualBalanceIncreaseBPLimit: 0n,
-      simulatedShareRateDeviationBPLimit: 0n,
-      maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
-      maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
-      maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
-      maxItemsPerExtraDataTransaction: 15n,
-      maxNodeOperatorsPerExtraDataItem: 16n,
-      requestTimestampMargin: 0n,
-      maxPositiveTokenRebase: 1n,
-      maxCLBalanceDecreaseBP: 360n,
-      clBalanceOraclesErrorUpperBPLimit: 0n,
-      consolidationEthAmountPerDayLimit: 0n,
-      exitedValidatorEthAmountLimit: 1n,
-      externalPendingBalanceCapEth: 0n,
-    }),
+    f.deploy(
+      lidoLocator,
+      accounting,
+      admin,
+      {
+        exitedEthAmountPerDayLimit,
+        appearedEthAmountPerDayLimit,
+        annualCLRebaseIncreaseSoftBPLimit: 0n,
+        simulatedShareRateDeviationBPLimit: 0n,
+        maxBalanceExitRequestedPerReportInEth: 65_535n, // Max uint16 (65,535 ETH)
+        maxEffectiveBalanceWeightWCType01: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_01,
+        maxEffectiveBalanceWeightWCType02: MAX_EFFECTIVE_BALANCE_WEIGHT_WC_TYPE_02,
+        maxItemsPerExtraDataTransaction: 15n,
+        maxNodeOperatorsPerExtraDataItem: 16n,
+        requestTimestampMargin: 0n,
+        annualCLRebaseIncreaseHardBPLimit: 0n,
+        clRebaseDecreaseSoftBPLimit: 0n,
+        clRebaseDecreaseHardBPLimit: 10_000n,
+        consolidationEthAmountPerDayLimit: 0n,
+        exitedValidatorEthAmountLimit: 1n,
+        externalPendingBalanceCapEth: 0n,
+      },
+      ethers.ZeroAddress,
+    ),
   );
 }
 
